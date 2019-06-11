@@ -1,6 +1,6 @@
 use crate::accounts_db::{
     get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters,
-    InstructionAccounts, InstructionLoaders,
+    InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
@@ -9,7 +9,7 @@ use bincode::serialize;
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_error;
-use solana_sdk::account::Account;
+use solana_sdk::account::{Account, LamportCredit};
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::native_loader;
@@ -170,7 +170,7 @@ impl Accounts {
         tx: &Transaction,
         fee: u64,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<Account>> {
+    ) -> Result<(Vec<Account>, InstructionCredits)> {
         // Copy all the accounts
         let message = tx.message();
         if tx.signatures.is_empty() && fee != 0 {
@@ -185,6 +185,7 @@ impl Accounts {
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
+            let mut credits: InstructionCredits = vec![];
             for key in &message.account_keys {
                 if !message.program_ids().contains(&key) {
                     called_accounts.push(
@@ -192,6 +193,7 @@ impl Accounts {
                             .map(|(account, _)| account)
                             .unwrap_or_default(),
                     );
+                    credits.push(0);
                 }
             }
             if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
@@ -205,7 +207,7 @@ impl Accounts {
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
                 called_accounts[0].lamports -= fee;
-                Ok(called_accounts)
+                Ok((called_accounts, credits))
             }
         }
     }
@@ -289,7 +291,7 @@ impl Accounts {
         lock_results: Vec<Result<()>>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
@@ -299,7 +301,7 @@ impl Accounts {
             .map(|etx| match etx {
                 (tx, Ok(())) => {
                     let fee = fee_calculator.calculate_fee(tx.message());
-                    let accounts = Self::load_tx_accounts(
+                    let (accounts, credits) = Self::load_tx_accounts(
                         &storage,
                         ancestors,
                         &accounts_index,
@@ -314,7 +316,7 @@ impl Accounts {
                         tx,
                         error_counters,
                     )?;
-                    Ok((accounts, loaders))
+                    Ok((accounts, loaders, credits))
                 }
                 (_, Err(e)) => Err(e),
             })
@@ -357,12 +359,14 @@ impl Accounts {
 
     /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
-        self.accounts_db.store(fork, &[(pubkey, account)]);
+        let mut accounts = HashMap::new();
+        accounts.insert(pubkey, (account, 0));
+        self.accounts_db.store(fork, &accounts);
     }
 
     fn lock_account(
         (fork_locks, parent_locks): (&mut HashSet<Pubkey>, &mut Vec<Arc<AccountLocks>>),
-        keys: &[Pubkey],
+        keys: &[&Pubkey],
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
         // Copy all the accounts
@@ -402,19 +406,19 @@ impl Accounts {
             }
         }
         for k in keys {
-            fork_locks.insert(*k);
+            fork_locks.insert(**k);
         }
         Ok(())
     }
 
-    fn lock_record_account(record_locks: &AccountLocks, keys: &[Pubkey]) {
+    fn lock_record_account(record_locks: &AccountLocks, keys: &[&Pubkey]) {
         let mut fork_locks = record_locks.lock().unwrap();
         for k in keys {
             // The fork locks should always be a subset of the account locks, so
             // the account locks should prevent record locks from ever touching the
             // same accounts
             assert!(!fork_locks.contains(k));
-            fork_locks.insert(*k);
+            fork_locks.insert(**k);
         }
     }
 
@@ -489,8 +493,7 @@ impl Accounts {
                 let message = tx.borrow().message();
                 Self::lock_account(
                     (&mut self.account_locks.lock().unwrap(), parent_record_locks),
-                    &message.account_keys[..(message.account_keys.len()
-                        - message.header.num_credit_only_unsigned_accounts as usize)],
+                    &message.get_account_keys_by_lock_type().0,
                     &mut error_counters,
                 )
             })
@@ -513,11 +516,7 @@ impl Accounts {
         let record_locks = self.record_locks.lock().unwrap();
         for tx in txs {
             let message = tx.borrow().message();
-            Self::lock_record_account(
-                &record_locks.0,
-                &message.account_keys[..(message.account_keys.len()
-                    - message.header.num_credit_only_unsigned_accounts as usize)],
-            );
+            Self::lock_record_account(&record_locks.0, &message.get_account_keys_by_lock_type().0);
         }
     }
 
@@ -553,20 +552,9 @@ impl Accounts {
         fork: Fork,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        let mut accounts: Vec<(&Pubkey, &Account)> = vec![];
-        for (i, raccs) in loaded.iter().enumerate() {
-            if res[i].is_err() || raccs.is_err() {
-                continue;
-            }
-
-            let message = &txs[i].message();
-            let acc = raccs.as_ref().unwrap();
-            for (key, account) in message.account_keys.iter().zip(acc.0.iter()) {
-                accounts.push((key, account));
-            }
-        }
+        let accounts = collect_accounts(txs, res, loaded);
         self.accounts_db.store(fork, &accounts);
     }
 
@@ -579,6 +567,39 @@ impl Accounts {
     pub fn add_root(&self, fork: Fork) {
         self.accounts_db.add_root(fork)
     }
+}
+
+fn collect_accounts<'a>(
+    txs: &'a [Transaction],
+    res: &'a [Result<()>],
+    loaded: &'a [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+) -> HashMap<&'a Pubkey, (&'a Account, LamportCredit)> {
+    let mut accounts: HashMap<&Pubkey, (&Account, LamportCredit)> = HashMap::new();
+    for (i, raccs) in loaded.iter().enumerate() {
+        if res[i].is_err() || raccs.is_err() {
+            continue;
+        }
+
+        let message = &txs[i].message();
+        let acc = raccs.as_ref().unwrap();
+        for ((key, account), credit) in message
+            .account_keys
+            .iter()
+            .zip(acc.0.iter())
+            .zip(acc.2.iter())
+        {
+            if !accounts.contains_key(key) {
+                accounts.insert(key, (account, 0));
+            } else if *credit > 0 {
+                // Credit-only accounts may be referenced by multiple transactions
+                // Collect credits to update account lamport balance before store.
+                if let Some((_, c)) = accounts.get_mut(key) {
+                    *c += credit;
+                }
+            }
+        }
+    }
+    accounts
 }
 
 #[cfg(test)]
@@ -603,7 +624,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         let accounts = Accounts::new(None);
         for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
@@ -624,7 +645,7 @@ mod tests {
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
@@ -800,11 +821,13 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((a, l)) => {
-                assert_eq!(a.len(), 2);
-                assert_eq!(a[0], accounts[0].1);
-                assert_eq!(l.len(), 1);
-                assert_eq!(l[0].len(), 0);
+            Ok((instruction_accounts, instruction_loaders, instruction_credits)) => {
+                assert_eq!(instruction_accounts.len(), 2);
+                assert_eq!(instruction_accounts[0], accounts[0].1);
+                assert_eq!(instruction_loaders.len(), 1);
+                assert_eq!(instruction_loaders[0].len(), 0);
+                assert_eq!(instruction_credits.len(), 2);
+                assert_eq!(instruction_credits, &vec![0, 0]);
             }
             Err(e) => Err(e).unwrap(),
         }
@@ -984,16 +1007,18 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((a, l)) => {
-                assert_eq!(a.len(), 1);
-                assert_eq!(a[0], accounts[0].1);
-                assert_eq!(l.len(), 2);
-                assert_eq!(l[0].len(), 1);
-                assert_eq!(l[1].len(), 2);
-                for instruction_loaders in l.iter() {
-                    for (i, a) in instruction_loaders.iter().enumerate() {
+            Ok((instruction_accounts, instruction_loaders, instruction_credits)) => {
+                assert_eq!(instruction_accounts.len(), 1);
+                assert_eq!(instruction_accounts[0], accounts[0].1);
+                assert_eq!(instruction_loaders.len(), 2);
+                assert_eq!(instruction_loaders[0].len(), 1);
+                assert_eq!(instruction_loaders[1].len(), 2);
+                assert_eq!(instruction_credits.len(), 1);
+                assert_eq!(instruction_credits, &vec![0]);
+                for loaders in instruction_loaders.iter() {
+                    for (i, accounts_subset) in loaders.iter().enumerate() {
                         // +1 to skip first not loader account
-                        assert_eq![a.1, accounts[i + 1].1];
+                        assert_eq![accounts_subset.1, accounts[i + 1].1];
                     }
                 }
             }
@@ -1121,7 +1146,7 @@ mod tests {
                     &mut child.account_locks.lock().unwrap(),
                     &mut child.record_locks.lock().unwrap().1
                 ),
-                &vec![locked_pubkey],
+                &vec![&locked_pubkey],
                 &mut ErrorCounters::default()
             ),
             Ok(())
@@ -1208,5 +1233,70 @@ mod tests {
             accounts.hash_internal_state(0),
             daccounts.hash_internal_state(0)
         );
+    }
+
+    #[test]
+    fn test_collect_accounts() {
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let pubkey = Pubkey::new_rand();
+
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
+        let tx0 = Transaction::new_with_compiled_instructions(
+            &[&keypair0],
+            &[pubkey],
+            Hash::default(),
+            vec![native_loader::id()],
+            instructions,
+        );
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
+        let tx1 = Transaction::new_with_compiled_instructions(
+            &[&keypair1],
+            &[pubkey],
+            Hash::default(),
+            vec![native_loader::id()],
+            instructions,
+        );
+        let txs = vec![tx0, tx1];
+
+        let loaders = vec![Ok(()), Ok(())];
+
+        let account0 = Account::new(1, 0, &Pubkey::default());
+        let account1 = Account::new(2, 0, &Pubkey::default());
+        let account2 = Account::new(3, 0, &Pubkey::default());
+
+        let instruction_accounts0 = vec![account0, account2.clone()];
+        let instruction_loaders0 = vec![];
+        let instruction_credits0 = vec![0, 2];
+        let loaded0 = Ok((
+            instruction_accounts0,
+            instruction_loaders0,
+            instruction_credits0,
+        ));
+
+        let instruction_accounts1 = vec![account1, account2.clone()];
+        let instruction_loaders1 = vec![];
+        let instruction_credits1 = vec![2, 3];
+        let loaded1 = Ok((
+            instruction_accounts1,
+            instruction_loaders1,
+            instruction_credits1,
+        ));
+
+        let loaded = vec![loaded0, loaded1];
+
+        let accounts = collect_accounts(&txs, &loaders, &loaded);
+        assert_eq!(accounts.len(), 3);
+        assert!(accounts.contains_key(&keypair0.pubkey()));
+        assert!(accounts.contains_key(&keypair1.pubkey()));
+        assert!(accounts.contains_key(&pubkey));
+
+        // Accounts referenced once are assumed to have the correct lamport balance, even if a
+        // credit amount is reported (as in a credit-only account)
+        assert_eq!(accounts.get(&keypair0.pubkey()).unwrap().1, 0);
+        assert_eq!(accounts.get(&keypair1.pubkey()).unwrap().1, 0);
+        // Accounts referenced more than once need to pass the accumulated credits of additional
+        // references on to store
+        assert_eq!(accounts.get(&pubkey).unwrap().1, 3);
     }
 }

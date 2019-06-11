@@ -3,7 +3,9 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::accounts::{AccountLockType, Accounts};
-use crate::accounts_db::{AccountsDB, ErrorCounters, InstructionAccounts, InstructionLoaders};
+use crate::accounts_db::{
+    AccountsDB, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
+};
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
@@ -679,7 +681,7 @@ impl Bank {
         txs: &[Transaction],
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
@@ -837,7 +839,7 @@ impl Bank {
         lock_results: &LockedAccountsResults<Transaction>,
         max_age: usize,
     ) -> (
-        Vec<Result<(InstructionAccounts, InstructionLoaders)>>,
+        Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
         Vec<Result<()>>,
     ) {
         debug!("processing transactions: {}", txs.len());
@@ -858,10 +860,9 @@ impl Bank {
             .zip(txs.iter())
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders)) => {
-                    self.message_processor
-                        .process_message(tx.message(), loaders, accounts)
-                }
+                Ok((ref mut accounts, ref mut loaders, ref mut credits)) => self
+                    .message_processor
+                    .process_message(tx.message(), loaders, accounts, credits),
             })
             .collect();
 
@@ -941,7 +942,7 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         txs: &[Transaction],
-        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
+        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
@@ -1161,7 +1162,7 @@ impl Bank {
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
@@ -1631,7 +1632,7 @@ mod tests {
     }
 
     #[test]
-    fn test_need_credit_only_accounts() {
+    fn test_credit_only_accounts() {
         let (genesis_block, mint_keypair) = create_genesis_block(10);
         let bank = Bank::new(&genesis_block);
         let payer0 = Keypair::new();
@@ -1646,18 +1647,13 @@ mod tests {
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
 
-        // If multiple transactions attempt to deposit into the same account, only the first will
-        // succeed, even though such atomic adds are safe. A System Transfer `To` account should be
-        // given credit-only handling
+        // If multiple transactions attempt to deposit into the same account, they should succeed,
+        // since System Transfer `To` accounts are given credit-only handling
 
         assert_eq!(results[0], Ok(()));
-        assert_eq!(results[1], Err(TransactionError::AccountInUse));
-        assert_eq!(results[2], Err(TransactionError::AccountInUse));
-
-        // After credit-only account handling is implemented, the following checks should pass instead:
-        // assert_eq!(results[0], Ok(()));
-        // assert_eq!(results[1], Ok(()));
-        // assert_eq!(results[2], Ok(()));
+        assert_eq!(results[1], Ok(()));
+        assert_eq!(results[2], Ok(()));
+        assert_eq!(bank.get_balance(&recipient), 3);
     }
 
     #[test]
@@ -1698,6 +1694,41 @@ mod tests {
         drop(lock_result);
 
         assert!(bank.transfer(2, &mint_keypair, &bob.pubkey()).is_ok());
+    }
+
+    #[test]
+    fn test_credit_only_relaxed_locks() {
+        use solana_sdk::message::{Message, MessageHeader};
+
+        let (genesis_block, mint_keypair) = create_genesis_block(3);
+        let bank = Bank::new(&genesis_block);
+        let key0 = Keypair::new();
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_credit_only_signed_accounts: 0,
+                num_credit_only_unsigned_accounts: 1,
+            },
+            account_keys: vec![key0.pubkey(), key1, key2],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let tx0 = Transaction::new(&[&key0], message, genesis_block.hash());
+        let txs = vec![tx0];
+
+        let lock_result = bank.lock_accounts(&txs);
+        assert_eq!(lock_result.locked_accounts_results(), &vec![Ok(())]);
+
+        // Try executing a tx loading a credit-only account from tx0
+        assert!(bank.transfer(1, &mint_keypair, &key2).is_ok());
+        // Try executing a tx loading a account locked as credit-debit in tx0
+        assert_eq!(
+            bank.transfer(1, &mint_keypair, &key1),
+            Err(TransactionError::AccountInUse)
+        );
     }
 
     #[test]

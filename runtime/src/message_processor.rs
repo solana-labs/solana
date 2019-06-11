@@ -1,7 +1,7 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
+use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount, LamportCredit};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::message::Message;
@@ -55,6 +55,7 @@ fn get_subset_unchecked_mut<'a, T>(
 }
 
 fn verify_instruction(
+    is_debitable: bool,
     program_id: &Pubkey,
     pre_program_id: &Pubkey,
     pre_lamports: u64,
@@ -71,12 +72,20 @@ fn verify_instruction(
     if *program_id != account.owner && pre_lamports > account.lamports {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
+    // The balance of credit-only accounts may only increase
+    if !is_debitable && pre_lamports > account.lamports {
+        return Err(InstructionError::CreditOnlyLamportSpend);
+    }
     // For accounts unassigned to the program, the data may not change.
     if *program_id != account.owner
         && !system_program::check_id(&program_id)
         && pre_data != &account.data[..]
     {
         return Err(InstructionError::ExternalAccountDataModified);
+    }
+    // Credit-only account data may not change.
+    if !is_debitable && pre_data != &account.data[..] {
+        return Err(InstructionError::CreditOnlyDataModified);
     }
     Ok(())
 }
@@ -172,6 +181,7 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
+        credits: &mut [&mut LamportCredit],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         // TODO: the runtime should be checking read/write access to memory
@@ -183,18 +193,26 @@ impl MessageProcessor {
             .collect();
 
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
-
         // Verify the instruction
-        for ((pre_program_id, pre_lamports, pre_data), post_account) in
-            pre_data.iter().zip(program_accounts.iter())
+        for ((pre_program_id, pre_lamports, pre_data), (i, post_account, is_debitable)) in
+            pre_data.iter().zip(
+                program_accounts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, program_account)| (i, program_account, message.is_debitable(i))),
+            )
         {
             verify_instruction(
+                is_debitable,
                 &program_id,
                 pre_program_id,
                 *pre_lamports,
                 pre_data,
                 post_account,
             )?;
+            if !is_debitable {
+                *credits[i] += post_account.lamports - *pre_lamports;
+            }
         }
         // The total sum of all the lamports in all the accounts cannot change.
         let post_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
@@ -212,6 +230,7 @@ impl MessageProcessor {
         message: &Message,
         loaders: &mut [Vec<(Pubkey, Account)>],
         accounts: &mut [Account],
+        credits: &mut [LamportCredit],
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
@@ -223,11 +242,14 @@ impl MessageProcessor {
             // TODO: `get_subset_unchecked_mut` panics on an index out of bounds if an executable
             // account is also included as a regular account for an instruction, because the
             // executable account is not passed in as part of the accounts slice
+            let mut instruction_credits = get_subset_unchecked_mut(credits, &instruction.accounts)
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             self.execute_instruction(
                 message,
                 instruction,
                 executable_accounts,
                 &mut program_accounts,
+                &mut instruction_credits,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -238,6 +260,9 @@ impl MessageProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
+    use solana_sdk::message::Message;
+    use solana_sdk::native_loader::{create_loadable_account, id};
 
     #[test]
     fn test_has_duplicates() {
@@ -280,7 +305,7 @@ mod tests {
             pre: &Pubkey,
             post: &Pubkey,
         ) -> Result<(), InstructionError> {
-            verify_instruction(&ix, &pre, 0, &[], &Account::new(0, 0, post))
+            verify_instruction(true, &ix, &pre, 0, &[], &Account::new(0, 0, post))
         }
 
         let system_program_id = system_program::id();
@@ -301,24 +326,175 @@ mod tests {
 
     #[test]
     fn test_verify_instruction_change_data() {
-        fn change_data(program_id: &Pubkey) -> Result<(), InstructionError> {
+        fn change_data(program_id: &Pubkey, is_debitable: bool) -> Result<(), InstructionError> {
             let alice_program_id = Pubkey::new_rand();
             let account = Account::new(0, 0, &alice_program_id);
-            verify_instruction(&program_id, &alice_program_id, 0, &[42], &account)
+            verify_instruction(
+                is_debitable,
+                &program_id,
+                &alice_program_id,
+                0,
+                &[42],
+                &account,
+            )
         }
 
         let system_program_id = system_program::id();
         let mallory_program_id = Pubkey::new_rand();
 
         assert_eq!(
-            change_data(&system_program_id),
+            change_data(&system_program_id, true),
             Ok(()),
             "system program should be able to change the data"
         );
         assert_eq!(
-            change_data(&mallory_program_id),
+            change_data(&mallory_program_id, true),
             Err(InstructionError::ExternalAccountDataModified),
             "malicious Mallory should not be able to change the account data"
+        );
+
+        assert_eq!(
+            change_data(&system_program_id, false),
+            Err(InstructionError::CreditOnlyDataModified),
+            "system program should not be able to change the data if credit-only"
+        );
+    }
+
+    #[test]
+    fn test_verify_instruction_credit_only() {
+        let alice_program_id = Pubkey::new_rand();
+        let account = Account::new(0, 0, &alice_program_id);
+        assert_eq!(
+            verify_instruction(
+                false,
+                &system_program::id(),
+                &alice_program_id,
+                42,
+                &[],
+                &account
+            ),
+            Err(InstructionError::ExternalAccountLamportSpend),
+            "debit should fail, even if system program"
+        );
+        assert_eq!(
+            verify_instruction(
+                false,
+                &alice_program_id,
+                &alice_program_id,
+                42,
+                &[],
+                &account
+            ),
+            Err(InstructionError::CreditOnlyLamportSpend),
+            "debit should fail, even if owning program"
+        );
+    }
+
+    #[test]
+    fn test_process_message_credit_only_handling() {
+        #[derive(Serialize, Deserialize)]
+        enum MockSystemInstruction {
+            Correct { lamports: u64 },
+            AttemptDebit { lamports: u64 },
+            Misbehave { lamports: u64 },
+        }
+
+        fn mock_system_process_instruction(
+            _program_id: &Pubkey,
+            keyed_accounts: &mut [KeyedAccount],
+            data: &[u8],
+        ) -> Result<(), InstructionError> {
+            if let Ok(instruction) = bincode::deserialize(data) {
+                match instruction {
+                    MockSystemInstruction::Correct { lamports } => {
+                        keyed_accounts[0].account.lamports -= lamports;
+                        keyed_accounts[1].account.lamports += lamports;
+                        Ok(())
+                    }
+                    MockSystemInstruction::AttemptDebit { lamports } => {
+                        keyed_accounts[0].account.lamports += lamports;
+                        keyed_accounts[1].account.lamports -= lamports;
+                        Ok(())
+                    }
+                    // Credit a credit-only account for more lamports than debited
+                    MockSystemInstruction::Misbehave { lamports } => {
+                        keyed_accounts[0].account.lamports -= lamports;
+                        keyed_accounts[1].account.lamports = 2 * lamports;
+                        Ok(())
+                    }
+                }
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+
+        let mock_system_program_id = Pubkey::new(&[2u8; 32]);
+        let mut message_processor = MessageProcessor::default();
+        message_processor
+            .add_instruction_processor(mock_system_program_id, mock_system_process_instruction);
+
+        let mut accounts: Vec<Account> = Vec::new();
+        let account = Account::new(100, 1, &mock_system_program_id);
+        accounts.push(account);
+        let account = Account::new(0, 1, &mock_system_program_id);
+        accounts.push(account);
+
+        let mut loaders: Vec<Vec<(Pubkey, Account)>> = Vec::new();
+        let account = create_loadable_account("mock_system_program");
+        loaders.push(vec![(id(), account)]);
+
+        let from_pubkey = Pubkey::new_rand();
+        let to_pubkey = Pubkey::new_rand();
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey, true),
+            AccountMeta::new_credit_only(to_pubkey, false),
+        ];
+        let message = Message::new(vec![Instruction::new(
+            mock_system_program_id,
+            &MockSystemInstruction::Correct { lamports: 50 },
+            account_metas.clone(),
+        )]);
+        let mut deltas = vec![0, 0];
+
+        let result =
+            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        assert_eq!(result, Ok(()));
+        assert_eq!(accounts[0].lamports, 50);
+        assert_eq!(accounts[1].lamports, 50);
+        assert_eq!(deltas, vec![0, 50]);
+
+        let message = Message::new(vec![Instruction::new(
+            mock_system_program_id,
+            &MockSystemInstruction::AttemptDebit { lamports: 50 },
+            account_metas.clone(),
+        )]);
+        let mut deltas = vec![0, 0];
+
+        let result =
+            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        assert_eq!(
+            result,
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::CreditOnlyLamportSpend
+            ))
+        );
+
+        let message = Message::new(vec![Instruction::new(
+            mock_system_program_id,
+            &MockSystemInstruction::Misbehave { lamports: 50 },
+            account_metas,
+        )]);
+        let mut deltas = vec![0, 0];
+
+        let result =
+            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        assert_eq!(
+            result,
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::UnbalancedInstruction
+            ))
         );
     }
 }

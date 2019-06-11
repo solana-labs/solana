@@ -52,6 +52,12 @@ pub enum InstructionError {
     /// Program modified the data of an account that doesn't belong to it
     ExternalAccountDataModified,
 
+    /// Credit-only account spent lamports
+    CreditOnlyLamportSpend,
+
+    /// Credit-only account modified data
+    CreditOnlyDataModified,
+
     /// An account was referenced more than once in a single instruction
     DuplicateAccountIndex,
 

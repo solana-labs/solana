@@ -216,7 +216,7 @@ impl Message {
             .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
-    fn is_credit_debit(&self, i: usize) -> bool {
+    pub fn is_debitable(&self, i: usize) -> bool {
         i < (self.header.num_required_signatures - self.header.num_credit_only_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
@@ -228,7 +228,7 @@ impl Message {
         let mut credit_debit_keys = vec![];
         let mut credit_only_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_credit_debit(i) {
+            if self.is_debitable(i) {
                 credit_debit_keys.push(key);
             } else {
                 credit_only_keys.push(key);
@@ -516,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_credit_debit() {
+    fn test_is_debitable() {
         let key0 = Pubkey::new_rand();
         let key1 = Pubkey::new_rand();
         let key2 = Pubkey::new_rand();
@@ -534,12 +534,12 @@ mod tests {
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
-        assert_eq!(message.is_credit_debit(0), true);
-        assert_eq!(message.is_credit_debit(1), false);
-        assert_eq!(message.is_credit_debit(2), false);
-        assert_eq!(message.is_credit_debit(3), true);
-        assert_eq!(message.is_credit_debit(4), true);
-        assert_eq!(message.is_credit_debit(5), false);
+        assert_eq!(message.is_debitable(0), true);
+        assert_eq!(message.is_debitable(1), false);
+        assert_eq!(message.is_debitable(2), false);
+        assert_eq!(message.is_debitable(3), true);
+        assert_eq!(message.is_debitable(4), true);
+        assert_eq!(message.is_debitable(5), false);
     }
 
     #[test]

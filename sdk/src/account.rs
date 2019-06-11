@@ -55,6 +55,8 @@ impl Account {
     }
 }
 
+pub type LamportCredit = u64;
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyedAccount<'a> {
