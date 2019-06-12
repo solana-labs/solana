@@ -16,7 +16,8 @@ serde_derive = "1.0.92"
 serde_json = "1.0.39"
 serde_yaml = "0.8.9"
 solana = { path = "../core", version = "0.16.0" }
-solana-bpfloader = { path = "../programs/bpf_loader", version = "0.16.0" }
+solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.16.0" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.16.0" }
 solana-budget-api = { path = "../programs/budget_api", version = "0.16.0" }
 solana-budget-program = { path = "../programs/budget_program", version = "0.16.0" }
 solana-config-api = { path = "../programs/config_api", version = "0.16.0" }

@@ -64,7 +64,7 @@ pub fn create_genesis_block_with_leader(
             ),
         ],
         &[
-            solana_bpf_loader!(),
+            solana_bpf_loader_program!(),
             solana_vote_program!(),
             solana_stake_program!(),
         ],

@@ -1,5 +1,5 @@
 [package]
-name = "solana-bpfloader"
+name = "solana-bpf-loader-api"
 version = "0.16.0"
 description = "Solana BPF Loader"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -19,5 +19,5 @@ solana-sdk = { path = "../../sdk", version = "0.16.0" }
 solana_rbpf = "=0.1.13"
 
 [lib]
-crate-type = ["lib", "cdylib"]
-name = "solana_bpf_loader"
+crate-type = ["lib"]
+name = "solana_bpf_loader_api"
