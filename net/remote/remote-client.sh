@@ -65,7 +65,7 @@ solana-bench-tps)
       --sustained \
       --threads $threadCount \
       $benchTpsExtraArgs \
-      -r ./client-accounts.yml \
+      --read-client-keys ./client-accounts.yml \
   "
   ;;
 solana-bench-exchange)

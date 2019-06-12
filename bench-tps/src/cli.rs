@@ -114,7 +114,6 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
         )
         .arg(
             Arg::with_name("write-client-keys")
-                .short("w")
                 .long("write-client-keys")
                 .value_name("FILENAME")
                 .takes_value(true)
@@ -122,7 +121,6 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
         )
         .arg(
             Arg::with_name("read-client-keys")
-                .short("r")
                 .long("read-client-keys")
                 .value_name("FILENAME")
                 .takes_value(true)

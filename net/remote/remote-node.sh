@@ -98,7 +98,7 @@ local|tar)
     mkdir ./solana-client-accounts
     for i in $(seq 0 $((numBenchTpsClients-1))); do
       # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
-      solana-bench-tps -w ./solana-client-accounts/bench-tps"$i".yml $benchTpsExtraArgs
+      solana-bench-tps --write-client-keys ./solana-client-accounts/bench-tps"$i".yml $benchTpsExtraArgs
       # Skip first line, as it contains header
       tail -n +2 -q ./solana-client-accounts/bench-tps"$i".yml >> ./solana-client-accounts/client-accounts.yml
       echo "" >> ./solana-client-accounts/client-accounts.yml
