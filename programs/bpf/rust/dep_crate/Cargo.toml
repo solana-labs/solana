@@ -4,7 +4,7 @@
 [package]
 name = "solana-bpf-rust-dep-crate"
 version = "0.16.0"
-description = "Solana BPF iter program written in Rust"
+description = "Solana BPF dep-crate program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
