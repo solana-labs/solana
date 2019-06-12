@@ -17,7 +17,6 @@ use solana_sdk::transaction::Transaction;
 use std::cmp;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
@@ -27,6 +26,13 @@ use std::time::Instant;
 
 pub const MAX_SPENDS_PER_TX: u64 = 4;
 pub const NUM_LAMPORTS_PER_ACCOUNT: u64 = 128;
+
+#[derive(Debug)]
+pub enum BenchTpsError {
+    AirdropFailure,
+}
+
+pub type Result<T> = std::result::Result<T, BenchTpsError>;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
@@ -447,7 +453,7 @@ pub fn airdrop_lamports<T: Client>(
     drone_addr: &SocketAddr,
     id: &Keypair,
     tx_count: u64,
-) {
+) -> Result<()> {
     let starting_balance = client.get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_lamport_balance(starting_balance);
     println!("starting balance {}", starting_balance);
@@ -496,9 +502,10 @@ pub fn airdrop_lamports<T: Client>(
                 current_balance,
                 starting_balance
             );
-            exit(1);
+            return Err(BenchTpsError::AirdropFailure);
         }
     }
+    Ok(())
 }
 
 fn compute_and_report_stats(
@@ -596,7 +603,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
     funding_pubkey: &Keypair,
     tx_count: usize,
     lamports_per_account: u64,
-) -> (Vec<Keypair>, u64) {
+) -> Result<(Vec<Keypair>, u64)> {
     info!("Creating {} keypairs...", tx_count * 2);
     let mut keypairs = generate_keypairs(funding_pubkey, tx_count as u64 * 2);
 
@@ -614,7 +621,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
             lamports_per_account - last_keypair_balance + fee_calculator.lamports_per_signature;
         let total = extra * (keypairs.len() as u64);
         if client.get_balance(&funding_pubkey.pubkey()).unwrap_or(0) < total {
-            airdrop_lamports(client, &drone_addr.unwrap(), funding_pubkey, total);
+            airdrop_lamports(client, &drone_addr.unwrap(), funding_pubkey, total)?;
         }
         info!("adding more lamports {}", extra);
         fund_keys(
@@ -629,7 +636,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
     // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
     keypairs.truncate(2 * tx_count);
 
-    (keypairs, last_keypair_balance)
+    Ok((keypairs, last_keypair_balance))
 }
 
 #[cfg(test)]
@@ -696,7 +703,8 @@ mod tests {
             &config.id,
             config.tx_count,
             lamports_per_account,
-        );
+        )
+        .unwrap();
 
         let total = do_bench_tps(vec![client], config, keypairs, 0);
         assert!(total > 100);
@@ -714,7 +722,7 @@ mod tests {
         config.duration = Duration::from_secs(5);
 
         let (keypairs, _keypair_balance) =
-            generate_and_fund_keypairs(&clients[0], None, &config.id, config.tx_count, 20);
+            generate_and_fund_keypairs(&clients[0], None, &config.id, config.tx_count, 20).unwrap();
 
         do_bench_tps(clients, config, keypairs, 0);
     }
@@ -728,7 +736,7 @@ mod tests {
         let lamports = 20;
 
         let (keypairs, _keypair_balance) =
-            generate_and_fund_keypairs(&client, None, &id, tx_count, lamports);
+            generate_and_fund_keypairs(&client, None, &id, tx_count, lamports).unwrap();
 
         for kp in &keypairs {
             // TODO: This should be >= lamports, but fails at the moment
