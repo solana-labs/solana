@@ -104,9 +104,6 @@ where
     );
 
     let accounts_in_groups = batch_size * account_groups;
-    let exit_signal = Arc::new(AtomicBool::new(false));
-    let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
-    let client = clients[0].as_ref();
 
     if write_to_client_file {
         let keypairs = generate_keypairs(accounts_in_groups as u64 * 2);
@@ -147,6 +144,10 @@ where
         let keypairs = generate_keypairs(total_keys);
         (keypairs, fund_amount)
     };
+
+    let exit_signal = Arc::new(AtomicBool::new(false));
+    let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
+    let client = clients[0].as_ref();
 
     let trader_signers: Vec<_> = keypairs
         .drain(0..accounts_in_groups)
