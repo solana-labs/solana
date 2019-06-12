@@ -41,7 +41,7 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 /// a Verifiable Delay Function (VDF) and a Proof of Work (not to be confused with Proof of
 /// Work consensus!)
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 pub struct Entry {
     /// The number of hashes since the previous Entry ID.
     pub num_hashes: u64,

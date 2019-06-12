@@ -44,6 +44,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::Transaction;
+use std::borrow::Cow;
 use std::cmp::min;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
@@ -126,7 +127,7 @@ impl Signable for PruneData {
         self.pubkey
     }
 
-    fn signable_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Cow<[u8]> {
         #[derive(Serialize)]
         struct SignData {
             pubkey: Pubkey,
@@ -140,7 +141,7 @@ impl Signable for PruneData {
             destination: self.destination,
             wallclock: self.wallclock,
         };
-        serialize(&data).expect("serialize PruneData")
+        Cow::Owned(serialize(&data).expect("serialize PruneData"))
     }
 
     fn get_signature(&self) -> Signature {

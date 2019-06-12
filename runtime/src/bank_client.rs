@@ -99,6 +99,10 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_balance(pubkey))
     }
 
+    fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
+        Ok(self.bank.last_blockhash_with_fee_calculator())
+    }
+
     fn get_signature_status(
         &self,
         signature: &Signature,
@@ -106,8 +110,8 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_signature_status(signature))
     }
 
-    fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
-        Ok(self.bank.last_blockhash_with_fee_calculator())
+    fn get_slot(&self) -> Result<u64> {
+        Ok(self.bank.slot())
     }
 
     fn get_transaction_count(&self) -> Result<u64> {

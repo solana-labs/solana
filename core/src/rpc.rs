@@ -96,6 +96,10 @@ impl JsonRpcRequestProcessor {
         self.bank().get_signature_confirmation_status(&signature)
     }
 
+    fn get_slot(&self) -> Result<u64> {
+        Ok(self.bank().slot())
+    }
+
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank().transaction_count() as u64)
     }
@@ -218,6 +222,9 @@ pub trait RpcSol {
         _: String,
     ) -> Result<Option<transaction::Result<()>>>;
 
+    #[rpc(meta, name = "getSlot")]
+    fn get_slot(&self, _: Self::Metadata) -> Result<u64>;
+
     #[rpc(meta, name = "getTransactionCount")]
     fn get_transaction_count(&self, _: Self::Metadata) -> Result<u64>;
 
@@ -332,6 +339,10 @@ impl RpcSol for RpcSolImpl {
     ) -> Result<Option<transaction::Result<()>>> {
         self.get_signature_confirmation(meta, id)
             .map(|res| res.map(|x| x.1))
+    }
+
+    fn get_slot(&self, meta: Self::Metadata) -> Result<u64> {
+        meta.request_processor.read().unwrap().get_slot()
     }
 
     fn get_num_blocks_since_signature_confirmation(

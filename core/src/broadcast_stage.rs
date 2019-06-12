@@ -4,7 +4,7 @@ use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::entry::EntrySlice;
 use crate::erasure::CodingGenerator;
-use crate::packet::index_blobs_with_genesis;
+use crate::packet::index_blobs;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -15,6 +15,7 @@ use solana_metrics::{
     datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signable;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -104,7 +105,7 @@ impl Broadcast {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        index_blobs_with_genesis(
+        index_blobs(
             &blobs,
             &self.id,
             blob_index,
@@ -116,9 +117,26 @@ impl Broadcast {
             blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
         }
 
+        // Make sure not to modify the blob header or data after signing it here
+        self.thread_pool.install(|| {
+            blobs.par_iter().for_each(|b| {
+                b.write()
+                    .unwrap()
+                    .sign(&cluster_info.read().unwrap().keypair);
+            })
+        });
+
         blocktree.write_shared_blobs(&blobs)?;
 
         let coding = self.coding_generator.next(&blobs);
+
+        self.thread_pool.install(|| {
+            coding.par_iter().for_each(|c| {
+                c.write()
+                    .unwrap()
+                    .sign(&cluster_info.read().unwrap().keypair);
+            })
+        });
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 

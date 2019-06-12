@@ -2,6 +2,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_config_api::ConfigState;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Signable, Signature};
+use std::borrow::Cow;
 use std::error;
 use std::io;
 
@@ -27,8 +28,8 @@ impl Signable for SignedUpdateManifest {
         self.account_pubkey
     }
 
-    fn signable_data(&self) -> Vec<u8> {
-        bincode::serialize(&self.manifest).expect("serialize")
+    fn signable_data(&self) -> Cow<[u8]> {
+        Cow::Owned(bincode::serialize(&self.manifest).expect("serialize"))
     }
     fn get_signature(&self) -> Signature {
         self.manifest_signature

@@ -18,6 +18,7 @@ use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
 use solana::validator;
 use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
+use solana_sdk::signature::Signable;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
 use std::fs::remove_dir_all;
@@ -39,9 +40,12 @@ fn new_gossip(
 #[test]
 fn test_replay() {
     solana_logger::setup();
-    let leader = Node::new_localhost();
+    let leader_keypair = Keypair::new();
+    let leader = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+
     let target1_keypair = Keypair::new();
     let target1 = Node::new_localhost_with_pubkey(&target1_keypair.pubkey());
+
     let target2 = Node::new_localhost();
     let exit = Arc::new(AtomicBool::new(false));
 
@@ -168,9 +172,12 @@ fn test_replay() {
             let blobs = entries.to_shared_blobs();
             index_blobs(&blobs, &leader.info.id, blob_idx, 1, 0);
             blob_idx += blobs.len() as u64;
-            blobs
-                .iter()
-                .for_each(|b| b.write().unwrap().meta.set_addr(&tvu_addr));
+            blobs.iter().for_each(|b| {
+                let mut b_w = b.write().unwrap();
+                b_w.set_id(&leader_keypair.pubkey());
+                b_w.meta.set_addr(&tvu_addr);
+                b_w.sign(&leader_keypair);
+            });
             msgs.extend(blobs.into_iter());
         }
 

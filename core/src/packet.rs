@@ -7,7 +7,10 @@ use serde::Serialize;
 use solana_metrics::inc_new_counter_debug;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signable;
+use solana_sdk::signature::Signature;
 use std::borrow::Borrow;
+use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::io;
@@ -335,12 +338,13 @@ macro_rules! range {
     };
 }
 
-const PARENT_RANGE: std::ops::Range<usize> = range!(0, u64);
+const SIGNATURE_RANGE: std::ops::Range<usize> = range!(0, Signature);
+const FORWARDED_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, bool);
+const PARENT_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u64);
 const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
 const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
-const FORWARDED_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, bool);
-const FLAGS_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u32);
+const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
 const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
 
 macro_rules! align {
@@ -350,6 +354,7 @@ macro_rules! align {
 }
 
 pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, BLOB_DATA_ALIGN); // make sure data() is safe for erasure
+pub const SIGNABLE_START: usize = PARENT_RANGE.start;
 
 pub const BLOB_FLAG_IS_LAST_IN_SLOT: u32 = 0x2;
 
@@ -593,21 +598,29 @@ impl Blob {
     }
 }
 
-pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, blob_index: u64, slot: u64, parent: u64) {
-    index_blobs_with_genesis(blobs, id, blob_index, slot, parent)
+impl Signable for Blob {
+    fn pubkey(&self) -> Pubkey {
+        self.id()
+    }
+
+    fn signable_data(&self) -> Cow<[u8]> {
+        let end = cmp::max(SIGNABLE_START, self.data_size() as usize);
+        Cow::Borrowed(&self.data[SIGNABLE_START..end])
+    }
+
+    fn get_signature(&self) -> Signature {
+        Signature::new(&self.data[SIGNATURE_RANGE])
+    }
+
+    fn set_signature(&mut self, signature: Signature) {
+        self.data[SIGNATURE_RANGE].copy_from_slice(signature.as_ref())
+    }
 }
 
-pub fn index_blobs_with_genesis(
-    blobs: &[SharedBlob],
-    id: &Pubkey,
-    mut blob_index: u64,
-    slot: u64,
-    parent: u64,
-) {
+pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut blob_index: u64, slot: u64, parent: u64) {
     // enumerate all the blobs, those are the indices
     for blob in blobs.iter() {
         let mut blob = blob.write().unwrap();
-
         blob.set_index(blob_index);
         blob.set_slot(slot);
         blob.set_parent(parent);
@@ -827,5 +840,20 @@ mod tests {
         assert!(p1 == p2);
         p2.data[1] = 4;
         assert!(p1 != p2);
+    }
+
+    #[test]
+    fn test_sign_blob() {
+        let mut b = Blob::default();
+        let k = Keypair::new();
+        let p = k.pubkey();
+        b.set_id(&p);
+        b.sign(&k);
+        assert!(b.verify());
+
+        // Set a bigger chunk of data to sign
+        b.set_size(80);
+        b.sign(&k);
+        assert!(b.verify());
     }
 }

@@ -75,6 +75,25 @@ impl RpcClient {
         Ok(result)
     }
 
+    pub fn get_slot(&self) -> io::Result<u64> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetSlot, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetSlot request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetSlot parse failure: {}", err),
+            )
+        })
+    }
+
     pub fn send_and_confirm_transaction<T: KeypairUtil>(
         &self,
         transaction: &mut Transaction,

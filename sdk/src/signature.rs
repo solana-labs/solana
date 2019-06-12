@@ -7,6 +7,8 @@ use generic_array::GenericArray;
 use rand::rngs::OsRng;
 use serde_json;
 use solana_ed25519_dalek as ed25519_dalek;
+use std::borrow::Borrow;
+use std::borrow::Cow;
 use std::error;
 use std::fmt;
 use std::fs::{self, File};
@@ -40,16 +42,16 @@ impl Signature {
 
 pub trait Signable {
     fn sign(&mut self, keypair: &Keypair) {
-        let data = self.signable_data();
-        self.set_signature(keypair.sign_message(&data));
+        let signature = keypair.sign_message(self.signable_data().borrow());
+        self.set_signature(signature);
     }
     fn verify(&self) -> bool {
         self.get_signature()
-            .verify(&self.pubkey().as_ref(), &self.signable_data())
+            .verify(&self.pubkey().as_ref(), self.signable_data().borrow())
     }
 
     fn pubkey(&self) -> Pubkey;
-    fn signable_data(&self) -> Vec<u8>;
+    fn signable_data(&self) -> Cow<[u8]>;
     fn get_signature(&self) -> Signature;
     fn set_signature(&mut self, signature: Signature);
 }
