@@ -1,6 +1,14 @@
 // @flow
 
-// These constants should match the values in
-// https://github.com/solana-labs/solana/blob/master/sdk/src/timing.rs
+// TODO: These constants should be removed in favor of reading them out of a
+// Syscall account
+
+/**
+ * @ignore
+ */
 export const NUM_TICKS_PER_SECOND = 10;
+
+/**
+ * @ignore
+ */
 export const DEFAULT_TICKS_PER_SLOT = 8;
