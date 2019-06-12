@@ -34,6 +34,7 @@ pub struct ValidatorInfo {
     pub voting_keypair: Arc<Keypair>,
     pub storage_keypair: Arc<Keypair>,
     pub ledger_path: String,
+    pub contact_info: ContactInfo,
 }
 
 pub struct ReplicatorInfo {
@@ -173,6 +174,7 @@ impl LocalCluster {
                 voting_keypair: leader_voting_keypair,
                 storage_keypair: leader_storage_keypair,
                 ledger_path: leader_ledger_path,
+                contact_info: leader_contact_info.clone(),
             },
         );
 
@@ -247,6 +249,7 @@ impl LocalCluster {
         let storage_keypair = Arc::new(Keypair::new());
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
+        let contact_info = validator_node.info.clone();
         let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
 
         if validator_config.voting_disabled {
@@ -299,6 +302,7 @@ impl LocalCluster {
                     voting_keypair,
                     storage_keypair,
                     ledger_path,
+                    contact_info,
                 },
             );
         } else {
@@ -309,6 +313,7 @@ impl LocalCluster {
                     voting_keypair,
                     storage_keypair,
                     ledger_path,
+                    contact_info,
                 },
             );
         }
@@ -511,6 +516,12 @@ impl LocalCluster {
 impl Cluster for LocalCluster {
     fn get_node_pubkeys(&self) -> Vec<Pubkey> {
         self.fullnodes.keys().cloned().collect()
+    }
+
+    fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
+        self.fullnode_infos
+            .get(pubkey)
+            .map(|f| create_client(f.contact_info.client_facing_addr(), FULLNODE_PORT_RANGE))
     }
 
     fn restart_node(&mut self, pubkey: Pubkey) {

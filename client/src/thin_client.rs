@@ -327,6 +327,16 @@ impl SyncClient for ThinClient {
         Ok(status)
     }
 
+    fn get_slot(&self) -> TransportResult<u64> {
+        let slot = self.rpc_client().get_slot().map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("send_transaction failed with error {:?}", err),
+            )
+        })?;
+        Ok(slot)
+    }
+
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
         let index = self.optimizer.experiment();
         let now = Instant::now();

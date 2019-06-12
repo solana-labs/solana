@@ -1,6 +1,5 @@
 extern crate solana;
 
-use crate::solana::blocktree::Blocktree;
 use hashbrown::HashSet;
 use log::*;
 use solana::cluster::Cluster;
@@ -9,8 +8,10 @@ use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::validator::ValidatorConfig;
 use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOT_LENGTH};
+use solana_sdk::client::SyncClient;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::timing;
+use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
@@ -265,11 +266,11 @@ fn run_repairman_catchup(num_repairmen: u64) {
 
     let repairman_pubkeys: HashSet<_> = cluster.get_node_pubkeys().into_iter().collect();
     let epoch_schedule = EpochSchedule::new(num_slots_per_epoch, stakers_slot_offset, true);
-    let num_warmup_epochs = (epoch_schedule.get_stakers_epoch(0) + 1) as f64;
+    let num_warmup_epochs = epoch_schedule.get_stakers_epoch(0) + 1;
 
     // Sleep for longer than the first N warmup epochs, with a one epoch buffer for timing issues
     cluster_tests::sleep_n_epochs(
-        num_warmup_epochs + 1.0,
+        num_warmup_epochs as f64 + 1.0,
         &cluster.genesis_block.poh_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
@@ -278,7 +279,6 @@ fn run_repairman_catchup(num_repairmen: u64) {
     // Start up a new node, wait for catchup. Backwards repair won't be sufficient because the
     // leader is sending blobs past this validator's first two confirmed epochs. Thus, the repairman
     // protocol will have to kick in for this validator to repair.
-
     cluster.add_validator(&validator_config, repairee_stake);
 
     let all_pubkeys = cluster.get_node_pubkeys();
@@ -288,28 +288,18 @@ fn run_repairman_catchup(num_repairmen: u64) {
         .unwrap();
 
     // Wait for repairman protocol to catch this validator up
-    cluster_tests::sleep_n_epochs(
-        num_warmup_epochs + 1.0,
-        &cluster.genesis_block.poh_config,
-        num_ticks_per_slot,
-        num_slots_per_epoch,
-    );
+    let repairee_client = cluster.get_validator_client(&repairee_id).unwrap();
+    let mut current_slot = 0;
 
-    cluster.close_preserve_ledgers();
-    let validator_ledger_path = cluster.fullnode_infos[&repairee_id].ledger_path.clone();
-
-    // Expect at least the the first two epochs to have been rooted after waiting 3 epochs.
-    let num_expected_slots = num_slots_per_epoch * 2;
-    let validator_ledger = Blocktree::open(&validator_ledger_path).unwrap();
-    let validator_rooted_slots: Vec<_> =
-        validator_ledger.rooted_slot_iterator(0).unwrap().collect();
-
-    if validator_rooted_slots.len() as u64 <= num_expected_slots {
-        error!(
-            "Num expected slots: {}, number of rooted slots: {}",
-            num_expected_slots,
-            validator_rooted_slots.len()
-        );
+    // Make sure this validator can get repaired past the first few warmup epochs
+    let target_slot = (num_warmup_epochs) * num_slots_per_epoch + 1;
+    while current_slot <= target_slot {
+        trace!("current_slot: {}", current_slot);
+        if let Ok(slot) = repairee_client.get_slot() {
+            current_slot = slot;
+        } else {
+            continue;
+        }
+        sleep(Duration::from_secs(1));
     }
-    assert!(validator_rooted_slots.len() as u64 > num_expected_slots);
 }

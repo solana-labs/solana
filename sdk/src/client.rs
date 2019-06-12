@@ -40,14 +40,17 @@ pub trait SyncClient {
     /// Get account balance or 0 if not found.
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64>;
 
+    /// Get recent blockhash
+    fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)>;
+
     /// Get signature status.
     fn get_signature_status(
         &self,
         signature: &Signature,
     ) -> Result<Option<transaction::Result<()>>>;
 
-    /// Get recent blockhash
-    fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)>;
+    /// Get last known slot
+    fn get_slot(&self) -> Result<u64>;
 
     /// Get transaction count
     fn get_transaction_count(&self) -> Result<u64>;
