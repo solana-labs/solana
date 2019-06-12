@@ -11,7 +11,6 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::bank::Bank;
 use solana_runtime::storage_utils::replicator_accounts;
 use solana_sdk::account::Account;

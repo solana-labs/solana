@@ -169,7 +169,7 @@ impl<'a> StorageAccount<'a> {
                 },
             );
             // TODO check for time correctness
-            proofs.retain(|segment, _| segment >= &current_segment.saturating_sub(5));
+            proofs.retain(|segment, _| *segment >= current_segment.saturating_sub(5));
 
             self.account.set_state(storage_contract)
         } else {

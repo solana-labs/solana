@@ -70,7 +70,11 @@ impl ForkProgress {
 }
 
 impl ReplayStage {
-    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
+    #[allow(
+        clippy::new_ret_no_self,
+        clippy::too_many_arguments,
+        clippy::type_complexity
+    )]
     pub fn new<T>(
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
