@@ -104,9 +104,11 @@ where
     );
 
     let accounts_in_groups = batch_size * account_groups;
+    const NUM_KEYPAIR_GROUPS: u64 = 2;
+    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
 
     if write_to_client_file {
-        let keypairs = generate_keypairs(accounts_in_groups as u64 * 2);
+        let keypairs = generate_keypairs(total_keys);
 
         let mut accounts = HashMap::new();
         keypairs.iter().for_each(|keypair| {
@@ -123,31 +125,22 @@ where
         return;
     }
 
-    let (mut keypairs, fund_amount) = if read_from_client_file {
+    let mut keypairs = if read_from_client_file {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
         let accounts: HashMap<String, u64> = serde_yaml::from_reader(file).unwrap();
-        let mut keypairs = vec![];
-        let mut fund_amount = 0;
-
-        accounts.into_iter().for_each(|(keypair, balance)| {
-            let bytes: Vec<u8> = serde_json::from_str(keypair.as_str()).unwrap();
-            keypairs.push(Keypair::from_bytes(&bytes).unwrap());
-            fund_amount = balance;
-        });
-        (keypairs, fund_amount)
+        accounts
+            .into_iter()
+            .map(|(keypair, _)| {
+                let bytes: Vec<u8> = serde_json::from_str(keypair.as_str()).unwrap();
+                Keypair::from_bytes(&bytes).unwrap()
+            })
+            .collect()
     } else {
-        const NUM_KEYPAIR_GROUPS: u64 = 2;
-        let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
         info!("Generating {:?} keys", total_keys);
-        let keypairs = generate_keypairs(total_keys);
-        (keypairs, fund_amount)
+        generate_keypairs(total_keys)
     };
-
-    let exit_signal = Arc::new(AtomicBool::new(false));
-    let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
-    let client = clients[0].as_ref();
 
     let trader_signers: Vec<_> = keypairs
         .drain(0..accounts_in_groups)
@@ -158,8 +151,6 @@ where
         .map(Arc::new)
         .collect();
 
-    const NUM_KEYPAIR_GROUPS: u64 = 2;
-    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
     info!("Generating {:?} keys", total_keys);
     let mut keypairs = generate_keypairs(total_keys);
     let src_pubkeys: Vec<_> = keypairs
@@ -171,10 +162,15 @@ where
         .map(|keypair| keypair.pubkey())
         .collect();
 
-    info!("Fund trader accounts");
-    fund_keys(client, &identity, &trader_signers, fund_amount);
-    info!("Fund swapper accounts");
-    fund_keys(client, &identity, &swapper_signers, fund_amount);
+    let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
+    let client = clients[0].as_ref();
+
+    if !read_from_client_file {
+        info!("Fund trader accounts");
+        fund_keys(client, &identity, &trader_signers, fund_amount);
+        info!("Fund swapper accounts");
+        fund_keys(client, &identity, &swapper_signers, fund_amount);
+    }
 
     info!("Create {:?} source token accounts", src_pubkeys.len());
     create_token_accounts(client, &trader_signers, &src_pubkeys);
@@ -190,6 +186,7 @@ where
         transfer_delay
     );
 
+    let exit_signal = Arc::new(AtomicBool::new(false));
     let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
     let total_txs_sent_count = Arc::new(AtomicUsize::new(0));
     let s_threads: Vec<_> = (0..threads)
