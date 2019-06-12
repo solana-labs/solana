@@ -105,7 +105,8 @@ local|tar)
     done
     for i in $(seq 0 $((numBenchExchangeClients-1))); do
       # shellcheck disable=SC2086 # Do not want to quote $benchExchangeExtraArgs
-      solana-bench-exchange --write-client-keys ./solana-client-accounts/bench-exchange"$i".yml $benchExchangeExtraArgs
+      solana-bench-exchange --batch-size 1000 --fund-amount 20000 \
+        --write-client-keys ./solana-client-accounts/bench-exchange"$i".yml $benchExchangeExtraArgs
       tail -n +2 -q ./solana-client-accounts/bench-exchange"$i".yml >> ./solana-client-accounts/client-accounts.yml
       echo "" >> ./solana-client-accounts/client-accounts.yml
     done
