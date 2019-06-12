@@ -2,7 +2,7 @@ use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
 
 pub const MINIMUM_SLOT_LENGTH: usize = MAX_LOCKOUT_HISTORY + 1;
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub struct EpochSchedule {
     /// The maximum number of slots in each epoch.
     pub slots_per_epoch: u64,
@@ -100,5 +100,70 @@ impl EpochSchedule {
 
     pub fn get_last_slot_in_epoch(&self, epoch: u64) -> u64 {
         self.get_first_slot_in_epoch(epoch) + self.get_slots_in_epoch(epoch) - 1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_epoch_schedule() {
+        // one week of slots at 8 ticks/slot, 10 ticks/sec is
+        // (1 * 7 * 24 * 4500u64).next_power_of_two();
+
+        // test values between MINIMUM_SLOT_LEN and MINIMUM_SLOT_LEN * 16, should cover a good mix
+        for slots_per_epoch in MINIMUM_SLOT_LENGTH as u64..=MINIMUM_SLOT_LENGTH as u64 * 16 {
+            let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
+
+            assert_eq!(epoch_schedule.get_first_slot_in_epoch(0), 0);
+            assert_eq!(
+                epoch_schedule.get_last_slot_in_epoch(0),
+                MINIMUM_SLOT_LENGTH as u64 - 1
+            );
+
+            let mut last_stakers = 0;
+            let mut last_epoch = 0;
+            let mut last_slots_in_epoch = MINIMUM_SLOT_LENGTH as u64;
+            for slot in 0..(2 * slots_per_epoch) {
+                // verify that stakers_epoch is continuous over the warmup
+                // and into the first normal epoch
+
+                let stakers = epoch_schedule.get_stakers_epoch(slot);
+                if stakers != last_stakers {
+                    assert_eq!(stakers, last_stakers + 1);
+                    last_stakers = stakers;
+                }
+
+                let (epoch, offset) = epoch_schedule.get_epoch_and_slot_index(slot);
+
+                //  verify that epoch increases continuously
+                if epoch != last_epoch {
+                    assert_eq!(epoch, last_epoch + 1);
+                    last_epoch = epoch;
+                    assert_eq!(epoch_schedule.get_first_slot_in_epoch(epoch), slot);
+                    assert_eq!(epoch_schedule.get_last_slot_in_epoch(epoch - 1), slot - 1);
+
+                    // verify that slots in an epoch double continuously
+                    //   until they reach slots_per_epoch
+
+                    let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
+                    if slots_in_epoch != last_slots_in_epoch {
+                        if slots_in_epoch != slots_per_epoch {
+                            assert_eq!(slots_in_epoch, last_slots_in_epoch * 2);
+                        }
+                    }
+                    last_slots_in_epoch = slots_in_epoch;
+                }
+                // verify that the slot offset is less than slots_in_epoch
+                assert!(offset < last_slots_in_epoch);
+            }
+
+            // assert that these changed  ;)
+            assert!(last_stakers != 0); // t
+            assert!(last_epoch != 0);
+            // assert that we got to "normal" mode
+            assert!(last_slots_in_epoch == slots_per_epoch);
+        }
     }
 }
