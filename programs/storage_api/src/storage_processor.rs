@@ -58,12 +58,11 @@ pub fn process_instruction(
             let current = Current::from(&rest[0].account).unwrap();
             storage_account.advertise_storage_recent_blockhash(hash, slot, current.slot)
         }
-        StorageInstruction::ClaimStorageReward { slot } => {
-            if rest.len() != 2 {
+        StorageInstruction::ClaimStorageReward => {
+            if rest.len() != 1 {
                 Err(InstructionError::InvalidArgument)?;
             }
-            let current = Current::from(&rest[1].account).unwrap();
-            storage_account.claim_storage_reward(&mut rest[0], slot, current.slot)
+            storage_account.claim_storage_reward(&mut rest[0])
         }
         StorageInstruction::ProofValidation { segment, proofs } => {
             if me_unsigned || rest.is_empty() {

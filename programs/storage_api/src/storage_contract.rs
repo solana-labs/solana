@@ -297,33 +297,20 @@ impl<'a> StorageAccount<'a> {
     pub fn claim_storage_reward(
         &mut self,
         mining_pool: &mut KeyedAccount,
-        slot: u64,
-        current_slot: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
 
         if let StorageContract::ValidatorStorage {
-            reward_validations,
-            slot: state_slot,
-            ..
+            reward_validations, ..
         } = &mut storage_contract
         {
-            let state_segment = get_segment_from_slot(*state_slot);
-            let claim_segment = get_segment_from_slot(slot);
-            if state_segment <= claim_segment || !reward_validations.contains_key(&claim_segment) {
-                debug!(
-                    "current {:?}, claim {:?}, have rewards for {:?} segments",
-                    state_segment,
-                    claim_segment,
-                    reward_validations.len()
-                );
-                return Err(InstructionError::InvalidArgument);
-            }
             let num_validations = count_valid_proofs(
                 &reward_validations
-                    .remove(&claim_segment)
-                    .map(|mut proofs| proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>())
-                    .unwrap_or_default(),
+                    .drain()
+                    .flat_map(|(_segment, mut proofs)| {
+                        proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>(),
             );
             let reward = TOTAL_VALIDATOR_REWARDS * num_validations;
             mining_pool.account.lamports -= reward;
@@ -335,34 +322,20 @@ impl<'a> StorageAccount<'a> {
             ..
         } = &mut storage_contract
         {
-            // if current tick height is a full segment away, allow reward collection
-            let claim_index = get_segment_from_slot(current_slot);
-            let claim_segment = get_segment_from_slot(slot);
-            // Todo this might might always be true
-            if claim_index <= claim_segment
-                || !reward_validations.contains_key(&claim_segment)
-                || !proofs.contains_key(&claim_segment)
-            {
-                info!(
-                    "current {:?}, claim {:?}, have rewards for {:?} segments",
-                    claim_index,
-                    claim_segment,
-                    reward_validations.len()
-                );
-                return Err(InstructionError::InvalidArgument);
-            }
             // remove proofs for which rewards have already been collected
-            let segment_proofs = proofs.get_mut(&claim_segment).unwrap();
+            let segment_proofs = proofs;
             let checked_proofs = reward_validations
-                .remove(&claim_segment)
-                .map(|mut proofs| {
+                .drain()
+                .flat_map(|(segment, mut proofs)| {
                     proofs
                         .drain()
                         .map(|(sha_state, proof)| {
                             proof
                                 .into_iter()
                                 .map(|proof| {
-                                    segment_proofs.remove(&sha_state);
+                                    segment_proofs.get_mut(&segment).and_then(|segment_proofs| {
+                                        segment_proofs.remove(&sha_state)
+                                    });
                                     proof
                                 })
                                 .collect::<Vec<_>>()
@@ -370,7 +343,7 @@ impl<'a> StorageAccount<'a> {
                         .flatten()
                         .collect::<Vec<_>>()
                 })
-                .unwrap_or_default();
+                .collect::<Vec<_>>();
             let total_proofs = checked_proofs.len() as u64;
             let num_validations = count_valid_proofs(&checked_proofs);
             let reward =

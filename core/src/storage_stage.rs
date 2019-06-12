@@ -11,7 +11,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::bank::Bank;
 use solana_runtime::storage_utils::replicator_accounts;
 use solana_sdk::account::Account;
@@ -513,15 +513,16 @@ impl StorageStage {
                         );
                     }
 
+                    // TODO un-ignore this result and be sure to drain all pending proofs
                     //process a "crossing"
-                    Self::process_entry_crossing(
+                    let _ignored = Self::process_entry_crossing(
                         &storage_keypair,
                         &storage_state,
                         &blocktree,
                         bank.last_blockhash(),
                         bank.slot(),
                         instruction_sender,
-                    )?;
+                    );
                     Self::submit_verifications(
                         get_segment_from_slot(bank.slot()),
                         &storage_state,
@@ -547,7 +548,7 @@ impl StorageStage {
             .replicator_map
             .iter_mut()
             .enumerate()
-            .flat_map(|(segment, proof_map)| {
+            .flat_map(|(_, proof_map)| {
                 let checked_proofs = proof_map
                     .iter_mut()
                     .filter_map(|(id, proofs)| {
@@ -579,11 +580,6 @@ impl StorageStage {
                 }
             })
             .collect();
-        w_state.replicator_map.par_iter().for_each(|proof_map| {
-            proof_map
-                .iter()
-                .for_each(|(_, proofs)| assert!(proofs.is_empty()))
-        });
         let res: std::result::Result<_, _> = instructions
             .into_iter()
             .map(|ix| {
@@ -698,7 +694,7 @@ mod tests {
         let signature = keypair.sign_message(&hash.as_ref());
         #[cfg(feature = "cuda")]
         let mut result = storage_state.get_mining_result(&signature);
-        #[cfg(feature = "cuda")]
+        #[cfg(not(feature = "cuda"))]
         let result = storage_state.get_mining_result(&signature);
 
         assert_eq!(result, Hash::default());

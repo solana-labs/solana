@@ -37,9 +37,7 @@ pub enum StorageInstruction {
     /// Expects 1 Account:
     ///    0 - Storage account with credits to redeem
     ///    1 - MiningPool account to redeem credits from
-    ClaimStorageReward {
-        slot: u64,
-    },
+    ClaimStorageReward,
     ProofValidation {
         segment: u64,
         proofs: Vec<(Pubkey, Vec<CheckedProof>)>,
@@ -164,16 +162,11 @@ pub fn proof_validation<S: std::hash::BuildHasher>(
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 
-pub fn claim_reward(
-    storage_pubkey: &Pubkey,
-    mining_pool_pubkey: &Pubkey,
-    slot: u64,
-) -> Instruction {
-    let storage_instruction = StorageInstruction::ClaimStorageReward { slot };
+pub fn claim_reward(storage_pubkey: &Pubkey, mining_pool_pubkey: &Pubkey) -> Instruction {
+    let storage_instruction = StorageInstruction::ClaimStorageReward;
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, false),
         AccountMeta::new(*mining_pool_pubkey, false),
-        AccountMeta::new(current::id(), false),
     ];
     Instruction::new(id(), &storage_instruction, account_metas)
 }

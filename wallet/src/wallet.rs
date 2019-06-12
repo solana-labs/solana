@@ -58,7 +58,7 @@ pub enum WalletCommand {
     CreateStorageMiningPoolAccount(Pubkey, u64),
     CreateReplicatorStorageAccount(Pubkey, Pubkey),
     CreateValidatorStorageAccount(Pubkey, Pubkey),
-    ClaimStorageReward(Pubkey, Pubkey, u64),
+    ClaimStorageReward(Pubkey, Pubkey),
     ShowStorageAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
@@ -302,11 +302,9 @@ pub fn parse_command(
             let storage_mining_pool_account_pubkey =
                 value_of(matches, "storage_mining_pool_account_pubkey").unwrap();
             let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
-            let slot = matches.value_of("slot").unwrap().parse()?;
             Ok(WalletCommand::ClaimStorageReward(
                 storage_mining_pool_account_pubkey,
                 storage_account_pubkey,
-                slot,
             ))
         }
         ("show-storage-account", Some(matches)) => {
@@ -738,14 +736,12 @@ fn process_claim_storage_reward(
     config: &WalletConfig,
     storage_mining_pool_account_pubkey: &Pubkey,
     storage_account_pubkey: &Pubkey,
-    slot: u64,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let instruction = storage_instruction::claim_reward(
         storage_account_pubkey,
         storage_mining_pool_account_pubkey,
-        slot,
     );
     let signers = [&config.keypair];
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
@@ -1132,13 +1128,11 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::ClaimStorageReward(
             storage_mining_pool_account_pubkey,
             storage_account_pubkey,
-            slot,
         ) => process_claim_storage_reward(
             &rpc_client,
             config,
             &storage_mining_pool_account_pubkey,
             &storage_account_pubkey,
-            *slot,
         ),
 
         WalletCommand::ShowStorageAccount(storage_account_pubkey) => {
