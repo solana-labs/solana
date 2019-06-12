@@ -100,13 +100,21 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank().transaction_count() as u64)
     }
 
-    fn get_epoch_vote_accounts(&self) -> Result<Vec<(Pubkey, u64, VoteState)>> {
+    fn get_epoch_vote_accounts(&self) -> Result<Vec<RpcVoteAccountInfo>> {
         let bank = self.bank();
         Ok(bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
             .ok_or_else(Error::invalid_request)?
             .iter()
-            .map(|(k, (s, a))| (*k, *s, VoteState::from(a).unwrap_or_default()))
+            .map(|(pubkey, (stake, account))| {
+                let vote_state = VoteState::from(account).unwrap_or_default();
+                RpcVoteAccountInfo {
+                    vote_pubkey: (*pubkey).to_string(),
+                    node_pubkey: vote_state.node_pubkey.to_string(),
+                    stake: *stake,
+                    commission: vote_state.commission,
+                }
+            })
             .collect::<Vec<_>>())
     }
 
@@ -158,14 +166,30 @@ impl Metadata for Meta {}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RpcContactInfo {
-    /// Base58 id
-    pub id: String,
+    /// Pubkey of the node as a base-58 string
+    pub pubkey: String,
     /// Gossip port
     pub gossip: Option<SocketAddr>,
     /// Tpu port
     pub tpu: Option<SocketAddr>,
     /// JSON RPC port
     pub rpc: Option<SocketAddr>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcVoteAccountInfo {
+    /// Vote account pubkey as base-58 encoded string
+    pub vote_pubkey: String,
+
+    /// The pubkey of the node that votes using this account
+    pub node_pubkey: String,
+
+    /// The current stake, in lamports, delegated to this vote account
+    pub stake: u64,
+
+    /// A 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
+    pub commission: u32,
 }
 
 #[rpc(server)]
@@ -207,7 +231,7 @@ pub trait RpcSol {
     fn get_slot_leader(&self, _: Self::Metadata) -> Result<String>;
 
     #[rpc(meta, name = "getEpochVoteAccounts")]
-    fn get_epoch_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<(Pubkey, u64, VoteState)>>;
+    fn get_epoch_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<RpcVoteAccountInfo>>;
 
     #[rpc(meta, name = "getStorageBlockhash")]
     fn get_storage_blockhash(&self, _: Self::Metadata) -> Result<String>;
@@ -280,7 +304,7 @@ impl RpcSol for RpcSolImpl {
             .filter_map(|(contact_info, _)| {
                 if ContactInfo::is_valid_address(&contact_info.gossip) {
                     Some(RpcContactInfo {
-                        id: contact_info.id.to_string(),
+                        pubkey: contact_info.id.to_string(),
                         gossip: Some(contact_info.gossip),
                         tpu: valid_address_or_none(&contact_info.tpu),
                         rpc: valid_address_or_none(&contact_info.rpc),
@@ -441,10 +465,7 @@ impl RpcSol for RpcSolImpl {
             .to_string())
     }
 
-    fn get_epoch_vote_accounts(
-        &self,
-        meta: Self::Metadata,
-    ) -> Result<Vec<(Pubkey, u64, VoteState)>> {
+    fn get_epoch_vote_accounts(&self, meta: Self::Metadata) -> Result<Vec<RpcVoteAccountInfo>> {
         meta.request_processor
             .read()
             .unwrap()
@@ -575,7 +596,7 @@ mod tests {
             .expect("actual response deserialization");
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","result":[{{"id": "{}", "gossip": "127.0.0.1:1235", "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:8899"}}],"id":1}}"#,
+            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:8899"}}],"id":1}}"#,
             leader_pubkey,
         );
 
