@@ -32,6 +32,8 @@ impl Default for ProofStatus {
 pub struct Proof {
     pub signature: Signature,
     pub sha_state: Hash,
+    /// The start index of the segment proof is for
+    pub segment_index: usize,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
@@ -134,13 +136,12 @@ impl<'a> StorageAccount<'a> {
     pub fn submit_mining_proof(
         &mut self,
         sha_state: Hash,
-        slot: u64,
+        segment_index: usize,
         signature: Signature,
         current_slot: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
-            let segment_index = get_segment_from_slot(slot);
             let current_segment = get_segment_from_slot(current_slot);
 
             if segment_index >= current_segment {
@@ -149,11 +150,12 @@ impl<'a> StorageAccount<'a> {
             }
 
             debug!(
-                "Mining proof submitted with contract {:?} slot: {}",
-                sha_state, slot
+                "Mining proof submitted with contract {:?} segment_index: {}",
+                sha_state, segment_index
             );
 
-            let segment_proofs = proofs.entry(segment_index).or_default();
+            // store the proofs in the "current" segment's entry in the hash map.
+            let segment_proofs = proofs.entry(current_segment).or_default();
             if segment_proofs.contains_key(&sha_state) {
                 // do not accept duplicate proofs
                 return Err(InstructionError::InvalidArgument);
@@ -163,8 +165,11 @@ impl<'a> StorageAccount<'a> {
                 Proof {
                     sha_state,
                     signature,
+                    segment_index,
                 },
             );
+            // TODO check for time correctness
+            proofs.retain(|segment, _| *segment >= current_segment.saturating_sub(5));
 
             self.account.set_state(storage_contract)
         } else {
@@ -286,33 +291,20 @@ impl<'a> StorageAccount<'a> {
     pub fn claim_storage_reward(
         &mut self,
         mining_pool: &mut KeyedAccount,
-        slot: u64,
-        current_slot: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
 
         if let StorageContract::ValidatorStorage {
-            reward_validations,
-            slot: state_slot,
-            ..
+            reward_validations, ..
         } = &mut storage_contract
         {
-            let state_segment = get_segment_from_slot(*state_slot);
-            let claim_segment = get_segment_from_slot(slot);
-            if state_segment <= claim_segment || !reward_validations.contains_key(&claim_segment) {
-                debug!(
-                    "current {:?}, claim {:?}, have rewards for {:?} segments",
-                    state_segment,
-                    claim_segment,
-                    reward_validations.len()
-                );
-                return Err(InstructionError::InvalidArgument);
-            }
             let num_validations = count_valid_proofs(
                 &reward_validations
-                    .remove(&claim_segment)
-                    .map(|mut proofs| proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>())
-                    .unwrap_or_default(),
+                    .drain()
+                    .flat_map(|(_segment, mut proofs)| {
+                        proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>(),
             );
             let reward = TOTAL_VALIDATOR_REWARDS * num_validations;
             mining_pool.account.lamports -= reward;
@@ -324,34 +316,20 @@ impl<'a> StorageAccount<'a> {
             ..
         } = &mut storage_contract
         {
-            // if current tick height is a full segment away, allow reward collection
-            let claim_index = get_segment_from_slot(current_slot);
-            let claim_segment = get_segment_from_slot(slot);
-            // Todo this might might always be true
-            if claim_index <= claim_segment
-                || !reward_validations.contains_key(&claim_segment)
-                || !proofs.contains_key(&claim_segment)
-            {
-                info!(
-                    "current {:?}, claim {:?}, have rewards for {:?} segments",
-                    claim_index,
-                    claim_segment,
-                    reward_validations.len()
-                );
-                return Err(InstructionError::InvalidArgument);
-            }
             // remove proofs for which rewards have already been collected
-            let segment_proofs = proofs.get_mut(&claim_segment).unwrap();
+            let segment_proofs = proofs;
             let checked_proofs = reward_validations
-                .remove(&claim_segment)
-                .map(|mut proofs| {
+                .drain()
+                .flat_map(|(segment, mut proofs)| {
                     proofs
                         .drain()
                         .map(|(sha_state, proof)| {
                             proof
                                 .into_iter()
                                 .map(|proof| {
-                                    segment_proofs.remove(&sha_state);
+                                    segment_proofs.get_mut(&segment).and_then(|segment_proofs| {
+                                        segment_proofs.remove(&sha_state)
+                                    });
                                     proof
                                 })
                                 .collect::<Vec<_>>()
@@ -359,7 +337,7 @@ impl<'a> StorageAccount<'a> {
                         .flatten()
                         .collect::<Vec<_>>()
                 })
-                .unwrap_or_default();
+                .collect::<Vec<_>>();
             let total_proofs = checked_proofs.len() as u64;
             let num_validations = count_valid_proofs(&checked_proofs);
             let reward =
@@ -491,6 +469,7 @@ mod tests {
         let proof = Proof {
             signature: Signature::default(),
             sha_state: Hash::default(),
+            segment_index,
         };
         let mut checked_proof = CheckedProof {
             proof: proof.clone(),

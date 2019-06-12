@@ -111,7 +111,7 @@ impl Tvu {
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
         );
 
-        let (replay_stage, slot_full_receiver, root_slot_receiver) = ReplayStage::new(
+        let (replay_stage, slot_full_receiver, root_bank_receiver) = ReplayStage::new(
             &keypair.pubkey(),
             vote_account,
             voting_keypair,
@@ -139,7 +139,7 @@ impl Tvu {
 
         let storage_stage = StorageStage::new(
             storage_state,
-            root_slot_receiver,
+            root_bank_receiver,
             Some(blocktree),
             &keypair,
             storage_keypair,

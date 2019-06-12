@@ -317,7 +317,7 @@ impl Replicator {
                     Ok(blockhash_and_slot) => blockhash_and_slot,
                     Err(e) => {
                         warn!(
-                            "Error could get a newer blockhash than {:?}. {:?}",
+                            "Error couldn't get a newer blockhash than {:?}. {:?}",
                             self.blockhash, e
                         );
                         break;
@@ -471,7 +471,7 @@ impl Replicator {
         let instruction = storage_instruction::mining_proof(
             &self.storage_keypair.pubkey(),
             self.sha_state,
-            self.slot,
+            get_segment_from_slot(self.slot),
             Signature::new(&self.signature.to_bytes()),
         );
         let message = Message::new_with_payer(vec![instruction], Some(&self.keypair.pubkey()));
@@ -508,7 +508,7 @@ impl Replicator {
     fn poll_for_blockhash_and_slot(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         previous_blockhash: &str,
-    ) -> Result<(String, u64)> {
+    ) -> result::Result<(String, u64), Error> {
         for _ in 0..10 {
             let rpc_client = {
                 let cluster_info = cluster_info.read().unwrap();
@@ -519,12 +519,18 @@ impl Replicator {
             };
             let storage_blockhash = rpc_client
                 .retry_make_rpc_request(&RpcRequest::GetStorageBlockhash, None, 0)
-                .expect("rpc request")
+                .map_err(|err| {
+                    warn!("Error while making rpc request {:?}", err);
+                    Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
+                })?
                 .to_string();
             if storage_blockhash != *previous_blockhash {
                 let storage_slot = rpc_client
                     .retry_make_rpc_request(&RpcRequest::GetStorageSlot, None, 0)
-                    .expect("rpc request")
+                    .map_err(|err| {
+                        warn!("Error while making rpc request {:?}", err);
+                        Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
+                    })?
                     .as_u64()
                     .unwrap();
                 info!("storage slot: {}", storage_slot);

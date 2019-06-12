@@ -6,8 +6,7 @@ use crate::storage_instruction::StorageInstruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::syscall::tick_height::TickHeight;
-use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
+use solana_sdk::syscall::current::Current;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -41,43 +40,29 @@ pub fn process_instruction(
         }
         StorageInstruction::SubmitMiningProof {
             sha_state,
-            slot,
+            segment_index,
             signature,
         } => {
             if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from(&rest[0].account).unwrap();
-            storage_account.submit_mining_proof(
-                sha_state,
-                slot,
-                signature,
-                tick_height / DEFAULT_TICKS_PER_SLOT,
-            )
+            let current = Current::from(&rest[0].account).unwrap();
+            storage_account.submit_mining_proof(sha_state, segment_index, signature, current.slot)
         }
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, slot } => {
             if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from(&rest[0].account).unwrap();
-            storage_account.advertise_storage_recent_blockhash(
-                hash,
-                slot,
-                tick_height / DEFAULT_TICKS_PER_SLOT,
-            )
+            let current = Current::from(&rest[0].account).unwrap();
+            storage_account.advertise_storage_recent_blockhash(hash, slot, current.slot)
         }
-        StorageInstruction::ClaimStorageReward { slot } => {
-            if rest.len() != 2 {
+        StorageInstruction::ClaimStorageReward => {
+            if rest.len() != 1 {
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from(&rest[1].account).unwrap();
-            storage_account.claim_storage_reward(
-                &mut rest[0],
-                slot,
-                tick_height / DEFAULT_TICKS_PER_SLOT,
-            )
+            storage_account.claim_storage_reward(&mut rest[0])
         }
         StorageInstruction::ProofValidation { segment, proofs } => {
             if me_unsigned || rest.is_empty() {

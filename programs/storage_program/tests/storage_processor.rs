@@ -12,8 +12,8 @@ use solana_sdk::instruction::{Instruction, InstructionError};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::syscall::tick_height;
-use solana_sdk::syscall::tick_height::TickHeight;
+use solana_sdk::syscall::current;
+use solana_sdk::syscall::current::Current;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_storage_api::storage_contract::StorageAccount;
 use solana_storage_api::storage_contract::{
@@ -114,18 +114,22 @@ fn test_proof_bounds() {
             .unwrap();
     }
 
-    let ix = storage_instruction::mining_proof(
-        &pubkey,
-        Hash::default(),
-        SLOTS_PER_SEGMENT,
-        Signature::default(),
+    let ix = storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+    // the proof is for segment 0, need to move the slot into segment 2
+    let mut current_account = current::create_account(1);
+    Current::to(
+        &Current {
+            slot: SLOTS_PER_SEGMENT * 2,
+            epoch: 0,
+            stakers_epoch: 0,
+        },
+        &mut current_account,
     );
-    // the proof is for slot 16, which is in segment 0, need to move the tick height into segment 2
-    let ticks_till_next_segment = TICKS_IN_SEGMENT * 2;
-    let mut tick_account = tick_height::create_account(1);
-    TickHeight::to(ticks_till_next_segment, &mut tick_account);
 
-    assert_eq!(test_instruction(&ix, &mut [account, tick_account]), Ok(()));
+    assert_eq!(
+        test_instruction(&ix, &mut [account, current_account]),
+        Ok(())
+    );
 }
 
 #[test]
@@ -142,9 +146,9 @@ fn test_serialize_overflow() {
     let tick_pubkey = Pubkey::new_rand();
     let mut keyed_accounts = Vec::new();
     let mut user_account = Account::default();
-    let mut tick_account = tick_height::create_account(1);
+    let mut current_account = current::create_account(1);
     keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
-    keyed_accounts.push(KeyedAccount::new(&tick_pubkey, false, &mut tick_account));
+    keyed_accounts.push(KeyedAccount::new(&tick_pubkey, false, &mut current_account));
 
     let ix = storage_instruction::advertise_recent_blockhash(
         &pubkey,
@@ -165,13 +169,19 @@ fn test_invalid_accounts_len() {
 
     let ix = storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
     // move tick height into segment 1
-    let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
-    let mut tick_account = tick_height::create_account(1);
-    TickHeight::to(ticks_till_next_segment, &mut tick_account);
+    let mut current_account = current::create_account(1);
+    Current::to(
+        &Current {
+            slot: 16,
+            epoch: 0,
+            stakers_epoch: 0,
+        },
+        &mut current_account,
+    );
 
     assert!(test_instruction(&ix, &mut accounts).is_err());
 
-    let mut accounts = [Account::default(), tick_account, Account::default()];
+    let mut accounts = [Account::default(), current_account, Account::default()];
 
     assert!(test_instruction(&ix, &mut accounts).is_err());
 }
@@ -205,18 +215,30 @@ fn test_submit_mining_ok() {
     }
 
     let ix = storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
-    // move tick height into segment 1
-    let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
-    let mut tick_account = tick_height::create_account(1);
-    TickHeight::to(ticks_till_next_segment, &mut tick_account);
+    // move slot into segment 1
+    let mut current_account = current::create_account(1);
+    Current::to(
+        &Current {
+            slot: SLOTS_PER_SEGMENT,
+            epoch: 0,
+            stakers_epoch: 0,
+        },
+        &mut current_account,
+    );
 
-    assert_matches!(test_instruction(&ix, &mut [account, tick_account]), Ok(_));
+    assert_matches!(
+        test_instruction(&ix, &mut [account, current_account]),
+        Ok(_)
+    );
 }
 
 #[test]
 fn test_validate_mining() {
     solana_logger::setup();
-    let (genesis_block, mint_keypair) = create_genesis_block(1000);
+    let (mut genesis_block, mint_keypair) = create_genesis_block(1000);
+    genesis_block
+        .native_instruction_processors
+        .push(solana_storage_program::solana_storage_program!());
     let mint_pubkey = mint_keypair.pubkey();
 
     let replicator_1_storage_keypair = Keypair::new();
@@ -231,10 +253,8 @@ fn test_validate_mining() {
     let mining_pool_keypair = Keypair::new();
     let mining_pool_pubkey = mining_pool_keypair.pubkey();
 
-    let mut bank = Bank::new(&genesis_block);
-    bank.add_instruction_processor(id(), process_instruction);
+    let bank = Bank::new(&genesis_block);
     let bank = Arc::new(bank);
-    let slot = 0;
     let bank_client = BankClient::new_shared(&bank);
 
     init_storage_accounts(
@@ -251,11 +271,13 @@ fn test_validate_mining() {
     ));
     bank_client.send_message(&[&mint_keypair], message).unwrap();
 
-    // tick the bank up until it's moved into storage segment 2 because the next advertise is for segment 1
-    let next_storage_segment_tick_height = TICKS_IN_SEGMENT * 2;
-    for _ in 0..next_storage_segment_tick_height {
-        bank.register_tick(&bank.last_blockhash());
-    }
+    // create a new bank in segment 2
+    let bank = Arc::new(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        SLOTS_PER_SEGMENT * 2,
+    ));
+    let bank_client = BankClient::new_shared(&bank);
 
     // advertise for storage segment 1
     let message = Message::new_with_payer(
@@ -273,15 +295,15 @@ fn test_validate_mining() {
 
     // submit proofs 5 proofs for each replicator for segment 0
     let mut checked_proofs: HashMap<_, Vec<_>> = HashMap::new();
-    for slot in 0..5 {
+    for _ in 0..5 {
         checked_proofs
             .entry(replicator_1_storage_id)
             .or_default()
             .push(submit_proof(
                 &mint_keypair,
                 &replicator_1_storage_keypair,
-                slot,
                 &bank_client,
+                0,
             ));
         checked_proofs
             .entry(replicator_2_storage_id)
@@ -289,8 +311,8 @@ fn test_validate_mining() {
             .push(submit_proof(
                 &mint_keypair,
                 &replicator_2_storage_keypair,
-                slot,
                 &bank_client,
+                0,
             ));
     }
     let message = Message::new_with_payer(
@@ -302,10 +324,14 @@ fn test_validate_mining() {
         Some(&mint_pubkey),
     );
 
-    let next_storage_segment_tick_height = TICKS_IN_SEGMENT;
-    for _ in 0..next_storage_segment_tick_height {
-        bank.register_tick(&bank.last_blockhash());
-    }
+    // move banks into the next segment
+    let proof_segment = get_segment_from_slot(bank.slot());
+    let bank = Arc::new(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        SLOTS_PER_SEGMENT + bank.slot(),
+    ));
+    let bank_client = BankClient::new_shared(&bank);
 
     assert_matches!(
         bank_client.send_message(&[&mint_keypair, &validator_storage_keypair], message),
@@ -315,7 +341,7 @@ fn test_validate_mining() {
     let message = Message::new_with_payer(
         vec![storage_instruction::proof_validation(
             &validator_storage_id,
-            get_segment_from_slot(slot) as u64,
+            proof_segment as u64,
             checked_proofs,
         )],
         Some(&mint_pubkey),
@@ -335,10 +361,13 @@ fn test_validate_mining() {
         Some(&mint_pubkey),
     );
 
-    let next_storage_segment_tick_height = TICKS_IN_SEGMENT;
-    for _ in 0..next_storage_segment_tick_height {
-        bank.register_tick(&bank.last_blockhash());
-    }
+    // move banks into the next segment
+    let bank = Arc::new(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        SLOTS_PER_SEGMENT + bank.slot(),
+    ));
+    let bank_client = BankClient::new_shared(&bank);
 
     assert_matches!(
         bank_client.send_message(&[&mint_keypair, &validator_storage_keypair], message),
@@ -351,7 +380,6 @@ fn test_validate_mining() {
         vec![storage_instruction::claim_reward(
             &validator_storage_id,
             &mining_pool_pubkey,
-            slot,
         )],
         Some(&mint_pubkey),
     );
@@ -375,7 +403,6 @@ fn test_validate_mining() {
         vec![storage_instruction::claim_reward(
             &replicator_1_storage_id,
             &mining_pool_pubkey,
-            slot,
         )],
         Some(&mint_pubkey),
     );
@@ -385,7 +412,6 @@ fn test_validate_mining() {
         vec![storage_instruction::claim_reward(
             &replicator_2_storage_id,
             &mining_pool_pubkey,
-            slot,
         )],
         Some(&mint_pubkey),
     );
@@ -453,15 +479,15 @@ fn get_storage_slot<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {
 fn submit_proof(
     mint_keypair: &Keypair,
     storage_keypair: &Keypair,
-    slot: u64,
     bank_client: &BankClient,
+    segment_index: u64,
 ) -> CheckedProof {
     let sha_state = Hash::new(Pubkey::new_rand().as_ref());
     let message = Message::new_with_payer(
         vec![storage_instruction::mining_proof(
             &storage_keypair.pubkey(),
             sha_state,
-            slot,
+            segment_index as usize,
             Signature::default(),
         )],
         Some(&mint_keypair.pubkey()),
@@ -475,6 +501,7 @@ fn submit_proof(
         proof: Proof {
             signature: Signature::default(),
             sha_state,
+            segment_index: segment_index as usize,
         },
         status: ProofStatus::Valid,
     }
@@ -497,20 +524,20 @@ fn get_storage_blockhash<C: SyncClient>(client: &C, account: &Pubkey) -> Hash {
 
 #[test]
 fn test_bank_storage() {
-    let (genesis_block, mint_keypair) = create_genesis_block(1000);
+    let (mut genesis_block, mint_keypair) = create_genesis_block(1000);
+    genesis_block
+        .native_instruction_processors
+        .push(solana_storage_program::solana_storage_program!());
     let mint_pubkey = mint_keypair.pubkey();
     let replicator_keypair = Keypair::new();
     let replicator_pubkey = replicator_keypair.pubkey();
     let validator_keypair = Keypair::new();
     let validator_pubkey = validator_keypair.pubkey();
 
-    let mut bank = Bank::new(&genesis_block);
-    bank.add_instruction_processor(id(), process_instruction);
+    let bank = Bank::new(&genesis_block);
     // tick the bank up until it's moved into storage segment 2
-    let next_storage_segment_tick_height = TICKS_IN_SEGMENT * 2;
-    for _ in 0..next_storage_segment_tick_height {
-        bank.register_tick(&bank.last_blockhash());
-    }
+    // create a new bank in storage segment 2
+    let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::new_rand(), SLOTS_PER_SEGMENT * 2);
     let bank_client = BankClient::new(bank);
 
     let x = 42;
@@ -541,7 +568,7 @@ fn test_bank_storage() {
         vec![storage_instruction::advertise_recent_blockhash(
             &validator_pubkey,
             storage_blockhash,
-            SLOTS_PER_SEGMENT,
+            SLOTS_PER_SEGMENT as u64,
         )],
         Some(&mint_pubkey),
     );
