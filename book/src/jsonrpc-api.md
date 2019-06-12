@@ -125,7 +125,7 @@ None
 
 ##### Results:
 The result field will be an array of JSON objects, each with the following sub fields:
-* `id` - Node identifier, as base-58 encoded string
+* `pubkey` - Node public key, as base-58 encoded string
 * `gossip` - Gossip network address for the node
 * `tpu` - TPU network address for the node
 * `rpc` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
@@ -136,7 +136,7 @@ The result field will be an array of JSON objects, each with the following sub f
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":[{"gossip":"10.239.6.48:8001","id":"9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ","rpc":"10.239.6.48:8899","tpu":"10.239.6.48:8856"}],"id":1}
+{"jsonrpc":"2.0","result":[{"gossip":"10.239.6.48:8001","pubkey":"9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ","rpc":"10.239.6.48:8899","tpu":"10.239.6.48:8856"}],"id":1}
 ```
 
 ---
@@ -282,19 +282,11 @@ Returns the account info and associated stake for all the voting accounts in the
 None
 
 ##### Results:
-An array consisting of vote accounts:
-* `string` - the vote account's Pubkey as base-58 encoded string
-* `integer` - the stake, in lamports, delegated to this vote account
-* `VoteState` - the vote account's state
-
-Each VoteState will be a JSON object with the following sub fields:
-
-* `votes`, array of most recent vote lockouts
-* `node_pubkey`, the pubkey of the node that votes using this account
-* `authorized_voter_pubkey`, the pubkey of the authorized vote signer for this account
+The result field will be an array of JSON objects, each with the following sub fields:
+* `votePubkey` - Vote account public key, as base-58 encoded string
+* `nodePubkey` - Node public key, as base-58 encoded string
+* `stake` - the stake, in lamports, delegated to this vote account
 * `commission`, a 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
-* `root_slot`, the most recent slot this account has achieved maximum lockout
-* `credits`, credits accrued by this account for reaching lockouts
 
 ##### Example:
 ```bash
@@ -302,7 +294,7 @@ Each VoteState will be a JSON object with the following sub fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":[[[84,115,89,23,41,83,221,72,58,23,53,245,195,188,140,161,242,189,200,164,139,214,12,180,84,161,28,151,24,243,159,125],10000000,{"authorized_voter_pubkey":[84,115,89,23,41,83,221,72,58,23,53,245,195,188,140,161,242,189,200,164,139,214,12,180,84,161,28,151,24,243,159,125],"commission":0,"credits":0,"node_pubkey":[49,139,227,211,47,39,69,86,131,244,160,144,228,169,84,143,142,253,83,81,212,110,254,12,242,71,219,135,30,60,157,213],"root_slot":null,"votes":[{"confirmation_count":1,"slot":0}]}]],"id":1}
+{"jsonrpc":"2.0","result":[{"commission":0,"nodePubkey":"Et2RaZJdJRTzTkodUwiHr4H6sLkVmijBFv8tkd7oSSFY","stake":42,"votePubkey":"B4CdWq3NBSoH2wYsVE1CaZSWPo2ZtopE4SJipQhZ3srF"}],"id":1}
 ```
 
 ---
