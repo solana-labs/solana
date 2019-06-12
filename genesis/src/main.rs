@@ -330,6 +330,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     genesis_block.ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
     genesis_block.slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
+    genesis_block.stakers_slot_offset = genesis_block.slots_per_epoch;
     genesis_block.poh_config.target_tick_duration =
         Duration::from_millis(value_t_or_exit!(matches, "target_tick_duration", u64));
 
