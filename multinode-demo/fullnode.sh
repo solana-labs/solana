@@ -109,7 +109,7 @@ setup_validator_accounts() {
 
     # Fund the vote account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-vote-account "$vote_pubkey" "$node_pubkey" 1 || return $?
+      create-vote-account "$vote_pubkey" "$node_pubkey" 1 --commission 65535 || return $?
 
     # Fund the stake account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
