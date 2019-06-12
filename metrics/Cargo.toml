@@ -13,7 +13,7 @@ env_logger = "0.6.1"
 influx_db_client = "0.3.6"
 lazy_static = "1.3.0"
 log = "0.4.2"
-reqwest = "0.9.17"
+reqwest = "0.9.18"
 solana-sdk = { path = "../sdk", version = "0.16.0" }
 sys-info = "0.5.7"
 
