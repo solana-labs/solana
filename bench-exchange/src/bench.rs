@@ -20,9 +20,12 @@ use solana_sdk::system_instruction;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use solana_sdk::transaction::Transaction;
 use std::cmp;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+use std::fs::File;
+use std::io::prelude::*;
 use std::mem;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -48,6 +51,9 @@ pub struct Config {
     pub batch_size: usize,
     pub chunk_size: usize,
     pub account_groups: usize,
+    pub client_ids_and_stake_file: String,
+    pub write_to_client_file: bool,
+    pub read_from_client_file: bool,
 }
 
 impl Default for Config {
@@ -61,6 +67,9 @@ impl Default for Config {
             batch_size: 10,
             chunk_size: 10,
             account_groups: 100,
+            client_ids_and_stake_file: String::new(),
+            write_to_client_file: false,
+            read_from_client_file: false,
         }
     }
 }
@@ -78,6 +87,9 @@ where
         batch_size,
         chunk_size,
         account_groups,
+        client_ids_and_stake_file,
+        write_to_client_file,
+        read_from_client_file,
     } = config;
 
     info!(
@@ -96,10 +108,46 @@ where
     let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
     let client = clients[0].as_ref();
 
-    const NUM_KEYPAIR_GROUPS: u64 = 4;
-    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
-    info!("Generating {:?} keys", total_keys);
-    let mut keypairs = generate_keypairs(total_keys);
+    if write_to_client_file {
+        let keypairs = generate_keypairs(accounts_in_groups as u64 * 2);
+
+        let mut accounts = HashMap::new();
+        keypairs.iter().for_each(|keypair| {
+            accounts.insert(
+                serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
+                fund_amount,
+            );
+        });
+
+        let serialized = serde_yaml::to_string(&accounts).unwrap();
+        let path = Path::new(&client_ids_and_stake_file);
+        let mut file = File::create(path).unwrap();
+        file.write_all(&serialized.into_bytes()).unwrap();
+        return;
+    }
+
+    let (mut keypairs, fund_amount) = if read_from_client_file {
+        let path = Path::new(&client_ids_and_stake_file);
+        let file = File::open(path).unwrap();
+
+        let accounts: HashMap<String, u64> = serde_yaml::from_reader(file).unwrap();
+        let mut keypairs = vec![];
+        let mut fund_amount = 0;
+
+        accounts.into_iter().for_each(|(keypair, balance)| {
+            let bytes: Vec<u8> = serde_json::from_str(keypair.as_str()).unwrap();
+            keypairs.push(Keypair::from_bytes(&bytes).unwrap());
+            fund_amount = balance;
+        });
+        (keypairs, fund_amount)
+    } else {
+        const NUM_KEYPAIR_GROUPS: u64 = 2;
+        let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
+        info!("Generating {:?} keys", total_keys);
+        let keypairs = generate_keypairs(total_keys);
+        (keypairs, fund_amount)
+    };
+
     let trader_signers: Vec<_> = keypairs
         .drain(0..accounts_in_groups)
         .map(Arc::new)
@@ -108,6 +156,11 @@ where
         .drain(0..accounts_in_groups)
         .map(Arc::new)
         .collect();
+
+    const NUM_KEYPAIR_GROUPS: u64 = 2;
+    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
+    info!("Generating {:?} keys", total_keys);
+    let mut keypairs = generate_keypairs(total_keys);
     let src_pubkeys: Vec<_> = keypairs
         .drain(0..accounts_in_groups)
         .map(|keypair| keypair.pubkey())

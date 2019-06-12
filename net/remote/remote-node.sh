@@ -103,11 +103,11 @@ local|tar)
       tail -n +2 -q ./solana-client-accounts/bench-tps"$i".yml >> ./solana-client-accounts/client-accounts.yml
       echo "" >> ./solana-client-accounts/client-accounts.yml
     done
-    for i in $(seq "$numBenchTpsClients" "$numBenchExchangeClients"); do
+    for i in $(seq 0 $((numBenchExchangeClients-1))); do
       # shellcheck disable=SC2086 # Do not want to quote $benchExchangeExtraArgs
-      echo $benchExchangeExtraArgs
-#      solana-bench-exchange -w ./solana-client-accounts/bench-exchange"$i".yml $benchExchangeExtraArgs
-#      tail -n +2 -q ./solana-client-accounts/bench-exchange"$i".yml >> ./solana-client-accounts/client-accounts.yml
+      solana-bench-exchange --write-client-keys ./solana-client-accounts/bench-exchange"$i".yml $benchExchangeExtraArgs
+      tail -n +2 -q ./solana-client-accounts/bench-exchange"$i".yml >> ./solana-client-accounts/client-accounts.yml
+      echo "" >> ./solana-client-accounts/client-accounts.yml
     done
     [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-stakes/fullnode-stakes.yml
     if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then

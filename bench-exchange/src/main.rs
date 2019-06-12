@@ -30,6 +30,9 @@ fn main() {
         batch_size,
         chunk_size,
         account_groups,
+        client_ids_and_stake_file,
+        write_to_client_file,
+        read_from_client_file,
         ..
     } = cli_config;
 
@@ -48,14 +51,16 @@ fn main() {
 
     info!("Funding keypair: {}", identity.pubkey());
 
-    let accounts_in_groups = batch_size * account_groups;
-    const NUM_SIGNERS: u64 = 2;
-    airdrop_lamports(
-        &client,
-        &drone_addr,
-        &identity,
-        fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
-    );
+    if !read_from_client_file && !write_to_client_file {
+        let accounts_in_groups = batch_size * account_groups;
+        const NUM_SIGNERS: u64 = 2;
+        airdrop_lamports(
+            &client,
+            &drone_addr,
+            &identity,
+            fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
+        );
+    }
 
     let config = Config {
         identity,
@@ -66,6 +71,9 @@ fn main() {
         batch_size,
         chunk_size,
         account_groups,
+        client_ids_and_stake_file,
+        write_to_client_file,
+        read_from_client_file,
     };
 
     do_bench_exchange(vec![client], config);
