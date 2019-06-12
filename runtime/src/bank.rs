@@ -212,6 +212,11 @@ pub struct Bank {
     #[serde(deserialize_with = "deserialize_atomicusize")]
     signature_count: AtomicUsize,
 
+    /// Total capitalization, used to calculate inflation
+    #[serde(serialize_with = "serialize_atomicusize")]
+    #[serde(deserialize_with = "deserialize_atomicusize")]
+    capitalization: AtomicUsize, // TODO: Use AtomicU64 if/when available
+
     // Bank max_tick_height
     max_tick_height: u64,
 
@@ -478,6 +483,8 @@ impl Bank {
 
         for (pubkey, account) in genesis_block.accounts.iter() {
             self.store(pubkey, account);
+            self.capitalization
+                .fetch_add(account.lamports as usize, Ordering::Relaxed);
         }
         // highest staked node is the first collector
         self.collector_id = self
@@ -1154,6 +1161,14 @@ impl Bank {
         self.tick_height.load(Ordering::Relaxed) as u64
     }
 
+    /// Return the total capititalization of the Bank
+    pub fn capitalization(&self) -> u64 {
+        // capitalization is using an AtomicUSize because AtomicU64 is not yet a stable API.
+        // Until we can switch to AtomicU64, fail if usize is not the same as u64
+        assert_eq!(std::usize::MAX, 0xFFFF_FFFF_FFFF_FFFF);
+        self.capitalization.load(Ordering::Relaxed) as u64
+    }
+
     /// Return this bank's max_tick_height
     pub fn max_tick_height(&self) -> u64 {
         self.max_tick_height
@@ -1332,6 +1347,15 @@ mod tests {
             bank.get_balance(&voting_keypair.pubkey()),
             dummy_leader_lamports /* 1 token goes to the vote account associated with dummy_leader_lamports */
         );
+    }
+
+    #[test]
+    fn test_bank_capitalization() {
+        let bank = Bank::new(&GenesisBlock {
+            accounts: vec![(Pubkey::default(), Account::new(42, 0, &Pubkey::default()),); 42],
+            ..GenesisBlock::default()
+        });
+        assert_eq!(bank.capitalization(), 42 * 42);
     }
 
     #[test]

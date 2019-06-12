@@ -15,12 +15,12 @@ use std::path::Path;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {
     pub accounts: Vec<(Pubkey, Account)>,
-    pub epoch_warmup: bool,
     pub fee_calculator: FeeCalculator,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
+    pub ticks_per_slot: u64,
     pub slots_per_epoch: u64,
     pub stakers_slot_offset: u64,
-    pub ticks_per_slot: u64,
+    pub epoch_warmup: bool,
     pub poh_config: PohConfig,
 }
 
@@ -39,6 +39,21 @@ pub fn create_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
     )
 }
 
+impl Default for GenesisBlock {
+    fn default() -> Self {
+        Self {
+            accounts: Vec::new(),
+            epoch_warmup: true,
+            fee_calculator: FeeCalculator::default(),
+            native_instruction_processors: Vec::new(),
+            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+            stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
+            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
+            poh_config: PohConfig::default(),
+        }
+    }
+}
+
 impl GenesisBlock {
     pub fn new(
         accounts: &[(Pubkey, Account)],
@@ -46,13 +61,8 @@ impl GenesisBlock {
     ) -> Self {
         Self {
             accounts: accounts.to_vec(),
-            epoch_warmup: true,
-            fee_calculator: FeeCalculator::default(),
             native_instruction_processors: native_instruction_processors.to_vec(),
-            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
-            stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
-            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
-            poh_config: PohConfig::default(),
+            ..GenesisBlock::default()
         }
     }
 
