@@ -340,6 +340,8 @@ startBootstrapLeader() {
          \"$externalPrimordialAccountsFile\" \
          \"$stakeNodesInGenesisBlock\" \
          $nodeIndex \
+         $numBenchTpsClients \"$benchTpsExtraArgs\" \
+         $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
       "
   ) >> "$logFile" 2>&1 || {
@@ -383,6 +385,7 @@ startNode() {
 startClient() {
   declare ipAddress=$1
   declare clientToRun="$2"
+  declare clientIndex="$3"
   declare logFile="$netLogDir/client-$clientToRun-$ipAddress.log"
   echo "--- Starting client: $ipAddress - $clientToRun"
   echo "start log: $logFile"
@@ -391,7 +394,7 @@ startClient() {
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" \"$benchExchangeExtraArgs\""
+      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" \"$benchExchangeExtraArgs\" $clientIndex"
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -562,9 +565,9 @@ start() {
   SECONDS=0
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
     if [[ $i -lt "$numBenchTpsClients" ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-tps"
+      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
     else
-      startClient "${clientIpList[$i]}" "solana-bench-exchange"
+      startClient "${clientIpList[$i]}" "solana-bench-exchange" "$i"
     fi
   done
   clientDeployTime=$SECONDS

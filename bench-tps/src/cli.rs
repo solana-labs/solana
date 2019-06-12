@@ -17,6 +17,9 @@ pub struct Config {
     pub tx_count: usize,
     pub thread_batch_sleep_ms: usize,
     pub sustained: bool,
+    pub client_ids_and_stake_file: String,
+    pub write_to_client_file: bool,
+    pub read_from_client_file: bool,
 }
 
 impl Default for Config {
@@ -31,6 +34,9 @@ impl Default for Config {
             tx_count: 500_000,
             thread_batch_sleep_ms: 0,
             sustained: false,
+            client_ids_and_stake_file: String::new(),
+            write_to_client_file: false,
+            read_from_client_file: false,
         }
     }
 }
@@ -106,6 +112,20 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .help("Per-thread-per-iteration sleep in ms"),
         )
+        .arg(
+            Arg::with_name("write-client-keys")
+                .long("write-client-keys")
+                .value_name("FILENAME")
+                .takes_value(true)
+                .help("Generate client keys and stakes and write the list to YAML file"),
+        )
+        .arg(
+            Arg::with_name("read-client-keys")
+                .long("read-client-keys")
+                .value_name("FILENAME")
+                .takes_value(true)
+                .help("Read client keys and stakes from the YAML file"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -162,6 +182,17 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     }
 
     args.sustained = matches.is_present("sustained");
+
+    if let Some(s) = matches.value_of("write-client-keys") {
+        args.write_to_client_file = true;
+        args.client_ids_and_stake_file = s.to_string();
+    }
+
+    if let Some(s) = matches.value_of("read-client-keys") {
+        assert!(!args.write_to_client_file);
+        args.read_from_client_file = true;
+        args.client_ids_and_stake_file = s.to_string();
+    }
 
     args
 }
