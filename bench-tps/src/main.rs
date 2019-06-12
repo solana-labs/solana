@@ -90,6 +90,10 @@ fn main() {
             tx_count,
             NUM_LAMPORTS_PER_ACCOUNT,
         )
+        .unwrap_or_else(|e| {
+            eprintln!("Error could not fund keys: {:?}", e);
+            exit(1);
+        })
     };
 
     let config = Config {
