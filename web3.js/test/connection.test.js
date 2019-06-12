@@ -319,7 +319,7 @@ test('transaction', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountFrom.publicKey.toBase58(), 12],
+      params: [accountFrom.publicKey.toBase58(), 100010],
     },
     {
       error: null,
@@ -335,11 +335,11 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: 12,
+      result: 100010,
     },
   ]);
-  await connection.requestAirdrop(accountFrom.publicKey, 12);
-  expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
+  await connection.requestAirdrop(accountFrom.publicKey, 100010);
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(100010);
 
   mockRpc.push([
     url,
@@ -406,7 +406,7 @@ test('transaction', async () => {
     if (await connection.confirmTransaction(signature)) {
       break;
     }
-
+    console.log('not confirmed', signature);
     expect(mockRpcEnabled).toBe(false);
     expect(++i).toBeLessThan(10);
     await sleep(500);
@@ -441,10 +441,10 @@ test('transaction', async () => {
     },
   ]);
 
-  // accountFrom may have less than 2 due to transaction fees
+  // accountFrom may have less than 100000 due to transaction fees
   const balance = await connection.getBalance(accountFrom.publicKey);
   expect(balance).toBeGreaterThan(0);
-  expect(balance).toBeLessThanOrEqual(2);
+  expect(balance).toBeLessThanOrEqual(100000);
 
   mockRpc.push([
     url,
@@ -470,8 +470,8 @@ test('multi-instruction transaction', async () => {
   const accountTo = new Account();
   const connection = new Connection(url);
 
-  await connection.requestAirdrop(accountFrom.publicKey, 12);
-  expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
+  await connection.requestAirdrop(accountFrom.publicKey, 100000);
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(100000);
 
   await connection.requestAirdrop(accountTo.publicKey, 21);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
@@ -481,8 +481,8 @@ test('multi-instruction transaction', async () => {
   const transaction = SystemProgram.transfer(
     accountFrom.publicKey,
     accountTo.publicKey,
-    10,
-  ).add(SystemProgram.transfer(accountTo.publicKey, accountFrom.publicKey, 10));
+    100,
+  ).add(SystemProgram.transfer(accountTo.publicKey, accountFrom.publicKey, 100));
   const signature = await connection.sendTransaction(
     transaction,
     accountFrom,
@@ -502,11 +502,11 @@ test('multi-instruction transaction', async () => {
     Ok: null,
   });
 
-  // accountFrom may have less than 12 due to transaction fees
+  // accountFrom may have less than 100000 due to transaction fees
   expect(await connection.getBalance(accountFrom.publicKey)).toBeGreaterThan(0);
   expect(
     await connection.getBalance(accountFrom.publicKey),
-  ).toBeLessThanOrEqual(12);
+  ).toBeLessThanOrEqual(100000);
 
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
 });
@@ -528,7 +528,7 @@ test('account change notification', async () => {
     mockCallback,
   );
 
-  await connection.requestAirdrop(owner.publicKey, 42);
+  await connection.requestAirdrop(owner.publicKey, 100000);
   await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
     1,
     2,
@@ -582,7 +582,7 @@ test('program account change notification', async () => {
     },
   );
 
-  await connection.requestAirdrop(owner.publicKey, 42);
+  await connection.requestAirdrop(owner.publicKey, 100000);
   await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
     1,
     2,
