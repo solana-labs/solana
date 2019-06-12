@@ -115,7 +115,7 @@ test('get cluster nodes', async () => {
       error: null,
       result: [
         {
-          id: '11111111111111111111111111111111',
+          pubkey: '11111111111111111111111111111111',
           gossip: '127.0.0.0:1234',
           tpu: '127.0.0.0:1235',
           rpc: null,
@@ -127,7 +127,7 @@ test('get cluster nodes', async () => {
   const clusterNodes = await connection.getClusterNodes();
   if (mockRpcEnabled) {
     expect(clusterNodes).toHaveLength(1);
-    expect(clusterNodes[0].id).toBe('11111111111111111111111111111111');
+    expect(clusterNodes[0].pubkey).toBe('11111111111111111111111111111111');
     expect(typeof clusterNodes[0].gossip).toBe('string');
     expect(typeof clusterNodes[0].tpu).toBe('string');
     expect(clusterNodes[0].rpc).toBeNull();
@@ -135,6 +135,17 @@ test('get cluster nodes', async () => {
     // There should be at least one node (the node that we're talking to)
     expect(clusterNodes.length).toBeGreaterThan(0);
   }
+});
+
+test('getEpochVoteAccounts', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url);
+  const voteAccounts = await connection.getEpochVoteAccounts();
+  expect(voteAccounts.length).toBeGreaterThan(0);
 });
 
 test('confirm transaction - error', () => {
