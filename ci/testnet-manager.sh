@@ -382,8 +382,7 @@ deploy() {
         ${skipCreate:+-e} \
         ${maybeSkipStart:+-s} \
         ${maybeStop:+-S} \
-        ${maybeDelete:+-D} \
-        --hashes-per-tick sleep
+        ${maybeDelete:+-D}
 
       if [[ -n $GCE_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
@@ -393,8 +392,7 @@ deploy() {
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
-          -x \
-          --hashes-per-tick sleep
+          -x
       fi
     )
     ;;
