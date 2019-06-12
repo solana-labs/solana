@@ -220,13 +220,10 @@ impl AppendVec {
     }
 
     #[allow(clippy::mutex_atomic)]
-    pub fn append_accounts(
-        &self,
-        accounts: &[(StorageMeta, &Pubkey, &Account, u64)],
-    ) -> Vec<usize> {
+    pub fn append_accounts(&self, accounts: &[(StorageMeta, &Account, u64)]) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
         let mut rv = vec![];
-        for (storage_meta, _, account, lamports) in accounts {
+        for (storage_meta, account, lamports) in accounts {
             let meta_ptr = storage_meta as *const StorageMeta;
             let balance = AccountBalance {
                 lamports: *lamports,
@@ -251,7 +248,7 @@ impl AppendVec {
     }
 
     pub fn append_account(&self, storage_meta: StorageMeta, account: &Account) -> Option<usize> {
-        self.append_accounts(&[(storage_meta, &Pubkey::default(), account, account.lamports)])
+        self.append_accounts(&[(storage_meta, account, account.lamports)])
             .first()
             .cloned()
     }
