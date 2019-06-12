@@ -435,7 +435,7 @@ impl AccountsDB {
         fork_id: Fork,
         accounts: &HashMap<&Pubkey, (&Account, LamportCredit)>,
     ) -> Vec<AccountInfo> {
-        let with_meta: Vec<(StorageMeta, &Pubkey, &Account, u64)> = accounts
+        let with_meta: Vec<(StorageMeta, &Account, u64)> = accounts
             .iter()
             .map(|(pubkey, (account, credit))| {
                 let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
@@ -457,7 +457,7 @@ impl AccountsDB {
                     lamports += credit;
                 }
 
-                (meta, *pubkey, *account, lamports)
+                (meta, *account, lamports)
             })
             .collect();
         let mut infos: Vec<AccountInfo> = vec![];
@@ -468,7 +468,7 @@ impl AccountsDB {
                 storage.set_status(AccountStorageStatus::Full);
                 continue;
             }
-            for (offset, (_, _, _, lamports)) in rvs.iter().zip(&with_meta[infos.len()..]) {
+            for (offset, (_, _, lamports)) in rvs.iter().zip(&with_meta[infos.len()..]) {
                 storage.add_account();
                 infos.push(AccountInfo {
                     id: storage.id,
