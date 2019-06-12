@@ -52,7 +52,6 @@ pub struct Config {
     pub chunk_size: usize,
     pub account_groups: usize,
     pub client_ids_and_stake_file: String,
-    pub write_to_client_file: bool,
     pub read_from_client_file: bool,
 }
 
@@ -68,10 +67,35 @@ impl Default for Config {
             chunk_size: 10,
             account_groups: 100,
             client_ids_and_stake_file: String::new(),
-            write_to_client_file: false,
             read_from_client_file: false,
         }
     }
+}
+
+pub fn create_client_accounts_file(
+    client_ids_and_stake_file: &String,
+    batch_size: usize,
+    account_groups: usize,
+    fund_amount: u64,
+) {
+    let accounts_in_groups = batch_size * account_groups;
+    const NUM_KEYPAIR_GROUPS: u64 = 2;
+    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
+
+    let keypairs = generate_keypairs(total_keys);
+
+    let mut accounts = HashMap::new();
+    keypairs.iter().for_each(|keypair| {
+        accounts.insert(
+            serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
+            fund_amount,
+        );
+    });
+
+    let serialized = serde_yaml::to_string(&accounts).unwrap();
+    let path = Path::new(&client_ids_and_stake_file);
+    let mut file = File::create(path).unwrap();
+    file.write_all(&serialized.into_bytes()).unwrap();
 }
 
 pub fn do_bench_exchange<T>(clients: Vec<T>, config: Config)
@@ -88,7 +112,6 @@ where
         chunk_size,
         account_groups,
         client_ids_and_stake_file,
-        write_to_client_file,
         read_from_client_file,
     } = config;
 
@@ -107,25 +130,7 @@ where
     const NUM_KEYPAIR_GROUPS: u64 = 2;
     let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
 
-    if write_to_client_file {
-        let keypairs = generate_keypairs(total_keys);
-
-        let mut accounts = HashMap::new();
-        keypairs.iter().for_each(|keypair| {
-            accounts.insert(
-                serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
-                fund_amount,
-            );
-        });
-
-        let serialized = serde_yaml::to_string(&accounts).unwrap();
-        let path = Path::new(&client_ids_and_stake_file);
-        let mut file = File::create(path).unwrap();
-        file.write_all(&serialized.into_bytes()).unwrap();
-        return;
-    }
-
-    let mut keypairs = if read_from_client_file {
+    let mut signer_keypairs = if read_from_client_file {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
@@ -138,28 +143,17 @@ where
             })
             .collect()
     } else {
-        info!("Generating {:?} keys", total_keys);
+        info!("Generating {:?} signer keys", total_keys);
         generate_keypairs(total_keys)
     };
 
-    let trader_signers: Vec<_> = keypairs
+    let trader_signers: Vec<_> = signer_keypairs
         .drain(0..accounts_in_groups)
         .map(Arc::new)
         .collect();
-    let swapper_signers: Vec<_> = keypairs
+    let swapper_signers: Vec<_> = signer_keypairs
         .drain(0..accounts_in_groups)
         .map(Arc::new)
-        .collect();
-
-    info!("Generating {:?} keys", total_keys);
-    let mut keypairs = generate_keypairs(total_keys);
-    let src_pubkeys: Vec<_> = keypairs
-        .drain(0..accounts_in_groups)
-        .map(|keypair| keypair.pubkey())
-        .collect();
-    let profit_pubkeys: Vec<_> = keypairs
-        .drain(0..accounts_in_groups)
-        .map(|keypair| keypair.pubkey())
         .collect();
 
     let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
@@ -171,6 +165,17 @@ where
         info!("Fund swapper accounts");
         fund_keys(client, &identity, &swapper_signers, fund_amount);
     }
+
+    info!("Generating {:?} account keys", total_keys);
+    let mut account_keypairs = generate_keypairs(total_keys);
+    let src_pubkeys: Vec<_> = account_keypairs
+        .drain(0..accounts_in_groups)
+        .map(|keypair| keypair.pubkey())
+        .collect();
+    let profit_pubkeys: Vec<_> = account_keypairs
+        .drain(0..accounts_in_groups)
+        .map(|keypair| keypair.pubkey())
+        .collect();
 
     info!("Create {:?} source token accounts", src_pubkeys.len());
     create_token_accounts(client, &trader_signers, &src_pubkeys);

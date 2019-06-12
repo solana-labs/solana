@@ -6,7 +6,7 @@ pub mod order_book;
 #[macro_use]
 extern crate solana_exchange_program;
 
-use crate::bench::{airdrop_lamports, do_bench_exchange, Config};
+use crate::bench::{airdrop_lamports, create_client_accounts_file, do_bench_exchange, Config};
 use log::*;
 use solana::gossip_service::{discover_cluster, get_multi_client};
 use solana_sdk::signature::KeypairUtil;
@@ -46,11 +46,17 @@ fn main() {
         chunk_size,
         account_groups,
         client_ids_and_stake_file,
-        write_to_client_file,
         read_from_client_file,
     };
 
-    let clients = if !write_to_client_file {
+    if write_to_client_file {
+        create_client_accounts_file(
+            &config.client_ids_and_stake_file,
+            config.batch_size,
+            config.account_groups,
+            config.fund_amount,
+        );
+    } else {
         info!("Connecting to the cluster");
         let (nodes, _replicators) =
             discover_cluster(&entrypoint_addr, num_nodes).unwrap_or_else(|_| {
@@ -76,10 +82,6 @@ fn main() {
                 fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
             );
         }
-        vec![client]
-    } else {
-        vec![]
-    };
-
-    do_bench_exchange(clients, config);
+        do_bench_exchange(vec![client], config);
+    }
 }
