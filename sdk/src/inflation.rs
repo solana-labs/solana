@@ -3,27 +3,27 @@
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct Inflation {
     /// Initial inflation percentage, from time=0
-    initial: f64,
+    pub initial: f64,
 
     /// Terminal inflation percentage, to time=INF
-    terminal: f64,
+    pub terminal: f64,
 
     /// Rate per year, at which inflation is lowered until reaching terminal
     ///  i.e. inflation(year) == MAX(terminal, initial*((1-taper)^year))
-    taper: f64,
+    pub taper: f64,
 
     /// Percentage of total inflation allocated to the foundation
-    foundation: f64,
+    pub foundation: f64,
     /// Duration of foundationt pool inflation, in years
-    foundation_term: f64,
+    pub foundation_term: f64,
 
     /// Percentage of total inflation allocated to grant pools
-    grant: f64,
+    pub grant: f64,
     /// Duration of grant pool inflation, in years
-    grant_term: f64,
+    pub grant_term: f64,
 
     /// Percentage of total inflation allocated to replicator rewards
-    replicator: f64,
+    pub replicator: f64,
 }
 
 const DEFAULT_INITIAL: f64 = 0.15;
@@ -100,7 +100,7 @@ mod tests {
 
         let mut last = inflation.total(0.0);
 
-        for year in &[0.1, 0.5, 1.0, 7.0, 100.0] {
+        for year in &[0.1, 0.5, 1.0, DEFAULT_FOUNDATION_GRANT_TERM, 100.0] {
             let total = inflation.total(*year);
             assert_eq!(
                 total,
