@@ -11,6 +11,7 @@ fi
 
 cd "$1"
 
-set -ex
+set -e
 
+echo "Cleaning $1"
 cargo clean
