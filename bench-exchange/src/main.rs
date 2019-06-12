@@ -76,8 +76,8 @@ fn main() {
                 &config.identity,
                 fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
             );
-            do_bench_exchange(vec![client], config);
         }
+        do_bench_exchange(vec![client], config);
     } else {
         let clients: Vec<ThinClient> = vec![];
         do_bench_exchange(clients, config);
