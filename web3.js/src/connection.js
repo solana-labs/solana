@@ -21,16 +21,32 @@ type RpcRequest = (methodName: string, args: Array<any>) => any;
  * Information describing a cluster node
  *
  * @typedef {Object} ContactInfo
- * @property {string} id Unique identifier of the node
+ * @property {string} pubkey Identity public key of the node
  * @property {string} gossip Gossip network address for the node
  * @property {string} tpu TPU network address for the node (null if not available)
  * @property {string|null} rpc JSON RPC network address for the node (null if not available)
  */
 type ContactInfo = {
-  id: string,
+  pubkey: string,
   gossip: string,
   tpu: string | null,
   rpc: string | null,
+};
+
+/**
+ * Information describing a vote account
+ *
+ * @typedef {Object} VoteAccountInfo
+ * @property {string} votePubkey Public key of the vote account
+ * @property {string} nodePubkey Identity public key of the node voting with this account
+ * @property {string} stake The stake, in lamports, delegated to this vote account
+ * @property {string} commission A 32-bit integer used as a fraction (commission/0xFFFFFFFF) for rewards payout
+ */
+type VoteAccountInfo = {
+  votePubkey: string,
+  nodePubkey: string,
+  stake: number,
+  commission: number,
 };
 
 function createRpcRequest(url): RpcRequest {
@@ -147,10 +163,24 @@ const GetSlotLeader = jsonRpcResult('string');
 const GetClusterNodes = jsonRpcResult(
   struct.list([
     struct({
-      id: 'string',
+      pubkey: 'string',
       gossip: 'string',
       tpu: struct.union(['null', 'string']),
       rpc: struct.union(['null', 'string']),
+    }),
+  ]),
+);
+
+/**
+ * Expected JSON RPC response for the "getEpochVoteAccounts" message
+ */
+const GetEpochVoteAccounts = jsonRpcResult(
+  struct.list([
+    struct({
+      votePubkey: 'string',
+      nodePubkey: 'string',
+      stake: 'number',
+      commission: 'number',
     }),
   ]),
 );
@@ -373,11 +403,11 @@ export class Connection {
   }
 
   /**
-   * Fetch the current slot leader of the cluster
+   * Return the list of nodes that are currently participating in the cluster
    */
-  async getSlotLeader(): Promise<string> {
-    const unsafeRes = await this._rpcRequest('getSlotLeader', []);
-    const res = GetSlotLeader(unsafeRes);
+  async getClusterNodes(): Promise<Array<ContactInfo>> {
+    const unsafeRes = await this._rpcRequest('getClusterNodes', []);
+    const res = GetClusterNodes(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
@@ -388,9 +418,23 @@ export class Connection {
   /**
    * Return the list of nodes that are currently participating in the cluster
    */
-  async getClusterNodes(): Promise<Array<ContactInfo>> {
-    const unsafeRes = await this._rpcRequest('getClusterNodes', []);
-    const res = GetClusterNodes(unsafeRes);
+  async getEpochVoteAccounts(): Promise<Array<VoteAccountInfo>> {
+    const unsafeRes = await this._rpcRequest('getEpochVoteAccounts', []);
+    const res = GetEpochVoteAccounts(unsafeRes);
+    //const res = unsafeRes;
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch the current slot leader of the cluster
+   */
+  async getSlotLeader(): Promise<string> {
+    const unsafeRes = await this._rpcRequest('getSlotLeader', []);
+    const res = GetSlotLeader(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
