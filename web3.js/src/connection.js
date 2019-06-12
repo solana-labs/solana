@@ -12,6 +12,7 @@ import {PublicKey} from './publickey';
 import {Transaction} from './transaction';
 import {sleep} from './util/sleep';
 import type {Blockhash} from './blockhash';
+import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
 
@@ -203,8 +204,23 @@ const GetTransactionCountRpcResult = jsonRpcResult('number');
 /**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
-const GetRecentBlockhash = jsonRpcResult(['string', 'object']);
-const GetRecentBlockhash_014 = jsonRpcResult('string'); // Legacy v0.14 response.  TODO: Remove in July 2019
+const GetRecentBlockhash = jsonRpcResult([
+  'string',
+  struct({
+    lamportsPerSignature: 'number',
+    targetLamportsPerSignature: 'number',
+    targetSignaturesPerSlot: 'number',
+  }),
+]);
+/**
+ * @ignore
+ */
+const GetRecentBlockhash_015 = jsonRpcResult([
+  'string',
+  struct({
+    lamportsPerSignature: 'number',
+  }),
+]);
 
 /**
  * Expected JSON RPC response for the "requestAirdrop" message
@@ -291,6 +307,12 @@ export type SignatureSuccess = {|
 export type TransactionError = {|
   Err: Object,
 |};
+
+
+/**
+ * @ignore
+ */
+type BlockhashAndFeeCalculator = [Blockhash, FeeCalculator]; // This type exists to workaround an esdoc parse error
 
 /**
  * A connection to a fullnode JSON RPC endpoint
@@ -473,28 +495,32 @@ export class Connection {
   /**
    * Fetch a recent blockhash from the cluster
    */
-  async getRecentBlockhash(): Promise<Blockhash> {
+  async getRecentBlockhash(): Promise<BlockhashAndFeeCalculator> {
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', []);
 
-    // Legacy v0.14 response.  TODO: Remove in July 2019
+    // Legacy v0.15 response.  TODO: Remove in August 2019
     try {
-      const res_014 = GetRecentBlockhash_014(unsafeRes);
-      if (res_014.error) {
-        throw new Error(res_014.error.message);
+      const res_015 = GetRecentBlockhash_015(unsafeRes);
+      if (res_015.error) {
+        throw new Error(res_015.error.message);
       }
-      return res_014.result;
+      const [blockhash, feeCalculator] = res_015.result;
+      feeCalculator.targetSignaturesPerSlot = 42;
+      feeCalculator.targetLamportsPerSignature =
+        feeCalculator.lamportsPerSignature;
+
+      return [blockhash, feeCalculator];
     } catch (e) {
       // Not legacy format
     }
-    // End Legacy v0.14 response
+    // End Legacy v0.15 response
 
     const res = GetRecentBlockhash(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    // TODO: deserialize and expose FeeCalculator in res.result[1]
-    return res.result[0];
+    return res.result;
   }
 
   /**
@@ -552,7 +578,10 @@ export class Connection {
       let attempts = 0;
       const startTime = Date.now();
       for (;;) {
-        const recentBlockhash = await this.getRecentBlockhash();
+        const [
+          recentBlockhash,
+          //feeCalculator,
+        ] = await this.getRecentBlockhash();
 
         if (this._blockhashInfo.recentBlockhash != recentBlockhash) {
           this._blockhashInfo = {

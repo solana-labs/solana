@@ -18,7 +18,7 @@ export function mockGetRecentBlockhash() {
       result: [
         recentBlockhash.publicKey.toBase58(),
         {
-          /* empty fee calculator */
+          lamportsPerSignature: 42,
         },
       ],
     },

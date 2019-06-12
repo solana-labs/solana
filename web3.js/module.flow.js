@@ -32,6 +32,13 @@ declare module '@solana/web3.js' {
     secretKey: Buffer;
   }
 
+  // === src/fee-calculator.js ===
+  declare export type FeeCalculator = {
+    lamportsPerSignature: number,
+    targetSignaturesPerSlot: number,
+    targetLamportsPerSignature: number,
+  };
+
   // === src/budget-program.js ===
   /* TODO */
 
@@ -55,6 +62,13 @@ declare module '@solana/web3.js' {
     accountInfo: AccountInfo,
   };
 
+  declare export type VoteAccountInfo = {
+    votePubkey: string,
+    nodePubkey: string,
+    stake: number,
+    commission: number,
+  };
+
   declare type AccountChangeCallback = (accountInfo: AccountInfo) => void;
   declare type ProgramAccountChangeCallback = (
     keyedAccountInfo: KeyedAccountInfo,
@@ -72,13 +86,14 @@ declare module '@solana/web3.js' {
     getAccountInfo(publicKey: PublicKey): Promise<AccountInfo>;
     getBalance(publicKey: PublicKey): Promise<number>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
+    getEpochVoteAccounts(): Promise<Array<VoteAccountInfo>>;
     confirmTransaction(signature: TransactionSignature): Promise<boolean>;
     getSlotLeader(): Promise<string>;
     getSignatureStatus(
       signature: TransactionSignature,
     ): Promise<SignatureSuccess | TransactionError | null>;
     getTransactionCount(): Promise<number>;
-    getRecentBlockhash(): Promise<Blockhash>;
+    getRecentBlockhash(): Promise<[Blockhash, FeeCalculator]>;
     requestAirdrop(
       to: PublicKey,
       amount: number,

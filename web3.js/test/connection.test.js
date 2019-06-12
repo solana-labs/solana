@@ -204,8 +204,12 @@ test('get recent blockhash', async () => {
 
   mockGetRecentBlockhash();
 
-  const recentBlockhash = await connection.getRecentBlockhash();
+  const [
+    recentBlockhash,
+    feeCalculator,
+  ] = await connection.getRecentBlockhash();
   expect(recentBlockhash.length).toBeGreaterThanOrEqual(43);
+  expect(feeCalculator.lamportsPerSignature).toBeGreaterThanOrEqual(0);
 });
 
 test('request airdrop', async () => {
@@ -482,7 +486,9 @@ test('multi-instruction transaction', async () => {
     accountFrom.publicKey,
     accountTo.publicKey,
     100,
-  ).add(SystemProgram.transfer(accountTo.publicKey, accountFrom.publicKey, 100));
+  ).add(
+    SystemProgram.transfer(accountTo.publicKey, accountFrom.publicKey, 100),
+  );
   const signature = await connection.sendTransaction(
     transaction,
     accountFrom,
