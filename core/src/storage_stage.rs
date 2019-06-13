@@ -647,9 +647,9 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(1000);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank], 0)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
         let (_slot_sender, slot_receiver) = channel();
-        let storage_state = StorageState::new();
+        let storage_state = StorageState::new(&bank.last_blockhash());
         let storage_stage = StorageStage::new(
             &storage_state,
             slot_receiver,
@@ -688,7 +688,7 @@ mod tests {
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let (bank_sender, bank_receiver) = channel();
-        let storage_state = StorageState::new();
+        let storage_state = StorageState::new(&bank.last_blockhash());
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
@@ -777,7 +777,7 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (bank_sender, bank_receiver) = channel();
-        let storage_state = StorageState::new();
+        let storage_state = StorageState::new(&bank.last_blockhash());
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,

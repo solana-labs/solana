@@ -49,6 +49,9 @@ pub enum StorageInstruction {
 
 fn get_ratios() -> (u64, u64) {
     // max number bytes available for account metas and proofs
+    // The maximum transaction size is == `PACKET_DATA_SIZE` (1232 bytes)
+    // There are approx. 900 bytes lefter over after the storage instruction is wrapped into
+    // a signed transaction.
     static MAX_BYTES: u64 = 900;
     let account_meta_size: u64 =
         bincode::serialized_size(&AccountMeta::new(Pubkey::new_rand(), false)).unwrap_or(0);
@@ -221,6 +224,5 @@ mod tests {
     fn check_size() {
         // check that if there's 50 proof per account, only 1 account can fit in a single tx
         assert_eq!(validation_account_limit(50), 1);
-        println!(" limit {:?}", proof_mask_limit());
     }
 }
