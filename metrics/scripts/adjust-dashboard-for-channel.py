@@ -6,13 +6,12 @@
 import sys
 import json
 
-if len(sys.argv) != 4:
+if len(sys.argv) != 3:
     print('Error: Dashboard or Channel not specified')
     sys.exit(1)
 
 dashboard_json = sys.argv[1]
 channel = sys.argv[2]
-output_dashboard_json = sys.argv[3]
 
 if channel not in ['edge', 'beta', 'stable', 'local']:
     print('Error: Unknown channel:', channel)
@@ -132,5 +131,5 @@ else:
                                     'type': 'query',
                                     'useTags': False}]
 
-with open(output_dashboard_json, 'w') as write_file:
+with open(dashboard_json, 'w') as write_file:
     json.dump(data, write_file, indent=2)

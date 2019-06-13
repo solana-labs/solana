@@ -26,7 +26,7 @@ cat <<EOF
 =========================================================================
 * Grafana dashboards are available at http://localhost:3000/dashboards
 
-* Enable local metric collection per shell by running the command:
-    source $PWD/enable.sh
+* Enable local metric collection per shell by running:
+    export SOLANA_METRICS_CONFIG="host=http://localhost:8086,db=testnet,u=write,p=write"
 
 EOF
