@@ -1,9 +1,9 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
 #
 # Stops local metrics
 #
 
-cd "$(dirname "$0")"
+set -e
 
 for container in influxdb grafana; do
   if [ "$(docker ps -q -a -f name=$container)" ]; then
@@ -16,4 +16,3 @@ for container in influxdb grafana; do
 done
 
 echo Local metrics stopped
-exit 0
