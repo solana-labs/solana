@@ -7,7 +7,7 @@ use solana::cluster_tests;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::validator::ValidatorConfig;
-use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOT_LENGTH};
+use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH};
 use solana_sdk::client::SyncClient;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::timing;
@@ -118,7 +118,7 @@ fn test_two_unbalanced_stakes() {
     let mut validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 10;
-    let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
+    let num_slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
 
     validator_config.rpc_config.enable_fullnode_exit = true;
     let mut cluster = LocalCluster::new(&ClusterConfig {
@@ -172,7 +172,7 @@ fn test_forwarding() {
 #[test]
 fn test_restart_node() {
     let validator_config = ValidatorConfig::default();
-    let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
+    let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
     let ticks_per_slot = 16;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![3],
@@ -221,10 +221,10 @@ fn run_repairman_catchup(num_repairmen: u64) {
     let mut validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 40;
-    let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
+    let num_slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
     let num_root_buffer_slots = 10;
     // Calculate the leader schedule num_root_buffer slots ahead. Otherwise, if stakers_slot_offset ==
-    // num_slots_per_epoch, and num_slots_per_epoch == MINIMUM_SLOT_LENGTH, then repairmen
+    // num_slots_per_epoch, and num_slots_per_epoch == MINIMUM_SLOTS_PER_EPOCH, then repairmen
     // will stop sending repairs after the last slot in epoch 1 (0-indexed), because the root
     // is at most in the first epoch.
     //
@@ -232,7 +232,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     // Assume:
     // 1) num_slots_per_epoch = 32
     // 2) stakers_slot_offset = 32
-    // 3) MINIMUM_SLOT_LENGTH = 32
+    // 3) MINIMUM_SLOTS_PER_EPOCH = 32
     //
     // Then the last slot in epoch 1 is slot 63. After completing slots 0 to 63, the root on the
     // repairee is at most 31. Because, the stakers_slot_offset == 32, then the max confirmed epoch

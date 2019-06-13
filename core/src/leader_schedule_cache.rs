@@ -172,7 +172,7 @@ mod tests {
     };
     use crate::staking_utils::tests::setup_vote_and_stake_accounts;
     use solana_runtime::bank::Bank;
-    use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOT_LENGTH};
+    use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH};
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::thread::Builder;
@@ -221,7 +221,7 @@ mod tests {
     }
 
     fn run_thread_race() {
-        let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
+        let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
         let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
         let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
