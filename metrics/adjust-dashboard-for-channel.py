@@ -6,20 +6,50 @@
 import sys
 import json
 
-if len(sys.argv) != 3:
+if len(sys.argv) != 4:
     print('Error: Dashboard or Channel not specified')
     sys.exit(1)
 
 dashboard_json = sys.argv[1]
 channel = sys.argv[2]
-if channel not in ['edge', 'beta', 'stable']:
+output_dashboard_json = sys.argv[3]
+
+if channel not in ['edge', 'beta', 'stable', 'local']:
     print('Error: Unknown channel:', channel)
     sys.exit(2)
 
 with open(dashboard_json, 'r') as read_file:
     data = json.load(read_file)
 
-if channel == 'stable':
+if channel == 'local':
+    data['title'] = 'Local Testnet Monitor'
+    data['uid'] = 'local'
+    data['links'] = []
+    data['templating']['list'] = [{'current': {'text': '$datasource',
+                                               'value': '$datasource'},
+                                   'hide': 1,
+                                   'label': 'Data Source',
+                                   'name': 'datasource',
+                                   'options': [],
+                                   'query': 'influxdb',
+                                   'refresh': 1,
+                                   'regex': '',
+                                   'type': 'datasource'},
+                                  {'allValue': None,
+                                   'current': {'text': 'testnet',
+                                               'value': 'testnet'},
+                                   'hide': 1,
+                                   'includeAll': False,
+                                   'label': 'Testnet',
+                                   'multi': False,
+                                   'name': 'testnet',
+                                   'options': [{'selected': True,
+                                                'text': 'testnet',
+                                                'value': 'testnet'}],
+                                   'query': 'testnet',
+                                   'type': 'custom'}]
+
+elif channel == 'stable':
     # Stable dashboard only allows the user to select between the stable
     # testnet databases
     data['title'] = 'Testnet Monitor'
@@ -102,5 +132,5 @@ else:
                                     'type': 'query',
                                     'useTags': False}]
 
-with open(dashboard_json, 'w') as write_file:
+with open(output_dashboard_json, 'w') as write_file:
     json.dump(data, write_file, indent=2)

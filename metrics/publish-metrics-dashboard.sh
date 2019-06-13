@@ -38,7 +38,7 @@ fi
 
 (
   set -x
-  ./adjust-dashboard-for-channel.py "$DASHBOARD_JSON" "$CHANNEL"
+  ./adjust-dashboard-for-channel.py "$DASHBOARD_JSON" "$CHANNEL" "$DASHBOARD_JSON".out
 )
 
 rm -rf venv
@@ -65,7 +65,7 @@ echo --- Take a backup of existing dashboard if possible
 echo --- Publish $DASHBOARD_JSON to $DASHBOARD
 (
   set -x
-  grafcli import $DASHBOARD_JSON remote/metrics
+  grafcli import "$DASHBOARD_JSON".out remote/metrics
 )
 
 exit 0
