@@ -19,8 +19,6 @@ fn return_sstruct() -> SStruct {
 }
 
 fn process(ka: &mut [SolKeyedAccount], data: &[u8], info: &SolClusterInfo) -> bool {
-    sol_log("Tick height:");
-    sol_log_64(info.tick_height, 0, 0, 0, 0);
     sol_log("Program identifier:");
     sol_log_key(&info.program_id);
 

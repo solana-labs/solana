@@ -156,8 +156,6 @@ pub struct SolKeyedAccount<'a> {
 /// Information about the state of the cluster immediately before the program
 /// started executing the current instruction
 pub struct SolClusterInfo<'a> {
-    /// Current ledger tick
-    pub tick_height: u64,
     ///program_id of the currently executing program
     pub program_id: SolPubkey<'a>,
 }
@@ -234,15 +232,6 @@ pub extern "C" fn entrypoint(input: *mut u8) -> bool {
     let data = unsafe { from_raw_parts(input.add(offset), data_length) };
     offset += data_length;
 
-    // Tick height
-
-    let tick_height = unsafe {
-        #[allow(clippy::cast_ptr_alignment)]
-        let tick_height_ptr: *const u64 = input.add(offset) as *const u64;
-        *tick_height_ptr
-    };
-    offset += size_of::<u64>();
-
     // Id
 
     let program_id_slice = unsafe { from_raw_parts(input.add(offset), SIZE_PUBKEY) };
@@ -251,7 +240,6 @@ pub extern "C" fn entrypoint(input: *mut u8) -> bool {
     };
 
     let info = SolClusterInfo {
-        tick_height,
         program_id,
     };
 
@@ -393,7 +381,6 @@ mod tests {
         let d = [1, 0, 0, 0, 0, 0, 0, 0, 1];
         assert_eq!(9, data.len());
         assert_eq!(d, data);
-        assert_eq!(1, info.tick_height);
         let program_id = [
             190, 103, 191, 69, 193, 202, 38, 193, 95, 62, 131, 135, 105, 13, 142, 240, 155, 120,
             177, 90, 212, 54, 10, 118, 40, 33, 192, 8, 54, 141, 187, 63,
