@@ -1724,7 +1724,7 @@ mod tests {
     }
 
     #[test]
-    fn test_credit_only_accounts() {
+    fn test_need_credit_only_accounts() {
         let (genesis_block, mint_keypair) = create_genesis_block(10);
         let bank = Bank::new(&genesis_block);
         let payer0 = Keypair::new();
@@ -1739,13 +1739,18 @@ mod tests {
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
 
-        // If multiple transactions attempt to deposit into the same account, they should succeed,
-        // since System Transfer `To` accounts are given credit-only handling
+        // If multiple transactions attempt to deposit into the same account, only the first will
+        // succeed, even though such atomic adds are safe. A System Transfer `To` account should be
+        // given credit-only handling
 
         assert_eq!(results[0], Ok(()));
-        assert_eq!(results[1], Ok(()));
-        assert_eq!(results[2], Ok(()));
-        assert_eq!(bank.get_balance(&recipient), 3);
+        assert_eq!(results[1], Err(TransactionError::AccountInUse));
+        assert_eq!(results[2], Err(TransactionError::AccountInUse));
+
+        // After credit-only account handling is implemented, the following checks should pass instead:
+        // assert_eq!(results[0], Ok(()));
+        // assert_eq!(results[1], Ok(()));
+        // assert_eq!(results[2], Ok(()));
     }
 
     #[test]
