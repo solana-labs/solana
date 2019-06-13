@@ -13,7 +13,7 @@ use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
-use solana_metrics::{datapoint_warn, inc_new_counter_error, inc_new_counter_info};
+use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -274,32 +274,17 @@ impl ReplayStage {
         }
     }
 
-    fn is_replay_bank_result_fatal(result: &Result<()>) -> bool {
+    // Returns Some(result) if the `result` is a fatal error, which is an error that will cause a
+    // bank to be marked as dead/corrupted
+    fn is_replay_result_fatal(result: &Result<()>) -> bool {
         match result {
-            Ok(_) => false,
-            Err(Error::TransactionError(ref e)) => {
+            Err(Error::TransactionError(e)) => {
                 // Transactions withand transaction errors mean this fork is bogus
                 let tx_error = Err(e.clone());
                 !Bank::can_commit(&tx_error)
             }
             Err(Error::BlobError(BlobError::VerificationFailed)) => true,
             _ => false,
-        }
-    }
-
-    fn log_replay_bank_error(result: &Result<()>) {
-        match result {
-            Err(Error::TransactionError(ref e)) => {
-                // Transactions withand transaction errors mean this fork is bogus
-                if !Bank::can_commit(&Err(e.clone())) {
-                    inc_new_counter_error!("replicate-stage_failed_process_entries", 1);
-                }
-            }
-            Err(Error::BlobError(BlobError::VerificationFailed)) => {
-                inc_new_counter_error!("replicate-stage_failed_verification", 1);
-            }
-
-            _ => (),
         }
     }
 
@@ -311,8 +296,7 @@ impl ReplayStage {
         let (entries, num) = Self::load_blocktree_entries(bank, blocktree, progress)?;
         let result = Self::replay_entries_into_bank(bank, entries, progress, num);
 
-        if Self::is_replay_bank_result_fatal(&result) {
-            Self::log_replay_bank_error(&result);
+        if Self::is_replay_result_fatal(&result) {
             Self::mark_dead_slot(bank.slot(), blocktree, progress);
         }
 
@@ -598,6 +582,12 @@ impl ReplayStage {
                 bank.tick_height(),
                 last_entry,
                 bank.last_blockhash()
+            );
+
+            datapoint_error!(
+                "replay-stage-entry_verification_failure",
+                ("slot", bank.slot(), i64),
+                ("last_entry", last_entry.to_string(), String),
             );
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
