@@ -37,6 +37,8 @@ docker run \
   --env INFLUXDB_DB=testnet \
   --env INFLUXDB_ADMIN_USER=admin \
   --env INFLUXDB_ADMIN_PASSWORD=admin \
+  --env INFLUXDB_READ_USER=read \
+  --env INFLUXDB_READ_PASSWORD=read \
   --env INFLUXDB_WRITE_USER=write \
   --env INFLUXDB_WRITE_PASSWORD=write \
   $INFLUXDB_IMAGE -config /etc/influxdb/influxdb.conf /init-influxdb.sh
