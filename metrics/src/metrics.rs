@@ -53,6 +53,14 @@ macro_rules! datapoint {
         point
         }
     };
+    (@point $name:expr) => {
+        $crate::influxdb::Point::new(&$name)
+    };
+    ($name:expr) => {
+        if log_enabled!(log::Level::Debug) {
+            $crate::submit($crate::datapoint!(@point $name), log::Level::Debug);
+        }
+    };
     ($name:expr, $($fields:tt)+) => {
         if log_enabled!(log::Level::Debug) {
             $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
@@ -62,6 +70,11 @@ macro_rules! datapoint {
 
 #[macro_export]
 macro_rules! datapoint_error {
+    ($name:expr) => {
+        if log_enabled!(log::Level::Error) {
+            $crate::submit($crate::datapoint!(@point $name), log::Level::Error);
+        }
+    };
     ($name:expr, $($fields:tt)+) => {
         if log_enabled!(log::Level::Error) {
             $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Error);
@@ -71,6 +84,11 @@ macro_rules! datapoint_error {
 
 #[macro_export]
 macro_rules! datapoint_warn {
+    ($name:expr) => {
+        if log_enabled!(log::Level::Warn) {
+            $crate::submit($crate::datapoint!(@point $name), log::Level::Warn);
+        }
+    };
     ($name:expr, $($fields:tt)+) => {
         if log_enabled!(log::Level::Warn) {
             $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Warn);
@@ -80,6 +98,11 @@ macro_rules! datapoint_warn {
 
 #[macro_export]
 macro_rules! datapoint_info {
+    ($name:expr) => {
+        if log_enabled!(log::Level::Info) {
+            $crate::submit($crate::datapoint!(@point $name), log::Level::Info);
+        }
+    };
     ($name:expr, $($fields:tt)+) => {
         if log_enabled!(log::Level::Info) {
             $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Info);
@@ -89,6 +112,11 @@ macro_rules! datapoint_info {
 
 #[macro_export]
 macro_rules! datapoint_debug {
+    ($name:expr) => {
+        if log_enabled!(log::Level::Debug) {
+            $crate::submit($crate::datapoint!(@point $name), log::Level::Debug);
+        }
+    };
     ($name:expr, $($fields:tt)+) => {
         if log_enabled!(log::Level::Debug) {
             $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
@@ -591,7 +619,7 @@ mod test {
                 }
             };
         }
-
+        datapoint!("name");
         datapoint!("name", ("field name", "test".to_string(), String));
         datapoint!("name", ("field name", 12.34_f64, f64));
         datapoint!("name", ("field name", true, bool));
