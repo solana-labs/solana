@@ -21,7 +21,7 @@ pub struct Contract {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum BudgetInstruction {
     /// Declare and instantiate `BudgetExpr`.
-    InitializeAccount(BudgetExpr),
+    InitializeAccount(Box<BudgetExpr>),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
     ApplyTimestamp(DateTime<Utc>),
@@ -40,7 +40,11 @@ fn initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
         keys.push(AccountMeta::new(payment.to, false));
     }
     keys.push(AccountMeta::new(*contract, false));
-    Instruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
+    Instruction::new(
+        id(),
+        &BudgetInstruction::InitializeAccount(Box::new(expr)),
+        keys,
+    )
 }
 
 pub fn create_account(

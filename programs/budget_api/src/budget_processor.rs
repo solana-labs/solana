@@ -126,7 +126,7 @@ pub fn process_instruction(
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
             let mut budget_state = BudgetState::default();
-            budget_state.pending_budget = Some(expr);
+            budget_state.pending_budget = Some(*expr);
             budget_state.initialized = true;
             budget_state.serialize(&mut keyed_accounts[0].account.data)
         }
