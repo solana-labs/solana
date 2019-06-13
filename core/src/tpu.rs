@@ -3,7 +3,7 @@
 
 use crate::banking_stage::BankingStage;
 use crate::blocktree::Blocktree;
-use crate::broadcast_stage::BroadcastStage;
+use crate::broadcast_stage::{BroadcastStage, BroadcastStageType};
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
@@ -70,7 +70,7 @@ impl Tpu {
             verified_vote_receiver,
         );
 
-        let broadcast_stage = BroadcastStage::new(
+        let broadcast_stage = BroadcastStageType::Standard.new_broadcast_stage(
             broadcast_socket,
             cluster_info.clone(),
             entry_receiver,
