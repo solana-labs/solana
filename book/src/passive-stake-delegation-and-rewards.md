@@ -76,20 +76,23 @@ this field can only modified by this entity
 
 ### StakeState
 
-A StakeState takes one of two forms, StakeState::Delegate and StakeState::MiningPool.
+A StakeState takes one of two forms, StakeState::Stake and StakeState::MiningPool.
 
-### StakeState::Delegate
+### StakeState::Stake
 
-StakeState is the current delegation preference of the **staker**. StakeState
+Stake is the current delegation preference of the **staker**. Stake
 contains the following state information:
-
-* Account::lamports - The staked lamports.
 
 * `voter_pubkey` - The pubkey of the VoteState instance the lamports are
 delegated to.
 
 * `credits_observed` - The total credits claimed over the lifetime of the
 program.
+
+* `stake` - The actual activated stake.
+
+* Account::lamports - Lamports available for staking, including any earned as rewards.
+
 
 ### StakeState::MiningPool
 
@@ -105,11 +108,12 @@ tokens stored as `Account::lamports`.
 The stakes and the MiningPool are accounts that are owned by the same `Stake`
 program.
 
-### StakeInstruction::Initialize
+### StakeInstruction::DelegateStake(stake)
 
-* `account[0]` - RW - The StakeState::Delegate instance.
-  `StakeState::Delegate::credits_observed` is initialized to `VoteState::credits`.
-  `StakeState::Delegate::voter_pubkey` is initialized to `account[1]`
+* `account[0]` - RW - The StakeState::Stake instance.
+  `StakeState::Stake::credits_observed` is initialized to `VoteState::credits`.
+  `StakeState::Stake::voter_pubkey` is initialized to `account[1]`
+  `StakeState::Stake::stake` is initialized to `stake`, as long as it's less than account[0].lamports
 
 * `account[1]` - R - The VoteState instance.
 
@@ -124,7 +128,7 @@ deposited into the StakeState and as validator commission is proportional to
 
 * `account[0]` - RW - The StakeState::MiningPool instance that will fulfill the
 reward.
-* `account[1]` - RW - The StakeState::Delegate instance that is redeeming votes
+* `account[1]` - RW - The StakeState::Stake instance that is redeeming votes
 credits.
 * `account[2]` - R - The VoteState instance, must be the same as
 `StakeState::voter_pubkey`
@@ -132,7 +136,7 @@ credits.
 Reward is payed out for the difference between `VoteState::credits` to
 `StakeState::Delgate.credits_observed`, and `credits_observed` is updated to
 `VoteState::credits`.  The commission is deposited into the `VoteState` token
-balance, and the reward is deposited to the `StakeState::Delegate` token balance.  The
+balance, and the reward is deposited to the `StakeState::Stake` token balance.  The
 reward and the commission is weighted by the `StakeState::lamports` divided by total lamports staked.
 
 The Staker or the owner of the Stake program sends a transaction with this
@@ -146,7 +150,7 @@ stake_state.credits_observed = vote_state.credits;
 ```
 
 `credits_to_claim` is used to compute the reward and commission, and
-`StakeState::Delegate::credits_observed` is updated to the latest
+`StakeState::Stake::credits_observed` is updated to the latest
 `VoteState::credits` value.
 
 ### Collecting network fees into the MiningPool
@@ -175,13 +179,13 @@ many rewards to be claimed concurrently.
 
 ## Passive Delegation
 
-Any number of instances of StakeState::Delegate programs can delegate to a single
+Any number of instances of StakeState::Stake programs can delegate to a single
 VoteState program without an interactive action from the identity controlling
 the VoteState program or submitting votes to the program.
 
 The total stake allocated to a VoteState program can be calculated by the sum of
 all the StakeState programs that have the VoteState pubkey as the
-`StakeState::Delegate::voter_pubkey`.
+`StakeState::Stake::voter_pubkey`.
 
 ## Example Callflow
 
