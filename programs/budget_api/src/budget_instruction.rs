@@ -140,9 +140,10 @@ pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruc
     Instruction::new(id(), &BudgetInstruction::ApplySignature, account_metas)
 }
 
-pub fn apply_account_data(account: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
+/// Apply account data to a contract waiting on an AccountData witness.
+pub fn apply_account_data(witness_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*account, false),
+        AccountMeta::new(*witness_pubkey, false),
         AccountMeta::new(*contract, false),
         AccountMeta::new(*to, false),
     ];
