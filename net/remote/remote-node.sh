@@ -112,8 +112,10 @@ local|tar)
     done
     [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-stakes/fullnode-stakes.yml
     if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then
-      genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml \
-        --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
+      genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml"
+    fi
+    if [ -f ./solana-client-accounts/client-accounts.yml ]; then
+      genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
     fi
     if [[ $skipSetup != true ]]; then
       args=(

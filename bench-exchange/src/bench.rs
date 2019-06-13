@@ -73,7 +73,7 @@ impl Default for Config {
 }
 
 pub fn create_client_accounts_file(
-    client_ids_and_stake_file: &String,
+    client_ids_and_stake_file: &str,
     batch_size: usize,
     account_groups: usize,
     fund_amount: u64,
