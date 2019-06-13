@@ -2,7 +2,7 @@
 //! programs. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use crate::accounts::Accounts;
+use crate::accounts::{Accounts, CreditOnlyLocks};
 use crate::accounts_db::{
     AppendVecId, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
@@ -777,7 +777,7 @@ impl Bank {
     fn load_accounts(
         &self,
         txs: &[Transaction],
-        results: Vec<Result<()>>,
+        results: Vec<Result<CreditOnlyLocks>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         self.rc.accounts.load_accounts(
@@ -791,9 +791,9 @@ impl Bank {
     fn check_refs(
         &self,
         txs: &[Transaction],
-        lock_results: &[Result<()>],
+        lock_results: &[Result<CreditOnlyLocks>],
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<CreditOnlyLocks>> {
         txs.iter()
             .zip(lock_results)
             .map(|(tx, lock_res)| {
@@ -809,10 +809,10 @@ impl Bank {
     fn check_age(
         &self,
         txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<CreditOnlyLocks>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<CreditOnlyLocks>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
@@ -831,9 +831,9 @@ impl Bank {
     fn check_signatures(
         &self,
         txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<CreditOnlyLocks>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<CreditOnlyLocks>> {
         let rcache = self.src.status_cache.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
@@ -862,10 +862,10 @@ impl Bank {
     pub fn check_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: &[Result<()>],
+        lock_results: &[Result<CreditOnlyLocks>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<CreditOnlyLocks>> {
         let refs_results = self.check_refs(txs, lock_results, &mut error_counters);
         let age_results = self.check_age(txs, refs_results, max_age, &mut error_counters);
         self.check_signatures(txs, age_results, &mut error_counters)
@@ -2016,11 +2016,12 @@ mod tests {
     fn test_credit_only_relaxed_locks() {
         use solana_sdk::message::{Message, MessageHeader};
 
-        let (genesis_block, mint_keypair) = create_genesis_block(3);
+        let (genesis_block, _) = create_genesis_block(3);
         let bank = Bank::new(&genesis_block);
         let key0 = Keypair::new();
-        let key1 = Pubkey::new_rand();
-        let key2 = Pubkey::new_rand();
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let key3 = Pubkey::new_rand();
 
         let message = Message {
             header: MessageHeader {
@@ -2028,23 +2029,59 @@ mod tests {
                 num_credit_only_signed_accounts: 0,
                 num_credit_only_unsigned_accounts: 1,
             },
-            account_keys: vec![key0.pubkey(), key1, key2],
+            account_keys: vec![key0.pubkey(), key3],
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
-        let tx0 = Transaction::new(&[&key0], message, genesis_block.hash());
-        let txs = vec![tx0];
+        let tx = Transaction::new(&[&key0], message, genesis_block.hash());
+        let txs = vec![tx];
 
-        let lock_result = bank.lock_accounts(&txs);
-        assert_eq!(lock_result.locked_accounts_results(), &vec![Ok(())]);
+        let lock_result0 = bank.lock_accounts(&txs);
+        assert!(lock_result0.locked_accounts_results()[0].is_ok());
+        if let Ok(locks) = &lock_result0.locked_accounts_results()[0] {
+            assert_eq!(locks.len(), 1);
+            assert_eq!(Arc::strong_count(&locks[0]), 2);
+        }
 
-        // Try executing a tx loading a credit-only account from tx0
-        assert!(bank.transfer(1, &mint_keypair, &key2).is_ok());
-        // Try executing a tx loading a account locked as credit-debit in tx0
-        assert_eq!(
-            bank.transfer(1, &mint_keypair, &key1),
-            Err(TransactionError::AccountInUse)
-        );
+        // Try locking accounts, locking a previously credit-only account as credit-debit
+        // should fail
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_credit_only_signed_accounts: 0,
+                num_credit_only_unsigned_accounts: 0,
+            },
+            account_keys: vec![key1.pubkey(), key3],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let tx = Transaction::new(&[&key1], message, genesis_block.hash());
+        let txs = vec![tx];
+
+        let lock_result1 = bank.lock_accounts(&txs);
+        assert!(lock_result1.locked_accounts_results()[0].is_err());
+
+        // Try locking a previously credit-only account a 2nd time; should succeed and increase
+        // the lock reference count
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_credit_only_signed_accounts: 0,
+                num_credit_only_unsigned_accounts: 1,
+            },
+            account_keys: vec![key2.pubkey(), key3],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let tx = Transaction::new(&[&key2], message, genesis_block.hash());
+        let txs = vec![tx];
+
+        let lock_result2 = bank.lock_accounts(&txs);
+        assert!(lock_result2.locked_accounts_results()[0].is_ok());
+        if let Ok(locks) = &lock_result2.locked_accounts_results()[0] {
+            assert_eq!(locks.len(), 1);
+            assert_eq!(Arc::strong_count(&locks[0]), 3);
+        }
     }
 
     #[test]

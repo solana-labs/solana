@@ -11,6 +11,7 @@ use log::*;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::{Account, LamportCredit};
 use solana_sdk::hash::{Hash, Hasher};
+use solana_sdk::message::Message;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -24,11 +25,13 @@ use std::fs::remove_dir_all;
 use std::io::{BufReader, Read};
 use std::ops::Neg;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 const ACCOUNTSDB_DIR: &str = "accountsdb";
 const NUM_ACCOUNT_DIRS: usize = 4;
+
+pub type CreditOnlyLocks = Vec<Arc<AtomicU64>>;
 
 /// This structure handles synchronization for db
 #[derive(Default, Debug)]
@@ -36,8 +39,11 @@ pub struct Accounts {
     /// Single global AccountsDB
     pub accounts_db: Arc<AccountsDB>,
 
-    /// set of accounts which are currently in the pipeline
+    /// set of credit-debit accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
+
+    /// Set of credit-only accounts which are currently in the pipeline, caching account balance
+    credit_only_account_locks: Mutex<HashMap<Pubkey, Arc<AtomicU64>>>,
 
     /// List of persistent stores
     pub paths: String,
@@ -98,6 +104,7 @@ impl Accounts {
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
+            credit_only_account_locks: Mutex::new(HashMap::new()),
             paths,
             own_paths,
         }
@@ -107,6 +114,7 @@ impl Accounts {
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
+            credit_only_account_locks: Mutex::new(HashMap::new()),
             paths: parent.paths.clone(),
             own_paths: parent.own_paths,
         }
@@ -244,7 +252,7 @@ impl Accounts {
         &self,
         ancestors: &HashMap<Fork, usize>,
         txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<CreditOnlyLocks>>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
@@ -255,7 +263,7 @@ impl Accounts {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
-                (tx, Ok(())) => {
+                (tx, Ok(_credit_only_locks)) => {
                     let fee_calculator = hash_queue
                         .get_fee_calculator(&tx.message().recent_blockhash)
                         .ok_or(TransactionError::BlockhashNotFound)?;
@@ -326,29 +334,72 @@ impl Accounts {
 
     fn lock_account(
         locks: &mut HashSet<Pubkey>,
-        keys: &[&Pubkey],
+        credit_only_locks: &mut HashMap<Pubkey, Arc<AtomicU64>>,
+        message: &Message,
         error_counters: &mut ErrorCounters,
-    ) -> Result<()> {
-        // Copy all the accounts
-        for k in keys {
+    ) -> Result<CreditOnlyLocks> {
+        let (credit_debit_keys, credit_only_keys) = message.get_account_keys_by_lock_type();
+
+        for k in credit_debit_keys.iter() {
+            if locks.contains(k) || credit_only_locks.contains_key(k) {
+                error_counters.account_in_use += 1;
+                debug!("Account in use: {:?}", k);
+                return Err(TransactionError::AccountInUse);
+            }
+        }
+        for k in credit_only_keys.iter() {
             if locks.contains(k) {
                 error_counters.account_in_use += 1;
                 debug!("Account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
-        for k in keys {
-            locks.insert(**k);
+
+        for k in credit_debit_keys {
+            locks.insert(*k);
         }
-        Ok(())
+        let mut lock_cache: CreditOnlyLocks = vec![];
+        for k in credit_only_keys {
+            if !credit_only_locks.contains_key(k) {
+                credit_only_locks.insert(*k, Arc::new(AtomicU64::new(0)));
+            }
+            let lock = credit_only_locks.get(k).unwrap().clone();
+            lock_cache.push(lock);
+        }
+
+        Ok(lock_cache)
     }
 
-    fn unlock_account(tx: &Transaction, result: &Result<()>, locks: &mut HashSet<Pubkey>) {
+    fn unlock_account(
+        tx: &Transaction,
+        result: &Result<CreditOnlyLocks>,
+        locks: &mut HashSet<Pubkey>,
+        credit_only_locks: &mut HashMap<Pubkey, Arc<AtomicU64>>,
+    ) {
+        let (credit_debit_keys, credit_only_keys) = &tx.message().get_account_keys_by_lock_type();
         match result {
             Err(TransactionError::AccountInUse) => (),
-            _ => {
-                for k in &tx.message().account_keys {
+            Ok(transaction_credit_only_locks) => {
+                for k in credit_debit_keys {
                     locks.remove(k);
+                }
+                for lock in transaction_credit_only_locks {
+                    drop(lock);
+                }
+                for k in credit_only_keys {
+                    if Arc::strong_count(credit_only_locks.get(k).unwrap()) == 1 {
+                        credit_only_locks.remove(k);
+                    }
+                }
+            }
+            _ => {
+                for k in credit_debit_keys {
+                    locks.remove(k);
+                }
+                for k in credit_only_keys {
+                    if Arc::strong_count(credit_only_locks.get(k).unwrap()) == 1 {
+                        credit_only_locks.remove(k);
+                    }
                 }
             }
         }
@@ -393,7 +444,7 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<CreditOnlyLocks>> {
         let mut error_counters = ErrorCounters::default();
         let rv = txs
             .iter()
@@ -401,7 +452,8 @@ impl Accounts {
                 let message = &tx.message();
                 Self::lock_account(
                     &mut self.account_locks.lock().unwrap(),
-                    &message.get_account_keys_by_lock_type().0,
+                    &mut self.credit_only_account_locks.lock().unwrap(),
+                    &message,
                     &mut error_counters,
                 )
             })
@@ -418,12 +470,18 @@ impl Accounts {
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
+    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<CreditOnlyLocks>]) {
         let mut account_locks = self.account_locks.lock().unwrap();
+        let mut credit_only_account_locks = self.credit_only_account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        txs.iter()
-            .zip(results.iter())
-            .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
+        txs.iter().zip(results.iter()).for_each(|(tx, result)| {
+            Self::unlock_account(
+                tx,
+                result,
+                &mut account_locks,
+                &mut credit_only_account_locks,
+            )
+        });
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
@@ -516,8 +574,13 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let res =
-            accounts.load_accounts(&ancestors, &[tx], vec![Ok(())], &hash_queue, error_counters);
+        let res = accounts.load_accounts(
+            &ancestors,
+            &[tx],
+            vec![Ok(vec![])],
+            &hash_queue,
+            error_counters,
+        );
         res
     }
 

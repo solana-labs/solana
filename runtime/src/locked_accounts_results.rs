@@ -1,9 +1,10 @@
+use crate::accounts::CreditOnlyLocks;
 use crate::bank::Bank;
 use solana_sdk::transaction::{Result, Transaction};
 
 // Represents the results of trying to lock a set of accounts
 pub struct LockedAccountsResults<'a, 'b> {
-    locked_accounts_results: Vec<Result<()>>,
+    locked_accounts_results: Vec<Result<CreditOnlyLocks>>,
     bank: &'a Bank,
     transactions: &'b [Transaction],
     pub(crate) needs_unlock: bool,
@@ -11,7 +12,7 @@ pub struct LockedAccountsResults<'a, 'b> {
 
 impl<'a, 'b> LockedAccountsResults<'a, 'b> {
     pub fn new(
-        locked_accounts_results: Vec<Result<()>>,
+        locked_accounts_results: Vec<Result<CreditOnlyLocks>>,
         bank: &'a Bank,
         transactions: &'b [Transaction],
     ) -> Self {
@@ -23,7 +24,7 @@ impl<'a, 'b> LockedAccountsResults<'a, 'b> {
         }
     }
 
-    pub fn locked_accounts_results(&self) -> &Vec<Result<()>> {
+    pub fn locked_accounts_results(&self) -> &Vec<Result<CreditOnlyLocks>> {
         &self.locked_accounts_results
     }
 
