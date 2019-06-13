@@ -31,14 +31,14 @@ if [[ -z $GRAFANA_API_TOKEN ]]; then
   exit 1
 fi
 
-DASHBOARD_JSON=./testnet-monitor.json
+DASHBOARD_JSON=scripts/grafana-provisioning/dashboards/testnet-monitor.json
 if [[ ! -r $DASHBOARD_JSON ]]; then
   echo Error: $DASHBOARD_JSON not found
 fi
 
 (
   set -x
-  ./adjust-dashboard-for-channel.py "$DASHBOARD_JSON" "$CHANNEL" "$DASHBOARD_JSON".out
+  scripts/adjust-dashboard-for-channel.py "$DASHBOARD_JSON" "$CHANNEL"
 )
 
 rm -rf venv
@@ -65,7 +65,7 @@ echo --- Take a backup of existing dashboard if possible
 echo --- Publish $DASHBOARD_JSON to $DASHBOARD
 (
   set -x
-  grafcli import "$DASHBOARD_JSON".out remote/metrics
+  grafcli import "$DASHBOARD_JSON" remote/metrics
 )
 
 exit 0
