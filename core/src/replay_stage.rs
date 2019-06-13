@@ -58,6 +58,7 @@ struct ForkProgress {
     last_entry: Hash,
     num_blobs: usize,
     started_ms: u64,
+    is_dead: bool,
 }
 impl ForkProgress {
     pub fn new(last_entry: Hash) -> Self {
@@ -65,6 +66,7 @@ impl ForkProgress {
             last_entry,
             num_blobs: 0,
             started_ms: timing::timestamp(),
+            is_dead: false,
         }
     }
 }
@@ -271,29 +273,47 @@ impl ReplayStage {
                 });
         }
     }
+
+    fn is_replay_bank_result_fatal(result: &Result<()>) -> bool {
+        match result {
+            Ok(_) => false,
+            Err(Error::TransactionError(ref e)) => {
+                // Transactions withand transaction errors mean this fork is bogus
+                let tx_error = Err(e.clone());
+                !Bank::can_commit(&tx_error)
+            }
+            Err(Error::BlobError(BlobError::VerificationFailed)) => true,
+            _ => false,
+        }
+    }
+
+    fn log_replay_bank_error(result: &Result<()>) {
+        match result {
+            Err(Error::TransactionError(ref e)) => {
+                // Transactions withand transaction errors mean this fork is bogus
+                if !Bank::can_commit(&Err(e.clone())) {
+                    inc_new_counter_error!("replicate-stage_failed_process_entries", 1);
+                }
+            }
+            Err(Error::BlobError(BlobError::VerificationFailed)) => {
+                inc_new_counter_error!("replicate-stage_failed_verification", 1);
+            }
+
+            _ => (),
+        }
+    }
+
     fn replay_blocktree_into_bank(
         bank: &Bank,
         blocktree: &Blocktree,
         progress: &mut HashMap<u64, ForkProgress>,
     ) -> Result<()> {
         let (entries, num) = Self::load_blocktree_entries(bank, blocktree, progress)?;
-        let len = entries.len();
         let result = Self::replay_entries_into_bank(bank, entries, progress, num);
-        match result {
-            Ok(_) => (),
-            Err(Error::TransactionError(ref e)) => {
-                // Transactions with lock failures (self-conflicting), and transaction errors
-                // mean this fork is bogus
-                if !Bank::can_commit(&Err(e.clone())) {
-                    Self::mark_dead_slot(bank.slot(), blocktree, progress);
-                }
-                inc_new_counter_error!("replicate-stage_failed_process_entries", 1);
-            }
-            Err(Error::BlobError(BlobError::VerificationFailed)) => {
-                Self::mark_dead_slot(bank.slot(), blocktree, progress);
-                inc_new_counter_error!("replicate-stage_failed_verification", 1);
-            }
-            _ => (),
+
+        if Self::is_replay_bank_result_fatal(&result) {
+            Self::log_replay_bank_error(&result);
+            Self::mark_dead_slot(bank.slot(), blocktree, progress);
         }
 
         result
@@ -301,7 +321,10 @@ impl ReplayStage {
 
     fn mark_dead_slot(slot: u64, blocktree: &Blocktree, progress: &mut HashMap<u64, ForkProgress>) {
         // Remove from progress map so we no longer try to replay this bank
-        progress.remove(&slot);
+        let mut progress_entry = progress
+            .get_mut(&slot)
+            .expect("Progress entry must exist after call to replay_entries_into_bank()");
+        progress_entry.is_dead = true;
         blocktree
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blocktree");
@@ -404,16 +427,28 @@ impl ReplayStage {
         trace!("active banks {:?}", active_banks);
 
         for bank_slot in &active_banks {
+            // If the fork was marked as dead, don't replay it
+            if progress.get(bank_slot).map(|p| p.is_dead).unwrap_or(false) {
+                continue;
+            }
+
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
             *ticks_per_slot = bank.ticks_per_slot();
-            if bank.collector_id() != my_pubkey {
-                let _ = Self::replay_blocktree_into_bank(&bank, &blocktree, progress);
+            if bank.collector_id() != my_pubkey
+                && Self::is_replay_result_fatal(&Self::replay_blocktree_into_bank(
+                    &bank, &blocktree, progress,
+                ))
+            {
+                // If the bank was corrupted, don't try to run the below logic to check if the
+                // bank is completed
+                continue;
             }
             let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
             if bank.tick_height() == max_tick_height {
                 Self::process_completed_bank(my_pubkey, bank, slot_full_sender);
             }
         }
+
         Ok(())
     }
 
@@ -755,9 +790,13 @@ mod test {
                 Err(Error::TransactionError(TransactionError::AccountNotFound))
             );
 
-            // Check that the erroring bank was removed from the progress map
-            assert!(progress.is_empty());
-            // Check that the bank was marked as dead
+            // Check that the erroring bank was marked as dead in the progress map
+            assert!(progress
+                .get(&bank0.slot())
+                .map(|b| b.is_dead)
+                .unwrap_or(false));
+
+            // Check that the erroring bank was marked as dead in blocktree
             assert!(blocktree.is_dead(bank0.slot()));
 
             // Create new bank
@@ -789,9 +828,13 @@ mod test {
                 ReplayStage::replay_blocktree_into_bank(&bank1, &blocktree, &mut progress),
                 Err(Error::BlobError(BlobError::VerificationFailed))
             );
-            // Check that the erroring bank was removed from the progress map
-            assert!(progress.is_empty());
-            // Check that the bank was marked as dead
+            // Check that the erroring bank was marked as dead in the progress map
+            assert!(progress
+                .get(&bank1.slot())
+                .map(|b| b.is_dead)
+                .unwrap_or(false));
+
+            // Check that the erroring bank was marked as dead in blocktree
             assert!(blocktree.is_dead(bank1.slot()));
         }
 
