@@ -101,7 +101,7 @@ impl Stakes {
         self.stake_accounts
             .iter()
             .filter(|(_key, account)| match StakeState::from(account) {
-                Some(StakeState::MiningPool { .. }  => true,
+                Some(StakeState::MiningPool { .. }) => true,
                 _ => false,
             })
     }

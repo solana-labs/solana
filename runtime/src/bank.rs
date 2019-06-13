@@ -447,25 +447,24 @@ impl Bank {
         self.store(&tick_height::id(), &account);
     }
 
-    fn update_rewards(&mut self, parent_epoch: u64) {
-        let epoch = self.epoch();
-        if epoch == parent_epoch {
+    // update reward for previous epoch
+    fn update_rewards(&mut self, epoch: u64) {
+        if epoch == self.epoch() {
             return;
         }
         // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
 
         // TODO: on-chain wallclock?
-        //  year =    slots           / slots/year
-        let year = (self.slot() - 1) as f64 / self.slots_per_year;
+        //  years_elapsed =         slots_elapsed                             /     slots/year
+        let year = (self.epoch_schedule.get_last_slot_in_epoch(epoch)) as f64 / self.slots_per_year;
 
         // period: time that has passed as a fraction of a year, basically the length of
         //  an epoch as a fraction of a year
         //  years_elapsed =   slots_elapsed                                   /  slots/year
-        let period = self.epoch_schedule.get_slots_in_epoch(epoch - 1) as f64 / self.slots_per_year;
+        let period = self.epoch_schedule.get_slots_in_epoch(epoch) as f64 / self.slots_per_year;
 
         // validators
         {
-            // cal
             let validator_rewards =
                 (self.inflation.validator(year) * self.capitalization() as f64 * period) as u64;
 
@@ -474,7 +473,7 @@ impl Bank {
                 .stakes
                 .write()
                 .unwrap()
-                .create_mining_pool(epoch - 1, validator_rewards);
+                .create_mining_pool(epoch, validator_rewards);
 
             self.store(&Pubkey::new_rand(), &mining_pool);
 
@@ -1486,15 +1485,13 @@ mod tests {
         assert_ne!(bank1.capitalization(), bank.capitalization());
         // verify the inflation is in rewards pools
         let inflation = bank1.capitalization() - bank.capitalization();
+
         let validator_rewards: u64 = bank1
             .stakes
             .read()
             .unwrap()
             .mining_pools()
-            .map(|(_key, account)| {
-                dbg!((_key, account.lamports));
-                account.lamports
-            })
+            .map(|(_key, account)| account.lamports)
             .sum();
 
         assert_eq!(validator_rewards, inflation);
