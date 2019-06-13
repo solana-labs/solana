@@ -48,7 +48,8 @@ official release.
 #### Windows (x86_64-pc-windows-msvc)
 * [solana.tar.bz2](http://release.solana.com/edge/solana-release-x86_64-pc-windows-msvc.tar.bz2)
 * [solana-install-init.exe](http://release.solana.com/edge/solana-install-init-x86_64-pc-windows-msvc.exe) as a stand-alone executable
-
+#### All platforms
+* [solana-metrics.tar.bz2](http://release.solana.com.s3.amazonaws.com/edge/solana-metrics.tar.bz2)
 
 ### Beta channel
 #### Linux (x86_64-unknown-linux-gnu)
@@ -60,6 +61,8 @@ official release.
 #### Windows (x86_64-pc-windows-msvc)
 * [solana.tar.bz2](http://release.solana.com/beta/solana-release-x86_64-pc-windows-msvc.tar.bz2)
 * [solana-install-init.exe](http://release.solana.com/beta/solana-install-init-x86_64-pc-windows-msvc.exe) as a stand-alone executable
+#### All platforms
+* [solana-metrics.tar.bz2](http://release.solana.com.s3.amazonaws.com/beta/solana-metrics.tar.bz2)
 
 Developing
 ===
