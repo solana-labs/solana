@@ -99,11 +99,17 @@ pub fn when_account_data(
     to: &Pubkey,
     contract: &Pubkey,
     account_pubkey: &Pubkey,
+    account_program_id: &Pubkey,
     account_hash: Hash,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let expr =
-        BudgetExpr::new_payment_when_account_data(account_pubkey, account_hash, lamports, to);
+    let expr = BudgetExpr::new_payment_when_account_data(
+        account_pubkey,
+        account_program_id,
+        account_hash,
+        lamports,
+        to,
+    );
     create_account(from, contract, lamports, expr)
 }
 

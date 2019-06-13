@@ -80,9 +80,11 @@ fn apply_account_data(
     let mut final_payment = None;
 
     if let Some(ref mut expr) = budget_state.pending_budget {
-        let key = keyed_accounts[2].unsigned_key();
-        let actual_hash = hash(&keyed_accounts[2].account.data);
-        expr.apply_witness(&Witness::AccountData(actual_hash), key);
+        let witness_keyed_account = &keyed_accounts[2];
+        let key = witness_keyed_account.unsigned_key();
+        let program_id = witness_keyed_account.account.owner;
+        let actual_hash = hash(&witness_keyed_account.account.data);
+        expr.apply_witness(&Witness::AccountData(actual_hash, program_id), key);
         final_payment = expr.final_payment();
     }
 
@@ -468,6 +470,7 @@ mod tests {
             &bob_pubkey,
             &budget_pubkey,
             &game_pubkey,
+            &game_account.owner,
             game_hash,
             1,
         );

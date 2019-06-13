@@ -19,7 +19,7 @@ pub enum Witness {
     Signature,
 
     /// Account snapshot.
-    AccountData(Hash),
+    AccountData(Hash, Pubkey),
 }
 
 /// Some amount of lamports that should be sent to the `to` `Pubkey`.
@@ -32,6 +32,23 @@ pub struct Payment {
     pub to: Pubkey,
 }
 
+/// The account constraints a Condition would wait on.
+/// Note: ideally this would be function that accepts an Account and returns
+/// a bool, but we don't have a way to pass functions over the wire. To simulate
+/// higher order programming, create your own program that includes an instruction
+/// that sets account data to a boolean. Pass that account key and program_id here.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct AccountConstraints {
+    /// The account holder.
+    pub key: Pubkey,
+
+    /// The program id that must own the account at `key`.
+    pub program_id: Pubkey,
+
+    /// The hash of the data in the account at `key`.
+    pub data_hash: Hash,
+}
+
 /// A data type representing a `Witness` that the payment plan is waiting on.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Condition {
@@ -41,8 +58,8 @@ pub enum Condition {
     /// Wait for a `Signature` `Witness` from `Pubkey`.
     Signature(Pubkey),
 
-    /// Wait for the account with the given pubkey to contain the expected data.
-    AccountData(Hash, Pubkey),
+    /// Wait for the account with the given constraints.
+    AccountData(AccountConstraints),
 }
 
 impl Condition {
@@ -53,8 +70,13 @@ impl Condition {
             (Condition::Timestamp(dt, pubkey), Witness::Timestamp(last_time)) => {
                 pubkey == from && dt <= last_time
             }
-            (Condition::AccountData(expected_hash, pubkey), Witness::AccountData(actual_hash)) => {
-                pubkey == from && actual_hash == expected_hash
+            (
+                Condition::AccountData(constraints),
+                Witness::AccountData(actual_hash, program_id),
+            ) => {
+                constraints.program_id == *program_id
+                    && constraints.key == *from
+                    && constraints.data_hash == *actual_hash
             }
             _ => false,
         }
@@ -96,12 +118,17 @@ impl BudgetExpr {
     /// Create a budget that pays `lamports` to `to` after witnessing account data in `account_pubkey` with the given hash.
     pub fn new_payment_when_account_data(
         account_pubkey: &Pubkey,
+        account_program_id: &Pubkey,
         account_hash: Hash,
         lamports: u64,
         to: &Pubkey,
     ) -> Self {
         BudgetExpr::After(
-            Condition::AccountData(account_hash, *account_pubkey),
+            Condition::AccountData(AccountConstraints {
+                key: *account_pubkey,
+                program_id: *account_program_id,
+                data_hash: account_hash,
+            }),
             Box::new(Self::new_payment(lamports, to)),
         )
     }
