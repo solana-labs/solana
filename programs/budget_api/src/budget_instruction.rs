@@ -141,19 +141,15 @@ pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruc
 }
 
 pub fn apply_account_data(
-    from: &Pubkey,
-    contract: &Pubkey,
     account: &Pubkey,
+    contract: &Pubkey,
     to: &Pubkey,
 ) -> Instruction {
-    let mut account_metas = vec![
-        AccountMeta::new(*from, true),
-        AccountMeta::new(*contract, false),
+    let account_metas = vec![
         AccountMeta::new(*account, false),
+        AccountMeta::new(*contract, false),
+        AccountMeta::new(*to, false),
     ];
-    if from != to {
-        account_metas.push(AccountMeta::new(*to, false));
-    }
     Instruction::new(id(), &BudgetInstruction::ApplyAccountData, account_metas)
 }
 

@@ -80,7 +80,7 @@ fn apply_account_data(
     let mut final_payment = None;
 
     if let Some(ref mut expr) = budget_state.pending_budget {
-        let witness_keyed_account = &keyed_accounts[2];
+        let witness_keyed_account = &keyed_accounts[0];
         let key = witness_keyed_account.unsigned_key();
         let program_id = witness_keyed_account.account.owner;
         let actual_hash = hash(&witness_keyed_account.account.data);
@@ -89,13 +89,13 @@ fn apply_account_data(
     }
 
     if let Some(payment) = final_payment {
-        if &payment.to != keyed_accounts[3].unsigned_key() {
+        if &payment.to != keyed_accounts[2].unsigned_key() {
             trace!("destination missing");
             return Err(BudgetError::DestinationMissing);
         }
         budget_state.pending_budget = None;
         keyed_accounts[1].account.lamports -= payment.lamports;
-        keyed_accounts[3].account.lamports += payment.lamports;
+        keyed_accounts[2].account.lamports += payment.lamports;
     }
     Ok(())
 }
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn test_pay_when_account_data() {
-        let (bank, alice_keypair) = create_bank(2);
+        let (bank, alice_keypair) = create_bank(42);
         let game_pubkey = Pubkey::new_rand();
         let game_account = Account {
             lamports: 1,
@@ -464,7 +464,12 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let game_hash = hash(&[1, 2, 3]);
         let budget_pubkey = Pubkey::new_rand();
-        let bob_pubkey = Pubkey::new_rand();
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
+
+        // Give Bob some lamports so he can sign the witness transaction.
+        bank_client.transfer(1, &alice_keypair, &bob_pubkey).unwrap();
+
         let instructions = budget_instruction::when_account_data(
             &alice_pubkey,
             &bob_pubkey,
@@ -472,14 +477,14 @@ mod tests {
             &game_pubkey,
             &game_account.owner,
             game_hash,
-            1,
+            41,
         );
         let message = Message::new(instructions);
         bank_client
             .send_message(&[&alice_keypair], message)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
-        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
+        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 41);
 
         let contract_account = bank_client
             .get_account_data(&budget_pubkey)
@@ -490,17 +495,21 @@ mod tests {
 
         // Acknowledge the condition occurred and that Bob's funds are now available.
         let instruction = budget_instruction::apply_account_data(
-            &alice_pubkey,
-            &budget_pubkey,
             &game_pubkey,
+            &budget_pubkey,
             &bob_pubkey,
         );
+
+        // Anyone can sign the message, but presumably it's Bob, since he's the
+        // one claiming the payout.
+        let message = Message::new_with_payer(vec![instruction], Some(&bob_pubkey));
         bank_client
-            .send_instruction(&alice_keypair, instruction)
+            .send_message(&[&bob_keypair], message)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 0);
-        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 42);
         assert_eq!(bank_client.get_account_data(&budget_pubkey).unwrap(), None);
     }
 }
