@@ -817,8 +817,13 @@ impl Blocktree {
             .zip(slot_metas)
             .filter_map(|(height, meta)| {
                 meta.map(|meta| {
-                    let next_slots = meta.next_slots.into_iter().filter(|s| !self.is_dead(s));
-                    (*height, meta.next_slots)
+                    let valid_next_slots: Vec<u64> = meta
+                        .next_slots
+                        .iter()
+                        .cloned()
+                        .filter(|s| !self.is_dead(*s))
+                        .collect();
+                    (*height, valid_next_slots)
                 })
             })
             .collect();
