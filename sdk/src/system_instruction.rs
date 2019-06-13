@@ -90,7 +90,7 @@ pub fn assign(from_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
 pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
-        AccountMeta::new_credit_only(*to_pubkey, false),
+        AccountMeta::new(*to_pubkey, false),
     ];
     Instruction::new(
         system_program::id(),
