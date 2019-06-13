@@ -615,7 +615,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
     if lamports_per_account > last_keypair_balance {
         let (_, fee_calculator) = client.get_recent_blockhash().unwrap();
         let extra =
-            lamports_per_account - last_keypair_balance + fee_calculator.lamports_per_signature;
+            lamports_per_account - last_keypair_balance + fee_calculator.max_lamports_per_signature;
         let total = extra * (keypairs.len() as u64);
         if client.get_balance(&funding_pubkey.pubkey()).unwrap_or(0) < total {
             airdrop_lamports(client, &drone_addr.unwrap(), funding_pubkey, total)?;
@@ -626,7 +626,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
             funding_pubkey,
             &keypairs,
             total,
-            fee_calculator.lamports_per_signature,
+            fee_calculator.max_lamports_per_signature,
         );
     }
 
