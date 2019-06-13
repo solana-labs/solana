@@ -171,6 +171,19 @@ const GetClusterNodes = jsonRpcResult(
     }),
   ]),
 );
+/**
+ * @ignore
+ */
+const GetClusterNodes_015 = jsonRpcResult(
+  struct.list([
+    struct({
+      id: 'string',
+      gossip: 'string',
+      tpu: struct.union(['null', 'string']),
+      rpc: struct.union(['null', 'string']),
+    }),
+  ]),
+);
 
 /**
  * Expected JSON RPC response for the "getEpochVoteAccounts" message
@@ -308,7 +321,6 @@ export type TransactionError = {|
   Err: Object,
 |};
 
-
 /**
  * @ignore
  */
@@ -429,6 +441,24 @@ export class Connection {
    */
   async getClusterNodes(): Promise<Array<ContactInfo>> {
     const unsafeRes = await this._rpcRequest('getClusterNodes', []);
+
+    // Legacy v0.15 response.  TODO: Remove in August 2019
+    try {
+      const res_015 = GetClusterNodes_015(unsafeRes);
+      if (res_015.error) {
+        console.log('no', res_015.error);
+        throw new Error(res_015.error.message);
+      }
+      return res_015.result.map(node => {
+        node.pubkey = node.id;
+        node.id = undefined;
+        return node;
+      });
+    } catch (e) {
+      // Not legacy format
+    }
+    // End Legacy v0.15 response
+
     const res = GetClusterNodes(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
