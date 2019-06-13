@@ -50,7 +50,7 @@ pub enum StorageInstruction {
 fn get_ratios() -> (u64, u64) {
     // max number bytes available for account metas and proofs
     // The maximum transaction size is == `PACKET_DATA_SIZE` (1232 bytes)
-    // There are approx. 900 bytes lefter over after the storage instruction is wrapped into
+    // There are approx. 900 bytes left over after the storage instruction is wrapped into
     // a signed transaction.
     static MAX_BYTES: u64 = 900;
     let account_meta_size: u64 =
