@@ -468,7 +468,9 @@ mod tests {
         let bob_pubkey = bob_keypair.pubkey();
 
         // Give Bob some lamports so he can sign the witness transaction.
-        bank_client.transfer(1, &alice_keypair, &bob_pubkey).unwrap();
+        bank_client
+            .transfer(1, &alice_keypair, &bob_pubkey)
+            .unwrap();
 
         let instructions = budget_instruction::when_account_data(
             &alice_pubkey,
@@ -494,18 +496,13 @@ mod tests {
         assert!(budget_state.is_pending());
 
         // Acknowledge the condition occurred and that Bob's funds are now available.
-        let instruction = budget_instruction::apply_account_data(
-            &game_pubkey,
-            &budget_pubkey,
-            &bob_pubkey,
-        );
+        let instruction =
+            budget_instruction::apply_account_data(&game_pubkey, &budget_pubkey, &bob_pubkey);
 
         // Anyone can sign the message, but presumably it's Bob, since he's the
         // one claiming the payout.
         let message = Message::new_with_payer(vec![instruction], Some(&bob_pubkey));
-        bank_client
-            .send_message(&[&bob_keypair], message)
-            .unwrap();
+        bank_client.send_message(&[&bob_keypair], message).unwrap();
 
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 0);
