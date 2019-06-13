@@ -46,7 +46,24 @@ if channel == 'local':
                                                 'text': 'testnet',
                                                 'value': 'testnet'}],
                                    'query': 'testnet',
-                                   'type': 'custom'}]
+                                   'type': 'custom'},
+                                   {'allValue': ".*",
+                                    'datasource': '$datasource',
+                                    'hide': 0,
+                                    'includeAll': True,
+                                    'label': 'HostID',
+                                    'multi': False,
+                                    'name': 'hostid',
+                                    'options': [],
+                                    'query': 'SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"validator-new\" ',
+                                    'refresh': 2,
+                                    'regex': '',
+                                    'sort': 1,
+                                    'tagValuesQuery': '',
+                                    'tags': [],
+                                    'tagsQuery': '',
+                                    'type': 'query',
+                                    'useTags': False}]
 
 elif channel == 'stable':
     # Stable dashboard only allows the user to select between the stable
@@ -121,7 +138,7 @@ else:
                                     'multi': False,
                                     'name': 'hostid',
                                     'options': [],
-                                    'query': 'SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-fullnode-new\" ',
+                                    'query': 'SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"validator-new\" ',
                                     'refresh': 2,
                                     'regex': '',
                                     'sort': 1,
