@@ -11,6 +11,11 @@ cd "$(dirname "$0")"
 
 set -x
 
+if [[ ! -f grafana-provisioning/dashboards/local.json ]]; then
+  ../adjust-dashboard-for-channel.py \
+    ../testnet-monitor.json local grafana-provisioning/dashboards/local.json
+fi
+
 : "${INFLUXDB_IMAGE:=influxdb:1.6}"
 : "${GRAFANA_IMAGE:=solanalabs/grafana:stable}"
 : "${GRAFANA_IMAGE:=grafana/grafana:5.2.3}"
