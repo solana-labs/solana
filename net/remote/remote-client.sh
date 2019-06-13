@@ -70,6 +70,8 @@ solana-bench-tps)
   ;;
 solana-bench-exchange)
   solana-keygen new -f -o bench.keypair
+  net/scripts/rsync-retry.sh -vPrc \
+    "$entrypointIp":~/solana/solana-client-accounts/bench-exchange"$clientIndex".yml ./client-accounts.yml
   clientCommand="\
     solana-bench-exchange \
       --entrypoint $entrypointIp:8001 \
@@ -80,6 +82,7 @@ solana-bench-exchange)
       --duration 7500 \
       --identity bench.keypair \
       $benchExchangeExtraArgs \
+      --read-client-keys ./client-accounts.yml \
   "
   ;;
 *)

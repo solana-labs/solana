@@ -20,9 +20,12 @@ use solana_sdk::system_instruction;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use solana_sdk::transaction::Transaction;
 use std::cmp;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+use std::fs::File;
+use std::io::prelude::*;
 use std::mem;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -48,6 +51,8 @@ pub struct Config {
     pub batch_size: usize,
     pub chunk_size: usize,
     pub account_groups: usize,
+    pub client_ids_and_stake_file: String,
+    pub read_from_client_file: bool,
 }
 
 impl Default for Config {
@@ -61,8 +66,36 @@ impl Default for Config {
             batch_size: 10,
             chunk_size: 10,
             account_groups: 100,
+            client_ids_and_stake_file: String::new(),
+            read_from_client_file: false,
         }
     }
+}
+
+pub fn create_client_accounts_file(
+    client_ids_and_stake_file: &str,
+    batch_size: usize,
+    account_groups: usize,
+    fund_amount: u64,
+) {
+    let accounts_in_groups = batch_size * account_groups;
+    const NUM_KEYPAIR_GROUPS: u64 = 2;
+    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
+
+    let keypairs = generate_keypairs(total_keys);
+
+    let mut accounts = HashMap::new();
+    keypairs.iter().for_each(|keypair| {
+        accounts.insert(
+            serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
+            fund_amount,
+        );
+    });
+
+    let serialized = serde_yaml::to_string(&accounts).unwrap();
+    let path = Path::new(&client_ids_and_stake_file);
+    let mut file = File::create(path).unwrap();
+    file.write_all(&serialized.into_bytes()).unwrap();
 }
 
 pub fn do_bench_exchange<T>(clients: Vec<T>, config: Config)
@@ -78,6 +111,8 @@ where
         batch_size,
         chunk_size,
         account_groups,
+        client_ids_and_stake_file,
+        read_from_client_file,
     } = config;
 
     info!(
@@ -92,35 +127,55 @@ where
     );
 
     let accounts_in_groups = batch_size * account_groups;
-    let exit_signal = Arc::new(AtomicBool::new(false));
+    const NUM_KEYPAIR_GROUPS: u64 = 2;
+    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
+
+    let mut signer_keypairs = if read_from_client_file {
+        let path = Path::new(&client_ids_and_stake_file);
+        let file = File::open(path).unwrap();
+
+        let accounts: HashMap<String, u64> = serde_yaml::from_reader(file).unwrap();
+        accounts
+            .into_iter()
+            .map(|(keypair, _)| {
+                let bytes: Vec<u8> = serde_json::from_str(keypair.as_str()).unwrap();
+                Keypair::from_bytes(&bytes).unwrap()
+            })
+            .collect()
+    } else {
+        info!("Generating {:?} signer keys", total_keys);
+        generate_keypairs(total_keys)
+    };
+
+    let trader_signers: Vec<_> = signer_keypairs
+        .drain(0..accounts_in_groups)
+        .map(Arc::new)
+        .collect();
+    let swapper_signers: Vec<_> = signer_keypairs
+        .drain(0..accounts_in_groups)
+        .map(Arc::new)
+        .collect();
+
     let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
     let client = clients[0].as_ref();
 
-    const NUM_KEYPAIR_GROUPS: u64 = 4;
-    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
-    info!("Generating {:?} keys", total_keys);
-    let mut keypairs = generate_keypairs(total_keys);
-    let trader_signers: Vec<_> = keypairs
-        .drain(0..accounts_in_groups)
-        .map(Arc::new)
-        .collect();
-    let swapper_signers: Vec<_> = keypairs
-        .drain(0..accounts_in_groups)
-        .map(Arc::new)
-        .collect();
-    let src_pubkeys: Vec<_> = keypairs
-        .drain(0..accounts_in_groups)
-        .map(|keypair| keypair.pubkey())
-        .collect();
-    let profit_pubkeys: Vec<_> = keypairs
-        .drain(0..accounts_in_groups)
-        .map(|keypair| keypair.pubkey())
-        .collect();
+    if !read_from_client_file {
+        info!("Fund trader accounts");
+        fund_keys(client, &identity, &trader_signers, fund_amount);
+        info!("Fund swapper accounts");
+        fund_keys(client, &identity, &swapper_signers, fund_amount);
+    }
 
-    info!("Fund trader accounts");
-    fund_keys(client, &identity, &trader_signers, fund_amount);
-    info!("Fund swapper accounts");
-    fund_keys(client, &identity, &swapper_signers, fund_amount);
+    info!("Generating {:?} account keys", total_keys);
+    let mut account_keypairs = generate_keypairs(total_keys);
+    let src_pubkeys: Vec<_> = account_keypairs
+        .drain(0..accounts_in_groups)
+        .map(|keypair| keypair.pubkey())
+        .collect();
+    let profit_pubkeys: Vec<_> = account_keypairs
+        .drain(0..accounts_in_groups)
+        .map(|keypair| keypair.pubkey())
+        .collect();
 
     info!("Create {:?} source token accounts", src_pubkeys.len());
     create_token_accounts(client, &trader_signers, &src_pubkeys);
@@ -136,6 +191,7 @@ where
         transfer_delay
     );
 
+    let exit_signal = Arc::new(AtomicBool::new(false));
     let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
     let total_txs_sent_count = Arc::new(AtomicUsize::new(0));
     let s_threads: Vec<_> = (0..threads)

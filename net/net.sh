@@ -567,7 +567,7 @@ start() {
     if [[ $i -lt "$numBenchTpsClients" ]]; then
       startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
     else
-      startClient "${clientIpList[$i]}" "solana-bench-exchange" "$i"
+      startClient "${clientIpList[$i]}" "solana-bench-exchange" $((i-numBenchTpsClients))
     fi
   done
   clientDeployTime=$SECONDS
