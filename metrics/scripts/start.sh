@@ -74,7 +74,7 @@ INFLUXDB_WRITE_USER=$INFLUXDB_WRITE_USER
 INFLUXDB_WRITE_PASSWORD=$INFLUXDB_WRITE_PASSWORD
 INFLUXDB_DB=testnet
 EOF
-
+mkdir -p lib/influxdb
 docker run \
   --detach \
   --name=influxdb \
@@ -92,6 +92,7 @@ GF_SECURITY_ADMIN_USER=$INFLUXDB_ADMIN_USER
 GF_SECURITY_ADMIN_PASSWORD=$INFLUXDB_ADMIN_PASSWORD
 EOF
 
+mkdir -p lib/grafana
 docker run \
   --detach \
   --name=grafana \
