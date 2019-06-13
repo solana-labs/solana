@@ -113,6 +113,13 @@ EOF
   cp solana-release/bin/solana-install-init solana-install-init-$TARGET
 )
 
+# Metrics tarball is platform agnostic, only publish it from Linux
+MAYBE_METRICS_TARBALL=
+if [[ "$CI_OS_NAME" = linux ]]; then
+  metrics/create-metrics-tarball.sh
+  MAYBE_METRICS_TARBALL=solana-metrics.tar.bz2
+fi
+
 echo --- Saving build artifacts
 source ci/upload-ci-artifact.sh
 upload-ci-artifact solana-release-$TARGET.tar.bz2
@@ -122,7 +129,7 @@ if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
   exit 0
 fi
 
-for file in solana-release-$TARGET.tar.bz2 solana-install-init-"$TARGET"*; do
+for file in solana-release-$TARGET.tar.bz2 solana-install-init-"$TARGET"* $MAYBE_METRICS_TARBALL; do
   if [[ -n $BUILDKITE ]]; then
     echo --- AWS S3 Store: "$file"
     (
