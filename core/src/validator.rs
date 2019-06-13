@@ -17,7 +17,7 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::datapoint_info;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
@@ -264,7 +264,7 @@ impl Validator {
             &exit,
         );
 
-        inc_new_counter_info!("fullnode-new", 1);
+        datapoint_info!("validator-new");
         Self {
             id,
             gossip_service,
