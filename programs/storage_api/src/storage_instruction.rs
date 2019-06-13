@@ -217,8 +217,6 @@ pub fn claim_reward(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::message::Message;
-    use solana_sdk::transaction::Transaction;
 
     #[test]
     fn check_size() {
