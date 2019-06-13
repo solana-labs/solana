@@ -1,12 +1,15 @@
-#!/bin/bash -ex
+#!/usr/bin/env bash
 #
 # (Re)starts the local metrics
 #
+set -e
 
 cd "$(dirname "$0")"
 
 # Stop if already running
 ./stop.sh
+
+set -x
 
 : "${INFLUXDB_IMAGE:=influxdb:1.6}"
 : "${GRAFANA_IMAGE:=solanalabs/grafana:stable}"
@@ -48,5 +51,3 @@ docker run \
 sleep 5
 
 ./status.sh
-
-exit 0

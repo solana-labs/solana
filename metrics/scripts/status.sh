@@ -1,8 +1,9 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
 #
-# Checks the status of lcoal metrics
+# Checks the status of local metrics
 #
 
+set -e
 cd "$(dirname "$0")"
 
 (
@@ -20,8 +21,12 @@ if ! timeout 10s curl -v --head http://localhost:3000; then
   exit 1
 fi
 
-echo Local metrics up and running
-echo - Enable local metric collection per shell by running \'source ./enable.sh\'
-echo - View dashboard at http://localhost:3000/d/local/local-monitor
-exit 0
+cat <<EOF
 
+=========================================================================
+* Grafana dashboards are available at http://localhost:3000/dashboards
+
+* Enable local metric collection per shell by running the command:
+    source $PWD/enable.sh
+
+EOF
