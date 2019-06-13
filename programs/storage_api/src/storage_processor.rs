@@ -79,7 +79,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me` and `rest` cannot be empty
                 Err(InstructionError::InvalidArgument)?;
             }
-            let me_id = storage_account.id.clone();
+            let me_id = storage_account.id;
             let mut rest: Vec<_> = rest
                 .iter_mut()
                 .map(|keyed_account| {

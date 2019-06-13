@@ -425,7 +425,7 @@ fn store_validation_result(
     me: &Pubkey,
     storage_account: &mut StorageAccount,
     segment: usize,
-    proof_mask: &Vec<ProofStatus>,
+    proof_mask: &[ProofStatus],
 ) -> Result<(), InstructionError> {
     let mut storage_contract = storage_account.account.state()?;
     match &mut storage_contract {
@@ -445,7 +445,7 @@ fn store_validation_result(
             reward_validations
                 .entry(segment)
                 .or_default()
-                .insert(*me, proof_mask.clone());
+                .insert(*me, proof_mask.to_vec());
         }
         _ => return Err(InstructionError::InvalidAccountData),
     }
