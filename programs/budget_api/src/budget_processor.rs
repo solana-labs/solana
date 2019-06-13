@@ -456,7 +456,7 @@ mod tests {
             data: vec![1, 2, 3],
             ..Account::default()
         };
-        bank.store(&game_pubkey, &game_account);
+        bank.store_account(&game_pubkey, &game_account);
         assert_eq!(bank.get_account(&game_pubkey).unwrap().data, vec![1, 2, 3]);
 
         let bank_client = BankClient::new(bank);
