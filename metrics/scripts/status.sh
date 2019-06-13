@@ -6,6 +6,18 @@
 set -e
 cd "$(dirname "$0")"
 
+if [[ ! -f lib/config.sh ]]; then
+  echo "Run start.sh first"
+  exit 1
+fi
+# shellcheck source=/dev/null
+source lib/config.sh
+
+: "${INFLUXDB_ADMIN_USER:?}"
+: "${INFLUXDB_ADMIN_PASSWORD:?}"
+: "${INFLUXDB_WRITE_USER:?}"
+: "${INFLUXDB_WRITE_PASSWORD:?}"
+
 (
   set -x
   docker ps --no-trunc --size
@@ -24,9 +36,11 @@ fi
 cat <<EOF
 
 =========================================================================
-* Grafana dashboards are available at http://localhost:3000/dashboards
+* Grafana url: http://localhost:3000/dashboards
+     username: $INFLUXDB_ADMIN_USER
+     password: $INFLUXDB_ADMIN_PASSWORD
 
-* Enable local metric collection per shell by running:
-    export SOLANA_METRICS_CONFIG="host=http://localhost:8086,db=testnet,u=write,p=write"
+* Enable metric collection per shell by running:
+     export SOLANA_METRICS_CONFIG="host=http://localhost:8086,db=testnet,u=$INFLUXDB_WRITE_USER,p=$INFLUXDB_WRITE_PASSWORD"
 
 EOF

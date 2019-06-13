@@ -9,10 +9,51 @@ cd "$(dirname "$0")"
 # Stop if already running
 ./stop.sh
 
-set -x
+randomPassword() {
+  declare p=
+  for _ in $(seq 0 16); do
+    p+="$((RANDOM % 10))"
+  done
+  echo $p
+}
 
-./adjust-dashboard-for-channel.py \
-  grafana-provisioning/dashboards/testnet-monitor.json local
+mkdir -p lib
+if [[ ! -f lib/config.sh ]]; then
+  cat > lib/config.sh <<EOF
+INFLUXDB_ADMIN_USER=admin
+INFLUXDB_ADMIN_PASSWORD=$(randomPassword)
+INFLUXDB_WRITE_USER=write
+INFLUXDB_WRITE_PASSWORD=$(randomPassword)
+INFLUXDB_READ_USER=read
+INFLUXDB_READ_PASSWORD=read
+EOF
+fi
+# shellcheck source=/dev/null
+source lib/config.sh
+
+if [[ ! -f lib/grafana-provisioning ]]; then
+  cp -va grafana-provisioning lib
+  ./adjust-dashboard-for-channel.py \
+    lib/grafana-provisioning/dashboards/testnet-monitor.json local
+
+  mkdir -p lib/grafana-provisioning/datasources
+  cat > lib/grafana-provisioning/datasources/datasource.yml <<EOF
+apiVersion: 1
+
+datasources:
+- name: local-influxdb
+  type: influxdb
+  isDefault: true
+  access: proxy
+  database: testnet
+  user: $INFLUXDB_READ_USER
+  password: $INFLUXDB_READ_PASSWORD
+  url: http://influxdb:8086
+  editable: true
+EOF
+fi
+
+set -x
 
 : "${INFLUXDB_IMAGE:=influxdb:1.6}"
 : "${GRAFANA_IMAGE:=solanalabs/grafana:stable}"
@@ -24,6 +65,16 @@ docker pull $GRAFANA_IMAGE
 docker network remove influxdb || true
 docker network create influxdb
 
+cat > "$PWD"/lib/influx-env-file <<EOF
+INFLUXDB_ADMIN_USER=$INFLUXDB_ADMIN_USER
+INFLUXDB_ADMIN_PASSWORD=$INFLUXDB_ADMIN_PASSWORD
+INFLUXDB_READ_USER=$INFLUXDB_READ_USER
+INFLUXDB_READ_PASSWORD=$INFLUXDB_READ_PASSWORD
+INFLUXDB_WRITE_USER=$INFLUXDB_WRITE_USER
+INFLUXDB_WRITE_PASSWORD=$INFLUXDB_WRITE_PASSWORD
+INFLUXDB_DB=testnet
+EOF
+
 docker run \
   --detach \
   --name=influxdb \
@@ -32,14 +83,14 @@ docker run \
   --user "$(id -u):$(id -g)" \
   --volume "$PWD"/influxdb.conf:/etc/influxdb/influxdb.conf:ro \
   --volume "$PWD"/lib/influxdb:/var/lib/influxdb \
-  --env INFLUXDB_DB=testnet \
-  --env INFLUXDB_ADMIN_USER=admin \
-  --env INFLUXDB_ADMIN_PASSWORD=admin \
-  --env INFLUXDB_READ_USER=read \
-  --env INFLUXDB_READ_PASSWORD=read \
-  --env INFLUXDB_WRITE_USER=write \
-  --env INFLUXDB_WRITE_PASSWORD=write \
+  --env-file "$PWD"/lib/influx-env-file \
   $INFLUXDB_IMAGE -config /etc/influxdb/influxdb.conf /init-influxdb.sh
+
+cat > "$PWD"/lib/grafana-env-file <<EOF
+GF_PATHS_CONFIG=/grafana.ini
+GF_SECURITY_ADMIN_USER=$INFLUXDB_ADMIN_USER
+GF_SECURITY_ADMIN_PASSWORD=$INFLUXDB_ADMIN_PASSWORD
+EOF
 
 docker run \
   --detach \
@@ -47,10 +98,10 @@ docker run \
   --net=influxdb \
   --publish 3000:3000 \
   --user "$(id -u):$(id -g)" \
-  --env GF_PATHS_CONFIG=/grafana.ini \
+  --env-file "$PWD"/lib/grafana-env-file \
   --volume "$PWD"/grafana.ini:/grafana.ini:ro \
   --volume "$PWD"/lib/grafana:/var/lib/grafana \
-  --volume "$PWD"/grafana-provisioning/:/etc/grafana/provisioning \
+  --volume "$PWD"/lib/grafana-provisioning/:/etc/grafana/provisioning:ro \
   $GRAFANA_IMAGE
 
 sleep 5
