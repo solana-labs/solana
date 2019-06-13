@@ -52,7 +52,7 @@ pub struct Replicator {
     ledger_path: String,
     keypair: Arc<Keypair>,
     storage_keypair: Arc<Keypair>,
-    blockhash: String,
+    blockhash: Hash,
     signature: ed25519_dalek::Signature,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_data_file_encrypted: PathBuf,
@@ -204,7 +204,7 @@ impl Replicator {
         let client = crate::gossip_service::get_client(&nodes);
 
         let (storage_blockhash, storage_slot) =
-            match Self::poll_for_blockhash_and_slot(&cluster_info, &Hash::default().to_string()) {
+            match Self::poll_for_blockhash_and_slot(&cluster_info, &Hash::default()) {
                 Ok(blockhash_and_slot) => blockhash_and_slot,
                 Err(e) => {
                     //shutdown services before exiting
@@ -301,9 +301,9 @@ impl Replicator {
     pub fn run(&mut self) {
         info!("waiting for ledger download");
         self.thread_handles.pop().unwrap().join().unwrap();
+        self.encrypt_ledger()
+            .expect("ledger encrypt not successful");
         loop {
-            self.encrypt_ledger()
-                .expect("ledger encrypt not successful");
             self.create_sampling_offsets();
             if let Err(err) = self.sample_file_to_create_mining_hash() {
                 warn!("Error sampling file, exiting: {:?}", err);
@@ -311,6 +311,7 @@ impl Replicator {
             }
             self.submit_mining_proof();
 
+            // Todo make this a lot more frequent by picking a "new" blockhash instead of picking a storage blockhash
             // prep the next proof
             let (storage_blockhash, _) =
                 match Self::poll_for_blockhash_and_slot(&self.cluster_info, &self.blockhash) {
@@ -323,7 +324,6 @@ impl Replicator {
                         break;
                     }
                 };
-            self.signature = self.storage_keypair.sign(storage_blockhash.as_ref());
             self.blockhash = storage_blockhash;
         }
     }
@@ -473,6 +473,7 @@ impl Replicator {
             self.sha_state,
             get_segment_from_slot(self.slot),
             Signature::new(&self.signature.to_bytes()),
+            self.blockhash,
         );
         let message = Message::new_with_payer(vec![instruction], Some(&self.keypair.pubkey()));
         let mut transaction = Transaction::new(
@@ -507,8 +508,8 @@ impl Replicator {
     /// Poll for a different blockhash and associated max_slot than `previous_blockhash`
     fn poll_for_blockhash_and_slot(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        previous_blockhash: &str,
-    ) -> result::Result<(String, u64), Error> {
+        previous_blockhash: &Hash,
+    ) -> result::Result<(Hash, u64), Error> {
         for _ in 0..10 {
             let rpc_client = {
                 let cluster_info = cluster_info.read().unwrap();
@@ -517,13 +518,28 @@ impl Replicator {
                 let node_index = thread_rng().gen_range(0, rpc_peers.len());
                 RpcClient::new_socket(rpc_peers[node_index].rpc)
             };
-            let storage_blockhash = rpc_client
+            let response = rpc_client
                 .retry_make_rpc_request(&RpcRequest::GetStorageBlockhash, None, 0)
                 .map_err(|err| {
                     warn!("Error while making rpc request {:?}", err);
                     Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
-                })?
-                .to_string();
+                })?;
+            let storage_blockhash =
+                serde_json::from_value::<(String)>(response).map_err(|err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Couldn't parse response: {:?}", err),
+                    )
+                })?;
+            let storage_blockhash = storage_blockhash.parse().map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "Blockhash parse failure: {:?} on {:?}",
+                        err, storage_blockhash
+                    ),
+                )
+            })?;
             if storage_blockhash != *previous_blockhash {
                 let storage_slot = rpc_client
                     .retry_make_rpc_request(&RpcRequest::GetStorageSlot, None, 0)

@@ -58,7 +58,7 @@ pub enum WalletCommand {
     CreateStorageMiningPoolAccount(Pubkey, u64),
     CreateReplicatorStorageAccount(Pubkey, Pubkey),
     CreateValidatorStorageAccount(Pubkey, Pubkey),
-    ClaimStorageReward(Pubkey, Pubkey),
+    ClaimStorageReward(Pubkey, Pubkey, Pubkey),
     ShowStorageAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
@@ -299,10 +299,12 @@ pub fn parse_command(
             ))
         }
         ("claim-storage-reward", Some(matches)) => {
+            let node_account_pubkey = value_of(matches, "node_account_pubkey").unwrap();
             let storage_mining_pool_account_pubkey =
                 value_of(matches, "storage_mining_pool_account_pubkey").unwrap();
             let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::ClaimStorageReward(
+                node_account_pubkey,
                 storage_mining_pool_account_pubkey,
                 storage_account_pubkey,
             ))
@@ -734,12 +736,14 @@ fn process_create_validator_storage_account(
 fn process_claim_storage_reward(
     rpc_client: &RpcClient,
     config: &WalletConfig,
+    node_account_pubkey: &Pubkey,
     storage_mining_pool_account_pubkey: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let instruction = storage_instruction::claim_reward(
+        node_account_pubkey,
         storage_account_pubkey,
         storage_mining_pool_account_pubkey,
     );
@@ -763,7 +767,7 @@ fn process_show_storage_account(
             format!("Unable to deserialize storage account: {:?}", err).to_string(),
         )
     })?;
-    println!("{:?}", storage_contract);
+    println!("{:#?}", storage_contract);
     println!("account lamports: {}", account.lamports);
     Ok("".to_string())
 }
@@ -1126,11 +1130,13 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         }
 
         WalletCommand::ClaimStorageReward(
+            node_account_pubkey,
             storage_mining_pool_account_pubkey,
             storage_account_pubkey,
         ) => process_claim_storage_reward(
             &rpc_client,
             config,
+            node_account_pubkey,
             &storage_mining_pool_account_pubkey,
             &storage_account_pubkey,
         ),
@@ -1591,8 +1597,17 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("claim-storage-reward")
                 .about("Redeem storage reward credits")
                 .arg(
-                    Arg::with_name("storage_mining_pool_account_pubkey")
+                    Arg::with_name("node_account_pubkey")
                         .index(1)
+                        .value_name("NODE PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The node account to credit the rewards to"),
+                )
+                .arg(
+                    Arg::with_name("storage_mining_pool_account_pubkey")
+                        .index(2)
                         .value_name("MINING POOL PUBKEY")
                         .takes_value(true)
                         .required(true)
@@ -1601,21 +1616,13 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 )
                 .arg(
                     Arg::with_name("storage_account_pubkey")
-                        .index(2)
+                        .index(3)
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
                         .help("Storage account address to redeem credits for"),
-                )
-                .arg(
-                    Arg::with_name("slot")
-                        .index(3)
-                        .value_name("SLOT")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The slot to claim rewards for"),
-                ),)
+                ))
 
         .subcommand(
             SubCommand::with_name("show-storage-account")

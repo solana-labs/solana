@@ -14,11 +14,11 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::syscall::current;
 use solana_sdk::syscall::current::Current;
+use solana_sdk::system_instruction;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_storage_api::storage_contract::StorageAccount;
 use solana_storage_api::storage_contract::{
-    CheckedProof, Proof, ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE,
-    TOTAL_REPLICATOR_REWARDS, TOTAL_VALIDATOR_REWARDS,
+    ProofStatus, StorageContract, REPLICATOR_REWARD, STORAGE_ACCOUNT_SPACE, VALIDATOR_REWARD,
 };
 use solana_storage_api::storage_instruction;
 use solana_storage_api::storage_processor::process_instruction;
@@ -108,13 +108,19 @@ fn test_proof_bounds() {
         ..Account::default()
     };
     {
-        let mut storage_account = StorageAccount::new(&mut account);
+        let mut storage_account = StorageAccount::new(pubkey, &mut account);
         storage_account
             .initialize_replicator_storage(account_owner)
             .unwrap();
     }
 
-    let ix = storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+    let ix = storage_instruction::mining_proof(
+        &pubkey,
+        Hash::default(),
+        0,
+        Signature::default(),
+        Hash::default(),
+    );
     // the proof is for segment 0, need to move the slot into segment 2
     let mut current_account = current::create_account(1);
     Current::to(
@@ -167,7 +173,13 @@ fn test_invalid_accounts_len() {
     let pubkey = Pubkey::new_rand();
     let mut accounts = [Account::default()];
 
-    let ix = storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+    let ix = storage_instruction::mining_proof(
+        &pubkey,
+        Hash::default(),
+        0,
+        Signature::default(),
+        Hash::default(),
+    );
     // move tick height into segment 1
     let mut current_account = current::create_account(1);
     Current::to(
@@ -194,7 +206,13 @@ fn test_submit_mining_invalid_slot() {
     accounts[0].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
     accounts[1].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
 
-    let ix = storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+    let ix = storage_instruction::mining_proof(
+        &pubkey,
+        Hash::default(),
+        0,
+        Signature::default(),
+        Hash::default(),
+    );
 
     // submitting a proof for a slot in the past, so this should fail
     assert!(test_instruction(&ix, &mut accounts).is_err());
@@ -208,13 +226,19 @@ fn test_submit_mining_ok() {
     let mut account = Account::default();
     account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
     {
-        let mut storage_account = StorageAccount::new(&mut account);
+        let mut storage_account = StorageAccount::new(pubkey, &mut account);
         storage_account
             .initialize_replicator_storage(account_owner)
             .unwrap();
     }
 
-    let ix = storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+    let ix = storage_instruction::mining_proof(
+        &pubkey,
+        Hash::default(),
+        0,
+        Signature::default(),
+        Hash::default(),
+    );
     // move slot into segment 1
     let mut current_account = current::create_account(1);
     Current::to(
@@ -235,11 +259,13 @@ fn test_submit_mining_ok() {
 #[test]
 fn test_validate_mining() {
     solana_logger::setup();
-    let (mut genesis_block, mint_keypair) = create_genesis_block(1000);
+    let (mut genesis_block, mint_keypair) = create_genesis_block(100_000);
     genesis_block
         .native_instruction_processors
         .push(solana_storage_program::solana_storage_program!());
     let mint_pubkey = mint_keypair.pubkey();
+    // 1 owner for all replicator and validator accounts for the test
+    let owner_pubkey = Pubkey::new_rand();
 
     let replicator_1_storage_keypair = Keypair::new();
     let replicator_1_storage_id = replicator_1_storage_keypair.pubkey();
@@ -258,6 +284,7 @@ fn test_validate_mining() {
     let bank_client = BankClient::new_shared(&bank);
 
     init_storage_accounts(
+        &owner_pubkey,
         &bank_client,
         &mint_keypair,
         &[&validator_storage_id],
@@ -267,7 +294,7 @@ fn test_validate_mining() {
     let message = Message::new(storage_instruction::create_mining_pool_account(
         &mint_pubkey,
         &mining_pool_pubkey,
-        100,
+        10_000,
     ));
     bank_client.send_message(&[&mint_keypair], message).unwrap();
 
@@ -342,7 +369,7 @@ fn test_validate_mining() {
         vec![storage_instruction::proof_validation(
             &validator_storage_id,
             proof_segment as u64,
-            checked_proofs,
+            checked_proofs.into_iter().map(|entry| entry).collect(),
         )],
         Some(&mint_pubkey),
     );
@@ -378,6 +405,7 @@ fn test_validate_mining() {
 
     let message = Message::new_with_payer(
         vec![storage_instruction::claim_reward(
+            &owner_pubkey,
             &validator_storage_id,
             &mining_pool_pubkey,
         )],
@@ -385,8 +413,8 @@ fn test_validate_mining() {
     );
     assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
     assert_eq!(
-        bank_client.get_balance(&validator_storage_id).unwrap(),
-        10 + (TOTAL_VALIDATOR_REWARDS * 10)
+        bank_client.get_balance(&owner_pubkey).unwrap(),
+        1 + (VALIDATOR_REWARD * 10)
     );
 
     // tick the bank into the next storage epoch so that rewards can be claimed
@@ -401,15 +429,23 @@ fn test_validate_mining() {
 
     let message = Message::new_with_payer(
         vec![storage_instruction::claim_reward(
+            &owner_pubkey,
             &replicator_1_storage_id,
             &mining_pool_pubkey,
         )],
         Some(&mint_pubkey),
     );
+
     assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
+
+    assert_eq!(
+        bank_client.get_balance(&owner_pubkey).unwrap(),
+        1 + (VALIDATOR_REWARD * 10) + (REPLICATOR_REWARD * 5)
+    );
 
     let message = Message::new_with_payer(
         vec![storage_instruction::claim_reward(
+            &owner_pubkey,
             &replicator_2_storage_id,
             &mining_pool_pubkey,
         )],
@@ -417,37 +453,44 @@ fn test_validate_mining() {
     );
     assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
 
-    // TODO enable when rewards are working
     assert_eq!(
-        bank_client.get_balance(&replicator_1_storage_id).unwrap(),
-        10 + (TOTAL_REPLICATOR_REWARDS * 5)
+        bank_client.get_balance(&owner_pubkey).unwrap(),
+        1 + (VALIDATOR_REWARD * 10) + (REPLICATOR_REWARD * 10)
     );
 }
 
 fn init_storage_accounts(
+    owner: &Pubkey,
     client: &BankClient,
     mint: &Keypair,
     validator_accounts_to_create: &[&Pubkey],
     replicator_accounts_to_create: &[&Pubkey],
     lamports: u64,
 ) {
-    let mut ixs: Vec<_> = validator_accounts_to_create
-        .into_iter()
-        .flat_map(|account| {
-            storage_instruction::create_validator_storage_account(
-                &mint.pubkey(),
-                &Pubkey::default(),
-                account,
-                lamports,
-            )
-        })
-        .collect();
+    let mut ixs: Vec<_> = vec![system_instruction::create_user_account(
+        &mint.pubkey(),
+        owner,
+        1,
+    )];
+    ixs.append(
+        &mut validator_accounts_to_create
+            .into_iter()
+            .flat_map(|account| {
+                storage_instruction::create_validator_storage_account(
+                    &mint.pubkey(),
+                    owner,
+                    account,
+                    lamports,
+                )
+            })
+            .collect(),
+    );
     replicator_accounts_to_create
         .into_iter()
         .for_each(|account| {
             ixs.append(&mut storage_instruction::create_replicator_storage_account(
                 &mint.pubkey(),
-                &Pubkey::default(),
+                owner,
                 account,
                 lamports,
             ))
@@ -481,7 +524,7 @@ fn submit_proof(
     storage_keypair: &Keypair,
     bank_client: &BankClient,
     segment_index: u64,
-) -> CheckedProof {
+) -> ProofStatus {
     let sha_state = Hash::new(Pubkey::new_rand().as_ref());
     let message = Message::new_with_payer(
         vec![storage_instruction::mining_proof(
@@ -489,6 +532,7 @@ fn submit_proof(
             sha_state,
             segment_index as usize,
             Signature::default(),
+            bank_client.get_recent_blockhash().unwrap().0,
         )],
         Some(&mint_keypair.pubkey()),
     );
@@ -497,14 +541,7 @@ fn submit_proof(
         bank_client.send_message(&[&mint_keypair, &storage_keypair], message),
         Ok(_)
     );
-    CheckedProof {
-        proof: Proof {
-            signature: Signature::default(),
-            sha_state,
-            segment_index: segment_index as usize,
-        },
-        status: ProofStatus::Valid,
-    }
+    ProofStatus::Valid
 }
 
 fn get_storage_blockhash<C: SyncClient>(client: &C, account: &Pubkey) -> Hash {
@@ -585,6 +622,7 @@ fn test_bank_storage() {
             Hash::default(),
             slot,
             Signature::default(),
+            bank_client.get_recent_blockhash().unwrap().0,
         )],
         Some(&mint_pubkey),
     );
