@@ -23,12 +23,17 @@ source lib/config.sh
   docker ps --no-trunc --size
 )
 
-if ! timeout 10s curl -v --head http://localhost:8086/ping; then
+
+curl_head() {
+  curl --retry 5 --retry-delay 2 --retry-connrefused -v --head "$1"
+}
+
+if ! curl_head http://localhost:8086/ping; then
   echo Error: InfluxDB not running
   exit 1
 fi
 
-if ! timeout 10s curl -v --head http://localhost:3000; then
+if ! curl_head http://localhost:3000; then
   echo Error: Grafana not running
   exit 1
 fi
