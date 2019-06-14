@@ -27,7 +27,7 @@ use solana_metrics::{
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::{extend_and_hash, Hash};
+use solana_sdk::hash::{extend_and_hash, hashv, Hash};
 use solana_sdk::inflation::Inflation;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
@@ -371,7 +371,7 @@ impl Bank {
             self.ancestors.insert(p.slot(), i + 1);
         });
 
-        self.update_rewards(parent.epoch());
+        self.update_rewards(parent.epoch(), parent.last_blockhash());
         self.update_current();
         self.update_fees();
         self
@@ -448,7 +448,7 @@ impl Bank {
     }
 
     // update reward for previous epoch
-    fn update_rewards(&mut self, epoch: u64) {
+    fn update_rewards(&mut self, epoch: u64, blockhash: Hash) {
         if epoch == self.epoch() {
             return;
         }
@@ -475,7 +475,17 @@ impl Bank {
                 .unwrap()
                 .create_mining_pool(epoch, validator_rewards);
 
-            self.store(&Pubkey::new_rand(), &mining_pool);
+            self.store(
+                &Pubkey::new(
+                    hashv(&[
+                        blockhash.as_ref(),
+                        "StakeMiningPool".as_ref(),
+                        &serialize(&epoch).unwrap(),
+                    ])
+                    .as_ref(),
+                ),
+                &mining_pool,
+            );
 
             self.capitalization
                 .fetch_add(validator_rewards as usize, Ordering::Relaxed);
