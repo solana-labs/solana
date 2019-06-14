@@ -273,6 +273,8 @@ if [[ $node_type = replicator ]]; then
   storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-storage-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/replicator-ledger$label
   configured_flag=$SOLANA_CONFIG_DIR/replicator$label.configured
+  storage_mining_pool_keypair_path="$SOLANA_CONFIG_DIR"/storage-mining-pool-keypair.json
+  storage_mining_pool_pubkey=$($solana_keygen pubkey "$storage_mining_pool_keypair_path")
 
   mkdir -p "$SOLANA_CONFIG_DIR"
   [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
@@ -293,6 +295,7 @@ EOF
   default_arg --identity "$identity_keypair_path"
   default_arg --storage-keypair "$storage_keypair_path"
   default_arg --ledger "$ledger_config_dir"
+  default_arg --mining-pool "$storage_mining_pool_pubkey"
 
   rsync_entrypoint_url=$(rsync_url "$entrypoint")
 elif [[ $node_type = bootstrap_leader ]]; then
