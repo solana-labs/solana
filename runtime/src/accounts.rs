@@ -560,6 +560,29 @@ impl Accounts {
     pub fn add_root(&self, fork: Fork) {
         self.accounts_db.add_root(fork)
     }
+
+    /// Commit remaining credit-only changes, regardless of reference count
+    pub fn commit_credits(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
+        let credit_only_account_locks = self.credit_only_account_locks.lock().unwrap();
+        for (pubkey, balance) in credit_only_account_locks.iter() {
+            let mut account = self
+                .load_slow(ancestors, pubkey)
+                .map(|(account, _)| account)
+                .unwrap_or_default();
+            let new_balance = balance.load(Ordering::Relaxed);
+            if new_balance > account.lamports {
+                account.lamports = new_balance;
+                self.store_slow(fork, pubkey, &account);
+            }
+        }
+        drop(credit_only_account_locks);
+        self.clear_credit_only_account_locks();
+    }
+
+    pub fn clear_credit_only_account_locks(&self) {
+        let mut credit_only_account_locks = self.credit_only_account_locks.lock().unwrap();
+        credit_only_account_locks.clear();
+    }
 }
 
 fn collect_accounts<'a>(
@@ -1213,6 +1236,61 @@ mod tests {
             accounts.hash_internal_state(0),
             daccounts.hash_internal_state(0)
         );
+    }
+
+    #[test]
+    fn test_commit_credits() {
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
+        let pubkey3 = Pubkey::new_rand();
+
+        let account0 = Account::new(1, 0, &Pubkey::default());
+        let account1 = Account::new(2, 0, &Pubkey::default());
+        let account2 = Account::new(2, 0, &Pubkey::default());
+
+        let accounts = Accounts::new(None);
+        accounts.store_slow(0, &pubkey0, &account0);
+        accounts.store_slow(0, &pubkey1, &account1);
+        accounts.store_slow(0, &pubkey2, &account2);
+
+        let mut credit_only_account_locks = accounts.credit_only_account_locks.lock().unwrap();
+        credit_only_account_locks.insert(pubkey0, Arc::new(AtomicU64::new(1)));
+        credit_only_account_locks.insert(pubkey1, Arc::new(AtomicU64::new(1)));
+        credit_only_account_locks.insert(pubkey2, Arc::new(AtomicU64::new(5)));
+        credit_only_account_locks.insert(pubkey3, Arc::new(AtomicU64::new(10)));
+
+        // Additional references should not affect commit_credits
+        let _additional_reference0 = credit_only_account_locks.get(&pubkey0).unwrap().clone();
+        let _additional_reference1 = credit_only_account_locks.get(&pubkey2).unwrap().clone();
+
+        drop(credit_only_account_locks);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        accounts.commit_credits(&ancestors, 0);
+
+        // No change when current account and credit-lock balances match
+        assert_eq!(
+            accounts.load_slow(&ancestors, &pubkey0).unwrap().0.lamports,
+            1
+        );
+        // No change if credit-lock balance < current account balance (should not happen)
+        assert_eq!(
+            accounts.load_slow(&ancestors, &pubkey1).unwrap().0.lamports,
+            2
+        );
+        // New balance should be applied to existing account
+        assert_eq!(
+            accounts.load_slow(&ancestors, &pubkey2).unwrap().0.lamports,
+            5
+        );
+        // New account should be created
+        assert_eq!(
+            accounts.load_slow(&ancestors, &pubkey3).unwrap().0.lamports,
+            10
+        );
+        // Account locks should be cleared
+        assert_eq!(accounts.credit_only_account_locks.lock().unwrap().len(), 0);
     }
 
     #[test]
