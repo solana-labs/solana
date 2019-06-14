@@ -1,5 +1,5 @@
 use crate::accounts_db::{
-    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters,
+    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, CreditOnlyLocks, ErrorCounters,
     InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
@@ -30,8 +30,6 @@ use std::sync::{Arc, Mutex};
 
 const ACCOUNTSDB_DIR: &str = "accountsdb";
 const NUM_ACCOUNT_DIRS: usize = 4;
-
-pub type CreditOnlyLocks = Vec<Arc<AtomicU64>>;
 
 /// This structure handles synchronization for db
 #[derive(Default, Debug)]

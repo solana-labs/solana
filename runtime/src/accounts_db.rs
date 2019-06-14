@@ -35,7 +35,7 @@ use std::fmt;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::io::{BufReader, Cursor, Error, ErrorKind, Read};
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use sys_info;
 
@@ -58,6 +58,8 @@ pub struct ErrorCounters {
     pub call_chain_too_deep: usize,
     pub missing_signature_for_fee: usize,
 }
+
+pub type CreditOnlyLocks = Vec<Arc<AtomicU64>>;
 
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]
 pub struct AccountInfo {

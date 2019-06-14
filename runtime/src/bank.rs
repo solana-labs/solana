@@ -2,9 +2,9 @@
 //! programs. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use crate::accounts::{Accounts, CreditOnlyLocks};
+use crate::accounts::Accounts;
 use crate::accounts_db::{
-    AppendVecId, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
+    AppendVecId, CreditOnlyLocks, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;

@@ -46,6 +46,7 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)])
                     );
                     let mut first_err = None;
                     for (r, tx) in results.iter().zip(e.transactions.iter()) {
+                        let r = r.clone().map(|_| ());
                         if let Err(ref e) = r {
                             if first_err.is_none() {
                                 first_err = Some(r.clone());
@@ -89,7 +90,8 @@ pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
             // try to lock the accounts
             let lock_results = bank.lock_accounts(&entry.transactions);
 
-            let first_lock_err = first_err(lock_results.locked_accounts_results());
+            let results: Vec<Result<()>> = lock_results.locked_accounts_results().iter().map(|res| res.clone().map(|_| ())).collect();
+            let first_lock_err = first_err(&results);
 
             // if locking worked
             if first_lock_err.is_ok() {

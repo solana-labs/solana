@@ -17,7 +17,7 @@ use bincode::deserialize;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
-use solana_runtime::accounts_db::ErrorCounters;
+use solana_runtime::accounts_db::{CreditOnlyLocks, ErrorCounters};
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::poh_config::PohConfig;
@@ -578,16 +578,16 @@ impl BankingStage {
     fn prepare_filter_for_pending_transactions(
         transactions: &[Transaction],
         pending_tx_indexes: &[usize],
-    ) -> Vec<transaction::Result<()>> {
+    ) -> Vec<transaction::Result<CreditOnlyLocks>> {
         let mut mask = vec![Err(TransactionError::BlockhashNotFound); transactions.len()];
-        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(()));
+        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(vec![]));
         mask
     }
 
     // This function returns a vector containing index of all valid transactions. A valid
     // transaction has result Ok() as the value
     fn filter_valid_transaction_indexes(
-        valid_txs: &[transaction::Result<()>],
+        valid_txs: &[transaction::Result<CreditOnlyLocks>],
         transaction_indexes: &[usize],
     ) -> Vec<usize> {
         let valid_transactions = valid_txs
@@ -1366,29 +1366,23 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
         ];
 
-        assert_eq!(
-            BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![2, 4, 5],),
-            vec![
-                Err(TransactionError::BlockhashNotFound),
-                Err(TransactionError::BlockhashNotFound),
-                Ok(()),
-                Err(TransactionError::BlockhashNotFound),
-                Ok(()),
-                Ok(())
-            ]
-        );
+        let results = BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![2, 4, 5],);
+        assert!(results[0].is_err());
+        assert!(results[1].is_err());
+        assert!(results[3].is_err());
 
-        assert_eq!(
-            BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![0, 2, 3],),
-            vec![
-                Ok(()),
-                Err(TransactionError::BlockhashNotFound),
-                Ok(()),
-                Ok(()),
-                Err(TransactionError::BlockhashNotFound),
-                Err(TransactionError::BlockhashNotFound),
-            ]
-        );
+        assert!(results[2].is_ok());
+        assert!(results[4].is_ok());
+        assert!(results[5].is_ok());
+
+        let results = BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![0, 2, 3],);
+        assert!(results[0].is_ok());
+        assert!(results[2].is_ok());
+        assert!(results[3].is_ok());
+
+        assert!(results[1].is_err());
+        assert!(results[4].is_err());
+        assert!(results[5].is_err());
     }
 
     #[test]
@@ -1398,10 +1392,10 @@ mod tests {
                 &vec![
                     Err(TransactionError::BlockhashNotFound),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
+                    Ok(vec![]),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
-                    Ok(())
+                    Ok(vec![]),
+                    Ok(vec![])
                 ],
                 &vec![2, 4, 5, 9, 11, 13]
             ),
@@ -1411,12 +1405,12 @@ mod tests {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
                 &vec![
-                    Ok(()),
+                    Ok(vec![]),
                     Err(TransactionError::BlockhashNotFound),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
-                    Ok(()),
-                    Ok(())
+                    Ok(vec![]),
+                    Ok(vec![]),
+                    Ok(vec![])
                 ],
                 &vec![1, 6, 7, 9, 31, 43]
             ),

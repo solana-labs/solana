@@ -1,4 +1,4 @@
-use crate::accounts::CreditOnlyLocks;
+use crate::accounts_db::CreditOnlyLocks;
 use crate::bank::Bank;
 use solana_sdk::transaction::{Result, Transaction};
 
