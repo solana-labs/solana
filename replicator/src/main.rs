@@ -2,8 +2,8 @@ use clap::{crate_description, crate_name, crate_version, App, Arg};
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::replicator::Replicator;
-use solana::socketaddr;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
 
@@ -77,7 +77,8 @@ fn main() {
         .unwrap();
 
     let gossip_addr = {
-        let mut addr = socketaddr!([127, 0, 0, 1], 8700);
+        let ip = solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap();
+        let mut addr = SocketAddr::new(ip, 0);
         addr.set_ip(solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap());
         addr
     };

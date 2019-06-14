@@ -1,5 +1,5 @@
 use crate::id;
-use crate::storage_contract::{CheckedProof, STORAGE_ACCOUNT_SPACE};
+use crate::storage_contract::{ProofStatus, STORAGE_ACCOUNT_SPACE};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
@@ -7,7 +7,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::syscall::current;
 use solana_sdk::system_instruction;
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {
@@ -27,6 +26,7 @@ pub enum StorageInstruction {
         sha_state: Hash,
         segment_index: usize,
         signature: Signature,
+        blockhash: Hash,
     },
     AdvertiseStorageRecentBlockhash {
         hash: Hash,
@@ -37,11 +37,47 @@ pub enum StorageInstruction {
     /// Expects 1 Account:
     ///    0 - Storage account with credits to redeem
     ///    1 - MiningPool account to redeem credits from
+    ///    2 - Replicator account to credit - this account *must* be the owner
     ClaimStorageReward,
     ProofValidation {
+        /// The segment during which this proof was generated
         segment: u64,
-        proofs: Vec<(Pubkey, Vec<CheckedProof>)>,
+        /// A Vec of proof masks per keyed replicator account loaded by the instruction
+        proofs: Vec<Vec<ProofStatus>>,
     },
+}
+
+fn get_ratios() -> (u64, u64) {
+    // max number bytes available for account metas and proofs
+    // The maximum transaction size is == `PACKET_DATA_SIZE` (1232 bytes)
+    // There are approx. 900 bytes left over after the storage instruction is wrapped into
+    // a signed transaction.
+    static MAX_BYTES: u64 = 900;
+    let account_meta_size: u64 =
+        bincode::serialized_size(&AccountMeta::new(Pubkey::new_rand(), false)).unwrap_or(0);
+    let proof_size: u64 = bincode::serialized_size(&ProofStatus::default()).unwrap_or(0);
+
+    // the ratio between account meta size and a single proof status
+    let ratio = (account_meta_size + proof_size - 1) / proof_size;
+    let bytes = (MAX_BYTES + ratio - 1) / ratio;
+    (ratio, bytes)
+}
+
+/// Returns how many accounts and their proofs will fit in a single proof validation tx
+///
+/// # Arguments
+///
+/// * `proof_mask_max` - The largest proof mask across all accounts intended for submission
+///
+pub fn validation_account_limit(proof_mask_max: usize) -> u64 {
+    let (ratio, bytes) = get_ratios();
+    // account_meta_count * (ratio + proof_mask_max) = bytes
+    bytes / (ratio + proof_mask_max as u64)
+}
+
+pub fn proof_mask_limit() -> u64 {
+    let (ratio, bytes) = get_ratios();
+    bytes - ratio
 }
 
 pub fn create_validator_storage_account(
@@ -118,11 +154,13 @@ pub fn mining_proof(
     sha_state: Hash,
     segment_index: usize,
     signature: Signature,
+    blockhash: Hash,
 ) -> Instruction {
     let storage_instruction = StorageInstruction::SubmitMiningProof {
         sha_state,
         segment_index,
         signature,
+        blockhash,
     };
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, true),
@@ -147,26 +185,42 @@ pub fn advertise_recent_blockhash(
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 
-pub fn proof_validation<S: std::hash::BuildHasher>(
+pub fn proof_validation(
     storage_pubkey: &Pubkey,
     segment: u64,
-    checked_proofs: HashMap<Pubkey, Vec<CheckedProof>, S>,
+    checked_proofs: Vec<(Pubkey, Vec<ProofStatus>)>,
 ) -> Instruction {
     let mut account_metas = vec![AccountMeta::new(*storage_pubkey, true)];
     let mut proofs = vec![];
     checked_proofs.into_iter().for_each(|(id, p)| {
-        proofs.push((id, p));
+        proofs.push(p);
         account_metas.push(AccountMeta::new(id, false))
     });
     let storage_instruction = StorageInstruction::ProofValidation { segment, proofs };
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 
-pub fn claim_reward(storage_pubkey: &Pubkey, mining_pool_pubkey: &Pubkey) -> Instruction {
+pub fn claim_reward(
+    owner_pubkey: &Pubkey,
+    storage_pubkey: &Pubkey,
+    mining_pool_pubkey: &Pubkey,
+) -> Instruction {
     let storage_instruction = StorageInstruction::ClaimStorageReward;
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, false),
         AccountMeta::new(*mining_pool_pubkey, false),
+        AccountMeta::new(*owner_pubkey, false),
     ];
     Instruction::new(id(), &storage_instruction, account_metas)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_size() {
+        // check that if there's 50 proof per account, only 1 account can fit in a single tx
+        assert_eq!(validation_account_limit(50), 1);
+    }
 }

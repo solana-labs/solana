@@ -21,11 +21,10 @@ use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::transaction::Transaction;
-use solana_storage_api::storage_contract::{CheckedProof, Proof, ProofStatus, StorageContract};
+use solana_storage_api::storage_contract::{Proof, ProofStatus, StorageContract};
 use solana_storage_api::storage_instruction::proof_validation;
 use solana_storage_api::{get_segment_from_slot, storage_instruction};
 use std::collections::HashMap;
-use std::io;
 use std::mem::size_of;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -33,6 +32,7 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
+use std::{cmp, io};
 
 // Block of hash answers to validate against
 // Vec of [ledger blocks] x [keys]
@@ -86,7 +86,7 @@ fn get_identity_index_from_signature(key: &Signature) -> usize {
 }
 
 impl StorageState {
-    pub fn new() -> Self {
+    pub fn new(hash: &Hash) -> Self {
         let storage_keys = vec![0u8; KEY_SIZE * NUM_IDENTITIES];
         let storage_results = vec![Hash::default(); NUM_IDENTITIES];
         let replicator_map = vec![];
@@ -96,7 +96,7 @@ impl StorageState {
             storage_results,
             replicator_map,
             slot: 0,
-            storage_blockhash: Hash::default(),
+            storage_blockhash: *hash,
         };
 
         StorageState {
@@ -439,7 +439,7 @@ impl StorageStage {
             //convert slot to segment
             let segment = get_segment_from_slot(slot);
             if let Some(proofs) = proofs.get(&segment) {
-                for (_, proof) in proofs.iter() {
+                for proof in proofs.iter() {
                     {
                         debug!(
                             "generating storage_keys from storage txs current_key_idx: {}",
@@ -543,6 +543,8 @@ impl StorageStage {
         // bundle up mining submissions from replicators
         // and submit them in a tx to the leader to get rewarded.
         let mut w_state = storage_state.write().unwrap();
+        let mut max_proof_mask = 0;
+        let proof_mask_limit = storage_instruction::proof_mask_limit();
         let instructions: Vec<_> = w_state
             .replicator_map
             .iter_mut()
@@ -552,32 +554,44 @@ impl StorageStage {
                     .iter_mut()
                     .filter_map(|(id, proofs)| {
                         if !proofs.is_empty() {
-                            Some((
-                                *id,
-                                proofs
-                                    .drain(..)
-                                    .map(|proof| CheckedProof {
-                                        proof,
-                                        status: ProofStatus::Valid,
-                                    })
-                                    .collect::<Vec<_>>(),
-                            ))
+                            if (proofs.len() as u64) >= proof_mask_limit {
+                                proofs.clear();
+                                None
+                            } else {
+                                max_proof_mask = cmp::max(max_proof_mask, proofs.len());
+                                Some((
+                                    *id,
+                                    proofs
+                                        .drain(..)
+                                        .map(|_| ProofStatus::Valid)
+                                        .collect::<Vec<_>>(),
+                                ))
+                            }
                         } else {
                             None
                         }
                     })
-                    .collect::<HashMap<_, _>>();
+                    .collect::<Vec<(_, _)>>();
+
                 if !checked_proofs.is_empty() {
-                    let ix = proof_validation(
-                        &storage_keypair.pubkey(),
-                        current_segment as u64,
-                        checked_proofs,
-                    );
-                    Some(ix)
+                    let max_accounts_per_ix =
+                        storage_instruction::validation_account_limit(max_proof_mask);
+                    let ixs = checked_proofs
+                        .chunks(max_accounts_per_ix as usize)
+                        .map(|checked_proofs| {
+                            proof_validation(
+                                &storage_keypair.pubkey(),
+                                current_segment as u64,
+                                checked_proofs.to_vec(),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    Some(ixs)
                 } else {
                     None
                 }
             })
+            .flatten()
             .collect();
         let res: std::result::Result<_, _> = instructions
             .into_iter()
@@ -633,9 +647,9 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(1000);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank], 0)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
         let (_slot_sender, slot_receiver) = channel();
-        let storage_state = StorageState::new();
+        let storage_state = StorageState::new(&bank.last_blockhash());
         let storage_stage = StorageStage::new(
             &storage_state,
             slot_receiver,
@@ -674,7 +688,7 @@ mod tests {
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let (bank_sender, bank_receiver) = channel();
-        let storage_state = StorageState::new();
+        let storage_state = StorageState::new(&bank.last_blockhash());
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
@@ -763,7 +777,7 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (bank_sender, bank_receiver) = channel();
-        let storage_state = StorageState::new();
+        let storage_state = StorageState::new(&bank.last_blockhash());
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
@@ -808,6 +822,7 @@ mod tests {
             Hash::default(),
             0,
             keypair.sign_message(b"test"),
+            bank.last_blockhash(),
         );
 
         let next_bank = Arc::new(Bank::new_from_parent(&bank, &keypair.pubkey(), 2));

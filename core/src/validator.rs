@@ -153,7 +153,7 @@ impl Validator {
             keypair.clone(),
         )));
 
-        let storage_state = StorageState::new();
+        let storage_state = StorageState::new(&bank.last_blockhash());
 
         let rpc_service = if node.info.rpc.port() == 0 {
             None
