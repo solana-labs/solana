@@ -779,7 +779,14 @@ impl Bank {
         txs: &[Transaction],
         results: Vec<Result<CreditOnlyLocks>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
+    ) -> Vec<
+        Result<(
+            InstructionAccounts,
+            InstructionLoaders,
+            InstructionCredits,
+            CreditOnlyLocks,
+        )>,
+    > {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
@@ -937,7 +944,14 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> (
-        Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
+        Vec<
+            Result<(
+                InstructionAccounts,
+                InstructionLoaders,
+                InstructionCredits,
+                CreditOnlyLocks,
+            )>,
+        >,
         Vec<Result<()>>,
         Vec<usize>,
     ) {
@@ -972,7 +986,7 @@ impl Bank {
             .zip(txs.iter())
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders, ref mut credits)) => {
+                Ok((ref mut accounts, ref mut loaders, ref mut credits, _)) => {
                     signature_count += tx.message().header.num_required_signatures as usize;
                     self.message_processor
                         .process_message(tx.message(), loaders, accounts, credits)
@@ -1063,7 +1077,12 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         txs: &[Transaction],
-        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+        loaded_accounts: &mut [Result<(
+            InstructionAccounts,
+            InstructionLoaders,
+            InstructionCredits,
+            CreditOnlyLocks,
+        )>],
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
@@ -1102,10 +1121,10 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
-        let (loaded_accounts, executed, _) =
+        let (mut loaded_accounts, executed, _) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
 
-        self.commit_transactions(txs, &loaded_accounts, &executed)
+        self.commit_transactions(txs, &mut loaded_accounts, &executed)
     }
 
     #[must_use]
@@ -1301,7 +1320,12 @@ impl Bank {
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+        loaded: &[Result<(
+            InstructionAccounts,
+            InstructionLoaders,
+            InstructionCredits,
+            CreditOnlyLocks,
+        )>],
     ) {
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
