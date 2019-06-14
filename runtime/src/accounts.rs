@@ -22,7 +22,6 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::remove_dir_all;
 use std::io::{BufReader, Read};
-use std::iter::once;
 use std::ops::Neg;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};

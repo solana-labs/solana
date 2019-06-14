@@ -166,7 +166,7 @@ impl BankForks {
             for slot in diff.iter() {
                 if **slot > root {
                     let _ = self.add_snapshot(**slot, root);
-                } else if **slot > 0 {
+                } else {
                     BankForks::remove_snapshot(**slot, &self.snapshot_path);
                 }
             }

@@ -410,8 +410,10 @@ while true; do
     (
       set -x
       $rsync -qvPr "${rsync_entrypoint_url:?}"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
-      $rsync -vqPr "${rsync_entrypoint_url:?}"/config/snapshots "$SOLANA_RSYNC_CONFIG_DIR"
-      $rsync -vqPr "${rsync_entrypoint_url:?}"/config/accounts "$SOLANA_RSYNC_CONFIG_DIR"
+      $rsync -qvPr "${rsync_entrypoint_url:?}"/config/snapshot_dir "$SOLANA_RSYNC_CONFIG_DIR"
+      current_snapshot_dir=$(cat "$SOLANA_RSYNC_CONFIG_DIR"/snapshot_dir)
+      $rsync -vqPr "${rsync_entrypoint_url:?}"/config/"$current_snapshot_dir"/snapshots "$SOLANA_RSYNC_CONFIG_DIR"
+      $rsync -vqPr "${rsync_entrypoint_url:?}"/config/"$current_snapshot_dir"/accounts "$SOLANA_RSYNC_CONFIG_DIR"
     ) || true
   fi
 
@@ -470,6 +472,7 @@ while true; do
   fi
 
   if [[ $node_type = bootstrap_leader ]]; then
+    snapshot_dir=0
     secs_to_next_sync_poll=30
     while true; do
       if ! kill -0 "$pid"; then
@@ -482,11 +485,15 @@ while true; do
       ((secs_to_next_sync_poll--)) && continue
       (
         if [[ -d $snapshot_config_dir ]]; then
-          $rsync -qrt --delete-after "$snapshot_config_dir"/ "$SOLANA_RSYNC_CONFIG_DIR"/snapshots
-          $rsync -qrt --delete-after "$accounts_config_dir"/ "$SOLANA_RSYNC_CONFIG_DIR"/accounts
+          current_config_dir="$SOLANA_RSYNC_CONFIG_DIR"/$snapshot_dir
+          mkdir -p "$current_config_dir"
+          cp -a "$snapshot_config_dir"/ "$current_config_dir"/snapshots
+          cp -a "$accounts_config_dir"/ "$current_config_dir"/accounts
+          echo $snapshot_dir > "$SOLANA_RSYNC_CONFIG_DIR"/snapshot_dir
 	fi
       ) || true
       secs_to_next_sync_poll=60
+      snapshot_dir=$((snapshot_dir+1))
     done
   else
     secs_to_next_genesis_poll=1

@@ -4,7 +4,7 @@
 //! already been signed and verified.
 use crate::accounts::Accounts;
 use crate::accounts_db::{
-    AccountsDB, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
+    ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
