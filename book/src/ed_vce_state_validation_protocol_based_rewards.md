@@ -1,8 +1,8 @@
 ### State-validation protocol-based rewards
 
-Validator-clients have two functional roles in the Solana network
+Validator-clients have two functional roles in the Solana network:
 
-* Validate (vote) the current global state of that PoH along with any Proofs-of-Replication (see [Replication Client Economics](ed_replication_client_economics.md)) that they are eligible to validate
+* Validate (vote) the current global state of that PoH along with any Proofs-of-Replication (see [Replication Client Economics](ed_replication_client_economics.md)) that they are eligible to validate.
 
 * Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and Proofs-of-Replication and incorporating them into the PoH, thus updating the global state of the network and providing chain continuity.
 
@@ -17,39 +17,24 @@ The effective protocol-based annual interest rate (%) per epoch to be distribute
 
 * the up-time/participation [% of available slots that validator had opportunity to vote on] of a given validator over the previous epoch.
 
-The first factor is a protocol parameters only (i.e. independent of validator behavior in a given epoch) and describe a global validation reward schedule designed to incentivize early participation, provide clear montetary schedule/stability and provide optimal security in the network. 
+The first factor is a function of protocol parameters only (i.e. independent of validator behavior in a given epoch) and results in a global validation reward schedule designed to incentivize early participation, provide clear montetary stability and provide optimal security in the network. 
 
-At any given point in time, a specific validator's interest rate can be determined based on the porportion of circulating supply that is staked by the network and the validator's uptime/activity in the previous epoch. For an illustrative example, consider a hypothetical instance of the network with an initial circulating token supply of 200MM tokens that vests to 500MM after 3 years, an inflation rate specified at network launch of 7.5%, and a disinflationary schedule of 20% decrease in inflation rate per year (the actual rates to be implemented are to be worked out during the testnet experimentation phase of mainnet launch). Additionally, we assume a split in interest-based rewards between validators and replicator nodes of 80%/20%. With these broad assumptions, the 10-year inflation rate (adjusted daily for this example) is shown in **Figure 2**, while the total circulating token supply is illustrated in **Figure 3**. Neglected in this toy-model is the inflation supression due to the portion of burnt transaction fees. 
+At any given point in time, a specific validator's interest rate can be determined based on the porportion of circulating supply that is staked by the network and the validator's uptime/activity in the previous epoch. For an illustrative example, consider a hypothetical instance of the network with an initial circulating token supply of 250MM tokens with an additional 250MM vesting over 3 years. Additionally an inflation rate is specified at network launch of 7.5%, and a disinflationary schedule of 20% decrease in inflation rate per year (the actual rates to be implemented are to be worked out during the testnet experimentation phase of mainnet launch). With these broad assumptions, the 10-year inflation rate (adjusted daily for this example) is shown in **Figure 2**, while the total circulating token supply is illustrated in **Figure 3**. Neglected in this toy-model is the inflation supression due to the portion of each transaction fee that is to be destroyed.
 
 <p style="text-align:center;"><img src="img/p_ex_schedule.png" alt="drawing" width="800"/></p>
-**Figure 2:** In this example schedule, the annual inflation rate [%] reduces at around 20% per year, until it reaches the long-term, fixed, 1.5% rate (not shown in 10-year graph).
+**Figure 2:** In this example schedule, the annual inflation rate [%] reduces at around 20% per year, until it reaches the long-term, fixed, 1.5% rate.
 
 <p style="text-align:center;"><img src="img/p_ex_supply.png" alt="drawing" width="800"/></p>
-**Figure 3:** The total token supply over a 10-year period, based on an initial 500MM tokens with the disinflationary inflation schedule as shown in **Figure 2**
+**Figure 3:** The total token supply over a 10-year period, based on an initial 250MM tokens with the disinflationary inflation schedule as shown in **Figure 2**
 
-Given these example parameters, annualized validator-specific interest rates can be determined based on the global fraction of tokens bonded as stake, as well as their uptime/activity in the previous epoch. For the purpose of this example, we assume 100% uptime for all validators and 
-The interest rate adjusts as the square-root [TBD] of the % staked, leading to higher validation-client interest rates as the % staked drops below the targeted goal, thus incentivizing more participation leading to more security in the network. An example of such a schedule, for a specified point in time (e.g. network launch) is shown in **Table 1**.
+Over time, the interest rate, at a fixed network staked percentage, will reduce concordant with network inflation. Validation-client interest rates are designed to be higher in the early days of the network to incentivize participation and jumpstart the network economy. As previously mentioned, the inflation rate is expected to stabalize near 1-2% which also results in a fixed, long-term, interest rate to be provided to validator-clients. This value does not represent the total interest available to validator-clients as transaction fees for both state-validation and ledger storage replication (PoReps) are not accounted for here. 
 
-| Percentage circulating supply staked [%] | Annual validator-client interest rate [%] |
-| ---:    | ---:      |
-| 5       | 13.87     |
-| 15      | 13.31     |
-| 25      | 12.73     |
-| 35      | 12.12     |
-| 45      | 11.48     |
-| 55      | 10.80     |
-| **66**  | **10.00** |
-| 75      | 9.29      |
-| 85      | 8.44      |    
-
-**Table 1:** Example interest rate schedule based on % SOL staked out of circulating supply. In this case, interest rates are fixed at 10% for 66% of staked circulating supply
-
-Over time, the interest rate, at any network staked percentage, will drop as described by an algorithmic schedule. Validation-client interest rates are designed to be higher in the early days of the network to incentivize participation and jumpstart the network economy. This mining-pool provided interest rate will reduce over time until a network-chosen baseline value is reached. This is a fixed, long-term, interest rate to be provided to validator-clients. This value does not represent the total interest available to validator-clients as transaction fees for both state-validation and ledger storage replication (PoReps) are not accounted for here. A validation-client interest rate schedule as a function of % network staked and time is shown in** Figure 2**.
+Given these example parameters, annualized validator-specific interest rates can be determined based on the global fraction of tokens bonded as stake, as well as their uptime/activity in the previous epoch. For the purpose of this example, we assume 100% uptime for all validators and a split in interest-based rewards between validators and replicator nodes of 80%/20%. Additionally, the fraction of staked circulating supply is assummed to be constant. Based on these assumptions, an annualized validation-client interest rate schedule as a function of % circulating token supply that is staked is shown in** Figure 4**.
 
 <!-- ![== Validation Client Interest Rates Figure ==](validation_client_interest_rates.png =250x) -->
 
-<p style="text-align:center;"><img src="img/validation_client_interest_rates.png" alt="drawing" width="800"/></p>
+<p style="text-align:center;"><img src="img/p_ex_interest.png" alt="drawing" width="800"/></p>
 
-**Figure 2:** In this example schedule, the annual interest rate [%] reduces at around 16.7% per year, until it reaches the long-term, fixed, 4% rate.
+**Figure 4:** Shown here are example validator interest rates over time, neglecting transaction fees, segmented by fraction of total circulating supply bonded as stake.
 
-This epoch-specific protocol-defined interest rate sets an upper limit of *protocol-generated* annual interest rate (not absolute total interest rate) possible to be delivered to any validator-client per epoch. The distributed interest rate per epoch is then discounted from this value based on the participation of the validator-client during the previous epoch. Each epoch is comprised of XXX slots. The protocol-defined interest rate is then discounted by the log [TBD] of the % of slots a given validator submitted a vote on a PoH branch during that epoch, see **Figure XX**
+This epoch-specific protocol-defined interest rate sets an upper limit of *protocol-generated* annual interest rate (not absolute total interest rate) possible to be delivered to any validator-client per epoch. The distributed interest rate per epoch is then discounted from this value based on the participation of the validator-client during the previous epoch.
