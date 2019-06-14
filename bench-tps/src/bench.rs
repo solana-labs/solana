@@ -587,12 +587,9 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> Vec<Keypair> {
     seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
 
-    let mut total_keys = 0;
-    let mut target = count;
-    while target > 1 {
-        total_keys += target;
-        // Use the upper bound for this division otherwise it may not generate enough keys
-        target = (target + MAX_SPENDS_PER_TX - 1) / MAX_SPENDS_PER_TX;
+    let mut total_keys = 1;
+    while total_keys < count {
+        total_keys *= MAX_SPENDS_PER_TX;
     }
     rnd.gen_n_keypairs(total_keys)
 }
@@ -739,8 +736,7 @@ mod tests {
             generate_and_fund_keypairs(&client, None, &id, tx_count, lamports).unwrap();
 
         for kp in &keypairs {
-            // TODO: This should be >= lamports, but fails at the moment
-            assert_ne!(client.get_balance(&kp.pubkey()).unwrap(), 0);
+            assert!(client.get_balance(&kp.pubkey()).unwrap() >= lamports);
         }
     }
 }
