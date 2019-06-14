@@ -131,6 +131,7 @@ impl Accounts {
         storage: &AccountStorage,
         ancestors: &HashMap<Fork, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
+        credit_only_locks: &CreditOnlyLocks,
         tx: &Transaction,
         fee: u64,
         error_counters: &mut ErrorCounters,
@@ -150,13 +151,26 @@ impl Accounts {
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
             let mut credits: InstructionCredits = vec![];
-            for key in &message.account_keys {
+            for (i, key) in message.account_keys.iter().enumerate() {
                 if !message.program_ids().contains(&key) {
-                    called_accounts.push(
-                        AccountsDB::load(storage, ancestors, accounts_index, key)
-                            .map(|(account, _)| account)
-                            .unwrap_or_default(),
-                    );
+                    let account = AccountsDB::load(storage, ancestors, accounts_index, key)
+                        .map(|(account, _)| account)
+                        .unwrap_or_default();
+                    if !message.is_debitable(i) {
+                        let position = message
+                            .get_account_keys_by_lock_type()
+                            .1
+                            .iter()
+                            .position(|k| k == &key)
+                            .unwrap();
+                        if credit_only_locks[position].load(Ordering::Relaxed) == 0
+                            && account.lamports > 0
+                        {
+                            credit_only_locks[position].store(account.lamports, Ordering::Relaxed);
+                        }
+                    }
+
+                    called_accounts.push(account);
                     credits.push(0);
                 }
             }
@@ -263,7 +277,7 @@ impl Accounts {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
-                (tx, Ok(_credit_only_locks)) => {
+                (tx, Ok(credit_only_locks)) => {
                     let fee_calculator = hash_queue
                         .get_fee_calculator(&tx.message().recent_blockhash)
                         .ok_or(TransactionError::BlockhashNotFound)?;
@@ -273,6 +287,7 @@ impl Accounts {
                         &storage,
                         ancestors,
                         &accounts_index,
+                        &credit_only_locks,
                         tx,
                         fee,
                         error_counters,
@@ -569,7 +584,11 @@ mod tests {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(None);
-        for ka in ka.iter() {
+        let mut credit_only_locks: CreditOnlyLocks = vec![];
+        for (i, ka) in ka.iter().enumerate() {
+            if !tx.message().is_debitable(i) {
+                credit_only_locks.push(Arc::new(AtomicU64::new(ka.1.lamports)));
+            }
             accounts.store_slow(0, &ka.0, &ka.1);
         }
 
@@ -577,7 +596,7 @@ mod tests {
         let res = accounts.load_accounts(
             &ancestors,
             &[tx],
-            vec![Ok(vec![])],
+            vec![Ok(credit_only_locks)],
             &hash_queue,
             error_counters,
         );
