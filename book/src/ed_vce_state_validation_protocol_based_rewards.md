@@ -6,20 +6,31 @@ Validator-clients have two functional roles in the Solana network
 
 * Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and Proofs-of-Replication and incorporating them into the PoH, thus updating the global state of the network and providing chain continuity.
 
-Validator-client rewards for these services are to be distributed at the end of each Solana epoch. Compensation for validator-clients is provided via a protocol-based annual interest rate dispersed in proportion to the stake-weight of each validator (see below) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each non-PoRep transaction fee, less a protocol-specified amount that is returned to the mining pool (see [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)). PoRep transaction fees are not collected directly by the leader client but pooled and returned to the validator set in proportion to the number of successfully validated PoReps. (see [Replication-client Transaction Fees](ed_vce_replication_validation_transaction_fees.md))
+Validator-client rewards for these services are to be distributed at the end of each Solana epoch. Compensation for validator-clients is provided via a protocol-based annual inflation rate dispersed in proportion to the stake-weight of each validator (see below) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each non-PoRep transaction fee, less a protocol-specified amount that is destroyed (see [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)). PoRep transaction fees are not collected directly by the leader client but pooled and returned to the validator set in proportion to the number of successfully validated PoReps. (see [Replication-client Transaction Fees](ed_vce_replication_validation_transaction_fees.md))
 
 
-The protocol-based annual interest-rate (%) per epoch to be distributed to validation-clients is to be a function of:
+The effective protocol-based annual interest rate (%) per epoch to be distributed to validation-clients is to be a function of:
 
-* the current fraction of staked SOLs out of the current total circulating supply,
+* the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule
 
 * the global time since the genesis block instantiation
 
+* the current fraction of staked SOLs out of the current total circulating supply,
+
 * the up-time/participation [% of available slots/blocks that validator had opportunity to vote on?] of a given validator over the previous epoch.
 
-The first two factors are protocol parameters only (i.e. independent of validator behavior in a given epoch) and describe a global validation reward schedule designed to both incentivize early participation and optimal security in the network. This schedule sets a maximum annual validator-client interest rate per epoch.
+The first two factors are protocol parameters only (i.e. independent of validator behavior in a given epoch) and describe a global validation reward schedule designed to incentivize early participation, provide clear montetary schedule/stability and provide optimal security in the network. 
 
-At any given point in time, this interest rate is pegged to a defined value given a specific % staked SOL out of the circulating supply (e.g. 10% interest rate when 66% of circulating SOL is staked). The interest rate adjusts as the square-root [TBD] of the % staked, leading to higher validation-client interest rates as the % staked drops below the targeted goal, thus incentivizing more participation leading to more security in the network. An example of such a schedule, for a specified point in time (e.g. network launch) is shown in **Table 1**.
+At any given point in time, a specific validator's interest rate can be determied based on that validators proportion of total stake and their uptime/activity in the previous epoch. For an illustrative example, consider a protocol with an initial circulating token supply of 500MM tokens, an inflation rate specified at network launch of 15%, and a disinflationary schedule of 70% decrease in rate per year (the actual rates to be implemented are to be worked out during the testnet experimentation phase of mainnet launch). In this case, the 10-year inflation rate (adjusted daily for this example) is shown in **Figure 2**, while the total circulating token supply is illustrated in **Figure 3**. 
+
+<p style="text-align:center;"><img src="img/p_ex_schedule.png" alt="drawing" width="800"/></p>
+**Figure 2:** In this example schedule, the annual inflation rate [%] reduces at around 20% per year, until it reaches the long-term, fixed, 1.5% rate (not shown in 10-year graph).
+
+<p style="text-align:center;"><img src="img/p_ex_supply.png" alt="drawing" width="800"/></p>
+**Figure 3:** The total token supply over a 10-year period, based on an initial 500MM tokens with the disinflationary inflation schedule as shown in **Figure 2**
+
+Given these example parameters, a validator-specific interest rate can be determined based on the proportion of the total amount of staked tokens that validator has bonded, as well as their uptime/activity in the previous epoch. For the purpose of this example, we assume 100% uptime for all validators and 
+The interest rate adjusts as the square-root [TBD] of the % staked, leading to higher validation-client interest rates as the % staked drops below the targeted goal, thus incentivizing more participation leading to more security in the network. An example of such a schedule, for a specified point in time (e.g. network launch) is shown in **Table 1**.
 
 | Percentage circulating supply staked [%] | Annual validator-client interest rate [%] |
 | ---:    | ---:      |
