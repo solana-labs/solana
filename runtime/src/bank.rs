@@ -475,7 +475,7 @@ impl Bank {
                 .unwrap()
                 .create_mining_pool(epoch, validator_rewards);
 
-            self.store(
+            self.store_account(
                 &Pubkey::new(
                     hashv(&[
                         blockhash.as_ref(),
@@ -1474,16 +1474,16 @@ mod tests {
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
         // set up stakes and vote accounts
-        bank.store(&stake.0, &stake.1);
+        bank.store_account(&stake.0, &stake.1);
 
         // generate some rewards
         let mut vote_state = VoteState::from(&vote_account).unwrap();
         for i in 0..MAX_LOCKOUT_HISTORY + 42 {
             vote_state.process_slot_vote_unchecked(i as u64);
             vote_state.to(&mut vote_account).unwrap();
-            bank.store(&vote_id, &vote_account);
+            bank.store_account(&vote_id, &vote_account);
         }
-        bank.store(&vote_id, &vote_account);
+        bank.store_account(&vote_id, &vote_account);
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
