@@ -5,12 +5,12 @@ cd "$(dirname "$0")/.."
 
 source ci/_
 source ci/rust-version.sh stable
+source ci/rust-version.sh nightly
 
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
 (
-    source ci/rust-version.sh nightly
     for project in programs/bpf/rust/*/ ; do
     (
         cd "$project"
