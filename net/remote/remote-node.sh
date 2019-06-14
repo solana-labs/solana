@@ -53,6 +53,22 @@ EOF
 source net/common.sh
 loadConfigFile
 
+initCompleteFile=init-complete-node.log
+waitForNodeToInit() {
+  echo "--- waiting for node to boot up"
+  SECONDS=
+  while [[ ! -r $initCompleteFile ]]; do
+    if [[ $SECONDS -ge 720 ]]; then
+      echo "^^^ +++"
+      echo "Error: $initCompleteFile not found in $SECONDS seconds"
+      exit 1
+    fi
+    echo "Waiting for $initCompleteFile ($SECONDS)..."
+    sleep 5
+  done
+  echo "Node booted up"
+}
+
 case $deployMethod in
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
@@ -135,8 +151,9 @@ local|tar)
     if [[ -n $stakeNodesInGenesisBlock ]]; then
       args+=(--no-airdrop)
     fi
+    args+=(--init-complete-file "$initCompleteFile")
     nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
-    sleep 1
+    waitForNodeToInit
     ;;
   validator|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
@@ -202,8 +219,9 @@ local|tar)
       curl --head "$(curl ifconfig.io)"
     fi
 
+    args+=(--init-complete-file "$initCompleteFile")
     nohup ./multinode-demo/validator.sh "${args[@]}" > fullnode.log 2>&1 &
-    sleep 1
+    waitForNodeToInit
     ;;
   replicator)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
