@@ -591,7 +591,7 @@ EOK
 chmod 444 /solana-id_ecdsa
 
 USER=\$(id -un)
-
+export DEBIAN_FRONTEND=noninteractive
 $(
   cd "$here"/scripts/
   cat \
