@@ -6,7 +6,7 @@ set -ex
 
 # Install libssl-dev to be compatible with binaries built on an Ubuntu machine...
 apt-get update
-apt-get --assume-yes install libssl-dev
+DEBIAN_FRONTEND=noninteractive apt-get --assume-yes install libssl-dev
 
 # Install libssl1.1 to be compatible with binaries built in the
 # solanalabs/rust docker image
