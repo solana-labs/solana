@@ -7,7 +7,7 @@
     "blockchain"
   ],
   "license": "MIT",
-  "author": "Solana Labs, Inc",
+  "author": "Solana Maintainers <maintainers@solana.com>",
   "homepage": "https://solana.com/",
   "repository": {
     "type": "git",
