@@ -379,7 +379,7 @@ impl Bank {
         };
         current.to(&mut account).unwrap();
 
-        self.store(&current::id(), &account);
+        self.store_account(&current::id(), &account);
     }
 
     fn update_slot_hashes(&self) {
@@ -391,7 +391,7 @@ impl Bank {
         slot_hashes.add(self.slot(), self.hash());
         slot_hashes.to(&mut account).unwrap();
 
-        self.store(&slot_hashes::id(), &account);
+        self.store_account(&slot_hashes::id(), &account);
     }
 
     fn update_fees(&self) {
@@ -403,7 +403,7 @@ impl Bank {
         fees.fee_calculator = self.fee_calculator.clone();
         fees.to(&mut account).unwrap();
 
-        self.store(&fees::id(), &account);
+        self.store_account(&fees::id(), &account);
     }
 
     fn update_tick_height(&self) {
@@ -413,7 +413,7 @@ impl Bank {
 
         TickHeight::to(self.tick_height(), &mut account).unwrap();
 
-        self.store(&tick_height::id(), &account);
+        self.store_account(&tick_height::id(), &account);
     }
 
     fn set_hash(&self) -> bool {
@@ -482,7 +482,7 @@ impl Bank {
         self.update_fees();
 
         for (pubkey, account) in genesis_block.accounts.iter() {
-            self.store(pubkey, account);
+            self.store_account(pubkey, account);
             self.capitalization
                 .fetch_add(account.lamports as usize, Ordering::Relaxed);
         }
@@ -526,7 +526,7 @@ impl Bank {
     pub fn register_native_instruction_processor(&self, name: &str, program_id: &Pubkey) {
         debug!("Adding native program {} under {:?}", name, program_id);
         let account = native_loader::create_loadable_account(name);
-        self.store(program_id, &account);
+        self.store_account(program_id, &account);
     }
 
     /// Return the last block hash registered.
@@ -930,7 +930,7 @@ impl Bank {
                     Err(TransactionError::InstructionError(_, _)) => {
                         // credit the transaction fee even in case of InstructionError
                         // necessary to withdraw from account[0] here because previous
-                        // work of doing so (in accounts.load()) is ignored by store()
+                        // work of doing so (in accounts.load()) is ignored by store_account()
                         self.withdraw(&message.account_keys[0], fee)?;
                         fees += fee;
                         Ok(())
@@ -1034,7 +1034,7 @@ impl Bank {
         parents
     }
 
-    fn store(&self, pubkey: &Pubkey, account: &Account) {
+    pub fn store_account(&self, pubkey: &Pubkey, account: &Account) {
         self.rc.accounts.store_slow(self.slot(), pubkey, account);
 
         if Stakes::is_stake(account) {
@@ -1055,7 +1055,7 @@ impl Bank {
                 }
 
                 account.lamports -= lamports;
-                self.store(pubkey, &account);
+                self.store_account(pubkey, &account);
 
                 Ok(())
             }
@@ -1066,7 +1066,7 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.lamports += lamports;
-        self.store(pubkey, &account);
+        self.store_account(pubkey, &account);
     }
 
     pub fn accounts(&self) -> Arc<Accounts> {

@@ -6,6 +6,7 @@ use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::hash::hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
@@ -70,6 +71,35 @@ fn apply_timestamp(
     Ok(())
 }
 
+/// Process an AccountData Witness and any payment waiting on it.
+fn apply_account_data(
+    budget_state: &mut BudgetState,
+    keyed_accounts: &mut [KeyedAccount],
+) -> Result<(), BudgetError> {
+    // Check to see if any timelocked transactions can be completed.
+    let mut final_payment = None;
+
+    if let Some(ref mut expr) = budget_state.pending_budget {
+        let witness_keyed_account = &keyed_accounts[0];
+        let key = witness_keyed_account.unsigned_key();
+        let program_id = witness_keyed_account.account.owner;
+        let actual_hash = hash(&witness_keyed_account.account.data);
+        expr.apply_witness(&Witness::AccountData(actual_hash, program_id), key);
+        final_payment = expr.final_payment();
+    }
+
+    if let Some(payment) = final_payment {
+        if &payment.to != keyed_accounts[2].unsigned_key() {
+            trace!("destination missing");
+            return Err(BudgetError::DestinationMissing);
+        }
+        budget_state.pending_budget = None;
+        keyed_accounts[1].account.lamports -= payment.lamports;
+        keyed_accounts[2].account.lamports += payment.lamports;
+    }
+    Ok(())
+}
+
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
@@ -96,7 +126,7 @@ pub fn process_instruction(
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
             let mut budget_state = BudgetState::default();
-            budget_state.pending_budget = Some(expr);
+            budget_state.pending_budget = Some(*expr);
             budget_state.initialized = true;
             budget_state.serialize(&mut keyed_accounts[0].account.data)
         }
@@ -136,6 +166,20 @@ pub fn process_instruction(
             trace!("apply signature committed");
             budget_state.serialize(&mut keyed_accounts[1].account.data)
         }
+        BudgetInstruction::ApplyAccountData => {
+            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].account.data)?;
+            if !budget_state.is_pending() {
+                return Ok(()); // Nothing to do here.
+            }
+            if !budget_state.initialized {
+                trace!("contract is uninitialized");
+                return Err(InstructionError::UninitializedAccount);
+            }
+            apply_account_data(&mut budget_state, keyed_accounts)
+                .map_err(|e| InstructionError::CustomError(e as u32))?;
+            trace!("apply account data committed");
+            budget_state.serialize(&mut keyed_accounts[1].account.data)
+        }
     }
 }
 
@@ -146,8 +190,10 @@ mod tests {
     use crate::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
+    use solana_sdk::account::Account;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::hash::hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -399,5 +445,68 @@ mod tests {
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
         assert_eq!(bank_client.get_account_data(&budget_pubkey).unwrap(), None);
         assert_eq!(bank_client.get_account_data(&bob_pubkey).unwrap(), None);
+    }
+
+    #[test]
+    fn test_pay_when_account_data() {
+        let (bank, alice_keypair) = create_bank(42);
+        let game_pubkey = Pubkey::new_rand();
+        let game_account = Account {
+            lamports: 1,
+            data: vec![1, 2, 3],
+            ..Account::default()
+        };
+        bank.store_account(&game_pubkey, &game_account);
+        assert_eq!(bank.get_account(&game_pubkey).unwrap().data, vec![1, 2, 3]);
+
+        let bank_client = BankClient::new(bank);
+
+        let alice_pubkey = alice_keypair.pubkey();
+        let game_hash = hash(&[1, 2, 3]);
+        let budget_pubkey = Pubkey::new_rand();
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
+
+        // Give Bob some lamports so he can sign the witness transaction.
+        bank_client
+            .transfer(1, &alice_keypair, &bob_pubkey)
+            .unwrap();
+
+        let instructions = budget_instruction::when_account_data(
+            &alice_pubkey,
+            &bob_pubkey,
+            &budget_pubkey,
+            &game_pubkey,
+            &game_account.owner,
+            game_hash,
+            41,
+        );
+        let message = Message::new(instructions);
+        bank_client
+            .send_message(&[&alice_keypair], message)
+            .unwrap();
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
+        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 41);
+
+        let contract_account = bank_client
+            .get_account_data(&budget_pubkey)
+            .unwrap()
+            .unwrap();
+        let budget_state = BudgetState::deserialize(&contract_account).unwrap();
+        assert!(budget_state.is_pending());
+
+        // Acknowledge the condition occurred and that Bob's funds are now available.
+        let instruction =
+            budget_instruction::apply_account_data(&game_pubkey, &budget_pubkey, &bob_pubkey);
+
+        // Anyone can sign the message, but presumably it's Bob, since he's the
+        // one claiming the payout.
+        let message = Message::new_with_payer(vec![instruction], Some(&bob_pubkey));
+        bank_client.send_message(&[&bob_keypair], message).unwrap();
+
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
+        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 0);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 42);
+        assert_eq!(bank_client.get_account_data(&budget_pubkey).unwrap(), None);
     }
 }

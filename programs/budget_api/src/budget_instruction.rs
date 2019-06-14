@@ -4,6 +4,7 @@ use crate::id;
 use bincode::serialized_size;
 use chrono::prelude::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
+use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction;
@@ -20,7 +21,7 @@ pub struct Contract {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum BudgetInstruction {
     /// Declare and instantiate `BudgetExpr`.
-    InitializeAccount(BudgetExpr),
+    InitializeAccount(Box<BudgetExpr>),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
     ApplyTimestamp(DateTime<Utc>),
@@ -28,6 +29,9 @@ pub enum BudgetInstruction {
     /// Tell the budget that the `InitializeAccount` with `Signature` has been
     /// signed by the containing transaction's `Pubkey`.
     ApplySignature,
+
+    /// Load an account and pass its data to the budget for inspection.
+    ApplyAccountData,
 }
 
 fn initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
@@ -36,7 +40,11 @@ fn initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
         keys.push(AccountMeta::new(payment.to, false));
     }
     keys.push(AccountMeta::new(*contract, false));
-    Instruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
+    Instruction::new(
+        id(),
+        &BudgetInstruction::InitializeAccount(Box::new(expr)),
+        keys,
+    )
 }
 
 pub fn create_account(
@@ -89,6 +97,26 @@ pub fn when_signed(
     create_account(from, contract, lamports, expr)
 }
 
+/// Make a payment when an account has the given data
+pub fn when_account_data(
+    from: &Pubkey,
+    to: &Pubkey,
+    contract: &Pubkey,
+    account_pubkey: &Pubkey,
+    account_program_id: &Pubkey,
+    account_hash: Hash,
+    lamports: u64,
+) -> Vec<Instruction> {
+    let expr = BudgetExpr::new_payment_when_account_data(
+        account_pubkey,
+        account_program_id,
+        account_hash,
+        lamports,
+        to,
+    );
+    create_account(from, contract, lamports, expr)
+}
+
 pub fn apply_timestamp(
     from: &Pubkey,
     contract: &Pubkey,
@@ -114,6 +142,16 @@ pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruc
         account_metas.push(AccountMeta::new(*to, false));
     }
     Instruction::new(id(), &BudgetInstruction::ApplySignature, account_metas)
+}
+
+/// Apply account data to a contract waiting on an AccountData witness.
+pub fn apply_account_data(witness_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*witness_pubkey, false),
+        AccountMeta::new(*contract, false),
+        AccountMeta::new(*to, false),
+    ];
+    Instruction::new(id(), &BudgetInstruction::ApplyAccountData, account_metas)
 }
 
 #[cfg(test)]
