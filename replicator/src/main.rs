@@ -6,8 +6,15 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::net::SocketAddr;
 use std::process::exit;
-use std::str::FromStr;
 use std::sync::Arc;
+
+// Return an error if a pubkey cannot be parsed.
+fn is_pubkey(string: String) -> Result<(), String> {
+    match string.parse::<Pubkey>() {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
+}
 
 fn main() {
     solana_logger::setup();
@@ -28,6 +35,7 @@ fn main() {
                 .long("mining-pool")
                 .value_name("PUBKEY_BASE58_STR")
                 .takes_value(true)
+                .validator(is_pubkey)
                 .help("The public key of the storage mining pool"),
         )
         .arg(
@@ -77,12 +85,10 @@ fn main() {
     } else {
         Keypair::new()
     };
-    let storage_mining_pool_pubkey =
-        matches
-            .value_of("storage_mining_pool_pubkey")
-            .map(|pubkey_str| {
-                Pubkey::from_str(pubkey_str).expect("unable to parse storage mining pool pubkey")
-            });
+
+    let storage_mining_pool_pubkey = matches
+        .value_of("storage_mining_pool_pubkey")
+        .map(|value| value.parse::<Pubkey>().unwrap());
 
     let entrypoint_addr = matches
         .value_of("entrypoint")
