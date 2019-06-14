@@ -9,8 +9,9 @@ use crate::pubkey::Pubkey;
 use crate::signature::{Keypair, KeypairUtil};
 use crate::system_program;
 use crate::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
-use bincode::{deserialize_from, serialize};
-use std::fs::File;
+use bincode::{deserialize, serialize};
+use memmap::Mmap;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
 
@@ -76,8 +77,14 @@ impl GenesisBlock {
     }
 
     pub fn load(ledger_path: &str) -> Result<Self, std::io::Error> {
-        let file = File::open(&Path::new(ledger_path).join("genesis.json"))?;
-        let genesis_block = deserialize_from(file)
+        let file = OpenOptions::new()
+            .read(true)
+            .open(&Path::new(ledger_path).join("genesis.bin"))
+            .expect("Unable to open genesis file");
+
+        //UNSAFE: Required to create a Mmap
+        let mem = unsafe { Mmap::map(&file).expect("failed to map the genesis file") };
+        let genesis_block = deserialize(&mem)
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))?;
         Ok(genesis_block)
     }
@@ -89,7 +96,7 @@ impl GenesisBlock {
         let dir = Path::new(ledger_path);
         std::fs::create_dir_all(&dir)?;
 
-        let mut file = File::create(&dir.join("genesis.json"))?;
+        let mut file = File::create(&dir.join("genesis.bin"))?;
         file.write_all(&serialized)
     }
 }

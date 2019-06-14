@@ -18,6 +18,7 @@ generic-array = { version = "0.13.0", default-features = false, features = ["ser
 hex = "0.3.2"
 itertools = "0.8.0"
 log = "0.4.2"
+memmap = "0.6.2"
 num-derive = "0.2"
 num-traits = "0.2"
 rand = "0.6.5"

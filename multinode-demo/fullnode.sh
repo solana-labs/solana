@@ -386,7 +386,7 @@ if [[ -z $CI ]]; then # Skip in CI
 fi
 
 new_gensis_block() {
-  ! diff -q "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json >/dev/null 2>&1
+  ! diff -q "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.bin "$ledger_config_dir"/genesis.bin >/dev/null 2>&1
 }
 
 set -e
