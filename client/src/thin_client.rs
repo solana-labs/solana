@@ -6,6 +6,7 @@
 use crate::rpc_client::RpcClient;
 use bincode::{serialize_into, serialized_size};
 use log::*;
+use solana_sdk::account::Account;
 use solana_sdk::client::{AsyncClient, Client, SyncClient};
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
@@ -306,9 +307,29 @@ impl SyncClient for ThinClient {
         Ok(self.rpc_client().get_account_data(pubkey).ok())
     }
 
+    fn get_account(&self, pubkey: &Pubkey) -> TransportResult<Option<Account>> {
+        Ok(self.rpc_client().get_account(pubkey).ok())
+    }
+
     fn get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
         let balance = self.rpc_client().get_balance(pubkey)?;
         Ok(balance)
+    }
+
+    fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
+        let index = self.optimizer.experiment();
+        let now = Instant::now();
+        let recent_blockhash = self.rpc_clients[index].get_recent_blockhash();
+        match recent_blockhash {
+            Ok(recent_blockhash) => {
+                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
+                Ok(recent_blockhash)
+            }
+            Err(e) => {
+                self.optimizer.report(index, std::u64::MAX);
+                Err(e)?
+            }
+        }
     }
 
     fn get_signature_status(
@@ -335,22 +356,6 @@ impl SyncClient for ThinClient {
             )
         })?;
         Ok(slot)
-    }
-
-    fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
-        let index = self.optimizer.experiment();
-        let now = Instant::now();
-        let recent_blockhash = self.rpc_clients[index].get_recent_blockhash();
-        match recent_blockhash {
-            Ok(recent_blockhash) => {
-                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
-                Ok(recent_blockhash)
-            }
-            Err(e) => {
-                self.optimizer.report(index, std::u64::MAX);
-                Err(e)?
-            }
-        }
     }
 
     fn get_transaction_count(&self) -> TransportResult<u64> {

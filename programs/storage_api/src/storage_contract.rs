@@ -11,8 +11,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
 
-pub const VALIDATOR_REWARD: u64 = 25;
-pub const REPLICATOR_REWARD: u64 = 25;
+pub const VALIDATOR_REWARD: u64 = 200;
+pub const REPLICATOR_REWARD: u64 = 200;
 // Todo Tune this for actual use cases when replicators are feature complete
 pub const STORAGE_ACCOUNT_SPACE: u64 = 1024 * 8;
 pub const MAX_PROOFS_PER_SEGMENT: usize = 80;
@@ -94,6 +94,17 @@ pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account
             lockout_validations: HashMap::new(),
             pending_lamports: 0,
         })
+        .expect("set_state");
+
+    storage_account
+}
+
+// utility function, used by genesis
+pub fn create_mining_pool_account(lamports: u64) -> Account {
+    let mut storage_account = Account::new(lamports, STORAGE_ACCOUNT_SPACE as usize, &crate::id());
+
+    storage_account
+        .set_state(&StorageContract::MiningPool)
         .expect("set_state");
 
     storage_account

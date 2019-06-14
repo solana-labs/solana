@@ -1,4 +1,5 @@
 use crate::bank::Bank;
+use solana_sdk::account::Account;
 use solana_sdk::client::{AsyncClient, Client, SyncClient};
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
@@ -93,6 +94,10 @@ impl SyncClient for BankClient {
 
     fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>> {
         Ok(self.bank.get_account(pubkey).map(|account| account.data))
+    }
+
+    fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+        Ok(self.bank.get_account(pubkey))
     }
 
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {

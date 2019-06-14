@@ -7,6 +7,7 @@
 //! Asynchronous implementations are expected to create transactions, sign them, and send
 //! them but without waiting to see if the server accepted it.
 
+use crate::account::Account;
 use crate::fee_calculator::FeeCalculator;
 use crate::hash::Hash;
 use crate::instruction::Instruction;
@@ -36,6 +37,9 @@ pub trait SyncClient {
 
     /// Get an account or None if not found.
     fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>>;
+
+    /// Get an account or None if not found.
+    fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
 
     /// Get account balance or 0 if not found.
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64>;

@@ -17,13 +17,16 @@ use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::ThinClient;
 use solana_ed25519_dalek as ed25519_dalek;
+use solana_sdk::account_utils::State;
 use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::timing::timestamp;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
+use solana_storage_api::storage_contract::StorageContract;
 use solana_storage_api::{get_segment_from_slot, storage_instruction, SLOTS_PER_SEGMENT};
 use std::fs::File;
 use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom};
@@ -298,7 +301,7 @@ impl Replicator {
         })
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self, mining_pool_pubkey: Option<Pubkey>) {
         info!("waiting for ledger download");
         self.thread_handles.pop().unwrap().join().unwrap();
         self.encrypt_ledger()
@@ -325,6 +328,40 @@ impl Replicator {
                     }
                 };
             self.blockhash = storage_blockhash;
+            if let Some(mining_pool_pubkey) = mining_pool_pubkey {
+                self.redeem_rewards(&mining_pool_pubkey);
+            }
+        }
+    }
+
+    fn redeem_rewards(&self, mining_pool_pubkey: &Pubkey) {
+        let nodes = self.cluster_info.read().unwrap().tvu_peers();
+        let client = crate::gossip_service::get_client(&nodes);
+
+        if let Ok(Some(account)) = client.get_account(&self.storage_keypair.pubkey()) {
+            if let Ok(StorageContract::ReplicatorStorage {
+                reward_validations, ..
+            }) = account.state()
+            {
+                if !reward_validations.is_empty() {
+                    let ix = storage_instruction::claim_reward(
+                        &self.keypair.pubkey(),
+                        &self.storage_keypair.pubkey(),
+                        mining_pool_pubkey,
+                    );
+                    let message = Message::new_with_payer(vec![ix], Some(&self.keypair.pubkey()));
+                    if let Err(e) = client.send_message(&[&self.keypair], message) {
+                        error!("unable to redeem reward, tx failed: {:?}", e);
+                    } else {
+                        info!(
+                            "collected mining rewards: Account balance {:?}",
+                            client.get_balance(&self.keypair.pubkey())
+                        );
+                    }
+                }
+            }
+        } else {
+            info!("Redeem mining reward: No account data found");
         }
     }
 
