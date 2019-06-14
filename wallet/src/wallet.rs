@@ -668,13 +668,10 @@ fn process_show_stake_account(
             println!("activated stake: {}", stake);
             Ok("".to_string())
         }
-        Ok(StakeState::MiningPool {
-            epoch,
-            credit_value,
-        }) => {
+        Ok(StakeState::MiningPool { epoch, point_value }) => {
             println!("account lamports: {}", stake_account.lamports);
             println!("epoch: {}", epoch);
-            println!("credit_value: {}", credit_value);
+            println!("point_value: {}", point_value);
             Ok("".to_string())
         }
         _ => Err(WalletError::RpcRequestError(

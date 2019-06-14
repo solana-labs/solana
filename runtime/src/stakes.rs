@@ -126,12 +126,12 @@ impl Stakes {
         points
     }
 
-    /// makes a pool with the lamports and points spread over those and
     ///  claims points
+    ///  makes a pool with the lamports and points spread over those points and
     pub fn create_mining_pool(&mut self, epoch: u64, lamports: u64) -> Account {
         let points = self.claim_points();
 
-        create_mining_pool(lamports, epoch, points)
+        create_mining_pool(lamports, epoch, lamports as f64 / points as f64)
     }
 }
 

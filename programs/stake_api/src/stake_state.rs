@@ -11,7 +11,7 @@ use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum StakeState {
     Uninitialized,
     Stake {
@@ -22,8 +22,9 @@ pub enum StakeState {
     MiningPool {
         /// epoch for which this Pool will redeem rewards
         epoch: u64,
-        /// how much each credit pays in lamports
-        credit_value: u64,
+
+        /// the number of lamports each point is worth
+        point_value: f64,
     },
 }
 
@@ -128,7 +129,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if let StakeState::Uninitialized = self.state()? {
             self.set_state(&StakeState::MiningPool {
                 epoch: 0,
-                credit_value: 0,
+                point_value: 0.0,
             })
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -240,14 +241,11 @@ pub fn create_stake_account(
 }
 
 // utility function, used by Bank, tests, genesis
-pub fn create_mining_pool(lamports: u64, epoch: u64, credit_value: u64) -> Account {
+pub fn create_mining_pool(lamports: u64, epoch: u64, point_value: f64) -> Account {
     let mut mining_pool_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
     mining_pool_account
-        .set_state(&StakeState::MiningPool {
-            epoch,
-            credit_value,
-        })
+        .set_state(&StakeState::MiningPool { epoch, point_value })
         .expect("set_state");
 
     mining_pool_account
@@ -325,7 +323,7 @@ mod tests {
 
         let stake_state = StakeState::MiningPool {
             epoch: 0,
-            credit_value: 0,
+            point_value: 0.0,
         };
         stake_keyed_account.set_state(&stake_state).unwrap();
         assert!(stake_keyed_account
@@ -422,7 +420,7 @@ mod tests {
         mining_pool_keyed_account
             .set_state(&StakeState::MiningPool {
                 epoch: 0,
-                credit_value: 0,
+                point_value: 0.0,
             })
             .unwrap();
 
@@ -489,7 +487,7 @@ mod tests {
         mining_pool_keyed_account
             .set_state(&StakeState::MiningPool {
                 epoch: 0,
-                credit_value: 0,
+                point_value: 0.0,
             })
             .unwrap();
 
