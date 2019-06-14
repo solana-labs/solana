@@ -280,7 +280,7 @@ mod test {
     use crate::packet::index_blobs;
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
-    use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
+    use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
@@ -348,7 +348,7 @@ mod test {
         );
 
         // with a Bank and no idea who leader is, blob gets thrown out
-        blob.set_slot(MINIMUM_SLOT_LENGTH as u64 * 3);
+        blob.set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
         assert_eq!(
             should_retransmit_and_persist(&blob, Some(bank), &cache, &me_id),
             false

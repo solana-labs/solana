@@ -11,7 +11,7 @@ use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum StakeState {
     Uninitialized,
     Stake {
@@ -19,7 +19,13 @@ pub enum StakeState {
         credits_observed: u64,
         stake: u64,
     },
-    MiningPool,
+    MiningPool {
+        /// epoch for which this Pool will redeem rewards
+        epoch: u64,
+
+        /// the number of lamports each point is worth
+        point_value: f64,
+    },
 }
 
 impl Default for StakeState {
@@ -121,7 +127,10 @@ pub trait StakeAccount {
 impl<'a> StakeAccount for KeyedAccount<'a> {
     fn initialize_mining_pool(&mut self) -> Result<(), InstructionError> {
         if let StakeState::Uninitialized = self.state()? {
-            self.set_state(&StakeState::MiningPool)
+            self.set_state(&StakeState::MiningPool {
+                epoch: 0,
+                point_value: 0.0,
+            })
         } else {
             Err(InstructionError::InvalidAccountData)
         }
@@ -167,7 +176,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         vote_account: &mut KeyedAccount,
     ) -> Result<(), InstructionError> {
         if let (
-            StakeState::MiningPool,
+            StakeState::MiningPool { .. },
             StakeState::Stake {
                 voter_pubkey,
                 credits_observed,
@@ -229,6 +238,17 @@ pub fn create_stake_account(
         .expect("set_state");
 
     stake_account
+}
+
+// utility function, used by Bank, tests, genesis
+pub fn create_mining_pool(lamports: u64, epoch: u64, point_value: f64) -> Account {
+    let mut mining_pool_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
+
+    mining_pool_account
+        .set_state(&StakeState::MiningPool { epoch, point_value })
+        .expect("set_state");
+
+    mining_pool_account
 }
 
 #[cfg(test)]
@@ -301,7 +321,10 @@ mod tests {
             }
         );
 
-        let stake_state = StakeState::MiningPool;
+        let stake_state = StakeState::MiningPool {
+            epoch: 0,
+            point_value: 0.0,
+        };
         stake_keyed_account.set_state(&stake_state).unwrap();
         assert!(stake_keyed_account
             .delegate_stake(&vote_keyed_account, 0)
@@ -395,7 +418,10 @@ mod tests {
         );
 
         mining_pool_keyed_account
-            .set_state(&StakeState::MiningPool)
+            .set_state(&StakeState::MiningPool {
+                epoch: 0,
+                point_value: 0.0,
+            })
             .unwrap();
 
         // no movement in vote account, so no redemption needed
@@ -459,7 +485,10 @@ mod tests {
         let mut mining_pool_keyed_account =
             KeyedAccount::new(&pubkey, true, &mut mining_pool_account);
         mining_pool_keyed_account
-            .set_state(&StakeState::MiningPool)
+            .set_state(&StakeState::MiningPool {
+                epoch: 0,
+                point_value: 0.0,
+            })
             .unwrap();
 
         let mut vote_state = VoteState::default();

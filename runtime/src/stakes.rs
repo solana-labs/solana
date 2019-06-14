@@ -2,7 +2,7 @@
 //! node stakes
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
-use solana_stake_api::stake_state::StakeState;
+use solana_stake_api::stake_state::{create_mining_pool, StakeState};
 use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
 
@@ -13,6 +13,10 @@ pub struct Stakes {
 
     /// stake_accounts
     stake_accounts: HashMap<Pubkey, Account>,
+
+    /// unclaimed points.
+    //  a point is a credit multiplied by the stake
+    points: u64,
 }
 
 impl Stakes {
@@ -40,11 +44,18 @@ impl Stakes {
             if account.lamports == 0 {
                 self.vote_accounts.remove(pubkey);
             } else {
-                // update the stake of this entry
-                let stake = self
-                    .vote_accounts
-                    .get(pubkey)
-                    .map_or_else(|| self.calculate_stake(pubkey), |v| v.0);
+                let old = self.vote_accounts.get(pubkey);
+
+                let stake = old.map_or_else(|| self.calculate_stake(pubkey), |v| v.0);
+
+                // count any increase in points, can only go forward
+                let old_credits = old
+                    .and_then(|(_stake, old_account)| VoteState::credits_from(old_account))
+                    .unwrap_or(0);
+
+                let credits = VoteState::credits_from(account).unwrap_or(old_credits);
+
+                self.points += credits.saturating_sub(old_credits) * stake;
 
                 self.vote_accounts.insert(*pubkey, (stake, account.clone()));
             }
@@ -86,6 +97,15 @@ impl Stakes {
         &self.vote_accounts
     }
 
+    pub fn mining_pools(&self) -> impl Iterator<Item = (&Pubkey, &Account)> {
+        self.stake_accounts
+            .iter()
+            .filter(|(_key, account)| match StakeState::from(account) {
+                Some(StakeState::MiningPool { .. }) => true,
+                _ => false,
+            })
+    }
+
     pub fn highest_staked_node(&self) -> Option<Pubkey> {
         self.vote_accounts
             .iter()
@@ -93,17 +113,37 @@ impl Stakes {
             .and_then(|(_k, (_stake, account))| VoteState::from(account))
             .map(|vote_state| vote_state.node_pubkey)
     }
+
+    /// currently unclaimed points
+    pub fn points(&mut self) -> u64 {
+        self.points
+    }
+
+    /// "claims" points, resets points to 0
+    pub fn claim_points(&mut self) -> u64 {
+        let points = self.points;
+        self.points = 0;
+        points
+    }
+
+    ///  claims points
+    ///  makes a pool with the lamports and points spread over those points and
+    pub fn create_mining_pool(&mut self, epoch: u64, lamports: u64) -> Account {
+        let points = self.claim_points();
+
+        create_mining_pool(lamports, epoch, lamports as f64 / points as f64)
+    }
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use solana_sdk::pubkey::Pubkey;
     use solana_stake_api::stake_state;
-    use solana_vote_api::vote_state::{self, VoteState};
+    use solana_vote_api::vote_state::{self, VoteState, MAX_LOCKOUT_HISTORY};
 
-    //  set up some dummies  for a staked node    ((     vote      )  (     stake     ))
-    fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
+    //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
+    pub fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
         let vote_pubkey = Pubkey::new_rand();
         let vote_account = vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1);
         (
@@ -113,7 +153,7 @@ mod tests {
     }
 
     //   add stake to a vote_pubkey                               (   stake    )
-    fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
+    pub fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
         (
             Pubkey::new_rand(),
             stake_state::create_stake_account(&vote_pubkey, &VoteState::default(), stake),
@@ -183,6 +223,50 @@ mod tests {
         let vote11_node_pubkey = VoteState::from(&vote11_account).unwrap().node_pubkey;
 
         assert_eq!(stakes.highest_staked_node(), Some(vote11_node_pubkey))
+    }
+
+    #[test]
+    fn test_stakes_points() {
+        let mut stakes = Stakes::default();
+        let stake = 42;
+        assert_eq!(stakes.points(), 0);
+        assert_eq!(stakes.claim_points(), 0);
+        assert_eq!(stakes.claim_points(), 0);
+
+        let ((vote_pubkey, mut vote_account), (stake_pubkey, stake_account)) =
+            create_staked_node_accounts(stake);
+
+        stakes.store(&vote_pubkey, &vote_account);
+        stakes.store(&stake_pubkey, &stake_account);
+
+        assert_eq!(stakes.points(), 0);
+        assert_eq!(stakes.claim_points(), 0);
+
+        let mut vote_state = VoteState::from(&vote_account).unwrap();
+        for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+            vote_state.process_slot_vote_unchecked(i as u64);
+            vote_state.to(&mut vote_account).unwrap();
+            stakes.store(&vote_pubkey, &vote_account);
+            assert_eq!(stakes.points(), vote_state.credits() * stake);
+        }
+        vote_account.lamports = 0;
+        stakes.store(&vote_pubkey, &vote_account);
+        assert_eq!(stakes.points(), vote_state.credits() * stake);
+
+        assert_eq!(stakes.claim_points(), vote_state.credits() * stake);
+        assert_eq!(stakes.claim_points(), 0);
+        assert_eq!(stakes.claim_points(), 0);
+
+        // points come out of nowhere, but don't care here ;)
+        vote_account.lamports = 1;
+        stakes.store(&vote_pubkey, &vote_account);
+        assert_eq!(stakes.points(), vote_state.credits() * stake);
+
+        // test going backwards, should never go backwards
+        let old_vote_state = vote_state;
+        let vote_account = vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1);
+        stakes.store(&vote_pubkey, &vote_account);
+        assert_eq!(stakes.points(), old_vote_state.credits() * stake);
     }
 
     #[test]

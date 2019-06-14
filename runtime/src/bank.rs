@@ -27,7 +27,8 @@ use solana_metrics::{
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::{extend_and_hash, Hash};
+use solana_sdk::hash::{extend_and_hash, hashv, Hash};
+use solana_sdk::inflation::Inflation;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
@@ -36,7 +37,7 @@ use solana_sdk::syscall::fees::{self, Fees};
 use solana_sdk::syscall::slot_hashes::{self, SlotHashes};
 use solana_sdk::syscall::tick_height::{self, TickHeight};
 use solana_sdk::system_transaction;
-use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
+use solana_sdk::timing::{duration_as_ms, duration_as_ns, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
 use std::collections::HashMap;
@@ -45,6 +46,8 @@ use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::time::Instant;
+
+pub const SECONDS_PER_YEAR: f64 = (365.0 * 24.0 * 60.0 * 60.0);
 
 type BankStatusCache = StatusCache<Result<()>>;
 
@@ -223,6 +226,9 @@ pub struct Bank {
     /// The number of ticks in each slot.
     ticks_per_slot: u64,
 
+    /// The number of slots per year, used for inflation
+    slots_per_year: f64,
+
     /// Bank fork (i.e. slot, i.e. block)
     slot: u64,
 
@@ -242,6 +248,9 @@ pub struct Bank {
 
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
+
+    /// inflation specs
+    inflation: Inflation,
 
     /// cache of vote_account and stake_account state for this fork
     stakes: RwLock<Stakes>,
@@ -293,61 +302,79 @@ impl Bank {
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: u64) -> Self {
+        Self::default().init_from_parent(parent, collector_id, slot)
+    }
+
+    /// Create a new bank that points to an immutable checkpoint of another bank.
+    pub fn init_from_parent(
+        mut self,
+        parent: &Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: u64,
+    ) -> Self {
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
-        let mut bank = Self::default();
-        bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
-        bank.src.status_cache = parent.src.status_cache.clone();
-        bank.bank_height = parent.bank_height + 1;
-        bank.fee_calculator =
+        // TODO: clean this up, soo much special-case copying...
+        self.ticks_per_slot = parent.ticks_per_slot;
+        self.slots_per_year = parent.slots_per_year;
+        self.epoch_schedule = parent.epoch_schedule;
+
+        self.slot = slot;
+        self.max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
+
+        self.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
+        self.src.status_cache = parent.src.status_cache.clone();
+        self.bank_height = parent.bank_height + 1;
+        self.fee_calculator =
             FeeCalculator::new_derived(&parent.fee_calculator, parent.signature_count());
 
-        bank.transaction_count
-            .store(parent.transaction_count() as usize, Ordering::Relaxed);
-        bank.stakes = RwLock::new(parent.stakes.read().unwrap().clone());
-        bank.storage_accounts = RwLock::new(parent.storage_accounts.read().unwrap().clone());
+        self.capitalization
+            .store(parent.capitalization() as usize, Ordering::Relaxed);
+        self.inflation = parent.inflation.clone();
 
-        bank.tick_height.store(
+        self.transaction_count
+            .store(parent.transaction_count() as usize, Ordering::Relaxed);
+        self.stakes = RwLock::new(parent.stakes.read().unwrap().clone());
+        self.storage_accounts = RwLock::new(parent.storage_accounts.read().unwrap().clone());
+
+        self.tick_height.store(
             parent.tick_height.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
-        bank.ticks_per_slot = parent.ticks_per_slot;
-        bank.epoch_schedule = parent.epoch_schedule;
-
-        bank.slot = slot;
-        bank.max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
 
         datapoint_info!(
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
-            ("bank_height", bank.bank_height, i64)
+            ("bank_height", self.bank_height, i64)
         );
 
-        bank.rc.parent = RwLock::new(Some(parent.clone()));
-        bank.parent_hash = parent.hash();
-        bank.collector_id = *collector_id;
+        self.rc.parent = RwLock::new(Some(parent.clone()));
+        self.parent_hash = parent.hash();
+        self.collector_id = *collector_id;
 
-        bank.rc.accounts = Arc::new(Accounts::new_from_parent(&parent.rc.accounts));
+        self.rc.accounts = Arc::new(Accounts::new_from_parent(&parent.rc.accounts));
 
-        bank.epoch_stakes = {
+        self.epoch_stakes = {
             let mut epoch_stakes = parent.epoch_stakes.clone();
-            let epoch = bank.get_stakers_epoch(bank.slot);
+            let epoch = self.get_stakers_epoch(self.slot);
             // update epoch_vote_states cache
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
             if epoch_stakes.get(&epoch).is_none() {
-                epoch_stakes.insert(epoch, bank.stakes.read().unwrap().clone());
+                epoch_stakes.insert(epoch, self.stakes.read().unwrap().clone());
             }
             epoch_stakes
         };
-        bank.ancestors.insert(bank.slot(), 0);
-        bank.parents().iter().enumerate().for_each(|(i, p)| {
-            bank.ancestors.insert(p.slot(), i + 1);
+        self.ancestors.insert(self.slot(), 0);
+        self.parents().iter().enumerate().for_each(|(i, p)| {
+            self.ancestors.insert(p.slot(), i + 1);
         });
-        bank.update_current();
-        bank.update_fees();
-        bank
+
+        self.update_rewards(parent.epoch(), parent.last_blockhash());
+        self.update_current();
+        self.update_fees();
+        self
     }
 
     pub fn collector_id(&self) -> &Pubkey {
@@ -356,6 +383,10 @@ impl Bank {
 
     pub fn slot(&self) -> u64 {
         self.slot
+    }
+
+    pub fn epoch(&self) -> u64 {
+        self.epoch_schedule.get_epoch(self.slot)
     }
 
     pub fn freeze_lock(&self) -> RwLockReadGuard<Hash> {
@@ -416,15 +447,58 @@ impl Bank {
         self.store_account(&tick_height::id(), &account);
     }
 
+    // update reward for previous epoch
+    fn update_rewards(&mut self, epoch: u64, blockhash: Hash) {
+        if epoch == self.epoch() {
+            return;
+        }
+        // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
+
+        // TODO: on-chain wallclock?
+        //  years_elapsed =         slots_elapsed                             /     slots/year
+        let year = (self.epoch_schedule.get_last_slot_in_epoch(epoch)) as f64 / self.slots_per_year;
+
+        // period: time that has passed as a fraction of a year, basically the length of
+        //  an epoch as a fraction of a year
+        //  years_elapsed =   slots_elapsed                                   /  slots/year
+        let period = self.epoch_schedule.get_slots_in_epoch(epoch) as f64 / self.slots_per_year;
+
+        // validators
+        {
+            let validator_rewards =
+                (self.inflation.validator(year) * self.capitalization() as f64 * period) as u64;
+
+            // claim points and create a pool
+            let mining_pool = self
+                .stakes
+                .write()
+                .unwrap()
+                .create_mining_pool(epoch, validator_rewards);
+
+            self.store(
+                &Pubkey::new(
+                    hashv(&[
+                        blockhash.as_ref(),
+                        "StakeMiningPool".as_ref(),
+                        &serialize(&epoch).unwrap(),
+                    ])
+                    .as_ref(),
+                ),
+                &mining_pool,
+            );
+
+            self.capitalization
+                .fetch_add(validator_rewards as usize, Ordering::Relaxed);
+        }
+    }
+
     fn set_hash(&self) -> bool {
         let mut hash = self.hash.write().unwrap();
-
         if *hash == Hash::default() {
             let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
             if collector_fees != 0 {
                 self.deposit(&self.collector_id, collector_fees);
             }
-
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
             true
@@ -501,6 +575,12 @@ impl Bank {
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
+        //   ticks/year     =      seconds/year ...
+        self.slots_per_year = SECONDS_PER_YEAR
+        //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+            *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+        //  / ticks/slot
+            / self.ticks_per_slot as f64;
 
         // make bank 0 votable
         self.is_delta.store(true, Ordering::Relaxed);
@@ -510,6 +590,8 @@ impl Bank {
             genesis_block.stakers_slot_offset,
             genesis_block.epoch_warmup,
         );
+
+        self.inflation = genesis_block.inflation.clone();
 
         // Add native programs mandatory for the MessageProcessor to function
         self.register_native_instruction_processor(
@@ -1311,7 +1393,7 @@ impl Drop for Bank {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::epoch_schedule::MINIMUM_SLOT_LENGTH;
+    use crate::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
     use crate::genesis_utils::{
         create_genesis_block_with_leader, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS,
     };
@@ -1319,12 +1401,15 @@ mod tests {
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash;
     use solana_sdk::instruction::InstructionError;
+    use solana_sdk::poh_config::PohConfig;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
     use solana_sdk::system_transaction;
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use solana_vote_api::vote_instruction;
-    use solana_vote_api::vote_state::VoteState;
+    use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
     use std::io::Cursor;
+    use std::time::Duration;
 
     #[test]
     fn test_bank_new() {
@@ -1351,11 +1436,75 @@ mod tests {
 
     #[test]
     fn test_bank_capitalization() {
-        let bank = Bank::new(&GenesisBlock {
+        let bank = Arc::new(Bank::new(&GenesisBlock {
             accounts: vec![(Pubkey::default(), Account::new(42, 0, &Pubkey::default()),); 42],
             ..GenesisBlock::default()
-        });
+        }));
         assert_eq!(bank.capitalization(), 42 * 42);
+        let bank1 = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
+        assert_eq!(bank1.capitalization(), 42 * 42);
+    }
+
+    #[test]
+    fn test_bank_update_rewards() {
+        // create a bank that ticks really slowly...
+        let bank = Arc::new(Bank::new(&GenesisBlock {
+            accounts: vec![
+                (
+                    Pubkey::default(),
+                    Account::new(1_000_000_000, 0, &Pubkey::default()),
+                );
+                42
+            ],
+            // set it up so the first epoch is a full year long
+            poh_config: PohConfig {
+                target_tick_duration: Duration::from_secs(
+                    SECONDS_PER_YEAR as u64
+                        / MINIMUM_SLOTS_PER_EPOCH as u64
+                        / DEFAULT_TICKS_PER_SLOT,
+                ),
+                hashes_per_tick: None,
+            },
+
+            ..GenesisBlock::default()
+        }));
+        assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
+
+        let ((vote_id, mut vote_account), stake) =
+            crate::stakes::tests::create_staked_node_accounts(1_0000);
+
+        // set up stakes and vote accounts
+        bank.store(&stake.0, &stake.1);
+
+        // generate some rewards
+        let mut vote_state = VoteState::from(&vote_account).unwrap();
+        for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+            vote_state.process_slot_vote_unchecked(i as u64);
+            vote_state.to(&mut vote_account).unwrap();
+            bank.store(&vote_id, &vote_account);
+        }
+        bank.store(&vote_id, &vote_account);
+
+        // put a child bank in epoch 1, which calls update_rewards()...
+        let bank1 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            bank.get_slots_in_epoch(bank.epoch()) + 1,
+        );
+        // verify that there's inflation
+        assert_ne!(bank1.capitalization(), bank.capitalization());
+        // verify the inflation is in rewards pools
+        let inflation = bank1.capitalization() - bank.capitalization();
+
+        let validator_rewards: u64 = bank1
+            .stakes
+            .read()
+            .unwrap()
+            .mining_pools()
+            .map(|(_key, account)| account.lamports)
+            .sum();
+
+        assert_eq!(validator_rewards, inflation);
     }
 
     #[test]
@@ -2098,7 +2247,7 @@ mod tests {
 
         // set this up weird, forces future generation, odd mod(), etc.
         //  this says: "vote_accounts for epoch X should be generated at slot index 3 in epoch X-2...
-        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOT_LENGTH as u64;
+        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
         const STAKERS_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
         genesis_block.slots_per_epoch = SLOTS_PER_EPOCH;
         genesis_block.stakers_slot_offset = STAKERS_SLOT_OFFSET;
@@ -2180,8 +2329,11 @@ mod tests {
 
         let bank = Bank::new(&genesis_block);
 
-        assert_eq!(bank.get_slots_in_epoch(0), MINIMUM_SLOT_LENGTH as u64);
-        assert_eq!(bank.get_slots_in_epoch(2), (MINIMUM_SLOT_LENGTH * 4) as u64);
+        assert_eq!(bank.get_slots_in_epoch(0), MINIMUM_SLOTS_PER_EPOCH as u64);
+        assert_eq!(
+            bank.get_slots_in_epoch(2),
+            (MINIMUM_SLOTS_PER_EPOCH * 4) as u64
+        );
         assert_eq!(bank.get_slots_in_epoch(5000), genesis_block.slots_per_epoch);
     }
 

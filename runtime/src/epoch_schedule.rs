@@ -1,6 +1,6 @@
 use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
 
-pub const MINIMUM_SLOT_LENGTH: usize = MAX_LOCKOUT_HISTORY + 1;
+pub const MINIMUM_SLOTS_PER_EPOCH: u64 = (MAX_LOCKOUT_HISTORY + 1) as u64;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub struct EpochSchedule {
@@ -19,16 +19,16 @@ pub struct EpochSchedule {
 
 impl EpochSchedule {
     pub fn new(slots_per_epoch: u64, stakers_slot_offset: u64, warmup: bool) -> Self {
-        assert!(slots_per_epoch >= MINIMUM_SLOT_LENGTH as u64);
+        assert!(slots_per_epoch >= MINIMUM_SLOTS_PER_EPOCH as u64);
         let (first_normal_epoch, first_normal_slot) = if warmup {
             let next_power_of_two = slots_per_epoch.next_power_of_two();
             let log2_slots_per_epoch = next_power_of_two
                 .trailing_zeros()
-                .saturating_sub(MINIMUM_SLOT_LENGTH.trailing_zeros());
+                .saturating_sub(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros());
 
             (
                 u64::from(log2_slots_per_epoch),
-                next_power_of_two.saturating_sub(MINIMUM_SLOT_LENGTH as u64),
+                next_power_of_two.saturating_sub(MINIMUM_SLOTS_PER_EPOCH),
             )
         } else {
             (0, 0)
@@ -44,7 +44,7 @@ impl EpochSchedule {
     /// get the length of the given epoch (in slots)
     pub fn get_slots_in_epoch(&self, epoch: u64) -> u64 {
         if epoch < self.first_normal_epoch {
-            2u64.pow(epoch as u32 + MINIMUM_SLOT_LENGTH.trailing_zeros() as u32)
+            2u64.pow(epoch as u32 + MINIMUM_SLOTS_PER_EPOCH.trailing_zeros() as u32)
         } else {
             self.slots_per_epoch
         }
@@ -70,17 +70,17 @@ impl EpochSchedule {
     /// get epoch and offset into the epoch for the given slot
     pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
         if slot < self.first_normal_slot {
-            let epoch = (slot + MINIMUM_SLOT_LENGTH as u64 + 1)
+            let epoch = (slot + MINIMUM_SLOTS_PER_EPOCH + 1)
                 .next_power_of_two()
                 .trailing_zeros()
-                - MINIMUM_SLOT_LENGTH.trailing_zeros()
+                - MINIMUM_SLOTS_PER_EPOCH.trailing_zeros()
                 - 1;
 
-            let epoch_len = 2u64.pow(epoch + MINIMUM_SLOT_LENGTH.trailing_zeros());
+            let epoch_len = 2u64.pow(epoch + MINIMUM_SLOTS_PER_EPOCH.trailing_zeros());
 
             (
                 u64::from(epoch),
-                slot - (epoch_len - MINIMUM_SLOT_LENGTH as u64),
+                slot - (epoch_len - MINIMUM_SLOTS_PER_EPOCH),
             )
         } else {
             (
@@ -92,7 +92,7 @@ impl EpochSchedule {
 
     pub fn get_first_slot_in_epoch(&self, epoch: u64) -> u64 {
         if epoch <= self.first_normal_epoch {
-            (2u64.pow(epoch as u32) - 1) * MINIMUM_SLOT_LENGTH as u64
+            (2u64.pow(epoch as u32) - 1) * MINIMUM_SLOTS_PER_EPOCH
         } else {
             (epoch - self.first_normal_epoch) * self.slots_per_epoch + self.first_normal_slot
         }
@@ -113,18 +113,18 @@ mod tests {
         // (1 * 7 * 24 * 4500u64).next_power_of_two();
 
         // test values between MINIMUM_SLOT_LEN and MINIMUM_SLOT_LEN * 16, should cover a good mix
-        for slots_per_epoch in MINIMUM_SLOT_LENGTH as u64..=MINIMUM_SLOT_LENGTH as u64 * 16 {
+        for slots_per_epoch in MINIMUM_SLOTS_PER_EPOCH..=MINIMUM_SLOTS_PER_EPOCH * 16 {
             let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
 
             assert_eq!(epoch_schedule.get_first_slot_in_epoch(0), 0);
             assert_eq!(
                 epoch_schedule.get_last_slot_in_epoch(0),
-                MINIMUM_SLOT_LENGTH as u64 - 1
+                MINIMUM_SLOTS_PER_EPOCH - 1
             );
 
             let mut last_stakers = 0;
             let mut last_epoch = 0;
-            let mut last_slots_in_epoch = MINIMUM_SLOT_LENGTH as u64;
+            let mut last_slots_in_epoch = MINIMUM_SLOTS_PER_EPOCH;
             for slot in 0..(2 * slots_per_epoch) {
                 // verify that stakers_epoch is continuous over the warmup
                 // and into the first normal epoch

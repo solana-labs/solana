@@ -561,7 +561,7 @@ impl Drop for LocalCluster {
 mod test {
     use super::*;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
-    use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
+    use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 
     #[test]
     fn test_local_cluster_start_and_exit() {
@@ -586,7 +586,7 @@ mod test {
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
             ticks_per_slot: 8,
-            slots_per_epoch: MINIMUM_SLOT_LENGTH as u64,
+            slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH as u64,
             ..ClusterConfig::default()
         };
         let cluster = LocalCluster::new(&config);

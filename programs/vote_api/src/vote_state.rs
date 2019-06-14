@@ -97,7 +97,12 @@ impl VoteState {
 
     // utility function, used by Stakes, tests
     pub fn from(account: &Account) -> Option<VoteState> {
-        account.state().ok()
+        Self::deserialize(&account.data).ok()
+    }
+
+    // utility function, used by Stakes, tests
+    pub fn to(&self, account: &mut Account) -> Option<()> {
+        Self::serialize(self, &mut account.data).ok()
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
@@ -109,6 +114,11 @@ impl VoteState {
             ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
             _ => InstructionError::GenericError,
         })
+    }
+
+    // utility function, used by Stakes, tests
+    pub fn credits_from(account: &Account) -> Option<u64> {
+        Self::from(account).map(|state| state.credits())
     }
 
     /// returns commission split as (voter_portion, staker_portion, was_split) tuple

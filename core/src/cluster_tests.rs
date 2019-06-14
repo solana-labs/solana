@@ -9,7 +9,7 @@ use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover_cluster;
 use crate::locktower::VOTE_THRESHOLD_DEPTH;
 use solana_client::thin_client::create_client;
-use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
+use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 use solana_sdk::client::SyncClient;
 use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
@@ -141,7 +141,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
-    let first_two_epoch_slots = MINIMUM_SLOT_LENGTH * 3;
+    let first_two_epoch_slots = MINIMUM_SLOTS_PER_EPOCH * 3;
 
     for ingress_node in &cluster_nodes {
         client
