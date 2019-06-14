@@ -1,6 +1,7 @@
 //! @brief Solana Rust-based BPF program panic handling
 
 use core::panic::PanicInfo;
+use core::ptr;
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -22,7 +23,7 @@ fn panic(info: &PanicInfo) -> ! {
                 );
             }
         }
-        None => unsafe { sol_panic_(0 as *const u8, 0, 0) },
+        None => unsafe { sol_panic_(ptr::null(), 0, 0) },
     }
 }
 extern "C" {

@@ -1,6 +1,7 @@
 //! @brief Example Rust-based BPF program that prints out the parameters passed to it
 
 #![no_std]
+#![allow(unreachable_code)]
 
 extern crate solana_sdk_bpf_utils;
 
@@ -37,7 +38,7 @@ fn process_instruction(
     {
         // Test - arch config
         #[cfg(not(target_arch = "bpf"))]
-        assert!(false);
+        panic!();
     }
 
     {
