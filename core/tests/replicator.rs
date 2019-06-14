@@ -27,7 +27,7 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     let mut validator_config = ValidatorConfig::default();
     validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
-        validator_config,
+        validator_configs: vec![ValidatorConfig::default(); num_nodes],
         num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,
@@ -149,7 +149,7 @@ fn test_account_setup() {
     let mut validator_config = ValidatorConfig::default();
     validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
-        validator_config,
+        validator_configs: vec![ValidatorConfig::default(); num_nodes],
         num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,

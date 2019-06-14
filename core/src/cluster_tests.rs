@@ -8,11 +8,13 @@ use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover_cluster;
 use crate::locktower::VOTE_THRESHOLD_DEPTH;
+use hashbrown::HashSet;
 use solana_client::thin_client::create_client;
 use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 use solana_sdk::client::SyncClient;
 use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{
@@ -26,14 +28,18 @@ use std::time::Duration;
 const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_NUM_TICKS_PER_SECOND;
 
 /// Spend and verify from every node in the network
-pub fn spend_and_verify_all_nodes(
+pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
     entry_point_info: &ContactInfo,
     funding_keypair: &Keypair,
     nodes: usize,
+    ignore_nodes: HashSet<Pubkey, S>,
 ) {
     let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for ingress_node in &cluster_nodes {
+        if ignore_nodes.contains(&ingress_node.id) {
+            continue;
+        }
         let random_keypair = Keypair::new();
         let client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
         let bal = client
@@ -48,6 +54,9 @@ pub fn spend_and_verify_all_nodes(
             .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 5, confs)
             .unwrap();
         for validator in &cluster_nodes {
+            if ignore_nodes.contains(&validator.id) {
+                continue;
+            }
             let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
             client.poll_for_signature_confirmation(&sig, confs).unwrap();
         }
