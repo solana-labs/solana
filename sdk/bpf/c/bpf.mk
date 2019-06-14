@@ -1,5 +1,5 @@
 LOCAL_PATH := $(dir $(lastword $(MAKEFILE_LIST)))
-INSTALL_SH := $(abspath $(LOCAL_PATH)/scripts/install.sh)
+INSTALL_SH := $(abspath $(LOCAL_PATH)/../scripts/install.sh)
 
 all:
 .PHONY: help all clean
@@ -16,10 +16,10 @@ OS := $(shell uname)
 
 ifeq ($(DOCKER),1)
 $(warning DOCKER=1 is experimential and may not work as advertised)
-LLVM_DIR = $(LOCAL_PATH)llvm-docker/
+LLVM_DIR = $(LOCAL_PATH)../dependencies/llvm-docker/
 LLVM_SYSTEM_INC_DIRS := /usr/local/lib/clang/8.0.0/include
 else
-LLVM_DIR = $(LOCAL_PATH)llvm-native/
+LLVM_DIR = $(LOCAL_PATH)../dependencies/llvm-native/
 LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/8.0.0/include
 endif
 
@@ -72,11 +72,11 @@ OBJ_DUMP_FLAGS := \
   -source \
   -disassemble \
 
-TESTFRAMEWORK_RPATH := $(abspath $(LOCAL_PATH)criterion/lib)
+TESTFRAMEWORK_RPATH := $(abspath $(LOCAL_PATH)../dependencies/criterion/lib)
 TESTFRAMEWORK_FLAGS := \
   -DSOL_TEST \
-  -isystem $(LOCAL_PATH)criterion/include \
-  -L $(LOCAL_PATH)criterion/lib \
+  -isystem $(LOCAL_PATH)../dependencies/criterion/include \
+  -L $(LOCAL_PATH)../dependencies/criterion/lib \
   -rpath $(TESTFRAMEWORK_RPATH) \
   -lcriterion \
 

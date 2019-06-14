@@ -26,7 +26,7 @@ test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 # Clear the BPF sysroot files, they are not automatically rebuilt
 rm -rf target/xargo # Issue #3105
 
-# Run tbe appropriate test based on entrypoint
+# Run the appropriate test based on entrypoint
 testName=$(basename "$0" .sh)
 case $testName in
 test-stable)
