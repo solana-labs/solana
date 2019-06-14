@@ -39,7 +39,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use sys_info;
 
-const ACCOUNT_DATA_FILE_SIZE: u64 = 64 * 1024 * 1024;
+const ACCOUNT_DATA_FILE_SIZE: u64 = 16 * 1024 * 1024;
 const ACCOUNT_DATA_FILE: &str = "data";
 pub const NUM_THREADS: u32 = 10;
 
@@ -340,8 +340,9 @@ impl AccountsDB {
             let union = index.roots.union(&accounts_index.roots);
             index.roots = union.cloned().collect();
             index.last_root = accounts_index.last_root;
+            let mut stores = self.storage.write().unwrap();
+            stores.0.extend(storage.0);
         }
-        *self.storage.write().unwrap() = storage;
         self.next_id
             .store(ids[ids.len() - 1] + 1, Ordering::Relaxed);
         self.write_version.store(version, Ordering::Relaxed);
