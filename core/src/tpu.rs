@@ -37,6 +37,7 @@ impl Tpu {
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         blocktree: &Arc<Blocktree>,
+        broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         cluster_info.write().unwrap().set_leader(id);
@@ -70,7 +71,7 @@ impl Tpu {
             verified_vote_receiver,
         );
 
-        let broadcast_stage = BroadcastStageType::Standard.new_broadcast_stage(
+        let broadcast_stage = broadcast_type.new_broadcast_stage(
             broadcast_socket,
             cluster_info.clone(),
             entry_receiver,

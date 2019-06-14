@@ -3,6 +3,7 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::blocktree_processor::{self, BankForksInfo};
+use crate::broadcast_stage::BroadcastStageType;
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::{discover_cluster, GossipService};
@@ -39,7 +40,9 @@ pub struct ValidatorConfig {
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
     pub snapshot_path: Option<String>,
+    pub broadcast_stage_type: BroadcastStageType,
 }
+
 impl Default for ValidatorConfig {
     fn default() -> Self {
         // TODO: remove this, temporary parameter to configure
@@ -54,6 +57,7 @@ impl Default for ValidatorConfig {
             account_paths: None,
             rpc_config: JsonRpcConfig::default(),
             snapshot_path: None,
+            broadcast_stage_type: BroadcastStageType::Standard,
         }
     }
 }
@@ -262,6 +266,7 @@ impl Validator {
             node.sockets.broadcast,
             config.sigverify_disabled,
             &blocktree,
+            &config.broadcast_stage_type,
             &exit,
         );
 
