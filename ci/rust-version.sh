@@ -16,8 +16,8 @@
 export rust_stable=1.35.0
 export rust_stable_docker_image=solanalabs/rust:1.35.0
 
-export rust_nightly=nightly-2019-05-01
-export rust_nightly_docker_image=solanalabs/rust-nightly:2019-05-01
+export rust_nightly=nightly-2019-06-14
+export rust_nightly_docker_image=solanalabs/rust-nightly:2019-06-14
 
 [[ -z $1 ]] || (
 
@@ -37,7 +37,6 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:2019-05-01
      ;;
   nightly)
      rustup_install "$rust_nightly"
-     rustup component add clippy --toolchain="$rust_nightly"
     ;;
   *)
     echo "Note: ignoring unknown argument: $1"
