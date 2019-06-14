@@ -39,6 +39,16 @@ impl<T: Clone> AccountsIndex<T> {
         rv
     }
 
+    pub fn get_max_root(roots: &HashSet<Fork>, fork_vec: &[(Fork, T)]) -> Fork {
+        let mut max_root = 0;
+        for (f, _) in fork_vec.iter() {
+            if *f > max_root && roots.contains(f) {
+                max_root = *f;
+            }
+        }
+        max_root
+    }
+
     pub fn insert(
         &mut self,
         fork: Fork,
@@ -46,7 +56,6 @@ impl<T: Clone> AccountsIndex<T> {
         account_info: T,
         reclaims: &mut Vec<(Fork, T)>,
     ) {
-        let last_root = self.last_root;
         let roots = &self.roots;
         let fork_vec = self
             .account_maps
@@ -60,13 +69,15 @@ impl<T: Clone> AccountsIndex<T> {
         // add the new entry
         fork_vec.push((fork, account_info));
 
+        let max_root = Self::get_max_root(roots, fork_vec);
+
         reclaims.extend(
             fork_vec
                 .iter()
-                .filter(|(fork, _)| Self::is_purged(roots, last_root, *fork))
+                .filter(|(fork, _)| Self::can_purge(max_root, *fork))
                 .cloned(),
         );
-        fork_vec.retain(|(fork, _)| !Self::is_purged(roots, last_root, *fork));
+        fork_vec.retain(|(fork, _)| !Self::can_purge(max_root, *fork));
     }
 
     pub fn add_index(&mut self, fork: Fork, pubkey: &Pubkey, account_info: T) {
@@ -74,8 +85,12 @@ impl<T: Clone> AccountsIndex<T> {
         entry.push((fork, account_info));
     }
 
-    pub fn is_purged(roots: &HashSet<Fork>, last_root: Fork, fork: Fork) -> bool {
-        !roots.contains(&fork) && fork < last_root
+    pub fn is_purged(&self, fork: Fork) -> bool {
+        fork < self.last_root
+    }
+
+    pub fn can_purge(max_root: Fork, fork: Fork) -> bool {
+        fork < max_root
     }
 
     pub fn is_root(&self, fork: Fork) -> bool {
@@ -170,17 +185,9 @@ mod tests {
     #[test]
     fn test_is_purged() {
         let mut index = AccountsIndex::<bool>::default();
-        assert!(!AccountsIndex::<bool>::is_purged(
-            &index.roots,
-            index.last_root,
-            0
-        ));
+        assert!(!index.is_purged(0));
         index.add_root(1);
-        assert!(AccountsIndex::<bool>::is_purged(
-            &index.roots,
-            index.last_root,
-            0
-        ));
+        assert!(index.is_purged(0));
     }
 
     #[test]
@@ -257,10 +264,15 @@ mod tests {
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
-        index.add_root(1);
         index.insert(1, &key.pubkey(), false, &mut gc);
-        assert_eq!(gc, vec![(0, true)]);
+        index.insert(2, &key.pubkey(), true, &mut gc);
+        index.insert(3, &key.pubkey(), true, &mut gc);
+        index.add_root(0);
+        index.add_root(1);
+        index.add_root(3);
+        index.insert(4, &key.pubkey(), true, &mut gc);
+        assert_eq!(gc, vec![(0, true), (1, false), (2, true)]);
         let ancestors = vec![].into_iter().collect();
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 1)));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 3)));
     }
 }

@@ -1219,14 +1219,7 @@ mod tests {
             .clone();
         //fork 0 is behind root, but it is not root, therefore it is purged
         accounts.add_root(1);
-        {
-            let accounts_index = accounts.accounts_index.read().unwrap();
-            assert!(AccountsIndex::<AccountInfo>::is_purged(
-                &accounts_index.roots,
-                accounts_index.last_root,
-                0
-            ));
-        }
+        assert!(accounts.accounts_index.read().unwrap().is_purged(0));
 
         //fork is still there, since gc is lazy
         assert!(accounts.storage.read().unwrap().0[&0]

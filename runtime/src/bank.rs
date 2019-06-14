@@ -2047,6 +2047,49 @@ mod tests {
     }
 
     #[test]
+    fn test_bank_get_account_in_parent_after_squash2() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = create_genesis_block(500);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+
+        let key1 = Keypair::new();
+
+        bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        assert_eq!(bank0.get_balance(&key1.pubkey()), 1);
+
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        bank1.transfer(3, &mint_keypair, &key1.pubkey()).unwrap();
+        let bank2 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 2));
+        bank2.transfer(2, &mint_keypair, &key1.pubkey()).unwrap();
+        let bank3 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 3));
+        bank1.squash();
+
+        assert_eq!(bank0.get_balance(&key1.pubkey()), 1);
+        assert_eq!(bank3.get_balance(&key1.pubkey()), 4);
+        assert_eq!(bank2.get_balance(&key1.pubkey()), 3);
+        bank3.squash();
+        assert_eq!(bank1.get_balance(&key1.pubkey()), 4);
+
+        let bank4 = Arc::new(Bank::new_from_parent(&bank3, &Pubkey::default(), 4));
+        bank4.transfer(4, &mint_keypair, &key1.pubkey()).unwrap();
+        assert_eq!(bank4.get_balance(&key1.pubkey()), 8);
+        assert_eq!(bank3.get_balance(&key1.pubkey()), 4);
+        bank4.squash();
+        let bank5 = Arc::new(Bank::new_from_parent(&bank4, &Pubkey::default(), 5));
+        bank5.squash();
+        let bank6 = Arc::new(Bank::new_from_parent(&bank5, &Pubkey::default(), 6));
+        bank6.squash();
+
+        // This picks up the values from 4 which is the highest root:
+        // TODO: if we need to access rooted banks older than this,
+        // need to fix the lookup.
+        assert_eq!(bank3.get_balance(&key1.pubkey()), 8);
+        assert_eq!(bank2.get_balance(&key1.pubkey()), 8);
+
+        assert_eq!(bank4.get_balance(&key1.pubkey()), 8);
+    }
+
+    #[test]
     fn test_bank_epoch_vote_accounts() {
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
