@@ -13,15 +13,13 @@ The effective protocol-based annual interest rate (%) per epoch to be distribute
 
 * the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule
 
-* the global time since the genesis block instantiation
+* the fraction of staked SOLs out of the current total circulating supply,
 
-* the current fraction of staked SOLs out of the current total circulating supply,
+* the up-time/participation [% of available slots that validator had opportunity to vote on] of a given validator over the previous epoch.
 
-* the up-time/participation [% of available slots/blocks that validator had opportunity to vote on?] of a given validator over the previous epoch.
+The first factor is a protocol parameters only (i.e. independent of validator behavior in a given epoch) and describe a global validation reward schedule designed to incentivize early participation, provide clear montetary schedule/stability and provide optimal security in the network. 
 
-The first two factors are protocol parameters only (i.e. independent of validator behavior in a given epoch) and describe a global validation reward schedule designed to incentivize early participation, provide clear montetary schedule/stability and provide optimal security in the network. 
-
-At any given point in time, a specific validator's interest rate can be determied based on that validators proportion of total stake and their uptime/activity in the previous epoch. For an illustrative example, consider a protocol with an initial circulating token supply of 500MM tokens, an inflation rate specified at network launch of 15%, and a disinflationary schedule of 70% decrease in rate per year (the actual rates to be implemented are to be worked out during the testnet experimentation phase of mainnet launch). In this case, the 10-year inflation rate (adjusted daily for this example) is shown in **Figure 2**, while the total circulating token supply is illustrated in **Figure 3**. 
+At any given point in time, a specific validator's interest rate can be determined based on the porportion of circulating supply that is staked by the network and the validator's uptime/activity in the previous epoch. For an illustrative example, consider a hypothetical instance of the network with an initial circulating token supply of 200MM tokens that vests to 500MM after 3 years, an inflation rate specified at network launch of 7.5%, and a disinflationary schedule of 20% decrease in inflation rate per year (the actual rates to be implemented are to be worked out during the testnet experimentation phase of mainnet launch). Additionally, we assume a split in interest-based rewards between validators and replicator nodes of 80%/20%. With these broad assumptions, the 10-year inflation rate (adjusted daily for this example) is shown in **Figure 2**, while the total circulating token supply is illustrated in **Figure 3**. Neglected in this toy-model is the inflation supression due to the portion of burnt transaction fees. 
 
 <p style="text-align:center;"><img src="img/p_ex_schedule.png" alt="drawing" width="800"/></p>
 **Figure 2:** In this example schedule, the annual inflation rate [%] reduces at around 20% per year, until it reaches the long-term, fixed, 1.5% rate (not shown in 10-year graph).
@@ -29,7 +27,7 @@ At any given point in time, a specific validator's interest rate can be determie
 <p style="text-align:center;"><img src="img/p_ex_supply.png" alt="drawing" width="800"/></p>
 **Figure 3:** The total token supply over a 10-year period, based on an initial 500MM tokens with the disinflationary inflation schedule as shown in **Figure 2**
 
-Given these example parameters, a validator-specific interest rate can be determined based on the proportion of the total amount of staked tokens that validator has bonded, as well as their uptime/activity in the previous epoch. For the purpose of this example, we assume 100% uptime for all validators and 
+Given these example parameters, annualized validator-specific interest rates can be determined based on the global fraction of tokens bonded as stake, as well as their uptime/activity in the previous epoch. For the purpose of this example, we assume 100% uptime for all validators and 
 The interest rate adjusts as the square-root [TBD] of the % staked, leading to higher validation-client interest rates as the % staked drops below the targeted goal, thus incentivizing more participation leading to more security in the network. An example of such a schedule, for a specified point in time (e.g. network launch) is shown in **Table 1**.
 
 | Percentage circulating supply staked [%] | Annual validator-client interest rate [%] |
