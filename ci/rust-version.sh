@@ -37,6 +37,7 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:2019-05-01
      ;;
   nightly)
      rustup_install "$rust_nightly"
+     rustup component add clippy
     ;;
   *)
     echo "Note: ignoring unknown argument: $1"
