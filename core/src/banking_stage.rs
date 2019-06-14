@@ -429,14 +429,19 @@ impl BankingStage {
         txs: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
         lock_results: &LockedAccountsResults,
+        credit_only_locks: Vec<transaction::Result<CreditOnlyLocks>>,
     ) -> (Result<()>, Vec<usize>) {
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (mut loaded_accounts, results, mut retryable_txs) =
-            bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
+        let (mut loaded_accounts, results, mut retryable_txs) = bank.load_and_execute_transactions(
+            txs,
+            lock_results,
+            credit_only_locks,
+            MAX_PROCESSING_AGE,
+        );
         let load_execute_time = now.elapsed();
 
         let freeze_lock = bank.freeze_lock();
@@ -481,11 +486,16 @@ impl BankingStage {
         let now = Instant::now();
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let lock_results = bank.lock_accounts(txs);
+        let (lock_results, credit_only_locks) = bank.lock_accounts(txs);
         let lock_time = now.elapsed();
 
-        let (result, mut retryable_txs) =
-            Self::process_and_record_transactions_locked(bank, txs, poh, &lock_results);
+        let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
+            bank,
+            txs,
+            poh,
+            &lock_results,
+            credit_only_locks,
+        );
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
         let now = Instant::now();
@@ -578,16 +588,16 @@ impl BankingStage {
     fn prepare_filter_for_pending_transactions(
         transactions: &[Transaction],
         pending_tx_indexes: &[usize],
-    ) -> Vec<transaction::Result<CreditOnlyLocks>> {
+    ) -> Vec<transaction::Result<()>> {
         let mut mask = vec![Err(TransactionError::BlockhashNotFound); transactions.len()];
-        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(vec![]));
+        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(()));
         mask
     }
 
     // This function returns a vector containing index of all valid transactions. A valid
     // transaction has result Ok() as the value
     fn filter_valid_transaction_indexes(
-        valid_txs: &[transaction::Result<CreditOnlyLocks>],
+        valid_txs: &[transaction::Result<()>],
         transaction_indexes: &[usize],
     ) -> Vec<usize> {
         let valid_transactions = valid_txs
@@ -1366,23 +1376,29 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
         ];
 
-        let results = BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![2, 4, 5],);
-        assert!(results[0].is_err());
-        assert!(results[1].is_err());
-        assert!(results[3].is_err());
+        assert_eq!(
+            BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![2, 4, 5],),
+            vec![
+                Err(TransactionError::BlockhashNotFound),
+                Err(TransactionError::BlockhashNotFound),
+                Ok(()),
+                Err(TransactionError::BlockhashNotFound),
+                Ok(()),
+                Ok(())
+            ]
+        );
 
-        assert!(results[2].is_ok());
-        assert!(results[4].is_ok());
-        assert!(results[5].is_ok());
-
-        let results = BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![0, 2, 3],);
-        assert!(results[0].is_ok());
-        assert!(results[2].is_ok());
-        assert!(results[3].is_ok());
-
-        assert!(results[1].is_err());
-        assert!(results[4].is_err());
-        assert!(results[5].is_err());
+        assert_eq!(
+            BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![0, 2, 3],),
+            vec![
+                Ok(()),
+                Err(TransactionError::BlockhashNotFound),
+                Ok(()),
+                Ok(()),
+                Err(TransactionError::BlockhashNotFound),
+                Err(TransactionError::BlockhashNotFound),
+            ]
+        );
     }
 
     #[test]
@@ -1392,10 +1408,10 @@ mod tests {
                 &vec![
                     Err(TransactionError::BlockhashNotFound),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(vec![]),
+                    Ok(()),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(vec![]),
-                    Ok(vec![])
+                    Ok(()),
+                    Ok(())
                 ],
                 &vec![2, 4, 5, 9, 11, 13]
             ),
@@ -1405,12 +1421,12 @@ mod tests {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
                 &vec![
-                    Ok(vec![]),
+                    Ok(()),
                     Err(TransactionError::BlockhashNotFound),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(vec![]),
-                    Ok(vec![]),
-                    Ok(vec![])
+                    Ok(()),
+                    Ok(()),
+                    Ok(())
                 ],
                 &vec![1, 6, 7, 9, 31, 43]
             ),

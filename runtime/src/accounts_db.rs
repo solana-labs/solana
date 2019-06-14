@@ -35,7 +35,7 @@ use std::fmt;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::io::{BufReader, Cursor, Error, ErrorKind, Read};
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use sys_info;
 
@@ -499,10 +499,11 @@ impl AccountsDB {
                     data_len,
                 };
 
-                let mut lamports: u64 = account.lamports;
-                if new_balance.is_some() {
-                    lamports = new_balance.unwrap();
-                }
+                let lamports = if new_balance.is_some() {
+                    new_balance.unwrap()
+                } else {
+                    account.lamports
+                };
 
                 (meta, *account, lamports)
             })

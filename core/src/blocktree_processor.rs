@@ -5,6 +5,7 @@ use crate::leader_schedule_cache::LeaderScheduleCache;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
+use solana_runtime::accounts_db::CreditOnlyLocks;
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -32,21 +33,24 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)]) -> Result<()> {
+fn par_execute_entries(
+    bank: &Bank,
+    entries: &[(&Entry, LockedAccountsResults, Vec<Result<CreditOnlyLocks>>)],
+) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", entries.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             entries
                 .into_par_iter()
-                .map(|(e, locked_accounts)| {
+                .map(|(e, locked_accounts, credit_only_locks)| {
                     let results = bank.load_execute_and_commit_transactions(
                         &e.transactions,
                         locked_accounts,
+                        credit_only_locks.to_vec(),
                         MAX_RECENT_BLOCKHASHES,
                     );
                     let mut first_err = None;
                     for (r, tx) in results.iter().zip(e.transactions.iter()) {
-                        let r = r.clone().map(|_| ());
                         if let Err(ref e) = r {
                             if first_err.is_none() {
                                 first_err = Some(r.clone());
@@ -88,15 +92,14 @@ pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
         // else loop on processing the entry
         loop {
             // try to lock the accounts
-            let lock_results = bank.lock_accounts(&entry.transactions);
+            let (lock_results, credit_only_locks) = bank.lock_accounts(&entry.transactions);
 
-            let results: Vec<Result<()>> = lock_results.locked_accounts_results().iter().map(|res| res.clone().map(|_| ())).collect();
-            let first_lock_err = first_err(&results);
+            let first_lock_err = first_err(lock_results.locked_accounts_results());
 
             // if locking worked
             if first_lock_err.is_ok() {
                 // push the entry to the mt_group
-                mt_group.push((entry, lock_results));
+                mt_group.push((entry, lock_results, credit_only_locks));
                 // done with this entry
                 break;
             }
@@ -944,13 +947,13 @@ pub mod tests {
         // Check all accounts are unlocked
         let txs1 = &entry_1_to_mint.transactions[..];
         let txs2 = &entry_2_to_3_mint_to_1.transactions[..];
-        let locked_accounts1 = bank.lock_accounts(txs1);
+        let (locked_accounts1, _) = bank.lock_accounts(txs1);
         for result in locked_accounts1.locked_accounts_results() {
             assert!(result.is_ok());
         }
         // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
         drop(locked_accounts1);
-        let locked_accounts2 = bank.lock_accounts(txs2);
+        let (locked_accounts2, _) = bank.lock_accounts(txs2);
         for result in locked_accounts2.locked_accounts_results() {
             assert!(result.is_ok());
         }

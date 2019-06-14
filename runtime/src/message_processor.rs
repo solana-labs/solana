@@ -184,6 +184,7 @@ impl MessageProcessor {
         credits: &mut [&mut LamportCredit],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
+        assert_eq!(instruction.accounts.len(), program_accounts.len());
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard-coded programs not to clobber or allocate
         let pre_total: u128 = program_accounts
@@ -202,7 +203,13 @@ impl MessageProcessor {
                 program_accounts
                     .iter()
                     .enumerate()
-                    .map(|(i, program_account)| (i, program_account, message.is_debitable(i))),
+                    .map(|(i, program_account)| {
+                        (
+                            i,
+                            program_account,
+                            message.is_debitable(instruction.accounts[i] as usize),
+                        )
+                    }),
             )
         {
             verify_instruction(
