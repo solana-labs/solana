@@ -40,6 +40,10 @@ fi
 BENCH_FILE=bench_output.log
 BENCH_ARTIFACT=current_bench_results.log
 
+# Clear the C dependency files, if dependeny moves these files are not regenerated
+find target/debug/bpf -name '*.d' -delete
+find target/release/bpf -name '*.d' -delete
+
 # Ensure all dependencies are built
 _ cargo +$rust_nightly build --all --release
 

@@ -19,6 +19,10 @@ source scripts/ulimit-n.sh
 # Clear cached json keypair files
 rm -rf "$HOME/.config/solana"
 
+# Clear the C dependency files, if dependeny moves these files are not regenerated
+find target/debug/bpf -name '*.d' -delete
+find target/release/bpf -name '*.d' -delete
+
 # Clear the BPF sysroot files, they are not automatically rebuilt
 rm -rf target/xargo # Issue #3105
 
