@@ -94,6 +94,8 @@ impl FeeCalculator {
             }
         } else {
             me.lamports_per_signature = base_fee_calculator.target_lamports_per_signature;
+            me.min_lamports_per_signature = me.target_lamports_per_signature;
+            me.max_lamports_per_signature = me.target_lamports_per_signature;
         }
         debug!(
             "new_derived(): lamports_per_signature: {}",
@@ -150,6 +152,8 @@ mod tests {
         assert_eq!(f1.target_signatures_per_slot, 0);
         assert_eq!(f1.target_lamports_per_signature, 42);
         assert_eq!(f1.lamports_per_signature, 42);
+        assert_eq!(f1.min_lamports_per_signature, 42);
+        assert_eq!(f1.max_lamports_per_signature, 42);
     }
 
     #[test]
