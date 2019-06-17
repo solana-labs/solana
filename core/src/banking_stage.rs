@@ -439,7 +439,7 @@ impl BankingStage {
         let (mut loaded_accounts, results, mut retryable_txs) = bank.load_and_execute_transactions(
             txs,
             lock_results,
-            credit_only_locks,
+            &credit_only_locks,
             MAX_PROCESSING_AGE,
         );
         let load_execute_time = now.elapsed();
@@ -459,7 +459,7 @@ impl BankingStage {
 
         let commit_time = {
             let now = Instant::now();
-            bank.commit_transactions(txs, &mut loaded_accounts, &results);
+            bank.commit_transactions(txs, &mut loaded_accounts, credit_only_locks, &results);
             now.elapsed()
         };
 

@@ -779,16 +779,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         results: Vec<Result<()>>,
-        credit_only_locks: Vec<Result<CreditOnlyLocks>>,
+        credit_only_locks: &[Result<CreditOnlyLocks>],
         error_counters: &mut ErrorCounters,
-    ) -> Vec<
-        Result<(
-            InstructionAccounts,
-            InstructionLoaders,
-            InstructionCredits,
-            CreditOnlyLocks,
-        )>,
-    > {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
@@ -945,17 +938,10 @@ impl Bank {
         &self,
         txs: &[Transaction],
         lock_results: &LockedAccountsResults,
-        credit_only_locks: Vec<Result<CreditOnlyLocks>>,
+        credit_only_locks: &[Result<CreditOnlyLocks>],
         max_age: usize,
     ) -> (
-        Vec<
-            Result<(
-                InstructionAccounts,
-                InstructionLoaders,
-                InstructionCredits,
-                CreditOnlyLocks,
-            )>,
-        >,
+        Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
         Vec<Result<()>>,
         Vec<usize>,
     ) {
@@ -991,7 +977,7 @@ impl Bank {
             .zip(txs.iter())
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders, ref mut credits, _)) => {
+                Ok((ref mut accounts, ref mut loaders, ref mut credits)) => {
                     signature_count += tx.message().header.num_required_signatures as usize;
                     self.message_processor
                         .process_message(tx.message(), loaders, accounts, credits)
@@ -1086,8 +1072,8 @@ impl Bank {
             InstructionAccounts,
             InstructionLoaders,
             InstructionCredits,
-            CreditOnlyLocks,
         )>],
+        credit_only_locks: Vec<Result<CreditOnlyLocks>>,
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
@@ -1101,9 +1087,13 @@ impl Bank {
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let now = Instant::now();
-        self.rc
-            .accounts
-            .store_accounts(self.slot(), txs, executed, loaded_accounts);
+        self.rc.accounts.store_accounts(
+            self.slot(),
+            txs,
+            executed,
+            loaded_accounts,
+            credit_only_locks,
+        );
 
         self.update_cached_accounts(txs, executed, loaded_accounts);
 
@@ -1128,9 +1118,9 @@ impl Bank {
         max_age: usize,
     ) -> Vec<Result<()>> {
         let (mut loaded_accounts, executed, _) =
-            self.load_and_execute_transactions(txs, lock_results, credit_only_locks, max_age);
+            self.load_and_execute_transactions(txs, lock_results, &credit_only_locks, max_age);
 
-        self.commit_transactions(txs, &mut loaded_accounts, &executed)
+        self.commit_transactions(txs, &mut loaded_accounts, credit_only_locks, &executed)
     }
 
     #[must_use]
@@ -1331,12 +1321,7 @@ impl Bank {
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(
-            InstructionAccounts,
-            InstructionLoaders,
-            InstructionCredits,
-            CreditOnlyLocks,
-        )>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {

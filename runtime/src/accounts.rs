@@ -265,24 +265,17 @@ impl Accounts {
         ancestors: &HashMap<Fork, usize>,
         txs: &[Transaction],
         lock_results: Vec<Result<()>>,
-        credit_only_locks: Vec<Result<CreditOnlyLocks>>,
+        credit_only_locks: &[Result<CreditOnlyLocks>],
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<
-        Result<(
-            InstructionAccounts,
-            InstructionLoaders,
-            InstructionCredits,
-            CreditOnlyLocks,
-        )>,
-    > {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
-            .zip(credit_only_locks.into_iter())
+            .zip(credit_only_locks.iter())
             .map(|etx| match etx {
                 ((tx, Ok(())), Ok(credit_only_locks)) => {
                     let fee_calculator = hash_queue
@@ -294,7 +287,7 @@ impl Accounts {
                         &storage,
                         ancestors,
                         &accounts_index,
-                        &credit_only_locks,
+                        credit_only_locks,
                         tx,
                         fee,
                         error_counters,
@@ -306,10 +299,10 @@ impl Accounts {
                         tx,
                         error_counters,
                     )?;
-                    Ok((accounts, loaders, credits, credit_only_locks))
+                    Ok((accounts, loaders, credits))
                 }
                 ((_, Err(e)), _) => Err(e),
-                ((_, Ok(())), Err(e)) => Err(e),
+                ((_, Ok(())), Err(e)) => Err(e.clone()),
             })
             .collect()
     }
@@ -383,11 +376,10 @@ impl Accounts {
         }
         let mut lock_cache: CreditOnlyLocks = vec![];
         for k in credit_only_keys {
-            if !credit_only_locks.contains_key(k) {
-                credit_only_locks.insert(*k, Arc::new(AtomicU64::new(0)));
-            }
-            let lock = credit_only_locks.get(k).unwrap().clone();
-            lock_cache.push(lock);
+            let lock = credit_only_locks
+                .entry(*k)
+                .or_insert_with(|| Arc::new(AtomicU64::new(0)));
+            lock_cache.push(lock.clone());
         }
 
         Ok(lock_cache)
@@ -506,14 +498,10 @@ impl Accounts {
         fork: Fork,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &mut [Result<(
-            InstructionAccounts,
-            InstructionLoaders,
-            InstructionCredits,
-            CreditOnlyLocks,
-        )>],
+        loaded: &mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+        credit_only_locks: Vec<Result<CreditOnlyLocks>>,
     ) {
-        let accounts = collect_accounts(txs, res, loaded);
+        let accounts = collect_accounts(txs, res, loaded, credit_only_locks);
         // Filter out unchanged credit-only accounts and those referenced by other threads
         let mut accounts_to_store: HashMap<&Pubkey, (&Account, Option<u64>)> = HashMap::new();
 
@@ -576,21 +564,18 @@ impl Accounts {
 fn collect_accounts<'a>(
     txs: &'a [Transaction],
     res: &'a [Result<()>],
-    loaded: &'a mut [Result<(
-        InstructionAccounts,
-        InstructionLoaders,
-        InstructionCredits,
-        CreditOnlyLocks,
-    )>],
+    loaded: &'a mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+    credit_only_locks: Vec<Result<CreditOnlyLocks>>,
 ) -> HashMap<&'a Pubkey, (&'a Account, bool, bool)> {
     let mut accounts: HashMap<&Pubkey, (&Account, bool, bool)> = HashMap::new();
-    for (i, raccs) in loaded.iter_mut().enumerate() {
+    for ((i, raccs), locks) in loaded.iter_mut().enumerate().zip(credit_only_locks) {
         if res[i].is_err() || raccs.is_err() {
             continue;
         }
 
         let message = &txs[i].message();
         let acc = raccs.as_mut().unwrap();
+        let mut locks = locks.unwrap();
         for (((i, key), account), credit) in message
             .account_keys
             .iter()
@@ -611,13 +596,13 @@ fn collect_accounts<'a>(
                         .iter()
                         .position(|k| k == &key)
                         .unwrap();
-                    acc.3[index].fetch_add(*credit, Ordering::Relaxed);
+                    locks[index].fetch_add(*credit, Ordering::Relaxed);
                 }
             }
         }
 
         // Drop CreditOnlyLocks to decrement ref count
-        acc.3.clear();
+        locks.clear();
     }
     accounts
 }
@@ -643,14 +628,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<
-        Result<(
-            InstructionAccounts,
-            InstructionLoaders,
-            InstructionCredits,
-            CreditOnlyLocks,
-        )>,
-    > {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(None);
@@ -667,7 +645,7 @@ mod tests {
             &ancestors,
             &[tx],
             vec![Ok(())],
-            vec![Ok(credit_only_locks)],
+            &vec![Ok(credit_only_locks)],
             &hash_queue,
             error_counters,
         );
@@ -678,14 +656,7 @@ mod tests {
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<
-        Result<(
-            InstructionAccounts,
-            InstructionLoaders,
-            InstructionCredits,
-            CreditOnlyLocks,
-        )>,
-    > {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
@@ -867,19 +838,13 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((
-                instruction_accounts,
-                instruction_loaders,
-                instruction_credits,
-                credit_only_locks,
-            )) => {
+            Ok((instruction_accounts, instruction_loaders, instruction_credits)) => {
                 assert_eq!(instruction_accounts.len(), 2);
                 assert_eq!(instruction_accounts[0], accounts[0].1);
                 assert_eq!(instruction_loaders.len(), 1);
                 assert_eq!(instruction_loaders[0].len(), 0);
                 assert_eq!(instruction_credits.len(), 2);
                 assert_eq!(instruction_credits, &vec![0, 0]);
-                assert_eq!(credit_only_locks.len(), 0); // No loaders means no credit_only_locks
             }
             Err(e) => Err(e).unwrap(),
         }
@@ -1068,12 +1033,7 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((
-                instruction_accounts,
-                instruction_loaders,
-                instruction_credits,
-                credit_only_locks,
-            )) => {
+            Ok((instruction_accounts, instruction_loaders, instruction_credits)) => {
                 assert_eq!(instruction_accounts.len(), 1);
                 assert_eq!(instruction_accounts[0], accounts[0].1);
                 assert_eq!(instruction_loaders.len(), 2);
@@ -1081,7 +1041,6 @@ mod tests {
                 assert_eq!(instruction_loaders[1].len(), 2);
                 assert_eq!(instruction_credits.len(), 1);
                 assert_eq!(instruction_credits, &vec![0]);
-                assert_eq!(credit_only_locks.len(), 3);
                 for loaders in instruction_loaders.iter() {
                     for (i, accounts_subset) in loaders.iter().enumerate() {
                         // +1 to skip first not loader account
@@ -1312,12 +1271,10 @@ mod tests {
         let instruction_accounts0 = vec![account0, account2.clone()];
         let instruction_loaders0 = vec![];
         let instruction_credits0 = vec![0, 2];
-        let credit_only_lock = vec![Arc::new(AtomicU64::new(0))];
         let loaded0 = Ok((
             instruction_accounts0,
             instruction_loaders0,
             instruction_credits0,
-            credit_only_lock.clone(),
         ));
 
         let instruction_accounts1 = vec![account1, account2.clone()];
@@ -1327,12 +1284,13 @@ mod tests {
             instruction_accounts1,
             instruction_loaders1,
             instruction_credits1,
-            credit_only_lock.clone(),
         ));
 
         let mut loaded = vec![loaded0, loaded1];
+        let lock = Arc::new(AtomicU64::new(0));
+        let credit_only_locks = vec![Ok(vec![lock.clone()]), Ok(vec![lock.clone()])];
 
-        let accounts = collect_accounts(&txs, &loaders, &mut loaded);
+        let accounts = collect_accounts(&txs, &loaders, &mut loaded, credit_only_locks);
         assert_eq!(accounts.len(), 3);
         assert!(accounts.contains_key(&keypair0.pubkey()));
         assert!(accounts.contains_key(&keypair1.pubkey()));
@@ -1349,6 +1307,6 @@ mod tests {
         assert_eq!(credit_only_account.1, false);
         assert_eq!(credit_only_account.2, true);
         // Ensure credit_only_lock reflects credits from both accounts: 2 + 3 = 5
-        assert_eq!(credit_only_lock[0].load(Ordering::Relaxed), 5);
+        assert_eq!(lock.load(Ordering::Relaxed), 5);
     }
 }
