@@ -23,4 +23,4 @@ solana-vote-api = { path = "../programs/vote_api", version = "0.16.0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.16.0" }
 
 [features]
-cuda = []
+cuda = ["solana/cuda"]
