@@ -1,11 +1,13 @@
 //! @brief Example Rust-based BPF program that prints out the parameters passed to it
 
-#![cfg(not(test))]
 #![no_std]
+#![allow(unreachable_code)]
 
-mod solana_sdk;
+extern crate solana_sdk_bpf_utils;
 
-use solana_sdk::*;
+use solana_sdk_bpf_utils::entrypoint;
+use solana_sdk_bpf_utils::entrypoint::*;
+use solana_sdk_bpf_utils::log::*;
 
 struct SStruct {
     x: u64,
@@ -18,7 +20,12 @@ fn return_sstruct() -> SStruct {
     SStruct { x: 1, y: 2, z: 3 }
 }
 
-fn process(ka: &mut [SolKeyedAccount], data: &[u8], info: &SolClusterInfo) -> bool {
+entrypoint!(process_instruction);
+fn process_instruction(
+    ka: &mut [Option<SolKeyedAccount>; MAX_ACCOUNTS],
+    info: &SolClusterInfo,
+    data: &[u8],
+) -> bool {
     sol_log("Program identifier:");
     sol_log_key(&info.program_id);
 
@@ -29,22 +36,26 @@ fn process(ka: &mut [SolKeyedAccount], data: &[u8], info: &SolClusterInfo) -> bo
     sol_log_params(ka, data);
 
     {
+        // Test - arch config
+        #[cfg(not(target_arch = "bpf"))]
+        panic!();
+    }
+
+    {
         // Test - use core methods, unwrap
 
         // valid bytes, in a stack-allocated array
         let sparkle_heart = [240, 159, 146, 150];
-
         let result_str = core::str::from_utf8(&sparkle_heart).unwrap();
-
-        sol_log_64(0, 0, 0, 0, result_str.len() as u64);
-        sol_log(result_str);
+        assert_eq!(4, result_str.len());
         assert_eq!("💖", result_str);
+        sol_log(result_str);
     }
 
     {
         // Test - struct return
+
         let s = return_sstruct();
-        sol_log_64(0, 0, s.x, s.y, s.z);
         assert_eq!(s.x + s.y + s.z, 6);
     }
 

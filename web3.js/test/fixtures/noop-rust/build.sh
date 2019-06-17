@@ -3,5 +3,5 @@ set -ex
 
 cd "$(dirname "$0")"
 
-../../../examples/bpf-rust-noop/build.sh
+../../../bpf-sdk/rust/build.sh ../../../examples/bpf-rust-noop
 cp ../../../examples/bpf-rust-noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so .
