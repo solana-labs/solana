@@ -120,7 +120,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:c:Fn:x:s:" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rD:c:Fn:i:x:s:" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -204,6 +204,9 @@ while getopts "h?T:t:o:f:rD:c:Fn:x:s:" opt "${shortArgs[@]}"; do
     ;;
   s)
     stakeNodesInGenesisBlock=$OPTARG
+    ;;
+  i)
+    nodeAddress=$OPTARG
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -683,6 +686,12 @@ sanity)
   ;;
 stop)
   stop
+  ;;
+stopnode)
+  stopNode "$nodeAddress" true
+  ;;
+startnode)
+  startNode "$nodeAddress" validator
   ;;
 logs)
   fetchRemoteLog() {

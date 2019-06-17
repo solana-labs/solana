@@ -113,7 +113,11 @@ impl Serialize for AccountStorage {
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        let mut len: usize = 0;
+        for storage in self.0.values() {
+            len += storage.len();
+        }
+        let mut map = serializer.serialize_map(Some(len))?;
         for fork_storage in self.0.values() {
             for (storage_id, account_storage_entry) in fork_storage {
                 map.serialize_entry(storage_id, &**account_storage_entry)?;
@@ -323,7 +327,7 @@ impl AccountsDB {
             .map_err(|_| AccountsDB::get_io_error("accounts index deserialize error"))?;
         let storage: AccountStorage = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("storage deserialize error"))?;
-        let version: usize = deserialize_from(&mut stream)
+        let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
         let mut ids: Vec<usize> = storage
@@ -336,7 +340,6 @@ impl AccountsDB {
 
         {
             let mut index = self.accounts_index.write().unwrap();
-            index.account_maps.extend(accounts_index.account_maps);
             let union = index.roots.union(&accounts_index.roots);
             index.roots = union.cloned().collect();
             index.last_root = accounts_index.last_root;
@@ -345,7 +348,8 @@ impl AccountsDB {
         }
         self.next_id
             .store(ids[ids.len() - 1] + 1, Ordering::Relaxed);
-        self.write_version.store(version, Ordering::Relaxed);
+        self.write_version
+            .fetch_add(version as usize, Ordering::Relaxed);
         self.generate_index();
         Ok(())
     }
@@ -662,18 +666,17 @@ impl Serialize for AccountsDB {
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        let len = serialized_size(&self.accounts_index).unwrap()
-            + serialized_size(&self.storage).unwrap()
-            + std::mem::size_of::<usize>() as u64;
+        let accounts_index = self.accounts_index.read().unwrap();
+        let storage = self.storage.read().unwrap();
+        let len = serialized_size(&*accounts_index).unwrap()
+            + serialized_size(&*storage).unwrap()
+            + std::mem::size_of::<u64>() as u64;
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
-        serialize_into(&mut wr, &self.accounts_index).map_err(Error::custom)?;
-        serialize_into(&mut wr, &self.storage).map_err(Error::custom)?;
-        serialize_into(
-            &mut wr,
-            &(self.write_version.load(Ordering::Relaxed) as u64),
-        )
-        .map_err(Error::custom)?;
+        let version: u64 = self.write_version.load(Ordering::Relaxed) as u64;
+        serialize_into(&mut wr, &*accounts_index).map_err(Error::custom)?;
+        serialize_into(&mut wr, &*storage).map_err(Error::custom)?;
+        serialize_into(&mut wr, &version).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
     }
@@ -1243,6 +1246,10 @@ mod tests {
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(&paths.paths);
         assert!(daccounts.update_from_stream(&mut reader).is_ok());
+        assert_eq!(
+            daccounts.write_version.load(Ordering::Relaxed),
+            accounts.write_version.load(Ordering::Relaxed)
+        );
         check_accounts(&daccounts, &pubkeys, 0, 100, 2);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
     }
