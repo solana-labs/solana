@@ -55,6 +55,7 @@ if [[ ! -f llvm-native-$machine-$version.md ]]; then
 
     set -ex
     rm -rf llvm-native*
+    rm -rf xargo
     mkdir -p llvm-native
     cd llvm-native
 
@@ -81,6 +82,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
     set -ex
     rm -rf rust-bpf
     rm -rf rust-bpf-$machine-*
+    rm -rf xargo
     mkdir -p rust-bpf
     pushd rust-bpf
 
@@ -113,6 +115,7 @@ if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
     set -ex
     rm -rf rust-bpf-sysroot*
+    rm -rf xargo
     cmd="git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git"
     $cmd
 
