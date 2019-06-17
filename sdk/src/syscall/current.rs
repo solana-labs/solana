@@ -32,8 +32,17 @@ impl Current {
     }
 }
 
-pub fn create_account(lamports: u64) -> Account {
-    Account::new(lamports, Current::size_of(), &syscall::id())
+pub fn create_account(lamports: u64, slot: u64, epoch: u64, stakers_epoch: u64) -> Account {
+    Account::new_data(
+        lamports,
+        &Current {
+            slot,
+            epoch,
+            stakers_epoch,
+        },
+        &syscall::id(),
+    )
+    .unwrap()
 }
 
 #[cfg(test)]
@@ -42,7 +51,7 @@ mod tests {
 
     #[test]
     fn test_create_account() {
-        let account = create_account(1);
+        let account = create_account(1, 0, 0, 0);
         let current = Current::from(&account).unwrap();
         assert_eq!(current, Current::default());
     }

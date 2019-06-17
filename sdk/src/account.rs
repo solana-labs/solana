@@ -46,6 +46,20 @@ impl Account {
         }
     }
 
+    pub fn new_data<T: serde::Serialize>(
+        lamports: u64,
+        state: &T,
+        owner: &Pubkey,
+    ) -> Result<Account, bincode::Error> {
+        let data = bincode::serialize(state)?;
+        Ok(Account {
+            lamports,
+            data,
+            owner: *owner,
+            executable: false,
+        })
+    }
+
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
         bincode::deserialize(&self.data)
     }
