@@ -11,7 +11,6 @@ fi
 
 pushd "$(dirname "$0")"
 bpf_sdk="$PWD/.."
-export XARGO_HOME="$bpf_sdk/dependencies/xargo"
 popd
 
 cd "$1"
@@ -38,6 +37,7 @@ export RUSTFLAGS="
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
     -C linker=$bpf_sdk/dependencies/llvm-native/bin/ld.lld"
+export XARGO_HOME="$bpf_sdk/dependencies/xargo"
 export XARGO_RUST_SRC="$bpf_sdk/dependencies/rust-bpf-sysroot/src"
 xargo build --target bpfel-unknown-unknown --release -v
 
