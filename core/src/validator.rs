@@ -82,11 +82,12 @@ impl Validator {
         entrypoint_info_option: Option<&ContactInfo>,
         config: &ValidatorConfig,
     ) -> Self {
-        info!("creating bank...");
+        warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
 
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
+        info!("creating bank...");
         let (
             bank_forks,
             bank_forks_info,
