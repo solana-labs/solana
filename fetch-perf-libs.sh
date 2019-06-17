@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
+
+PERF_LIBS_VERSION=v0.13.2
+
 set -e
 cd "$(dirname "$0")"
 
-if [[ ! -d target/perf-libs ]]; then
+if [[ ! -f target/perf-libs/.$PERF_LIBS_VERSION ]]; then
   if [[ $(uname) != Linux ]]; then
     echo Performance libraries are only available for Linux
     exit 1
@@ -17,7 +20,8 @@ if [[ ! -d target/perf-libs ]]; then
   (
     set -x
     cd target/perf-libs
-    curl https://solana-perf.s3.amazonaws.com/v0.13.2/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
+    curl https://solana-perf.s3.amazonaws.com/$PERF_LIBS_VERSION/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
+    touch .$PERF_LIBS_VERSION
   )
 fi
 
