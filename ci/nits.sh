@@ -23,7 +23,7 @@ declare print_free_tree=(
   'metrics/src'
   'netutil/src'
   'runtime/src'
-  'sdk/bpf/rust-utils'
+  'sdk/bpf/rust/rust-utils'
   'sdk/src'
   'programs/bpf/rust'
   'programs/stake_api/src'
