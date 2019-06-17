@@ -6,16 +6,11 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::syscall;
 use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
-    /// Initialize the stake account as a Stake account.
-    ///
-    /// Expects 1 Accounts:
-    ///    0 - StakeAccount to be initialized
-    InitializeStake,
-
     // Initialize the stake account as a MiningPool account
     ///
     /// Expects 1 Accounts:
@@ -25,7 +20,7 @@ pub enum StakeInstruction {
     /// `Delegate` a stake to a particular node
     ///
     /// Expects 2 Accounts:
-    ///    0 - Delegate StakeAccount to be updated <= must have this signature
+    ///    0 - Uninitialized StakeAccount to be delegated <= must have this signature
     ///    1 - VoteAccount to which this Stake will be delegated
     ///
     /// The u64 is the portion of the Stake account balance to be activated,
@@ -48,20 +43,13 @@ pub fn create_stake_account(
     staker_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
-    vec![
-        system_instruction::create_account(
-            from_pubkey,
-            staker_pubkey,
-            lamports,
-            std::mem::size_of::<StakeState>() as u64,
-            &id(),
-        ),
-        Instruction::new(
-            id(),
-            &StakeInstruction::InitializeStake,
-            vec![AccountMeta::new(*staker_pubkey, false)],
-        ),
-    ]
+    vec![system_instruction::create_account(
+        from_pubkey,
+        staker_pubkey,
+        lamports,
+        std::mem::size_of::<StakeState>() as u64,
+        &id(),
+    )]
 }
 
 pub fn create_stake_account_and_delegate_stake(
@@ -113,8 +101,14 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
         AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
+}
+
+fn current(current_account: &KeyedAccount) -> Result<syscall::current::Current, InstructionError> {
+    syscall::current::Current::from(current_account.account)
+        .ok_or(InstructionError::InvalidArgument)
 }
 
 pub fn process_instruction(
@@ -142,18 +136,13 @@ pub fn process_instruction(
             }
             me.initialize_mining_pool()
         }
-        StakeInstruction::InitializeStake => {
-            if !rest.is_empty() {
-                Err(InstructionError::InvalidInstructionData)?;
-            }
-            me.initialize_stake()
-        }
         StakeInstruction::DelegateStake(stake) => {
-            if rest.len() != 1 {
+            if rest.len() != 2 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             let vote = &rest[0];
-            me.delegate_stake(vote, stake)
+
+            me.delegate_stake(vote, stake, &current(&rest[1])?)
         }
         StakeInstruction::RedeemVoteCredits => {
             if rest.len() != 2 {
@@ -175,10 +164,18 @@ mod tests {
     use solana_sdk::account::Account;
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
-        let mut accounts = vec![];
-        for _ in 0..instruction.accounts.len() {
-            accounts.push(Account::default());
-        }
+        let mut accounts: Vec<_> = instruction
+            .accounts
+            .iter()
+            .map(|meta| {
+                if syscall::current::check_id(&meta.pubkey) {
+                    syscall::current::create_account(1, 0, 0, 0)
+                } else {
+                    Account::default()
+                }
+            })
+            .collect();
+
         {
             let mut keyed_accounts: Vec<_> = instruction
                 .accounts
@@ -250,13 +247,18 @@ mod tests {
             Err(InstructionError::InvalidInstructionData),
         );
 
-        // gets the check in delegate_stake
+        // gets the check non-deserialize-able account in delegate_stake
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
                     KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(
+                        &syscall::current::id(),
+                        false,
+                        &mut syscall::current::create_account(1, 0, 0, 0)
+                    ),
                 ],
                 &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),
             ),
