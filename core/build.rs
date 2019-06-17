@@ -5,17 +5,17 @@ use std::path::Path;
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
-    let perf_libs_dir = {
-        let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        let mut path = Path::new(&manifest_dir);
-        path = path.parent().unwrap();
-        path.join(Path::new("target/perf-libs"))
-    };
-    let perf_libs_dir = perf_libs_dir.to_str().unwrap();
+    if env::var("CARGO_FEATURE_CUDA").is_ok() {
+        println!("cargo:rustc-cfg=cuda");
 
-    let cuda = !env::var("CARGO_FEATURE_CUDA").is_err();
+        let perf_libs_dir = {
+            let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+            let mut path = Path::new(&manifest_dir);
+            path = path.parent().unwrap();
+            path.join(Path::new("target/perf-libs"))
+        };
+        let perf_libs_dir = perf_libs_dir.to_str().unwrap();
 
-    if cuda {
         // Ensure `perf_libs_dir` exists.  It's been observed that
         // a cargo:rerun-if-changed= directive with a non-existent
         // directory triggers a rebuild on every |cargo build| invocation
@@ -24,18 +24,15 @@ fn main() {
                 panic!("Unable to create {}: {:?}", perf_libs_dir, err);
             }
         });
-
         println!("cargo:rerun-if-changed={}", perf_libs_dir);
         println!("cargo:rustc-link-search=native={}", perf_libs_dir);
-    }
-    if cuda {
+        println!("cargo:rerun-if-changed={}/libcuda-crypt.a", perf_libs_dir);
+        println!("cargo:rustc-link-lib=static=cuda-crypt");
+
         let cuda_home = match env::var("CUDA_HOME") {
             Ok(cuda_home) => cuda_home,
             Err(_) => String::from("/usr/local/cuda"),
         };
-
-        println!("cargo:rerun-if-changed={}/libcuda-crypt.a", perf_libs_dir);
-        println!("cargo:rustc-link-lib=static=cuda-crypt");
         println!("cargo:rustc-link-search=native={}/lib64", cuda_home);
         println!("cargo:rustc-link-lib=dylib=cudart");
         println!("cargo:rustc-link-lib=dylib=cuda");
