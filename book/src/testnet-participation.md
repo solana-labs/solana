@@ -42,6 +42,13 @@ For a performance testnet with many transactions we have some preliminary recomm
 | Accounts Drive(s) | None | Samsung 970 Pro 1TB | 2x Samsung 970 Pro 1TB | |
 | GPU | 4x Nvidia 1070 or 2x Nvidia 1080 Ti or 2x Nvidia 2070 | 2x Nvidia 2080 Ti | 4x Nvidia 2080 Ti | Any number of cuda-capable GPUs are supported on Linux platforms. |
 
+#### GPU Requirements
+CUDA is required to make use of the GPU on your system.  The provided Solana
+release binaries are built on Ubuntu 18.04 with <a
+href="https://developer.nvidia.com/cuda-toolkit-archive">CUDA Toolkit 10.1
+update 1"</a>.  If your machine is using a different CUDA version then you will
+need to rebuild from source.
+
 #### Confirm The Testnet Is Reachable
 Before attaching a validator node, sanity check that the cluster is accessible
 to your machine by running some simple commands.  If any of the commands fail,
@@ -115,6 +122,12 @@ $ ./scripts/cargo-install-all.sh .
 $ export PATH=$PWD/bin:$PATH
 ```
 
+If building for CUDA, include the `cuda` feature flag as well:
+```bash
+$ ./scripts/cargo-install-all.sh . cuda
+$ export PATH=$PWD/bin:$PATH
+```
+
 ### Starting The Validator
 Sanity check that you are able to interact with the cluster by receiving a small
 airdrop of lamports from the testnet drone:
@@ -155,6 +168,17 @@ If you built from source:
 $ USE_INSTALL=1 ./multinode-demo/clear-config.sh
 $ USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
+
+#### Enabling CUDA
+By default CUDA is disabled.  If your machine has a GPU with CUDA installed,
+define the SOLANA_CUDA flag in your environment *before* running any of the
+previusly mentioned commands
+```bash
+$ export SOLANA_CUDA=1
+```
+
+When your validator is started look for the following log message to indicate that CUDA is enabled:
+`"[<timestamp> solana::validator] CUDA is enabled"`
 
 #### Controlling local network port allocation
 By default the validator will dynamically select available network ports in the
