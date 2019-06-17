@@ -36,7 +36,7 @@ else
     declare features="--features="
     if [[ "$program" =~ ^(.*)-cuda$ ]]; then
       program=${BASH_REMATCH[1]}
-      features+="cuda,"
+      features+="cuda"
     fi
     if [[ -r "$SOLANA_ROOT/$program"/Cargo.toml ]]; then
       maybe_package="--package solana-$program"
