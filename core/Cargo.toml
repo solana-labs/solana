@@ -58,6 +58,7 @@ solana-logger = { path = "../logger", version = "0.17.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "0.17.0" }
 solana-metrics = { path = "../metrics", version = "0.17.0" }
 solana-netutil = { path = "../netutil", version = "0.17.0" }
+solana-poh-sys = { path = "../poh-sys", version = "0.17.0" }
 solana-runtime = { path = "../runtime", version = "0.17.0" }
 solana-sdk = { path = "../sdk", version = "0.17.0" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.17.0" }

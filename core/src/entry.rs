@@ -12,6 +12,7 @@ use rayon::ThreadPool;
 use solana_budget_api::budget_instruction;
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::inc_new_counter_warn;
+use solana_poh_sys::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
@@ -235,9 +236,9 @@ pub trait EntrySlice {
     fn to_single_entry_shared_blobs(&self) -> Vec<SharedBlob>;
 }
 
-impl EntrySlice for [Entry] {
-    fn verify_cpu(&self, start_hash: &Hash) -> bool {
-        let now = Instant::now();
+#[cfg(not(feature = "cuda"))]
+fn verify_entries_scalar(entries: &[Entry], start_hash: &Hash) -> bool {
+    let now = Instant::now();
         let genesis = [Entry {
             num_hashes: 0,
             hash: *start_hash,
@@ -265,6 +266,121 @@ impl EntrySlice for [Entry] {
             timing::duration_as_ms(&now.elapsed()) as usize
         );
         res
+}
+
+#[cfg(not(feature = "cuda"))]
+fn verify_entries_simd(
+    entries: &[Entry],
+    start_hash: &Hash,
+    poh_verify_simd: unsafe extern "C" fn(*mut u8, *const u64) -> (),
+    num_per_simd: usize,
+) -> bool {
+    if entries.len() == 0 {
+        return true;
+    }
+
+    let genesis = [Entry {
+        num_hashes: 0,
+        hash: *start_hash,
+        transactions: vec![],
+    }];
+
+    let extra = num_per_simd - (entries.len() % num_per_simd);
+
+    let mut hashes: Vec<Hash> = genesis
+        .par_iter()
+        .chain(entries)
+        .map(|entry| entry.hash)
+        .take(entries.len())
+        .chain(vec![Hash::default(); extra])
+        .collect();
+
+    let num_hashes_vec: Vec<u64> = entries
+        .into_iter()
+        .map(|entry| entry.num_hashes.saturating_sub(1))
+        .chain(vec![0; extra])
+        .collect();
+
+    hashes
+        .par_chunks_mut(num_per_simd)
+        .zip(num_hashes_vec.par_chunks(num_per_simd))
+        .for_each(|(hashes, num_hashes_vec)| unsafe {
+            poh_verify_simd(hashes.as_mut_ptr() as *mut u8, num_hashes_vec.as_ptr());
+        });
+
+    // TODO: SIMD tx hashing may be possible
+    let tx_hashes: Vec<Option<Hash>> = entries
+        .into_par_iter()
+        .map(|entry| {
+            if entry.transactions.is_empty() {
+                None
+            } else {
+                Some(hash_transactions(&entry.transactions))
+            }
+        })
+        .collect();
+
+    hashes
+        .into_par_iter()
+        .zip(tx_hashes)
+        .zip(entries)
+        .take(entries.len())
+        .all(|((hash, tx_hash), answer)| {
+            if answer.num_hashes == 0 {
+                hash == answer.hash
+            } else {
+                let mut poh = Poh::new(hash, None);
+                if let Some(mixin) = tx_hash {
+                    poh.record(mixin).unwrap().hash == answer.hash
+                } else {
+                    poh.tick().unwrap().hash == answer.hash
+                }
+            }
+        })
+}
+
+impl EntrySlice for [Entry] {
+    fn verify_cpu(&self, start_hash: &Hash) -> bool {
+        let poh_verify_simd: unsafe extern "C" fn(*mut u8, *const u64) -> ();
+        let num_per_simd;
+
+        if let Ok(val) = std::env::var("SOLANA_SIMD") {
+            match &val[..] {
+                "avx2" => {
+                    poh_verify_simd = poh_verify_many_simd_avx2;
+                    num_per_simd = 8;
+                }
+                "avx" => {
+                    poh_verify_simd = poh_verify_many_simd_avx1;
+                    num_per_simd = 8;
+                }
+                "sse4" => {
+                    poh_verify_simd = poh_verify_many_simd_sse4;
+                    num_per_simd = 4;
+                }
+                "sse2" => {
+                    poh_verify_simd = poh_verify_many_simd_sse2;
+                    num_per_simd = 4;
+                }
+                "scalar" => return verify_entries_scalar(self, start_hash),
+                _ => panic!("Invalid SIMD option selected with SOLANA_SIMD"),
+            }
+        } else if is_x86_feature_detected!("avx2") {
+            poh_verify_simd = poh_verify_many_simd_avx2;
+            num_per_simd = 8;
+        } else if is_x86_feature_detected!("avx") {
+            poh_verify_simd = poh_verify_many_simd_avx1;
+            num_per_simd = 8;
+        } else if is_x86_feature_detected!("sse4.1") {
+            poh_verify_simd = poh_verify_many_simd_sse4;
+            num_per_simd = 4;
+        } else if is_x86_feature_detected!("sse2") {
+            poh_verify_simd = poh_verify_many_simd_sse2;
+            num_per_simd = 4;
+        } else {
+            return verify_entries_scalar(self, start_hash);
+        }
+        verify_entries_simd(self, start_hash, poh_verify_simd, num_per_simd)
     }
 
     #[cfg(not(feature = "cuda"))]
@@ -707,7 +823,7 @@ mod tests {
         assert!(ticks.verify(&one)); // inductive step
 
         let mut bad_ticks = vec![next_entry(&one, 1, vec![])];
-        bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![]));
+        bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 2, vec![]));
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&one)); // inductive step, bad
     }
@@ -734,7 +850,7 @@ mod tests {
         assert!(ticks.verify(&one)); // inductive step
 
         let mut bad_ticks = vec![next_entry(&one, 1, vec![tx0])];
-        bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
+        bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 2, vec![tx1]));
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&one)); // inductive step, bad
     }

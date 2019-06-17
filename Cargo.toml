@@ -18,6 +18,7 @@ members = [
     "merkle-tree",
     "metrics",
     "netutil",
+    "poh-sys",
     "programs/bpf",
     "programs/bpf_loader_api",
     "programs/bpf_loader_program",
