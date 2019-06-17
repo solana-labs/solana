@@ -42,12 +42,17 @@ missing() {
 [[ -n $skipSetup ]]     || missing skipSetup
 [[ -n $failOnValidatorBootupFailure ]] || missing failOnValidatorBootupFailure
 
+airdropsEnabled=true
+if [[ -n $stakeNodesInGenesisBlock ]]; then
+  airdropsEnabled=false
+fi
 cat > deployConfig <<EOF
 deployMethod="$deployMethod"
 entrypointIp="$entrypointIp"
 numNodes="$numNodes"
 failOnValidatorBootupFailure=$failOnValidatorBootupFailure
 genesisOptions="$genesisOptions"
+airdropsEnabled="$airdropsEnabled"
 EOF
 
 source net/common.sh
