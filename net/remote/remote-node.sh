@@ -141,7 +141,7 @@ local|tar)
       args+=($genesisOptions)
       ./multinode-demo/setup.sh "${args[@]}"
     fi
-    ./multinode-demo/drone.sh > drone.log 2>&1 &
+    [[ -n $stakeNodesInGenesisBlock ]] || ./multinode-demo/drone.sh > drone.log 2>&1 &
 
     args=(
       --enable-rpc-exit
@@ -201,7 +201,7 @@ local|tar)
       # a static IP/DNS name for hosting the blockexplorer web app, and is
       # a location that somebody would expect to be able to airdrop from
       scp "$entrypointIp":~/solana/config-local/mint-keypair.json config-local/
-      ./multinode-demo/drone.sh > drone.log 2>&1 &
+      [[ -n $stakeNodesInGenesisBlock ]] || ./multinode-demo/drone.sh > drone.log 2>&1 &
 
       export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
       npm install @solana/blockexplorer@1
