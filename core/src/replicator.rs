@@ -630,7 +630,7 @@ impl Replicator {
             start: start_slot,
             end: start_slot + SLOTS_PER_SEGMENT,
         };
-        // try for 60 seconds //TODO needs tuning if segments are huge
+        // try for upto 180 seconds //TODO needs tuning if segments are huge
         for _ in 0..120 {
             // Strategy used by replicators
             let repairs = RepairService::generate_repairs_in_range(
