@@ -122,7 +122,7 @@ fn test_proof_bounds() {
         Hash::default(),
     );
     // the proof is for segment 0, need to move the slot into segment 2
-    let mut current_account = current::create_account(1);
+    let mut current_account = current::create_account(1, 0, 0, 0);
     Current::to(
         &Current {
             slot: SLOTS_PER_SEGMENT * 2,
@@ -152,7 +152,7 @@ fn test_serialize_overflow() {
     let tick_pubkey = Pubkey::new_rand();
     let mut keyed_accounts = Vec::new();
     let mut user_account = Account::default();
-    let mut current_account = current::create_account(1);
+    let mut current_account = current::create_account(1, 0, 0, 0);
     keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
     keyed_accounts.push(KeyedAccount::new(&tick_pubkey, false, &mut current_account));
 
@@ -181,7 +181,7 @@ fn test_invalid_accounts_len() {
         Hash::default(),
     );
     // move tick height into segment 1
-    let mut current_account = current::create_account(1);
+    let mut current_account = current::create_account(1, 0, 0, 0);
     Current::to(
         &Current {
             slot: 16,
@@ -240,7 +240,7 @@ fn test_submit_mining_ok() {
         Hash::default(),
     );
     // move slot into segment 1
-    let mut current_account = current::create_account(1);
+    let mut current_account = current::create_account(1, 0, 0, 0);
     Current::to(
         &Current {
             slot: SLOTS_PER_SEGMENT,
