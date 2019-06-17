@@ -15,6 +15,7 @@ pub struct AccountsIndex<T> {
     pub roots: HashSet<Fork>,
 
     //This value that needs to be stored to recover the index from AppendVec
+    #[serde(skip)]
     pub last_root: Fork,
 }
 
