@@ -52,7 +52,7 @@ entrypointIp="$entrypointIp"
 numNodes="$numNodes"
 failOnValidatorBootupFailure=$failOnValidatorBootupFailure
 genesisOptions="$genesisOptions"
-airdropsEnabled="$airdropsEnabled"
+airdropsEnabled=$airdropsEnabled
 EOF
 
 source net/common.sh

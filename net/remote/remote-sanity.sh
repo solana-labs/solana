@@ -129,6 +129,9 @@ if [[ "$airdropsEnabled" = true ]]; then
     set -x
     scripts/wallet-sanity.sh --url http://"$sanityTargetIp":8899
   )
+else
+  echo "^^^ +++"
+  echo "Note: wallet sanity is disabled as airdrops are disabled"
 fi
 
 echo "--- $sanityTargetIp: verify ledger"
