@@ -32,7 +32,7 @@ use solana_sdk::inflation::Inflation;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::syscall::current::{self, Current};
+use solana_sdk::syscall::current;
 use solana_sdk::syscall::fees::{self, Fees};
 use solana_sdk::syscall::slot_hashes::{self, SlotHashes};
 use solana_sdk::syscall::tick_height::{self, TickHeight};
@@ -402,15 +402,15 @@ impl Bank {
     }
 
     fn update_current(&self) {
-        let mut account = current::create_account(1);
-        let current = Current {
-            slot: self.slot,
-            epoch: self.epoch_schedule.get_epoch(self.slot),
-            stakers_epoch: self.epoch_schedule.get_stakers_epoch(self.slot),
-        };
-        current.to(&mut account).unwrap();
-
-        self.store_account(&current::id(), &account);
+        self.store_account(
+            &current::id(),
+            &current::create_account(
+                1,
+                self.slot,
+                self.epoch_schedule.get_epoch(self.slot),
+                self.epoch_schedule.get_stakers_epoch(self.slot),
+            ),
+        );
     }
 
     fn update_slot_hashes(&self) {
