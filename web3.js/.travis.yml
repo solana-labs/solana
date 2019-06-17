@@ -33,7 +33,7 @@ script:
   - npm run lint
   - npm run codecov
   - make -C examples/bpf-c-noop/
-  - ./examples/bpf-rust-noop/build.sh
+  - bpf-sdk/rust/build.sh examples/bpf-rust-noop
   - npm run localnet:update
   - npm run localnet:up
   - npm run examples || true

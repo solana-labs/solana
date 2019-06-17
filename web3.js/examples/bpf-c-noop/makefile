@@ -1,1 +1,1 @@
-include ../../bpf-sdk/bpf.mk
+include ../../bpf-sdk/c/bpf.mk
