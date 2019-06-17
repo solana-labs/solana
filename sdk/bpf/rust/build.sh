@@ -9,9 +9,10 @@ if [ ! -f "$1/Cargo.toml" ]; then
     exit 1
 fi
 
-cd "$(dirname "$0")"
+pushd "$(dirname "$0")"
 bpf_sdk="$PWD/.."
-export XARGO_HOME="$PWD/../../../target/xargo"
+export XARGO_HOME="$bpf_sdk/dependencies/xargo"
+popd
 
 cd "$1"
 
