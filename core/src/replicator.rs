@@ -549,47 +549,51 @@ impl Replicator {
         previous_blockhash: &Hash,
     ) -> result::Result<(Hash, u64), Error> {
         for _ in 0..10 {
-            let rpc_client = {
+            let rpc_peers = {
                 let cluster_info = cluster_info.read().unwrap();
-                let rpc_peers = cluster_info.rpc_peers();
-                debug!("rpc peers: {:?}", rpc_peers);
-                let node_index = thread_rng().gen_range(0, rpc_peers.len());
-                RpcClient::new_socket(rpc_peers[node_index].rpc)
+                cluster_info.rpc_peers()
             };
-            let response = rpc_client
-                .retry_make_rpc_request(&RpcRequest::GetStorageBlockhash, None, 0)
-                .map_err(|err| {
-                    warn!("Error while making rpc request {:?}", err);
-                    Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
-                })?;
-            let storage_blockhash =
-                serde_json::from_value::<(String)>(response).map_err(|err| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Couldn't parse response: {:?}", err),
-                    )
-                })?;
-            let storage_blockhash = storage_blockhash.parse().map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "Blockhash parse failure: {:?} on {:?}",
-                        err, storage_blockhash
-                    ),
-                )
-            })?;
-            if storage_blockhash != *previous_blockhash {
-                let storage_slot = rpc_client
-                    .retry_make_rpc_request(&RpcRequest::GetStorageSlot, None, 0)
+            debug!("rpc peers: {:?}", rpc_peers);
+            if !rpc_peers.is_empty() {
+                let rpc_client = {
+                    let node_index = thread_rng().gen_range(0, rpc_peers.len());
+                    RpcClient::new_socket(rpc_peers[node_index].rpc)
+                };
+                let response = rpc_client
+                    .retry_make_rpc_request(&RpcRequest::GetStorageBlockhash, None, 0)
                     .map_err(|err| {
                         warn!("Error while making rpc request {:?}", err);
                         Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
-                    })?
-                    .as_u64()
-                    .unwrap();
-                info!("storage slot: {}", storage_slot);
-                if get_segment_from_slot(storage_slot) != 0 {
-                    return Ok((storage_blockhash, storage_slot));
+                    })?;
+                let storage_blockhash =
+                    serde_json::from_value::<(String)>(response).map_err(|err| {
+                        io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("Couldn't parse response: {:?}", err),
+                        )
+                    })?;
+                let storage_blockhash = storage_blockhash.parse().map_err(|err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "Blockhash parse failure: {:?} on {:?}",
+                            err, storage_blockhash
+                        ),
+                    )
+                })?;
+                if storage_blockhash != *previous_blockhash {
+                    let storage_slot = rpc_client
+                        .retry_make_rpc_request(&RpcRequest::GetStorageSlot, None, 0)
+                        .map_err(|err| {
+                            warn!("Error while making rpc request {:?}", err);
+                            Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
+                        })?
+                        .as_u64()
+                        .unwrap();
+                    info!("storage slot: {}", storage_slot);
+                    if get_segment_from_slot(storage_slot) != 0 {
+                        return Ok((storage_blockhash, storage_slot));
+                    }
                 }
             }
             info!("waiting for segment...");
