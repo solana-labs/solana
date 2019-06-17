@@ -350,7 +350,7 @@ impl StorageStage {
         Ok(())
     }
 
-    fn process_entry_crossing(
+    fn process_turn(
         storage_keypair: &Arc<Keypair>,
         state: &Arc<RwLock<StorageStateInner>>,
         _blocktree: &Arc<Blocktree>,
@@ -428,7 +428,7 @@ impl StorageStage {
         Ok(())
     }
 
-    fn process_replicator_storage(
+    fn collect_proofs(
         slot: u64,
         account_id: Pubkey,
         account: Account,
@@ -441,6 +441,7 @@ impl StorageStage {
             if let Some(proofs) = proofs.get(&segment) {
                 for proof in proofs.iter() {
                     {
+                        // TODO do this only once per account and segment? and maybe do it somewhere else
                         debug!(
                             "generating storage_keys from storage txs current_key_idx: {}",
                             *current_key_idx
@@ -453,11 +454,8 @@ impl StorageStage {
                     }
 
                     let mut statew = storage_state.write().unwrap();
-                    let max_segment_index = get_segment_from_slot(slot);
-                    if statew.replicator_map.len() < max_segment_index {
-                        statew
-                            .replicator_map
-                            .resize(max_segment_index, HashMap::new());
+                    if statew.replicator_map.len() < segment {
+                        statew.replicator_map.resize(segment, HashMap::new());
                     }
                     let proof_segment_index = proof.segment_index;
                     if proof_segment_index < statew.replicator_map.len() {
@@ -503,7 +501,7 @@ impl StorageStage {
                     // find proofs, and use them to update
                     // the storage_keys with their signatures
                     for (account_id, account) in replicator_accounts.into_iter() {
-                        Self::process_replicator_storage(
+                        Self::collect_proofs(
                             bank.slot(),
                             account_id,
                             account,
@@ -513,8 +511,7 @@ impl StorageStage {
                     }
 
                     // TODO un-ignore this result and be sure to drain all pending proofs
-                    //process a "crossing"
-                    let _ignored = Self::process_entry_crossing(
+                    let _ignored = Self::process_turn(
                         &storage_keypair,
                         &storage_state,
                         &blocktree,

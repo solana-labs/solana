@@ -437,7 +437,7 @@ impl Replicator {
             use rand_chacha::ChaChaRng;
 
             let mut rng_seed = [0u8; 32];
-            rng_seed.copy_from_slice(&self.signature.to_bytes()[0..32]);
+            rng_seed.copy_from_slice(&self.blockhash.as_ref());
             let mut rng = ChaChaRng::from_seed(rng_seed);
             for _ in 0..NUM_STORAGE_SAMPLES {
                 self.sampling_offsets
