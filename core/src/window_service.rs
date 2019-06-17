@@ -50,7 +50,7 @@ fn retransmit_blobs(blobs: &[SharedBlob], retransmit: &BlobSender, id: &Pubkey) 
 }
 
 /// Process a blob: Add blob to the ledger window.
-fn process_blobs(blobs: &[SharedBlob], blocktree: &Arc<Blocktree>) -> Result<()> {
+pub fn process_blobs(blobs: &[SharedBlob], blocktree: &Arc<Blocktree>) -> Result<()> {
     // make an iterator for insert_data_blobs()
     let blobs: Vec<_> = blobs.iter().map(move |blob| blob.read().unwrap()).collect();
 

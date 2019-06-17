@@ -195,7 +195,7 @@ impl RepairService {
     }
 
     // Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
-    fn generate_repairs_in_range(
+    pub fn generate_repairs_in_range(
         blocktree: &Blocktree,
         max_repairs: usize,
         repair_range: &RepairSlotRange,

@@ -815,32 +815,33 @@ impl ClusterInfo {
         }
         let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].gossip; // send the request to the peer's gossip port
-        let out = {
-            match repair_request {
-                RepairType::Blob(slot, blob_index) => {
-                    datapoint_debug!(
-                        "cluster_info-repair",
-                        ("repair-slot", *slot, i64),
-                        ("repair-ix", *blob_index, i64)
-                    );
-                    self.window_index_request_bytes(*slot, *blob_index)?
-                }
-                RepairType::HighestBlob(slot, blob_index) => {
-                    datapoint_debug!(
-                        "cluster_info-repair_highest",
-                        ("repair-highest-slot", *slot, i64),
-                        ("repair-highest-ix", *blob_index, i64)
-                    );
-                    self.window_highest_index_request_bytes(*slot, *blob_index)?
-                }
-                RepairType::Orphan(slot) => {
-                    datapoint_debug!("cluster_info-repair_orphan", ("repair-orphan", *slot, i64));
-                    self.orphan_bytes(*slot)?
-                }
-            }
-        };
+        let out = self.map_repair_request(repair_request)?;
 
         Ok((addr, out))
+    }
+    pub fn map_repair_request(&self, repair_request: &RepairType) -> Result<Vec<u8>> {
+        match repair_request {
+            RepairType::Blob(slot, blob_index) => {
+                datapoint_debug!(
+                    "cluster_info-repair",
+                    ("repair-slot", *slot, i64),
+                    ("repair-ix", *blob_index, i64)
+                );
+                Ok(self.window_index_request_bytes(*slot, *blob_index)?)
+            }
+            RepairType::HighestBlob(slot, blob_index) => {
+                datapoint_debug!(
+                    "cluster_info-repair_highest",
+                    ("repair-highest-slot", *slot, i64),
+                    ("repair-highest-ix", *blob_index, i64)
+                );
+                Ok(self.window_highest_index_request_bytes(*slot, *blob_index)?)
+            }
+            RepairType::Orphan(slot) => {
+                datapoint_debug!("cluster_info-repair_orphan", ("repair-orphan", *slot, i64));
+                Ok(self.orphan_bytes(*slot)?)
+            }
+        }
     }
     // If the network entrypoint hasn't been discovered yet, add it to the crds table
     fn add_entrypoint(&mut self, pulls: &mut Vec<(Pubkey, Bloom<Hash>, SocketAddr, CrdsValue)>) {
