@@ -1510,7 +1510,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Pubkey::new_rand();
 
-        let transactions = vec![system_transaction::transfer(
+        let transactions = vec![system_transaction::create_user_account(
             &mint_keypair,
             &pubkey,
             1,

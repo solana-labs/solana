@@ -743,10 +743,12 @@ impl Bank {
         }
     }
 
-    /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
+    /// Process a Transaction. This is used for unit tests and simply calls the vector
+    /// Bank::process_transactions method, and commits credit-only credits.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
         self.process_transactions(&txs)[0].clone()?;
+        self.commit_credits();
         tx.signatures
             .get(0)
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
@@ -1604,6 +1606,7 @@ mod tests {
         let t1 = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_block.hash());
         let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_block.hash());
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
+        bank.commit_credits();
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Err(TransactionError::AccountInUse));
@@ -1986,6 +1989,7 @@ mod tests {
         let tx2 = system_transaction::transfer(&payer1, &recipient, 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
+        bank.commit_credits();
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
         // since System Transfer `To` accounts are given credit-only handling
