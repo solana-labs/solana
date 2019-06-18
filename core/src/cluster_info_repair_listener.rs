@@ -4,8 +4,7 @@ use crate::crds_value::EpochSlots;
 use crate::result::Result;
 use crate::service::Service;
 use byteorder::{ByteOrder, LittleEndian};
-use rand::seq::SliceRandom;
-use rand::SeedableRng;
+use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_metrics::datapoint;
 use solana_runtime::epoch_schedule::EpochSchedule;
@@ -272,6 +271,8 @@ impl ClusterInfoRepairListener {
         let mut total_data_blobs_sent = 0;
         let mut total_coding_blobs_sent = 0;
         let mut num_slots_repaired = 0;
+        let mut rng = rand::thread_rng();
+
         let max_confirmed_repairee_epoch =
             epoch_schedule.get_stakers_epoch(repairee_epoch_slots.root);
         let max_confirmed_repairee_slot =
@@ -305,20 +306,38 @@ impl ClusterInfoRepairListener {
                         // a database iterator over the slots because by the time this node is
                         // sending the blobs in this slot for repair, we expect these slots
                         // to be full.
-                        if let Some(blob_data) = blocktree
-                            .get_data_blob_bytes(slot, blob_index as u64)
+
+                        if let Some(data_blob) = blocktree
+                            .get_data_blob(slot, blob_index as u64)
                             .expect("Failed to read data blob from blocktree")
                         {
-                            socket.send_to(&blob_data[..], repairee_tvu)?;
+                            socket.send_to(&data_blob.data[..], repairee_tvu)?;
                             total_data_blobs_sent += 1;
-                        }
 
-                        if let Some(coding_bytes) = blocktree
-                            .get_coding_blob_bytes(slot, blob_index as u64)
-                            .expect("Failed to read coding blob from blocktree")
-                        {
-                            socket.send_to(&coding_bytes[..], repairee_tvu)?;
-                            total_coding_blobs_sent += 1;
+                            if let Some(coding_header) = data_blob.get_coding_header() {
+                                let ratio = std::cmp::max(
+                                    1,
+                                    coding_header.parity_count / coding_header.data_count,
+                                );
+
+                                for _ in 0..ratio {
+                                    let chosen_index =
+                                        rng.gen_range(0, coding_header.parity_count as u64);
+
+                                    let coding_blob_opt = blocktree
+                                        .get_coding_blob(
+                                            slot,
+                                            coding_header.set_index,
+                                            chosen_index,
+                                        )
+                                        .expect("Failed to read coding blob from blocktree");
+
+                                    if let Some(coding_blob) = coding_blob_opt {
+                                        socket.send_to(&coding_blob.data[..], repairee_tvu)?;
+                                        total_coding_blobs_sent += 1;
+                                    }
+                                }
+                            }
                         }
                     }
 
