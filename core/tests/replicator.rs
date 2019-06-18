@@ -4,98 +4,19 @@ extern crate log;
 #[macro_use]
 extern crate solana;
 
-use bincode::{deserialize, serialize};
-use solana::blocktree::{create_new_tmp_ledger, Blocktree};
+use solana::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::replicator::Replicator;
-use solana::replicator::ReplicatorRequest;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
-use solana::streamer::blob_receiver;
 use solana::validator::ValidatorConfig;
 use solana_client::thin_client::create_client;
 use solana_sdk::genesis_block::create_genesis_block;
-use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::remove_dir_all;
-use std::net::SocketAddr;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
-use std::sync::Arc;
-use std::thread::sleep;
-use std::time::Duration;
-
-fn get_slot_height(to: SocketAddr) -> u64 {
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    socket
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .unwrap();
-
-    let req = ReplicatorRequest::GetSlotHeight(socket.local_addr().unwrap());
-    let serialized_req = serialize(&req).unwrap();
-    for _ in 0..10 {
-        socket.send_to(&serialized_req, to).unwrap();
-        let mut buf = [0; 1024];
-        if let Ok((size, _addr)) = socket.recv_from(&mut buf) {
-            return deserialize(&buf[..size]).unwrap();
-        }
-        sleep(Duration::from_millis(500));
-    }
-    panic!("Couldn't get slot height!");
-}
-
-fn download_from_replicator(replicator_info: &ContactInfo) {
-    // Create a client which downloads from the replicator and see that it
-    // can respond with blobs.
-    let tn = Node::new_localhost();
-    let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
-    let mut repair_index = get_slot_height(replicator_info.storage_addr);
-    info!("repair index: {}", repair_index);
-
-    repair_index = 0;
-    let req = cluster_info
-        .window_index_request_bytes(0, repair_index)
-        .unwrap();
-
-    let exit = Arc::new(AtomicBool::new(false));
-    let (s_reader, r_reader) = channel();
-    let repair_socket = Arc::new(tn.sockets.repair);
-    let t_receiver = blob_receiver(repair_socket.clone(), &exit, s_reader);
-
-    info!(
-        "Sending repair requests from: {} to: {}",
-        tn.info.id, replicator_info.gossip
-    );
-
-    let mut received_blob = false;
-    for _ in 0..5 {
-        repair_socket.send_to(&req, replicator_info.gossip).unwrap();
-
-        let x = r_reader.recv_timeout(Duration::new(1, 0));
-
-        if let Ok(blobs) = x {
-            for b in blobs {
-                let br = b.read().unwrap();
-                assert!(br.index() == repair_index);
-                info!("br: {:?}", br);
-                let entries = Blocktree::deserialize_blob_data(&br.data()).unwrap();
-                for entry in &entries {
-                    info!("entry: {:?}", entry);
-                    assert_ne!(entry.hash, Hash::default());
-                    received_blob = true;
-                }
-            }
-            break;
-        }
-    }
-    exit.store(true, Ordering::Relaxed);
-    t_receiver.join().unwrap();
-
-    assert!(received_blob);
-}
+use std::sync::{Arc, RwLock};
 
 /// Start the cluster with the given configuration and wait till the replicators are discovered
 /// Then download blobs from one of them.
@@ -134,7 +55,15 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     }
     assert_eq!(replicator_count, num_replicators);
 
-    download_from_replicator(&replicator_info);
+    let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+        cluster_nodes[0].clone(),
+    )));
+    let path = get_tmp_ledger_path("test");
+    let blocktree = Arc::new(Blocktree::open(&path).unwrap());
+    assert_eq!(
+        Replicator::download_from_replicator(&cluster_info, &replicator_info, &blocktree).unwrap(),
+        0
+    );
 }
 
 #[test]
