@@ -89,7 +89,7 @@ fn test_fullnode_exit_2() {
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; num_nodes],
-        validator_configs: vec![ValidatorConfig::default(); num_nodes],
+        validator_configs: vec![validator_config.clone(); num_nodes],
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -106,7 +106,7 @@ fn test_leader_failure_4() {
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
-        validator_configs: vec![ValidatorConfig::default(); num_nodes],
+        validator_configs: vec![validator_config.clone(); num_nodes],
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -129,7 +129,7 @@ fn test_two_unbalanced_stakes() {
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 1_000_000,
-        validator_configs: vec![ValidatorConfig::default(); 3],
+        validator_configs: vec![validator_config.clone(); 2],
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
         poh_config: PohConfig::new_sleep(Duration::from_millis(1000 / num_ticks_per_second)),
@@ -185,7 +185,7 @@ fn test_restart_node() {
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![3],
         cluster_lamports: 100,
-        validator_configs: vec![ValidatorConfig::default(); 3],
+        validator_configs: vec![ValidatorConfig::default()],
         ticks_per_slot,
         slots_per_epoch,
         ..ClusterConfig::default()
