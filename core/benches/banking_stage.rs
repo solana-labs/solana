@@ -22,7 +22,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{
-    duration_as_ms, timestamp, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES,
+    duration_as_us, timestamp, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES,
 };
 use std::iter;
 use std::sync::atomic::Ordering;
@@ -33,16 +33,18 @@ use test::Bencher;
 
 fn check_txs(receiver: &Arc<Receiver<WorkingBankEntries>>, ref_tx_count: usize) {
     let mut total = 0;
+    let now = Instant::now();
     loop {
         let entries = receiver.recv_timeout(Duration::new(1, 0));
         if let Ok((_, entries)) = entries {
             for (entry, _) in &entries {
                 total += entry.transactions.len();
             }
-        } else {
-            break;
         }
         if total >= ref_tx_count {
+            break;
+        }
+        if now.elapsed().as_secs() > 60 {
             break;
         }
     }
@@ -85,12 +87,12 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
 }
 
 #[bench]
-#[ignore]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     solana_logger::setup();
     let num_threads = BankingStage::num_threads() as usize;
     //   a multiple of packet chunk  2X duplicates to avoid races
-    let txes = 192 * num_threads * 2;
+    const CHUNKS: usize = 32;
+    let txes = 192 * num_threads * CHUNKS;
     let mint_total = 1_000_000_000_000;
     let GenesisBlockInfo {
         mut genesis_block,
@@ -168,7 +170,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
-        let half_len = verified.len() / 2;
+        let chunk_len = verified.len() / CHUNKS;
         let mut start = 0;
 
         // This is so that the signal_receiver does not go out of scope after the closure.
@@ -178,18 +180,33 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         let signal_receiver2 = signal_receiver.clone();
         bencher.iter(move || {
             let now = Instant::now();
-            for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
-                trace!("sending... {}..{} {}", start, start + half_len, timestamp());
+            let mut sent = 0;
+
+            for v in verified[start..start + chunk_len].chunks(verified.len() / num_threads) {
+                trace!(
+                    "sending... {}..{} {}",
+                    start,
+                    start + chunk_len,
+                    timestamp()
+                );
+                for xv in v {
+                    sent += xv.0.packets.len();
+                }
                 verified_sender.send(v.to_vec()).unwrap();
             }
-            check_txs(&signal_receiver2, txes / 2);
-            trace!(
-                "time: {} checked: {}",
-                duration_as_ms(&now.elapsed()),
-                txes / 2
-            );
+            check_txs(&signal_receiver2, txes / CHUNKS);
+
+            // This signature clear may not actually clear the signatures
+            // in this chunk, but since we rotate between 32 chunks then
+            // we should clear them by the time we come around again to re-use that chunk.
             bank.clear_signatures();
-            start += half_len;
+            trace!(
+                "time: {} checked: {} sent: {}",
+                duration_as_us(&now.elapsed()),
+                txes / CHUNKS,
+                sent,
+            );
+            start += chunk_len;
             start %= verified.len();
         });
         drop(vote_sender);
