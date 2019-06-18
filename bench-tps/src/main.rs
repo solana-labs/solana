@@ -5,6 +5,7 @@ use crate::bench::{
     do_bench_tps, generate_and_fund_keypairs, generate_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT,
 };
 use solana::gossip_service::{discover_cluster, get_multi_client};
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::Keypair;
 use std::collections::HashMap;
 use std::fs::File;
@@ -41,8 +42,8 @@ fn main() {
     if write_to_client_file {
         let keypairs = generate_keypairs(&id, tx_count as u64 * 2);
         let num_accounts = keypairs.len() as u64;
-        let num_lamports_per_account = (num_accounts - 1
-            + NUM_SIGNATURES_FOR_TXS * target_lamports_per_signature)
+        let max_fee = FeeCalculator::new(target_lamports_per_signature).max_lamports_per_signature;
+        let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
             / num_accounts
             + NUM_LAMPORTS_PER_ACCOUNT;
         let mut accounts = HashMap::new();
