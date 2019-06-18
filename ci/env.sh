@@ -17,6 +17,7 @@ if [[ -n $CI ]]; then
       export CI_PULL_REQUEST=
     fi
     export CI_OS_NAME=$TRAVIS_OS_NAME
+    export CI_REPO_SLUG=$TRAVIS_REPO_SLUG
     export CI_TAG=$TRAVIS_TAG
   elif [[ -n $BUILDKITE ]]; then
     export CI_BRANCH=$BUILDKITE_BRANCH
@@ -32,6 +33,7 @@ if [[ -n $CI ]]; then
       export CI_PULL_REQUEST=
     fi
     export CI_OS_NAME=linux
+    export CI_REPO_SLUG=$BUILDKITE_ORGANIZATION_SLUG/$BUILDKITE_PIPELINE_SLUG
     # TRIGGERED_BUILDKITE_TAG is a workaround to propagate BUILDKITE_TAG into
     # the solana-secondary builder
     if [[ -n $TRIGGERED_BUILDKITE_TAG ]]; then
@@ -54,6 +56,7 @@ if [[ -n $CI ]]; then
     elif [[ $CI_WINDOWS = True ]]; then
       export CI_OS_NAME=windows
     fi
+    export CI_REPO_SLUG=$APPVEYOR_REPO_NAME
     export CI_TAG=$APPVEYOR_REPO_TAG_NAME
   fi
 else
@@ -64,6 +67,7 @@ else
   export CI_JOB_ID=
   export CI_OS_NAME=
   export CI_PULL_REQUEST=
+  export CI_REPO_SLUG=
   export CI_TAG=
 fi
 
