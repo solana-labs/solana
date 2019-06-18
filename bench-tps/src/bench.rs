@@ -25,8 +25,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 pub const MAX_SPENDS_PER_TX: u64 = 4;
-/// Enough tokens to run bench client for ~1 week at ~100K TPS
-pub const NUM_LAMPORTS_PER_ACCOUNT: u64 = 65536;
+pub const NUM_LAMPORTS_PER_ACCOUNT: u64 = 128;
 
 #[derive(Debug)]
 pub enum BenchTpsError {

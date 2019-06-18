@@ -76,13 +76,17 @@ default_arg() {
   declare name=$1
   declare value=$2
 
-  for arg in "${args[@]}"; do
-    if [[ $arg = "$name" ]]; then
+  for i in "${!args[@]}"; do
+    if [[ "${args[$i]}" = "$name" ]]; then
+      if [[ -n $value ]]; then
+        echo "${args[$((i+1))]}"
+      fi
       return
     fi
   done
 
   if [[ -n $value ]]; then
+    echo "$value"
     args+=("$name" "$value")
   else
     args+=("$name")
