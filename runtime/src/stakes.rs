@@ -21,16 +21,17 @@ pub struct Stakes {
 
 impl Stakes {
     // sum the stakes that point to the given voter_pubkey
-    fn calculate_stake(&self, voter: &Pubkey) -> u64 {
+    fn calculate_stake(&self, voter_pubkey: &Pubkey) -> u64 {
         self.stake_accounts
             .iter()
-            .map(|(_, stake_account)| match StakeState::from(stake_account) {
-                Some(StakeState::Stake {
-                    voter_pubkey,
-                    stake,
-                    ..
-                }) if *voter == voter_pubkey => stake,
-                _ => 0,
+            .map(|(_, stake_account)| {
+                StakeState::stake_from(stake_account).map_or(0, |stake| {
+                    if stake.voter_pubkey == *voter_pubkey {
+                        stake.stake
+                    } else {
+                        0
+                    }
+                })
             })
             .sum()
     }

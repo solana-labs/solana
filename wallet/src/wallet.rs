@@ -659,15 +659,13 @@ fn process_show_stake_account(
     use solana_stake_api::stake_state::StakeState;
     let stake_account = rpc_client.get_account(staking_account_pubkey)?;
     match stake_account.state() {
-        Ok(StakeState::Stake {
-            voter_pubkey,
-            credits_observed,
-            stake,
-        }) => {
+        Ok(StakeState::Stake(stake)) => {
             println!("account lamports: {}", stake_account.lamports);
-            println!("voter pubkey: {}", voter_pubkey);
-            println!("credits observed: {}", credits_observed);
-            println!("activated stake: {}", stake);
+            println!("voter pubkey: {}", stake.voter_pubkey);
+            println!("credits observed: {}", stake.credits_observed);
+            println!("epoch: {}", stake.epoch);
+            println!("activated stake: {}", stake.stake);
+            println!("previous stake: {}", stake.prev_stake);
             Ok("".to_string())
         }
         Ok(StakeState::MiningPool { epoch, point_value }) => {
