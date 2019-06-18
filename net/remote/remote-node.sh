@@ -194,6 +194,7 @@ local|tar)
         --blockstream /tmp/solana-blockstream.sock
         --no-voting
         --stake 0
+        --generate-snapshots
       )
     else
       args+=(--stake "$stake")

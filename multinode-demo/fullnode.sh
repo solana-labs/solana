@@ -191,6 +191,7 @@ label=
 identity_keypair_path=
 no_restart=0
 airdrops_enabled=1
+generate_snapshots=0
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -203,6 +204,10 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --bootstrap-leader ]]; then
       node_type=bootstrap_leader
+      generate_snapshots=1
+      shift
+    elif [[ $1 = --generate-snapshots ]]; then
+      generate_snapshots=1
       shift
     elif [[ $1 = --replicator ]]; then
       node_type=replicator
@@ -314,8 +319,7 @@ elif [[ $node_type = bootstrap_leader ]]; then
   : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/bootstrap-leader-keypair.json}"
   vote_keypair_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
   ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
-  accounts_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
-  snapshot_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-snapshots
+  state_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-state
   storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
   configured_flag=$SOLANA_CONFIG_DIR/bootstrap-leader.configured
 
@@ -335,11 +339,10 @@ elif [[ $node_type = validator ]]; then
 
   : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/validator-keypair$label.json}"
   vote_keypair_path=$SOLANA_CONFIG_DIR/validator-vote-keypair$label.json
-  stake_keypair_path=$SOLANA_CONFIG_DIR/validator-stake-keypair$label.json
-  storage_keypair_path=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/validator-ledger$label
-  accounts_config_dir=$SOLANA_CONFIG_DIR/validator-accounts$label
-  snapshot_config_dir="$SOLANA_CONFIG_DIR"/validator-snapshots$label
+  state_dir="$SOLANA_CONFIG_DIR"/validator-state$label
+  storage_keypair_path=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json
+  stake_keypair_path=$SOLANA_CONFIG_DIR/validator-stake-keypair$label.json
   configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
 
   mkdir -p "$SOLANA_CONFIG_DIR"
@@ -361,6 +364,9 @@ fi
 
 
 if [[ $node_type != replicator ]]; then
+  accounts_config_dir="$state_dir"/accounts
+  snapshot_config_dir="$state_dir"/snapshots
+
   identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
   vote_pubkey=$($solana_keygen pubkey "$vote_keypair_path")
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
@@ -402,47 +408,46 @@ new_gensis_block() {
 
 set -e
 PS4="$(basename "$0"): "
+pid=
+trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 while true; do
-  if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
-    if [[ $node_type = bootstrap_leader ]]; then
-      ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
-    fi
-    (
-      set -x
-      $rsync -qvPr "${rsync_entrypoint_url:?}"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
-      $rsync -qvPr "${rsync_entrypoint_url:?}"/config/snapshot_dir "$SOLANA_RSYNC_CONFIG_DIR"
-      current_snapshot_dir=$(cat "$SOLANA_RSYNC_CONFIG_DIR"/snapshot_dir)
-      $rsync -vqPr "${rsync_entrypoint_url:?}"/config/"$current_snapshot_dir"/snapshots "$SOLANA_RSYNC_CONFIG_DIR"
-      $rsync -vqPr "${rsync_entrypoint_url:?}"/config/"$current_snapshot_dir"/accounts "$SOLANA_RSYNC_CONFIG_DIR"
-    ) || true
-  fi
-
   if new_gensis_block; then
     # If the genesis block has changed remove the now stale ledger and vote
     # keypair for the node and start all over again
     (
       set -x
-      rm -rf "$ledger_config_dir" "$accounts_config_dir" "$snapshot_config_dir" "$configured_flag"
+      rm -rf "$ledger_config_dir" "$state_dir" "$configured_flag"
     )
+  fi
+
+  if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
+    if [[ $node_type = bootstrap_leader ]]; then
+      ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
+    elif [[ $node_type = validator ]]; then
+      (
+        SECONDS=0
+        set -x
+        cd "$SOLANA_RSYNC_CONFIG_DIR"
+        $rsync -qPr "${rsync_entrypoint_url:?}"/config/{ledger,state.tgz} .
+        echo "Fetched snapshot in $SECONDS seconds"
+      ) || true
+    fi
   fi
 
   (
     set -x
     if [[ $node_type = validator ]]; then
-	rm -rf "$ledger_config_dir"
-        if [[ -d "$SOLANA_RSYNC_CONFIG_DIR"/snapshots ]]; then
-          rm -rf "$snapshot_config_dir" "$accounts_config_dir"
-          cp -a "$SOLANA_RSYNC_CONFIG_DIR"/snapshots/ "$snapshot_config_dir"
-          cp -a "$SOLANA_RSYNC_CONFIG_DIR"/accounts/ "$accounts_config_dir"
+        if [[ -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz ]]; then
+          mkdir -p "$state_dir"
+          SECONDS=
+          tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+          echo "Extracted snapshot in $SECONDS seconds"
         fi
     fi
     if [[ ! -d "$ledger_config_dir" ]]; then
       cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
-      $solana_ledger_tool --ledger "$ledger_config_dir" verify
     fi
   )
-
-  trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 
   if ((stake_lamports)); then
     if [[ $node_type = validator ]]; then
@@ -471,59 +476,58 @@ while true; do
     exit $?
   fi
 
-  if [[ $node_type = bootstrap_leader ]]; then
-    snapshot_dir=0
-    secs_to_next_sync_poll=30
-    while true; do
-      if ! kill -0 "$pid"; then
-        wait "$pid"
-        exit 0
-      fi
+  secs_to_next_genesis_poll=5
+  secs_to_next_snapshot=30
+  while true; do
+    if ! kill -0 "$pid"; then
+      wait "$pid" || true
+      echo "############## $node_type exited, restarting ##############"
+      break
+    fi
 
-      sleep 1
+    sleep 1
 
-      ((secs_to_next_sync_poll--)) && continue
+    if ((generate_snapshots && --secs_to_next_snapshot == 0)); then
       (
-        if [[ -d $snapshot_config_dir ]]; then
-          current_config_dir="$SOLANA_RSYNC_CONFIG_DIR"/$snapshot_dir
-          mkdir -p "$current_config_dir"
-          cp -a "$snapshot_config_dir"/ "$current_config_dir"/snapshots
-          cp -a "$accounts_config_dir"/ "$current_config_dir"/accounts
-          echo $snapshot_dir > "$SOLANA_RSYNC_CONFIG_DIR"/snapshot_dir
-	fi
-      ) || true
-      secs_to_next_sync_poll=60
-      snapshot_dir=$((snapshot_dir+1))
-    done
-  else
-    secs_to_next_genesis_poll=1
-    while true; do
-      if ! kill -0 "$pid"; then
-        wait "$pid" || true
-        echo "############## $node_type exited, restarting ##############"
-        break
-      fi
+        SECONDS=
+        new_state_dir="$SOLANA_RSYNC_CONFIG_DIR"/new_state
+        new_state_archive="$SOLANA_RSYNC_CONFIG_DIR"/new_state.tgz
+        (
+          rm -rf "$new_state_dir" "$new_state_archive"
+          cp -a "$state_dir" "$new_state_dir"
+          cd "$new_state_dir"
+          tar zcf "$new_state_archive" ./*
+        )
+        ln -f "$new_state_archive" "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+        rm -rf "$new_state_dir" "$new_state_archive"
+        ls -hl "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+        echo "Snapshot generated in $SECONDS seconds"
+      ) || (
+        echo "Error: failed to generate snapshot"
+      )
+      secs_to_next_snapshot=60
+    fi
 
-      sleep 1
-
-      ((poll_for_new_genesis_block)) || continue
-      ((secs_to_next_genesis_poll--)) && continue
+    if ((poll_for_new_genesis_block && --secs_to_next_genesis_poll == 0)); then
+      echo "Polling for new genesis block..."
       (
         set -x
         $rsync -r "${rsync_entrypoint_url:?}"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
-      ) || true
+      ) || (
+        echo "Error: failed to rsync ledger"
+      )
       new_gensis_block && break
-
       secs_to_next_genesis_poll=60
-    done
+    fi
 
-    echo "############## New genesis detected, restarting $node_type ##############"
-    kill "$pid" || true
-    wait "$pid" || true
-    # give the cluster time to come back up
-    (
-      set -x
-      sleep 60
-    )
-  fi
+  done
+
+  echo "############## New genesis detected, restarting $node_type ##############"
+  kill "$pid" || true
+  wait "$pid" || true
+  # give the cluster time to come back up
+  (
+    set -x
+    sleep 60
+  )
 done
