@@ -121,9 +121,8 @@ pub(crate) mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use solana_stake_api::stake_instruction;
+    use solana_stake_api::stake_state::Stake;
     use solana_vote_api::vote_instruction;
-    use std::collections::HashSet;
-    use std::iter::FromIterator;
     use std::sync::Arc;
 
     fn new_from_parent(parent: &Arc<Bank>, slot: u64) -> Bank {
@@ -144,8 +143,14 @@ pub(crate) mod tests {
         let mut expected = HashMap::new();
         assert_eq!(vote_account_stakes_at_epoch(&bank, 10), None);
 
+        let leader_stake = Stake {
+            stake: BOOTSTRAP_LEADER_LAMPORTS,
+            epoch: 0,
+            ..Stake::default()
+        };
+
         // First epoch has the bootstrap leader
-        expected.insert(voting_keypair.pubkey(), BOOTSTRAP_LEADER_LAMPORTS);
+        expected.insert(voting_keypair.pubkey(), leader_stake.stake(0));
         let expected = Some(expected);
         assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
 
@@ -205,7 +210,12 @@ pub(crate) mod tests {
 
     #[test]
     fn test_epoch_stakes_and_lockouts() {
-        let stake = 42;
+        let stake = BOOTSTRAP_LEADER_LAMPORTS * 100;
+        let leader_stake = Stake {
+            stake: BOOTSTRAP_LEADER_LAMPORTS,
+            ..Stake::default()
+        };
+
         let validator = Keypair::new();
 
         let GenesisBlockInfo {
@@ -233,6 +243,11 @@ pub(crate) mod tests {
             stake,
         );
 
+        let other_stake = Stake {
+            stake,
+            ..Stake::default()
+        };
+
         // soonest slot that could be a new epoch is 1
         let mut slot = 1;
         let mut epoch = bank.get_stakers_epoch(0);
@@ -240,17 +255,20 @@ pub(crate) mod tests {
         while bank.get_stakers_epoch(slot) == epoch {
             slot += 1;
         }
-
         epoch = bank.get_stakers_epoch(slot);
 
         let bank = new_from_parent(&Arc::new(bank), slot);
 
         let result: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
-        assert_eq!(result, vec![(BOOTSTRAP_LEADER_LAMPORTS, None)]);
+        assert_eq!(result, vec![(leader_stake.stake(0), None)]);
 
-        let result: HashSet<_> = HashSet::from_iter(epoch_stakes_and_lockouts(&bank, epoch));
-        let expected: HashSet<_> =
-            HashSet::from_iter(vec![(BOOTSTRAP_LEADER_LAMPORTS, None), (stake, None)]);
+        let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, epoch);
+        result.sort();
+        let mut expected = vec![
+            (leader_stake.stake(bank.epoch()), None),
+            (other_stake.stake(bank.epoch()), None),
+        ];
+        expected.sort();
         assert_eq!(result, expected);
     }
 
