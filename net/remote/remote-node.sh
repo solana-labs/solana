@@ -117,6 +117,7 @@ local|tar)
     fi
 
     lamports_per_signature="42"
+    # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
     genesis_args=($genesisOptions)
     for i in "${!genesis_args[@]}"; do
       if [[ "${genesis_args[$i]}" = --target-lamports-per-signature ]]; then
