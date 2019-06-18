@@ -33,16 +33,17 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
-use sys_info;
 
-type PacketsAndOffsets = (Packets, Vec<usize>);
+type TransactionsAndOffsets = (Vec<Transaction>, Vec<usize>);
+type PacketsAndOffsets = (Packets, Option<TransactionsAndOffsets>, Vec<usize>);
 pub type UnprocessedPackets = Vec<PacketsAndOffsets>;
 
 /// Transaction forwarding
 pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 4;
 
-// number of threads is 1 until mt bank is ready
-pub const NUM_THREADS: u32 = 10;
+pub const NUM_THREADS: u32 = 5;
+
+const NUM_BATCHES_TO_BUFFER_PER_THREAD: u32 = 100;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -70,7 +71,7 @@ impl BankingStage {
             poh_recorder,
             verified_receiver,
             verified_vote_receiver,
-            4,
+            Self::num_threads(),
         )
     }
 
@@ -126,7 +127,7 @@ impl BankingStage {
     fn filter_valid_packets_for_forwarding(all_packets: &[PacketsAndOffsets]) -> Vec<&Packet> {
         all_packets
             .iter()
-            .flat_map(|(p, valid_indexes)| valid_indexes.iter().map(move |x| &p.packets[*x]))
+            .flat_map(|(p, _, valid_indexes)| valid_indexes.iter().map(move |x| &p.packets[*x]))
             .collect()
     }
 
@@ -150,41 +151,59 @@ impl BankingStage {
         my_pubkey: &Pubkey,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         buffered_packets: &mut Vec<PacketsAndOffsets>,
+        id: u32,
     ) -> Result<UnprocessedPackets> {
         let mut unprocessed_packets = vec![];
         let mut rebuffered_packets = 0;
         let mut new_tx_count = 0;
+        let mut deserialized_count = 0;
         let buffered_len = buffered_packets.len();
         let mut buffered_packets_iter = buffered_packets.drain(..);
 
         let proc_start = Instant::now();
-        while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
+        while let Some((msgs, transactions, unprocessed_indexes)) = buffered_packets_iter.next() {
             let bank = poh_recorder.lock().unwrap().bank();
             if bank.is_none() {
                 rebuffered_packets += unprocessed_indexes.len();
-                Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
+                Self::push_unprocessed(
+                    &mut unprocessed_packets,
+                    msgs,
+                    unprocessed_indexes,
+                    transactions,
+                );
                 continue;
             }
             let bank = bank.unwrap();
 
-            let (processed, verified_txs_len, new_unprocessed_indexes) =
+            let (processed, verified_txs_len, new_unprocessed_indexes, deserialized) =
                 Self::process_received_packets(
                     &bank,
                     &poh_recorder,
                     &msgs,
                     unprocessed_indexes.to_owned(),
+                    transactions.to_owned(),
                 )?;
 
             new_tx_count += processed;
+            if deserialized {
+                deserialized_count += processed;
+            }
 
             // Collect any unprocessed transactions in this batch for forwarding
             rebuffered_packets += new_unprocessed_indexes.len();
-            Self::push_unprocessed(&mut unprocessed_packets, msgs, new_unprocessed_indexes);
+            Self::push_unprocessed(
+                &mut unprocessed_packets,
+                msgs,
+                new_unprocessed_indexes,
+                transactions,
+            );
 
             if processed < verified_txs_len {
                 let next_leader = poh_recorder.lock().unwrap().next_slot_leader();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
-                while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
+                while let Some((msgs, transactions, unprocessed_indexes)) =
+                    buffered_packets_iter.next()
+                {
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
                         &bank,
                         &msgs,
@@ -192,7 +211,12 @@ impl BankingStage {
                         my_pubkey,
                         next_leader,
                     );
-                    Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
+                    Self::push_unprocessed(
+                        &mut unprocessed_packets,
+                        msgs,
+                        unprocessed_indexes,
+                        transactions,
+                    );
                 }
             }
         }
@@ -201,12 +225,15 @@ impl BankingStage {
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
 
         debug!(
-            "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
+            "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {} rebuffered: {} deser: {} id: {}",
             timing::timestamp(),
             buffered_len,
             total_time_ms,
             new_tx_count,
-            (new_tx_count as f32) / (total_time_s)
+            (new_tx_count as f32) / (total_time_s),
+            rebuffered_packets,
+            deserialized_count,
+            id,
         );
 
         inc_new_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets);
@@ -251,6 +278,7 @@ impl BankingStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         buffered_packets: &mut Vec<PacketsAndOffsets>,
         enable_forwarding: bool,
+        id: u32,
     ) -> Result<()> {
         let decision = {
             let poh = poh_recorder.lock().unwrap();
@@ -267,7 +295,7 @@ impl BankingStage {
         match decision {
             BufferedPacketsDecision::Consume => {
                 let mut unprocessed =
-                    Self::consume_buffered_packets(my_pubkey, poh_recorder, buffered_packets)?;
+                    Self::consume_buffered_packets(my_pubkey, poh_recorder, buffered_packets, id)?;
                 buffered_packets.append(&mut unprocessed);
                 Ok(())
             }
@@ -300,7 +328,22 @@ impl BankingStage {
                     Ok(())
                 }
             }
-            _ => Ok(()),
+            _ => {
+                // When holding packets, do some deserialization in the downtime
+                // to get ready for leader slot.
+                let mut times = 0;
+                for (packets, transactions, packet_indexes) in buffered_packets.iter_mut() {
+                    if transactions.is_none() {
+                        *transactions =
+                            Some(Self::transactions_from_packets(&packets, &packet_indexes));
+                        times += 1;
+                    }
+                    if times > 2 {
+                        break;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -324,6 +367,7 @@ impl BankingStage {
                     cluster_info,
                     &mut buffered_packets,
                     enable_forwarding,
+                    id,
                 )
                 .unwrap_or_else(|_| buffered_packets.clear());
             }
@@ -353,7 +397,7 @@ impl BankingStage {
                     }
                     let num = unprocessed_packets
                         .iter()
-                        .map(|(_, unprocessed)| unprocessed.len())
+                        .map(|(_, _, unprocessed)| unprocessed.len())
                         .sum();
                     inc_new_counter_info!("banking_stage-buffered_packets", num);
                     buffered_packets.append(&mut unprocessed_packets);
@@ -366,8 +410,9 @@ impl BankingStage {
         }
     }
 
+    // Fixed thread size has proven to be faster.
     pub fn num_threads() -> u32 {
-        sys_info::cpu_num().unwrap_or(NUM_THREADS)
+        NUM_THREADS
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions
@@ -637,9 +682,16 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         msgs: &Packets,
         transaction_indexes: Vec<usize>,
-    ) -> Result<(usize, usize, Vec<usize>)> {
-        let (transactions, transaction_indexes) =
-            Self::transactions_from_packets(msgs, &transaction_indexes);
+        optional_transactions: Option<(Vec<Transaction>, Vec<usize>)>,
+    ) -> Result<(usize, usize, Vec<usize>, bool)> {
+        let mut deserialized = false;
+        let (transactions, transaction_indexes) = if let Some((txs, idxs)) = optional_transactions {
+            deserialized = true;
+            (txs, idxs)
+        } else {
+            Self::transactions_from_packets(msgs, &transaction_indexes)
+        };
+
         debug!(
             "bank: {} filtered transactions {}",
             bank.slot(),
@@ -664,7 +716,12 @@ impl BankingStage {
             unprocessed_tx_count.saturating_sub(filtered_unprocessed_tx_indexes.len())
         );
 
-        Ok((processed, tx_len, filtered_unprocessed_tx_indexes))
+        Ok((
+            processed,
+            tx_len,
+            filtered_unprocessed_tx_indexes,
+            deserialized,
+        ))
     }
 
     fn filter_unprocessed_packets(
@@ -737,6 +794,7 @@ impl BankingStage {
         inc_new_counter_debug!("banking_stage-transactions_received", count);
         let proc_start = Instant::now();
         let mut new_tx_count = 0;
+        let mut deserialized_count = 0;
 
         let mut mms_iter = mms.into_iter();
         let mut unprocessed_packets = vec![];
@@ -744,18 +802,21 @@ impl BankingStage {
             let packet_indexes = Self::generate_packet_indexes(vers);
             let bank = poh.lock().unwrap().bank();
             if bank.is_none() {
-                Self::push_unprocessed(&mut unprocessed_packets, msgs, packet_indexes);
+                Self::push_unprocessed(&mut unprocessed_packets, msgs, packet_indexes, None);
                 continue;
             }
             let bank = bank.unwrap();
 
-            let (processed, verified_txs_len, unprocessed_indexes) =
-                Self::process_received_packets(&bank, &poh, &msgs, packet_indexes)?;
+            let (processed, verified_txs_len, unprocessed_indexes, deserialized) =
+                Self::process_received_packets(&bank, &poh, &msgs, packet_indexes, None)?;
 
             new_tx_count += processed;
+            if deserialized {
+                deserialized_count += processed;
+            }
 
             // Collect any unprocessed transactions in this batch for forwarding
-            Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
+            Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes, None);
 
             if processed < verified_txs_len {
                 let next_leader = poh.lock().unwrap().next_slot_leader();
@@ -769,7 +830,12 @@ impl BankingStage {
                         &my_pubkey,
                         next_leader,
                     );
-                    Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
+                    Self::push_unprocessed(
+                        &mut unprocessed_packets,
+                        msgs,
+                        unprocessed_indexes,
+                        None,
+                    );
                 }
             }
         }
@@ -781,7 +847,7 @@ impl BankingStage {
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         debug!(
-            "@{:?} done processing transaction batches: {} time: {:?}ms tx count: {} tx/s: {} total count: {} id: {}",
+            "@{:?} done processing transaction batches: {} time: {:?}ms tx count: {} tx/s: {} total count: {} id: {} unproc: {} deser: {}",
             timing::timestamp(),
             mms_len,
             total_time_ms,
@@ -789,6 +855,8 @@ impl BankingStage {
             (new_tx_count as f32) / (total_time_s),
             count,
             id,
+            unprocessed_packets.len(),
+            deserialized_count,
         );
         inc_new_counter_debug!("banking_stage-process_packets", count);
         inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
@@ -802,9 +870,15 @@ impl BankingStage {
         unprocessed_packets: &mut UnprocessedPackets,
         packets: Packets,
         packet_indexes: Vec<usize>,
+        optional_transactions: Option<TransactionsAndOffsets>,
     ) {
         if !packet_indexes.is_empty() {
-            unprocessed_packets.push((packets, packet_indexes));
+            if unprocessed_packets.len()
+                > (Self::num_threads() * NUM_BATCHES_TO_BUFFER_PER_THREAD) as usize
+            {
+                unprocessed_packets.remove(0);
+            }
+            unprocessed_packets.push((packets, optional_transactions, packet_indexes));
         }
     }
 }
@@ -1602,7 +1676,7 @@ mod tests {
                 let valid_indexes = (0..32)
                     .filter_map(|x| if x % 2 != 0 { Some(x as usize) } else { None })
                     .collect_vec();
-                (packets, valid_indexes)
+                (packets, None, valid_indexes)
             })
             .collect_vec();
 
