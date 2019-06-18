@@ -115,11 +115,23 @@ local|tar)
         echo "${pubkey}: $stakeNodesInGenesisBlock" >> ./solana-node-stakes/fullnode-stakes.yml
       done
     fi
+
+    lamports_per_signature="42"
+    # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
+    genesis_args=($genesisOptions)
+    for i in "${!genesis_args[@]}"; do
+      if [[ "${genesis_args[$i]}" = --target-lamports-per-signature ]]; then
+        lamports_per_signature="${genesis_args[$((i+1))]}"
+        break
+      fi
+    done
+
     rm -rf ./solana-client-accounts
     mkdir ./solana-client-accounts
     for i in $(seq 0 $((numBenchTpsClients-1))); do
       # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
-      solana-bench-tps --write-client-keys ./solana-client-accounts/bench-tps"$i".yml $benchTpsExtraArgs
+      solana-bench-tps --write-client-keys ./solana-client-accounts/bench-tps"$i".yml \
+        --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
       # Skip first line, as it contains header
       tail -n +2 -q ./solana-client-accounts/bench-tps"$i".yml >> ./solana-client-accounts/client-accounts.yml
       echo "" >> ./solana-client-accounts/client-accounts.yml

@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use clap::{crate_description, crate_name, crate_version, App, Arg, ArgMatches};
 use solana_drone::drone::DRONE_PORT;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 
 /// Holds the configuration for a single run of the benchmark
@@ -20,6 +21,7 @@ pub struct Config {
     pub client_ids_and_stake_file: String,
     pub write_to_client_file: bool,
     pub read_from_client_file: bool,
+    pub target_lamports_per_signature: u64,
 }
 
 impl Default for Config {
@@ -37,6 +39,7 @@ impl Default for Config {
             client_ids_and_stake_file: String::new(),
             write_to_client_file: false,
             read_from_client_file: false,
+            target_lamports_per_signature: FeeCalculator::default().target_lamports_per_signature,
         }
     }
 }
@@ -126,6 +129,16 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .help("Read client keys and stakes from the YAML file"),
         )
+        .arg(
+            Arg::with_name("target_lamports_per_signature")
+                .long("target-lamports-per-signature")
+                .value_name("LAMPORTS")
+                .takes_value(true)
+                .help(
+                    "The cost in lamports that the cluster will charge for signature \
+                     verification when the cluster is operating at target-signatures-per-slot",
+                ),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -192,6 +205,10 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
         assert!(!args.write_to_client_file);
         args.read_from_client_file = true;
         args.client_ids_and_stake_file = s.to_string();
+    }
+
+    if let Some(v) = matches.value_of("target_lamports_per_signature") {
+        args.target_lamports_per_signature = v.to_string().parse().expect("can't parse lamports");
     }
 
     args

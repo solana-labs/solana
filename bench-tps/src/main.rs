@@ -5,12 +5,16 @@ use crate::bench::{
     do_bench_tps, generate_and_fund_keypairs, generate_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT,
 };
 use solana::gossip_service::{discover_cluster, get_multi_client};
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::Keypair;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::exit;
+
+/// Number of signatures for all transactions in ~1 week at ~100K TPS
+pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
 
 fn main() {
     solana_logger::setup();
@@ -32,15 +36,21 @@ fn main() {
         client_ids_and_stake_file,
         write_to_client_file,
         read_from_client_file,
+        target_lamports_per_signature,
     } = cli_config;
 
     if write_to_client_file {
         let keypairs = generate_keypairs(&id, tx_count as u64 * 2);
+        let num_accounts = keypairs.len() as u64;
+        let max_fee = FeeCalculator::new(target_lamports_per_signature).max_lamports_per_signature;
+        let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
+            / num_accounts
+            + NUM_LAMPORTS_PER_ACCOUNT;
         let mut accounts = HashMap::new();
         keypairs.iter().for_each(|keypair| {
             accounts.insert(
                 serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
-                NUM_LAMPORTS_PER_ACCOUNT as u64,
+                num_lamports_per_account,
             );
         });
 
