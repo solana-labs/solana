@@ -4,7 +4,6 @@ use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::erasure::CodingGenerator;
-use crate::packet::index_blobs;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -13,7 +12,6 @@ use rayon::ThreadPool;
 use solana_metrics::{
     datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -82,7 +80,6 @@ trait BroadcastRun {
 }
 
 struct Broadcast {
-    id: Pubkey,
     coding_generator: CodingGenerator,
     thread_pool: ThreadPool,
 }
@@ -118,11 +115,9 @@ impl BroadcastStage {
         blocktree: &Arc<Blocktree>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
-        let me = cluster_info.read().unwrap().my_data().clone();
         let coding_generator = CodingGenerator::default();
 
         let mut broadcast = Broadcast {
-            id: me.id,
             coding_generator,
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
@@ -211,6 +206,7 @@ mod test {
     use crate::service::Service;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;

@@ -1,8 +1,5 @@
 use super::broadcast_utils;
 use super::*;
-use crate::entry::EntrySlice;
-use rayon::prelude::*;
-use solana_sdk::signature::Signable;
 
 #[derive(Default)]
 struct BroadcastStats {
@@ -68,57 +65,24 @@ impl BroadcastRun for StandardBroadcastRun {
 
         // 2) Convert entries to blobs + generate coding blobs
         let to_blobs_start = Instant::now();
-        let blobs: Vec<_> = broadcast.thread_pool.install(|| {
-            receive_results
-                .ventries
-                .into_par_iter()
-                .map(|p| {
-                    let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
-                    entries.to_shared_blobs()
-                })
-                .flatten()
-                .collect()
-        });
-
-        let blob_index = blocktree
+        let keypair = &cluster_info.read().unwrap().keypair.clone();
+        let latest_blob_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        index_blobs(
-            &blobs,
-            &broadcast.id,
-            blob_index,
-            bank.slot(),
-            bank.parent().map_or(0, |parent| parent.slot()),
+        let (data_blobs, coding_blobs) = broadcast_utils::entries_to_blobs(
+            receive_results.ventries,
+            &broadcast.thread_pool,
+            latest_blob_index,
+            last_tick,
+            &bank,
+            &keypair,
+            &mut broadcast.coding_generator,
         );
 
-        if last_tick == bank.max_tick_height() {
-            blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
-        }
-
-        // Make sure not to modify the blob header or data after signing it here
-        broadcast.thread_pool.install(|| {
-            blobs.par_iter().for_each(|b| {
-                b.write()
-                    .unwrap()
-                    .sign(&cluster_info.read().unwrap().keypair);
-            })
-        });
-
-        blocktree.write_shared_blobs(&blobs)?;
-
-        let coding = broadcast.coding_generator.next(&blobs);
-
-        broadcast.thread_pool.install(|| {
-            coding.par_iter().for_each(|c| {
-                c.write()
-                    .unwrap()
-                    .sign(&cluster_info.read().unwrap().keypair);
-            })
-        });
-
+        blocktree.write_shared_blobs(data_blobs.iter().chain(coding_blobs.iter()))?;
         let to_blobs_elapsed = to_blobs_start.elapsed();
 
         // 3) Start broadcast step
@@ -126,19 +90,17 @@ impl BroadcastRun for StandardBroadcastRun {
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        // Broadcast data
-        cluster_info
-            .read()
-            .unwrap()
-            .broadcast(sock, &blobs, stakes.as_ref())?;
+        // Broadcast data + erasures
+        cluster_info.read().unwrap().broadcast(
+            sock,
+            data_blobs.iter().chain(coding_blobs.iter()),
+            stakes.as_ref(),
+        )?;
 
-        inc_new_counter_debug!("streamer-broadcast-sent", blobs.len());
-
-        // Broadcast erasures
-        cluster_info
-            .read()
-            .unwrap()
-            .broadcast(sock, &coding, stakes.as_ref())?;
+        inc_new_counter_debug!(
+            "streamer-broadcast-sent",
+            data_blobs.len() + coding_blobs.len()
+        );
 
         let broadcast_elapsed = broadcast_start.elapsed();
         self.update_broadcast_stats(
@@ -146,7 +108,7 @@ impl BroadcastRun for StandardBroadcastRun {
             duration_as_ms(&(receive_elapsed + to_blobs_elapsed + broadcast_elapsed)),
             num_entries,
             duration_as_ms(&to_blobs_elapsed),
-            blob_index,
+            latest_blob_index,
         );
 
         Ok(())
