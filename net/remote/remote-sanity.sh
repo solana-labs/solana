@@ -13,6 +13,7 @@ deployMethod=
 entrypointIp=
 numNodes=
 failOnValidatorBootupFailure=
+airdropsEnabled=true
 
 [[ -r deployConfig ]] || {
   echo deployConfig missing
@@ -122,11 +123,16 @@ echo "--- $sanityTargetIp: RPC API: getTransactionCount"
     http://"$sanityTargetIp":8899
 )
 
-echo "--- $sanityTargetIp: wallet sanity"
-(
-  set -x
-  scripts/wallet-sanity.sh --url http://"$sanityTargetIp":8899
-)
+if [[ "$airdropsEnabled" = true ]]; then
+  echo "--- $sanityTargetIp: wallet sanity"
+  (
+    set -x
+    scripts/wallet-sanity.sh --url http://"$sanityTargetIp":8899
+  )
+else
+  echo "^^^ +++"
+  echo "Note: wallet sanity is disabled as airdrops are disabled"
+fi
 
 echo "--- $sanityTargetIp: verify ledger"
 if $ledgerVerify; then

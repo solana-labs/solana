@@ -316,7 +316,9 @@ elif [[ $node_type = bootstrap_leader ]]; then
   configured_flag=$SOLANA_CONFIG_DIR/bootstrap-leader.configured
 
   default_arg --rpc-port 8899
-  default_arg --rpc-drone-address 127.0.0.1:9900
+  if ((airdrops_enabled)); then
+    default_arg --rpc-drone-address 127.0.0.1:9900
+  fi
   default_arg --gossip-port 8001
 
 elif [[ $node_type = validator ]]; then
@@ -342,7 +344,9 @@ elif [[ $node_type = validator ]]; then
   [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
 
   default_arg --entrypoint "$entrypoint_address"
-  default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
+  if ((airdrops_enabled)); then
+    default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
+  fi
 
   rsync_entrypoint_url=$(rsync_url "$entrypoint")
 else
