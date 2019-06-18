@@ -12,7 +12,12 @@ fn main() {
             let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
             let mut path = Path::new(&manifest_dir);
             path = path.parent().unwrap();
-            path.join(Path::new("target/perf-libs"))
+            let mut path = path.join(Path::new("target/perf-libs"));
+            path.push(
+                env::var("SOLANA_PERF_LIBS_CUDA")
+                    .unwrap_or_else(|err| panic!("SOLANA_PERF_LIBS_CUDA not defined: {}", err)),
+            );
+            path
         };
         let perf_libs_dir = perf_libs_dir.to_str().unwrap();
 
@@ -26,8 +31,16 @@ fn main() {
         });
         println!("cargo:rerun-if-changed={}", perf_libs_dir);
         println!("cargo:rustc-link-search=native={}", perf_libs_dir);
-        println!("cargo:rerun-if-changed={}/libcuda-crypt.a", perf_libs_dir);
-        println!("cargo:rustc-link-lib=static=cuda-crypt");
+        if cfg!(windows) {
+            println!("cargo:rerun-if-changed={}/libcuda-crypt.dll", perf_libs_dir);
+        } else if cfg!(target_os = "macos") {
+            println!(
+                "cargo:rerun-if-changed={}/libcuda-crypt.dylib",
+                perf_libs_dir
+            );
+        } else {
+            println!("cargo:rerun-if-changed={}/libcuda-crypt.so", perf_libs_dir);
+        }
 
         let cuda_home = match env::var("CUDA_HOME") {
             Ok(cuda_home) => cuda_home,
