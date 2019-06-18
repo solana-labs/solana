@@ -117,9 +117,10 @@ local|tar)
     fi
 
     lamports_per_signature="42"
-    for i in "${!genesisOptions[@]}"; do
-      if [[ "${genesisOptions[$i]}" = "--target-lamports-per-signature" ]]; then
-        lamports_per_signature="${genesisOptions[$((i+1))]}"
+    genesis_args=($genesisOptions)
+    for i in "${!genesis_args[@]}"; do
+      if [[ "${genesis_args[$i]}" = --target-lamports-per-signature ]]; then
+        lamports_per_signature="${genesis_args[$((i+1))]}"
         break
       fi
     done

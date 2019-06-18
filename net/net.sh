@@ -108,6 +108,9 @@ while [[ -n $1 ]]; do
     if [[ $1 = --hashes-per-tick ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
+    elif [[ $1 = --target-lamports-per-signature ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
       shift 2
