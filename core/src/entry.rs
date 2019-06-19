@@ -224,6 +224,7 @@ where
 pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
+    fn verify_cpu(&self, start_hash: &Hash) -> bool;
     fn to_shared_blobs(&self) -> Vec<SharedBlob>;
     fn to_blobs(&self) -> Vec<Blob>;
     fn to_single_entry_blobs(&self) -> Vec<Blob>;
@@ -233,6 +234,10 @@ pub trait EntrySlice {
 impl EntrySlice for [Entry] {
     #[cfg(not(feature = "cuda"))]
     fn verify(&self, start_hash: &Hash) -> bool {
+        self.verify_cpu(start_hash)
+    }
+
+    fn verify_cpu(&self, start_hash: &Hash) -> bool {
         let now = Instant::now();
         let genesis = [Entry {
             num_hashes: 0,
@@ -266,26 +271,33 @@ impl EntrySlice for [Entry] {
     #[cfg(feature = "cuda")]
     fn verify(&self, start_hash: &Hash) -> bool {
         let now = Instant::now();
+
+        let mut total_num_hashes = 0;
+
+        let num_hashes_vec: Vec<u64> = self
+            .into_iter()
+            .map(|entry| {
+                let num_hashes = entry.num_hashes.saturating_sub(1);
+                total_num_hashes += num_hashes;
+                num_hashes
+            })
+            .collect();
+
+        if total_num_hashes < 64 {
+            return self.verify_cpu(start_hash);
+        }
+
         let genesis = [Entry {
             num_hashes: 0,
             hash: *start_hash,
             transactions: vec![],
         }];
 
-        let hashes: Vec<Hash> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                genesis
-                    .par_iter()
-                    .chain(self)
-                    .map(|entry| entry.hash)
-                    .take(self.len())
-                    .collect()
-            })
-        });
-
-        let num_hashes_vec: Vec<u64> = self
-            .into_iter()
-            .map(|entry| entry.num_hashes.saturating_sub(1))
+        let hashes: Vec<Hash> = genesis
+            .iter()
+            .chain(self)
+            .map(|entry| entry.hash)
+            .take(self.len())
             .collect();
 
         let length = self.len();
