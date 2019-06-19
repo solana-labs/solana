@@ -283,7 +283,15 @@ impl EntrySlice for [Entry] {
             })
             .collect();
 
-        if total_num_hashes < 64 {
+        inc_new_counter_warn!(
+            "entry_verify-num_hashes",
+            total_num_hashes as usize
+        );
+        inc_new_counter_warn!(
+            "entry_verify-num_entries",
+            self.len() as usize
+        );
+        if self.len() < 64 {
             return self.verify_cpu(start_hash);
         }
 
@@ -293,6 +301,7 @@ impl EntrySlice for [Entry] {
             transactions: vec![],
         }];
 
+        let now1 = Instant::now();
         let hashes: Vec<Hash> = genesis
             .iter()
             .chain(self)
@@ -303,7 +312,12 @@ impl EntrySlice for [Entry] {
         let length = self.len();
         let hashes = Arc::new(Mutex::new(hashes));
         let hashes_clone = hashes.clone();
+        inc_new_counter_warn!(
+            "entry_verify-genesis_iter",
+            timing::duration_as_ms(&now1.elapsed()) as usize
+        );
 
+        let now1 = Instant::now();
         let gpu_verify_thread = thread::spawn(move || {
             let mut hashes = hashes_clone.lock().unwrap();
             let res;
@@ -320,6 +334,7 @@ impl EntrySlice for [Entry] {
             }
         });
 
+        let now2 = Instant::now();
         let tx_hashes: Vec<Option<Hash>> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 self.into_par_iter()
@@ -333,9 +348,18 @@ impl EntrySlice for [Entry] {
                     .collect()
             })
         });
+        inc_new_counter_warn!(
+            "entry_verify-tx_hash",
+            timing::duration_as_ms(&now2.elapsed()) as usize
+        );
 
         gpu_verify_thread.join().unwrap();
+        inc_new_counter_warn!(
+            "entry_verify-gpu_thread",
+            timing::duration_as_ms(&now1.elapsed()) as usize
+        );
 
+        let now1 = Instant::now();
         let hashes = Arc::try_unwrap(hashes).unwrap().into_inner().unwrap();
         let res =
             PAR_THREAD_POOL.with(|thread_pool| {
@@ -356,6 +380,10 @@ impl EntrySlice for [Entry] {
                     )
                 })
             });
+        inc_new_counter_warn!(
+            "entry_verify-mixin",
+            timing::duration_as_ms(&now1.elapsed()) as usize
+        );
         inc_new_counter_warn!(
             "entry_verify-duration",
             timing::duration_as_ms(&now.elapsed()) as usize
