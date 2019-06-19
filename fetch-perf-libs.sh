@@ -88,4 +88,4 @@ done
 
 echo
 echo No supported CUDA versions detected
-exit 1
+exit 0
