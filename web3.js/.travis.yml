@@ -28,6 +28,9 @@ before_install:
 
 script:
   - ls -l lib
+  - test -r lib/index.iife.js
+  - test -r lib/index.cjs.js
+  - test -r lib/index.esm.js
   - npm run doc
   - npm run flow
   - npm run lint
