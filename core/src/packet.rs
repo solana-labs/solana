@@ -406,8 +406,8 @@ impl Blob {
 
     pub fn seed(&self) -> [u8; 32] {
         let mut seed = [0; 32];
-        seed[0..8].copy_from_slice(&self.index().to_le_bytes());
-        seed[8..16].copy_from_slice(&self.slot().to_le_bytes());
+        let seed_len = seed.len();
+        seed[0..32].copy_from_slice(&self.get_signature_bytes()[..seed_len]);
         seed
     }
 
@@ -486,6 +486,10 @@ impl Blob {
         let new_size = size + BLOB_HEADER_SIZE;
         self.meta.size = new_size;
         self.set_data_size(new_size as u64);
+    }
+
+    pub fn get_signature_bytes(&self) -> &[u8] {
+        &self.data[SIGNATURE_RANGE]
     }
 
     pub fn store_packets<T: Borrow<Packet>>(&mut self, packets: &[T]) -> u64 {
@@ -609,7 +613,7 @@ impl Signable for Blob {
     }
 
     fn get_signature(&self) -> Signature {
-        Signature::new(&self.data[SIGNATURE_RANGE])
+        Signature::new(self.get_signature_bytes())
     }
 
     fn set_signature(&mut self, signature: Signature) {
