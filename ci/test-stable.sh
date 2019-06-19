@@ -44,6 +44,7 @@ test-stable-perf)
     Cargo.toml$ \
     ci/test-stable-perf.sh \
     ci/test-stable.sh \
+    ^fetch-perf-libs.sh \
     ^programs/ \
     ^sdk/ \
   || {
