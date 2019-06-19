@@ -6,7 +6,19 @@ if [[ -z $installDir ]]; then
   installDir="$(cd "$(dirname "$0")"/..; pwd)"
 fi
 
-channel=$("$(dirname "$0")"/testnet-default-channel.js)
+channel=$(
+  cd "$(dirname "$0")";
+  node -p '
+    let p = [
+      "../lib/node_modules/@solana/web3.js/package.json",
+      "../@solana/web3.js/package.json",
+      "../package.json"
+    ].find(require("fs").existsSync);
+    if (!p) throw new Error("Unable to locate solana-web3.js directory");
+    require(p)["testnetDefaultChannel"]
+  '
+)
+
 if [[ -n $2 ]]; then
   channel=$2
 fi
