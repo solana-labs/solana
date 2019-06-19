@@ -20,7 +20,7 @@ use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, A
 use solana::blocktree::create_new_ledger;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::genesis_block::Builder;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
@@ -47,30 +47,26 @@ pub enum AccountFileFormat {
 pub fn append_primordial_accounts(
     file: &str,
     file_format: AccountFileFormat,
-    genesis_block: &mut GenesisBlock,
-) -> io::Result<()> {
+    mut builder: Builder,
+) -> io::Result<(Builder)> {
     let accounts_file = File::open(file.to_string())?;
 
     let primordial_accounts: HashMap<String, u64> = serde_yaml::from_reader(accounts_file)
         .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
 
-    primordial_accounts
-        .into_iter()
-        .for_each(|(account, balance)| {
-            let pubkey = match file_format {
-                AccountFileFormat::Pubkey => Pubkey::from_str(account.as_str()).unwrap(),
-                AccountFileFormat::Keypair => {
-                    let bytes: Vec<u8> = serde_json::from_str(account.as_str()).unwrap();
-                    Keypair::from_bytes(&bytes).unwrap().pubkey()
-                }
-            };
+    for (account, balance) in primordial_accounts {
+        let pubkey = match file_format {
+            AccountFileFormat::Pubkey => Pubkey::from_str(account.as_str()).unwrap(),
+            AccountFileFormat::Keypair => {
+                let bytes: Vec<u8> = serde_json::from_str(account.as_str()).unwrap();
+                Keypair::from_bytes(&bytes).unwrap().pubkey()
+            }
+        };
 
-            genesis_block
-                .accounts
-                .push((pubkey, Account::new(balance, 0, &system_program::id())))
-        });
+        builder = builder.account(pubkey, Account::new(balance, 0, &system_program::id()));
+    }
 
-    Ok(())
+    Ok(builder)
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -292,8 +288,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         1,
     );
 
-    let mut genesis_block = GenesisBlock::new(
-        &[
+    let mut builder = Builder::new()
+        .accounts(&[
             // the mint
             (
                 mint_keypair.pubkey(),
@@ -326,8 +322,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 storage_mining_keypair.pubkey(),
                 storage_contract::create_mining_pool_account(storage_pool_lamports),
             ),
-        ],
-        &[
+        ])
+        .native_instruction_processors(&[
             solana_bpf_loader_program!(),
             solana_vote_program!(),
             solana_stake_program!(),
@@ -336,27 +332,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             solana_config_program!(),
             solana_exchange_program!(),
             solana_storage_program!(),
-        ],
-    );
+        ])
+        .ticks_per_slot(value_t_or_exit!(matches, "ticks_per_slot", u64))
+        .slots_per_epoch(value_t_or_exit!(matches, "slots_per_epoch", u64));
 
-    if let Some(file) = matches.value_of("primordial_accounts_file") {
-        append_primordial_accounts(file, AccountFileFormat::Pubkey, &mut genesis_block)?;
-    }
-
-    if let Some(file) = matches.value_of("primordial_keypairs_file") {
-        append_primordial_accounts(file, AccountFileFormat::Keypair, &mut genesis_block)?;
-    }
-
-    genesis_block.fee_calculator.target_lamports_per_signature =
+    let mut fee_calculator = FeeCalculator::default();
+    fee_calculator.target_lamports_per_signature =
         value_t_or_exit!(matches, "target_lamports_per_signature", u64);
-    genesis_block.fee_calculator.target_signatures_per_slot =
+    fee_calculator.target_signatures_per_slot =
         value_t_or_exit!(matches, "target_signatures_per_slot", usize);
-    genesis_block.fee_calculator = FeeCalculator::new_derived(&genesis_block.fee_calculator, 0);
+    builder = builder.fee_calculator(&FeeCalculator::new_derived(&fee_calculator, 0));
 
-    genesis_block.ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
-    genesis_block.slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
-    genesis_block.stakers_slot_offset = genesis_block.slots_per_epoch;
-    genesis_block.poh_config.target_tick_duration =
+    let mut poh_config = PohConfig::default();
+    poh_config.target_tick_duration =
         Duration::from_millis(value_t_or_exit!(matches, "target_tick_duration", u64));
 
     match matches.value_of("hashes_per_tick").unwrap() {
@@ -370,22 +358,29 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let end = Instant::now();
             let elapsed = end.duration_since(start).as_millis();
 
-            let hashes_per_tick = (genesis_block.poh_config.target_tick_duration.as_millis()
-                * 1_000_000
-                / elapsed) as u64;
+            let hashes_per_tick =
+                (poh_config.target_tick_duration.as_millis() * 1_000_000 / elapsed) as u64;
             println!("Hashes per tick: {}", hashes_per_tick);
-            genesis_block.poh_config.hashes_per_tick = Some(hashes_per_tick);
+            poh_config.hashes_per_tick = Some(hashes_per_tick);
         }
         "sleep" => {
-            genesis_block.poh_config.hashes_per_tick = None;
+            poh_config.hashes_per_tick = None;
         }
         _ => {
-            genesis_block.poh_config.hashes_per_tick =
-                Some(value_t_or_exit!(matches, "hashes_per_tick", u64));
+            poh_config.hashes_per_tick = Some(value_t_or_exit!(matches, "hashes_per_tick", u64));
         }
     }
+    builder = builder.poh_config(&poh_config);
 
-    create_new_ledger(ledger_path, &genesis_block)?;
+    if let Some(file) = matches.value_of("primordial_accounts_file") {
+        builder = append_primordial_accounts(file, AccountFileFormat::Pubkey, builder)?;
+    }
+
+    if let Some(file) = matches.value_of("primordial_keypairs_file") {
+        builder = append_primordial_accounts(file, AccountFileFormat::Keypair, builder)?;
+    }
+
+    create_new_ledger(ledger_path, &builder.build())?;
     Ok(())
 }
 
@@ -393,7 +388,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 mod tests {
     use super::*;
     use hashbrown::HashSet;
-    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::Builder;
     use solana_sdk::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::fs::remove_file;
@@ -420,15 +415,15 @@ mod tests {
 
     #[test]
     fn test_append_primordial_accounts_to_genesis() {
-        let mut genesis_block = GenesisBlock::new(&[], &[]);
-
         // Test invalid file returns error
         assert!(append_primordial_accounts(
             "unknownfile",
             AccountFileFormat::Pubkey,
-            &mut genesis_block
+            Builder::new()
         )
         .is_err());
+
+        let mut builder = Builder::new();
 
         let mut primordial_accounts = HashMap::new();
         primordial_accounts.insert(Pubkey::new_rand().to_string(), 2 as u64);
@@ -440,26 +435,29 @@ mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
-        // Test valid file returns ok
-        assert!(append_primordial_accounts(
+        builder = append_primordial_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
             AccountFileFormat::Pubkey,
-            &mut genesis_block
+            builder,
         )
-        .is_ok());
+        .expect("test_append_primordial_accounts_to_genesis.yml");
+        // Test valid file returns ok
 
         remove_file(path).unwrap();
 
-        // Test all accounts were added
-        assert_eq!(genesis_block.accounts.len(), primordial_accounts.len());
+        {
+            let genesis_block = builder.clone().build();
+            // Test all accounts were added
+            assert_eq!(genesis_block.accounts.len(), primordial_accounts.len());
 
-        // Test account data matches
-        (0..primordial_accounts.len()).for_each(|i| {
-            assert_eq!(
-                primordial_accounts[&genesis_block.accounts[i].0.to_string()],
-                genesis_block.accounts[i].1.lamports,
-            );
-        });
+            // Test account data matches
+            (0..primordial_accounts.len()).for_each(|i| {
+                assert_eq!(
+                    primordial_accounts[&genesis_block.accounts[i].0.to_string()],
+                    genesis_block.accounts[i].1.lamports,
+                );
+            });
+        }
 
         // Test more accounts can be appended
         let mut primordial_accounts1 = HashMap::new();
@@ -472,15 +470,16 @@ mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
-        assert!(append_primordial_accounts(
+        builder = append_primordial_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
             AccountFileFormat::Pubkey,
-            &mut genesis_block
+            builder,
         )
-        .is_ok());
+        .expect("test_append_primordial_accounts_to_genesis.yml");
 
         remove_file(path).unwrap();
 
+        let genesis_block = builder.clone().build();
         // Test total number of accounts is correct
         assert_eq!(
             genesis_block.accounts.len(),
@@ -528,15 +527,16 @@ mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
-        assert!(append_primordial_accounts(
+        builder = append_primordial_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
             AccountFileFormat::Keypair,
-            &mut genesis_block
+            builder,
         )
-        .is_ok());
+        .expect("builder");
 
         remove_file(path).unwrap();
 
+        let genesis_block = builder.clone().build();
         // Test total number of accounts is correct
         assert_eq!(
             genesis_block.accounts.len(),
