@@ -342,7 +342,10 @@ impl Accounts {
         let (credit_debit_keys, credit_only_keys) = message.get_account_keys_by_lock_type();
 
         for k in credit_debit_keys.iter() {
-            if locks.contains(k) || credit_only_locks.contains_key(k) {
+            if locks.contains(k)
+                || (credit_only_locks.contains_key(k)
+                    && Arc::strong_count(credit_only_locks.get(&k).unwrap()) > 1)
+            {
                 error_counters.account_in_use += 1;
                 debug!("Account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
@@ -1128,6 +1131,96 @@ mod tests {
             accounts.hash_internal_state(0),
             daccounts.hash_internal_state(0)
         );
+    }
+
+    #[test]
+    fn test_accounts_locks() {
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+
+        let account0 = Account::new(1, 0, &Pubkey::default());
+        let account1 = Account::new(2, 0, &Pubkey::default());
+        let account2 = Account::new(3, 0, &Pubkey::default());
+        let account3 = Account::new(4, 0, &Pubkey::default());
+
+        let accounts = Accounts::new(None);
+        accounts.store_slow(0, &keypair0.pubkey(), &account0);
+        accounts.store_slow(0, &keypair1.pubkey(), &account1);
+        accounts.store_slow(0, &keypair2.pubkey(), &account2);
+        accounts.store_slow(0, &keypair3.pubkey(), &account3);
+
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair0.pubkey(), keypair1.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx = Transaction::new(&[&keypair0], message, Hash::default());
+        let credit_only_locks0 = accounts.lock_accounts(&[tx]);
+
+        assert!(credit_only_locks0[0].is_ok());
+        if let Ok(lock) = &credit_only_locks0[0] {
+            assert_eq!(lock[0].load(Ordering::Relaxed), 0);
+            assert_eq!(Arc::strong_count(&lock[0]), 2);
+        }
+
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair2.pubkey(), keypair1.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx0 = Transaction::new(&[&keypair2], message, Hash::default());
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair1.pubkey(), keypair3.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
+        let txs = vec![tx0, tx1];
+        let credit_only_locks1 = accounts.lock_accounts(&txs);
+
+        assert!(credit_only_locks1[0].is_ok()); // Credit-only account (keypair1) can be referenced multiple times
+        assert!(credit_only_locks1[1].is_err()); // Credit-only account (keypair1) cannot also be locked as credit-debit
+        if let Ok(lock) = &credit_only_locks1[0] {
+            assert_eq!(Arc::strong_count(&lock[0]), 3);
+        }
+
+        // Drop locks on credit-only accounts
+        drop(credit_only_locks0);
+        drop(credit_only_locks1);
+
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair1.pubkey(), keypair3.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx = Transaction::new(&[&keypair1], message, Hash::default());
+        let credit_only_locks2 = accounts.lock_accounts(&[tx]);
+
+        assert!(credit_only_locks2[0].is_ok()); // Now keypair1 account can be locked as credit-debit
+
+        // Check that credit-only credits are still cached in accounts struct
+        let credit_only_account_locks = accounts.credit_only_account_locks.lock().unwrap();
+        let keypair1_lock = credit_only_account_locks.get(&keypair1.pubkey());
+        assert!(keypair1_lock.is_some());
+        assert_eq!(Arc::strong_count(&keypair1_lock.unwrap()), 1);
     }
 
     #[test]
