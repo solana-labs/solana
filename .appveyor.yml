@@ -7,7 +7,8 @@ branches:
   - /v[0-9.]+/
 
 cache:
-  - '%USERPROFILE%\.cargo -> appveyor.yml'
+  - '%USERPROFILE%\.cargo'
+  - '%APPVEYOR_BUILD_FOLDER%\target'
 
 build_script:
   - bash ci/publish-tarball.sh
