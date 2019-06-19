@@ -243,7 +243,9 @@ impl AccountStorageEntry {
             status = AccountStorageStatus::Available;
         }
 
-        *count_and_status = (count - 1, status);
+        if count > 0 {
+            *count_and_status = (count - 1, status);
+        }
         count_and_status.0
     }
 }
