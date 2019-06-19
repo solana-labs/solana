@@ -6,6 +6,7 @@
 
 - [Getting Started](getting-started.md)
   - [Testnet Participation](testnet-participation.md)
+  - [Testnet Replicator](testnet-replicator.md)
   - [Example: Web Wallet](webwallet.md)
 
 - [Programming Model](programs.md)

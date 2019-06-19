@@ -299,12 +299,6 @@ EOF
   default_arg --storage-keypair "$storage_keypair_path"
   default_arg --ledger "$ledger_config_dir"
 
-  storage_mining_pool_keypair_path="$SOLANA_CONFIG_DIR"/storage-mining-pool-keypair.json
-  if [[ -r $storage_mining_pool_keypair_path ]]; then
-    storage_mining_pool_pubkey=$($solana_keygen pubkey "$storage_mining_pool_keypair_path")
-    default_arg --mining-pool "$storage_mining_pool_pubkey"
-  fi
-
   rsync_entrypoint_url=$(rsync_url "$entrypoint")
 elif [[ $node_type = bootstrap_leader ]]; then
   if [[ ${#positional_args[@]} -ne 0 ]]; then

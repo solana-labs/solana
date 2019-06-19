@@ -303,7 +303,7 @@ impl Replicator {
         })
     }
 
-    pub fn run(&mut self, mining_pool_pubkey: Option<Pubkey>) {
+    pub fn run(&mut self, mining_pool_pubkey: Pubkey) {
         info!("waiting for ledger download");
         self.thread_handles.pop().unwrap().join().unwrap();
         self.encrypt_ledger()
@@ -330,9 +330,7 @@ impl Replicator {
                     }
                 };
             self.blockhash = storage_blockhash;
-            if let Some(mining_pool_pubkey) = mining_pool_pubkey {
-                self.redeem_rewards(&mining_pool_pubkey);
-            }
+            self.redeem_rewards(&mining_pool_pubkey);
         }
     }
 
