@@ -14,6 +14,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_metrics::{datapoint_info, inc_new_counter_error};
 use solana_runtime::epoch_schedule::EpochSchedule;
+use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
@@ -23,6 +24,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
 fn retransmit(
+    my_id: &Pubkey,
     bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -40,6 +42,9 @@ fn retransmit(
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     for blob in &blobs {
+        if blob.read().unwrap().id() == *my_id {
+            continue;
+        }
         let (my_index, mut peers) = cluster_info.read().unwrap().shuffle_peers_and_index(
             staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch).as_ref(),
             ChaChaRng::from_seed(blob.read().unwrap().seed()),
@@ -82,8 +87,10 @@ fn retransmitter(
         .name("solana-retransmitter".to_string())
         .spawn(move || {
             trace!("retransmitter started");
+            let my_id = cluster_info.read().unwrap().id();
             loop {
                 if let Err(e) = retransmit(
+                    &my_id,
                     &bank_forks,
                     &leader_schedule_cache,
                     &cluster_info,
