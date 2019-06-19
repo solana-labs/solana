@@ -294,10 +294,7 @@ impl EntrySlice for [Entry] {
 
         let num_hashes_vec: Vec<u64> = self
             .into_iter()
-            .map(|entry| {
-                let num_hashes = entry.num_hashes.saturating_sub(1);
-                num_hashes
-            })
+            .map(|entry| entry.num_hashes.saturating_sub(1))
             .collect();
 
         let length = self.len();
