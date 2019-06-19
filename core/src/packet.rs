@@ -407,7 +407,7 @@ impl Blob {
     pub fn seed(&self) -> [u8; 32] {
         let mut seed = [0; 32];
         let seed_len = seed.len();
-        seed[0..32].copy_from_slice(&self.get_signature_bytes()[..seed_len]);
+        seed[0..seed_len].copy_from_slice(&self.get_signature_bytes()[..seed_len]);
         seed
     }
 
