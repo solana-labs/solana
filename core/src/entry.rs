@@ -10,6 +10,7 @@ use chrono::prelude::Utc;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_budget_api::budget_instruction;
+use solana_metrics::inc_new_counter_warn;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
@@ -20,10 +21,12 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "cuda")]
 use crate::sigverify::poh_verify_many;
+use solana_sdk::timing;
 #[cfg(feature = "cuda")]
 use std::sync::Mutex;
 #[cfg(feature = "cuda")]
 use std::thread;
+use std::time::Instant;
 
 pub const NUM_THREADS: u32 = 10;
 
@@ -230,13 +233,14 @@ pub trait EntrySlice {
 impl EntrySlice for [Entry] {
     #[cfg(not(feature = "cuda"))]
     fn verify(&self, start_hash: &Hash) -> bool {
+        let now = Instant::now();
         let genesis = [Entry {
             num_hashes: 0,
             hash: *start_hash,
             transactions: vec![],
         }];
         let entry_pairs = genesis.par_iter().chain(self).zip(self);
-        PAR_THREAD_POOL.with(|thread_pool| {
+        let res = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 entry_pairs.all(|(x0, x1)| {
                     let r = x1.verify(&x0.hash);
@@ -251,11 +255,17 @@ impl EntrySlice for [Entry] {
                     r
                 })
             })
-        })
+        });
+        inc_new_counter_warn!(
+            "entry_verify-duration",
+            timing::duration_as_ms(&now.elapsed()) as usize
+        );
+        res
     }
 
     #[cfg(feature = "cuda")]
     fn verify(&self, start_hash: &Hash) -> bool {
+        let now = Instant::now();
         let genesis = [Entry {
             num_hashes: 0,
             hash: *start_hash,
@@ -315,26 +325,30 @@ impl EntrySlice for [Entry] {
         gpu_verify_thread.join().unwrap();
 
         let hashes = Arc::try_unwrap(hashes).unwrap().into_inner().unwrap();
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                hashes
-                    .into_par_iter()
-                    .zip(tx_hashes)
-                    .zip(self)
-                    .all(|((hash, tx_hash), answer)| {
-                        if answer.num_hashes == 0 {
-                            hash == answer.hash
-                        } else {
-                            let mut poh = Poh::new(hash, None);
-                            if let Some(mixin) = tx_hash {
-                                poh.record(mixin).unwrap().hash == answer.hash
+        let res =
+            PAR_THREAD_POOL.with(|thread_pool| {
+                thread_pool.borrow().install(|| {
+                    hashes.into_par_iter().zip(tx_hashes).zip(self).all(
+                        |((hash, tx_hash), answer)| {
+                            if answer.num_hashes == 0 {
+                                hash == answer.hash
                             } else {
-                                poh.tick().unwrap().hash == answer.hash
+                                let mut poh = Poh::new(hash, None);
+                                if let Some(mixin) = tx_hash {
+                                    poh.record(mixin).unwrap().hash == answer.hash
+                                } else {
+                                    poh.tick().unwrap().hash == answer.hash
+                                }
                             }
-                        }
-                    })
-            })
-        })
+                        },
+                    )
+                })
+            });
+        inc_new_counter_warn!(
+            "entry_verify-duration",
+            timing::duration_as_ms(&now.elapsed()) as usize
+        );
+        res
     }
 
     fn to_blobs(&self) -> Vec<Blob> {
