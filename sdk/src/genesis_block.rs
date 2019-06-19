@@ -15,16 +15,17 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GenesisBlock {
     pub accounts: Vec<(Pubkey, Account)>,
-    pub fee_calculator: FeeCalculator,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
-    pub ticks_per_slot: u64,
+    pub rewards_pools: Vec<(Pubkey, Account)>,
     pub slots_per_epoch: u64,
     pub stakers_slot_offset: u64,
     pub epoch_warmup: bool,
+    pub ticks_per_slot: u64,
     pub poh_config: PohConfig,
+    pub fee_calculator: FeeCalculator,
     pub inflation: Inflation,
 }
 
@@ -47,15 +48,99 @@ impl Default for GenesisBlock {
     fn default() -> Self {
         Self {
             accounts: Vec::new(),
-            epoch_warmup: true,
-            fee_calculator: FeeCalculator::default(),
             native_instruction_processors: Vec::new(),
+            rewards_pools: Vec::new(),
+            epoch_warmup: true,
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
             stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             poh_config: PohConfig::default(),
             inflation: Inflation::default(),
+            fee_calculator: FeeCalculator::default(),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct Builder {
+    genesis_block: GenesisBlock,
+    already_have_stakers_slot_offset: bool,
+}
+
+impl Builder {
+    pub fn new() -> Self {
+        Builder::default()
+    }
+    // consuming builder because I don't want to clone all the accounts
+    pub fn build(self) -> GenesisBlock {
+        self.genesis_block
+    }
+
+    fn append<T: Clone>(items: &[T], mut dest: Vec<T>) -> Vec<T> {
+        items.iter().cloned().for_each(|item| dest.push(item));
+        dest
+    }
+
+    pub fn account(self, pubkey: Pubkey, account: Account) -> Self {
+        self.accounts(&[(pubkey, account)])
+    }
+    pub fn accounts(mut self, accounts: &[(Pubkey, Account)]) -> Self {
+        self.genesis_block.accounts = Self::append(accounts, self.genesis_block.accounts);
+        self
+    }
+    pub fn native_instruction_processor(self, name: &str, pubkey: Pubkey) -> Self {
+        self.native_instruction_processors(&[(name.to_string(), pubkey)])
+    }
+    pub fn native_instruction_processors(
+        mut self,
+        native_instruction_processors: &[(String, Pubkey)],
+    ) -> Self {
+        self.genesis_block.native_instruction_processors = Self::append(
+            native_instruction_processors,
+            self.genesis_block.native_instruction_processors,
+        );
+        self
+    }
+    pub fn rewards_pool(self, pubkey: Pubkey, account: Account) -> Self {
+        self.rewards_pools(&[(pubkey, account)])
+    }
+    pub fn rewards_pools(mut self, rewards_pools: &[(Pubkey, Account)]) -> Self {
+        self.genesis_block.rewards_pools =
+            Self::append(rewards_pools, self.genesis_block.rewards_pools);
+        self
+    }
+    // also sets stakers_slot_offset, unless already set explicitly
+    pub fn slots_per_epoch(mut self, slots_per_epoch: u64) -> Self {
+        self.genesis_block.slots_per_epoch = slots_per_epoch;
+        if !self.already_have_stakers_slot_offset {
+            self.genesis_block.stakers_slot_offset = slots_per_epoch;
+        }
+        self
+    }
+    pub fn stakers_slot_offset(mut self, stakers_slot_offset: u64) -> Self {
+        self.genesis_block.stakers_slot_offset = stakers_slot_offset;
+        self.already_have_stakers_slot_offset = true;
+        self
+    }
+    pub fn epoch_warmup(mut self, epoch_warmup: bool) -> Self {
+        self.genesis_block.epoch_warmup = epoch_warmup;
+        self
+    }
+    pub fn ticks_per_slot(mut self, ticks_per_slot: u64) -> Self {
+        self.genesis_block.ticks_per_slot = ticks_per_slot;
+        self
+    }
+    pub fn poh_config(mut self, poh_config: &PohConfig) -> Self {
+        self.genesis_block.poh_config = poh_config.clone();
+        self
+    }
+    pub fn fee_calculator(mut self, fee_calculator: &FeeCalculator) -> Self {
+        self.genesis_block.fee_calculator = fee_calculator.clone();
+        self
+    }
+    pub fn inflation(mut self, inflation: &Inflation) -> Self {
+        self.genesis_block.inflation = inflation.clone();
+        self
     }
 }
 
@@ -123,16 +208,15 @@ mod tests {
     #[test]
     fn test_genesis_block() {
         let mint_keypair = Keypair::new();
-        let block = GenesisBlock::new(
-            &[
-                (
-                    mint_keypair.pubkey(),
-                    Account::new(10_000, 0, &Pubkey::default()),
-                ),
-                (Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default())),
-            ],
-            &[("hi".to_string(), Pubkey::new_rand())],
-        );
+        let block = Builder::new()
+            .account(
+                mint_keypair.pubkey(),
+                Account::new(10_000, 0, &Pubkey::default()),
+            )
+            .accounts(&[(Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()))])
+            .native_instruction_processor("hi", Pubkey::new_rand())
+            .build();
+
         assert_eq!(block.accounts.len(), 2);
         assert!(block.accounts.iter().any(
             |(pubkey, account)| *pubkey == mint_keypair.pubkey() && account.lamports == 10_000
