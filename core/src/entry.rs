@@ -8,11 +8,13 @@ use crate::result::Result;
 use bincode::{deserialize, serialized_size};
 use chrono::prelude::Utc;
 use rayon::prelude::*;
+use rayon::ThreadPool;
 use solana_budget_api::budget_instruction;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 
@@ -22,6 +24,13 @@ use crate::sigverify::poh_verify_many;
 use std::sync::Mutex;
 #[cfg(feature = "cuda")]
 use std::thread;
+
+pub const NUM_THREADS: u32 = 10;
+
+thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .build()
+                    .unwrap()));
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -227,17 +236,21 @@ impl EntrySlice for [Entry] {
             transactions: vec![],
         }];
         let entry_pairs = genesis.par_iter().chain(self).zip(self);
-        entry_pairs.all(|(x0, x1)| {
-            let r = x1.verify(&x0.hash);
-            if !r {
-                warn!(
-                    "entry invalid!: x0: {:?}, x1: {:?} num txs: {}",
-                    x0.hash,
-                    x1.hash,
-                    x1.transactions.len()
-                );
-            }
-            r
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                entry_pairs.all(|(x0, x1)| {
+                    let r = x1.verify(&x0.hash);
+                    if !r {
+                        warn!(
+                            "entry invalid!: x0: {:?}, x1: {:?} num txs: {}",
+                            x0.hash,
+                            x1.hash,
+                            x1.transactions.len()
+                        );
+                    }
+                    r
+                })
+            })
         })
     }
 
@@ -249,12 +262,16 @@ impl EntrySlice for [Entry] {
             transactions: vec![],
         }];
 
-        let hashes: Vec<Hash> = genesis
-            .par_iter()
-            .chain(self)
-            .map(|entry| entry.hash)
-            .take(self.len())
-            .collect();
+        let hashes: Vec<Hash> = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                genesis
+                    .par_iter()
+                    .chain(self)
+                    .map(|entry| entry.hash)
+                    .take(self.len())
+                    .collect()
+            })
+        });
 
         let num_hashes_vec: Vec<u64> = self
             .into_iter()
@@ -281,36 +298,43 @@ impl EntrySlice for [Entry] {
             }
         });
 
-        let tx_hashes: Vec<Option<Hash>> = self
-            .into_par_iter()
-            .map(|entry| {
-                if entry.transactions.is_empty() {
-                    None
-                } else {
-                    Some(hash_transactions(&entry.transactions))
-                }
+        let tx_hashes: Vec<Option<Hash>> = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                self.into_par_iter()
+                    .map(|entry| {
+                        if entry.transactions.is_empty() {
+                            None
+                        } else {
+                            Some(hash_transactions(&entry.transactions))
+                        }
+                    })
+                    .collect()
             })
-            .collect();
+        });
 
         gpu_verify_thread.join().unwrap();
 
         let hashes = Arc::try_unwrap(hashes).unwrap().into_inner().unwrap();
-        hashes
-            .into_par_iter()
-            .zip(tx_hashes)
-            .zip(self)
-            .all(|((hash, tx_hash), answer)| {
-                if answer.num_hashes == 0 {
-                    hash == answer.hash
-                } else {
-                    let mut poh = Poh::new(hash, None);
-                    if let Some(mixin) = tx_hash {
-                        poh.record(mixin).unwrap().hash == answer.hash
-                    } else {
-                        poh.tick().unwrap().hash == answer.hash
-                    }
-                }
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                hashes
+                    .into_par_iter()
+                    .zip(tx_hashes)
+                    .zip(self)
+                    .all(|((hash, tx_hash), answer)| {
+                        if answer.num_hashes == 0 {
+                            hash == answer.hash
+                        } else {
+                            let mut poh = Poh::new(hash, None);
+                            if let Some(mixin) = tx_hash {
+                                poh.record(mixin).unwrap().hash == answer.hash
+                            } else {
+                                poh.tick().unwrap().hash == answer.hash
+                            }
+                        }
+                    })
             })
+        })
     }
 
     fn to_blobs(&self) -> Vec<Blob> {
