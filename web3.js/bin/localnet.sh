@@ -1,18 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-channel=$(
-  cd "$(dirname "$0")";
-  node -p '
-    let p = [
-      "../lib/node_modules/@solana/web3.js/package.json",
-      "../@solana/web3.js/package.json",
-      "../package.json"
-    ].find(require("fs").existsSync);
-    if (!p) throw new Error("Unable to locate solana-web3.js directory");
-    require(p)["testnetDefaultChannel"]
-  '
-)
+channel=$("$(dirname "$0")"/testnet-default-channel.js)
 
 usage() {
   exitcode=0

@@ -22,6 +22,7 @@
   "main": "lib/index.cjs.js",
   "module": "lib/index.esm.js",
   "bin": {
+    "solana-bpf-sdk-install": "bin/bpf-sdk-install.sh",
     "solana-localnet": "bin/localnet.sh"
   },
   "testnetDefaultChannel": "edge",
@@ -35,11 +36,8 @@
     "/src"
   ],
   "scripts": {
-    "bpf-sdk:install": "run-s bpf-sdk:clean bpf-sdk:fetch bpf-sdk:extract bpf-sdk:remove-symlinks bpf-sdk:clean",
-    "bpf-sdk:extract": "rimraf bpf-sdk; tar jxvf bpf-sdk.tar.bz2",
-    "bpf-sdk:fetch": "curl http://solana-sdk.s3.amazonaws.com/$npm_package_testnetDefaultChannel/bpf-sdk.tar.bz2 -o bpf-sdk.tar.bz2",
+    "bpf-sdk:install": "bin/bpf-sdk-install.sh",
     "bpf-sdk:remove-symlinks": "find bpf-sdk -type l -print -exec cp {} {}.tmp \\; -exec mv {}.tmp {} \\;",
-    "bpf-sdk:clean": "rimraf bpf-sdk.tar.bz2",
     "build": "cross-env NODE_ENV=production rollup -c",
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
@@ -58,7 +56,7 @@
     "localnet:up": "bin/localnet.sh up $npm_package_testnetDefaultChannel",
     "localnet:update": "bin/localnet.sh update $npm_package_testnetDefaultChannel",
     "ok": "run-s --serial lint flow test doc",
-    "prepare": "run-s clean bpf-sdk:install build",
+    "prepare": "run-s clean bpf-sdk:install bpf-sdk:remove-symlinks build",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.js'",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
     "test": "cross-env NODE_ENV=test jest --useStderr",
