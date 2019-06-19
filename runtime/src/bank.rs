@@ -321,7 +321,7 @@ impl Bank {
 
         self.transaction_count
             .store(parent.transaction_count() as usize, Ordering::Relaxed);
-        self.stakes = RwLock::new(parent.stakes.read().unwrap().clone());
+        self.stakes = RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(self.epoch()));
         self.storage_accounts = RwLock::new(parent.storage_accounts.read().unwrap().clone());
 
         self.tick_height.store(

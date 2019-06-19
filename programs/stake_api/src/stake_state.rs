@@ -49,36 +49,13 @@ impl StakeState {
         account.state().ok()
     }
 
-    // utility function, used by Stakes, tests
-    pub fn voter_pubkey_from(account: &Account) -> Option<Pubkey> {
-        Self::from(account).and_then(|state: Self| state.voter_pubkey())
-    }
-
-    // utility function, used by Stakes, tests
-    pub fn voter_pubkey_and_stake_from(account: &Account) -> Option<(Pubkey, u64)> {
-        Self::from(account).and_then(|state: Self| state.voter_pubkey_and_stake())
-    }
-
-    pub fn stake_from(account: &Account) -> Option<(Stake)> {
+    pub fn stake_from(account: &Account) -> Option<Stake> {
         Self::from(account).and_then(|state: Self| state.stake())
     }
 
-    pub fn voter_pubkey(&self) -> Option<Pubkey> {
-        match self {
-            StakeState::Stake(stake) => Some(stake.voter_pubkey),
-            _ => None,
-        }
-    }
     pub fn stake(&self) -> Option<Stake> {
         match self {
             StakeState::Stake(stake) => Some(stake.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn voter_pubkey_and_stake(&self) -> Option<(Pubkey, u64)> {
-        match self {
-            StakeState::Stake(stake) => Some((stake.voter_pubkey, stake.stake)),
             _ => None,
         }
     }
@@ -121,27 +98,26 @@ pub struct Stake {
     pub epoch: u64,      // epoch the stake was activated
     pub prev_stake: u64, // for warmup, cooldown
 }
-const STAKE_WARMUP_COOLDOWN_EPOCHS: u64 = 3;
+pub const STAKE_WARMUP_EPOCHS: u64 = 3;
 
 impl Stake {
-    pub fn stake(&mut self, epoch: u64) -> u64 {
+    pub fn stake(&self, epoch: u64) -> u64 {
         // prev_stake for stuff in the past
         if epoch < self.epoch {
             return self.prev_stake;
         }
-        if epoch - self.epoch >= STAKE_WARMUP_COOLDOWN_EPOCHS {
+        if epoch - self.epoch >= STAKE_WARMUP_EPOCHS {
             return self.stake;
         }
 
         if self.stake != 0 {
             // warmup
             // 1/3rd, then 2/3rds...
-            (self.stake / STAKE_WARMUP_COOLDOWN_EPOCHS) * (epoch - self.epoch + 1)
+            (self.stake / STAKE_WARMUP_EPOCHS) * (epoch - self.epoch + 1)
         } else if self.prev_stake != 0 {
             // cool down
             // 3/3rds, then 2/3rds...
-            self.prev_stake
-                - ((self.prev_stake / STAKE_WARMUP_COOLDOWN_EPOCHS) * (epoch - self.epoch))
+            self.prev_stake - ((self.prev_stake / STAKE_WARMUP_EPOCHS) * (epoch - self.epoch))
         } else {
             0
         }
@@ -307,7 +283,7 @@ pub fn create_stake_account(
             credits_observed: vote_state.credits(),
             stake: lamports,
             epoch: 0,
-            prev_stake: lamports,
+            prev_stake: 0,
         }))
         .expect("set_state");
 
@@ -414,25 +390,24 @@ mod tests {
     fn test_stake_stake() {
         let mut stake = Stake::default();
         assert_eq!(stake.stake(0), 0);
-        let staked = STAKE_WARMUP_COOLDOWN_EPOCHS;
+        let staked = STAKE_WARMUP_EPOCHS;
         stake.delegate(staked, &Pubkey::default(), &VoteState::default(), 1);
         // test warmup
-        for i in 0..STAKE_WARMUP_COOLDOWN_EPOCHS {
+        for i in 0..STAKE_WARMUP_EPOCHS {
             assert_eq!(stake.stake(i), i);
         }
-        assert_eq!(stake.stake(STAKE_WARMUP_COOLDOWN_EPOCHS * 42), staked);
+        assert_eq!(stake.stake(STAKE_WARMUP_EPOCHS * 42), staked);
 
-        stake.deactivate(STAKE_WARMUP_COOLDOWN_EPOCHS);
+        stake.deactivate(STAKE_WARMUP_EPOCHS);
 
         // test cooldown
-        for i in STAKE_WARMUP_COOLDOWN_EPOCHS..STAKE_WARMUP_COOLDOWN_EPOCHS * 2 {
+        for i in STAKE_WARMUP_EPOCHS..STAKE_WARMUP_EPOCHS * 2 {
             assert_eq!(
                 stake.stake(i),
-                staked
-                    - (staked / STAKE_WARMUP_COOLDOWN_EPOCHS) * (i - STAKE_WARMUP_COOLDOWN_EPOCHS)
+                staked - (staked / STAKE_WARMUP_EPOCHS) * (i - STAKE_WARMUP_EPOCHS)
             );
         }
-        assert_eq!(stake.stake(STAKE_WARMUP_COOLDOWN_EPOCHS * 42), 0);
+        assert_eq!(stake.stake(STAKE_WARMUP_EPOCHS * 42), 0);
     }
 
     #[test]
