@@ -51,10 +51,24 @@ impl ReplicatorInfo {
     }
 }
 
+pub struct ClusterValidatorInfo {
+    pub info: ValidatorInfo,
+    pub config: ValidatorConfig,
+}
+
+impl ClusterValidatorInfo {
+    pub fn new(validator_info: ValidatorInfo, config: ValidatorConfig) -> Self {
+        Self {
+            info: validator_info,
+            config,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ClusterConfig {
     /// The fullnode config that should be applied to every node in the cluster
-    pub validator_config: ValidatorConfig,
+    pub validator_configs: Vec<ValidatorConfig>,
     /// Number of replicators in the cluster
     /// Note- replicators will timeout if ticks_per_slot is much larger than the default 8
     pub num_replicators: usize,
@@ -74,7 +88,7 @@ pub struct ClusterConfig {
 impl Default for ClusterConfig {
     fn default() -> Self {
         ClusterConfig {
-            validator_config: ValidatorConfig::default(),
+            validator_configs: vec![],
             num_replicators: 0,
             num_listeners: 0,
             node_stakes: vec![],
@@ -91,11 +105,10 @@ impl Default for ClusterConfig {
 pub struct LocalCluster {
     /// Keypair with funding to participate in the network
     pub funding_keypair: Keypair,
-    pub validator_config: ValidatorConfig,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: ContactInfo,
-    pub fullnode_infos: HashMap<Pubkey, ValidatorInfo>,
-    pub listener_infos: HashMap<Pubkey, ValidatorInfo>,
+    pub fullnode_infos: HashMap<Pubkey, ClusterValidatorInfo>,
+    pub listener_infos: HashMap<Pubkey, ClusterValidatorInfo>,
     fullnodes: HashMap<Pubkey, Validator>,
     genesis_ledger_path: String,
     pub genesis_block: GenesisBlock,
@@ -113,12 +126,14 @@ impl LocalCluster {
         let config = ClusterConfig {
             node_stakes: stakes,
             cluster_lamports,
+            validator_configs: vec![ValidatorConfig::default(); num_nodes],
             ..ClusterConfig::default()
         };
         Self::new(&config)
     }
 
     pub fn new(config: &ClusterConfig) -> Self {
+        assert_eq!(config.validator_configs.len(), config.node_stakes.len());
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
@@ -161,22 +176,24 @@ impl LocalCluster {
             &leader_voting_keypair,
             &leader_storage_keypair,
             None,
-            &config.validator_config,
+            &config.validator_configs[0],
         );
 
         let mut fullnodes = HashMap::new();
         let mut fullnode_infos = HashMap::new();
         fullnodes.insert(leader_pubkey, leader_server);
-        fullnode_infos.insert(
-            leader_pubkey,
-            ValidatorInfo {
-                keypair: leader_keypair,
-                voting_keypair: leader_voting_keypair,
-                storage_keypair: leader_storage_keypair,
-                ledger_path: leader_ledger_path,
-                contact_info: leader_contact_info.clone(),
-            },
-        );
+        let leader_info = ValidatorInfo {
+            keypair: leader_keypair,
+            voting_keypair: leader_voting_keypair,
+            storage_keypair: leader_storage_keypair,
+            ledger_path: leader_ledger_path,
+            contact_info: leader_contact_info.clone(),
+        };
+
+        let cluster_leader =
+            ClusterValidatorInfo::new(leader_info, config.validator_configs[0].clone());
+
+        fullnode_infos.insert(leader_pubkey, cluster_leader);
 
         let mut cluster = Self {
             funding_keypair: mint_keypair,
@@ -187,17 +204,19 @@ impl LocalCluster {
             genesis_block,
             fullnode_infos,
             replicator_infos: HashMap::new(),
-            validator_config: config.validator_config.clone(),
             listener_infos: HashMap::new(),
         };
 
-        for stake in &config.node_stakes[1..] {
-            cluster.add_validator(&config.validator_config, *stake);
+        for (stake, validator_config) in (&config.node_stakes[1..])
+            .iter()
+            .zip((&config.validator_configs[1..]).iter())
+        {
+            cluster.add_validator(validator_config, *stake);
         }
 
         let listener_config = ValidatorConfig {
             voting_disabled: true,
-            ..config.validator_config.clone()
+            ..config.validator_configs[0].clone()
         };
         (0..config.num_listeners).for_each(|_| cluster.add_validator(&listener_config, 0));
 
@@ -294,28 +313,22 @@ impl LocalCluster {
 
         self.fullnodes
             .insert(validator_keypair.pubkey(), validator_server);
+        let validator_pubkey = validator_keypair.pubkey();
+        let validator_info = ClusterValidatorInfo::new(
+            ValidatorInfo {
+                keypair: validator_keypair,
+                voting_keypair,
+                storage_keypair,
+                ledger_path,
+                contact_info,
+            },
+            validator_config.clone(),
+        );
+
         if validator_config.voting_disabled {
-            self.listener_infos.insert(
-                validator_keypair.pubkey(),
-                ValidatorInfo {
-                    keypair: validator_keypair,
-                    voting_keypair,
-                    storage_keypair,
-                    ledger_path,
-                    contact_info,
-                },
-            );
+            self.listener_infos.insert(validator_pubkey, validator_info);
         } else {
-            self.fullnode_infos.insert(
-                validator_keypair.pubkey(),
-                ValidatorInfo {
-                    keypair: validator_keypair,
-                    voting_keypair,
-                    storage_keypair,
-                    ledger_path,
-                    contact_info,
-                },
-            );
+            self.fullnode_infos.insert(validator_pubkey, validator_info);
         }
     }
 
@@ -362,7 +375,7 @@ impl LocalCluster {
         for ledger_path in self
             .fullnode_infos
             .values()
-            .map(|f| &f.ledger_path)
+            .map(|f| &f.info.ledger_path)
             .chain(self.replicator_infos.values().map(|info| &info.ledger_path))
         {
             remove_dir_all(&ledger_path)
@@ -519,9 +532,12 @@ impl Cluster for LocalCluster {
     }
 
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
-        self.fullnode_infos
-            .get(pubkey)
-            .map(|f| create_client(f.contact_info.client_facing_addr(), FULLNODE_PORT_RANGE))
+        self.fullnode_infos.get(pubkey).map(|f| {
+            create_client(
+                f.info.contact_info.client_facing_addr(),
+                FULLNODE_PORT_RANGE,
+            )
+        })
     }
 
     fn restart_node(&mut self, pubkey: Pubkey) {
@@ -531,7 +547,8 @@ impl Cluster for LocalCluster {
         node.join().unwrap();
 
         // Restart the node
-        let fullnode_info = &self.fullnode_infos[&pubkey];
+        let fullnode_info = &self.fullnode_infos[&pubkey].info;
+        let config = &self.fullnode_infos[&pubkey].config;
         let node = Node::new_localhost_with_pubkey(&fullnode_info.keypair.pubkey());
         if pubkey == self.entry_point_info.id {
             self.entry_point_info = node.info.clone();
@@ -544,7 +561,7 @@ impl Cluster for LocalCluster {
             &fullnode_info.voting_keypair,
             &fullnode_info.storage_keypair,
             None,
-            &self.validator_config,
+            config,
         );
 
         self.fullnodes.insert(pubkey, restarted_node);
@@ -581,7 +598,7 @@ mod test {
         const NUM_NODES: usize = 1;
         let num_replicators = 1;
         let config = ClusterConfig {
-            validator_config,
+            validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
             num_replicators,
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
@@ -593,5 +610,4 @@ mod test {
         assert_eq!(cluster.fullnodes.len(), NUM_NODES);
         assert_eq!(cluster.replicators.len(), num_replicators);
     }
-
 }

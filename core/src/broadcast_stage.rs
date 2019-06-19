@@ -1,28 +1,28 @@
 //! A stage to broadcast data from a leader node to validators
-//!
+use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun;
+use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
-use crate::entry::EntrySlice;
 use crate::erasure::CodingGenerator;
-use crate::packet::index_blobs;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
-use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_metrics::{
     datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signable;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Instant;
+
+mod broadcast_utils;
+mod fail_entry_verification_broadcast_run;
+mod standard_broadcast_run;
 
 pub const NUM_THREADS: u32 = 10;
 
@@ -31,170 +31,57 @@ pub enum BroadcastStageReturnType {
     ChannelDisconnected,
 }
 
-#[derive(Default)]
-struct BroadcastStats {
-    num_entries: Vec<usize>,
-    run_elapsed: Vec<u64>,
-    to_blobs_elapsed: Vec<u64>,
+#[derive(PartialEq, Clone, Debug)]
+pub enum BroadcastStageType {
+    Standard,
+    FailEntryVerification,
 }
 
-struct Broadcast {
-    id: Pubkey,
-    coding_generator: CodingGenerator,
-    stats: BroadcastStats,
-    thread_pool: ThreadPool,
+impl BroadcastStageType {
+    pub fn new_broadcast_stage(
+        &self,
+        sock: UdpSocket,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
+        receiver: Receiver<WorkingBankEntries>,
+        exit_sender: &Arc<AtomicBool>,
+        blocktree: &Arc<Blocktree>,
+    ) -> BroadcastStage {
+        match self {
+            BroadcastStageType::Standard => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                exit_sender,
+                blocktree,
+                StandardBroadcastRun::new(),
+            ),
+
+            BroadcastStageType::FailEntryVerification => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                exit_sender,
+                blocktree,
+                FailEntryVerificationBroadcastRun::new(),
+            ),
+        }
+    }
 }
 
-impl Broadcast {
+trait BroadcastRun {
     fn run(
         &mut self,
+        broadcast: &mut Broadcast,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
-    ) -> Result<()> {
-        let timer = Duration::new(1, 0);
-        let (mut bank, entries) = receiver.recv_timeout(timer)?;
-        let mut max_tick_height = bank.max_tick_height();
+    ) -> Result<()>;
+}
 
-        let run_start = Instant::now();
-        let mut num_entries = entries.len();
-        let mut ventries = Vec::new();
-        let mut last_tick = entries.last().map(|v| v.1).unwrap_or(0);
-        ventries.push(entries);
-
-        assert!(last_tick <= max_tick_height);
-        if last_tick != max_tick_height {
-            while let Ok((same_bank, entries)) = receiver.try_recv() {
-                // If the bank changed, that implies the previous slot was interrupted and we do not have to
-                // broadcast its entries.
-                if same_bank.slot() != bank.slot() {
-                    num_entries = 0;
-                    ventries.clear();
-                    bank = same_bank.clone();
-                    max_tick_height = bank.max_tick_height();
-                }
-                num_entries += entries.len();
-                last_tick = entries.last().map(|v| v.1).unwrap_or(0);
-                ventries.push(entries);
-                assert!(last_tick <= max_tick_height,);
-                if last_tick == max_tick_height {
-                    break;
-                }
-            }
-        }
-
-        inc_new_counter_info!("broadcast_service-entries_received", num_entries);
-
-        let to_blobs_start = Instant::now();
-
-        let blobs: Vec<_> = self.thread_pool.install(|| {
-            ventries
-                .into_par_iter()
-                .map(|p| {
-                    let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
-                    entries.to_shared_blobs()
-                })
-                .flatten()
-                .collect()
-        });
-
-        let blob_index = blocktree
-            .meta(bank.slot())
-            .expect("Database error")
-            .map(|meta| meta.consumed)
-            .unwrap_or(0);
-
-        index_blobs(
-            &blobs,
-            &self.id,
-            blob_index,
-            bank.slot(),
-            bank.parent().map_or(0, |parent| parent.slot()),
-        );
-
-        if last_tick == max_tick_height {
-            blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
-        }
-
-        // Make sure not to modify the blob header or data after signing it here
-        self.thread_pool.install(|| {
-            blobs.par_iter().for_each(|b| {
-                b.write()
-                    .unwrap()
-                    .sign(&cluster_info.read().unwrap().keypair);
-            })
-        });
-
-        blocktree.write_shared_blobs(&blobs)?;
-
-        let coding = self.coding_generator.next(&blobs);
-
-        self.thread_pool.install(|| {
-            coding.par_iter().for_each(|c| {
-                c.write()
-                    .unwrap()
-                    .sign(&cluster_info.read().unwrap().keypair);
-            })
-        });
-
-        let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
-
-        let broadcast_start = Instant::now();
-
-        let bank_epoch = bank.get_stakers_epoch(bank.slot());
-        let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
-
-        // Send out data
-        cluster_info
-            .read()
-            .unwrap()
-            .broadcast(sock, &blobs, stakes.as_ref())?;
-
-        inc_new_counter_debug!("streamer-broadcast-sent", blobs.len());
-
-        // send out erasures
-        cluster_info
-            .read()
-            .unwrap()
-            .broadcast(sock, &coding, stakes.as_ref())?;
-
-        self.update_broadcast_stats(
-            duration_as_ms(&broadcast_start.elapsed()),
-            duration_as_ms(&run_start.elapsed()),
-            num_entries,
-            to_blobs_elapsed,
-            blob_index,
-        );
-
-        Ok(())
-    }
-
-    fn update_broadcast_stats(
-        &mut self,
-        broadcast_elapsed: u64,
-        run_elapsed: u64,
-        num_entries: usize,
-        to_blobs_elapsed: u64,
-        blob_index: u64,
-    ) {
-        inc_new_counter_info!("broadcast_service-time_ms", broadcast_elapsed as usize);
-
-        self.stats.num_entries.push(num_entries);
-        self.stats.to_blobs_elapsed.push(to_blobs_elapsed);
-        self.stats.run_elapsed.push(run_elapsed);
-        if self.stats.num_entries.len() >= 16 {
-            info!(
-                "broadcast: entries: {:?} blob times ms: {:?} broadcast times ms: {:?}",
-                self.stats.num_entries, self.stats.to_blobs_elapsed, self.stats.run_elapsed
-            );
-            self.stats.num_entries.clear();
-            self.stats.to_blobs_elapsed.clear();
-            self.stats.run_elapsed.clear();
-        }
-
-        datapoint!("broadcast-service", ("transmit-index", blob_index, i64));
-    }
+struct Broadcast {
+    coding_generator: CodingGenerator,
+    thread_pool: ThreadPool,
 }
 
 // Implement a destructor for the BroadcastStage thread to signal it exited
@@ -226,14 +113,12 @@ impl BroadcastStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
         blocktree: &Arc<Blocktree>,
+        mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
-        let me = cluster_info.read().unwrap().my_data().clone();
         let coding_generator = CodingGenerator::default();
 
         let mut broadcast = Broadcast {
-            id: me.id,
             coding_generator,
-            stats: BroadcastStats::default(),
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
                 .build()
@@ -241,7 +126,9 @@ impl BroadcastStage {
         };
 
         loop {
-            if let Err(e) = broadcast.run(&cluster_info, receiver, sock, blocktree) {
+            if let Err(e) =
+                broadcast_stage_run.run(&mut broadcast, &cluster_info, receiver, sock, blocktree)
+            {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastStageReturnType::ChannelDisconnected;
@@ -273,12 +160,13 @@ impl BroadcastStage {
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    fn new(
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntries>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
+        broadcast_stage_run: impl BroadcastRun + Send + 'static,
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
@@ -286,7 +174,13 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit_sender);
-                Self::run(&sock, &cluster_info, &receiver, &blocktree)
+                Self::run(
+                    &sock,
+                    &cluster_info,
+                    &receiver,
+                    &blocktree,
+                    broadcast_stage_run,
+                )
             })
             .unwrap();
 
@@ -312,6 +206,7 @@ mod test {
     use crate::service::Service;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
@@ -357,6 +252,7 @@ mod test {
             entry_receiver,
             &exit_sender,
             &blocktree,
+            StandardBroadcastRun::new(),
         );
 
         MockBroadcastStage {

@@ -2,6 +2,7 @@ extern crate solana;
 
 use hashbrown::HashSet;
 use log::*;
+use solana::broadcast_stage::BroadcastStageType;
 use solana::cluster::Cluster;
 use solana::cluster_tests;
 use solana::gossip_service::discover_cluster;
@@ -23,6 +24,7 @@ fn test_spend_and_verify_all_nodes_1() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
+        HashSet::new(),
     );
 }
 
@@ -35,6 +37,7 @@ fn test_spend_and_verify_all_nodes_2() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
+        HashSet::new(),
     );
 }
 
@@ -47,6 +50,7 @@ fn test_spend_and_verify_all_nodes_3() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
+        HashSet::new(),
     );
 }
 
@@ -63,6 +67,7 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
+        HashSet::new(),
     );
 }
 
@@ -83,8 +88,8 @@ fn test_fullnode_exit_2() {
     validator_config.rpc_config.enable_fullnode_exit = true;
     let config = ClusterConfig {
         cluster_lamports: 10_000,
-        node_stakes: vec![100; 2],
-        validator_config,
+        node_stakes: vec![100; num_nodes],
+        validator_configs: vec![validator_config.clone(); num_nodes],
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -101,7 +106,7 @@ fn test_leader_failure_4() {
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
-        validator_config: validator_config.clone(),
+        validator_configs: vec![validator_config.clone(); num_nodes],
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -124,7 +129,7 @@ fn test_two_unbalanced_stakes() {
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 1_000_000,
-        validator_config: validator_config.clone(),
+        validator_configs: vec![validator_config.clone(); 2],
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
         poh_config: PohConfig::new_sleep(Duration::from_millis(1000 / num_ticks_per_second)),
@@ -139,7 +144,10 @@ fn test_two_unbalanced_stakes() {
     );
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
-    let leader_ledger = cluster.fullnode_infos[&leader_pubkey].ledger_path.clone();
+    let leader_ledger = cluster.fullnode_infos[&leader_pubkey]
+        .info
+        .ledger_path
+        .clone();
     cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
 }
 
@@ -151,6 +159,7 @@ fn test_forwarding() {
     let config = ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 2_000_000,
+        validator_configs: vec![ValidatorConfig::default(); 3],
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&config);
@@ -171,13 +180,12 @@ fn test_forwarding() {
 
 #[test]
 fn test_restart_node() {
-    let validator_config = ValidatorConfig::default();
     let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
     let ticks_per_slot = 16;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![3],
         cluster_lamports: 100,
-        validator_config: validator_config.clone(),
+        validator_configs: vec![ValidatorConfig::default()],
         ticks_per_slot,
         slots_per_epoch,
         ..ClusterConfig::default()
@@ -205,11 +213,66 @@ fn test_listener_startup() {
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         num_listeners: 3,
+        validator_configs: vec![ValidatorConfig::default(); 1],
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&config);
     let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
     assert_eq!(cluster_nodes.len(), 4);
+}
+
+#[test]
+#[ignore]
+fn test_fail_entry_verification_leader() {
+    solana_logger::setup();
+    let num_nodes = 4;
+    let validator_config = ValidatorConfig::default();
+    let mut error_validator_config = ValidatorConfig::default();
+    error_validator_config.broadcast_stage_type = BroadcastStageType::FailEntryVerification;
+    let mut validator_configs = vec![validator_config; num_nodes - 1];
+    validator_configs.push(error_validator_config);
+
+    let cluster_config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes: vec![100; 4],
+        validator_configs: validator_configs,
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
+        ..ClusterConfig::default()
+    };
+
+    let cluster = LocalCluster::new(&cluster_config);
+    let epoch_schedule = EpochSchedule::new(
+        cluster_config.slots_per_epoch,
+        cluster_config.stakers_slot_offset,
+        true,
+    );
+    let num_warmup_epochs = epoch_schedule.get_stakers_epoch(0) + 1;
+
+    // Wait for the corrupted leader to be scheduled afer the warmup epochs expire
+    cluster_tests::sleep_n_epochs(
+        (num_warmup_epochs + 1) as f64,
+        &cluster.genesis_block.poh_config,
+        cluster_config.ticks_per_slot,
+        cluster_config.slots_per_epoch,
+    );
+
+    let corrupt_node = cluster
+        .fullnode_infos
+        .iter()
+        .find(|(_, v)| v.config.broadcast_stage_type == BroadcastStageType::FailEntryVerification)
+        .unwrap()
+        .0;
+    let mut ignore = HashSet::new();
+    ignore.insert(*corrupt_node);
+
+    // Verify that we can still spend and verify even in the presence of corrupt nodes
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        num_nodes,
+        ignore,
+    );
 }
 
 #[test]
@@ -223,7 +286,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     let num_ticks_per_slot = 40;
     let num_slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
     let num_root_buffer_slots = 10;
-    // Calculate the leader schedule num_root_buffer slots ahead. Otherwise, if stakers_slot_offset ==
+    // Calculate the leader schedule num_root_buffer_slots ahead. Otherwise, if stakers_slot_offset ==
     // num_slots_per_epoch, and num_slots_per_epoch == MINIMUM_SLOTS_PER_EPOCH, then repairmen
     // will stop sending repairs after the last slot in epoch 1 (0-indexed), because the root
     // is at most in the first epoch.
@@ -256,7 +319,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes,
         cluster_lamports,
-        validator_config: validator_config.clone(),
+        validator_configs: vec![validator_config.clone(); num_repairmen as usize],
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
         stakers_slot_offset,

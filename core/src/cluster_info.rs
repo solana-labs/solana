@@ -44,6 +44,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::Transaction;
+use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp::min;
 use std::collections::{BTreeSet, HashMap};
@@ -709,16 +710,22 @@ impl ClusterInfo {
 
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
-    pub fn broadcast(
+    pub fn broadcast<I>(
         &self,
         s: &UdpSocket,
-        blobs: &[SharedBlob],
+        blobs: I,
         stakes: Option<&HashMap<Pubkey, u64>>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<SharedBlob>,
+    {
         let mut last_err = Ok(());
         let mut broadcast_table_len = 0;
-        blobs.iter().for_each(|b| {
-            let blob = b.read().unwrap();
+        let mut blobs_len = 0;
+        blobs.into_iter().for_each(|b| {
+            blobs_len += 1;
+            let blob = b.borrow().read().unwrap();
             let broadcast_table = self.sorted_tvu_peers(stakes, ChaChaRng::from_seed(blob.seed()));
             broadcast_table_len = cmp::max(broadcast_table_len, broadcast_table.len());
 
@@ -732,7 +739,7 @@ impl ClusterInfo {
 
         last_err?;
 
-        inc_new_counter_debug!("cluster_info-broadcast-max_idx", blobs.len());
+        inc_new_counter_debug!("cluster_info-broadcast-max_idx", blobs_len);
         if broadcast_table_len != 0 {
             inc_new_counter_warn!("broadcast_service-num_peers", broadcast_table_len + 1);
         }
