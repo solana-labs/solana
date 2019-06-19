@@ -40,7 +40,6 @@ BIN_CRATES=(
   validator
   wallet
   bench-exchange
-  bench-streamer
   bench-tps
 )
 
