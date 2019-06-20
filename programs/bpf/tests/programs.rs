@@ -37,17 +37,18 @@ mod bpf {
             solana_logger::setup();
 
             let programs = [
-                "bpf_to_bpf",
-                "multiple_static",
-                "noop",
-                "noop++",
-                "relative_call",
-                "struct_pass",
-                "struct_ret",
+                ("bpf_to_bpf", true),
+                ("multiple_static", true),
+                ("noop", true),
+                ("noop++", true),
+                ("panic", false),
+                ("relative_call", true),
+                ("struct_pass", true),
+                ("struct_ret", true),
             ];
             for program in programs.iter() {
-                println!("Test program: {:?}", program);
-                let mut file = File::open(create_bpf_path(program)).expect("file open failed");
+                println!("Test program: {:?}", program.0);
+                let mut file = File::open(create_bpf_path(program.0)).expect("file open failed");
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
@@ -63,9 +64,12 @@ mod bpf {
                 let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
                 let instruction =
                     create_invoke_instruction(mint_keypair.pubkey(), program_id, &1u8);
-                bank_client
-                    .send_instruction(&mint_keypair, instruction)
-                    .unwrap();
+                let result = bank_client.send_instruction(&mint_keypair, instruction);
+                if program.1 {
+                    assert!(result.is_ok());
+                } else {
+                    assert!(result.is_err());
+                }
             }
         }
     }

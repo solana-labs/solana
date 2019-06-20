@@ -175,19 +175,15 @@ SOL_FN_PREFIX size_t sol_strlen(const char *s) {
  * Prints the line number where the panic occurred and then causes
  * the BPF VM to immediately halt execution. No accounts' userdata are updated
  */
-#define sol_panic() _sol_panic(__LINE__)
-SOL_FN_PREFIX void _sol_panic(uint64_t line) {
-  sol_log_64(0xFF, 0xFF, 0xFF, 0xFF, line);
-  uint8_t *pv = (uint8_t *)1;
-  *pv = 1;
-}
+void sol_panic_(const char *, uint64_t, uint64_t);
+#define sol_panic() sol_panic_(__FILE__, __LINE__, 0)
 
 /**
  * Asserts
  */
 #define sol_assert(expr)  \
 if (!(expr)) {          \
-  _sol_panic(__LINE__); \
+  sol_panic(); \
 }
 
 /**
