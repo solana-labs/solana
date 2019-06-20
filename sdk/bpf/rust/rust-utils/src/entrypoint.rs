@@ -1,24 +1,17 @@
 //! @brief Solana Rust-based BPF program entrypoint and its parameter types
+extern crate alloc;
 
-use crate::log::*;
+use alloc::vec::Vec;
 use core::mem::size_of;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 
-/// Max number of accounts supported
-pub const MAX_ACCOUNTS: usize = 10;
-
-/// Size in bytes of a public key
-pub const SIZE_PUBKEY: usize = 32;
-
 /// Public key
-pub struct SolPubkey<'a> {
-    pub key: &'a [u8; SIZE_PUBKEY],
-}
+pub type SolPubkey = [u8; 32];
 
 /// Keyed Account
 pub struct SolKeyedAccount<'a> {
     /// Public key of the account
-    pub key: SolPubkey<'a>,
+    pub key: &'a SolPubkey,
     /// Public key of the account
     pub is_signer: bool,
     /// Number of lamports owned by this account
@@ -26,14 +19,14 @@ pub struct SolKeyedAccount<'a> {
     /// On-chain data within this account
     pub data: &'a mut [u8],
     /// Program that owns this account
-    pub owner: SolPubkey<'a>,
+    pub owner: &'a SolPubkey,
 }
 
 /// Information about the state of the cluster immediately before the program
 /// started executing the current instruction
 pub struct SolClusterInfo<'a> {
-    ///program_id of the currently executing program
-    pub program_id: SolPubkey<'a>,
+    /// program_id of the currently executing program
+    pub program_id: &'a SolPubkey,
 }
 
 /// Declare entrypoint of the program.
@@ -48,9 +41,8 @@ macro_rules! entrypoint {
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> bool {
             unsafe {
-                if let Ok((mut ka, info, data)) = $crate::entrypoint::deserialize(input) {
-                    // Call use function
-                    $process_instruction(&mut ka, &info, &data)
+                if let Ok((mut kas, info, data)) = $crate::entrypoint::deserialize(input) {
+                    $process_instruction(&mut kas, &info, &data)
                 } else {
                     false
                 }
@@ -63,32 +55,19 @@ macro_rules! entrypoint {
 #[allow(clippy::type_complexity)]
 pub unsafe fn deserialize<'a>(
     input: *mut u8,
-) -> Result<
-    (
-        [Option<SolKeyedAccount<'a>>; MAX_ACCOUNTS],
-        SolClusterInfo<'a>,
-        &'a [u8],
-    ),
-    (),
-> {
+) -> Result<(Vec<SolKeyedAccount<'a>>, SolClusterInfo<'a>, &'a [u8]), ()> {
     let mut offset: usize = 0;
 
     // Number of KeyedAccounts present
 
     #[allow(clippy::cast_ptr_alignment)]
     let num_ka = *(input.add(offset) as *const u64) as usize;
-    offset += 8;
+    offset += size_of::<u64>();
 
     // KeyedAccounts
 
-    if num_ka > MAX_ACCOUNTS {
-        sol_log("Error: Too many accounts");
-        return Err(());
-    }
-
-    let mut kas: [Option<SolKeyedAccount>; MAX_ACCOUNTS] =
-        [None, None, None, None, None, None, None, None, None, None];
-    for ka in kas.iter_mut().take(num_ka) {
+    let mut kas = Vec::new();
+    for _ in 0..num_ka {
         let is_signer = {
             #[allow(clippy::cast_ptr_alignment)]
             let is_signer_val = *(input.add(offset) as *const u64);
@@ -96,12 +75,8 @@ pub unsafe fn deserialize<'a>(
         };
         offset += size_of::<u64>();
 
-        let key = {
-            SolPubkey {
-                key: &*(input.add(offset) as *mut [u8; SIZE_PUBKEY]),
-            }
-        };
-        offset += SIZE_PUBKEY;
+        let key: &SolPubkey = &*(input.add(offset) as *const [u8; size_of::<SolPubkey>()]);
+        offset += size_of::<SolPubkey>();
 
         #[allow(clippy::cast_ptr_alignment)]
         let lamports = *(input.add(offset) as *const u64);
@@ -114,14 +89,10 @@ pub unsafe fn deserialize<'a>(
         let data = { from_raw_parts_mut(input.add(offset), data_length) };
         offset += data_length;
 
-        let owner = {
-            SolPubkey {
-                key: &*(input.add(offset) as *mut [u8; SIZE_PUBKEY]),
-            }
-        };
-        offset += SIZE_PUBKEY;
+        let owner: &SolPubkey = &*(input.add(offset) as *const [u8; size_of::<SolPubkey>()]);
+        offset += size_of::<SolPubkey>();
 
-        *ka = Some(SolKeyedAccount {
+        kas.push(SolKeyedAccount {
             key,
             is_signer,
             lamports,
@@ -139,14 +110,9 @@ pub unsafe fn deserialize<'a>(
     let data = { from_raw_parts(input.add(offset), data_length) };
     offset += data_length;
 
-    // Id
+    // Program Id
 
-    let program_id = {
-        SolPubkey {
-            key: &*(input.add(offset) as *mut [u8; SIZE_PUBKEY]),
-        }
-    };
-
+    let program_id: &SolPubkey = &*(input.add(offset) as *const [u8; size_of::<SolPubkey>()]);
     let info = SolClusterInfo { program_id };
 
     Ok((kas, info, data))

@@ -81,8 +81,9 @@ fn main() {
                 "cargo:warning=(not a warning) Building Rust-based BPF programs: solana_bpf_rust_{}",
                 program
             );
-            assert!(Command::new("./build.sh")
+            assert!(Command::new("./do.sh")
                 .current_dir("rust")
+                .arg("build")
                 .arg(program)
                 .status()
                 .expect(&format!(

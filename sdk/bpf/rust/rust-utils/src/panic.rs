@@ -6,11 +6,12 @@ use core::ptr;
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    // Message is ignored for now to avoid incurring formatting program size overhead
     match info.location() {
         Some(location) => {
             let mut file: [u8; 128] = [0; 128];
             for (i, c) in location.file().as_bytes().iter().enumerate() {
-                if i >= 126 {
+                if i > 127 {
                     break;
                 }
                 file[i] = *c;

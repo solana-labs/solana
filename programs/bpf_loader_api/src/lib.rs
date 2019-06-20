@@ -164,7 +164,7 @@ pub fn helper_sol_log(
     let c_buf: *const c_char = addr as *const c_char;
     let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
     match c_str.to_str() {
-        Ok(slice) => info!("sol_log: {:?}", slice),
+        Ok(slice) => info!("info!: {:?}", slice),
         Err(e) => warn!("Error: Cannot print invalid string: {}", e),
     };
     0
@@ -178,7 +178,7 @@ pub fn helper_sol_log_u64(
     _context: &mut Option<Box<Any + 'static>>,
 ) -> u64 {
     info!(
-        "sol_log_u64: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+        "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
         arg1, arg2, arg3, arg4, arg5
     );
     0
