@@ -364,8 +364,8 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
             for dir_path in account_paths.iter() {
                 let fullpath = format!("{}/{}/{}", dir_path, split_path[1], split_path[0]);
                 let file_path = Path::new(&fullpath);
+                account_path = file_path.to_path_buf();
                 if file_path.exists() {
-                    account_path = file_path.to_path_buf();
                     break;
                 }
             }
@@ -498,5 +498,9 @@ pub mod tests {
         assert_eq!(dav.get_account_test(index2).unwrap(), account2);
         assert_eq!(dav.get_account_test(index1).unwrap(), account1);
         std::fs::remove_file(path).unwrap();
+
+        let mut reader = Cursor::new(&mut buf[..]);
+        let dav: AppendVec = deserialize_from(&mut reader).unwrap();
+        assert!(dav.get_account_test(index2).is_none());
     }
 }
