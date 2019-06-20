@@ -21,7 +21,7 @@ fn process_instruction(
         let tick_height = LittleEndian::read_u64(k.data);
         assert_eq!(10u64, tick_height);
         sol_log("Success");
-        return true
+        return true;
     }
     panic!();
 }
