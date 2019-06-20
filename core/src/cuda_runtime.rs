@@ -40,7 +40,7 @@ pub fn pin<T>(_mem: &mut Vec<T>) {
                 "cudaHostRegister error: {} ptr: {:?} bytes: {}",
                 err,
                 _mem.as_ptr(),
-                _mem.len() * size_of::<T>()
+                _mem.capacity() * size_of::<T>()
             );
         }
     }
@@ -141,6 +141,21 @@ impl<'a, T> IntoIterator for &'a PinnedVec<T> {
 }
 
 impl<T: Clone> PinnedVec<T> {
+    pub fn reserve_and_pin(&mut self, size: usize) {
+        if self.x.capacity() < size {
+            if self.pinned {
+                unpin(&mut self.x);
+                self.pinned = false;
+            }
+            self.x.reserve(size);
+        }
+        self.set_pinnable();
+        if !self.pinned {
+            pin(&mut self.x);
+            self.pinned = true;
+        }
+    }
+
     pub fn set_pinnable(&mut self) {
         self.pinnable = true;
     }

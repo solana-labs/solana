@@ -175,9 +175,9 @@ impl Packets {
         }
     }
 
-    pub fn new_with_recycler(recycler: PacketsRecycler, name: &'static str) -> Self {
+    pub fn new_with_recycler(recycler: PacketsRecycler, size: usize, name: &'static str) -> Self {
         let mut packets = recycler.allocate(name);
-        packets.set_pinnable();
+        packets.reserve_and_pin(size);
         Packets {
             packets,
             recycler: Some(recycler),
