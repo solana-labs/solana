@@ -14,7 +14,7 @@ pub struct Inflation {
 
     /// Percentage of total inflation allocated to the foundation
     pub foundation: f64,
-    /// Duration of foundationt pool inflation, in years
+    /// Duration of foundation pool inflation, in years
     pub foundation_term: f64,
 
     /// Percentage of total inflation allocated to grant pools
