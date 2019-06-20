@@ -58,6 +58,7 @@
   - [Validator](validator-proposal.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
+  - [Blocktree](blocktree.md)
   - [Cluster Software Installation and Updates](installer.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
   - [Fork Selection](fork-selection.md)
@@ -66,4 +67,5 @@
   - [Passive Stake Delegation and Rewards](passive-stake-delegation-and-rewards.md)
   - [Persistent Account Storage](persistent-account-storage.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
+  - [Repair Service](repair-service.md) 
   - [Testing Programs](testing-programs.md)
