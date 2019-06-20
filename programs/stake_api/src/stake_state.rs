@@ -23,6 +23,7 @@ pub enum StakeState {
         /// the number of lamports each point is worth
         point_value: f64,
     },
+    RewardsPool,
 }
 
 impl Default for StakeState {

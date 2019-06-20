@@ -11,6 +11,7 @@ edition = "2018"
 [dependencies]
 bincode = "1.1.4"
 log = "0.4.2"
+rand = "0.6.5"
 serde = "1.0.92"
 serde_derive = "1.0.92"
 solana-logger = { path = "../../logger", version = "0.16.0" }
