@@ -1,7 +1,6 @@
 //! This account contains the current cluster tick height
 //!
 use crate::account::Account;
-use crate::account_utils::State;
 use crate::syscall;
 use bincode::serialized_size;
 
@@ -16,14 +15,14 @@ crate::solana_name_id!(ID, "Sysca11TickHeight11111111111111111111111111");
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct TickHeight(u64);
+pub struct TickHeight(pub u64);
 
 impl TickHeight {
-    pub fn from(account: &Account) -> Option<u64> {
-        account.state().ok().map(|res: Self| res.0)
+    pub fn from(account: &Account) -> Option<Self> {
+        account.deserialize_data().ok()
     }
-    pub fn to(tick_height: u64, account: &mut Account) -> Option<()> {
-        account.set_state(&TickHeight(tick_height)).ok()
+    pub fn to(&self, account: &mut Account) -> Option<()> {
+        account.serialize_data(self).ok()
     }
 
     pub fn size_of() -> usize {
@@ -31,8 +30,8 @@ impl TickHeight {
     }
 }
 
-pub fn create_account(lamports: u64) -> Account {
-    Account::new(lamports, TickHeight::size_of(), &syscall::id())
+pub fn create_account(lamports: u64, tick_height: u64) -> Account {
+    Account::new_data(lamports, &TickHeight(tick_height), &syscall::id()).unwrap()
 }
 
 #[cfg(test)]
@@ -41,8 +40,8 @@ mod tests {
 
     #[test]
     fn test_tick_height_create_account() {
-        let account = create_account(1);
+        let account = create_account(1, 1);
         let tick_height = TickHeight::from(&account).unwrap();
-        assert_eq!(tick_height, 0);
+        assert_eq!(tick_height.0, 1);
     }
 }
