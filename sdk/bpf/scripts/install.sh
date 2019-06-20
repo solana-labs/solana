@@ -22,6 +22,12 @@ download() {
   wget "${args[@]}"
 }
 
+# Install xargo
+if [[ ! -r xargo.md ]]; then
+  cargo install xargo
+  xargo --version > xargo.md 2>&1
+fi
+
 # Install Criterion
 version=v2.3.2
 if [[ ! -r criterion-$machine-$version.md ]]; then

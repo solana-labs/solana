@@ -10,16 +10,9 @@ if [ ! -f "$1/Cargo.toml" ]; then
 fi
 
 echo "Building $1"
-
-pushd "$(dirname "$0")"
-bpf_sdk="$PWD/.."
-popd
-
-cd "$1"
-
-cargo install xargo
-
 set -e
+
+cd "$(dirname "$0")" && bpf_sdk="$PWD/.."
 
 # Ensure the sdk is installed
 "$bpf_sdk"/scripts/install.sh
@@ -27,6 +20,7 @@ set -e
 # Use the SDK's version of llvm to build the compiler-builtins for BPF
 export CC="$bpf_sdk/dependencies/llvm-native/bin/clang"
 export AR="$bpf_sdk/dependencies/llvm-native/bin/llvm-ar"
+
 # Use the SDK's version of Rust to build for BPF
 export RUSTUP_TOOLCHAIN=bpf
 export RUSTFLAGS="
@@ -38,8 +32,12 @@ export RUSTFLAGS="
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
     -C linker=$bpf_sdk/dependencies/llvm-native/bin/ld.lld"
+
+# Setup xargo
 export XARGO_HOME="$bpf_sdk/dependencies/xargo"
 export XARGO_RUST_SRC="$bpf_sdk/dependencies/rust-bpf-sysroot/src"
+
+cd "$1"
 xargo build --target bpfel-unknown-unknown --release
 
 { { set +x; } 2>/dev/null; echo Success; }
