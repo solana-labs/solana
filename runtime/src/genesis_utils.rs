@@ -1,9 +1,9 @@
 use solana_sdk::account::Account;
-use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::genesis_block::{Builder, GenesisBlock};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_program;
-use solana_stake_api::stake_state;
+use solana_stake_api;
 use solana_vote_api::vote_state;
 
 // The default stake placed with the bootstrap leader
@@ -38,8 +38,8 @@ pub fn create_genesis_block_with_leader(
         bootstrap_leader_stake_lamports,
     );
 
-    let genesis_block = GenesisBlock::new(
-        &[
+    let mut builder = Builder::new()
+        .accounts(&[
             // the mint
             (
                 mint_keypair.pubkey(),
@@ -56,22 +56,23 @@ pub fn create_genesis_block_with_leader(
             // passive bootstrap leader stake, duplicates above temporarily
             (
                 staking_keypair.pubkey(),
-                stake_state::create_stake_account(
+                solana_stake_api::stake_state::create_stake_account(
                     &voting_keypair.pubkey(),
                     &vote_state,
                     bootstrap_leader_stake_lamports,
                 ),
             ),
-        ],
-        &[
+        ])
+        .native_instruction_processors(&[
             solana_bpf_loader_program!(),
             solana_vote_program!(),
             solana_stake_program!(),
-        ],
-    );
+        ]);
+
+    builder = solana_stake_api::rewards_pools::genesis(builder);
 
     GenesisBlockInfo {
-        genesis_block,
+        genesis_block: builder.build(),
         mint_keypair,
         voting_keypair,
     }

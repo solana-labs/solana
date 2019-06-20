@@ -1,3 +1,4 @@
+pub mod rewards_pools;
 pub mod stake_instruction;
 pub mod stake_state;
 
