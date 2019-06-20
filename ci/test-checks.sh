@@ -10,14 +10,22 @@ source ci/rust-version.sh nightly
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-(
-    for project in programs/bpf/rust/*/ ; do
-    (
-        cd "$project"
+do_bpf_check() {
         _ cargo +"$rust_stable" fmt --all -- --check
         _ cargo +"$rust_nightly" clippy --all -- --version
         _ cargo +"$rust_nightly" clippy --all -- --deny=warnings
         _ cargo +"$rust_stable" audit
+}
+
+(
+    (
+        cd sdk/bpf/rust/rust-utils
+        do_bpf_check
+    )
+    for project in programs/bpf/rust/*/ ; do
+    (
+        cd "$project"
+        do_bpf_check
     )
     done
 )

@@ -9,6 +9,8 @@ if [ ! -f "$1/Cargo.toml" ]; then
     exit 1
 fi
 
+echo "Building $1"
+
 pushd "$(dirname "$0")"
 bpf_sdk="$PWD/.."
 popd
@@ -28,7 +30,6 @@ export AR="$bpf_sdk/dependencies/llvm-native/bin/llvm-ar"
 # Use the SDK's version of Rust to build for BPF
 export RUSTUP_TOOLCHAIN=bpf
 export RUSTFLAGS="
-    --emit=llvm-ir \
     -C lto=no \
     -C opt-level=2 \
     -C link-arg=-z -C link-arg=notext \
@@ -39,6 +40,6 @@ export RUSTFLAGS="
     -C linker=$bpf_sdk/dependencies/llvm-native/bin/ld.lld"
 export XARGO_HOME="$bpf_sdk/dependencies/xargo"
 export XARGO_RUST_SRC="$bpf_sdk/dependencies/rust-bpf-sysroot/src"
-xargo build --target bpfel-unknown-unknown --release -v
+xargo build --target bpfel-unknown-unknown --release
 
 { { set +x; } 2>/dev/null; echo Success; }

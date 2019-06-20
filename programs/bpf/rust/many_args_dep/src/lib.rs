@@ -4,7 +4,7 @@
 
 extern crate solana_sdk_bpf_utils;
 
-use solana_sdk_bpf_utils::log::*;
+use solana_sdk_bpf_utils::info;
 
 pub fn many_args(
     arg1: u64,
@@ -17,8 +17,8 @@ pub fn many_args(
     arg8: u64,
     arg9: u64,
 ) -> u64 {
-    sol_log("another package");
-    sol_log_64(arg1, arg2, arg3, arg4, arg5);
-    sol_log_64(arg6, arg7, arg8, arg9, 0);
+    info!("another package");
+    info!(arg1, arg2, arg3, arg4, arg5);
+    info!(arg6, arg7, arg8, arg9, 0);
     arg1 + arg2 + arg3 + arg4 + arg5 + arg6 + arg7 + arg8 + arg9
 }

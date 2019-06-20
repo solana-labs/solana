@@ -6,7 +6,7 @@
 extern crate solana_sdk_bpf_utils;
 
 use byteorder::{ByteOrder, LittleEndian};
-use solana_sdk_bpf_utils::log::*;
+use solana_sdk_bpf_utils::info;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
@@ -18,6 +18,6 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     LittleEndian::write_i16(&mut buf, -5_000);
     assert_eq!(-5_000, LittleEndian::read_i16(&buf));
 
-    sol_log("Success");
+    info!("Success");
     true
 }
