@@ -597,6 +597,8 @@ mod tests {
     use solana_sdk::syscall;
     use solana_sdk::transaction::Transaction;
     use std::io::Cursor;
+    use std::sync::atomic::AtomicBool;
+    use std::{thread, time};
 
     fn load_accounts_with_fee(
         tx: Transaction,
@@ -1232,6 +1234,83 @@ mod tests {
         let keypair1_lock = credit_only_account_locks.get(&keypair1.pubkey());
         assert!(keypair1_lock.is_some());
         assert_eq!(*keypair1_lock.unwrap().lock_count.lock().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_accounts_locks_multithreaded() {
+        let counter = Arc::new(AtomicU64::new(0));
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+
+        let account0 = Account::new(1, 0, &Pubkey::default());
+        let account1 = Account::new(2, 0, &Pubkey::default());
+        let account2 = Account::new(3, 0, &Pubkey::default());
+
+        let accounts = Accounts::new(None);
+        accounts.store_slow(0, &keypair0.pubkey(), &account0);
+        accounts.store_slow(0, &keypair1.pubkey(), &account1);
+        accounts.store_slow(0, &keypair2.pubkey(), &account2);
+
+        let accounts_arc = Arc::new(accounts);
+
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let credit_only_message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair0.pubkey(), keypair1.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let credit_only_tx = Transaction::new(&[&keypair0], credit_only_message, Hash::default());
+
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let credit_debit_message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair1.pubkey(), keypair2.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let credit_debit_tx = Transaction::new(&[&keypair1], credit_debit_message, Hash::default());
+
+        let counter_clone = counter.clone();
+        let accounts_clone = accounts_arc.clone();
+        let exit_clone = exit.clone();
+        thread::spawn(move || {
+            let counter_clone = counter_clone.clone();
+            let exit_clone = exit_clone.clone();
+            loop {
+                let txs = vec![credit_debit_tx.clone()];
+                let results = accounts_clone.clone().lock_accounts(&txs);
+                for result in results.iter() {
+                    if result.is_ok() {
+                        counter_clone.clone().fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+                accounts_clone.unlock_accounts(&txs, &results);
+                if exit_clone.clone().load(Ordering::Relaxed) {
+                    break;
+                }
+            }
+        });
+        let counter_clone = counter.clone();
+        for _ in 0..5 {
+            let txs = vec![credit_only_tx.clone()];
+            let results = accounts_arc.clone().lock_accounts(&txs);
+            if results[0].is_ok() {
+                let counter_value = counter_clone.clone().load(Ordering::SeqCst);
+                thread::sleep(time::Duration::from_millis(50));
+                assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
+            }
+            accounts_arc.unlock_accounts(&txs, &results);
+            thread::sleep(time::Duration::from_millis(50));
+        }
+        exit.store(true, Ordering::Relaxed);
     }
 
     #[test]
