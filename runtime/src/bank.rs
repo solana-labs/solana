@@ -546,6 +546,10 @@ impl Bank {
             self.capitalization
                 .fetch_add(account.lamports as usize, Ordering::Relaxed);
         }
+        for (pubkey, account) in genesis_block.rewards_pools.iter() {
+            self.store_account(pubkey, account);
+        }
+
         // highest staked node is the first collector
         self.collector_id = self
             .stakes
