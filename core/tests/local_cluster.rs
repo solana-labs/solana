@@ -276,6 +276,7 @@ fn test_fail_entry_verification_leader() {
 }
 
 #[test]
+#[ignore]
 fn test_repairman_catchup() {
     run_repairman_catchup(3);
 }
