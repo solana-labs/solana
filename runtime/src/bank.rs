@@ -33,9 +33,9 @@ use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::syscall::current;
-use solana_sdk::syscall::fees::{self, Fees};
+use solana_sdk::syscall::fees;
 use solana_sdk::syscall::slot_hashes::{self, SlotHashes};
-use solana_sdk::syscall::tick_height::{self, TickHeight};
+use solana_sdk::syscall::tick_height;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_ns, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
@@ -424,25 +424,14 @@ impl Bank {
     }
 
     fn update_fees(&self) {
-        let mut account = self
-            .get_account(&fees::id())
-            .unwrap_or_else(|| fees::create_account(1));
-
-        let mut fees = Fees::from(&account).unwrap();
-        fees.fee_calculator = self.fee_calculator.clone();
-        fees.to(&mut account).unwrap();
-
-        self.store_account(&fees::id(), &account);
+        self.store_account(&fees::id(), &fees::create_account(1, &self.fee_calculator));
     }
 
     fn update_tick_height(&self) {
-        let mut account = self
-            .get_account(&tick_height::id())
-            .unwrap_or_else(|| tick_height::create_account(1));
-
-        TickHeight::to(self.tick_height(), &mut account).unwrap();
-
-        self.store_account(&tick_height::id(), &account);
+        self.store_account(
+            &tick_height::id(),
+            &tick_height::create_account(1, self.tick_height()),
+        );
     }
 
     // update reward for previous epoch
@@ -1401,6 +1390,8 @@ mod tests {
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::poh_config::PohConfig;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::syscall::fees::Fees;
+    use solana_sdk::syscall::tick_height::TickHeight;
     use solana_sdk::system_instruction;
     use solana_sdk::system_transaction;
     use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
@@ -2519,7 +2510,7 @@ mod tests {
         }
 
         let tick_account = bank.get_account(&tick_height::id()).unwrap();
-        let tick_height = TickHeight::from(&tick_account).unwrap();
+        let tick_height = TickHeight::from(&tick_account).unwrap().0;
         assert_eq!(bank.tick_height(), tick_height);
         assert_eq!(tick_height, 10);
     }

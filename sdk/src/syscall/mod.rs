@@ -4,6 +4,7 @@ use crate::pubkey::Pubkey;
 
 pub mod current;
 pub mod fees;
+pub mod rewards;
 pub mod slot_hashes;
 pub mod tick_height;
 
