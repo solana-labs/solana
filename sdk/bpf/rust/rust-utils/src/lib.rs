@@ -6,7 +6,8 @@
 #![feature(panic_info_message)]
 #![feature(compiler_builtins_lib)]
 #![feature(lang_items)]
-#[lang = "eh_personality"] extern fn eh_personality() {}
+#[lang = "eh_personality"]
+extern "C" fn eh_personality() {}
 
 extern crate compiler_builtins;
 
