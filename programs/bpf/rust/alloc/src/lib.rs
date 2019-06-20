@@ -1,5 +1,6 @@
 //! @brief Example Rust-based BPF program that test dynamic memory allocation
 #![no_std]
+#![allow(unused_attributes)]
 
 #[macro_use]
 extern crate alloc;
@@ -52,7 +53,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         for i in 0..ITERS {
             assert_eq!(*ptr.add(i as usize), i as u8);
         }
-        sol_log_64(0x3, 0, 0, 0, *ptr.add(42) as u64);
+        sol_log_64(0x3, 0, 0, 0, u64::from(*ptr.add(42)));
         assert_eq!(*ptr.add(42), 42);
         alloc::alloc::dealloc(ptr, layout);
     }

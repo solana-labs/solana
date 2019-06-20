@@ -3,6 +3,7 @@ ARG date
 
 RUN set -x \
  && rustup install nightly-$date \
+ && rustup component add clippy --toolchain=nightly-$date \
  && rustup show \
  && rustc --version \
  && cargo --version \

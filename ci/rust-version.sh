@@ -13,11 +13,14 @@
 #   $ source ci/rust-version.sh
 #
 
-export rust_stable=1.35.0
-export rust_stable_docker_image=solanalabs/rust:1.35.0
+stable_version=1.35.0
+nightly_version=2019-06-20
 
-export rust_nightly=nightly-2019-05-01
-export rust_nightly_docker_image=solanalabs/rust-nightly:2019-05-01
+export rust_stable="$stable_version"
+export rust_stable_docker_image=solanalabs/rust:"$stable_version"
+
+export rust_nightly=nightly-"$nightly_version"
+export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
 
 [[ -z $1 ]] || (
 

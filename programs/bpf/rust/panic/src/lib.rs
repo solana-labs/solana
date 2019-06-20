@@ -1,6 +1,7 @@
 //! @brief Example Rust-based BPF program that panics
 
 #![no_std]
+#![allow(unused_attributes)]
 
 extern crate solana_sdk_bpf_utils;
 

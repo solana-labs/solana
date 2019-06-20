@@ -46,7 +46,7 @@ pub struct SolClusterInfo<'a> {
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
         #[no_mangle]
-        pub extern "C" fn entrypoint(input: *mut u8) -> bool {
+        pub unsafe extern "C" fn entrypoint(input: *mut u8) -> bool {
             unsafe {
                 if let Ok((mut ka, info, data)) = $crate::entrypoint::deserialize(input) {
                     // Call use function
@@ -86,9 +86,9 @@ pub unsafe fn deserialize<'a>(
         return Err(());
     }
 
-    let mut ka: [Option<SolKeyedAccount>; MAX_ACCOUNTS] =
+    let mut kas: [Option<SolKeyedAccount>; MAX_ACCOUNTS] =
         [None, None, None, None, None, None, None, None, None, None];
-    for i in 0..num_ka {
+    for ka in kas.iter_mut().take(num_ka) {
         let is_signer = {
             #[allow(clippy::cast_ptr_alignment)]
             let is_signer_val = *(input.add(offset) as *const u64);
@@ -121,7 +121,7 @@ pub unsafe fn deserialize<'a>(
         };
         offset += SIZE_PUBKEY;
 
-        ka[i] = Some(SolKeyedAccount {
+        *ka = Some(SolKeyedAccount {
             key,
             is_signer,
             lamports,
@@ -149,7 +149,7 @@ pub unsafe fn deserialize<'a>(
 
     let info = SolClusterInfo { program_id };
 
-    Ok((ka, info, data))
+    Ok((kas, info, data))
 }
 
 #[cfg(test)]
