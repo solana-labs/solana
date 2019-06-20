@@ -29,6 +29,10 @@ pub mod columns {
     pub struct Data;
 
     #[derive(Debug)]
+    /// Data Column
+    pub struct DeadSlots;
+
+    #[derive(Debug)]
     /// The erasure meta column
     pub struct ErasureMeta;
 

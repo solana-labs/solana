@@ -30,7 +30,7 @@ impl Backend for Rocks {
     type Error = rocksdb::Error;
 
     fn open(path: &Path) -> Result<Rocks> {
-        use crate::blocktree::db::columns::{Coding, Data, ErasureMeta, Orphans, Root, SlotMeta};
+        use crate::blocktree::db::columns::{Coding, Data, DeadSlots, ErasureMeta, Orphans, Root, SlotMeta};
 
         fs::create_dir_all(&path)?;
 
@@ -40,6 +40,7 @@ impl Backend for Rocks {
         // Column family names
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
         let data_cf_descriptor = ColumnFamilyDescriptor::new(Data::NAME, get_cf_options());
+        let dead_slots_cf_descriptor = ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options());
         let erasure_cf_descriptor = ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options());
         let erasure_meta_cf_descriptor =
             ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
@@ -49,6 +50,7 @@ impl Backend for Rocks {
         let cfs = vec![
             meta_cf_descriptor,
             data_cf_descriptor,
+            dead_slots_cf_descriptor,
             erasure_cf_descriptor,
             erasure_meta_cf_descriptor,
             orphans_cf_descriptor,
@@ -62,11 +64,12 @@ impl Backend for Rocks {
     }
 
     fn columns(&self) -> Vec<&'static str> {
-        use crate::blocktree::db::columns::{Coding, Data, ErasureMeta, Orphans, Root, SlotMeta};
+        use crate::blocktree::db::columns::{Coding, Data, DeadSlots, ErasureMeta, Orphans, Root, SlotMeta};
 
         vec![
             Coding::NAME,
             ErasureMeta::NAME,
+            DeadSlots::NAME,
             Data::NAME,
             Orphans::NAME,
             Root::NAME,
@@ -159,6 +162,25 @@ impl Column<Rocks> for cf::Data {
         let index = BigEndian::read_u64(&key[8..16]);
         (slot, index)
     }
+}
+
+impl Column<Rocks> for cf::DeadSlots {
+    const NAME: &'static str = super::DEAD_SLOTS_CF;
+    type Index = u64;
+
+    fn key(slot: u64) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], slot);
+        key
+    }
+
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
+}
+
+impl TypedColumn<Rocks> for cf::DeadSlots {
+    type Type = bool;
 }
 
 impl Column<Rocks> for cf::Orphans {

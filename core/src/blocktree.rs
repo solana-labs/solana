@@ -84,6 +84,7 @@ pub struct Blocktree {
     db: Arc<Database>,
     meta_cf: LedgerColumn<cf::SlotMeta>,
     data_cf: LedgerColumn<cf::Data>,
+    dead_slots_cf: LedgerColumn<cf::DeadSlots>,
     erasure_cf: LedgerColumn<cf::Coding>,
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
@@ -97,6 +98,8 @@ pub struct Blocktree {
 pub const META_CF: &str = "meta";
 // Column family for the data in a leader slot
 pub const DATA_CF: &str = "data";
+// Column family for slots that have been marked as dead
+pub const DEAD_SLOTS_CF: &str = "dead_slots";
 // Column family for erasure data
 pub const ERASURE_CF: &str = "erasure";
 pub const ERASURE_META_CF: &str = "erasure_meta";
@@ -124,6 +127,9 @@ impl Blocktree {
         // Create the data column family
         let data_cf = db.column();
 
+        // Create the dead slots column family
+        let dead_slots_cf = db.column();
+
         // Create the erasure column family
         let erasure_cf = db.column();
 
@@ -143,6 +149,7 @@ impl Blocktree {
             db,
             meta_cf,
             data_cf,
+            dead_slots_cf,
             erasure_cf,
             erasure_meta_cf,
             orphans_cf,
@@ -808,7 +815,17 @@ impl Blocktree {
         let result: HashMap<u64, Vec<u64>> = slots
             .iter()
             .zip(slot_metas)
-            .filter_map(|(height, meta)| meta.map(|meta| (*height, meta.next_slots)))
+            .filter_map(|(height, meta)| {
+                meta.map(|meta| {
+                    let valid_next_slots: Vec<u64> = meta
+                        .next_slots
+                        .iter()
+                        .cloned()
+                        .filter(|s| !self.is_dead(*s))
+                        .collect();
+                    (*height, valid_next_slots)
+                })
+            })
             .collect();
 
         Ok(result)
@@ -838,6 +855,22 @@ impl Blocktree {
             batch_processor.write(write_batch)?;
         }
         Ok(())
+    }
+
+    pub fn is_dead(&self, slot: u64) -> bool {
+        if let Some(true) = self
+            .db
+            .get::<cf::DeadSlots>(slot)
+            .expect("fetch from DeadSlots column family failed")
+        {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn set_dead_slot(&self, slot: u64) -> Result<()> {
+        self.dead_slots_cf.put(slot, &true)
     }
 
     pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {

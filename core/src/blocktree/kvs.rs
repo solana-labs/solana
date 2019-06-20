@@ -100,6 +100,25 @@ impl Column<Kvs> for cf::Data {
     }
 }
 
+impl Column<Kvs> for cf::DeadSlots {
+    const NAME: &'static str = super::DEAD_SLOTS;
+    type Index = u64;
+
+    fn key(slot: u64) -> Key {
+        let mut key = Key::default();
+        BigEndian::write_u64(&mut key.0[8..16], slot);
+        key
+    }
+
+    fn index(key: &Key) -> u64 {
+        BigEndian::read_u64(&key.0[8..16])
+    }
+}
+
+impl TypedColumn<Kvs> for cf::Root {
+    type Type = bool;
+}
+
 impl Column<Kvs> for cf::Orphans {
     const NAME: &'static str = super::ORPHANS_CF;
     type Index = u64;
