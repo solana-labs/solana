@@ -1,6 +1,6 @@
 use crate::accounts_db::{
-    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, CreditOnlyLocks,
-    ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
+    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters,
+    InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
@@ -26,10 +26,16 @@ use std::io::{BufReader, Read};
 use std::ops::Neg;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 const ACCOUNTSDB_DIR: &str = "accountsdb";
 const NUM_ACCOUNT_DIRS: usize = 4;
+
+#[derive(Default, Debug)]
+struct CreditOnlyLock {
+    credits: AtomicU64,
+    lock_count: Mutex<u64>,
+}
 
 /// This structure handles synchronization for db
 #[derive(Default, Debug)]
@@ -40,8 +46,8 @@ pub struct Accounts {
     /// set of credit-debit accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
 
-    /// Set of credit-only accounts which are currently in the pipeline, caching account balance
-    credit_only_account_locks: Mutex<HashMap<Pubkey, Arc<AtomicU64>>>,
+    /// Set of credit-only accounts which are currently in the pipeline, caching account balance and number of locks
+    credit_only_account_locks: Arc<RwLock<HashMap<Pubkey, CreditOnlyLock>>>,
 
     /// List of persistent stores
     pub paths: String,
@@ -102,7 +108,7 @@ impl Accounts {
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
-            credit_only_account_locks: Mutex::new(HashMap::new()),
+            credit_only_account_locks: Arc::new(RwLock::new(HashMap::new())),
             paths,
             own_paths,
         }
@@ -112,7 +118,7 @@ impl Accounts {
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
-            credit_only_account_locks: Mutex::new(HashMap::new()),
+            credit_only_account_locks: Arc::new(RwLock::new(HashMap::new())),
             paths: parent.paths.clone(),
             own_paths: parent.own_paths,
         }
@@ -251,7 +257,6 @@ impl Accounts {
         ancestors: &HashMap<Fork, usize>,
         txs: &[Transaction],
         lock_results: Vec<Result<()>>,
-        credit_only_locks: &[Result<CreditOnlyLocks>],
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
@@ -261,9 +266,8 @@ impl Accounts {
         let storage = self.accounts_db.storage.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
-            .zip(credit_only_locks.iter())
             .map(|etx| match etx {
-                ((tx, Ok(())), Ok(_credit_only_locks)) => {
+                (tx, Ok(())) => {
                     let fee_calculator = hash_queue
                         .get_fee_calculator(&tx.message().recent_blockhash)
                         .ok_or(TransactionError::BlockhashNotFound)?;
@@ -286,8 +290,7 @@ impl Accounts {
                     )?;
                     Ok((accounts, loaders, credits))
                 }
-                ((_, Err(e)), _) => Err(e),
-                ((_, Ok(())), Err(e)) => Err(e.clone()),
+                (_, Err(e)) => Err(e),
             })
             .collect()
     }
@@ -329,22 +332,29 @@ impl Accounts {
     /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
         let mut accounts = HashMap::new();
-        accounts.insert(pubkey, (account, None));
+        accounts.insert(pubkey, account);
         self.accounts_db.store(fork, &accounts);
     }
 
     fn lock_account(
         locks: &mut HashSet<Pubkey>,
-        credit_only_locks: &mut HashMap<Pubkey, Arc<AtomicU64>>,
+        credit_only_locks: &Arc<RwLock<HashMap<Pubkey, CreditOnlyLock>>>,
         message: &Message,
         error_counters: &mut ErrorCounters,
-    ) -> Result<CreditOnlyLocks> {
+    ) -> Result<()> {
         let (credit_debit_keys, credit_only_keys) = message.get_account_keys_by_lock_type();
 
         for k in credit_debit_keys.iter() {
+            let credit_only_locks = credit_only_locks.read().unwrap();
             if locks.contains(k)
                 || (credit_only_locks.contains_key(k)
-                    && Arc::strong_count(credit_only_locks.get(&k).unwrap()) > 1)
+                    && *credit_only_locks
+                        .get(&k)
+                        .unwrap()
+                        .lock_count
+                        .lock()
+                        .unwrap()
+                        > 0)
             {
                 error_counters.account_in_use += 1;
                 debug!("Account in use: {:?}", k);
@@ -362,24 +372,38 @@ impl Accounts {
         for k in credit_debit_keys {
             locks.insert(*k);
         }
-        let mut lock_cache: CreditOnlyLocks = vec![];
         for k in credit_only_keys {
-            let lock = credit_only_locks
+            let mut credit_only_locks = credit_only_locks.write().unwrap();
+            credit_only_locks
                 .entry(*k)
-                .or_insert_with(|| Arc::new(AtomicU64::new(0)));
-            lock_cache.push(lock.clone());
+                .and_modify(|lock| *lock.lock_count.lock().unwrap() += 1)
+                .or_insert_with(|| CreditOnlyLock {
+                    credits: AtomicU64::new(0),
+                    lock_count: Mutex::new(1),
+                });
         }
 
-        Ok(lock_cache)
+        Ok(())
     }
 
-    fn unlock_account(tx: &Transaction, result: &Result<()>, locks: &mut HashSet<Pubkey>) {
-        let (credit_debit_keys, _) = &tx.message().get_account_keys_by_lock_type();
+    fn unlock_account(
+        tx: &Transaction,
+        result: &Result<()>,
+        locks: &mut HashSet<Pubkey>,
+        credit_only_locks: &Arc<RwLock<HashMap<Pubkey, CreditOnlyLock>>>,
+    ) {
+        let (credit_debit_keys, credit_only_keys) = &tx.message().get_account_keys_by_lock_type();
         match result {
             Err(TransactionError::AccountInUse) => (),
             _ => {
                 for k in credit_debit_keys {
                     locks.remove(k);
+                }
+                for k in credit_only_keys {
+                    let mut locks = credit_only_locks.write().unwrap();
+                    locks
+                        .entry(**k)
+                        .and_modify(|lock| *lock.lock_count.lock().unwrap() -= 1);
                 }
             }
         }
@@ -424,7 +448,7 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<CreditOnlyLocks>> {
+    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let mut error_counters = ErrorCounters::default();
         let rv = txs
             .iter()
@@ -432,7 +456,7 @@ impl Accounts {
                 let message = &tx.message();
                 Self::lock_account(
                     &mut self.account_locks.lock().unwrap(),
-                    &mut self.credit_only_account_locks.lock().unwrap(),
+                    &self.credit_only_account_locks,
                     &message,
                     &mut error_counters,
                 )
@@ -452,10 +476,11 @@ impl Accounts {
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
     pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
         let mut account_locks = self.account_locks.lock().unwrap();
+        let credit_only_locks = self.credit_only_account_locks.clone();
         debug!("bank unlock accounts");
-        txs.iter()
-            .zip(results.iter())
-            .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
+        txs.iter().zip(results.iter()).for_each(|(tx, result)| {
+            Self::unlock_account(tx, result, &mut account_locks, &credit_only_locks)
+        });
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
@@ -469,15 +494,14 @@ impl Accounts {
         txs: &[Transaction],
         res: &[Result<()>],
         loaded: &mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
-        credit_only_locks: Vec<Result<CreditOnlyLocks>>,
     ) {
-        let accounts = collect_accounts(txs, res, loaded, credit_only_locks);
-        // Filter out unchanged credit-only accounts and those referenced by other threads
-        let mut accounts_to_store: HashMap<&Pubkey, (&Account, Option<u64>)> = HashMap::new();
+        let accounts = self.collect_accounts(txs, res, loaded);
+        // Only store credit-debit accounts immediately
+        let mut accounts_to_store: HashMap<&Pubkey, &Account> = HashMap::new();
 
         for (pubkey, (account, is_debitable)) in accounts.iter() {
             if *is_debitable {
-                accounts_to_store.insert(pubkey, (account, None));
+                accounts_to_store.insert(pubkey, account);
             }
         }
         self.accounts_db.store(fork, &accounts_to_store);
@@ -495,14 +519,14 @@ impl Accounts {
 
     /// Commit remaining credit-only changes, regardless of reference count
     pub fn commit_credits(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
-        let credit_only_account_locks = self.credit_only_account_locks.lock().unwrap();
-        for (pubkey, balance) in credit_only_account_locks.iter() {
-            let mut account = self
-                .load_slow(ancestors, pubkey)
-                .map(|(account, _)| account)
-                .unwrap_or_default();
-            let credit = balance.load(Ordering::Relaxed);
+        let credit_only_account_locks = self.credit_only_account_locks.read().unwrap();
+        for (pubkey, credit_only_lock) in credit_only_account_locks.iter() {
+            let credit = credit_only_lock.credits.load(Ordering::Relaxed);
             if credit > 0 {
+                let mut account = self
+                    .load_slow(ancestors, pubkey)
+                    .map(|(account, _)| account)
+                    .unwrap_or_default();
                 account.lamports += credit;
                 self.store_slow(fork, pubkey, &account);
             }
@@ -512,54 +536,50 @@ impl Accounts {
     }
 
     pub fn clear_credit_only_account_locks(&self) {
-        let mut credit_only_account_locks = self.credit_only_account_locks.lock().unwrap();
+        let mut credit_only_account_locks = self.credit_only_account_locks.write().unwrap();
         credit_only_account_locks.clear();
     }
-}
 
-fn collect_accounts<'a>(
-    txs: &'a [Transaction],
-    res: &'a [Result<()>],
-    loaded: &'a mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
-    credit_only_locks: Vec<Result<CreditOnlyLocks>>,
-) -> HashMap<&'a Pubkey, (&'a Account, bool)> {
-    let mut accounts: HashMap<&Pubkey, (&Account, bool)> = HashMap::new();
-    for ((i, raccs), locks) in loaded.iter_mut().enumerate().zip(credit_only_locks) {
-        if res[i].is_err() || raccs.is_err() {
-            continue;
-        }
-
-        let message = &txs[i].message();
-        let acc = raccs.as_mut().unwrap();
-        let mut locks = locks.unwrap();
-        for (((i, key), account), credit) in message
-            .account_keys
-            .iter()
-            .enumerate()
-            .zip(acc.0.iter())
-            .zip(acc.2.iter())
-        {
-            if !accounts.contains_key(key) {
-                accounts.insert(key, (account, message.is_debitable(i)));
+    fn collect_accounts<'a>(
+        &self,
+        txs: &'a [Transaction],
+        res: &'a [Result<()>],
+        loaded: &'a mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+    ) -> HashMap<&'a Pubkey, (&'a Account, bool)> {
+        let mut accounts: HashMap<&Pubkey, (&Account, bool)> = HashMap::new();
+        for (i, raccs) in loaded.iter_mut().enumerate() {
+            if res[i].is_err() || raccs.is_err() {
+                continue;
             }
-            if *credit > 0 {
-                // Increment credit-only account balance Atomic
-                if accounts.get_mut(key).is_some() {
-                    let index = message
-                        .get_account_keys_by_lock_type()
-                        .1
-                        .iter()
-                        .position(|k| k == &key)
-                        .unwrap();
-                    locks[index].fetch_add(*credit, Ordering::Relaxed);
+
+            let message = &txs[i].message();
+            let acc = raccs.as_mut().unwrap();
+            for (((i, key), account), credit) in message
+                .account_keys
+                .iter()
+                .enumerate()
+                .zip(acc.0.iter())
+                .zip(acc.2.iter())
+            {
+                if !accounts.contains_key(key) {
+                    accounts.insert(key, (account, message.is_debitable(i)));
+                }
+                if *credit > 0 {
+                    // Increment credit-only account balance Atomic
+                    if accounts.get_mut(key).is_some() {
+                        self.credit_only_account_locks
+                            .write()
+                            .unwrap()
+                            .get(key)
+                            .unwrap()
+                            .credits
+                            .fetch_add(*credit, Ordering::Relaxed);
+                    }
                 }
             }
         }
-
-        // Drop CreditOnlyLocks to decrement ref count
-        locks.clear();
+        accounts
     }
-    accounts
 }
 
 #[cfg(test)]
@@ -587,23 +607,13 @@ mod tests {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(None);
-        let mut credit_only_locks: CreditOnlyLocks = vec![];
-        for (i, ka) in ka.iter().enumerate() {
-            if !tx.message().is_debitable(i) {
-                credit_only_locks.push(Arc::new(AtomicU64::new(ka.1.lamports)));
-            }
+        for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let res = accounts.load_accounts(
-            &ancestors,
-            &[tx],
-            vec![Ok(())],
-            &vec![Ok(credit_only_locks)],
-            &hash_queue,
-            error_counters,
-        );
+        let res =
+            accounts.load_accounts(&ancestors, &[tx], vec![Ok(())], &hash_queue, error_counters);
         res
     }
 
@@ -634,10 +644,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::AccountNotFound
-        );
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -660,10 +667,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::AccountNotFound
-        );
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -695,8 +699,8 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::ProgramAccountNotFound
+            loaded_accounts[0],
+            Err(TransactionError::ProgramAccountNotFound)
         );
     }
 
@@ -729,8 +733,8 @@ mod tests {
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::InsufficientFundsForFee
+            loaded_accounts[0].clone(),
+            Err(TransactionError::InsufficientFundsForFee)
         );
     }
 
@@ -759,8 +763,8 @@ mod tests {
         assert_eq!(error_counters.invalid_account_for_fee, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::InvalidAccountForFee
+            loaded_accounts[0],
+            Err(TransactionError::InvalidAccountForFee)
         );
     }
 
@@ -865,10 +869,7 @@ mod tests {
 
         assert_eq!(error_counters.call_chain_too_deep, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::CallChainTooDeep
-        );
+        assert_eq!(loaded_accounts[0], Err(TransactionError::CallChainTooDeep));
     }
 
     #[test]
@@ -901,10 +902,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::AccountNotFound
-        );
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -936,10 +934,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::AccountNotFound
-        );
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -1032,8 +1027,8 @@ mod tests {
         assert_eq!(error_counters.account_loaded_twice, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
-            loaded_accounts[0].clone().unwrap_err(),
-            TransactionError::AccountLoadedTwice
+            loaded_accounts[0],
+            Err(TransactionError::AccountLoadedTwice)
         );
     }
 
@@ -1161,13 +1156,21 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
-        let credit_only_locks0 = accounts.lock_accounts(&[tx]);
+        let results0 = accounts.lock_accounts(&[tx.clone()]);
 
-        assert!(credit_only_locks0[0].is_ok());
-        if let Ok(lock) = &credit_only_locks0[0] {
-            assert_eq!(lock[0].load(Ordering::Relaxed), 0);
-            assert_eq!(Arc::strong_count(&lock[0]), 2);
-        }
+        assert!(results0[0].is_ok());
+        assert_eq!(
+            *accounts
+                .credit_only_account_locks
+                .read()
+                .unwrap()
+                .get(&keypair1.pubkey())
+                .unwrap()
+                .lock_count
+                .lock()
+                .unwrap(),
+            1
+        );
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -1190,17 +1193,25 @@ mod tests {
         );
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-        let credit_only_locks1 = accounts.lock_accounts(&txs);
+        let results1 = accounts.lock_accounts(&txs);
 
-        assert!(credit_only_locks1[0].is_ok()); // Credit-only account (keypair1) can be referenced multiple times
-        assert!(credit_only_locks1[1].is_err()); // Credit-only account (keypair1) cannot also be locked as credit-debit
-        if let Ok(lock) = &credit_only_locks1[0] {
-            assert_eq!(Arc::strong_count(&lock[0]), 3);
-        }
+        assert!(results1[0].is_ok()); // Credit-only account (keypair1) can be referenced multiple times
+        assert!(results1[1].is_err()); // Credit-only account (keypair1) cannot also be locked as credit-debit
+        assert_eq!(
+            *accounts
+                .credit_only_account_locks
+                .read()
+                .unwrap()
+                .get(&keypair1.pubkey())
+                .unwrap()
+                .lock_count
+                .lock()
+                .unwrap(),
+            2
+        );
 
-        // Drop locks on credit-only accounts
-        drop(credit_only_locks0);
-        drop(credit_only_locks1);
+        accounts.unlock_accounts(&[tx], &results0);
+        accounts.unlock_accounts(&txs, &results1);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -1212,15 +1223,15 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair1], message, Hash::default());
-        let credit_only_locks2 = accounts.lock_accounts(&[tx]);
+        let results2 = accounts.lock_accounts(&[tx]);
 
-        assert!(credit_only_locks2[0].is_ok()); // Now keypair1 account can be locked as credit-debit
+        assert!(results2[0].is_ok()); // Now keypair1 account can be locked as credit-debit
 
         // Check that credit-only credits are still cached in accounts struct
-        let credit_only_account_locks = accounts.credit_only_account_locks.lock().unwrap();
+        let credit_only_account_locks = accounts.credit_only_account_locks.read().unwrap();
         let keypair1_lock = credit_only_account_locks.get(&keypair1.pubkey());
         assert!(keypair1_lock.is_some());
-        assert_eq!(Arc::strong_count(&keypair1_lock.unwrap()), 1);
+        assert_eq!(*keypair1_lock.unwrap().lock_count.lock().unwrap(), 0);
     }
 
     #[test]
@@ -1236,26 +1247,40 @@ mod tests {
         accounts.store_slow(0, &pubkey0, &account0);
         accounts.store_slow(0, &pubkey1, &account1);
 
-        let mut credit_only_account_locks = accounts.credit_only_account_locks.lock().unwrap();
-        credit_only_account_locks.insert(pubkey0, Arc::new(AtomicU64::new(0)));
-        credit_only_account_locks.insert(pubkey1, Arc::new(AtomicU64::new(5)));
-        credit_only_account_locks.insert(pubkey2, Arc::new(AtomicU64::new(10)));
-
-        // Additional references should not affect commit_credits
-        let _additional_reference0 = credit_only_account_locks.get(&pubkey0).unwrap().clone();
-        let _additional_reference1 = credit_only_account_locks.get(&pubkey2).unwrap().clone();
+        let mut credit_only_account_locks = accounts.credit_only_account_locks.write().unwrap();
+        credit_only_account_locks.insert(
+            pubkey0,
+            CreditOnlyLock {
+                credits: AtomicU64::new(0),
+                lock_count: Mutex::new(1),
+            },
+        );
+        credit_only_account_locks.insert(
+            pubkey1,
+            CreditOnlyLock {
+                credits: AtomicU64::new(5),
+                lock_count: Mutex::new(1),
+            },
+        );
+        credit_only_account_locks.insert(
+            pubkey2,
+            CreditOnlyLock {
+                credits: AtomicU64::new(10),
+                lock_count: Mutex::new(1),
+            },
+        );
 
         drop(credit_only_account_locks);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         accounts.commit_credits(&ancestors, 0);
 
-        // No change when credit-lock difference is 0
+        // No change when CreditOnlyLock credits are 0
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey0).unwrap().0.lamports,
             1
         );
-        // New balance should equal previous balance plus credit-lock difference
+        // New balance should equal previous balance plus CreditOnlyLock credits
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey1).unwrap().0.lamports,
             7
@@ -1266,7 +1291,7 @@ mod tests {
             10
         );
         // Account locks should be cleared
-        assert_eq!(accounts.credit_only_account_locks.lock().unwrap().len(), 0);
+        assert_eq!(accounts.credit_only_account_locks.read().unwrap().len(), 0);
     }
 
     #[test]
@@ -1323,23 +1348,39 @@ mod tests {
         ));
 
         let mut loaded = vec![loaded0, loaded1];
-        let lock = Arc::new(AtomicU64::new(0));
-        let credit_only_locks = vec![Ok(vec![lock.clone()]), Ok(vec![lock.clone()])];
 
-        let accounts = collect_accounts(&txs, &loaders, &mut loaded, credit_only_locks);
-        assert_eq!(accounts.len(), 3);
-        assert!(accounts.contains_key(&keypair0.pubkey()));
-        assert!(accounts.contains_key(&keypair1.pubkey()));
-        assert!(accounts.contains_key(&pubkey));
+        let accounts = Accounts::new(None);
+        let mut credit_only_locks = accounts.credit_only_account_locks.write().unwrap();
+        credit_only_locks.insert(
+            pubkey,
+            CreditOnlyLock {
+                credits: AtomicU64::new(0),
+                lock_count: Mutex::new(1),
+            },
+        );
+        drop(credit_only_locks);
+        let collected_accounts = accounts.collect_accounts(&txs, &loaders, &mut loaded);
+        assert_eq!(collected_accounts.len(), 3);
+        assert!(collected_accounts.contains_key(&keypair0.pubkey()));
+        assert!(collected_accounts.contains_key(&keypair1.pubkey()));
+        assert!(collected_accounts.contains_key(&pubkey));
 
-        let credit_debit_account0 = accounts.get(&keypair0.pubkey()).unwrap();
+        let credit_debit_account0 = collected_accounts.get(&keypair0.pubkey()).unwrap();
         assert_eq!(credit_debit_account0.1, true);
-        let credit_debit_account1 = accounts.get(&keypair1.pubkey()).unwrap();
+        let credit_debit_account1 = collected_accounts.get(&keypair1.pubkey()).unwrap();
         assert_eq!(credit_debit_account1.1, true);
 
-        let credit_only_account = accounts.get(&pubkey).unwrap();
+        let credit_only_account = collected_accounts.get(&pubkey).unwrap();
         assert_eq!(credit_only_account.1, false);
         // Ensure credit_only_lock reflects credits from both accounts: 2 + 3 = 5
-        assert_eq!(lock.load(Ordering::Relaxed), 5);
+        let credit_only_locks = accounts.credit_only_account_locks.read().unwrap();
+        assert_eq!(
+            credit_only_locks
+                .get(&pubkey)
+                .unwrap()
+                .credits
+                .load(Ordering::Relaxed),
+            5
+        );
     }
 }

@@ -1,4 +1,3 @@
-use crate::accounts_db::CreditOnlyLocks;
 use crate::bank::Bank;
 use solana_sdk::transaction::{Result, Transaction};
 
@@ -12,19 +11,12 @@ pub struct LockedAccountsResults<'a, 'b> {
 
 impl<'a, 'b> LockedAccountsResults<'a, 'b> {
     pub fn new(
-        locked_accounts_results: &[Result<CreditOnlyLocks>],
+        locked_accounts_results: Vec<Result<()>>,
         bank: &'a Bank,
         transactions: &'b [Transaction],
     ) -> Self {
-        let mut results: Vec<Result<()>> = vec![];
-        for result in locked_accounts_results.iter() {
-            match result {
-                Ok(_) => results.push(Ok(())),
-                Err(e) => results.push(Err(e.clone())),
-            }
-        }
         Self {
-            locked_accounts_results: results,
+            locked_accounts_results,
             bank,
             transactions,
             needs_unlock: true,
@@ -62,7 +54,7 @@ mod tests {
         let (bank, txs) = setup();
 
         // Test getting locked accounts
-        let (lock_results, credit_only_locks) = bank.lock_accounts(&txs);
+        let lock_results = bank.lock_accounts(&txs);
 
         // Grab locks
         assert!(lock_results
@@ -70,14 +62,8 @@ mod tests {
             .iter()
             .all(|x| x.is_ok()));
 
-        for result in credit_only_locks {
-            if let Ok(lock) = result {
-                assert_eq!(lock.len(), 2);
-            }
-        }
-
         // Trying to grab locks again should fail
-        let (lock_results2, _) = bank.lock_accounts(&txs);
+        let lock_results2 = bank.lock_accounts(&txs);
         assert!(lock_results2
             .locked_accounts_results()
             .iter()
@@ -87,7 +73,7 @@ mod tests {
         drop(lock_results);
 
         // Now grabbing locks should work again
-        let (lock_results2, _) = bank.lock_accounts(&txs);
+        let lock_results2 = bank.lock_accounts(&txs);
         assert!(lock_results2
             .locked_accounts_results()
             .iter()

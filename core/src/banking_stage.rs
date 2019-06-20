@@ -17,7 +17,7 @@ use bincode::deserialize;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
-use solana_runtime::accounts_db::{CreditOnlyLocks, ErrorCounters};
+use solana_runtime::accounts_db::ErrorCounters;
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::poh_config::PohConfig;
@@ -429,19 +429,14 @@ impl BankingStage {
         txs: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
         lock_results: &LockedAccountsResults,
-        credit_only_locks: Vec<transaction::Result<CreditOnlyLocks>>,
     ) -> (Result<()>, Vec<usize>) {
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (mut loaded_accounts, results, mut retryable_txs) = bank.load_and_execute_transactions(
-            txs,
-            lock_results,
-            &credit_only_locks,
-            MAX_PROCESSING_AGE,
-        );
+        let (mut loaded_accounts, results, mut retryable_txs) =
+            bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
         let load_execute_time = now.elapsed();
 
         let freeze_lock = bank.freeze_lock();
@@ -459,7 +454,7 @@ impl BankingStage {
 
         let commit_time = {
             let now = Instant::now();
-            bank.commit_transactions(txs, &mut loaded_accounts, credit_only_locks, &results);
+            bank.commit_transactions(txs, &mut loaded_accounts, &results);
             now.elapsed()
         };
 
@@ -486,16 +481,11 @@ impl BankingStage {
         let now = Instant::now();
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let (lock_results, credit_only_locks) = bank.lock_accounts(txs);
+        let lock_results = bank.lock_accounts(txs);
         let lock_time = now.elapsed();
 
-        let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
-            bank,
-            txs,
-            poh,
-            &lock_results,
-            credit_only_locks,
-        );
+        let (result, mut retryable_txs) =
+            Self::process_and_record_transactions_locked(bank, txs, poh, &lock_results);
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
         let now = Instant::now();
