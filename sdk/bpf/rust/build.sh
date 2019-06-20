@@ -22,7 +22,7 @@ export CC="$bpf_sdk/dependencies/llvm-native/bin/clang"
 export AR="$bpf_sdk/dependencies/llvm-native/bin/llvm-ar"
 
 # Use the SDK's version of Rust to build for BPF
-export RUSTUP_TOOLCHAIN=bpf2
+export RUSTUP_TOOLCHAIN=bpf
 export RUSTFLAGS="
     -C lto=no \
     -C opt-level=2 \
