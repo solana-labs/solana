@@ -175,6 +175,8 @@ mod tests {
     #[test]
     fn test_tree_from_many() {
         let mt = MerkleTree::new(TEST);
+        // This golden hash will need to be updated whenever the contents of `TEST` change in any
+        // way, including addition, removal and reordering
         let bytes = hex::decode("7e6791d2b9a6338e1446ad4776f267b97e7e4ed968ae2592cfd9c1607bd7dbbb")
             .unwrap();
         let expected = Hash::new(&bytes);
