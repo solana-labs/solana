@@ -125,7 +125,7 @@ fn network_simulator(network: &mut Network) {
                 .and_then(|v| v.contact_info().cloned())
                 .unwrap();
             m.wallclock = now;
-            node.process_push_message(vec![CrdsValue::ContactInfo(m)], now);
+            node.process_push_message(&Pubkey::default(), vec![CrdsValue::ContactInfo(m)], now);
         });
         // push for a bit
         let (queue_size, bytes_tx) = network_run_push(network, start, end);
@@ -171,7 +171,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
             .collect();
         let transfered: Vec<_> = requests
             .into_par_iter()
-            .map(|(from, push_messages)| {
+            .map(|(_from, push_messages)| {
                 let mut bytes: usize = 0;
                 let mut delivered: usize = 0;
                 let mut num_msgs: usize = 0;
@@ -179,27 +179,49 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                 for (to, msgs) in push_messages {
                     bytes += serialized_size(&msgs).unwrap() as usize;
                     num_msgs += 1;
-                    let rsps = network
+                    let versioned = network
                         .get(&to)
-                        .map(|node| node.lock().unwrap().process_push_message(msgs.clone(), now))
-                        .unwrap();
-                    bytes += serialized_size(&rsps).unwrap() as usize;
-                    prunes += rsps.len();
-                    network
-                        .get(&from)
                         .map(|node| {
-                            let mut node = node.lock().unwrap();
-                            let destination = node.id;
-                            let now = timestamp();
-                            node.process_prune_msg(&to, &destination, &rsps, now, now)
-                                .unwrap()
+                            node.lock().unwrap().process_push_message(
+                                &Pubkey::default(),
+                                msgs.clone(),
+                                now,
+                            )
                         })
                         .unwrap();
-                    delivered += rsps.is_empty() as usize;
+
+                    let prunes_map = network
+                        .get(&to)
+                        .map(|node| {
+                            node.lock()
+                                .unwrap()
+                                .prune_received_cache(versioned, &HashMap::default()) // TODO: mock stakes
+                        })
+                        .unwrap();
+
+                    for (from, prune_set) in prunes_map {
+                        let prune_keys: Vec<_> = prune_set.into_iter().collect();
+
+                        bytes += serialized_size(&prune_keys).unwrap() as usize;
+                        delivered += 1;
+                        prunes += prune_keys.len();
+
+                        network
+                            .get(&from)
+                            .map(|node| {
+                                let mut node = node.lock().unwrap();
+                                let destination = node.id;
+                                let now = timestamp();
+                                node.process_prune_msg(&to, &destination, &prune_keys, now, now)
+                                    .unwrap()
+                            })
+                            .unwrap();
+                    }
                 }
                 (bytes, delivered, num_msgs, prunes)
             })
             .collect();
+
         for (b, d, m, p) in transfered {
             bytes += b;
             delivered += d;

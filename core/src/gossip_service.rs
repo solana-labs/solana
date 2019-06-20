@@ -45,6 +45,7 @@ impl GossipService {
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
             blocktree,
+            bank_forks.clone(),
             request_receiver,
             response_sender.clone(),
             exit,

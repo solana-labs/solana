@@ -2,7 +2,7 @@
 pub enum CrdsGossipError {
     NoPeers,
     PushMessageTimeout,
-    PushMessagePrune,
+    PushMessageAlreadyReceived,
     PushMessageOldVersion,
     BadPruneDestination,
     PruneMessageTimeout,
