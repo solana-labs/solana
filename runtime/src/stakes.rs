@@ -2,7 +2,7 @@
 //! node stakes
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
-use solana_stake_api::stake_state::{create_mining_pool, StakeState};
+use solana_stake_api::stake_state::StakeState;
 use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
 
@@ -136,6 +136,14 @@ impl Stakes {
                 _ => false,
             })
     }
+    pub fn rewards_pools(&self) -> impl Iterator<Item = (&Pubkey, &Account)> {
+        self.stake_accounts
+            .iter()
+            .filter(|(_key, account)| match StakeState::from(account) {
+                Some(StakeState::RewardsPool) => true,
+                _ => false,
+            })
+    }
 
     pub fn highest_staked_node(&self) -> Option<Pubkey> {
         self.vote_accounts
@@ -146,7 +154,7 @@ impl Stakes {
     }
 
     /// currently unclaimed points
-    pub fn points(&mut self) -> u64 {
+    pub fn points(&self) -> u64 {
         self.points
     }
 
@@ -155,14 +163,6 @@ impl Stakes {
         let points = self.points;
         self.points = 0;
         points
-    }
-
-    ///  claims points
-    ///  makes a pool with the lamports and points spread over those points and
-    pub fn create_mining_pool(&mut self, epoch: u64, lamports: u64) -> Account {
-        let points = self.claim_points();
-
-        create_mining_pool(lamports, epoch, lamports as f64 / points as f64)
     }
 }
 

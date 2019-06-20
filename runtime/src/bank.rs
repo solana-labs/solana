@@ -27,15 +27,16 @@ use solana_metrics::{
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::{extend_and_hash, hashv, Hash};
+use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::inflation::Inflation;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::syscall::current;
-use solana_sdk::syscall::fees;
-use solana_sdk::syscall::slot_hashes::{self, SlotHashes};
-use solana_sdk::syscall::tick_height;
+use solana_sdk::syscall::{
+    current, fees, rewards,
+    slot_hashes::{self, SlotHashes},
+    tick_height,
+};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_ns, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
@@ -264,6 +265,8 @@ impl Default for BlockhashQueue {
     }
 }
 
+pub const DUMMY_REPLICATOR_POINTS: u64 = 100;
+
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
         Self::new_with_paths(&genesis_block, None)
@@ -357,7 +360,7 @@ impl Bank {
             self.ancestors.insert(p.slot(), i + 1);
         });
 
-        self.update_rewards(parent.epoch(), parent.last_blockhash());
+        self.update_rewards(parent.epoch());
         self.update_current();
         self.update_fees();
         self
@@ -435,7 +438,7 @@ impl Bank {
     }
 
     // update reward for previous epoch
-    fn update_rewards(&mut self, epoch: u64, blockhash: Hash) {
+    fn update_rewards(&mut self, epoch: u64) {
         if epoch == self.epoch() {
             return;
         }
@@ -450,33 +453,29 @@ impl Bank {
         //  years_elapsed =   slots_elapsed                                   /  slots/year
         let period = self.epoch_schedule.get_slots_in_epoch(epoch) as f64 / self.slots_per_year;
 
-        // validators
-        {
-            let validator_rewards =
-                (self.inflation.validator(year) * self.capitalization() as f64 * period) as u64;
+        let validator_rewards =
+            self.inflation.validator(year) * self.capitalization() as f64 * period;
 
-            // claim points and create a pool
-            let mining_pool = self
-                .stakes
-                .write()
-                .unwrap()
-                .create_mining_pool(epoch, validator_rewards);
+        let validator_points = self.stakes.write().unwrap().claim_points();
 
-            self.store_account(
-                &Pubkey::new(
-                    hashv(&[
-                        blockhash.as_ref(),
-                        "StakeMiningPool".as_ref(),
-                        &serialize(&epoch).unwrap(),
-                    ])
-                    .as_ref(),
-                ),
-                &mining_pool,
-            );
+        let replicator_rewards =
+            self.inflation.replicator(year) * self.capitalization() as f64 * period;
 
-            self.capitalization
-                .fetch_add(validator_rewards as usize, Ordering::Relaxed);
-        }
+        let replicator_points = DUMMY_REPLICATOR_POINTS; // TODO: real value for points earned last epoch
+
+        self.store_account(
+            &rewards::id(),
+            &rewards::create_account(
+                1,
+                validator_rewards / validator_points as f64,
+                replicator_rewards / replicator_points as f64,
+            ),
+        );
+
+        self.capitalization.fetch_add(
+            (validator_rewards + replicator_rewards) as usize,
+            Ordering::Relaxed,
+        );
     }
 
     fn set_hash(&self) -> bool {
@@ -1390,8 +1389,7 @@ mod tests {
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::poh_config::PohConfig;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::syscall::fees::Fees;
-    use solana_sdk::syscall::tick_height::TickHeight;
+    use solana_sdk::syscall::{fees::Fees, rewards::Rewards, tick_height::TickHeight};
     use solana_sdk::system_instruction;
     use solana_sdk::system_transaction;
     use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
@@ -1474,6 +1472,8 @@ mod tests {
         }
         bank.store_account(&vote_id, &vote_account);
 
+        let validator_points = bank.stakes.read().unwrap().points();
+
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
             &bank,
@@ -1482,18 +1482,22 @@ mod tests {
         );
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank.capitalization());
-        // verify the inflation is in rewards pools
+
+        // verify the inflation is represented in validator_points *
         let inflation = bank1.capitalization() - bank.capitalization();
 
-        let validator_rewards: u64 = bank1
-            .stakes
-            .read()
-            .unwrap()
-            .mining_pools()
-            .map(|(_key, account)| account.lamports)
-            .sum();
+        let rewards = bank1
+            .get_account(&rewards::id())
+            .map(|account| Rewards::from(&account).unwrap())
+            .unwrap();
 
-        assert_eq!(validator_rewards, inflation);
+        assert!(
+            ((rewards.validator_point_value * validator_points as f64
+              + rewards.replicator_point_value * DUMMY_REPLICATOR_POINTS as f64) - // TODO: need replicator points per-epoch
+             inflation as f64)
+                .abs()
+                < 1.0 // rounding, truncating
+        );
     }
 
     #[test]
