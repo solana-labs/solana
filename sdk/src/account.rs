@@ -65,6 +65,9 @@ impl Account {
     }
 
     pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
+        if bincode::serialized_size(state)? > self.data.len() as u64 {
+            return Err(Box::new(bincode::ErrorKind::SizeLimit));
+        }
         bincode::serialize_into(&mut self.data[..], state)
     }
 }
