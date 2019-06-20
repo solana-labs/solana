@@ -110,7 +110,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
 fi
 
 # Install Rust-BPF Sysroot sources
-version=v0.3
+version=v0.4
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
     set -ex
