@@ -204,7 +204,7 @@ impl VoteState {
     }
 
     /// increment credits, record credits for last epoch if new epoch
-    fn increment_credits(&mut self, epoch: Epoch) {
+    pub fn increment_credits(&mut self, epoch: Epoch) {
         // record credits by epoch
 
         if epoch != self.epoch {
@@ -356,12 +356,10 @@ pub fn create_account(
 ) -> Account {
     let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
 
-    initialize_account(
-        &mut KeyedAccount::new(vote_pubkey, false, &mut vote_account),
-        node_pubkey,
-        commission,
-    )
-    .unwrap();
+    VoteState::new(vote_pubkey, node_pubkey, commission)
+        .to(&mut vote_account)
+        .unwrap();
+
     vote_account
 }
 
