@@ -519,6 +519,8 @@ mod tests {
     use solana_sdk::transaction::TransactionError;
     use std::thread;
 
+    const TEST_MINT_LAMPORTS: u64 = 10_000;
+
     fn start_rpc_handler_with_tx(
         pubkey: &Pubkey,
     ) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair, Pubkey) {
@@ -875,7 +877,7 @@ mod tests {
             genesis_block,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_block(TEST_MINT_LAMPORTS);
         let bank = Bank::new(&genesis_block);
         (
             Arc::new(RwLock::new(BankForks::new(bank.slot(), bank))),
