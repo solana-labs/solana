@@ -7,7 +7,7 @@ use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CrdsGossipPull;
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
-use crate::crds_value::CrdsValue;
+use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -68,13 +68,24 @@ impl CrdsGossip {
     /// remove redundant paths in the network
     pub fn prune_received_cache(
         &mut self,
-        values: Vec<VersionedCrdsValue>,
+        labels: Vec<CrdsValueLabel>,
         stakes: &HashMap<Pubkey, u64>,
     ) -> HashMap<Pubkey, HashSet<Pubkey>> {
         let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
-        for val in values {
-            let origin = val.value.pubkey();
-            let peers = self.push.prune_received_cache(&self.id, val, stakes);
+        let pairs: Vec<(Pubkey, Hash)> = labels
+            .into_iter()
+            .filter_map(|label| self.crds.lookup_versioned(&label))
+            .map(|val| {
+                let origin = val.value.pubkey();
+                let hash = val.value_hash;
+                (origin, hash)
+            })
+            .collect();
+
+        for (origin, hash) in pairs {
+            let peers = self
+                .push
+                .prune_received_cache(&self.id, origin, hash, stakes);
             for from in peers {
                 prune_map.entry(from).or_default().insert(origin);
             }

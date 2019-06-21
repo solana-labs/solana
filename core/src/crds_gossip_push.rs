@@ -25,7 +25,6 @@ use rand_chacha::ChaChaRng;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signable;
 use solana_sdk::timing::timestamp;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
@@ -74,11 +73,10 @@ impl CrdsGossipPush {
     pub fn prune_received_cache(
         &mut self,
         self_pubkey: &Pubkey,
-        value: VersionedCrdsValue,
+        origin: Pubkey,
+        hash: Hash,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<Pubkey> {
-        let hash = value.value_hash;
-        let origin = value.value.pubkey();
         let origin_stake = stakes.get(&origin);
         let self_stake = stakes.get(&self_pubkey);
         let cache = self.received_cache.get(&hash);

@@ -1149,17 +1149,18 @@ impl ClusterInfo {
         let self_id = me.read().unwrap().gossip.id;
         inc_new_counter_debug!("cluster_info-push_message", 1, 0, 1000);
 
-        let versioned: Vec<_> =
+        let updated: Vec<_> =
             me.write()
                 .unwrap()
                 .gossip
                 .process_push_message(from, data, timestamp());
 
+        let updated_labels: Vec<_> = updated.into_iter().map(|u| u.value.label()).collect();
         let prunes_map: HashMap<Pubkey, HashSet<Pubkey>> = me
             .write()
             .unwrap()
             .gossip
-            .prune_received_cache(versioned, stakes);
+            .prune_received_cache(updated_labels, stakes);
 
         let mut rsp: Vec<_> = prunes_map
             .into_iter()

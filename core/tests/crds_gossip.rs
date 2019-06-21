@@ -39,6 +39,15 @@ impl Deref for Node {
 }
 
 type Network = HashMap<Pubkey, Node>;
+
+fn stakes(network: &Network) -> HashMap<Pubkey, u64> {
+    let mut stakes = HashMap::new();
+    for (key, Node { stake, .. }) in network.iter() {
+        stakes.insert(*key, *stake);
+    }
+    stakes
+}
+
 fn star_network_create(num: usize) -> Network {
     let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
     let mut network: HashMap<_, _> = (1..num)
@@ -222,6 +231,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
     let mut prunes: usize = 0;
     let mut delivered: usize = 0;
     let network_values: Vec<Node> = network.values().cloned().collect();
+    let stakes = stakes(network);
     for t in start..end {
         let now = t as u64 * 100;
         let requests: Vec<_> = network_values
@@ -233,7 +243,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
             .collect();
         let transfered: Vec<_> = requests
             .into_par_iter()
-            .map(|(_from, push_messages)| {
+            .map(|(from, push_messages)| {
                 let mut bytes: usize = 0;
                 let mut delivered: usize = 0;
                 let mut num_msgs: usize = 0;
@@ -241,23 +251,23 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                 for (to, msgs) in push_messages {
                     bytes += serialized_size(&msgs).unwrap() as usize;
                     num_msgs += 1;
-                    let versioned = network
+                    let updated = network
                         .get(&to)
                         .map(|node| {
-                            node.lock().unwrap().process_push_message(
-                                &Pubkey::default(),
-                                msgs.clone(),
-                                now,
-                            )
+                            node.lock()
+                                .unwrap()
+                                .process_push_message(&from, msgs.clone(), now)
                         })
                         .unwrap();
 
+                    let updated_labels: Vec<_> =
+                        updated.into_iter().map(|u| u.value.label()).collect();
                     let prunes_map = network
                         .get(&to)
                         .map(|node| {
                             node.lock()
                                 .unwrap()
-                                .prune_received_cache(versioned, &HashMap::default()) // TODO: mock stakes
+                                .prune_received_cache(updated_labels, &stakes)
                         })
                         .unwrap();
 
@@ -419,6 +429,13 @@ fn test_star_network_push_rstar_200() {
 #[test]
 fn test_star_network_push_ring_200() {
     let mut network = ring_network_create(200);
+    network_simulator(&mut network);
+}
+#[test]
+fn test_connected_staked_network_200() {
+    solana_logger::setup();
+    let stakes: Vec<_> = (0..200).map(|i| i).collect();
+    let mut network = connected_staked_network_create(&stakes);
     network_simulator(&mut network);
 }
 #[test]
