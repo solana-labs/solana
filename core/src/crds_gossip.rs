@@ -73,10 +73,10 @@ impl CrdsGossip {
     ) -> HashMap<Pubkey, HashSet<Pubkey>> {
         let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
         for val in values {
-            let origin = val.value.pubkey().clone();
+            let origin = val.value.pubkey();
             let peers = self.push.prune_received_cache(&self.id, val, stakes);
             for from in peers {
-                prune_map.entry(from).or_default().insert(origin.clone());
+                prune_map.entry(from).or_default().insert(origin);
             }
         }
         prune_map

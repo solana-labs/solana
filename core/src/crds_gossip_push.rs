@@ -96,7 +96,7 @@ impl CrdsGossipPush {
         let staked_peers: Vec<(Pubkey, u64)> = peers
             .iter()
             .filter_map(|p| stakes.get(p).map(|s| (*p, *s)))
-            .filter(|(_, s)| s > &peer_stake_threshold)
+            .filter(|(_, s)| *s > peer_stake_threshold)
             .collect();
 
         if staked_peers.is_empty() {
