@@ -148,14 +148,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Path to file containing the bootstrap leader's storage keypair"),
         )
         .arg(
-            Arg::with_name("storage_mining_pool_keypair_file")
-                .long("storage-mining-pool-keypair")
-                .value_name("KEYPAIR")
-                .takes_value(true)
-                .required(true)
-                .help("Path to file containing the storage mining pool storage keypair"),
-        )
-        .arg(
             Arg::with_name("storage_mining_pool_lamports")
                 .long("storage-mining-pool-lamports")
                 .value_name("LAMPORTS")
@@ -263,9 +255,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_stake_keypair_file = matches.value_of("bootstrap_stake_keypair_file").unwrap();
     let bootstrap_storage_keypair_file =
         matches.value_of("bootstrap_storage_keypair_file").unwrap();
-    let storage_mining_pool_keypair = matches
-        .value_of("storage_mining_pool_keypair_file")
-        .unwrap();
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
     let ledger_path = matches.value_of("ledger_path").unwrap();
     let lamports = value_t_or_exit!(matches, "lamports", u64);
@@ -278,7 +267,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
     let bootstrap_stake_keypair = read_keypair(bootstrap_stake_keypair_file)?;
     let bootstrap_storage_keypair = read_keypair(bootstrap_storage_keypair_file)?;
-    let storage_mining_keypair = read_keypair(storage_mining_pool_keypair)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
     let (vote_account, vote_state) = vote_state::create_bootstrap_leader_account(
@@ -319,7 +307,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
             ),
             (
-                storage_mining_keypair.pubkey(),
+                "StorageMiningPoo111111111111111111111111111"
+                    .parse()
+                    .unwrap(),
                 storage_contract::create_mining_pool_account(storage_pool_lamports),
             ),
         ])

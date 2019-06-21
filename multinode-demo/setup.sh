@@ -13,14 +13,12 @@ $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-keypair.json
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-stake-keypair.json
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-storage-keypair.json
-$solana_keygen new -o "$SOLANA_CONFIG_DIR"/storage-mining-pool-keypair.json
 
 args=("$@")
 default_arg --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-keypair.json
 default_arg --bootstrap-vote-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
 default_arg --bootstrap-stake-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-stake-keypair.json
 default_arg --bootstrap-storage-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-storage-keypair.json
-default_arg --storage-mining-pool-keypair "$SOLANA_CONFIG_DIR"/storage-mining-pool-keypair.json
 default_arg --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger
 default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
 default_arg --lamports 100000000000000
