@@ -462,10 +462,12 @@ deploy() {
   testnet-tds)
     (
       set -x
+      # TODO: Should we spread the few nodes around multiple zones?
       # shellcheck disable=SC2068
+      # shellcheck disable=SC2086
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p tds-solana-com -C gce ${GCE_ZONE_ARGS[0]} \  # TODO: Should we spread the few nodes around multiple zones?
+        ci/testnet-deploy.sh -p tds-solana-com -C gce ${GCE_ZONE_ARGS[0]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
           -a tds-solana-com --hashes-per-tick auto \
           ${skipCreate:+-e} \
