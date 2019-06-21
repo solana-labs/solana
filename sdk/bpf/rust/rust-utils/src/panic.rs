@@ -28,5 +28,5 @@ fn panic(info: &PanicInfo) -> ! {
     }
 }
 extern "C" {
-    pub fn sol_panic_(message: *const u8, line: u64, column: u64) -> !;
+    pub fn sol_panic_(file: *const u8, line: u64, column: u64) -> !;
 }
