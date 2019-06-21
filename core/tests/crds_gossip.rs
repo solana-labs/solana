@@ -11,9 +11,33 @@ use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
-type Node = Arc<Mutex<CrdsGossip>>;
+#[derive(Clone)]
+struct Node {
+    gossip: Arc<Mutex<CrdsGossip>>,
+    stake: u64,
+}
+
+impl Node {
+    fn new(gossip: Arc<Mutex<CrdsGossip>>) -> Self {
+        Node { gossip, stake: 0 }
+    }
+
+    fn staked(gossip: Arc<Mutex<CrdsGossip>>, stake: u64) -> Self {
+        Node { gossip, stake }
+    }
+}
+
+impl Deref for Node {
+    type Target = Arc<Mutex<CrdsGossip>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.gossip
+    }
+}
+
 type Network = HashMap<Pubkey, Node>;
 fn star_network_create(num: usize) -> Network {
     let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
@@ -25,14 +49,14 @@ fn star_network_create(num: usize) -> Network {
             node.crds.insert(new.clone(), 0).unwrap();
             node.crds.insert(entry.clone(), 0).unwrap();
             node.set_self(&id);
-            (new.label().pubkey(), Arc::new(Mutex::new(node)))
+            (new.label().pubkey(), Node::new(Arc::new(Mutex::new(node))))
         })
         .collect();
     let mut node = CrdsGossip::default();
     let id = entry.label().pubkey();
     node.crds.insert(entry.clone(), 0).unwrap();
     node.set_self(&id);
-    network.insert(id, Arc::new(Mutex::new(node)));
+    network.insert(id, Node::new(Arc::new(Mutex::new(node))));
     network
 }
 
@@ -50,10 +74,10 @@ fn rstar_network_create(num: usize) -> Network {
             node.crds.insert(new.clone(), 0).unwrap();
             origin.crds.insert(new.clone(), 0).unwrap();
             node.set_self(&id);
-            (new.label().pubkey(), Arc::new(Mutex::new(node)))
+            (new.label().pubkey(), Node::new(Arc::new(Mutex::new(node))))
         })
         .collect();
-    network.insert(id, Arc::new(Mutex::new(origin)));
+    network.insert(id, Node::new(Arc::new(Mutex::new(origin))));
     network
 }
 
@@ -65,7 +89,7 @@ fn ring_network_create(num: usize) -> Network {
             let mut node = CrdsGossip::default();
             node.crds.insert(new.clone(), 0).unwrap();
             node.set_self(&id);
-            (new.label().pubkey(), Arc::new(Mutex::new(node)))
+            (new.label().pubkey(), Node::new(Arc::new(Mutex::new(node))))
         })
         .collect();
     let keys: Vec<Pubkey> = network.keys().cloned().collect();
@@ -83,6 +107,44 @@ fn ring_network_create(num: usize) -> Network {
         };
         let end = network.get_mut(&keys[(k + 1) % keys.len()]).unwrap();
         end.lock().unwrap().crds.insert(start_info, 0).unwrap();
+    }
+    network
+}
+
+fn connected_staked_network_create(stakes: &[u64]) -> Network {
+    let num = stakes.len();
+    let mut network: HashMap<_, _> = (0..num)
+        .map(|n| {
+            let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
+            let id = new.label().pubkey();
+            let mut node = CrdsGossip::default();
+            node.crds.insert(new.clone(), 0).unwrap();
+            node.set_self(&id);
+            (
+                new.label().pubkey(),
+                Node::staked(Arc::new(Mutex::new(node)), stakes[n]),
+            )
+        })
+        .collect();
+
+    let keys: Vec<Pubkey> = network.keys().cloned().collect();
+    let start_entries: Vec<_> = keys
+        .iter()
+        .map(|k| {
+            let start = &network[k].lock().unwrap();
+            let start_id = start.id.clone();
+            let start_label = CrdsValueLabel::ContactInfo(start_id);
+            start.crds.lookup(&start_label).unwrap().clone()
+        })
+        .collect();
+    for end in network.values_mut() {
+        for k in 0..keys.len() {
+            let mut end = end.lock().unwrap();
+            if keys[k] != end.id {
+                let start_info = start_entries[k].clone();
+                end.crds.insert(start_info, 0).unwrap();
+            }
+        }
     }
     network
 }
