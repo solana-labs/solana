@@ -34,7 +34,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         x.wrapping_shl(64).wrapping_shr(64) as u64,
         0xffff_ffff_ffff_fffe
     );
-    assert_eq!(x, 0xffff_ffff_ffff_fffe);
+    assert_eq!(x, 0x1ffff_ffff_ffff_fffe);
 
     info!("Success");
     true
