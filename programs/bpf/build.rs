@@ -68,6 +68,7 @@ fn main() {
             .success());
 
         let rust_programs = [
+            "128bit",
             "alloc",
             "dep_crate",
             "iter",

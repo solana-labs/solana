@@ -90,6 +90,7 @@ mod bpf {
             solana_logger::setup();
 
             let programs = [
+                ("solana_bpf_rust_128bit", true),
                 ("solana_bpf_rust_alloc", true),
                 ("solana_bpf_rust_dep_crate", true),
                 ("solana_bpf_rust_iter", true),
