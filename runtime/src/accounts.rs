@@ -372,11 +372,20 @@ impl Accounts {
         for k in credit_debit_keys {
             locks.insert(*k);
         }
+        let mut credit_only_writes: Vec<&Pubkey> = vec![];
         for k in credit_only_keys {
+            let credit_only_locks = credit_only_locks.read().unwrap();
+            if let Some(credit_only_lock) = credit_only_locks.get(&k) {
+                *credit_only_lock.lock_count.lock().unwrap() += 1;
+            } else {
+                credit_only_writes.push(k);
+            }
+        }
+
+        for k in credit_only_writes.iter() {
             let mut credit_only_locks = credit_only_locks.write().unwrap();
             credit_only_locks
-                .entry(*k)
-                .and_modify(|lock| *lock.lock_count.lock().unwrap() += 1)
+                .entry(**k)
                 .or_insert_with(|| CreditOnlyLock {
                     credits: AtomicU64::new(0),
                     lock_count: Mutex::new(1),
@@ -400,10 +409,10 @@ impl Accounts {
                     locks.remove(k);
                 }
                 for k in credit_only_keys {
-                    let mut locks = credit_only_locks.write().unwrap();
-                    locks
-                        .entry(**k)
-                        .and_modify(|lock| *lock.lock_count.lock().unwrap() -= 1);
+                    let locks = credit_only_locks.read().unwrap();
+                    if let Some(lock) = locks.get(&k) {
+                        *lock.lock_count.lock().unwrap() -= 1;
+                    }
                 }
             }
         }
@@ -568,7 +577,7 @@ impl Accounts {
                     // Increment credit-only account balance Atomic
                     if accounts.get_mut(key).is_some() {
                         self.credit_only_account_locks
-                            .write()
+                            .read()
                             .unwrap()
                             .get(key)
                             .unwrap()
