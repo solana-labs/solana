@@ -221,6 +221,8 @@ const GetRecentBlockhash = jsonRpcResult([
   'string',
   struct({
     lamportsPerSignature: 'number',
+    maxLamportsPerSignature: 'number',
+    minLamportsPerSignature: 'number',
     targetLamportsPerSignature: 'number',
     targetSignaturesPerSlot: 'number',
   }),
