@@ -9,7 +9,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub const VALIDATOR_REWARD: u64 = 200;
 pub const REPLICATOR_REWARD: u64 = 200;
@@ -65,7 +65,7 @@ pub enum StorageContract {
         hash: Hash,
         // Lockouts and Rewards are per segment per replicator. It needs to remain this way until
         // the challenge stage is added. Once challenges are in rewards can just be a number
-        lockout_validations: HashMap<usize, HashMap<Pubkey, Vec<ProofStatus>>>,
+        lockout_validations: BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
         // lamports that are ready to be claimed
         pending_lamports: u64,
     },
@@ -73,10 +73,10 @@ pub enum StorageContract {
         owner: Pubkey,
         // TODO what to do about duplicate proofs across segments? - Check the blockhashes
         // Map of Proofs per segment, in a Vec
-        proofs: HashMap<usize, Vec<Proof>>,
-        // Map of Rewards per segment, in a HashMap based on the validator account that verified
+        proofs: BTreeMap<usize, Vec<Proof>>,
+        // Map of Rewards per segment, in a BTreeMap based on the validator account that verified
         // the proof. This can be used for challenge stage when its added
-        reward_validations: HashMap<usize, HashMap<Pubkey, Vec<ProofStatus>>>,
+        reward_validations: BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
     },
 
     MiningPool,
@@ -91,7 +91,7 @@ pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account
             owner,
             slot: 0,
             hash: Hash::default(),
-            lockout_validations: HashMap::new(),
+            lockout_validations: BTreeMap::new(),
             pending_lamports: 0,
         })
         .expect("set_state");
@@ -135,8 +135,8 @@ impl<'a> StorageAccount<'a> {
         if let StorageContract::Uninitialized = storage_contract {
             *storage_contract = StorageContract::ReplicatorStorage {
                 owner,
-                proofs: HashMap::new(),
-                reward_validations: HashMap::new(),
+                proofs: BTreeMap::new(),
+                reward_validations: BTreeMap::new(),
             };
             self.account.set_state(storage_contract)
         } else {
@@ -151,7 +151,7 @@ impl<'a> StorageAccount<'a> {
                 owner,
                 slot: 0,
                 hash: Hash::default(),
-                lockout_validations: HashMap::new(),
+                lockout_validations: BTreeMap::new(),
                 pending_lamports: 0,
             };
             self.account.set_state(storage_contract)
@@ -179,8 +179,16 @@ impl<'a> StorageAccount<'a> {
 
             // clean up the account
             // TODO check for time correctness - storage seems to run at a delay of about 3
-            proofs.retain(|segment, _| *segment >= current_segment.saturating_sub(5));
-            reward_validations.retain(|segment, _| *segment >= current_segment.saturating_sub(10));
+            *proofs = proofs
+                .iter()
+                .filter(|(segment, _)| **segment >= current_segment.saturating_sub(5))
+                .map(|(segment, proofs)| (*segment, proofs.clone()))
+                .collect();
+            *reward_validations = reward_validations
+                .iter()
+                .filter(|(segment, _)| **segment >= current_segment.saturating_sub(10))
+                .map(|(segment, rewards)| (*segment, rewards.clone()))
+                .collect();
 
             if segment_index >= current_segment {
                 // attempt to submit proof for unconfirmed segment
@@ -261,15 +269,16 @@ impl<'a> StorageAccount<'a> {
             // storage epoch updated, move the lockout_validations to pending_lamports
             let num_validations = count_valid_proofs(
                 &lockout_validations
-                    .drain()
-                    .flat_map(|(_segment, mut proofs)| {
+                    .iter()
+                    .flat_map(|(_segment, proofs)| {
                         proofs
-                            .drain()
-                            .flat_map(|(_, proof)| proof)
+                            .iter()
+                            .flat_map(|(_, proof)| proof.clone())
                             .collect::<Vec<_>>()
                     })
                     .collect::<Vec<_>>(),
             );
+            lockout_validations.clear();
             *pending_lamports += VALIDATOR_REWARD * num_validations;
             self.account.set_state(storage_contract)
         } else {
@@ -411,14 +420,15 @@ impl<'a> StorageAccount<'a> {
             }
 
             let checked_proofs = reward_validations
-                .drain()
-                .flat_map(|(_, mut proofs)| {
+                .iter()
+                .flat_map(|(_, proofs)| {
                     proofs
-                        .drain()
-                        .flat_map(|(_, proofs)| proofs)
+                        .iter()
+                        .flat_map(|(_, proofs)| proofs.clone())
                         .collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>();
+            reward_validations.clear();
             let total_proofs = checked_proofs.len() as u64;
             let num_validations = count_valid_proofs(&checked_proofs);
             let reward = num_validations * REPLICATOR_REWARD * (num_validations / total_proofs);
@@ -477,6 +487,7 @@ fn count_valid_proofs(proofs: &[ProofStatus]) -> u64 {
 mod tests {
     use super::*;
     use crate::id;
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_account_data() {
@@ -497,7 +508,7 @@ mod tests {
             owner: Pubkey::default(),
             slot: 0,
             hash: Hash::default(),
-            lockout_validations: HashMap::new(),
+            lockout_validations: BTreeMap::new(),
             pending_lamports: 0,
         };
         storage_account.account.set_state(&contract).unwrap();
@@ -506,8 +517,8 @@ mod tests {
         }
         contract = StorageContract::ReplicatorStorage {
             owner: Pubkey::default(),
-            proofs: HashMap::new(),
-            reward_validations: HashMap::new(),
+            proofs: BTreeMap::new(),
+            reward_validations: BTreeMap::new(),
         };
         storage_account.account.set_state(&contract).unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
@@ -547,12 +558,12 @@ mod tests {
             .resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         let storage_contract = &mut account.account.state().unwrap();
         if let StorageContract::Uninitialized = storage_contract {
-            let mut proofs = HashMap::new();
+            let mut proofs = BTreeMap::new();
             proofs.insert(0, vec![proof.clone()]);
             *storage_contract = StorageContract::ReplicatorStorage {
                 owner: Pubkey::default(),
                 proofs,
-                reward_validations: HashMap::new(),
+                reward_validations: BTreeMap::new(),
             };
         };
         account.account.set_state(storage_contract).unwrap();
