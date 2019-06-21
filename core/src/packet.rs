@@ -1,9 +1,6 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use crate::{
-    erasure::CodingHeader,
-    recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
-    result::{Error, Result},
-};
+use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
+use crate::result::{Error, Result};
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
@@ -336,7 +333,7 @@ pub fn packets_to_blobs<T: Borrow<Packet>>(packets: &[T]) -> Vec<Blob> {
 }
 
 macro_rules! range {
-    ($prev:expr, $type:ty) => {
+    ($prev:expr, $type:ident) => {
         $prev..$prev + size_of::<$type>()
     };
 }
@@ -346,13 +343,17 @@ const FORWARDED_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, bool
 const PARENT_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u64);
 const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
-const CODING_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Option<CodingHeader>);
-const ID_RANGE: std::ops::Range<usize> = range!(CODING_RANGE.end, Pubkey);
+const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
 const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
 const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
 
-pub const BLOB_HEADER_SIZE: usize = SIZE_RANGE.end;
+macro_rules! align {
+    ($x:expr, $align:expr) => {
+        $x + ($align - 1) & !($align - 1)
+    };
+}
 
+pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, BLOB_DATA_ALIGN); // make sure data() is safe for erasure
 pub const SIGNABLE_START: usize = PARENT_RANGE.start;
 
 pub const BLOB_FLAG_IS_LAST_IN_SLOT: u32 = 0x2;
@@ -421,14 +422,6 @@ impl Blob {
         self.data[ID_RANGE].copy_from_slice(id.as_ref())
     }
 
-    pub fn set_coding_header(&mut self, header: &CodingHeader) {
-        bincode::serialize_into(&mut self.data[CODING_RANGE], &Some(*header)).unwrap();
-    }
-
-    pub fn get_coding_header(&self) -> Option<CodingHeader> {
-        bincode::deserialize(&self.data[CODING_RANGE]).unwrap()
-    }
-
     /// Used to determine whether or not this blob should be forwarded in retransmit
     /// A bool is used here instead of a flag because this item is not intended to be signed when
     /// blob signatures are introduced
@@ -475,10 +468,10 @@ impl Blob {
     }
 
     pub fn data(&self) -> &[u8] {
-        &self.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + BLOB_DATA_SIZE]
+        &self.data[BLOB_HEADER_SIZE..]
     }
     pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + BLOB_DATA_SIZE]
+        &mut self.data[BLOB_HEADER_SIZE..]
     }
     pub fn size(&self) -> usize {
         let size = self.data_size() as usize;

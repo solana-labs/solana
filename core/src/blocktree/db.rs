@@ -39,10 +39,6 @@ pub mod columns {
     #[derive(Debug)]
     /// The root column
     pub struct Root;
-
-    #[derive(Debug)]
-    /// The index column
-    pub struct Index;
 }
 
 pub trait Backend: Sized + Send + Sync {
