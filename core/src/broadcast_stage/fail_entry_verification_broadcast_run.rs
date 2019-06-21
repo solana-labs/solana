@@ -1,11 +1,13 @@
 use super::*;
 use solana_sdk::hash::Hash;
 
-pub(super) struct FailEntryVerificationBroadcastRun {}
+pub(super) struct FailEntryVerificationBroadcastRun {
+    set_index: u64,
+}
 
 impl FailEntryVerificationBroadcastRun {
     pub(super) fn new() -> Self {
-        Self {}
+        Self { set_index: 0 }
     }
 }
 
@@ -49,7 +51,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             last_tick,
             &bank,
             &keypair,
-            &mut broadcast.coding_generator,
+            &mut self.set_index,
         );
 
         blocktree.write_shared_blobs(data_blobs.iter().chain(coding_blobs.iter()))?;

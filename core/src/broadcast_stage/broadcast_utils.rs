@@ -1,6 +1,6 @@
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
-use crate::erasure::CodingGenerator;
+use crate::erasure;
 use crate::packet::{self, SharedBlob};
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::Result;
@@ -81,7 +81,7 @@ pub(super) fn entries_to_blobs(
     last_tick: u64,
     bank: &Bank,
     keypair: &Keypair,
-    coding_generator: &mut CodingGenerator,
+    set_index: &mut u64,
 ) -> (Vec<SharedBlob>, Vec<SharedBlob>) {
     let blobs = generate_data_blobs(
         ventries,
@@ -92,7 +92,18 @@ pub(super) fn entries_to_blobs(
         &keypair,
     );
 
-    let coding = generate_coding_blobs(&blobs, &thread_pool, coding_generator, &keypair);
+    let start_index = blobs[0].read().unwrap().index();
+
+    let coding = generate_coding_blobs(
+        &blobs,
+        &thread_pool,
+        bank.slot(),
+        *set_index,
+        start_index,
+        &keypair,
+    );
+
+    *set_index += 1;
 
     (blobs, coding)
 }
@@ -141,10 +152,15 @@ pub(super) fn generate_data_blobs(
 pub(super) fn generate_coding_blobs(
     blobs: &[SharedBlob],
     thread_pool: &ThreadPool,
-    coding_generator: &mut CodingGenerator,
+    slot: u64,
+    set_index: u64,
+    start_index: u64,
     keypair: &Keypair,
 ) -> Vec<SharedBlob> {
-    let coding = coding_generator.next(&blobs);
+    let set_len = blobs.len();
+
+    let coding = erasure::encode_shared(slot, set_index, start_index, blobs, set_len)
+        .expect("Erasure coding failed");
 
     thread_pool.install(|| {
         coding.par_iter().for_each(|c| {

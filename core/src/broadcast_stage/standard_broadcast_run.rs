@@ -10,12 +10,14 @@ struct BroadcastStats {
 
 pub(super) struct StandardBroadcastRun {
     stats: BroadcastStats,
+    set_index: u64,
 }
 
 impl StandardBroadcastRun {
     pub(super) fn new() -> Self {
         Self {
             stats: BroadcastStats::default(),
+            set_index: 0,
         }
     }
 
@@ -79,7 +81,7 @@ impl BroadcastRun for StandardBroadcastRun {
             last_tick,
             &bank,
             &keypair,
-            &mut broadcast.coding_generator,
+            &mut self.set_index,
         );
 
         blocktree.write_shared_blobs(data_blobs.iter().chain(coding_blobs.iter()))?;

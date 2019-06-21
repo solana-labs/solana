@@ -71,14 +71,21 @@ impl Backend for Kvs {
 
 impl Column<Kvs> for cf::Coding {
     const NAME: &'static str = super::ERASURE_CF;
-    type Index = (u64, u64);
+    type Index = (u64, u64, u64);
 
-    fn key(index: (u64, u64)) -> Key {
-        cf::Data::key(index)
+    fn key((slot, set_index, index): (u64, u64, u64)) -> Vec<u8> {
+        let mut key = Key::default();
+        BigEndian::write_u64(&mut key.0[..8], slot);
+        BigEndian::write_u64(&mut key.0[8..16], set_index);
+        BigEndian::write_u64(&mut key.0[16..], index);
+        key
     }
 
-    fn index(key: &Key) -> (u64, u64) {
-        cf::Data::index(key)
+    fn index(key: &Key) -> (u64, u64, u64) {
+        let slot = BigEndian::read_u64(&key.0[..8]);
+        let set_index = BigEndian::read_u64(&key.0[8..16]);
+        let index = BigEndian::read_u64(&key.0[16..]);
+        (slot, set_index, index)
     }
 }
 
@@ -172,8 +179,12 @@ impl Column<Kvs> for cf::SlotMeta {
     }
 }
 
-impl Column<Kvs> for cf::SlotMeta {
-    const NAME: &'static str = super::META_CF;
+impl TypedColumn<Kvs> for cf::SlotMeta {
+    type Type = super::SlotMeta;
+}
+
+impl Column<Kvs> for cf::Index {
+    const NAME: &'static str = super::INDEX_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Key {
@@ -187,8 +198,8 @@ impl Column<Kvs> for cf::SlotMeta {
     }
 }
 
-impl TypedColumn<Kvs> for cf::SlotMeta {
-    type Type = super::SlotMeta;
+impl TypedColumn<Kvs> for cf::Index {
+    type Type = crate::blocktree::meta::Index;
 }
 
 impl Column<Kvs> for cf::ErasureMeta {
