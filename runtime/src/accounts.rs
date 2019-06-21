@@ -347,14 +347,9 @@ impl Accounts {
         for k in credit_debit_keys.iter() {
             let credit_only_locks = credit_only_locks.read().unwrap();
             if locks.contains(k)
-                || (credit_only_locks.contains_key(k)
-                    && *credit_only_locks
-                        .get(&k)
-                        .unwrap()
-                        .lock_count
-                        .lock()
-                        .unwrap()
-                        > 0)
+                || credit_only_locks
+                    .get(&k)
+                    .map_or(false, |lock| *lock.lock_count.lock().unwrap() > 0)
             {
                 error_counters.account_in_use += 1;
                 debug!("Account in use: {:?}", k);
@@ -410,9 +405,8 @@ impl Accounts {
                 }
                 for k in credit_only_keys {
                     let locks = credit_only_locks.read().unwrap();
-                    if let Some(lock) = locks.get(&k) {
-                        *lock.lock_count.lock().unwrap() -= 1;
-                    }
+                    let lock = locks.get(&k).unwrap();
+                    *lock.lock_count.lock().unwrap() -= 1;
                 }
             }
         }
