@@ -71,21 +71,18 @@ impl CrdsGossip {
         labels: Vec<CrdsValueLabel>,
         stakes: &HashMap<Pubkey, u64>,
     ) -> HashMap<Pubkey, HashSet<Pubkey>> {
-        let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
-        let pairs: Vec<(Pubkey, Hash)> = labels
+        let id = &self.id;
+        let crds = &self.crds;
+        let push = &mut self.push;
+        let versioned = labels
             .into_iter()
-            .filter_map(|label| self.crds.lookup_versioned(&label))
-            .map(|val| {
-                let origin = val.value.pubkey();
-                let hash = val.value_hash;
-                (origin, hash)
-            })
-            .collect();
+            .filter_map(|label| crds.lookup_versioned(&label));
 
-        for (origin, hash) in pairs {
-            let peers = self
-                .push
-                .prune_received_cache(&self.id, origin, hash, stakes);
+        let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
+        for val in versioned {
+            let origin = val.value.pubkey();
+            let hash = val.value_hash;
+            let peers = push.prune_received_cache(id, origin, hash, stakes);
             for from in peers {
                 prune_map.entry(from).or_default().insert(origin);
             }
