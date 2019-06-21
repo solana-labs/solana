@@ -50,8 +50,10 @@ impl CrdsGossip {
     ) -> Vec<VersionedCrdsValue> {
         values
             .into_iter()
-            .map(|val| self.push.process_push_message(&mut self.crds, val, now))
-            .filter_map(|res| {
+            .filter_map(|val| {
+                let res = self
+                    .push
+                    .process_push_message(&mut self.crds, from, val, now);
                 if let Ok(Some(val)) = res {
                     self.pull
                         .record_old_hash(val.value_hash, val.local_timestamp);
