@@ -12,7 +12,9 @@ fi
 echo "Building $1"
 set -e
 
-cd "$(dirname "$0")" && bpf_sdk="$PWD/.."
+pushd "$(dirname "$0")"
+bpf_sdk="$PWD/.."
+popd
 
 # Ensure the sdk is installed
 "$bpf_sdk"/scripts/install.sh
@@ -22,7 +24,7 @@ export CC="$bpf_sdk/dependencies/llvm-native/bin/clang"
 export AR="$bpf_sdk/dependencies/llvm-native/bin/llvm-ar"
 
 # Use the SDK's version of Rust to build for BPF
-export RUSTUP_TOOLCHAIN=bpf
+export RUSTUP_TOOLCHAIN=bpf2
 export RUSTFLAGS="
     -C lto=no \
     -C opt-level=2 \
