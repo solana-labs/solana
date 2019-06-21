@@ -15,6 +15,7 @@ members = [
     "kvstore",
     "ledger-tool",
     "logger",
+    "merkle-tree",
     "metrics",
     "netutil",
     "programs/bpf",
