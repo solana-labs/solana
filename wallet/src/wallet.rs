@@ -51,9 +51,8 @@ pub enum WalletCommand {
     CreateVoteAccount(Pubkey, Pubkey, u32, u64),
     ShowVoteAccount(Pubkey),
     CreateStakeAccount(Pubkey, u64),
-    CreateMiningPoolAccount(Pubkey, u64),
     DelegateStake(Keypair, Pubkey, u64),
-    RedeemVoteCredits(Pubkey, Pubkey, Pubkey),
+    RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
     CreateStorageMiningPoolAccount(Pubkey, u64),
     CreateReplicatorStorageAccount(Pubkey, Pubkey),
@@ -238,15 +237,6 @@ pub fn parse_command(
                 lamports,
             ))
         }
-        ("create-mining-pool-account", Some(matches)) => {
-            let mining_pool_account_pubkey =
-                value_of(matches, "mining_pool_account_pubkey").unwrap();
-            let lamports = matches.value_of("lamports").unwrap().parse()?;
-            Ok(WalletCommand::CreateMiningPoolAccount(
-                mining_pool_account_pubkey,
-                lamports,
-            ))
-        }
         ("delegate-stake", Some(matches)) => {
             let staking_account_keypair =
                 keypair_of(matches, "staking_account_keypair_file").unwrap();
@@ -259,12 +249,9 @@ pub fn parse_command(
             ))
         }
         ("redeem-vote-credits", Some(matches)) => {
-            let mining_pool_account_pubkey =
-                value_of(matches, "mining_pool_account_pubkey").unwrap();
             let staking_account_pubkey = value_of(matches, "staking_account_pubkey").unwrap();
             let voting_account_pubkey = value_of(matches, "voting_account_pubkey").unwrap();
             Ok(WalletCommand::RedeemVoteCredits(
-                mining_pool_account_pubkey,
                 staking_account_pubkey,
                 voting_account_pubkey,
             ))
@@ -272,15 +259,6 @@ pub fn parse_command(
         ("show-stake-account", Some(matches)) => {
             let staking_account_pubkey = value_of(matches, "staking_account_pubkey").unwrap();
             Ok(WalletCommand::ShowStakeAccount(staking_account_pubkey))
-        }
-        ("create-storage-mining-pool-account", Some(matches)) => {
-            let storage_mining_pool_account_pubkey =
-                value_of(matches, "storage_mining_pool_account_pubkey").unwrap();
-            let lamports = matches.value_of("lamports").unwrap().parse()?;
-            Ok(WalletCommand::CreateStorageMiningPoolAccount(
-                storage_mining_pool_account_pubkey,
-                lamports,
-            ))
         }
         ("create-replicator-storage-account", Some(matches)) => {
             let account_owner = value_of(matches, "storage_account_owner").unwrap();
@@ -580,28 +558,6 @@ fn process_create_stake_account(
     Ok(signature_str.to_string())
 }
 
-fn process_create_mining_pool_account(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    mining_pool_account_pubkey: &Pubkey,
-    lamports: u64,
-) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = stake_instruction::create_mining_pool_account(
-        &config.keypair.pubkey(),
-        mining_pool_account_pubkey,
-        lamports,
-    );
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair],
-        recent_blockhash,
-    );
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
-    Ok(signature_str.to_string())
-}
-
 fn process_delegate_stake(
     rpc_client: &RpcClient,
     config: &WalletConfig,
@@ -631,13 +587,11 @@ fn process_delegate_stake(
 fn process_redeem_vote_credits(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    mining_pool_account_pubkey: &Pubkey,
     staking_account_pubkey: &Pubkey,
     voting_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::redeem_vote_credits(
-        mining_pool_account_pubkey,
         staking_account_pubkey,
         voting_account_pubkey,
     )];
@@ -663,15 +617,7 @@ fn process_show_stake_account(
             println!("account lamports: {}", stake_account.lamports);
             println!("voter pubkey: {}", stake.voter_pubkey);
             println!("credits observed: {}", stake.credits_observed);
-            println!("epoch: {}", stake.epoch);
-            println!("activated stake: {}", stake.stake);
-            println!("previous stake: {}", stake.prev_stake);
-            Ok("".to_string())
-        }
-        Ok(StakeState::MiningPool { epoch, point_value }) => {
-            println!("account lamports: {}", stake_account.lamports);
-            println!("epoch: {}", epoch);
-            println!("point_value: {}", point_value);
+            println!("stake: {}", stake.stake);
             Ok("".to_string())
         }
         _ => Err(WalletError::RpcRequestError(
@@ -1066,15 +1012,6 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_create_stake_account(&rpc_client, config, &staking_account_pubkey, *lamports)
         }
 
-        WalletCommand::CreateMiningPoolAccount(mining_pool_account_pubkey, lamports) => {
-            process_create_mining_pool_account(
-                &rpc_client,
-                config,
-                &mining_pool_account_pubkey,
-                *lamports,
-            )
-        }
-
         WalletCommand::DelegateStake(staking_account_keypair, voting_account_pubkey, lamports) => {
             process_delegate_stake(
                 &rpc_client,
@@ -1085,17 +1022,14 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             )
         }
 
-        WalletCommand::RedeemVoteCredits(
-            mining_pool_account_pubkey,
-            staking_account_pubkey,
-            voting_account_pubkey,
-        ) => process_redeem_vote_credits(
-            &rpc_client,
-            config,
-            &mining_pool_account_pubkey,
-            &staking_account_pubkey,
-            &voting_account_pubkey,
-        ),
+        WalletCommand::RedeemVoteCredits(staking_account_pubkey, voting_account_pubkey) => {
+            process_redeem_vote_credits(
+                &rpc_client,
+                config,
+                &staking_account_pubkey,
+                &voting_account_pubkey,
+            )
+        }
 
         WalletCommand::ShowStakeAccount(staking_account_pubkey) => {
             process_show_stake_account(&rpc_client, config, &staking_account_pubkey)
@@ -1416,27 +1350,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .validator(is_pubkey)
                         .help("Vote account pubkey"),
                 )
-        )
-        .subcommand(
-            SubCommand::with_name("create-mining-pool-account")
-                .about("Create staking mining pool account")
-                .arg(
-                    Arg::with_name("mining_pool_account_pubkey")
-                        .index(1)
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("Staking mining pool account address to fund"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .index(2)
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The number of lamports to assign to the mining pool account"),
-                ),
         )
        .subcommand(
             SubCommand::with_name("create-stake-account")

@@ -25,12 +25,11 @@ pub enum StakeInstruction {
 
     /// Redeem credits in the stake account
     ///
-    /// Expects 5 Accounts:
+    /// Expects 4 Accounts:
     ///    0 - Delegate StakeAccount to be updated with rewards
     ///    1 - VoteAccount to which the Stake is delegated,
     ///    2 - RewardsPool Stake Account from which to redeem credits
     ///    3 - Rewards syscall Account that carries points values
-    ///    4 - Current syscall Account that carries current bank epoch
     RedeemVoteCredits,
 }
 
@@ -65,7 +64,6 @@ pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instr
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new(crate::rewards_pools::random_id(), false),
         AccountMeta::new(syscall::rewards::id(), false),
-        AccountMeta::new(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
@@ -77,16 +75,6 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -
         AccountMeta::new(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
-}
-
-fn current(current_account: &KeyedAccount) -> Result<syscall::current::Current, InstructionError> {
-    syscall::current::Current::from(current_account.account)
-        .ok_or(InstructionError::InvalidArgument)
-}
-
-fn rewards(rewards_account: &KeyedAccount) -> Result<syscall::rewards::Rewards, InstructionError> {
-    syscall::rewards::Rewards::from(rewards_account.account)
-        .ok_or(InstructionError::InvalidArgument)
 }
 
 pub fn process_instruction(
@@ -114,7 +102,11 @@ pub fn process_instruction(
             }
             let vote = &rest[0];
 
-            me.delegate_stake(vote, stake, &current(&rest[1])?)
+            me.delegate_stake(
+                vote,
+                stake,
+                &syscall::current::from_keyed_account(&rest[1])?,
+            )
         }
         StakeInstruction::RedeemVoteCredits => {
             if rest.len() != 3 {
@@ -125,7 +117,11 @@ pub fn process_instruction(
             let (rewards_pool, rest) = rest.split_at_mut(1);
             let rewards_pool = &mut rewards_pool[0];
 
-            me.redeem_vote_credits(vote, rewards_pool, &rewards(&rest[1])?, &current(&rest[2])?)
+            me.redeem_vote_credits(
+                vote,
+                rewards_pool,
+                &syscall::rewards::from_keyed_account(&rest[0])?,
+            )
         }
     }
 }
@@ -143,6 +139,8 @@ mod tests {
             .map(|meta| {
                 if syscall::current::check_id(&meta.pubkey) {
                     syscall::current::create_account(1, 0, 0, 0)
+                } else if syscall::rewards::check_id(&meta.pubkey) {
+                    syscall::rewards::create_account(1, 0.0, 0.0)
                 } else {
                     Account::default()
                 }
@@ -234,7 +232,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
 
-        // gets the check in redeem_vote_credits
+        // gets the deserialization checks in redeem_vote_credits
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
@@ -242,6 +240,11 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(
+                        &syscall::rewards::id(),
+                        false,
+                        &mut syscall::rewards::create_account(1, 0.0, 0.0)
+                    ),
                 ],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
             ),

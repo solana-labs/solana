@@ -57,3 +57,11 @@ pub fn timestamp() -> u64 {
         .expect("create timestamp in timing");
     duration_as_ms(&now)
 }
+
+/// Slot is a unit of time given to a leader for encoding,
+///  is some some number of Ticks long.  Use a u64 to count them.
+pub type Slot = u64;
+
+/// Epoch is a unit of time a given leader schedule is honored,
+///  some number of Slots.  Use a u64 to count them.
+pub type Epoch = u64;

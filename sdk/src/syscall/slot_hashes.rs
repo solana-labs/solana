@@ -9,6 +9,8 @@ use crate::syscall;
 use bincode::serialized_size;
 use std::ops::Deref;
 
+pub use crate::timing::Slot;
+
 /// "Sysca11SlotHashes11111111111111111111111111"
 ///  slot hashes account pubkey
 const ID: [u8; 32] = [
@@ -29,7 +31,7 @@ pub const MAX_SLOT_HASHES: usize = 512; // 512 slots to get your vote in
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct SlotHashes {
     // non-pub to keep control of size
-    inner: Vec<(u64, Hash)>,
+    inner: Vec<(Slot, Hash)>,
 }
 
 impl SlotHashes {
@@ -46,9 +48,14 @@ impl SlotHashes {
         })
         .unwrap() as usize
     }
-    pub fn add(&mut self, slot: u64, hash: Hash) {
+    pub fn add(&mut self, slot: Slot, hash: Hash) {
         self.inner.insert(0, (slot, hash));
         self.inner.truncate(MAX_SLOT_HASHES);
+    }
+    pub fn new(slot_hashes: &[(Slot, Hash)]) -> Self {
+        Self {
+            inner: slot_hashes.to_vec(),
+        }
     }
 }
 
@@ -59,8 +66,19 @@ impl Deref for SlotHashes {
     }
 }
 
-pub fn create_account(lamports: u64) -> Account {
-    Account::new(lamports, SlotHashes::size_of(), &syscall::id())
+pub fn create_account(lamports: u64, slot_hashes: &[(Slot, Hash)]) -> Account {
+    let mut account = Account::new(lamports, SlotHashes::size_of(), &syscall::id());
+    SlotHashes::new(slot_hashes).to(&mut account).unwrap();
+    account
+}
+
+use crate::account::KeyedAccount;
+use crate::instruction::InstructionError;
+pub fn from_keyed_account(account: &KeyedAccount) -> Result<SlotHashes, InstructionError> {
+    if !check_id(account.unsigned_key()) {
+        return Err(InstructionError::InvalidArgument);
+    }
+    SlotHashes::from(account.account).ok_or(InstructionError::InvalidArgument)
 }
 
 #[cfg(test)]
@@ -71,7 +89,8 @@ mod tests {
     #[test]
     fn test_create_account() {
         let lamports = 42;
-        let account = create_account(lamports);
+        let account = create_account(lamports, &[]);
+        assert_eq!(account.data.len(), SlotHashes::size_of());
         let slot_hashes = SlotHashes::from(&account);
         assert_eq!(slot_hashes, Some(SlotHashes { inner: vec![] }));
         let mut slot_hashes = slot_hashes.unwrap();

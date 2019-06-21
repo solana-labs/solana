@@ -10,7 +10,7 @@ use solana_metrics::datapoint_warn;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::syscall::slot_hashes;
+use solana_sdk::syscall;
 use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -52,15 +52,22 @@ pub fn create_account(
 fn metas_for_authorized_signer(
     vote_pubkey: &Pubkey,
     authorized_voter_pubkey: &Pubkey, // currently authorized
+    other_params: &[AccountMeta],
 ) -> Vec<AccountMeta> {
     let is_own_signer = authorized_voter_pubkey == vote_pubkey;
 
     // vote account
     let mut account_metas = vec![AccountMeta::new(*vote_pubkey, is_own_signer)];
 
+    for meta in other_params {
+        account_metas.push(meta.clone());
+    }
+
+    // append signer at the end
     if !is_own_signer {
         account_metas.push(AccountMeta::new(*authorized_voter_pubkey, true)) // signer
     }
+
     account_metas
 }
 
@@ -69,7 +76,7 @@ pub fn authorize_voter(
     authorized_voter_pubkey: &Pubkey, // currently authorized
     new_authorized_voter_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_voter_pubkey);
+    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_voter_pubkey, &[]);
 
     Instruction::new(
         id(),
@@ -83,10 +90,16 @@ pub fn vote(
     authorized_voter_pubkey: &Pubkey,
     recent_votes: Vec<Vote>,
 ) -> Instruction {
-    let mut account_metas = metas_for_authorized_signer(vote_pubkey, authorized_voter_pubkey);
-
-    // request slot_hashes syscall account after vote_pubkey
-    account_metas.insert(1, AccountMeta::new(slot_hashes::id(), false));
+    let account_metas = metas_for_authorized_signer(
+        vote_pubkey,
+        authorized_voter_pubkey,
+        &[
+            // request slot_hashes syscall account after vote_pubkey
+            AccountMeta::new(syscall::slot_hashes::id(), false),
+            // request current syscall account after that
+            AccountMeta::new(syscall::current::id(), false),
+        ],
+    );
 
     Instruction::new(id(), &VoteInstruction::Vote(recent_votes), account_metas)
 }
@@ -119,9 +132,18 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(votes) => {
             datapoint_warn!("vote-native", ("count", 1, i64));
-            let (slot_hashes, other_signers) = rest.split_at_mut(1);
-            let slot_hashes = &mut slot_hashes[0];
-            vote_state::process_votes(me, slot_hashes, other_signers, &votes)
+            if rest.len() < 2 {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            let (slot_hashes_and_current, other_signers) = rest.split_at_mut(2);
+
+            vote_state::process_votes(
+                me,
+                &syscall::slot_hashes::from_keyed_account(&slot_hashes_and_current[0])?,
+                &syscall::current::from_keyed_account(&slot_hashes_and_current[1])?,
+                other_signers,
+                &votes,
+            )
         }
     }
 }
@@ -141,7 +163,20 @@ mod tests {
     }
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
-        let mut accounts = vec![];
+        let mut accounts: Vec<_> = instruction
+            .accounts
+            .iter()
+            .map(|meta| {
+                if syscall::current::check_id(&meta.pubkey) {
+                    syscall::current::create_account(1, 0, 0, 0)
+                } else if syscall::slot_hashes::check_id(&meta.pubkey) {
+                    syscall::slot_hashes::create_account(1, &[])
+                } else {
+                    Account::default()
+                }
+            })
+            .collect();
+
         for _ in 0..instruction.accounts.len() {
             accounts.push(Account::default());
         }

@@ -4,6 +4,8 @@ use crate::account::Account;
 use crate::syscall;
 use bincode::serialized_size;
 
+pub use crate::timing::{Epoch, Slot};
+
 crate::solana_name_id!(ID, "Sysca11Current11111111111111111111111111111");
 
 const ID: [u8; 32] = [
@@ -14,9 +16,9 @@ const ID: [u8; 32] = [
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Current {
-    pub slot: u64,
-    pub epoch: u64,
-    pub stakers_epoch: u64,
+    pub slot: Slot,
+    pub epoch: Epoch,
+    pub stakers_epoch: Epoch,
 }
 
 impl Current {
@@ -32,7 +34,7 @@ impl Current {
     }
 }
 
-pub fn create_account(lamports: u64, slot: u64, epoch: u64, stakers_epoch: u64) -> Account {
+pub fn create_account(lamports: u64, slot: Slot, epoch: Epoch, stakers_epoch: Epoch) -> Account {
     Account::new_data(
         lamports,
         &Current {
@@ -43,6 +45,15 @@ pub fn create_account(lamports: u64, slot: u64, epoch: u64, stakers_epoch: u64) 
         &syscall::id(),
     )
     .unwrap()
+}
+
+use crate::account::KeyedAccount;
+use crate::instruction::InstructionError;
+pub fn from_keyed_account(account: &KeyedAccount) -> Result<Current, InstructionError> {
+    if !check_id(account.unsigned_key()) {
+        return Err(InstructionError::InvalidArgument);
+    }
+    Current::from(account.account).ok_or(InstructionError::InvalidArgument)
 }
 
 #[cfg(test)]

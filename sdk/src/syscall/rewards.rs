@@ -47,6 +47,16 @@ pub fn create_account(
     .unwrap()
 }
 
+use crate::account::KeyedAccount;
+use crate::instruction::InstructionError;
+pub fn from_keyed_account(account: &KeyedAccount) -> Result<Rewards, InstructionError> {
+    if !check_id(account.unsigned_key()) {
+        dbg!(account.unsigned_key());
+        return Err(InstructionError::InvalidArgument);
+    }
+    Rewards::from(account.account).ok_or(InstructionError::InvalidAccountData)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
