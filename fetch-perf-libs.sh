@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PERF_LIBS_VERSION=v0.14.0
+PERF_LIBS_VERSION=v0.14.1
 
 set -e
 cd "$(dirname "$0")"

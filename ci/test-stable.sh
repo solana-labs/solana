@@ -42,8 +42,9 @@ test-stable-perf)
     .rs$ \
     Cargo.lock$ \
     Cargo.toml$ \
-    ci/test-stable-perf.sh \
-    ci/test-stable.sh \
+    ^ci/test-stable-perf.sh \
+    ^ci/test-stable.sh \
+    ^core/build.rs \
     ^fetch-perf-libs.sh \
     ^programs/ \
     ^sdk/ \
