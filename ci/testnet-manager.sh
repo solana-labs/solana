@@ -44,6 +44,8 @@ steps:
             value: "testnet-beta-perf"
           - label: "testnet-demo"
             value: "testnet-demo"
+          - label: "testnet-tds"
+            value: "testnet-tds"
       - select: "Operation"
         key: "testnet-operation"
         default: "sanity-or-restart"
@@ -152,6 +154,11 @@ testnet-demo)
   CHANNEL_BRANCH=$BETA_CHANNEL
   : "${GCE_NODE_COUNT:=150}"
   : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
+  ;;
+testnet-tds)
+  CHANNEL_OR_TAG=edge # TODO: Set this to beta once v0.16 is branched
+  CHANNEL_BRANCH=$EDGE_CHANNEL # TODO: Set this to $BETA_CHANNEL once v0.16 is branched
+  : "${GCE_NODE_COUNT:=3}"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
@@ -285,6 +292,14 @@ sanity() {
         ok=false
       fi
       $ok
+    )
+    ;;
+  testnet-tds)
+    (
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh tds-solana-com gce "${GCE_ZONES[0]}" -f
     )
     ;;
   *)
@@ -442,6 +457,21 @@ deploy() {
             ${maybeStop:+-S} \
             ${maybeDelete:+-D}
       fi
+    )
+    ;;
+  testnet-tds)
+    (
+      set -x
+      # shellcheck disable=SC2068
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh -p tds-solana-com -C gce ${GCE_ZONE_ARGS[0]} \  # TODO: Should we spread the few nodes around multiple zones?
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
+          -a tds-solana-com --hashes-per-tick auto \
+          ${skipCreate:+-e} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
+          ${maybeDelete:+-D}
     )
     ;;
   *)
