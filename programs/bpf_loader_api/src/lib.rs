@@ -28,6 +28,8 @@ use std::ffi::CStr;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::mem;
+use std::slice::from_raw_parts;
+use std::str::from_utf8;
 
 /// Program heap allocators are intended to allocate/free from a given
 /// chunk of memory.  The specific allocator implementation is
@@ -139,8 +141,7 @@ pub fn helper_sol_panic(
 }
 
 /// Logging helper functions, called when the BPF program calls `sol_log_()` or
-/// `sol_log_64_()`.  Both functions use a common verify function to validate
-/// their parameters.
+/// `sol_log_64_()`.
 pub fn helper_sol_log_verify(
     addr: u64,
     _arg2: u64,
@@ -167,6 +168,39 @@ pub fn helper_sol_log(
         Ok(slice) => info!("info!: {:?}", slice),
         Err(e) => warn!("Error: Cannot print invalid string: {}", e),
     };
+    0
+}
+pub fn helper_sol_log_verify_(
+    addr: u64,
+    len: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
+    ro_regions: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
+) -> Result<(()), Error> {
+    for region in ro_regions.iter() {
+        if region.addr <= addr && (addr as u64) + len <= region.addr + region.len {
+            return Ok(());
+        }
+    }
+    Err(Error::new(
+        ErrorKind::Other,
+        "Error: Load segfault, bad string pointer",
+    ))
+}
+pub fn helper_sol_log_(
+    addr: u64,
+    len: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
+) -> u64 {
+    let ptr: *const u8 = addr as *const u8;
+    let message = unsafe { from_utf8(from_raw_parts(ptr, len as usize)) };
+    info!("sol_log: {:?}", message);
     0
 }
 pub fn helper_sol_log_u64(
@@ -238,8 +272,8 @@ pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
     vm.register_helper_ex("sol_log", Some(helper_sol_log_verify), helper_sol_log, None)?;
     vm.register_helper_ex(
         "sol_log_",
-        Some(helper_sol_log_verify),
-        helper_sol_log,
+        Some(helper_sol_log_verify_),
+        helper_sol_log_,
         None,
     )?;
     vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64, None)?;

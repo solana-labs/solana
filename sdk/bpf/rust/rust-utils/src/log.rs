@@ -27,22 +27,13 @@ macro_rules! info {
 /// Prints a string to stdout
 ///
 /// @param message - Message to print
-#[inline(never)] // prevent inline so everyone does not incur stack cost
 pub fn sol_log(message: &str) {
-    // Not pretty but 1/3 faster then using `clone_from_slice()`
-    let mut buf: [u8; 128] = [0; 128];
-    for (i, b) in message.as_bytes().iter().enumerate() {
-        if i > 127 {
-            break;
-        }
-        buf[i] = *b;
-    }
     unsafe {
-        sol_log_(buf.as_ptr());
+        sol_log_(message.as_ptr(), message.len() as u64);
     }
 }
 extern "C" {
-    fn sol_log_(message: *const u8);
+    fn sol_log_(message: *const u8, length: u64);
 }
 
 /// Prints 64 bit values represented as hexadecimal to stdout
