@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")"
+
 usage() {
     echo ""
     echo "  Usage: do.sh action <project>"
