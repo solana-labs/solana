@@ -1,7 +1,7 @@
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
-use crate::cluster_info::{ClusterInfo, Node};
+use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
 use crate::packet::to_shared_blob;
@@ -18,6 +18,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::ThinClient;
 use solana_ed25519_dalek as ed25519_dalek;
+use solana_netutil::bind_in_range;
 use solana_sdk::account_utils::State;
 use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
@@ -622,7 +623,7 @@ impl Replicator {
 
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let repair_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
+        let repair_socket = Arc::new(bind_in_range(FULLNODE_PORT_RANGE).unwrap().1);
         let t_receiver = blob_receiver(repair_socket.clone(), &exit, s_reader);
         let id = cluster_info.read().unwrap().id();
         info!(
@@ -707,7 +708,7 @@ impl Replicator {
     }
 
     fn get_replicator_segment_slot(to: SocketAddr) -> u64 {
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let (_port, socket) = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
         socket
             .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();

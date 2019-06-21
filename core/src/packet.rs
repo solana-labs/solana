@@ -570,7 +570,8 @@ impl Blob {
                     break;
                 }
                 Err(e) => {
-                    if e.kind() != io::ErrorKind::WouldBlock {
+                    if e.kind() != io::ErrorKind::WouldBlock && e.kind() != io::ErrorKind::TimedOut
+                    {
                         info!("recv_from err {:?}", e);
                     }
                     return Err(Error::IO(e));
