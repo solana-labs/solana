@@ -142,13 +142,18 @@ impl ReplayStage {
                         ticks_per_slot = bank.ticks_per_slot();
                     }
 
-                    let votable =
-                        Self::generate_votable_banks(&bank_forks, &locktower, &mut progress);
+                    let votable = Self::generate_votable_banks(
+                        &my_pubkey,
+                        &bank_forks,
+                        &locktower,
+                        &mut progress,
+                    );
 
                     if let Some((_, bank)) = votable.last() {
                         subscriptions.notify_subscribers(bank.slot(), &bank_forks);
 
                         Self::handle_votable_bank(
+                            &my_pubkey,
                             &bank,
                             &bank_forks,
                             &mut locktower,
@@ -245,7 +250,7 @@ impl ReplayStage {
                     );
                     cluster_info.write().unwrap().set_leader(&next_leader);
                     if next_leader == *my_pubkey && reached_leader_tick {
-                        debug!("{} starting tpu for slot {}", my_pubkey, poh_slot);
+                        error!("{} starting tpu for slot {}, parent {}", my_pubkey, poh_slot, parent.slot());
                         datapoint_warn!(
                             "replay_stage-new_leader",
                             ("count", poh_slot, i64),
@@ -268,7 +273,7 @@ impl ReplayStage {
                     }
                 })
                 .or_else(|| {
-                    warn!("{} No next leader found", my_pubkey);
+                    error!("{} No next leader found", my_pubkey);
                     None
                 });
         }
@@ -316,6 +321,7 @@ impl ReplayStage {
 
     #[allow(clippy::too_many_arguments)]
     fn handle_votable_bank<T>(
+        my_id: &Pubkey,
         bank: &Arc<Bank>,
         bank_forks: &Arc<RwLock<BankForks>>,
         locktower: &mut Locktower,
@@ -330,7 +336,9 @@ impl ReplayStage {
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
+        error!("{} voting for slot: {}", my_id, bank.slot());
         if let Some(new_root) = locktower.record_vote(bank.slot(), bank.hash()) {
+            error!("{} new root: {}", my_id, new_root);
             // get the root bank before squash
             let root_bank = bank_forks
                 .read()
@@ -437,6 +445,7 @@ impl ReplayStage {
     }
 
     fn generate_votable_banks(
+        my_id: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
         locktower: &Locktower,
         progress: &mut HashMap<u64, ForkProgress>,
@@ -452,7 +461,7 @@ impl ReplayStage {
             .values()
             .filter(|b| {
                 let is_votable = b.is_votable();
-                trace!("bank is votable: {} {}", b.slot(), is_votable);
+                error!("{} bank is votable: {} {}", my_id, b.slot(), is_votable);
                 is_votable
             })
             .filter(|b| {
@@ -467,7 +476,12 @@ impl ReplayStage {
             })
             .filter(|b| {
                 let is_locked_out = locktower.is_locked_out(b.slot(), &descendants);
-                trace!("bank is is_locked_out: {} {}", b.slot(), is_locked_out);
+                error!(
+                    "{} bank is is_locked_out: {} {}",
+                    my_id,
+                    b.slot(),
+                    is_locked_out
+                );
                 !is_locked_out
             })
             .map(|bank| {
@@ -484,7 +498,7 @@ impl ReplayStage {
                 let vote_threshold =
                     locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts);
                 Self::confirm_forks(locktower, stake_lockouts, progress, bank_forks);
-                debug!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
+                error!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
                 vote_threshold
             })
             .map(|(b, stake_lockouts)| (locktower.calculate_weight(&stake_lockouts), b.clone()))

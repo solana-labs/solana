@@ -365,4 +365,6 @@ fn run_repairman_catchup(num_repairmen: u64) {
         }
         sleep(Duration::from_secs(1));
     }
+
+    error!("Shutting down");
 }
