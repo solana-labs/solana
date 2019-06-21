@@ -768,6 +768,8 @@ mod tests {
             "jsonrpc": "2.0",
             "result": [ blockhash.to_string(), {
                 "lamportsPerSignature": 0,
+                "maxLamportsPerSignature": 0,
+                "minLamportsPerSignature": 0,
                 "targetLamportsPerSignature": 0,
                 "targetSignaturesPerSlot": 0
             }],
