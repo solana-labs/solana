@@ -12,7 +12,9 @@ fi
 echo "Building $1"
 set -e
 
-cd "$(dirname "$0")" && bpf_sdk="$PWD/.."
+pushd "$(dirname "$0")"
+bpf_sdk="$PWD/.."
+popd
 
 # Ensure the sdk is installed
 "$bpf_sdk"/scripts/install.sh
