@@ -4,7 +4,7 @@ version: '{build}'
 branches:
   only:
   - master
-  - /v[0-9.]+/
+  - /^v[0-9.]+/
 
 cache:
   - '%USERPROFILE%\.cargo'
