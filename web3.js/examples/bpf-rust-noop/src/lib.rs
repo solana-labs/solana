@@ -2,12 +2,13 @@
 
 #![no_std]
 #![allow(unreachable_code)]
+#![allow(unused_attributes)]
 
 extern crate solana_sdk_bpf_utils;
 
-use solana_sdk_bpf_utils::entrypoint;
 use solana_sdk_bpf_utils::entrypoint::*;
 use solana_sdk_bpf_utils::log::*;
+use solana_sdk_bpf_utils::{entrypoint, info};
 
 struct SStruct {
     x: u64,
@@ -21,18 +22,14 @@ fn return_sstruct() -> SStruct {
 }
 
 entrypoint!(process_instruction);
-fn process_instruction(
-    ka: &mut [Option<SolKeyedAccount>; MAX_ACCOUNTS],
-    info: &SolClusterInfo,
-    data: &[u8],
-) -> bool {
-    sol_log("Program identifier:");
+fn process_instruction(ka: &mut [SolKeyedAccount], info: &SolClusterInfo, data: &[u8]) -> bool {
+    info!("Program identifier:");
     sol_log_key(&info.program_id);
 
     // Log the provided account keys and instruction input data.  In the case of
     // the no-op program, no account keys or input data are expected but real
     // programs will have specific requirements so they can do their work.
-    sol_log("Account keys and instruction input data:");
+    info!("Account keys and instruction input data:");
     sol_log_params(ka, data);
 
     {
@@ -49,7 +46,7 @@ fn process_instruction(
         let result_str = core::str::from_utf8(&sparkle_heart).unwrap();
         assert_eq!(4, result_str.len());
         assert_eq!("💖", result_str);
-        sol_log(result_str);
+        info!(result_str);
     }
 
     {
@@ -59,6 +56,6 @@ fn process_instruction(
         assert_eq!(s.x + s.y + s.z, 6);
     }
 
-    sol_log("Success");
+    info!("Success");
     true
 }
