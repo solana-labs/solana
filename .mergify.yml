@@ -1,0 +1,15 @@
+pull_request_rules:
+  - name: remove outdated reviews
+    conditions:
+      - base=master
+    actions:
+      dismiss_reviews:
+        changes_requested: true
+  - name: v0.16 backport
+    conditions:
+      - base=master
+      - label=v0.16
+    actions:
+      backport:
+        branches:
+          - v0.16
