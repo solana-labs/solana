@@ -465,6 +465,44 @@ mod tests {
     }
 
     #[test]
+    fn test_deactivate_stake() {
+        let stake_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+        let mut stake_account =
+            Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        let current = syscall::current::Current::default();
+
+        // unsigned keyed account
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.deactivate_stake(&current),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // signed keyed account but not staked yet
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.deactivate_stake(&current),
+            Err(InstructionError::InvalidAccountData)
+        );
+
+        // Staking
+        let vote_pubkey = Pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_keyed_account.set_state(&VoteState::default()).unwrap();
+        assert_eq!(
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &current),
+            Ok(())
+        );
+
+        // Deactivate after staking
+        assert_eq!(stake_keyed_account.deactivate_stake(&current), Ok(()));
+    }
+
+    #[test]
     fn test_withdraw_stake() {
         let stake_pubkey = Pubkey::new_rand();
         let mut total_lamports = 100;
