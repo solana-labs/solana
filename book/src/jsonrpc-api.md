@@ -30,6 +30,7 @@ Methods
 * [getSlotLeader](#getslotleader)
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
+* [getTotalSupply](#gettotalsupply)
 * [getEpochVoteAccounts](#getepochvoteaccounts)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
@@ -271,6 +272,26 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":268,"id":1}
+```
+
+---
+
+### getTotalSupply
+Returns the current total supply in Lamports
+
+##### Parameters:
+None
+
+##### Results:
+* `integer` - Total supply, as unsigned 64-bit integer
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getTotalSupply"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":10126,"id":1}
 ```
 
 ---

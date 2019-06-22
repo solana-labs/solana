@@ -104,6 +104,10 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank().transaction_count() as u64)
     }
 
+    fn get_total_supply(&self) -> Result<u64> {
+        Ok(self.bank().capitalization())
+    }
+
     fn get_epoch_vote_accounts(&self) -> Result<Vec<RpcVoteAccountInfo>> {
         let bank = self.bank();
         Ok(bank
@@ -227,6 +231,9 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getTransactionCount")]
     fn get_transaction_count(&self, _: Self::Metadata) -> Result<u64>;
+
+    #[rpc(meta, name = "getTotalSupply")]
+    fn get_total_supply(&self, _: Self::Metadata) -> Result<u64>;
 
     #[rpc(meta, name = "requestAirdrop")]
     fn request_airdrop(&self, _: Self::Metadata, _: String, _: u64) -> Result<String>;
@@ -376,6 +383,11 @@ impl RpcSol for RpcSolImpl {
             .get_transaction_count()
     }
 
+    fn get_total_supply(&self, meta: Self::Metadata) -> Result<u64> {
+        debug!("get_total_supply rpc request received");
+        meta.request_processor.read().unwrap().get_total_supply()
+    }
+
     fn request_airdrop(&self, meta: Self::Metadata, id: String, lamports: u64) -> Result<String> {
         trace!("request_airdrop id={} lamports={}", id, lamports);
 
@@ -511,13 +523,15 @@ mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use jsonrpc_core::{MetaIoHandler, Response};
+    use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::TransactionError;
     use std::thread;
+
+    const TEST_MINT_LAMPORTS: u64 = 10_000;
 
     fn start_rpc_handler_with_tx(
         pubkey: &Pubkey,
@@ -645,6 +659,31 @@ mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_total_supply() {
+        let bob_pubkey = Pubkey::new_rand();
+        let (io, meta, _blockhash, _alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTotalSupply"}}"#);
+        let rep = io.handle_request_sync(&req, meta);
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+        let supply: u64 = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                if let Value::Number(num) = res.result {
+                    num.as_u64().unwrap()
+                } else {
+                    panic!("Expected number");
+                }
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        assert!(supply >= TEST_MINT_LAMPORTS);
     }
 
     #[test]
@@ -877,7 +916,7 @@ mod tests {
             genesis_block,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_block(TEST_MINT_LAMPORTS);
         let bank = Bank::new(&genesis_block);
         (
             Arc::new(RwLock::new(BankForks::new(bank.slot(), bank))),
