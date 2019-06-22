@@ -17,9 +17,7 @@ pub struct FeeCalculator {
     // for the next slot.  A value of 0 disables lamports_per_signature fee adjustments
     pub target_signatures_per_slot: usize,
 
-    #[serde(skip)]
     pub min_lamports_per_signature: u64,
-    #[serde(skip)]
     pub max_lamports_per_signature: u64,
 }
 
