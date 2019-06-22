@@ -186,7 +186,10 @@ impl MessageProcessor {
         let program_id = instruction.program_id(&message.account_keys);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard-coded programs not to clobber or allocate
-        let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
+        let pre_total: u128 = program_accounts
+            .iter()
+            .map(|a| u128::from(a.lamports))
+            .sum();
         let pre_data: Vec<_> = program_accounts
             .iter_mut()
             .map(|a| (a.owner, a.lamports, a.data.clone()))
@@ -215,7 +218,10 @@ impl MessageProcessor {
             }
         }
         // The total sum of all the lamports in all the accounts cannot change.
-        let post_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
+        let post_total: u128 = program_accounts
+            .iter()
+            .map(|a| u128::from(a.lamports))
+            .sum();
         if pre_total != post_total {
             return Err(InstructionError::UnbalancedInstruction);
         }

@@ -70,6 +70,7 @@ pub fn create_genesis_block_with_leader(
         ]);
 
     builder = solana_stake_api::rewards_pools::genesis(builder);
+    builder = solana_storage_api::rewards_pools::genesis(builder);
 
     GenesisBlockInfo {
         genesis_block: builder.build(),
