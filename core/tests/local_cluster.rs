@@ -274,9 +274,9 @@ fn test_fail_entry_verification_leader() {
     );
 }
 
-#[test]
-#[ignore]
+#[test]     
 fn test_repairman_catchup() {
+    solana_logger::setup();
     run_repairman_catchup(3);
 }
 
