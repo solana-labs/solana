@@ -9,30 +9,35 @@ use solana_sdk::account_utils::State;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::syscall::slot_hashes;
+use solana_sdk::syscall::current::Current;
+pub use solana_sdk::timing::{Epoch, Slot};
 use std::collections::VecDeque;
 
 // Maximum number of votes to keep around
 pub const MAX_LOCKOUT_HISTORY: usize = 31;
 pub const INITIAL_LOCKOUT: usize = 2;
 
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
+// Maximum number of credits history to keep around
+//  smaller numbers makes
+pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
+
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Vote {
     /// A vote for height slot
-    pub slot: u64,
+    pub slot: Slot,
     // signature of the bank's state at given slot
     pub hash: Hash,
 }
 
 impl Vote {
-    pub fn new(slot: u64, hash: Hash) -> Self {
+    pub fn new(slot: Slot, hash: Hash) -> Self {
         Self { slot, hash }
     }
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Lockout {
-    pub slot: u64,
+    pub slot: Slot,
     pub confirmation_count: u32,
 }
 
@@ -51,10 +56,10 @@ impl Lockout {
 
     // The slot height at which this vote expires (cannot vote for any slot
     // less than this)
-    pub fn expiration_slot(&self) -> u64 {
+    pub fn expiration_slot(&self) -> Slot {
         self.slot + self.lockout()
     }
-    pub fn is_expired(&self, slot: u64) -> bool {
+    pub fn is_expired(&self, slot: Slot) -> bool {
         self.expiration_slot() < slot
     }
 }
@@ -68,21 +73,27 @@ pub struct VoteState {
     ///  payout should be given to this VoteAccount
     pub commission: u32,
     pub root_slot: Option<u64>,
+
+    /// current epoch
+    epoch: Epoch,
+    /// current credits earned, monotonically increasing
     credits: u64,
+
+    /// credits as of previous epoch
+    last_epoch_credits: u64,
+
+    /// history of how many credits earned by the end of each epoch
+    ///  each tuple is (Epoch, credits, prev_credits)
+    epoch_credits: Vec<(Epoch, u64, u64)>,
 }
 
 impl VoteState {
     pub fn new(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u32) -> Self {
-        let votes = VecDeque::new();
-        let credits = 0;
-        let root_slot = None;
         Self {
-            votes,
             node_pubkey: *node_pubkey,
             authorized_voter_pubkey: *vote_pubkey,
-            credits,
             commission,
-            root_slot,
+            ..VoteState::default()
         }
     }
 
@@ -92,6 +103,7 @@ impl VoteState {
         let mut vote_state = Self::default();
         vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
         vote_state.root_slot = Some(std::u64::MAX);
+        vote_state.epoch_credits = vec![(0, 0, 0); MAX_EPOCH_CREDITS_HISTORY];
         serialized_size(&vote_state).unwrap() as usize
     }
 
@@ -136,11 +148,13 @@ impl VoteState {
         }
     }
 
-    pub fn process_votes(&mut self, votes: &[Vote], slot_hashes: &[(u64, Hash)]) {
-        votes.iter().for_each(|v| self.process_vote(v, slot_hashes));
+    pub fn process_votes(&mut self, votes: &[Vote], slot_hashes: &[(Slot, Hash)], epoch: Epoch) {
+        votes
+            .iter()
+            .for_each(|v| self.process_vote(v, slot_hashes, epoch));
     }
 
-    pub fn process_vote(&mut self, vote: &Vote, slot_hashes: &[(u64, Hash)]) {
+    pub fn process_vote(&mut self, vote: &Vote, slot_hashes: &[(Slot, Hash)], epoch: Epoch) {
         // Ignore votes for slots earlier than we already have votes for
         if self
             .votes
@@ -176,24 +190,45 @@ impl VoteState {
 
         let vote = Lockout::new(&vote);
 
-        // TODO: Integrity checks
-        // Verify the vote's bank hash matches what is expected
-
         self.pop_expired_votes(vote.slot);
+
         // Once the stack is full, pop the oldest vote and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
             let vote = self.votes.pop_front().unwrap();
             self.root_slot = Some(vote.slot);
-            self.credits += 1;
+
+            self.increment_credits(epoch);
         }
         self.votes.push_back(vote);
         self.double_lockouts();
     }
 
-    pub fn process_vote_unchecked(&mut self, vote: &Vote) {
-        self.process_vote(vote, &[(vote.slot, vote.hash)]);
+    /// increment credits, record credits for last epoch if new epoch
+    pub fn increment_credits(&mut self, epoch: Epoch) {
+        // record credits by epoch
+
+        if epoch != self.epoch {
+            // encode the delta, but be able to return partial for stakers who
+            //   attach halfway through an epoch
+            self.epoch_credits
+                .push((self.epoch, self.credits, self.last_epoch_credits));
+            // if stakers do not claim before the epoch goes away they lose the
+            //  credits...
+            if self.epoch_credits.len() > MAX_EPOCH_CREDITS_HISTORY {
+                self.epoch_credits.remove(0);
+            }
+            self.epoch = epoch;
+            self.last_epoch_credits = self.credits;
+        }
+
+        self.credits += 1;
     }
-    pub fn process_slot_vote_unchecked(&mut self, slot: u64) {
+
+    /// "uncheckeds" used by tests, locktower
+    pub fn process_vote_unchecked(&mut self, vote: &Vote) {
+        self.process_vote(vote, &[(vote.slot, vote.hash)], self.epoch);
+    }
+    pub fn process_slot_vote_unchecked(&mut self, slot: Slot) {
         self.process_vote_unchecked(&Vote::new(slot, Hash::default()));
     }
 
@@ -210,6 +245,13 @@ impl VoteState {
     /// VoteState to the Rewards program to trade credits for lamports.
     pub fn credits(&self) -> u64 {
         self.credits
+    }
+
+    /// Number of "credits" owed to this account from the mining pool on a per-epoch basis,
+    ///  starting from credits observed.
+    /// Each tuple of (Epoch, u64) is the credits() delta as of the end of the Epoch
+    pub fn epoch_credits(&self) -> impl Iterator<Item = &(Epoch, u64, u64)> {
+        self.epoch_credits.iter()
     }
 
     fn pop_expired_votes(&mut self, slot: u64) {
@@ -280,7 +322,8 @@ pub fn initialize_account(
 
 pub fn process_votes(
     vote_account: &mut KeyedAccount,
-    slot_hashes_account: &mut KeyedAccount,
+    slot_hashes: &[(Slot, Hash)],
+    current: &Current,
     other_signers: &[KeyedAccount],
     votes: &[Vote],
 ) -> Result<(), InstructionError> {
@@ -289,12 +332,6 @@ pub fn process_votes(
     if vote_state.authorized_voter_pubkey == Pubkey::default() {
         return Err(InstructionError::UninitializedAccount);
     }
-
-    if !slot_hashes::check_id(slot_hashes_account.unsigned_key()) {
-        return Err(InstructionError::InvalidArgument);
-    }
-
-    let slot_hashes: Vec<(u64, Hash)> = slot_hashes_account.state()?;
 
     let authorized = Some(&vote_state.authorized_voter_pubkey);
     // find a signer that matches the authorized_voter_pubkey
@@ -306,7 +343,7 @@ pub fn process_votes(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    vote_state.process_votes(&votes, &slot_hashes);
+    vote_state.process_votes(&votes, slot_hashes, current.epoch);
     vote_account.set_state(&vote_state)
 }
 
@@ -319,12 +356,10 @@ pub fn create_account(
 ) -> Account {
     let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
 
-    initialize_account(
-        &mut KeyedAccount::new(vote_pubkey, false, &mut vote_account),
-        node_pubkey,
-        commission,
-    )
-    .unwrap();
+    VoteState::new(vote_pubkey, node_pubkey, commission)
+        .to(&mut vote_account)
+        .unwrap();
+
     vote_account
 }
 
@@ -351,12 +386,9 @@ pub fn create_bootstrap_leader_account(
 mod tests {
     use super::*;
     use crate::vote_state;
-    use bincode::serialized_size;
     use solana_sdk::account::Account;
     use solana_sdk::account_utils::State;
     use solana_sdk::hash::hash;
-    use solana_sdk::syscall;
-    use solana_sdk::syscall::slot_hashes;
 
     const MAX_RECENT_VOTES: usize = 16;
 
@@ -385,30 +417,20 @@ mod tests {
         )
     }
 
-    fn create_test_slot_hashes_account(slot_hashes: &[(u64, Hash)]) -> (Pubkey, Account) {
-        let mut slot_hashes_account = Account::new(
-            0,
-            serialized_size(&slot_hashes).unwrap() as usize,
-            &syscall::id(),
-        );
-        slot_hashes_account
-            .set_state(&slot_hashes.to_vec())
-            .unwrap();
-        (slot_hashes::id(), slot_hashes_account)
-    }
-
     fn simulate_process_vote(
         vote_pubkey: &Pubkey,
         vote_account: &mut Account,
         vote: &Vote,
         slot_hashes: &[(u64, Hash)],
+        epoch: u64,
     ) -> Result<VoteState, InstructionError> {
-        let (slot_hashes_id, mut slot_hashes_account) =
-            create_test_slot_hashes_account(slot_hashes);
-
         process_votes(
             &mut KeyedAccount::new(vote_pubkey, true, vote_account),
-            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            slot_hashes,
+            &Current {
+                epoch,
+                ..Current::default()
+            },
             &[],
             &[vote.clone()],
         )?;
@@ -421,7 +443,13 @@ mod tests {
         vote_account: &mut Account,
         vote: &Vote,
     ) -> Result<VoteState, InstructionError> {
-        simulate_process_vote(vote_pubkey, vote_account, vote, &[(vote.slot, vote.hash)])
+        simulate_process_vote(
+            vote_pubkey,
+            vote_account,
+            vote,
+            &[(vote.slot, vote.hash)],
+            0,
+        )
     }
 
     #[test]
@@ -479,58 +507,45 @@ mod tests {
             &mut vote_account,
             &vote,
             &[(0, Hash::default())],
+            0,
         )
         .unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         // wrong slot
         let vote_state =
-            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[(1, hash)]).unwrap();
+            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[(1, hash)], 0).unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         // empty slot_hashes
         let vote_state =
-            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[]).unwrap();
+            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[], 0).unwrap();
         assert_eq!(vote_state.votes.len(), 0);
-
-        // this one would work, but the wrong account is passed for slot_hashes_id
-        let (_slot_hashes_id, mut slot_hashes_account) =
-            create_test_slot_hashes_account(&[(vote.slot, vote.hash)]);
-        assert_eq!(
-            process_votes(
-                &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-                &mut KeyedAccount::new(&Pubkey::default(), false, &mut slot_hashes_account),
-                &[],
-                &[vote.clone()],
-            ),
-            Err(InstructionError::InvalidArgument)
-        );
     }
 
     #[test]
     fn test_vote_signature() {
         let (vote_pubkey, mut vote_account) = create_test_account();
 
-        let vote = vec![Vote::new(1, Hash::default())];
-
-        let (slot_hashes_id, mut slot_hashes_account) =
-            create_test_slot_hashes_account(&[(1, Hash::default())]);
+        let vote = Vote::new(1, Hash::default());
 
         // unsigned
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &[(vote.slot, vote.hash)],
+            &Current::default(),
             &[],
-            &vote,
+            &[vote],
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // unsigned
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &[(vote.slot, vote.hash)],
+            &Current::default(),
             &[],
-            &vote,
+            &[vote],
         );
         assert_eq!(res, Ok(()));
 
@@ -562,28 +577,28 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // not signed by authorized voter
-        let vote = vec![Vote::new(2, Hash::default())];
-        let (slot_hashes_id, mut slot_hashes_account) =
-            create_test_slot_hashes_account(&[(2, Hash::default())]);
+        let vote = Vote::new(2, Hash::default());
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &[(vote.slot, vote.hash)],
+            &Current::default(),
             &[],
-            &vote,
+            &[vote],
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // signed by authorized voter
-        let vote = vec![Vote::new(2, Hash::default())];
+        let vote = Vote::new(2, Hash::default());
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &[(vote.slot, vote.hash)],
+            &Current::default(),
             &[KeyedAccount::new(
                 &authorized_voter_pubkey,
                 true,
                 &mut Account::default(),
             )],
-            &vote,
+            &[vote],
         );
         assert_eq!(res, Ok(()));
     }
@@ -773,8 +788,8 @@ mod tests {
             .collect();
         let slot_hashes: Vec<_> = votes.iter().map(|vote| (vote.slot, vote.hash)).collect();
 
-        vote_state_a.process_votes(&votes, &slot_hashes);
-        vote_state_b.process_votes(&votes, &slot_hashes);
+        vote_state_a.process_votes(&votes, &slot_hashes, 0);
+        vote_state_b.process_votes(&votes, &slot_hashes, 0);
         assert_eq!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
     }
 
@@ -793,6 +808,44 @@ mod tests {
         assert_eq!(
             (voter_portion.round(), staker_portion.round(), was_split),
             (5.0, 5.0, true)
+        );
+    }
+
+    #[test]
+    fn test_vote_state_epoch_credits() {
+        let mut vote_state = VoteState::default();
+
+        assert_eq!(vote_state.credits(), 0);
+        assert_eq!(
+            vote_state
+                .epoch_credits()
+                .cloned()
+                .collect::<Vec<(Epoch, u64, u64)>>(),
+            vec![]
+        );
+
+        let mut expected = vec![];
+        let mut credits = 0;
+        let epochs = (MAX_EPOCH_CREDITS_HISTORY + 2) as u64;
+        for epoch in 0..epochs {
+            for _j in 0..epoch {
+                vote_state.increment_credits(epoch);
+                credits += 1;
+            }
+            expected.push((epoch, credits, credits - epoch));
+        }
+        expected.pop(); // last one doesn't count, doesn't get saved off
+        while expected.len() > MAX_EPOCH_CREDITS_HISTORY {
+            expected.remove(0);
+        }
+
+        assert_eq!(vote_state.credits(), credits);
+        assert_eq!(
+            vote_state
+                .epoch_credits()
+                .cloned()
+                .collect::<Vec<(Epoch, u64, u64)>>(),
+            expected
         );
     }
 

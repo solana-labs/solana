@@ -3,9 +3,8 @@
 //! * keep track of rewards
 //! * own mining pools
 
-use crate::stake_state::StakeState;
+use crate::stake_state::create_rewards_pool;
 use rand::{thread_rng, Rng};
-use solana_sdk::account::Account;
 use solana_sdk::genesis_block::Builder;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
@@ -25,10 +24,7 @@ pub fn genesis(mut builder: Builder) -> Builder {
     let mut pubkey = id();
 
     for _i in 0..NUM_REWARDS_POOLS {
-        builder = builder.rewards_pool(
-            pubkey,
-            Account::new_data(std::u64::MAX, &StakeState::RewardsPool, &crate::id()).unwrap(),
-        );
+        builder = builder.rewards_pool(pubkey, create_rewards_pool());
         pubkey = Pubkey::new(hash(pubkey.as_ref()).as_ref());
     }
     builder

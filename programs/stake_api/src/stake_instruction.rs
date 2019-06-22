@@ -11,30 +11,25 @@ use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
-    // Initialize the stake account as a MiningPool account
-    ///
-    /// Expects 1 Accounts:
-    ///    0 - MiningPool StakeAccount to be initialized
-    InitializeMiningPool,
-
     /// `Delegate` a stake to a particular node
     ///
-    /// Expects 2 Accounts:
+    /// Expects 3 Accounts:
     ///    0 - Uninitialized StakeAccount to be delegated <= must have this signature
     ///    1 - VoteAccount to which this Stake will be delegated
+    ///    2 - Current syscall Account that carries current bank epoch
     ///
     /// The u64 is the portion of the Stake account balance to be activated,
     ///    must be less than StakeAccount.lamports
     ///
-    /// This instruction resets rewards, so issue
     DelegateStake(u64),
 
     /// Redeem credits in the stake account
     ///
-    /// Expects 3 Accounts:
-    ///    0 - MiningPool Stake Account to redeem credits from
-    ///    1 - Delegate StakeAccount to be updated
-    ///    2 - VoteAccount to which the Stake is delegated,
+    /// Expects 4 Accounts:
+    ///    0 - Delegate StakeAccount to be updated with rewards
+    ///    1 - VoteAccount to which the Stake is delegated,
+    ///    2 - RewardsPool Stake Account from which to redeem credits
+    ///    3 - Rewards syscall Account that carries points values
     RedeemVoteCredits,
 }
 
@@ -63,36 +58,12 @@ pub fn create_stake_account_and_delegate_stake(
     instructions
 }
 
-pub fn create_mining_pool_account(
-    from_pubkey: &Pubkey,
-    staker_pubkey: &Pubkey,
-    lamports: u64,
-) -> Vec<Instruction> {
-    vec![
-        system_instruction::create_account(
-            from_pubkey,
-            staker_pubkey,
-            lamports,
-            std::mem::size_of::<StakeState>() as u64,
-            &id(),
-        ),
-        Instruction::new(
-            id(),
-            &StakeInstruction::InitializeMiningPool,
-            vec![AccountMeta::new(*staker_pubkey, false)],
-        ),
-    ]
-}
-
-pub fn redeem_vote_credits(
-    mining_pool_pubkey: &Pubkey,
-    stake_pubkey: &Pubkey,
-    vote_pubkey: &Pubkey,
-) -> Instruction {
+pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*mining_pool_pubkey, false),
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new(crate::rewards_pools::random_id(), false),
+        AccountMeta::new(syscall::rewards::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
@@ -104,11 +75,6 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -
         AccountMeta::new(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
-}
-
-fn current(current_account: &KeyedAccount) -> Result<syscall::current::Current, InstructionError> {
-    syscall::current::Current::from(current_account.account)
-        .ok_or(InstructionError::InvalidArgument)
 }
 
 pub fn process_instruction(
@@ -130,29 +96,32 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StakeInstruction::InitializeMiningPool => {
-            if !rest.is_empty() {
-                Err(InstructionError::InvalidInstructionData)?;
-            }
-            me.initialize_mining_pool()
-        }
         StakeInstruction::DelegateStake(stake) => {
             if rest.len() != 2 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             let vote = &rest[0];
 
-            me.delegate_stake(vote, stake, &current(&rest[1])?)
+            me.delegate_stake(
+                vote,
+                stake,
+                &syscall::current::from_keyed_account(&rest[1])?,
+            )
         }
         StakeInstruction::RedeemVoteCredits => {
-            if rest.len() != 2 {
+            if rest.len() != 3 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            let (stake, vote) = rest.split_at_mut(1);
-            let stake = &mut stake[0];
+            let (vote, rest) = rest.split_at_mut(1);
             let vote = &mut vote[0];
+            let (rewards_pool, rest) = rest.split_at_mut(1);
+            let rewards_pool = &mut rewards_pool[0];
 
-            me.redeem_vote_credits(stake, vote)
+            me.redeem_vote_credits(
+                vote,
+                rewards_pool,
+                &syscall::rewards::from_keyed_account(&rest[0])?,
+            )
         }
     }
 }
@@ -170,6 +139,8 @@ mod tests {
             .map(|meta| {
                 if syscall::current::check_id(&meta.pubkey) {
                     syscall::current::create_account(1, 0, 0, 0)
+                } else if syscall::rewards::check_id(&meta.pubkey) {
+                    syscall::rewards::create_account(1, 0.0, 0.0)
                 } else {
                     Account::default()
                 }
@@ -190,11 +161,7 @@ mod tests {
     #[test]
     fn test_stake_process_instruction() {
         assert_eq!(
-            process_instruction(&redeem_vote_credits(
-                &Pubkey::default(),
-                &Pubkey::default(),
-                &Pubkey::default()
-            )),
+            process_instruction(&redeem_vote_credits(&Pubkey::default(), &Pubkey::default(),)),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
@@ -265,7 +232,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
 
-        // gets the check in redeem_vote_credits
+        // gets the deserialization checks in redeem_vote_credits
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
@@ -273,6 +240,11 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(
+                        &syscall::rewards::id(),
+                        false,
+                        &mut syscall::rewards::create_account(1, 0.0, 0.0)
+                    ),
                 ],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
             ),

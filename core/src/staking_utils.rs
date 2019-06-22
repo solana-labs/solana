@@ -145,7 +145,6 @@ pub(crate) mod tests {
 
         let leader_stake = Stake {
             stake: BOOTSTRAP_LEADER_LAMPORTS,
-            epoch: 0,
             ..Stake::default()
         };
 

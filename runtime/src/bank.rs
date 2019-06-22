@@ -417,7 +417,7 @@ impl Bank {
     fn update_slot_hashes(&self) {
         let mut account = self
             .get_account(&slot_hashes::id())
-            .unwrap_or_else(|| slot_hashes::create_account(1));
+            .unwrap_or_else(|| slot_hashes::create_account(1, &[]));
 
         let mut slot_hashes = SlotHashes::from(&account).unwrap();
         slot_hashes.add(self.slot(), self.hash());
@@ -546,6 +546,10 @@ impl Bank {
             self.capitalization
                 .fetch_add(account.lamports as usize, Ordering::Relaxed);
         }
+        for (pubkey, account) in genesis_block.rewards_pools.iter() {
+            self.store_account(pubkey, account);
+        }
+
         // highest staked node is the first collector
         self.collector_id = self
             .stakes
