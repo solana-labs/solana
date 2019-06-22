@@ -61,7 +61,6 @@ else
 fi
 solana-keygen new -f -o "$dataDir"/drone-keypair.json
 solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
-solana-keygen new -f -o "$dataDir"/storage-mining-pool-keypair.json
 
 leaderVoteAccountPubkey=$(\
   solana-wallet \
@@ -73,7 +72,6 @@ solana-genesis \
   --lamports 1000000000 \
   --bootstrap-leader-lamports 10000000 \
   --storage-mining-pool-lamports 100000000 \
-  --storage-mining-pool-keypair "$dataDir"/storage-mining-pool-keypair.json \
   --target-lamports-per-signature 42 \
   --target-signatures-per-slot 42 \
   --hashes-per-tick sleep \
