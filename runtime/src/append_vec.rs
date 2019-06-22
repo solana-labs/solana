@@ -289,9 +289,12 @@ pub mod test_utils {
         }
     }
 
+    pub fn get_append_vec_dir() -> String {
+        std::env::var("OUT_DIR").unwrap_or_else(|_| "target/append_vec_tests".to_string())
+    }
+
     pub fn get_append_vec_path(path: &str) -> TempFile {
-        let out_dir =
-            std::env::var("OUT_DIR").unwrap_or_else(|_| "target/append_vec_tests".to_string());
+        let out_dir = get_append_vec_dir();
         let rand_string: String = thread_rng().sample_iter(&Alphanumeric).take(30).collect();
         let dir = format!("{}/{}", out_dir, rand_string);
         let mut buf = PathBuf::new();
@@ -493,12 +496,13 @@ pub mod tests {
         let mut writer = Cursor::new(&mut buf[..]);
         serialize_into(&mut writer, &av).unwrap();
 
+        AppendVec::set_account_paths(&vec![get_append_vec_dir()]);
         let mut reader = Cursor::new(&mut buf[..]);
         let dav: AppendVec = deserialize_from(&mut reader).unwrap();
 
         assert_eq!(dav.get_account_test(index2).unwrap(), account2);
         assert_eq!(dav.get_account_test(index1).unwrap(), account1);
-        std::fs::remove_file(&path.path).unwrap();
+        drop(dav);
 
         let mut reader = Cursor::new(&mut buf[..]);
         let dav: AppendVec = deserialize_from(&mut reader).unwrap();
