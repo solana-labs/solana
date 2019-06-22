@@ -42,6 +42,13 @@ pub enum StakeInstruction {
     /// The u64 is the portion of the Stake account balance to be withdrawn,
     ///    must be <= StakeAccount.lamports - staked lamports
     Withdraw(u64),
+
+    /// Deactivates the stake in the account
+    ///
+    /// Expects 2 Accounts:
+    ///    0 - Delegate StakeAccount
+    ///    1 - Syscall Account that carries epoch
+    Deactivate,
 }
 
 pub fn create_stake_account(
@@ -95,6 +102,14 @@ pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Ins
         AccountMeta::new(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
+}
+
+pub fn deactivate_stake(stake_pubkey: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, true),
+        AccountMeta::new(syscall::current::id(), false),
+    ];
+    Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
 }
 
 pub fn process_instruction(
@@ -156,6 +171,14 @@ pub fn process_instruction(
                 &syscall::current::from_keyed_account(&syscall[0])?,
             )
         }
+        StakeInstruction::Deactivate => {
+            if rest.len() != 1 {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            let syscall = &rest[0];
+
+            me.deactivate_stake(&syscall::current::from_keyed_account(&syscall)?)
+        }
     }
 }
 
@@ -203,6 +226,10 @@ mod tests {
         );
         assert_eq!(
             process_instruction(&withdraw(&Pubkey::default(), &Pubkey::new_rand(), 100)),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(&deactivate_stake(&Pubkey::default())),
             Err(InstructionError::InvalidAccountData),
         );
     }
@@ -319,6 +346,41 @@ mod tests {
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
+            ),
+            Err(InstructionError::InvalidInstructionData),
+        );
+
+        // Tests 2nd keyed account is of correct type (Current instead of rewards) in deactivate
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(
+                        &syscall::rewards::id(),
+                        false,
+                        &mut syscall::rewards::create_account(1, 0.0, 0.0)
+                    ),
+                ],
+                &serialize(&StakeInstruction::Deactivate).unwrap(),
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
+
+        // Tests correct number of accounts are provided in deactivate
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(
+                        &syscall::current::id(),
+                        false,
+                        &mut syscall::rewards::create_account(1, 0.0, 0.0)
+                    ),
+                ],
+                &serialize(&StakeInstruction::Deactivate).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
         );
