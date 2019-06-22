@@ -70,6 +70,11 @@ impl CrdsGossipPush {
         self.push_messages.len()
     }
 
+    fn prune_stake_threshold(self_stake: u64, origin_stake: u64) -> u64 {
+        let min_path_stake = self_stake.min(origin_stake);
+        (CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT * min_path_stake as f64).round() as u64
+    }
+
     pub fn prune_received_cache(
         &mut self,
         self_pubkey: &Pubkey,
@@ -84,20 +89,17 @@ impl CrdsGossipPush {
             return Vec::new();
         }
 
-        let self_stake = *self_stake.unwrap();
-        let origin_stake = *origin_stake.unwrap();
-        let min_path_stake = self_stake.min(origin_stake);
-        let peer_stake_threshold: u64 =
-            (CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT * min_path_stake as f64).round() as u64;
-
         let peers = &cache.unwrap().1;
         let staked_peers: Vec<(Pubkey, u64)> = peers
             .iter()
             .filter_map(|p| stakes.get(p).map(|s| (*p, *s)))
-            .filter(|(_, s)| *s > peer_stake_threshold)
+            .filter(|(_, s)| *s > 0)
             .collect();
 
-        if staked_peers.is_empty() {
+        let peer_stake_total: u64 = staked_peers.iter().map(|(_, s)| s).sum();
+        let prune_stake_threshold =
+            Self::prune_stake_threshold(*self_stake.unwrap(), *origin_stake.unwrap());
+        if peer_stake_total < prune_stake_threshold {
             return Vec::new();
         }
 
@@ -108,8 +110,22 @@ impl CrdsGossipPush {
             ChaChaRng::from_seed(seed),
         );
 
-        let keep = staked_peers[shuffle[0]].0;
-        peers.iter().filter(|p| *p != &keep).cloned().collect()
+        let mut keep = HashSet::new();
+        let mut peer_stake_sum = 0;
+        for next in shuffle {
+            let (next_peer, next_stake) = staked_peers[next];
+            keep.insert(next_peer);
+            peer_stake_sum += next_stake;
+            if peer_stake_sum >= prune_stake_threshold {
+                break;
+            }
+        }
+
+        peers
+            .iter()
+            .filter(|p| !keep.contains(p))
+            .cloned()
+            .collect()
     }
 
     /// process a push message to the network
@@ -326,6 +342,55 @@ mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
     use solana_sdk::signature::Signable;
+
+    #[test]
+    fn test_prune() {
+        let mut crds = Crds::default();
+        let mut push = CrdsGossipPush::default();
+        let mut stakes = HashMap::new();
+
+        let self_id = Pubkey::new_rand();
+        let origin = Pubkey::new_rand();
+        stakes.insert(self_id, 100);
+        stakes.insert(origin, 100);
+
+        let value = CrdsValue::ContactInfo(ContactInfo::new_localhost(&origin, 0));
+        let label = value.label();
+        let low_staked_peers = (0..10).map(|_| Pubkey::new_rand());
+        let mut low_staked_set = HashSet::new();
+        low_staked_peers.for_each(|p| {
+            let _ = push.process_push_message(&mut crds, &p, value.clone(), 0);
+            low_staked_set.insert(p);
+            stakes.insert(p, 1);
+        });
+
+        let versioned = crds
+            .lookup_versioned(&label)
+            .expect("versioned value should exist");
+        let hash = versioned.value_hash;
+        let pruned = push.prune_received_cache(&self_id, origin, hash, &stakes);
+        assert!(
+            pruned.is_empty(),
+            "should not prune if min threshold has not been reached"
+        );
+
+        let high_staked_peer = Pubkey::new_rand();
+        let high_stake = CrdsGossipPush::prune_stake_threshold(100, 100) + 10;
+        stakes.insert(high_staked_peer, high_stake);
+        let _ = push.process_push_message(&mut crds, &high_staked_peer, value.clone(), 0);
+
+        let pruned = push.prune_received_cache(&self_id, origin, hash, &stakes);
+        assert!(
+            pruned.len() < low_staked_set.len() + 1,
+            "should not prune all peers"
+        );
+        pruned.iter().for_each(|p| {
+            assert!(
+                low_staked_set.contains(p),
+                "only low staked peers should be pruned"
+            );
+        });
+    }
 
     #[test]
     fn test_process_push() {

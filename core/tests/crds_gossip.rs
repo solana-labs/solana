@@ -38,7 +38,29 @@ impl Deref for Node {
     }
 }
 
-type Network = HashMap<Pubkey, Node>;
+struct Network {
+    nodes: HashMap<Pubkey, Node>,
+    pruned_count: usize,
+    stake_pruned: u64,
+}
+
+impl Network {
+    fn new(nodes: HashMap<Pubkey, Node>) -> Self {
+        Network {
+            nodes,
+            pruned_count: 0,
+            stake_pruned: 0,
+        }
+    }
+}
+
+impl Deref for Network {
+    type Target = HashMap<Pubkey, Node>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.nodes
+    }
+}
 
 fn stakes(network: &Network) -> HashMap<Pubkey, u64> {
     let mut stakes = HashMap::new();
@@ -66,7 +88,7 @@ fn star_network_create(num: usize) -> Network {
     node.crds.insert(entry.clone(), 0).unwrap();
     node.set_self(&id);
     network.insert(id, Node::new(Arc::new(Mutex::new(node))));
-    network
+    Network::new(network)
 }
 
 fn rstar_network_create(num: usize) -> Network {
@@ -87,7 +109,7 @@ fn rstar_network_create(num: usize) -> Network {
         })
         .collect();
     network.insert(id, Node::new(Arc::new(Mutex::new(origin))));
-    network
+    Network::new(network)
 }
 
 fn ring_network_create(num: usize) -> Network {
@@ -117,7 +139,7 @@ fn ring_network_create(num: usize) -> Network {
         let end = network.get_mut(&keys[(k + 1) % keys.len()]).unwrap();
         end.lock().unwrap().crds.insert(start_info, 0).unwrap();
     }
-    network
+    Network::new(network)
 }
 
 fn connected_staked_network_create(stakes: &[u64]) -> Network {
@@ -155,7 +177,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
             }
         }
     }
-    network
+    Network::new(network)
 }
 
 fn network_simulator_pull_only(network: &mut Network) {
@@ -230,6 +252,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
     let num = network.len();
     let mut prunes: usize = 0;
     let mut delivered: usize = 0;
+    let mut stake_pruned: u64 = 0;
     let network_values: Vec<Node> = network.values().cloned().collect();
     let stakes = stakes(network);
     for t in start..end {
@@ -248,6 +271,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                 let mut delivered: usize = 0;
                 let mut num_msgs: usize = 0;
                 let mut prunes: usize = 0;
+                let mut stake_pruned: u64 = 0;
                 for (to, msgs) in push_messages {
                     bytes += serialized_size(&msgs).unwrap() as usize;
                     num_msgs += 1;
@@ -278,6 +302,13 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                         delivered += 1;
                         prunes += prune_keys.len();
 
+                        let stake_pruned_sum: u64 = prune_keys
+                            .iter()
+                            .map(|k| stakes.get(&k).unwrap())
+                            .cloned()
+                            .sum();
+                        stake_pruned += stake_pruned_sum;
+
                         network
                             .get(&from)
                             .map(|node| {
@@ -290,15 +321,16 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                             .unwrap();
                     }
                 }
-                (bytes, delivered, num_msgs, prunes)
+                (bytes, delivered, num_msgs, prunes, stake_pruned)
             })
             .collect();
 
-        for (b, d, m, p) in transfered {
+        for (b, d, m, p, s) in transfered {
             bytes += b;
             delivered += d;
             num_msgs += m;
             prunes += p;
+            stake_pruned += s;
         }
         if now % CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS == 0 && now > 0 {
             network_values.par_iter().for_each(|node| {
@@ -312,16 +344,19 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
             .map(|v| v.lock().unwrap().push.num_pending())
             .sum();
         trace!(
-                "network_run_push_{}: now: {} queue: {} bytes: {} num_msgs: {} prunes: {} delivered: {}",
+                "network_run_push_{}: now: {} queue: {} bytes: {} num_msgs: {} prunes: {} stake_pruned: {} delivered: {}",
                 num,
                 now,
                 total,
                 bytes,
                 num_msgs,
                 prunes,
+                stake_pruned,
                 delivered,
             );
     }
+    network.pruned_count = prunes;
+    network.stake_pruned = stake_pruned;
     (total, bytes)
 }
 
@@ -432,11 +467,25 @@ fn test_star_network_push_ring_200() {
     network_simulator(&mut network);
 }
 #[test]
-fn test_connected_staked_network_200() {
+fn test_connected_staked_network() {
     solana_logger::setup();
-    let stakes: Vec<_> = (0..200).map(|i| i).collect();
+    let stakes = [
+        [1000; 5].to_vec(),
+        [100; 20].to_vec(),
+        [10; 50].to_vec(),
+        [1; 125].to_vec(),
+    ]
+    .concat();
     let mut network = connected_staked_network_create(&stakes);
     network_simulator(&mut network);
+
+    let stake_sum: u64 = stakes.iter().sum();
+    let avg_stake: u64 = stake_sum / stakes.len() as u64;
+    let avg_stake_pruned = network.stake_pruned / network.pruned_count as u64;
+    assert!(
+        avg_stake_pruned < avg_stake,
+        "network should prune lower stakes more often"
+    )
 }
 #[test]
 #[ignore]
