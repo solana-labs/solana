@@ -12,6 +12,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::syscall;
 use solana_sdk::timing::Epoch;
 use solana_vote_api::vote_state::VoteState;
+use std::cmp;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum StakeState {
@@ -196,6 +197,12 @@ pub trait StakeAccount {
         rewards_account: &mut KeyedAccount,
         rewards: &syscall::rewards::Rewards,
     ) -> Result<(), InstructionError>;
+    fn withdraw(
+        &mut self,
+        lamports: u64,
+        to: &mut KeyedAccount,
+        current: &syscall::current::Current,
+    ) -> Result<(), InstructionError>;
 }
 
 impl<'a> StakeAccount for KeyedAccount<'a> {
@@ -281,6 +288,44 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             Err(InstructionError::InvalidAccountData)
         }
     }
+    fn withdraw(
+        &mut self,
+        lamports: u64,
+        to: &mut KeyedAccount,
+        current: &syscall::current::Current,
+    ) -> Result<(), InstructionError> {
+        if self.signer_key().is_none() {
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+
+        match self.state()? {
+            StakeState::Stake(mut stake) => {
+                let staked = if stake.stake(current.epoch) == 0 {
+                    0
+                } else {
+                    // Assume full stake if the stake is under warmup/cooldown
+                    stake.stake
+                };
+                if lamports > self.account.lamports.saturating_sub(staked) {
+                    return Err(InstructionError::InsufficientFunds);
+                }
+                self.account.lamports -= lamports;
+                // Adjust the stake (in case balance dropped below stake)
+                stake.stake = cmp::min(stake.stake, self.account.lamports);
+                to.account.lamports += lamports;
+                Ok(())
+            }
+            StakeState::Uninitialized => {
+                if lamports > self.account.lamports {
+                    return Err(InstructionError::InsufficientFunds);
+                }
+                self.account.lamports -= lamports;
+                to.account.lamports += lamports;
+                Ok(())
+            }
+            _ => Err(InstructionError::InvalidAccountData),
+        }
+    }
 }
 
 // utility function, used by Bank, tests, genesis
@@ -316,6 +361,7 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_program;
     use solana_vote_api::vote_state;
 
     #[test]
@@ -416,6 +462,143 @@ mod tests {
             );
         }
         assert_eq!(stake.stake(STAKE_WARMUP_EPOCHS * 42), 0);
+    }
+
+    #[test]
+    fn test_withdraw_stake() {
+        let stake_pubkey = Pubkey::new_rand();
+        let mut total_lamports = 100;
+        let stake_lamports = 42;
+        let mut stake_account =
+            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        let current = syscall::current::Current::default();
+
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+
+        // unsigned keyed account
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &current),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // signed keyed account but uninitialized
+        // try withdrawing more than balance
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(total_lamports + 1, &mut to_keyed_account, &current),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // try withdrawing some (enough for rest of the test to carry forward)
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(5, &mut to_keyed_account, &current),
+            Ok(())
+        );
+        total_lamports -= 5;
+
+        // Stake some lamports (available lampoorts for withdrawls will reduce)
+        let vote_pubkey = Pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_keyed_account.set_state(&VoteState::default()).unwrap();
+        assert_eq!(
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &current),
+            Ok(())
+        );
+
+        // Try to withdraw more than what's available
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports - stake_lamports + 1,
+                &mut to_keyed_account,
+                &current
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // Try to withdraw all unstaked lamports
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports - stake_lamports,
+                &mut to_keyed_account,
+                &current
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_withdraw_stake_before_warmup() {
+        let stake_pubkey = Pubkey::new_rand();
+        let total_lamports = 100;
+        let stake_lamports = 42;
+        let mut stake_account =
+            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        let current = syscall::current::Current::default();
+        let mut future = syscall::current::Current::default();
+        future.epoch += 16;
+
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+
+        // Stake some lamports (available lampoorts for withdrawls will reduce)
+        let vote_pubkey = Pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_keyed_account.set_state(&VoteState::default()).unwrap();
+        assert_eq!(
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &future),
+            Ok(())
+        );
+
+        // Try to withdraw including staked
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports - stake_lamports + 1,
+                &mut to_keyed_account,
+                &current
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_withdraw_stake_invalid_state() {
+        let stake_pubkey = Pubkey::new_rand();
+        let total_lamports = 100;
+        let mut stake_account =
+            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        let current = syscall::current::Current::default();
+        let mut future = syscall::current::Current::default();
+        future.epoch += 16;
+
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        let stake_state = StakeState::MiningPool {
+            epoch: 0,
+            point_value: 0.0,
+        };
+        stake_keyed_account.set_state(&stake_state).unwrap();
+
+        assert_eq!(
+            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &current),
+            Err(InstructionError::InvalidAccountData)
+        );
     }
 
     #[test]
