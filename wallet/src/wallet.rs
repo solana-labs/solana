@@ -52,6 +52,7 @@ pub enum WalletCommand {
     ShowVoteAccount(Pubkey),
     CreateStakeAccount(Pubkey, u64),
     DelegateStake(Keypair, Pubkey, u64),
+    WithdrawStake(Keypair, Pubkey, u64),
     RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
     CreateStorageMiningPoolAccount(Pubkey, u64),
@@ -246,6 +247,18 @@ pub fn parse_command(
                 staking_account_keypair,
                 voting_account_pubkey,
                 stake,
+            ))
+        }
+        ("withdraw-stake", Some(matches)) => {
+            let staking_account_keypair =
+                keypair_of(matches, "staking_account_keypair_file").unwrap();
+            let destination_account_pubkey =
+                value_of(matches, "destination_account_pubkey").unwrap();
+            let lamports = matches.value_of("lamports").unwrap().parse()?;
+            Ok(WalletCommand::WithdrawStake(
+                staking_account_keypair,
+                destination_account_pubkey,
+                lamports,
             ))
         }
         ("redeem-vote-credits", Some(matches)) => {
@@ -570,6 +583,32 @@ fn process_delegate_stake(
         &staking_account_keypair.pubkey(),
         voting_account_pubkey,
         stake,
+    )];
+
+    let mut tx = Transaction::new_signed_with_payer(
+        ixs,
+        Some(&config.keypair.pubkey()),
+        &[&config.keypair, &staking_account_keypair],
+        recent_blockhash,
+    );
+
+    let signature_str = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &staking_account_keypair])?;
+    Ok(signature_str.to_string())
+}
+
+fn process_withdraw_stake(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    staking_account_keypair: &Keypair,
+    destination_account_pubkey: &Pubkey,
+    lamports: u64,
+) -> ProcessResult {
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs = vec![stake_instruction::withdraw(
+        &staking_account_keypair.pubkey(),
+        destination_account_pubkey,
+        lamports,
     )];
 
     let mut tx = Transaction::new_signed_with_payer(
@@ -1022,6 +1061,18 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             )
         }
 
+        WalletCommand::WithdrawStake(
+            staking_account_keypair,
+            destination_account_pubkey,
+            lamports,
+        ) => process_withdraw_stake(
+            &rpc_client,
+            config,
+            &staking_account_keypair,
+            &destination_account_pubkey,
+            *lamports,
+        ),
+
         WalletCommand::RedeemVoteCredits(staking_account_pubkey, voting_account_pubkey) => {
             process_redeem_vote_credits(
                 &rpc_client,
@@ -1399,6 +1450,35 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to stake, must be less than the stake account's balance."),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("withdraw-stake")
+                .about("Withdraw the unstaked lamports from the stake account")
+                .arg(
+                    Arg::with_name("staking_account_keypair_file")
+                        .index(1)
+                        .value_name("KEYPAIR_FILE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Keypair file for the staking account, for signing the withdraw transaction."),
+                )
+                .arg(
+                    Arg::with_name("destination_account_pubkey")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The account where the lamports should be transfered"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(3)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to to withdraw from the stake account."),
                 ),
         )
         .subcommand(
@@ -1837,6 +1917,22 @@ mod tests {
             WalletCommand::DelegateStake(keypair, pubkey, 42)
         );
 
+        let keypair_file = make_tmp_path("keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let keypair = read_keypair(&keypair_file).unwrap();
+        // Test Withdraw from Stake Account
+        let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-stake",
+            &keypair_file,
+            &pubkey_string,
+            "42",
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_withdraw_stake).unwrap(),
+            WalletCommand::WithdrawStake(keypair, pubkey, 42)
+        );
+
         // Test Deploy Subcommand
         let test_deploy =
             test_commands
@@ -2003,6 +2099,12 @@ mod tests {
         let bob_keypair = Keypair::new();
         let node_pubkey = Pubkey::new_rand();
         config.command = WalletCommand::DelegateStake(bob_keypair.into(), node_pubkey, 100);
+        let signature = process_command(&config);
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+
+        let bob_keypair = Keypair::new();
+        let to_pubkey = Pubkey::new_rand();
+        config.command = WalletCommand::WithdrawStake(bob_keypair.into(), to_pubkey, 100);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
