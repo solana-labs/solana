@@ -31,6 +31,17 @@ pub enum StakeInstruction {
     ///    2 - RewardsPool Stake Account from which to redeem credits
     ///    3 - Rewards syscall Account that carries points values
     RedeemVoteCredits,
+
+    /// Withdraw unstaked lamports from the stake account
+    ///
+    /// Expects 3 Accounts:
+    ///    0 - Delegate StakeAccount
+    ///    1 - System account to which the lamports will be transferred,
+    ///    2 - Syscall Account that carries epoch
+    ///
+    /// The u64 is the portion of the Stake account balance to be withdrawn,
+    ///    must be <= StakeAccount.lamports - staked lamports
+    Withdraw(u64),
 }
 
 pub fn create_stake_account(
@@ -75,6 +86,15 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -
         AccountMeta::new(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
+}
+
+pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, true),
+        AccountMeta::new(*to_pubkey, false),
+        AccountMeta::new(syscall::current::id(), false),
+    ];
+    Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
 
 pub fn process_instruction(
@@ -123,6 +143,19 @@ pub fn process_instruction(
                 &syscall::rewards::from_keyed_account(&rest[0])?,
             )
         }
+        StakeInstruction::Withdraw(lamports) => {
+            if rest.len() != 2 {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            let (to, syscall) = &mut rest.split_at_mut(1);
+            let mut to = &mut to[0];
+
+            me.withdraw(
+                lamports,
+                &mut to,
+                &syscall::current::from_keyed_account(&syscall[0])?,
+            )
+        }
     }
 }
 
@@ -166,6 +199,10 @@ mod tests {
         );
         assert_eq!(
             process_instruction(&delegate_stake(&Pubkey::default(), &Pubkey::default(), 0)),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(&withdraw(&Pubkey::default(), &Pubkey::new_rand(), 100)),
             Err(InstructionError::InvalidAccountData),
         );
     }
@@ -249,6 +286,41 @@ mod tests {
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
             ),
             Err(InstructionError::InvalidAccountData),
+        );
+
+        // Tests 3rd keyed account is of correct type (Current instead of rewards) in withdraw
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(
+                        &syscall::rewards::id(),
+                        false,
+                        &mut syscall::rewards::create_account(1, 0.0, 0.0)
+                    ),
+                ],
+                &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
+
+        // Tests correct number of accounts are provided in withdraw
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(
+                        &syscall::current::id(),
+                        false,
+                        &mut syscall::rewards::create_account(1, 0.0, 0.0)
+                    ),
+                ],
+                &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
+            ),
+            Err(InstructionError::InvalidInstructionData),
         );
     }
 
