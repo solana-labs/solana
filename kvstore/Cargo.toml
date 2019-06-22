@@ -1,7 +1,7 @@
 [package]
 name = "solana-kvstore"
 description = "Embedded Key-Value store for solana"
-version = "0.16.0"
+version = "0.17.0"
 homepage = "https://solana.com/"
 repository = "https://github.com/solana-labs/solana"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
