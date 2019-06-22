@@ -5,6 +5,14 @@ pull_request_rules:
     actions:
       dismiss_reviews:
         changes_requested: true
+  - name: set automerge label on mergify backport PRs
+    conditions:
+      - author=mergify[bot]
+      - head~=^mergify/bp/
+    actions:
+      label:
+        add:
+          - automerge
   - name: v0.16 backport
     conditions:
       - base=master
