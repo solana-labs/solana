@@ -379,12 +379,14 @@ impl Accounts {
 
         for k in credit_only_writes.iter() {
             let mut credit_only_locks = credit_only_locks.write().unwrap();
-            credit_only_locks
-                .entry(**k)
-                .or_insert_with(|| CreditOnlyLock {
+            assert!(credit_only_locks.get(&k).is_none());
+            credit_only_locks.insert(
+                **k,
+                CreditOnlyLock {
                     credits: AtomicU64::new(0),
                     lock_count: Mutex::new(1),
-                });
+                },
+            );
         }
 
         Ok(())
