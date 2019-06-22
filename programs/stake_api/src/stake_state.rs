@@ -419,6 +419,184 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn test_deactivate_stake() {
+        let stake_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+        let mut stake_account =
+            Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        let current = syscall::current::Current::default();
+
+        // unsigned keyed account
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.deactivate_stake(&current),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // signed keyed account but not staked yet
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.deactivate_stake(&current),
+            Err(InstructionError::InvalidAccountData)
+        );
+
+        // Staking
+        let vote_pubkey = Pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_keyed_account.set_state(&VoteState::default()).unwrap();
+        assert_eq!(
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &current),
+            Ok(())
+        );
+
+        // Deactivate after staking
+        assert_eq!(stake_keyed_account.deactivate_stake(&current), Ok(()));
+    }
+
+    #[test]
+    fn test_withdraw_stake() {
+        let stake_pubkey = Pubkey::new_rand();
+        let mut total_lamports = 100;
+        let stake_lamports = 42;
+        let mut stake_account =
+            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        let current = syscall::current::Current::default();
+
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+
+        // unsigned keyed account
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &current),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // signed keyed account but uninitialized
+        // try withdrawing more than balance
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(total_lamports + 1, &mut to_keyed_account, &current),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // try withdrawing some (enough for rest of the test to carry forward)
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(5, &mut to_keyed_account, &current),
+            Ok(())
+        );
+        total_lamports -= 5;
+
+        // Stake some lamports (available lampoorts for withdrawls will reduce)
+        let vote_pubkey = Pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_keyed_account.set_state(&VoteState::default()).unwrap();
+        assert_eq!(
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &current),
+            Ok(())
+        );
+
+        // Try to withdraw more than what's available
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports - stake_lamports + 1,
+                &mut to_keyed_account,
+                &current
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // Try to withdraw all unstaked lamports
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports - stake_lamports,
+                &mut to_keyed_account,
+                &current
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_withdraw_stake_before_warmup() {
+        let stake_pubkey = Pubkey::new_rand();
+        let total_lamports = 100;
+        let stake_lamports = 42;
+        let mut stake_account =
+            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        let current = syscall::current::Current::default();
+        let mut future = syscall::current::Current::default();
+        future.epoch += 16;
+
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+
+        // Stake some lamports (available lampoorts for withdrawls will reduce)
+        let vote_pubkey = Pubkey::new_rand();
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_keyed_account.set_state(&VoteState::default()).unwrap();
+        assert_eq!(
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &future),
+            Ok(())
+        );
+
+        // Try to withdraw including staked
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports - stake_lamports + 1,
+                &mut to_keyed_account,
+                &current
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_withdraw_stake_invalid_state() {
+        let stake_pubkey = Pubkey::new_rand();
+        let total_lamports = 100;
+        let mut stake_account =
+            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        let current = syscall::current::Current::default();
+        let mut future = syscall::current::Current::default();
+        future.epoch += 16;
+
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        let stake_state = StakeState::MiningPool {
+            epoch: 0,
+            point_value: 0.0,
+        };
+        stake_keyed_account.set_state(&stake_state).unwrap();
+
+        assert_eq!(
+            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &current),
+            Err(InstructionError::InvalidAccountData)
+        );
+    }
+
+    #[test]
+>>>>>>> 405ca1bcb... Add instructions and processor for stake deactivation (#4781)
     fn test_stake_state_calculate_rewards() {
         let mut vote_state = VoteState::default();
         let mut stake = Stake::default();
