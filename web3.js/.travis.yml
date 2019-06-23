@@ -12,6 +12,10 @@ cache:
   directories:
     - ~/.npm
 
+branches:
+  only:
+    - master
+
 notifications:
   email: false
 
