@@ -15,6 +15,70 @@ To create a specific instance of a program, called a process, programs can be
 associated with a read-only context by the loader.  A process is used as an
 implementation of a Move resource.
 
+## Processes
+
+The purpose of a process is to allow for implementation reuse of well known
+programs for different purposes.
+
+Programs are loaded by the Loader as BPF bytecode and are identified by the
+pubkey of the program.  Programs are pure code without a state.  Process is a
+program with a context.  The context is always passed as the first parameter to
+all program instructions for the process.
+
+Move Resources are implemented as Processes.
+
+### Loader::CreateProcess
+
+A single user pubkey has a valid address for every owner.  In order to
+differentiate between instances of programs for a specific process, the
+‘Loader::CreateProcess’ instruction can be used to create a specific instance of
+a program.
+
+Loaders create processes by pairing a program pubkey and a context.  The
+pipeline will pass the context as the first parameter to all the program
+instructions.  Initial implemtnation of CreateProcess only supports a single
+read-only context that is fixed as the first parameter.
+
+
+## Move Scripts
+
+The purpose of scripts is to execute logic between processes.
+
+A Move script is a process that whose context implements a Move main program and
+executes with the Move interpreter as the program.  While other interpreters can
+be supported using this mechansism as well, this document focuses on Move.s
+
+### Move Script Execution
+
+```
+//Swap some tokens around
+//based on libra examples
+
+public main(src: address, src_amount: u64 dst: address, dst_amount: u64) {
+  let happy = 0x0.HappyCoin.withdraw(copy(src), copy(src_amount));
+  let sad = 0x0.SadCoin.withdraw(copy(dst), copy(dst_amount));
+  0x0.SadCoin.deposit(copy(src), move(src_amount));
+  0x0.HappyCoin.deposit(copy(dst), move(dst_amount));
+}
+
+```
+Scripts compose execution of process instructions.  A transaction is submited with an instruction vector.  The instructions preceeding the script must follow the exact execution path that the script will take. E 
+
+The above script contains instructions for the HappyCoin and SadCoin processes.  The transaction executing this script specifies a vecotor
+
+* ‘Currency::withdraw_from_sender’
+
+Generates a reference to the coin, which could be compiled since the
+‘AccountAddress’ is a reference.
+
+* ‘Currency::deposit’
+
+This generates a stored transaction that calls a ‘Currency::deposit’ instruction
+from the payee address to the destination, which is the ‘hash(0x0, Currency
+program owner pubkey).’
+
+The stored transaction yields and then resumes back if necessary.
+
 ## Accounts, Programs, and Processes
 
 ### Account Map
@@ -89,34 +153,4 @@ All the accounts referenced in the execution of the stored transaction must be
 present in the caller’s transaction.  This guarantees that the state is still
 locked and immutable and has already been fetched.
 
-## Scripts
-
-A script is a program that generates a stored transaction that yields and
-resumes from that transaction.
-
-```
-
-//from libra move whitepaper
-
-public main(payee: address, amount: u64) {
-  let coin: 0x0.Currency.Coin = 0x0.Currency.withdraw_from_sender(copy(amount));
-
-  0x0.Currency.deposit(copy(payee), move(coin));
-
-}
-
-```
-
-* ‘Currency::withdraw_from_sender’
-
-Generates a reference to the coin, which could be compiled since the
-‘AccountAddress’ is a reference.
-
-* ‘Currency::deposit’
-
-This generates a stored transaction that calls a ‘Currency::deposit’ instruction
-from the payee address to the destination, which is the ‘hash(0x0, Currency
-program owner pubkey).’
-
-The stored transaction yields and then resumes back if necessary.
 
