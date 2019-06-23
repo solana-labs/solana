@@ -100,7 +100,7 @@
     "eslint": "5.16.0",
     "eslint-config-prettier": "^5.0.0",
     "eslint-plugin-import": "2.17.3",
-    "eslint-plugin-jest": "22.6.4",
+    "eslint-plugin-jest": "22.7.1",
     "eslint-plugin-prettier": "^3.0.0",
     "flow-bin": "0.101.0",
     "flow-typed": "2.5.2",
