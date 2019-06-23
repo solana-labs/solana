@@ -79,7 +79,7 @@ pub enum StorageContract {
         reward_validations: BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
     },
 
-    MiningPool,
+    RewardsPool,
 }
 
 // utility function, used by Bank, tests, genesis
@@ -99,17 +99,6 @@ pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account
     storage_account
 }
 
-// utility function, used by genesis
-pub fn create_mining_pool_account(lamports: u64) -> Account {
-    let mut storage_account = Account::new(lamports, STORAGE_ACCOUNT_SPACE as usize, &crate::id());
-
-    storage_account
-        .set_state(&StorageContract::MiningPool)
-        .expect("set_state");
-
-    storage_account
-}
-
 pub struct StorageAccount<'a> {
     pub(crate) id: Pubkey,
     account: &'a mut Account,
@@ -118,16 +107,6 @@ pub struct StorageAccount<'a> {
 impl<'a> StorageAccount<'a> {
     pub fn new(id: Pubkey, account: &'a mut Account) -> Self {
         Self { id, account }
-    }
-
-    pub fn initialize_mining_pool(&mut self) -> Result<(), InstructionError> {
-        let storage_contract = &mut self.account.state()?;
-        if let StorageContract::Uninitialized = storage_contract {
-            *storage_contract = StorageContract::MiningPool;
-            self.account.set_state(storage_contract)
-        } else {
-            Err(InstructionError::AccountAlreadyInitialized)?
-        }
     }
 
     pub fn initialize_replicator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError> {
@@ -379,7 +358,7 @@ impl<'a> StorageAccount<'a> {
 
     pub fn claim_storage_reward(
         &mut self,
-        mining_pool: &mut KeyedAccount,
+        rewards_pool: &mut KeyedAccount,
         owner: &mut StorageAccount,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
@@ -397,12 +376,13 @@ impl<'a> StorageAccount<'a> {
             }
 
             let pending = *pending_lamports;
-            if mining_pool.account.lamports < pending {
+            if rewards_pool.account.lamports < pending {
+                println!("reward pool has {}", rewards_pool.account.lamports);
                 Err(InstructionError::CustomError(
                     StorageError::RewardPoolDepleted as u32,
                 ))?
             }
-            mining_pool.account.lamports -= pending;
+            rewards_pool.account.lamports -= pending;
             owner.account.lamports += pending;
             //clear pending_lamports
             *pending_lamports = 0;
@@ -432,13 +412,17 @@ impl<'a> StorageAccount<'a> {
             let total_proofs = checked_proofs.len() as u64;
             let num_validations = count_valid_proofs(&checked_proofs);
             let reward = num_validations * REPLICATOR_REWARD * (num_validations / total_proofs);
-            mining_pool.account.lamports -= reward;
+            rewards_pool.account.lamports -= reward;
             owner.account.lamports += reward;
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
         }
     }
+}
+
+pub fn create_rewards_pool() -> Account {
+    Account::new_data(std::u64::MAX, &StorageContract::RewardsPool, &crate::id()).unwrap()
 }
 
 /// Store the result of a proof validation into the replicator account

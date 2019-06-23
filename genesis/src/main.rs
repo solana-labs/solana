@@ -148,14 +148,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Path to file containing the bootstrap leader's storage keypair"),
         )
         .arg(
-            Arg::with_name("storage_mining_pool_lamports")
-                .long("storage-mining-pool-lamports")
-                .value_name("LAMPORTS")
-                .takes_value(true)
-                .required(true)
-                .help("Number of lamports to assign to the storage mining pool"),
-        )
-        .arg(
             Arg::with_name("bootstrap_leader_lamports")
                 .long("bootstrap-leader-lamports")
                 .value_name("LAMPORTS")
@@ -261,7 +253,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
         value_t_or_exit!(matches, "bootstrap_leader_stake_lamports", u64);
-    let storage_pool_lamports = value_t_or_exit!(matches, "storage_mining_pool_lamports", u64);
 
     let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
     let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
@@ -305,12 +296,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     bootstrap_leader_keypair.pubkey(),
                     1,
                 ),
-            ),
-            (
-                "StorageMiningPoo111111111111111111111111111"
-                    .parse()
-                    .unwrap(),
-                storage_contract::create_mining_pool_account(storage_pool_lamports),
             ),
         ])
         .native_instruction_processors(&[
@@ -523,6 +508,8 @@ mod tests {
             builder,
         )
         .expect("builder");
+
+        builder = solana_storage_api::rewards_pools::genesis(builder);
 
         remove_file(path).unwrap();
 

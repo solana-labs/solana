@@ -3,10 +3,10 @@ use bincode::deserialize;
 use log::*;
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
+use solana_runtime::genesis_utils::{create_genesis_block, GenesisBlockInfo};
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::account_utils::State;
 use solana_sdk::client::SyncClient;
-use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::instruction::{Instruction, InstructionError};
 use solana_sdk::message::Message;
@@ -53,7 +53,11 @@ fn test_account_owner() {
     let validator_storage_pubkey = Pubkey::new_rand();
     let replicator_storage_pubkey = Pubkey::new_rand();
 
-    let (genesis_block, mint_keypair) = create_genesis_block(1000);
+    let GenesisBlockInfo {
+        genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block(1000);
     let mut bank = Bank::new(&genesis_block);
     let mint_pubkey = mint_keypair.pubkey();
     bank.add_instruction_processor(id(), process_instruction);
@@ -259,7 +263,11 @@ fn test_submit_mining_ok() {
 #[test]
 fn test_validate_mining() {
     solana_logger::setup();
-    let (mut genesis_block, mint_keypair) = create_genesis_block(100_000);
+    let GenesisBlockInfo {
+        mut genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block(100_000);
     genesis_block
         .native_instruction_processors
         .push(solana_storage_program::solana_storage_program!());
@@ -276,9 +284,6 @@ fn test_validate_mining() {
     let validator_storage_keypair = Keypair::new();
     let validator_storage_id = validator_storage_keypair.pubkey();
 
-    let mining_pool_keypair = Keypair::new();
-    let mining_pool_pubkey = mining_pool_keypair.pubkey();
-
     let bank = Bank::new(&genesis_block);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
@@ -291,12 +296,6 @@ fn test_validate_mining() {
         &[&replicator_1_storage_id, &replicator_2_storage_id],
         10,
     );
-    let message = Message::new(storage_instruction::create_mining_pool_account(
-        &mint_pubkey,
-        &mining_pool_pubkey,
-        10_000,
-    ));
-    bank_client.send_message(&[&mint_keypair], message).unwrap();
 
     // create a new bank in segment 2
     let bank = Arc::new(Bank::new_from_parent(
@@ -407,7 +406,6 @@ fn test_validate_mining() {
         vec![storage_instruction::claim_reward(
             &owner_pubkey,
             &validator_storage_id,
-            &mining_pool_pubkey,
         )],
         Some(&mint_pubkey),
     );
@@ -431,7 +429,6 @@ fn test_validate_mining() {
         vec![storage_instruction::claim_reward(
             &owner_pubkey,
             &replicator_1_storage_id,
-            &mining_pool_pubkey,
         )],
         Some(&mint_pubkey),
     );
@@ -447,7 +444,6 @@ fn test_validate_mining() {
         vec![storage_instruction::claim_reward(
             &owner_pubkey,
             &replicator_2_storage_id,
-            &mining_pool_pubkey,
         )],
         Some(&mint_pubkey),
     );
@@ -561,7 +557,11 @@ fn get_storage_blockhash<C: SyncClient>(client: &C, account: &Pubkey) -> Hash {
 
 #[test]
 fn test_bank_storage() {
-    let (mut genesis_block, mint_keypair) = create_genesis_block(1000);
+    let GenesisBlockInfo {
+        mut genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block(1000);
     genesis_block
         .native_instruction_processors
         .push(solana_storage_program::solana_storage_program!());

@@ -23,7 +23,6 @@ use solana_sdk::account_utils::State;
 use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::timing::timestamp;
 use solana_sdk::transaction::Transaction;
@@ -303,7 +302,7 @@ impl Replicator {
         })
     }
 
-    pub fn run(&mut self, mining_pool_pubkey: Pubkey) {
+    pub fn run(&mut self) {
         info!("waiting for ledger download");
         self.thread_handles.pop().unwrap().join().unwrap();
         self.encrypt_ledger()
@@ -330,11 +329,11 @@ impl Replicator {
                     }
                 };
             self.blockhash = storage_blockhash;
-            self.redeem_rewards(&mining_pool_pubkey);
+            self.redeem_rewards();
         }
     }
 
-    fn redeem_rewards(&self, mining_pool_pubkey: &Pubkey) {
+    fn redeem_rewards(&self) {
         let nodes = self.cluster_info.read().unwrap().tvu_peers();
         let client = crate::gossip_service::get_client(&nodes);
 
@@ -347,7 +346,6 @@ impl Replicator {
                     let ix = storage_instruction::claim_reward(
                         &self.keypair.pubkey(),
                         &self.storage_keypair.pubkey(),
-                        mining_pool_pubkey,
                     );
                     let message = Message::new_with_payer(vec![ix], Some(&self.keypair.pubkey()));
                     if let Err(e) = client.send_message(&[&self.keypair], message) {
