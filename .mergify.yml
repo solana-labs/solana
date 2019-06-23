@@ -9,7 +9,7 @@ pull_request_rules:
     conditions:
       - author=mergify[bot]
       - head~=^mergify/bp/
-      - #status-failure=0
+      - "#status-failure=0"
     actions:
       label:
         add:
