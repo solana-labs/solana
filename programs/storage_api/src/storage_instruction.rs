@@ -1,5 +1,5 @@
-use crate::id;
 use crate::storage_contract::{ProofStatus, STORAGE_ACCOUNT_SPACE};
+use crate::{id, rewards_pools};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
@@ -10,11 +10,10 @@ use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {
-    /// Initialize the account as a mining pool, validator or replicator
+    /// Initialize the account as a validator or replicator
     ///
     /// Expects 1 Account:
     ///    0 - Account to be initialized
-    InitializeMiningPool,
     InitializeValidatorStorage {
         owner: Pubkey,
     },
@@ -128,27 +127,6 @@ pub fn create_replicator_storage_account(
     ]
 }
 
-pub fn create_mining_pool_account(
-    from_pubkey: &Pubkey,
-    storage_pubkey: &Pubkey,
-    lamports: u64,
-) -> Vec<Instruction> {
-    vec![
-        system_instruction::create_account(
-            from_pubkey,
-            storage_pubkey,
-            lamports,
-            STORAGE_ACCOUNT_SPACE,
-            &id(),
-        ),
-        Instruction::new(
-            id(),
-            &StorageInstruction::InitializeMiningPool,
-            vec![AccountMeta::new(*storage_pubkey, false)],
-        ),
-    ]
-}
-
 pub fn mining_proof(
     storage_pubkey: &Pubkey,
     sha_state: Hash,
@@ -200,15 +178,11 @@ pub fn proof_validation(
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 
-pub fn claim_reward(
-    owner_pubkey: &Pubkey,
-    storage_pubkey: &Pubkey,
-    mining_pool_pubkey: &Pubkey,
-) -> Instruction {
+pub fn claim_reward(owner_pubkey: &Pubkey, storage_pubkey: &Pubkey) -> Instruction {
     let storage_instruction = StorageInstruction::ClaimStorageReward;
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, false),
-        AccountMeta::new(*mining_pool_pubkey, false),
+        AccountMeta::new(rewards_pools::random_id(), false),
         AccountMeta::new(*owner_pubkey, false),
     ];
     Instruction::new(id(), &storage_instruction, account_metas)
