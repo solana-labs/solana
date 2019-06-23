@@ -1,15 +1,15 @@
 # Pipeline Runtime + Move
 
-This architecture describes how the Pipeline Runtime supports Resources and the Move
-interpreter as defined by the Move
-whitepaper (https://developers.libra.org/docs/move-paper).  A native solution
-with Move running in isolation over a single ‘Account::data’ as its state
-creates a sandbox that cannot interact across the global state machine.
+This architecture describes how the Pipeline Runtime supports Resources and the
+Move interpreter as defined by the Move whitepaper
+(https://developers.libra.org/docs/move-paper).  A native solution with Move
+running in isolation over a single ‘Account::data’ as its state creates a
+sandbox that cannot interact across the global state machine.
 
-Move’s Resources have a design motivation similar to that of Solana programs.  The
-Resource implementation governs all the state transitions for the resource data,
-regardless of what user the resource belongs to, including interpreting the
-meaning of signatures.
+Move’s Resources have a design motivation similar to that of Solana programs.
+The Resource implementation governs all the state transitions for the resource
+data, regardless of what user the resource belongs to, including interpreting
+the meaning of signatures.
 
 To create a specific instance of a program, called a process, programs can be
 associated with a read-only context by the loader.  A process is used as an
@@ -22,12 +22,12 @@ programs for different purposes.
 
 Programs are loaded by the Loader as BPF bytecode and are identified by the
 pubkey of the program.  Programs are pure code without a state.  Process is a
-program with a context.  The context is always passed as the first parameter to
-all program instructions for the process.
+program with a context.  The context is always passed as a credit-only first
+parameter to all program instructions for the process.
 
 Move Resources are implemented as Processes.
 
-### Loader::CreateProcess
+### `Loader::CreateProcess`
 
 A single user pubkey has a valid address for every owner.  In order to
 differentiate between instances of programs for a specific process, the
@@ -36,65 +36,104 @@ a program.
 
 Loaders create processes by pairing a program pubkey and a context.  The
 pipeline will pass the context as the first parameter to all the program
-instructions.  Initial implemtnation of CreateProcess only supports a single
-read-only context that is fixed as the first parameter.
+instructions.  Initial implementation of `Loader::CreateProcess` only supports a
+single read-only context that is fixed as the first parameter.
 
+## Scripts
 
-## Move Scripts
-
-The purpose of scripts is to execute logic between processes.
+The purpose of scripts is to execute logic between process instruction calls.
+For example, assignment of tokens to the winner based on an output of a game can
+be defined as a script.
 
 A Move script is a process that whose context implements a Move main program and
 executes with the Move interpreter as the program.  While other interpreters can
-be supported using this mechansism as well, this document focuses on Move.s
+be supported using this mechanism as well, this document focuses on Move.
 
-### Move Script Execution
+### `Loader::CreateScript`
+
+`Loader::CreateScript` is similar to `Loader::CreateProcess` as it binds a
+context to a program. The difference between scripts and processes is that
+script execution yields to external process instructions.
+
+### Script Execution
+
+Transactions that include instructions that invoke scripts encode all the
+instructions that the script will make during its execution in the message
+instruction vector.  The additional instructions appear after the script, in the
+exact same order and the same parameters as the script would make during
+execution.
+
+During the script execution, calls to instructions yield, and the next
+instruction to be processed in the instruction vector is invoked.  The
+instruction that is called must match the one that the script is expecting to
+call through its execution path.  If the instruction doesn't match, the program
+fails.
+
+### Move Script Execution Example
 
 ```
 //Swap some tokens around
 //based on libra examples
 
-public main(src: address, src_amount: u64 dst: address, dst_amount: u64) {
-  let happy = 0x0.HappyCoin.withdraw(copy(src), copy(src_amount));
-  let sad = 0x0.SadCoin.withdraw(copy(dst), copy(dst_amount));
-  0x0.SadCoin.deposit(copy(src), move(src_amount));
-  0x0.HappyCoin.deposit(copy(dst), move(dst_amount));
+public main(payee: address, amount: u64 exchage_rate: f64) {
+  let happy = 0x0.HappyCoin.withdraw_from_sender(copy(amount));
+  0x0.HappyCoin.deposit(copy(payee), move(amount));
+  //logic is interspersed with resource operations
+  let amount = (amount * exchange_rate).floor() as u64;
+  let sad = 0x0.SadCoin.withdraw(copy(payee), copy(amount));
+  0x0.SadCoin.deposit_to_sender(move(amount));
 }
 
 ```
-Scripts compose execution of process instructions.  A transaction is submited with an instruction vector.  The instructions preceeding the script must follow the exact execution path that the script will take. E 
 
-The above script contains instructions for the HappyCoin and SadCoin processes.  The transaction executing this script specifies a vecotor
+The above script would contain an instruction vector that looks like
 
-* ‘Currency::withdraw_from_sender’
+```
+Message {
+    instructions: vec![
+        //instruction to the entry point of the above script
+        script,
+        //instruction that points to HappyCoin::withdraw
+        happy_coin_withdraw,
+        //instruction that points to HappyCoin::deposit
+        happy_coin_deposit,
+        //instruction that points to SadCoin::deposit_to_sender
+        sad_coin_deposit_to_sender,
+    ]
+}
+```
 
-Generates a reference to the coin, which could be compiled since the
-‘AccountAddress’ is a reference.
+When the script reaches the following line:
 
-* ‘Currency::deposit’
+```
+  0x0.HappyCoin.deposit(copy(payee), move(amount));
+```
 
-This generates a stored transaction that calls a ‘Currency::deposit’ instruction
-from the payee address to the destination, which is the ‘hash(0x0, Currency
-program owner pubkey).’
+The script yields, and the next instruction in the instruction vector is
+scheduled to execute.  Before it is executed, Pipeline checks that the call is
+to `HappyCoin::deposit`, that the address is the source is the sender and the
+destination is the payee and the amount matches amount by verifying the
+instruction arguments declared in the vector.
 
-The stored transaction yields and then resumes back if necessary.
+## Accounts Organization for Programs and Processes
 
-## Accounts, Programs, and Processes
+Accounts are organized such that a single account can be used for storing
+state of any process.  Process accounts themselves can store state.
 
 ### Account Map
 
 Accounts are a map of an address to an account.
 
-* Accounts = Map<AccountAddress, Account>
+* `Accounts = Map<AccountAddress, Account>`
 
 ### Account Address
 
-The ‘AccountAddress’ is a hash of the account pubkey that users self-generate
+The `AccountAddress` is a hash of the account pubkey that users self-generate
 and the owner pubkey.  With this change, a user only needs one pubkey, and it
 exists for all owners.  The Account database stores the Account pubkey
 and the Owner pubkey such that the index is recoverable.
 
-* AccountAddress = hash(Account pubkey, Owner pubkey)
+* `AccountAddress = hash(Account pubkey, Owner pubkey)`
 
 * ‘Accounts = Map<AccountAddress, Account>’
 
@@ -115,42 +154,9 @@ a program.  Loaders create processes by pairing a program pubkey and a read-only
 context.  The pipeline will pass the context as the first parameter to all the
 program instructions.
 
-## System::Allocate
+## `System::Allocate`
 
 This instruction is available to every program or process and appears as instruction 0.
 
-* size: u64 - allocate the memory length in ‘size’ in bytes.  The memory is
+* `size: u64` - allocate the memory length in ‘size’ in bytes.  The memory is
 zero-initialized.
-
-## Stored Transactions
-
-A stored transaction is a transaction that is generated by a program.  It is
-stored as a serialized message in an ‘Account::data’; the data holds the stored
-transaction message and nothing else at a user-defined offset into the data.
-
-The signatures of a stored transaction are inherited from the caller.  If a
-caller provided a signature for the pubkey in the ‘AccountAddress,’ the program
-may generate a stored transaction that indicates that the signature check
-succeeded for the same ‘AccountAddress.’
-
-Stored transactions can contain any instructions to any programs, and signatures
-can accumulate.
-
-## Stored Transaction Execution
-
-The metadata of the ‘KeyedAccount’ contains a few more bits of metadata
-
-* a bit that indicates if the data is a stored transaction ready to execute,
-
-* the offset of the Account::data at which the stored transaction resides
-
-* how to jump back to the script
-
-In order to ‘yield,’ the bytecode interpreter sets the execute bit, stores the last
-instruction offset, and aborts the current contract.
-
-All the accounts referenced in the execution of the stored transaction must be
-present in the caller’s transaction.  This guarantees that the state is still
-locked and immutable and has already been fetched.
-
-
