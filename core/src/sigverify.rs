@@ -20,7 +20,10 @@ use solana_sdk::transaction::Transaction;
 use std::mem::size_of;
 
 #[cfg(feature = "cuda")]
-use std::os::raw::c_int;
+use std::os::raw::{c_int, c_uint};
+
+#[cfg(feature = "cuda")]
+use core::ffi::c_void;
 
 pub const NUM_THREADS: u32 = 10;
 use std::cell::RefCell;
@@ -82,6 +85,9 @@ extern "C" {
         num_elems: usize,
         use_non_default_stream: u8,
     ) -> c_int;
+
+    pub fn cuda_host_register(ptr: *mut c_void, size: usize, flags: c_uint) -> c_int;
+    pub fn cuda_host_unregister(ptr: *mut c_void) -> c_int;
 }
 
 #[cfg(not(feature = "cuda"))]

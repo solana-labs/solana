@@ -6,6 +6,8 @@
 //    cannot be paged to disk. The cuda driver provides these interfaces to pin and unpin memory.
 
 use crate::recycler::Reset;
+#[cfg(feature = "cuda")]
+use crate::sigverify::{cuda_host_register, cuda_host_unregister};
 use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "cuda")]
@@ -15,22 +17,15 @@ use std::mem::size_of;
 use core::ffi::c_void;
 
 #[cfg(feature = "cuda")]
-type CudaError = i32;
+use std::os::raw::c_int;
 
 #[cfg(feature = "cuda")]
-#[link(name = "cudart")]
-extern "C" {
-    fn cudaHostRegister(ptr: *mut c_void, size: usize, flags: u32) -> CudaError;
-    fn cudaHostUnregister(ptr: *mut c_void) -> CudaError;
-}
-
-#[cfg(feature = "cuda")]
-const CUDA_SUCCESS: CudaError = 0;
+const CUDA_SUCCESS: c_int = 0;
 
 pub fn pin<T>(_mem: &mut Vec<T>) {
     #[cfg(feature = "cuda")]
     unsafe {
-        let err = cudaHostRegister(
+        let err = cuda_host_register(
             _mem.as_mut_ptr() as *mut c_void,
             _mem.capacity() * size_of::<T>(),
             0,
@@ -49,7 +44,7 @@ pub fn pin<T>(_mem: &mut Vec<T>) {
 pub fn unpin<T>(_mem: *mut T) {
     #[cfg(feature = "cuda")]
     unsafe {
-        let err = cudaHostUnregister(_mem as *mut c_void);
+        let err = cuda_host_unregister(_mem as *mut c_void);
         if err != CUDA_SUCCESS {
             error!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
         }
