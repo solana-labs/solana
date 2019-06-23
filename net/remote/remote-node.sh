@@ -224,7 +224,7 @@ local|tar)
         ./multinode-demo/drone.sh > drone.log 2>&1 &
       fi
       export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
-      npm install @solana/blockexplorer@1
+      npm install @solana/blockexplorer@1.10.3
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
 
       # Confirm the blockexplorer is accessible
