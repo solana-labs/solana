@@ -20,12 +20,6 @@ pub fn process_instruction(
     let mut storage_account = StorageAccount::new(*me[0].unsigned_key(), &mut me[0].account);
 
     match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StorageInstruction::InitializeMiningPool => {
-            if !rest.is_empty() {
-                Err(InstructionError::InvalidArgument)?;
-            }
-            storage_account.initialize_mining_pool()
-        }
         StorageInstruction::InitializeReplicatorStorage { owner } => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;

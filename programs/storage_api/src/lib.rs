@@ -1,3 +1,4 @@
+pub mod rewards_pools;
 pub mod storage_contract;
 pub mod storage_instruction;
 pub mod storage_processor;
