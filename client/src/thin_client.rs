@@ -184,7 +184,7 @@ impl ThinClient {
         tries: usize,
         min_confirmed_blocks: usize,
     ) -> io::Result<Signature> {
-        self.send_and_confirm_transaction(&[keypair], transaction, tries, min_confirmed_blocks)
+        self.send_and_confirm_transaction(&[keypair], transaction, tries, min_confirmed_blocks, 0)
     }
 
     /// Retry sending a signed Transaction with one signing Keypair to the server for processing.
@@ -194,7 +194,7 @@ impl ThinClient {
         transaction: &mut Transaction,
         tries: usize,
     ) -> io::Result<Signature> {
-        self.send_and_confirm_transaction(&[keypair], transaction, tries, 0)
+        self.send_and_confirm_transaction(&[keypair], transaction, tries, 0, 0)
     }
 
     /// Retry sending a signed Transaction to the server for processing
@@ -204,16 +204,31 @@ impl ThinClient {
         transaction: &mut Transaction,
         tries: usize,
         min_confirmed_blocks: usize,
+        fee_limit: u64,
     ) -> io::Result<Signature> {
         let mut signatures = vec![];
+        let mut cost = 0;
         for x in 0..tries {
             signatures.push(transaction.signatures[0]);
+            if fee_limit > 0 && cost < fee_limit {
+                let (_blockhash, fee_calculator) = self.rpc_client().get_recent_blockhash()?;
+                cost += fee_calculator.calculate_fee(&transaction.message);
+            }
             let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
                 .expect("serialize Transaction in pub fn transfer_signed");
-            self.transactions_socket
-                .send_to(&buf[..], &self.transactions_addr())?;
+            if cost < fee_limit {
+                self.transactions_socket
+                    .send_to(&buf[..], &self.transactions_addr())?;
+            } else {
+                info!(
+                    "Attempt {} transfer to {} skipped because fee limit reached {}",
+                    x,
+                    self.transactions_addr(),
+                    fee_limit,
+                );
+            }
             for sig in signatures.iter() {
                 // break if any of the previous transactions have worked
                 if self
@@ -284,7 +299,7 @@ impl SyncClient for ThinClient {
     fn send_message(&self, keypairs: &[&Keypair], message: Message) -> TransportResult<Signature> {
         let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
         let mut transaction = Transaction::new(&keypairs, message, blockhash);
-        let signature = self.send_and_confirm_transaction(keypairs, &mut transaction, 5, 0)?;
+        let signature = self.send_and_confirm_transaction(keypairs, &mut transaction, 5, 0, 0)?;
         Ok(signature)
     }
 

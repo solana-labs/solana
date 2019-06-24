@@ -469,6 +469,7 @@ impl LocalCluster {
                     &mut transaction,
                     5,
                     0,
+                    0,
                 )
                 .expect("delegate stake");
             client
