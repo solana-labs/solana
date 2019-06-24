@@ -1,19 +1,13 @@
-# Pipeline Runtime + Move
+# Resources
 
-This architecture describes how the Pipeline Runtime supports Resources and the
-Move interpreter as defined by the Move whitepaper
-(https://developers.libra.org/docs/move-paper).  A native solution with Move
-running in isolation over a single ‘Account::data’ as its state creates a
-sandbox that cannot interact across the global state machine.
+This architecture describes how the Pipeline runtime supports resources. 
 
-Move’s Resources have a design motivation similar to that of Solana programs.
-The Resource implementation governs all the state transitions for the resource
-data, regardless of what user the resource belongs to, including interpreting
-the meaning of signatures.
-
-To create a specific instance of a program, called a process, programs can be
-associated with a read-only context by the loader.  A process is used as an
-implementation of a Move resource.
+Resources are inspired by the Move whitepaper
+(https://developers.libra.org/docs/move-paper).  The goal of this architecture
+is provide similar safety guarantees to native Solana programs as Move
+interpreter provides to resources.  The resource implementation governs all the
+state transitions for the resource data, regardless of what user the resource
+belongs to, including interpreting the meaning of signatures.
 
 ## Processes
 
@@ -25,14 +19,13 @@ pubkey of the program.  Programs are pure code without a state.  Process is a
 program with a context.  The context is always passed as a credit-only first
 parameter to all program instructions for the process.
 
-Move Resources are implemented as Processes.
+Resources are implemented as Processes.
 
 ### `Loader::CreateProcess`
 
-A single user pubkey has a valid address for every owner.  In order to
-differentiate between instances of programs for a specific process, the
-‘Loader::CreateProcess’ instruction can be used to create a specific instance of
-a program.
+The ‘Loader::CreateProcess’ instruction is used to create a specific instance of
+a program with an associated read-only context. Once a process has been created,
+it can be used as an account "owner".
 
 Loaders create processes by pairing a program pubkey and a context.  The
 pipeline will pass the context as the first parameter to all the program
@@ -44,10 +37,6 @@ single read-only context that is fixed as the first parameter.
 The purpose of scripts is to execute logic between process instruction calls.
 For example, assignment of tokens to the winner based on an output of a game can
 be defined as a script.
-
-A Move script is a process that whose context implements a Move main program and
-executes with the Move interpreter as the program.  While other interpreters can
-be supported using this mechanism as well, this document focuses on Move.
 
 ### `Loader::CreateScript`
 
@@ -69,11 +58,11 @@ instruction that is called must match the one that the script is expecting to
 call through its execution path.  If the instruction doesn't match, the program
 fails.
 
-### Move Script Execution Example
+### Script Execution Example
 
 ```
 //Swap some tokens around
-//based on libra examples
+//based on libra move examples
 
 public main(payee: address, amount: u64 exchage_rate: f64) {
   let happy = 0x0.HappyCoin.withdraw_from_sender(copy(amount));
@@ -106,14 +95,18 @@ Message {
 When the script reaches the following line:
 
 ```
-  0x0.HappyCoin.deposit(copy(payee), move(amount));
+let happy = 0x0.HappyCoin.withdraw_from_sender(copy(amount));
 ```
 
 The script yields, and the next instruction in the instruction vector is
 scheduled to execute.  Before it is executed, Pipeline checks that the call is
-to `HappyCoin::deposit`, that the address is the source is the sender and the
-destination is the payee and the amount matches amount by verifying the
-instruction arguments declared in the vector.
+to `HappyCoin::withdraw_from_sender`, that the address is the source is the
+sender the amount matches amount by verifying the instruction arguments declared
+in the vector.
+
+Effectively, calls to external processes are encoded as instructions, and the
+runtime can validate that when the script yields the accounts and data
+in the instruction match what is encoded in the message instruction vector.
 
 ## Accounts Organization for Programs and Processes
 
@@ -135,28 +128,17 @@ and the Owner pubkey such that the index is recoverable.
 
 * `AccountAddress = hash(Account pubkey, Owner pubkey)`
 
-* ‘Accounts = Map<AccountAddress, Account>’
+* `Accounts = Map<AccountAddress, Account>`
 
-* ‘owner’ - The process responsible for the state transitions of the
+* `owner: Pubkey` - The process responsible for the state transitions of the
 tokens and data in the ‘AccountAddress.’
 
-### Programs
+### Account memory Allocation
 
-Programs are loaded by the Loader as BPF bytecode and are identified by the
-pubkey of the program.  Programs are pure code without a state.
+* `System::Allocate`
 
-### `Loader::CreateProcess`
-
-A single user pubkey has a valid address for every owner.  In order to
-differentiate between instances of programs for a specific process, the
-‘Loader::CreateProcess’ instruction can be used to create a specific instance of
-a program.  Loaders create processes by pairing a program pubkey and a read-only
-context.  The pipeline will pass the context as the first parameter to all the
-program instructions.
-
-## `System::Allocate`
-
-This instruction is available to every program or process and appears as instruction 0.
+This instruction is available to every program or process and appears as
+instruction 0.
 
 * `size: u64` - allocate the memory length in ‘size’ in bytes.  The memory is
 zero-initialized.
