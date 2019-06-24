@@ -329,8 +329,9 @@ impl BankForks {
         names.sort();
         let mut bank_maps = vec![];
         let status_cache_rc = StatusCacheRc::default();
+        let id = (names[names.len() - 1] + 1) as usize;
         let mut bank0 =
-            Bank::create_with_genesis(&genesis_block, account_paths.clone(), &status_cache_rc);
+            Bank::create_with_genesis(&genesis_block, account_paths.clone(), &status_cache_rc, id);
         bank0.freeze();
         let bank_root = BankForks::load_snapshots(
             &names,
