@@ -612,13 +612,18 @@ impl BankingStage {
         let filter = Self::prepare_filter_for_pending_transactions(transactions, pending_indexes);
 
         let mut error_counters = ErrorCounters::default();
+        // The following code also checks if the blockhash for a transaction is too old
+        // The check accounts for
+        //  1. Transaction forwarding delay
+        //  2. The slot at which the next leader will actually process the transaction
+        // Drop the transaction if it will expire by the time the next node receives and processes it
         let result = bank.check_transactions(
             transactions,
             &filter,
             (MAX_RECENT_BLOCKHASHES / 2)
                 .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY)
                 .saturating_sub(
-                    (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT
+                    (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET * bank.ticks_per_slot()
                         / DEFAULT_NUM_TICKS_PER_SECOND) as usize,
                 ),
             &mut error_counters,
