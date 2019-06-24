@@ -228,10 +228,10 @@ impl ThinClient {
                 );
             }
             if self
-                .poll_for_signature_confirmation(sig, min_confirmed_blocks)
+                .poll_for_signature_confirmation(&transaction.signatures[0], min_confirmed_blocks)
                 .is_ok()
             {
-                return Ok(*sig);
+                return Ok(transaction.signatures[0]);
             }
             info!(
                 "{} tries failed transfer to {}",
