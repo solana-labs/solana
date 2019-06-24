@@ -77,11 +77,11 @@ fails.
 
 public main(payee: address, amount: u64 exchage_rate: f64) {
   let happy = 0x0.HappyCoin.withdraw_from_sender(copy(amount));
-  0x0.HappyCoin.deposit(copy(payee), move(amount));
+  0x0.HappyCoin.deposit(copy(payee), move(happy));
   //logic is interspersed with resource operations
   let amount = (amount * exchange_rate).floor() as u64;
   let sad = 0x0.SadCoin.withdraw(copy(payee), copy(amount));
-  0x0.SadCoin.deposit_to_sender(move(amount));
+  0x0.SadCoin.deposit_to_sender(move(sad));
 }
 
 ```
@@ -145,7 +145,7 @@ tokens and data in the ‘AccountAddress.’
 Programs are loaded by the Loader as BPF bytecode and are identified by the
 pubkey of the program.  Programs are pure code without a state.
 
-### Loader::CreateProcess
+### `Loader::CreateProcess`
 
 A single user pubkey has a valid address for every owner.  In order to
 differentiate between instances of programs for a specific process, the
