@@ -128,14 +128,6 @@ impl Stakes {
         &self.vote_accounts
     }
 
-    pub fn mining_pools(&self) -> impl Iterator<Item = (&Pubkey, &Account)> {
-        self.stake_accounts
-            .iter()
-            .filter(|(_key, account)| match StakeState::from(account) {
-                Some(StakeState::MiningPool { .. }) => true,
-                _ => false,
-            })
-    }
     pub fn rewards_pools(&self) -> impl Iterator<Item = (&Pubkey, &Account)> {
         self.stake_accounts
             .iter()

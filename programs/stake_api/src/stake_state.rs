@@ -18,13 +18,6 @@ use std::cmp;
 pub enum StakeState {
     Uninitialized,
     Stake(Stake),
-    MiningPool {
-        /// epoch for which this Pool will redeem rewards
-        epoch: u64,
-
-        /// the number of lamports each point is worth
-        point_value: f64,
-    },
     RewardsPool,
 }
 
@@ -430,10 +423,8 @@ mod tests {
             Err(InstructionError::InsufficientFunds)
         );
 
-        let stake_state = StakeState::MiningPool {
-            epoch: 0,
-            point_value: 0.0,
-        };
+        let stake_state = StakeState::RewardsPool;
+
         stake_keyed_account.set_state(&stake_state).unwrap();
         assert!(stake_keyed_account
             .delegate_stake(&vote_keyed_account, 0, &current)
@@ -627,10 +618,7 @@ mod tests {
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
-        let stake_state = StakeState::MiningPool {
-            epoch: 0,
-            point_value: 0.0,
-        };
+        let stake_state = StakeState::RewardsPool;
         stake_keyed_account.set_state(&stake_state).unwrap();
 
         assert_eq!(
