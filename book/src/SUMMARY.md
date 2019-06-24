@@ -62,7 +62,7 @@
   - [Blocktree](blocktree.md)
   - [Cluster Software Installation and Updates](installer.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
-  - [Fork Selection](fork-selection.md)
+  - [Tower BFT](tower-bft.md)
   - [Leader-to-Leader Transition](leader-leader-transition.md)
   - [Leader-to-Validator Transition](leader-validator-transition.md)
   - [Passive Stake Delegation and Rewards](passive-stake-delegation-and-rewards.md)

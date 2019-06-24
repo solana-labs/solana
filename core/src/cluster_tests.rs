@@ -4,10 +4,10 @@ use crate::blocktree::Blocktree;
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
 use crate::cluster_info::FULLNODE_PORT_RANGE;
+use crate::consensus::VOTE_THRESHOLD_DEPTH;
 use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover_cluster;
-use crate::locktower::VOTE_THRESHOLD_DEPTH;
 use hashbrown::HashSet;
 use solana_client::thin_client::create_client;
 use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
