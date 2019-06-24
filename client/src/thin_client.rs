@@ -235,7 +235,7 @@ impl ThinClient {
                     .poll_for_signature_confirmation(sig, min_confirmed_blocks)
                     .is_ok()
                 {
-                    return Ok(sig);
+                    return Ok(*sig);
                 }
             }
             info!(
