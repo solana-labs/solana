@@ -528,7 +528,7 @@ impl Replicator {
                 0,
                 balance,
             )
-            .map_err(|e| println!("Error {:?}, transfer didn't work!", e));
+            .expect("transfer didn't work!");
     }
 
     pub fn close(self) {
