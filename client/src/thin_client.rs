@@ -205,18 +205,23 @@ impl ThinClient {
         tries: usize,
         min_confirmed_blocks: usize,
     ) -> io::Result<Signature> {
+        let mut signatures = vec![];
         for x in 0..tries {
+            signatures.push(transaction.signatures[0]);
             let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
                 .expect("serialize Transaction in pub fn transfer_signed");
             self.transactions_socket
                 .send_to(&buf[..], &self.transactions_addr())?;
-            if self
-                .poll_for_signature_confirmation(&transaction.signatures[0], min_confirmed_blocks)
-                .is_ok()
-            {
-                return Ok(transaction.signatures[0]);
+            for sig in signatures.iter() {
+                // break if any of the previous transactions have worked
+                if self
+                    .poll_for_signature_confirmation(sig, min_confirmed_blocks)
+                    .is_ok()
+                {
+                    return Ok(sig.clone());
+                }
             }
             info!(
                 "{} tries failed transfer to {}",
