@@ -500,7 +500,11 @@ impl Replicator {
                 > 0
         );
         // ...or no lamports for fees
-        assert!(client.poll_get_balance(&self.keypair.pubkey()).unwrap() > 0);
+        let balance = client.poll_get_balance(&self.keypair.pubkey()).unwrap();
+        if balance == 0 {
+            error!("Unable to submit mining proof, insufficient Replicator Account balance");
+            return;
+        }
 
         let (blockhash, _) = client.get_recent_blockhash().expect("No recent blockhash");
         let instruction = storage_instruction::mining_proof(
