@@ -206,10 +206,8 @@ impl ThinClient {
         min_confirmed_blocks: usize,
         fee_limit: u64,
     ) -> io::Result<Signature> {
-        let mut signatures = vec![];
         let mut cost = 0;
         for x in 0..tries {
-            signatures.push(transaction.signatures[0]);
             if fee_limit > 0 && cost < fee_limit {
                 let (_blockhash, fee_calculator) = self.rpc_client().get_recent_blockhash()?;
                 cost += fee_calculator.calculate_fee(&transaction.message);
@@ -229,14 +227,11 @@ impl ThinClient {
                     fee_limit,
                 );
             }
-            for sig in signatures.iter() {
-                // break if any of the previous transactions have worked
-                if self
-                    .poll_for_signature_confirmation(sig, min_confirmed_blocks)
-                    .is_ok()
-                {
-                    return Ok(*sig);
-                }
+            if self
+                .poll_for_signature_confirmation(sig, min_confirmed_blocks)
+                .is_ok()
+            {
+                return Ok(*sig);
             }
             info!(
                 "{} tries failed transfer to {}",
