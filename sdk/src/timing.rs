@@ -26,6 +26,9 @@ pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;
 // This must be <= MAX_HASH_AGE_IN_SECONDS, otherwise there's risk for DuplicateSignature errors
 pub const MAX_RECENT_BLOCKHASHES: usize = MAX_HASH_AGE_IN_SECONDS;
 
+// The maximum age of a blockhash that will be accepted by the leader
+pub const MAX_PROCESSING_AGE: usize = MAX_RECENT_BLOCKHASHES / 2;
+
 /// This is maximum time consumed in forwarding a transaction from one node to next, before
 /// it can be processed in the target node
 #[cfg(feature = "cuda")]

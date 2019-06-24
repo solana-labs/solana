@@ -16,7 +16,7 @@ use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction;
-use solana_sdk::timing::duration_as_ms;
+use solana_sdk::timing::{duration_as_ms, MAX_PROCESSING_AGE};
 use solana_sdk::transaction::{self, Transaction};
 use solana_sdk::transport::Result as TransportResult;
 use std::io;
@@ -206,17 +206,24 @@ impl ThinClient {
         min_confirmed_blocks: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
+            let now = Instant::now();
             let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
                 .expect("serialize Transaction in pub fn transfer_signed");
-            self.transactions_socket
-                .send_to(&buf[..], &self.transactions_addr())?;
-            if self
-                .poll_for_signature_confirmation(&transaction.signatures[0], min_confirmed_blocks)
-                .is_ok()
-            {
-                return Ok(transaction.signatures[0]);
+            // resend the same transaction until the transaction has no chance of succeeding
+            while now.elapsed().as_secs() < MAX_PROCESSING_AGE as u64 {
+                self.transactions_socket
+                    .send_to(&buf[..], &self.transactions_addr())?;
+                if self
+                    .poll_for_signature_confirmation(
+                        &transaction.signatures[0],
+                        min_confirmed_blocks,
+                    )
+                    .is_ok()
+                {
+                    return Ok(transaction.signatures[0]);
+                }
             }
             info!(
                 "{} tries failed transfer to {}",

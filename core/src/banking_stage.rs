@@ -22,8 +22,8 @@ use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{
-    self, duration_as_us, DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
-    MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
+    self, duration_as_us, DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
+    MAX_TRANSACTION_FORWARDING_DELAY,
 };
 use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::net::UdpSocket;
@@ -423,7 +423,7 @@ impl BankingStage {
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
         let (loaded_accounts, results) =
-            bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
+            bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
         let load_execute_time = now.elapsed();
 
         let freeze_lock = bank.freeze_lock();
@@ -620,7 +620,7 @@ impl BankingStage {
         let result = bank.check_transactions(
             transactions,
             &filter,
-            (MAX_RECENT_BLOCKHASHES / 2)
+            (MAX_PROCESSING_AGE)
                 .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY)
                 .saturating_sub(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET * bank.ticks_per_slot()
