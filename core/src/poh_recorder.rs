@@ -105,6 +105,13 @@ impl PohRecorder {
         self.leader_schedule_cache.slot_leader_at(slot + 1, None)
     }
 
+    pub fn leader_after_slots(&self, slots: u64) -> Option<Pubkey> {
+        let slot =
+            leader_schedule_utils::tick_height_to_slot(self.ticks_per_slot, self.tick_height());
+        self.leader_schedule_cache
+            .slot_leader_at(slot + slots, None)
+    }
+
     pub fn start_slot(&self) -> u64 {
         self.start_slot
     }
