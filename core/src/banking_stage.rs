@@ -39,7 +39,7 @@ type PacketsAndOffsets = (Packets, Vec<usize>);
 pub type UnprocessedPackets = Vec<PacketsAndOffsets>;
 
 /// Transaction forwarding
-pub const TRANSACTION_FORWARD_SLOT_TARGET: u64 = 4;
+pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 4;
 
 // number of threads is 1 until mt bank is ready
 pub const NUM_THREADS: u32 = 10;
@@ -257,7 +257,9 @@ impl BankingStage {
             Self::consume_or_forward_packets(
                 poh.next_slot_leader(),
                 poh.bank().is_some(),
-                poh.would_be_leader(DEFAULT_TICKS_PER_SLOT * 2),
+                poh.would_be_leader(
+                    (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
+                ),
                 my_pubkey,
             )
         };
@@ -272,7 +274,8 @@ impl BankingStage {
             BufferedPacketsDecision::Forward => {
                 if enable_forwarding {
                     let poh = poh_recorder.lock().unwrap();
-                    let next_leader = poh.leader_after_slots(TRANSACTION_FORWARD_SLOT_TARGET);
+                    let next_leader =
+                        poh.leader_after_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
                     next_leader.map_or(Ok(()), |leader_pubkey| {
                         let leader_addr = {
                             cluster_info
@@ -615,7 +618,7 @@ impl BankingStage {
             (MAX_RECENT_BLOCKHASHES / 2)
                 .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY)
                 .saturating_sub(
-                    (TRANSACTION_FORWARD_SLOT_TARGET * DEFAULT_TICKS_PER_SLOT
+                    (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT
                         / DEFAULT_NUM_TICKS_PER_SECOND) as usize,
                 ),
             &mut error_counters,
