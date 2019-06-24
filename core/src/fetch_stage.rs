@@ -1,5 +1,6 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
+use crate::banking_stage::TRANSACTION_FORWARD_SLOT_TARGET;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -61,11 +62,11 @@ impl FetchStage {
             batch.push(more);
         }
 
-        if poh_recorder
-            .lock()
-            .unwrap()
-            .would_be_leader(DEFAULT_TICKS_PER_SLOT * 2)
-        {
+        if poh_recorder.lock().unwrap().would_be_leader(
+            TRANSACTION_FORWARD_SLOT_TARGET
+                .saturating_add(1)
+                .saturating_mul(DEFAULT_TICKS_PER_SLOT),
+        ) {
             inc_new_counter_debug!("fetch_stage-honor_forwards", len);
             for packets in batch {
                 if sendr.send(packets).is_err() {
