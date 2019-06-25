@@ -7,7 +7,7 @@ company headquartered in San Francisco that maintains the open source project.
 # About this Book
 
 This book describes the Solana open source project, a blockchain built from the
-ground up for scale. The book covers why it's useful, how to use it, how it
+ground up for scale. The book covers why Solana is useful, how to use it, how it
 works, and why it will continue to work long after the company Solana closes
 its doors. The goal of the Solana architecture is to demonstrate there exists a
 set of software algorithms that when used in combination to implement a
