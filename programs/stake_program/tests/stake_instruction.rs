@@ -94,6 +94,19 @@ fn test_stake_account_delegate() {
         .send_message(&[&mint_keypair, &staker_keypair], message)
         .is_ok());
 
+    // Test that we cannot withdraw staked lamports due to cooldown period
+    let message = Message::new_with_payer(
+        vec![stake_instruction::withdraw(
+            &staker_pubkey,
+            &Pubkey::new_rand(),
+            100,
+        )],
+        Some(&mint_pubkey),
+    );
+    assert!(bank_client
+        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .is_err());
+
     // Create a new bank at later epoch (to account for cooldown of stake)
     let mut bank = Bank::new_from_parent(
         &bank,
