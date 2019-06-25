@@ -289,13 +289,17 @@ pub mod test_utils {
         }
     }
 
+    pub fn get_append_vec_dir() -> String {
+        std::env::var("OUT_DIR").unwrap_or_else(|_| "target/append_vec_tests".to_string())
+    }
+
     pub fn get_append_vec_path(path: &str) -> TempFile {
-        let out_dir =
-            std::env::var("OUT_DIR").unwrap_or_else(|_| "target/append_vec_tests".to_string());
-        let mut buf = PathBuf::new();
+        let out_dir = get_append_vec_dir();
         let rand_string: String = thread_rng().sample_iter(&Alphanumeric).take(30).collect();
-        buf.push(&format!("{}/{}{}", out_dir, path, rand_string));
-        create_dir_all(out_dir).expect("Create directory failed");
+        let dir = format!("{}/{}", out_dir, rand_string);
+        let mut buf = PathBuf::new();
+        buf.push(&format!("{}/{}", dir, path));
+        create_dir_all(dir).expect("Create directory failed");
         TempFile { path: buf }
     }
 
@@ -477,8 +481,8 @@ pub mod tests {
 
     #[test]
     fn test_append_vec_serialize() {
-        let path = Path::new("append_vec_serialize");
-        let av: AppendVec = AppendVec::new(path, true, 1024 * 1024);
+        let path = get_append_vec_path("test_append_serialize");
+        let av: AppendVec = AppendVec::new(Path::new(&path.path), true, 1024 * 1024);
         let account1 = create_test_account(1);
         let index1 = av.append_account_test(&account1).unwrap();
         assert_eq!(index1, 0);
@@ -493,12 +497,13 @@ pub mod tests {
         let mut writer = Cursor::new(&mut buf[..]);
         serialize_into(&mut writer, &av).unwrap();
 
+        AppendVec::set_account_paths(&vec![get_append_vec_dir()]);
         let mut reader = Cursor::new(&mut buf[..]);
         let dav: AppendVec = deserialize_from(&mut reader).unwrap();
 
         assert_eq!(dav.get_account_test(index2).unwrap(), account2);
         assert_eq!(dav.get_account_test(index1).unwrap(), account1);
-        std::fs::remove_file(path).unwrap();
+        drop(dav);
 
         let mut reader = Cursor::new(&mut buf[..]);
         let dav: AppendVec = deserialize_from(&mut reader).unwrap();
