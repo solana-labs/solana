@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "bench-exchange",
+    "bench-exchange-1",
     "bench-streamer",
     "bench-tps",
     "chacha-sys",
@@ -27,6 +28,8 @@ members = [
     "programs/config_program",
     "programs/exchange_api",
     "programs/exchange_program",
+    "programs/exchange_1_api",
+    "programs/exchange_1_program",
     "programs/failure_program",
     "programs/noop_program",
     "programs/stake_api",
