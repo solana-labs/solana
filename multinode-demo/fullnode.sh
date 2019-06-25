@@ -490,7 +490,7 @@ while true; do
           rm -rf "$new_state_dir" "$new_state_archive"
           cp -a "$state_dir" "$new_state_dir"
           cd "$new_state_dir"
-          tar zcf "$new_state_archive" ./*
+          tar zcfS "$new_state_archive" ./*
         )
         ln -f "$new_state_archive" "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
         rm -rf "$new_state_dir" "$new_state_archive"
