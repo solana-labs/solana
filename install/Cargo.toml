@@ -16,7 +16,7 @@ cuda = []
 bincode = "1.1.4"
 bs58 = "0.2.0"
 bzip2 = "0.3.3"
-chrono = { version = "0.4.0", features = ["serde"] }
+chrono = { version = "0.4.7", features = ["serde"] }
 clap = { version = "2.33.0" }
 console = "0.7.7"
 dirs = "2.0.1"
