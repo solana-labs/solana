@@ -21,22 +21,42 @@ pub struct LeaderScheduleCache {
 
 impl LeaderScheduleCache {
     pub fn new_from_bank(bank: &Bank) -> Self {
-        Self::new(*bank.epoch_schedule(), bank.slot())
+        Self::new(*bank.epoch_schedule(), bank)
     }
 
-    pub fn new(epoch_schedule: EpochSchedule, root: u64) -> Self {
+    pub fn new(epoch_schedule: EpochSchedule, root_bank: &Bank) -> Self {
         let cache = Self {
             cached_schedules: RwLock::new((HashMap::new(), VecDeque::new())),
             epoch_schedule,
             max_epoch: RwLock::new(0),
         };
 
-        cache.set_root(root);
+        // This sets the root and calculates the schedule at stakers_epoch(root)
+        cache.set_root(root_bank);
+
+        // Calculate the schedule for all epochs between 0 and stakers_epoch(root)
+        let stakers_epoch = epoch_schedule.get_stakers_epoch(root_bank.slot());
+        for epoch in 0..stakers_epoch {
+            let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
+            cache.slot_leader_at(first_slot_in_epoch, Some(root_bank));
+        }
         cache
     }
 
-    pub fn set_root(&self, root: u64) {
-        *self.max_epoch.write().unwrap() = self.epoch_schedule.get_stakers_epoch(root);
+    pub fn set_root(&self, root_bank: &Bank) {
+        let new_max_epoch = self.epoch_schedule.get_stakers_epoch(root_bank.slot());
+        let old_max_epoch = {
+            let mut max_epoch = self.max_epoch.write().unwrap();
+            let old_max_epoch = *max_epoch;
+            *max_epoch = new_max_epoch;
+            assert!(new_max_epoch >= old_max_epoch);
+            old_max_epoch
+        };
+
+        // Calculate the epoch as soon as it's rooted
+        if new_max_epoch > old_max_epoch {
+            self.compute_epoch_schedule(new_max_epoch, root_bank);
+        }
     }
 
     pub fn slot_leader_at(&self, slot: u64, bank: Option<&Bank>) -> Option<Pubkey> {
@@ -180,18 +200,38 @@ mod tests {
     use crate::blocktree::get_tmp_ledger_path;
 
     #[test]
-    fn test_slot_leader_at() {
+    fn test_new_cache() {
         let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
         let bank = Bank::new(&genesis_block);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
+        assert_eq!(bank.slot(), 0);
 
-        // Nothing in the cache, should return None
-        assert!(cache.slot_leader_at(bank.slot(), None).is_none());
+        // Epoch schedule for all epochs in the range:
+        // [0, stakers_epoch(bank.slot())] should
+        // be calculated by constructor
+        let epoch_schedule = bank.epoch_schedule();
+        let stakers_epoch = bank.get_stakers_epoch(bank.slot());
+        for epoch in 0..=stakers_epoch {
+            let first_slot_in_stakers_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
+            let last_slot_in_stakers_epoch = epoch_schedule.get_last_slot_in_epoch(epoch);
+            assert!(cache
+                .slot_leader_at(first_slot_in_stakers_epoch, None)
+                .is_some());
+            assert!(cache
+                .slot_leader_at(last_slot_in_stakers_epoch, None)
+                .is_some());
+            if epoch == stakers_epoch {
+                assert!(cache
+                    .slot_leader_at(last_slot_in_stakers_epoch + 1, None)
+                    .is_none());
+            }
+        }
 
-        // Add something to the cache
-        assert!(cache.slot_leader_at(bank.slot(), Some(&bank)).is_some());
-        assert!(cache.slot_leader_at(bank.slot(), None).is_some());
-        assert_eq!(cache.cached_schedules.read().unwrap().0.len(), 1);
+        // Should be a schedule for every epoch just checked
+        assert_eq!(
+            cache.cached_schedules.read().unwrap().0.len() as u64,
+            stakers_epoch + 1
+        );
     }
 
     #[test]
@@ -225,7 +265,7 @@ mod tests {
         let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
         let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule, bank.slot()));
+        let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule, &bank));
 
         let num_threads = 10;
         let (threads, senders): (Vec<_>, Vec<_>) = (0..num_threads)
@@ -446,7 +486,7 @@ mod tests {
         assert!(bank2.epoch_vote_accounts(2).is_some());
 
         // Set root for a slot in epoch 1, so that epoch 2 is now confirmed
-        cache.set_root(95);
+        cache.set_root(&bank2);
         assert_eq!(*cache.max_epoch.read().unwrap(), 2);
         assert!(cache.slot_leader_at(96, Some(&bank2)).is_some());
         assert_eq!(bank2.get_epoch_and_slot_index(223).0, 2);

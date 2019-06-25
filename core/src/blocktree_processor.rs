@@ -166,7 +166,8 @@ pub fn process_blocktree(
 
     blocktree.set_roots(&[0]).expect("Couldn't set first root");
 
-    let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule(), 0);
+    let leader_schedule_cache =
+        LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule(), &pending_slots[0].2);
 
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
@@ -225,7 +226,7 @@ pub fn process_blocktree(
 
         if blocktree.is_root(slot) {
             root = slot;
-            leader_schedule_cache.set_root(slot);
+            leader_schedule_cache.set_root(&bank);
             bank.squash();
             pending_slots.clear();
             fork_info.clear();
