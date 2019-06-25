@@ -1694,4 +1694,59 @@ mod tests {
             })
             .collect_vec();
     }
+
+    #[test]
+    fn test_consume_buffered_packets() {
+        solana_logger::setup();
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let pubkey = Pubkey::new_rand();
+
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+
+            let (poh_recorder, _entry_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some(4),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+            let working_bank = WorkingBank {
+                bank: bank.clone(),
+                min_tick_height: bank.tick_height(),
+                max_tick_height: bank.tick_height() + 1,
+            };
+
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            let start_hash = bank.last_blockhash();
+            let tx = system_transaction::create_user_account(&mint_keypair, &pubkey, 1, start_hash);
+            let buffered_packets = to_packets(&[tx]);
+            let mut buffered_packets = buffered_packets
+                .into_iter()
+                .map(|packets| (packets, None, vec![0]))
+                .collect();
+
+            let result = BankingStage::consume_buffered_packets(
+                &pubkey,
+                &poh_recorder,
+                &mut buffered_packets,
+                0,
+            );
+            assert_eq!(result.unwrap().len(), 0);
+            assert_eq!(bank.transaction_count(), 1);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
+    }
 }
