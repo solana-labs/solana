@@ -1,5 +1,5 @@
 [package]
-name = "solana-exchange-program"
+name = "solana-exchange-1-program"
 version = "0.17.0"
 description = "Solana exchange program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -10,10 +10,10 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.2"
-solana-exchange-api = { path = "../exchange_api", version = "0.17.0" }
+solana-exchange-1-api = { path = "../exchange_1_api", version = "0.17.0" }
 solana-logger = { path = "../../logger", version = "0.17.0" }
 solana-sdk = { path = "../../sdk", version = "0.17.0" }
 
 [lib]
 crate-type = ["lib", "cdylib"]
-name = "solana_exchange_program"
+name = "solana_exchange_1_program"
