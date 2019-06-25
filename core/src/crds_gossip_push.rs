@@ -82,26 +82,25 @@ impl CrdsGossipPush {
         hash: Hash,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<Pubkey> {
-        let origin_stake = stakes.get(origin);
-        let self_stake = stakes.get(self_pubkey);
+        let origin_stake = stakes.get(origin).unwrap_or(&0);
+        let self_stake = stakes.get(self_pubkey).unwrap_or(&0);
         let cache = self.received_cache.get(&hash);
-        if cache.is_none() || origin_stake.is_none() || self_stake.is_none() {
+        if cache.is_none() {
             return Vec::new();
         }
 
         let peers = &cache.unwrap().1;
+        let peer_stake_total: u64 = peers.iter().map(|p| stakes.get(p).unwrap_or(&0)).sum();
+        let prune_stake_threshold = Self::prune_stake_threshold(*self_stake, *origin_stake);
+        if peer_stake_total < prune_stake_threshold {
+            return Vec::new();
+        }
+
         let staked_peers: Vec<(Pubkey, u64)> = peers
             .iter()
             .filter_map(|p| stakes.get(p).map(|s| (*p, *s)))
             .filter(|(_, s)| *s > 0)
             .collect();
-
-        let peer_stake_total: u64 = staked_peers.iter().map(|(_, s)| s).sum();
-        let prune_stake_threshold =
-            Self::prune_stake_threshold(*self_stake.unwrap(), *origin_stake.unwrap());
-        if peer_stake_total < prune_stake_threshold {
-            return Vec::new();
-        }
 
         let mut seed = [0; 32];
         seed[0..8].copy_from_slice(&thread_rng().next_u64().to_le_bytes());
