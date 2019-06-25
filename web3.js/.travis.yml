@@ -31,6 +31,7 @@ before_install:
   - rustup --version
 
 script:
+  - npx commitlint-travis
   - ls -l lib
   - test -r lib/index.iife.js
   - test -r lib/index.cjs.js
