@@ -107,11 +107,29 @@ fn test_stake_account_delegate() {
         .send_message(&[&mint_keypair, &staker_keypair], message)
         .is_err());
 
+    // Create a new bank at later epoch (within cooldown period)
+    let mut bank = Bank::new_from_parent(&bank, &Pubkey::default(), 2 + bank.slot());
+    bank.add_instruction_processor(id(), process_instruction);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let message = Message::new_with_payer(
+        vec![stake_instruction::withdraw(
+            &staker_pubkey,
+            &Pubkey::new_rand(),
+            100,
+        )],
+        Some(&mint_pubkey),
+    );
+    assert!(bank_client
+        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .is_err());
+
     // Create a new bank at later epoch (to account for cooldown of stake)
     let mut bank = Bank::new_from_parent(
         &bank,
         &Pubkey::default(),
-        genesis_block.slots_per_epoch * 8 + bank.slot(),
+        genesis_block.slots_per_epoch * 4 + bank.slot(),
     );
     bank.add_instruction_processor(id(), process_instruction);
     let bank = Arc::new(bank);

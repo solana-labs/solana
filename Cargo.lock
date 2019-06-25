@@ -2659,6 +2659,7 @@ dependencies = [
  "solana-sdk 0.17.0",
  "solana-stake-api 0.17.0",
  "solana-stake-program 0.17.0",
+ "solana-stake-tests 0.17.0",
  "solana-storage-api 0.17.0",
  "solana-vote-api 0.17.0",
  "solana-vote-program 0.17.0",
@@ -2709,6 +2710,16 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-program"
+version = "0.17.0"
+dependencies = [
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger 0.17.0",
+ "solana-sdk 0.17.0",
+ "solana-stake-api 0.17.0",
+]
+
+[[package]]
+name = "solana-stake-tests"
 version = "0.17.0"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
