@@ -720,10 +720,14 @@ impl BankingStage {
         recv_timeout: Duration,
         id: u32,
     ) -> Result<UnprocessedPackets> {
-        let mms = verified_receiver
-            .lock()
-            .unwrap()
-            .recv_timeout(recv_timeout)?;
+        let mms = {
+            let verified_receiver = verified_receiver.try_lock();
+            if let Ok(verified_receiver) = verified_receiver {
+                verified_receiver.recv_timeout(recv_timeout)?
+            } else {
+                vec![]
+            }
+        };
 
         let mms_len = mms.len();
         let count: usize = mms.iter().map(|x| x.1.len()).sum();
