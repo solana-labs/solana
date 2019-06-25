@@ -1,7 +1,7 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
-name = "solana-bench-exchange"
+name = "solana-bench-exchange-1"
 version = "0.17.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -27,8 +27,8 @@ serde_yaml = "0.8.9"
 solana = { path = "../core", version = "0.17.0" }
 solana-client = { path = "../client", version = "0.17.0" }
 solana-drone = { path = "../drone", version = "0.17.0" }
-solana-exchange-api = { path = "../programs/exchange_api", version = "0.17.0" }
-solana-exchange-program = { path = "../programs/exchange_program", version = "0.17.0" }
+solana-exchange-1-api = { path = "../programs/exchange_1_api", version = "0.17.0" }
+solana-exchange-1-program = { path = "../programs/exchange_1_program", version = "0.17.0" }
 solana-logger = { path = "../logger", version = "0.17.0" }
 solana-metrics = { path = "../metrics", version = "0.17.0" }
 solana-netutil = { path = "../netutil", version = "0.17.0" }
@@ -39,4 +39,3 @@ ws = "0.8.1"
 
 [features]
 cuda = ["solana/cuda"]
-

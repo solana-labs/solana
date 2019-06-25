@@ -8,9 +8,9 @@ use rayon::prelude::*;
 use solana::gen_keys::GenKeys;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_drone::drone::request_airdrop_transaction;
-use solana_exchange_api::exchange_instruction;
-use solana_exchange_api::exchange_state::*;
-use solana_exchange_api::id;
+use solana_exchange_1_api::exchange_instruction;
+use solana_exchange_1_api::exchange_state::*;
+use solana_exchange_1_api::id;
 use solana_metrics::datapoint_info;
 use solana_sdk::client::Client;
 use solana_sdk::client::SyncClient;
@@ -952,7 +952,7 @@ mod tests {
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana::validator::ValidatorConfig;
     use solana_drone::drone::run_local_drone;
-    use solana_exchange_api::exchange_processor::process_instruction;
+    use solana_exchange_1_api::exchange_processor::process_instruction;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::create_genesis_block;
@@ -985,7 +985,7 @@ mod tests {
             node_stakes: vec![100_000; NUM_NODES],
             cluster_lamports: 100_000_000_000_000,
             validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
-            native_instruction_processors: [solana_exchange_program!()].to_vec(),
+            native_instruction_processors: [solana_exchange_1_program!()].to_vec(),
             ..ClusterConfig::default()
         });
 
