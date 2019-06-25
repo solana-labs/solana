@@ -4,7 +4,7 @@
 //! already been signed and verified.
 use crate::accounts::Accounts;
 use crate::accounts_db::{
-    ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
+    AppendVecId, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
@@ -62,8 +62,12 @@ pub struct BankRc {
 }
 
 impl BankRc {
-    pub fn new(account_paths: Option<String>) -> Self {
+    pub fn new(account_paths: Option<String>, id: AppendVecId) -> Self {
         let accounts = Accounts::new(account_paths);
+        accounts
+            .accounts_db
+            .next_id
+            .store(id as usize, Ordering::Relaxed);
         BankRc {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
@@ -374,9 +378,10 @@ impl Bank {
         genesis_block: &GenesisBlock,
         account_paths: Option<String>,
         status_cache_rc: &StatusCacheRc,
+        id: AppendVecId,
     ) -> Self {
         let mut bank = Self::default();
-        bank.set_bank_rc(&BankRc::new(account_paths), &status_cache_rc);
+        bank.set_bank_rc(&BankRc::new(account_paths, id), &status_cache_rc);
         bank.process_genesis_block(genesis_block);
         bank.ancestors.insert(0, 0);
         bank
@@ -2583,7 +2588,7 @@ mod tests {
         let mut dbank: Bank = deserialize_from(&mut rdr).unwrap();
         let mut reader = BufReader::new(&buf[rdr.position() as usize..]);
         dbank.set_bank_rc(
-            &BankRc::new(Some(bank0.accounts().paths.clone())),
+            &BankRc::new(Some(bank0.accounts().paths.clone()), 0),
             &StatusCacheRc::default(),
         );
         assert!(dbank.rc.update_from_stream(&mut reader).is_ok());
