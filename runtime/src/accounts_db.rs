@@ -245,6 +245,8 @@ impl AccountStorageEntry {
 
         if count > 0 {
             *count_and_status = (count - 1, status);
+        } else {
+            warn!("count value 0 for fork {}", self.fork_id);
         }
         count_and_status.0
     }
@@ -260,7 +262,7 @@ pub struct AccountsDB {
     pub storage: RwLock<AccountStorage>,
 
     /// distribute the accounts across storage lists
-    next_id: AtomicUsize,
+    pub next_id: AtomicUsize,
 
     /// write version
     write_version: AtomicUsize,
@@ -325,9 +327,7 @@ impl AccountsDB {
 
         let _len: usize = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("len deserialize error"))?;
-        let accounts_index: AccountsIndex<AccountInfo> = deserialize_from(&mut stream)
-            .map_err(|_| AccountsDB::get_io_error("accounts index deserialize error"))?;
-        let storage: AccountStorage = deserialize_from(&mut stream)
+        let mut storage: AccountStorage = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("storage deserialize error"))?;
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
@@ -341,11 +341,13 @@ impl AccountsDB {
         ids.sort();
 
         {
-            let mut index = self.accounts_index.write().unwrap();
-            let union = index.roots.union(&accounts_index.roots);
-            index.roots = union.cloned().collect();
-            index.last_root = accounts_index.last_root;
             let mut stores = self.storage.write().unwrap();
+            if let Some((_, store0)) = storage.0.remove_entry(&0) {
+                let fork_storage0 = stores.0.entry(0).or_insert_with(HashMap::new);
+                for (id, store) in store0.iter() {
+                    fork_storage0.insert(*id, store.clone());
+                }
+            }
             stores.0.extend(storage.0);
         }
         self.next_id
@@ -627,8 +629,8 @@ impl AccountsDB {
     }
 
     fn generate_index(&self) {
-        let mut forks: Vec<Fork> = self.storage.read().unwrap().0.keys().cloned().collect();
-
+        let storage = self.storage.read().unwrap();
+        let mut forks: Vec<Fork> = storage.0.keys().cloned().collect();
         forks.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
         accounts_index.roots.insert(0);
@@ -655,8 +657,12 @@ impl AccountsDB {
             while let Some(maps) = accumulator.pop() {
                 AccountsDB::merge(&mut account_maps, &maps);
             }
-            for (pubkey, (_, account_info)) in account_maps.iter() {
-                accounts_index.add_index(*fork_id, pubkey, account_info.clone());
+            if !account_maps.is_empty() {
+                accounts_index.roots.insert(*fork_id);
+                let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
+                for (pubkey, (_, account_info)) in account_maps.iter() {
+                    accounts_index.insert(*fork_id, pubkey, account_info.clone(), &mut _reclaims);
+                }
             }
         }
     }
@@ -668,15 +674,11 @@ impl Serialize for AccountsDB {
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
-        let len = serialized_size(&*accounts_index).unwrap()
-            + serialized_size(&*storage).unwrap()
-            + std::mem::size_of::<u64>() as u64;
+        let len = serialized_size(&*storage).unwrap() + std::mem::size_of::<u64>() as u64;
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         let version: u64 = self.write_version.load(Ordering::Relaxed) as u64;
-        serialize_into(&mut wr, &*accounts_index).map_err(Error::custom)?;
         serialize_into(&mut wr, &*storage).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
         let len = wr.position() as usize;
@@ -880,7 +882,7 @@ mod tests {
             ACCOUNT_DATA_FILE_SIZE as usize / 3,
             0,
         );
-        assert!(check_storage(&db, 2));
+        assert!(check_storage(&db, 0, 2));
 
         let pubkey = Pubkey::new_rand();
         let account = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 3, &pubkey);
@@ -991,12 +993,17 @@ mod tests {
         }
     }
 
-    fn check_storage(accounts: &AccountsDB, count: usize) -> bool {
-        let stores = accounts.storage.read().unwrap();
-        assert_eq!(stores.0[&0].len(), 1);
-        assert_eq!(stores.0[&0][&0].status(), AccountStorageStatus::Available);
-        assert_eq!(stores.0[&0][&0].count(), count);
-        stores.0[&0][&0].count() == count
+    fn check_storage(accounts: &AccountsDB, fork: Fork, count: usize) -> bool {
+        let storage = accounts.storage.read().unwrap();
+        assert_eq!(storage.0[&fork].len(), 1);
+        let fork_storage = storage.0.get(&fork).unwrap();
+        let mut total_count: usize = 0;
+        for store in fork_storage.values() {
+            assert_eq!(store.status(), AccountStorageStatus::Available);
+            total_count += store.count();
+        }
+        assert_eq!(total_count, count);
+        total_count == count
     }
 
     fn check_accounts(
@@ -1057,7 +1064,7 @@ mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
-        assert_eq!(check_storage(&accounts, 100), true);
+        assert_eq!(check_storage(&accounts, 0, 100), true);
     }
 
     #[test]
@@ -1232,7 +1239,7 @@ mod tests {
         let accounts = AccountsDB::new(&paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
-        assert_eq!(check_storage(&accounts, 100), true);
+        assert_eq!(check_storage(&accounts, 0, 100), true);
         check_accounts(&accounts, &pubkeys, 0, 100, 1);
         modify_accounts(&accounts, &pubkeys, 0, 100, 2);
         check_accounts(&accounts, &pubkeys, 0, 100, 2);
@@ -1244,6 +1251,8 @@ mod tests {
         let mut buf = vec![0u8; serialized_size(&accounts).unwrap() as usize];
         let mut writer = Cursor::new(&mut buf[..]);
         serialize_into(&mut writer, &accounts).unwrap();
+        assert!(check_storage(&accounts, 0, 100));
+        assert!(check_storage(&accounts, 1, 10));
 
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(&paths.paths);
@@ -1254,6 +1263,8 @@ mod tests {
         );
         check_accounts(&daccounts, &pubkeys, 0, 100, 2);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
+        assert!(check_storage(&daccounts, 0, 100));
+        assert!(check_storage(&daccounts, 1, 10));
     }
 
     #[test]

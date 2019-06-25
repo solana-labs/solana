@@ -1,21 +1,18 @@
 use hashbrown::HashMap;
 use log::*;
-use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use std::collections;
 use std::collections::HashSet;
 
 pub type Fork = u64;
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    #[serde(skip)]
     pub account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
 
     pub roots: HashSet<Fork>,
 
     //This value that needs to be stored to recover the index from AppendVec
-    #[serde(skip)]
     pub last_root: Fork,
 }
 
