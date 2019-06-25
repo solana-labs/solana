@@ -2201,6 +2201,7 @@ dependencies = [
  "solana-exchange-program 0.17.0",
  "solana-kvstore 0.17.0",
  "solana-logger 0.17.0",
+ "solana-merkle-tree 0.17.0",
  "solana-metrics 0.17.0",
  "solana-netutil 0.17.0",
  "solana-runtime 0.17.0",

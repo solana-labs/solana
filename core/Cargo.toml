@@ -55,6 +55,7 @@ solana-ed25519-dalek = "0.2.0"
 solana-exchange-program = { path = "../programs/exchange_program", version = "0.17.0" }
 solana-kvstore = { path = "../kvstore", version = "0.17.0", optional = true }
 solana-logger = { path = "../logger", version = "0.17.0" }
+solana-merkle-tree = { path = "../merkle-tree", version = "0.17.0" }
 solana-metrics = { path = "../metrics", version = "0.17.0" }
 solana-netutil = { path = "../netutil", version = "0.17.0" }
 solana-runtime = { path = "../runtime", version = "0.17.0" }

@@ -10,8 +10,9 @@ use chrono::prelude::Utc;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_budget_api::budget_instruction;
+use solana_merkle_tree::MerkleTree;
 use solana_metrics::inc_new_counter_warn;
-use solana_sdk::hash::{Hash, Hasher};
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
@@ -172,13 +173,16 @@ impl Entry {
 
 pub fn hash_transactions(transactions: &[Transaction]) -> Hash {
     // a hash of a slice of transactions only needs to hash the signatures
-    let mut hasher = Hasher::default();
-    transactions.iter().for_each(|tx| {
-        if !tx.signatures.is_empty() {
-            hasher.hash(&tx.signatures[0].as_ref());
-        }
-    });
-    hasher.result()
+    let signatures: Vec<_> = transactions
+        .iter()
+        .flat_map(|tx| tx.signatures.iter().map(|sig| sig.as_ref()))
+        .collect();
+    let merkle_tree = MerkleTree::new(&signatures);
+    if let Some(root_hash) = merkle_tree.get_root() {
+        *root_hash
+    } else {
+        Hash::default()
+    }
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains
