@@ -1,8 +1,11 @@
-use solana_sdk::account::Account;
-use solana_sdk::genesis_block::{Builder, GenesisBlock};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_program;
+use solana_sdk::{
+    account::Account,
+    fee_calculator::FeeCalculator,
+    genesis_block::{Builder, GenesisBlock},
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_program,
+};
 use solana_stake_api;
 use solana_vote_api::vote_state;
 
@@ -67,7 +70,8 @@ pub fn create_genesis_block_with_leader(
             solana_bpf_loader_program!(),
             solana_vote_program!(),
             solana_stake_program!(),
-        ]);
+        ])
+        .fee_calculator(FeeCalculator::new(0)); // most tests don't want fees
 
     builder = solana_stake_api::rewards_pools::genesis(builder);
     builder = solana_storage_api::rewards_pools::genesis(builder);
