@@ -325,6 +325,7 @@ impl Serialize for AppendVec {
             + std::mem::size_of::<usize>() as u64;
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
+        self.map.flush().map_err(Error::custom)?;
         serialize_into(&mut wr, &self.path).map_err(Error::custom)?;
         serialize_into(&mut wr, &(self.current_len.load(Ordering::Relaxed) as u64))
             .map_err(Error::custom)?;
