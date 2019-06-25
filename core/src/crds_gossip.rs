@@ -82,7 +82,7 @@ impl CrdsGossip {
         for val in versioned {
             let origin = val.value.pubkey();
             let hash = val.value_hash;
-            let peers = push.prune_received_cache(id, origin, hash, stakes);
+            let peers = push.prune_received_cache(id, &origin, hash, stakes);
             for from in peers {
                 prune_map.entry(from).or_default().insert(origin);
             }

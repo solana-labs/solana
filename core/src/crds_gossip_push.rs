@@ -78,12 +78,12 @@ impl CrdsGossipPush {
     pub fn prune_received_cache(
         &mut self,
         self_pubkey: &Pubkey,
-        origin: Pubkey,
+        origin: &Pubkey,
         hash: Hash,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<Pubkey> {
-        let origin_stake = stakes.get(&origin);
-        let self_stake = stakes.get(&self_pubkey);
+        let origin_stake = stakes.get(origin);
+        let self_stake = stakes.get(self_pubkey);
         let cache = self.received_cache.get(&hash);
         if cache.is_none() || origin_stake.is_none() || self_stake.is_none() {
             return Vec::new();
@@ -368,7 +368,7 @@ mod test {
             .lookup_versioned(&label)
             .expect("versioned value should exist");
         let hash = versioned.value_hash;
-        let pruned = push.prune_received_cache(&self_id, origin, hash, &stakes);
+        let pruned = push.prune_received_cache(&self_id, &origin, hash, &stakes);
         assert!(
             pruned.is_empty(),
             "should not prune if min threshold has not been reached"
@@ -379,7 +379,7 @@ mod test {
         stakes.insert(high_staked_peer, high_stake);
         let _ = push.process_push_message(&mut crds, &high_staked_peer, value.clone(), 0);
 
-        let pruned = push.prune_received_cache(&self_id, origin, hash, &stakes);
+        let pruned = push.prune_received_cache(&self_id, &origin, hash, &stakes);
         assert!(
             pruned.len() < low_staked_set.len() + 1,
             "should not prune all peers"
