@@ -22,8 +22,8 @@ pub struct Inflation {
     /// Duration of grant pool inflation, in years
     pub grant_term: f64,
 
-    /// Percentage of total inflation allocated to replicator rewards
-    pub replicator: f64,
+    /// Percentage of total inflation allocated to storage rewards
+    pub storage: f64,
 }
 
 const DEFAULT_INITIAL: f64 = 0.15;
@@ -32,7 +32,7 @@ const DEFAULT_TAPER: f64 = 0.15;
 const DEFAULT_FOUNDATION: f64 = 0.05;
 const DEFAULT_GRANT: f64 = 0.05;
 const DEFAULT_FOUNDATION_GRANT_TERM: f64 = 7.0;
-const DEFAULT_REPLICATOR: f64 = 0.10;
+const DEFAULT_STORAGE: f64 = 0.10;
 
 impl Default for Inflation {
     fn default() -> Self {
@@ -44,7 +44,7 @@ impl Default for Inflation {
             foundation_term: DEFAULT_FOUNDATION_GRANT_TERM,
             grant: DEFAULT_GRANT,
             grant_term: DEFAULT_FOUNDATION_GRANT_TERM,
-            replicator: DEFAULT_REPLICATOR,
+            storage: DEFAULT_STORAGE,
         }
     }
 }
@@ -63,12 +63,12 @@ impl Inflation {
 
     /// portion of total that goes to validators
     pub fn validator(&self, year: f64) -> f64 {
-        self.total(year) - self.replicator(year) - self.grant(year) - self.foundation(year)
+        self.total(year) - self.storage(year) - self.grant(year) - self.foundation(year)
     }
 
-    /// portion of total that goes to replicators
-    pub fn replicator(&self, year: f64) -> f64 {
-        self.total(year) * self.replicator
+    /// portion of total that goes to storage mining
+    pub fn storage(&self, year: f64) -> f64 {
+        self.total(year) * self.storage
     }
 
     /// portion of total that goes to grant pools
@@ -105,7 +105,7 @@ mod tests {
             assert_eq!(
                 total,
                 inflation.validator(*year)
-                    + inflation.replicator(*year)
+                    + inflation.storage(*year)
                     + inflation.grant(*year)
                     + inflation.foundation(*year)
             );

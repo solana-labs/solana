@@ -338,11 +338,8 @@ impl Replicator {
         let client = crate::gossip_service::get_client(&nodes);
 
         if let Ok(Some(account)) = client.get_account(&self.storage_keypair.pubkey()) {
-            if let Ok(StorageContract::ReplicatorStorage {
-                reward_validations, ..
-            }) = account.state()
-            {
-                if !reward_validations.is_empty() {
+            if let Ok(StorageContract::ReplicatorStorage { validations, .. }) = account.state() {
+                if !validations.is_empty() {
                     let ix = storage_instruction::claim_reward(
                         &self.keypair.pubkey(),
                         &self.storage_keypair.pubkey(),
