@@ -302,11 +302,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                         delivered += 1;
                         prunes += prune_keys.len();
 
-                        let stake_pruned_sum: u64 = prune_keys
-                            .iter()
-                            .map(|k| stakes.get(&k).unwrap())
-                            .cloned()
-                            .sum();
+                        let stake_pruned_sum = stakes.get(&from).unwrap() * prune_keys.len() as u64;
                         stake_pruned += stake_pruned_sum;
 
                         network
@@ -482,6 +478,11 @@ fn test_connected_staked_network() {
     let stake_sum: u64 = stakes.iter().sum();
     let avg_stake: u64 = stake_sum / stakes.len() as u64;
     let avg_stake_pruned = network.stake_pruned / network.pruned_count as u64;
+    trace!(
+        "connected staked network, avg_stake: {}, avg_stake_pruned: {}",
+        avg_stake,
+        avg_stake_pruned
+    );
     assert!(
         avg_stake_pruned < avg_stake,
         "network should prune lower stakes more often"
