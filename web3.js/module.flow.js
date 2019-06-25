@@ -93,6 +93,7 @@ declare module '@solana/web3.js' {
       signature: TransactionSignature,
     ): Promise<SignatureSuccess | TransactionError | null>;
     getTransactionCount(): Promise<number>;
+    getTotalSupply(): Promise<number>;
     getRecentBlockhash(): Promise<[Blockhash, FeeCalculator]>;
     requestAirdrop(
       to: PublicKey,

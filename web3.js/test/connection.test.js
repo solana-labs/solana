@@ -199,6 +199,25 @@ test('get transaction count', async () => {
   expect(count).toBeGreaterThanOrEqual(0);
 });
 
+test('get total supply', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getTotalSupply',
+      params: [],
+    },
+    {
+      error: null,
+      result: 1000000,
+    },
+  ]);
+
+  const count = await connection.getTotalSupply();
+  expect(count).toBeGreaterThanOrEqual(0);
+});
+
 test('get recent blockhash', async () => {
   const connection = new Connection(url);
 
