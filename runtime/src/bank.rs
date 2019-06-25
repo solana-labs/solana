@@ -4,7 +4,7 @@
 //! already been signed and verified.
 use crate::accounts::Accounts;
 use crate::accounts_db::{
-    ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
+    AppendVecId, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
@@ -62,9 +62,12 @@ pub struct BankRc {
 }
 
 impl BankRc {
-    pub fn new(account_paths: Option<String>, id: usize) -> Self {
+    pub fn new(account_paths: Option<String>, id: AppendVecId) -> Self {
         let accounts = Accounts::new(account_paths);
-        accounts.accounts_db.next_id.store(id, Ordering::Relaxed);
+        accounts
+            .accounts_db
+            .next_id
+            .store(id as usize, Ordering::Relaxed);
         BankRc {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
@@ -375,7 +378,7 @@ impl Bank {
         genesis_block: &GenesisBlock,
         account_paths: Option<String>,
         status_cache_rc: &StatusCacheRc,
-        id: usize,
+        id: AppendVecId,
     ) -> Self {
         let mut bank = Self::default();
         bank.set_bank_rc(&BankRc::new(account_paths, id), &status_cache_rc);
