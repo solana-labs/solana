@@ -215,6 +215,11 @@ const GetSignatureStatusRpcResult = jsonRpcResult(
 const GetTransactionCountRpcResult = jsonRpcResult('number');
 
 /**
+ * Expected JSON RPC response for the "getTotalSupply" message
+ */
+const GetTotalSupplyRpcResult = jsonRpcResult('number');
+
+/**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
 const GetRecentBlockhash = jsonRpcResult([
@@ -517,6 +522,19 @@ export class Connection {
   async getTransactionCount(): Promise<number> {
     const unsafeRes = await this._rpcRequest('getTransactionCount', []);
     const res = GetTransactionCountRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return Number(res.result);
+  }
+
+  /**
+   * Fetch the current total currency supply of the cluster
+   */
+  async getTotalSupply(): Promise<number> {
+    const unsafeRes = await this._rpcRequest('getTotalSupply', []);
+    const res = GetTotalSupplyRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
