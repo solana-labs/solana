@@ -9,8 +9,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_sdk::syscall::current::Current;
-use solana_sdk::syscall::rewards::Rewards;
+use solana_sdk::syscall;
 use std::collections::BTreeMap;
 
 // Todo Tune this for actual use cases when PoRep is feature complete
@@ -21,8 +20,6 @@ pub const MAX_PROOFS_PER_SEGMENT: usize = 80;
 pub struct Credits {
     // current epoch
     epoch: u64,
-    // credits earned in the last epoch
-    pub last_epoch: u64,
     // currently pending credits
     pub current_epoch: u64,
     // credits ready to be claimed
@@ -161,7 +158,7 @@ impl<'a> StorageAccount<'a> {
         segment_index: usize,
         signature: Signature,
         blockhash: Hash,
-        current: Current,
+        current: syscall::current::Current,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ReplicatorStorage {
@@ -236,7 +233,7 @@ impl<'a> StorageAccount<'a> {
         &mut self,
         hash: Hash,
         slot: u64,
-        current: Current,
+        current: syscall::current::Current,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ValidatorStorage {
@@ -277,7 +274,7 @@ impl<'a> StorageAccount<'a> {
     pub fn proof_validation(
         &mut self,
         me: &Pubkey,
-        current: Current,
+        current: syscall::current::Current,
         segment: u64,
         proofs_per_account: Vec<Vec<ProofStatus>>,
         replicator_accounts: &mut [StorageAccount],
@@ -376,8 +373,8 @@ impl<'a> StorageAccount<'a> {
     pub fn claim_storage_reward(
         &mut self,
         rewards_pool: &mut KeyedAccount,
-        current: Current,
-        rewards: Rewards,
+        current: syscall::current::Current,
+        rewards: syscall::rewards::Rewards,
         owner: &mut StorageAccount,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
@@ -449,7 +446,7 @@ pub fn create_rewards_pool() -> Account {
 /// Store the result of a proof validation into the replicator account
 fn store_validation_result(
     me: &Pubkey,
-    current: &Current,
+    current: &syscall::current::Current,
     storage_account: &mut StorageAccount,
     segment: usize,
     proof_mask: &[ProofStatus],
