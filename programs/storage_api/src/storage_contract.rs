@@ -402,18 +402,8 @@ impl<'a> StorageAccount<'a> {
             }
 
             credits.update_epoch(current.epoch);
-            let pending = (credits.redeemable as f64 * rewards.storage_point_value) as u64;
-            if rewards_pool.account.lamports < pending {
-                Err(InstructionError::CustomError(
-                    StorageError::RewardPoolDepleted as u32,
-                ))?
-            }
-            if pending >= 1 {
-                rewards_pool.account.lamports -= pending;
-                owner.account.lamports += pending;
-                //clear credits
-                credits.redeemable = 0;
-            }
+            check_redeemable(credits, rewards.storage_point_value, rewards_pool, owner)?;
+
             self.account.set_state(storage_contract)
         } else if let StorageContract::ReplicatorStorage {
             owner: account_owner,
@@ -431,22 +421,34 @@ impl<'a> StorageAccount<'a> {
             let (num_validations, _total_proofs) = count_valid_proofs(&validations);
             credits.current_epoch += num_validations;
             validations.clear();
-            let reward = (credits.redeemable as f64 * rewards.storage_point_value) as u64;
-            if rewards_pool.account.lamports < reward {
-                Err(InstructionError::CustomError(
-                    StorageError::RewardPoolDepleted as u32,
-                ))?
-            }
-            if reward >= 1 {
-                rewards_pool.account.lamports -= reward;
-                owner.account.lamports += reward;
-                credits.redeemable = 0;
-            }
+            check_redeemable(credits, rewards.storage_point_value, rewards_pool, owner)?;
+
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
         }
     }
+}
+
+fn check_redeemable(
+    credits: &mut Credits,
+    storage_point_value: f64,
+    rewards_pool: &mut KeyedAccount,
+    owner: &mut StorageAccount,
+) -> Result<(), InstructionError> {
+    let rewards = (credits.redeemable as f64 * storage_point_value) as u64;
+    if rewards_pool.account.lamports < rewards {
+        Err(InstructionError::CustomError(
+            StorageError::RewardPoolDepleted as u32,
+        ))?
+    }
+    if rewards >= 1 {
+        rewards_pool.account.lamports -= rewards;
+        owner.account.lamports += rewards;
+        //clear credits
+        credits.redeemable = 0;
+    }
+    Ok(())
 }
 
 pub fn create_rewards_pool() -> Account {
