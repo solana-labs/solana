@@ -63,10 +63,10 @@ fi
 
 $solana_wallet "${entrypoint[@]}" address
 check_balance_output "0 lamports"
-$solana_wallet "${entrypoint[@]}" airdrop 60
-check_balance_output "60 lamports"
-$solana_wallet "${entrypoint[@]}" airdrop 40
-check_balance_output "100 lamports"
+$solana_wallet "${entrypoint[@]}" airdrop 600
+check_balance_output "600 lamports"
+$solana_wallet "${entrypoint[@]}" airdrop 400
+check_balance_output "1000 lamports"
 pay_and_confirm $garbage_address 50
 check_balance_output "lamports" # <-- exact number of lamports here depends on the current cluster fees
 
