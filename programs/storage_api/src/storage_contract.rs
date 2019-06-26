@@ -402,18 +402,8 @@ impl<'a> StorageAccount<'a> {
             }
 
             credits.update_epoch(current.epoch);
-            let pending = (credits.redeemable as f64 * rewards.storage_point_value) as u64;
-            if rewards_pool.account.lamports < pending {
-                Err(InstructionError::CustomError(
-                    StorageError::RewardPoolDepleted as u32,
-                ))?
-            }
-            if pending >= 1 {
-                rewards_pool.account.lamports -= pending;
-                owner.account.lamports += pending;
-                //clear credits
-                credits.redeemable = 0;
-            }
+            check_redeemable(credits, rewards.storage_point_value, rewards_pool, owner)?;
+
             self.account.set_state(storage_contract)
         } else if let StorageContract::ReplicatorStorage {
             owner: account_owner,
@@ -431,22 +421,34 @@ impl<'a> StorageAccount<'a> {
             let (num_validations, _total_proofs) = count_valid_proofs(&validations);
             credits.current_epoch += num_validations;
             validations.clear();
-            let reward = (credits.redeemable as f64 * rewards.storage_point_value) as u64;
-            if rewards_pool.account.lamports < reward {
-                Err(InstructionError::CustomError(
-                    StorageError::RewardPoolDepleted as u32,
-                ))?
-            }
-            if reward >= 1 {
-                rewards_pool.account.lamports -= reward;
-                owner.account.lamports += reward;
-                credits.redeemable = 0;
-            }
+            check_redeemable(credits, rewards.storage_point_value, rewards_pool, owner)?;
+
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
         }
     }
+}
+
+fn check_redeemable(
+    credits: &mut Credits,
+    storage_point_value: f64,
+    rewards_pool: &mut KeyedAccount,
+    owner: &mut StorageAccount,
+) -> Result<(), InstructionError> {
+    let rewards = (credits.redeemable as f64 * storage_point_value) as u64;
+    if rewards_pool.account.lamports < rewards {
+        Err(InstructionError::CustomError(
+            StorageError::RewardPoolDepleted as u32,
+        ))?
+    }
+    if rewards >= 1 {
+        rewards_pool.account.lamports -= rewards;
+        owner.account.lamports += rewards;
+        //clear credits
+        credits.redeemable = 0;
+    }
+    Ok(())
 }
 
 pub fn create_rewards_pool() -> Account {
@@ -515,7 +517,7 @@ fn count_valid_proofs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::id;
+    use crate::{id, rewards_pools};
     use std::collections::BTreeMap;
 
     #[test]
@@ -619,5 +621,43 @@ mod tests {
             &vec![ProofStatus::NotValid],
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_redeemable() {
+        let mut credits = Credits {
+            epoch: 0,
+            current_epoch: 0,
+            redeemable: 100,
+        };
+        let mut owner_account = Account {
+            lamports: 1,
+            ..Account::default()
+        };
+        let mut rewards_pool = create_rewards_pool();
+        let pool_id = rewards_pools::id();
+        let mut keyed_pool_account = KeyedAccount::new(&pool_id, false, &mut rewards_pool);
+        let mut owner = StorageAccount {
+            id: Pubkey::default(),
+            account: &mut owner_account,
+        };
+
+        // check that redeeming from depleted pools fails
+        keyed_pool_account.account.lamports = 0;
+        assert_eq!(
+            check_redeemable(&mut credits, 1.0, &mut keyed_pool_account, &mut owner),
+            Err(InstructionError::CustomError(
+                StorageError::RewardPoolDepleted as u32,
+            ))
+        );
+        assert_eq!(owner.account.lamports, 1);
+
+        keyed_pool_account.account.lamports = 200;
+        assert_eq!(
+            check_redeemable(&mut credits, 1.0, &mut keyed_pool_account, &mut owner),
+            Ok(())
+        );
+        // check that the owner's balance increases
+        assert_eq!(owner.account.lamports, 101);
     }
 }
