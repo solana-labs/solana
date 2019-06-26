@@ -806,6 +806,7 @@ mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": [ blockhash.to_string(), {
+                "burnPercent": 50,
                 "lamportsPerSignature": 0,
                 "maxLamportsPerSignature": 0,
                 "minLamportsPerSignature": 0,

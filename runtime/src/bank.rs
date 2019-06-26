@@ -487,8 +487,10 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
             let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
+
             if collector_fees != 0 {
-                self.deposit(&self.collector_id, collector_fees);
+                // burn a portion of fees
+                self.deposit(&self.collector_id, self.fee_calculator.burn(collector_fees));
             }
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -1723,28 +1725,44 @@ mod tests {
 
     #[test]
     fn test_bank_tx_fee() {
+        let arbitrary_transfer_amount = 42;
+        let mint = arbitrary_transfer_amount * 100;
         let leader = Pubkey::new_rand();
         let GenesisBlockInfo {
             mut genesis_block,
             mint_keypair,
             ..
-        } = create_genesis_block_with_leader(100, &leader, 3);
-        genesis_block.fee_calculator.lamports_per_signature = 3;
+        } = create_genesis_block_with_leader(mint, &leader, 3);
+        genesis_block.fee_calculator.lamports_per_signature = 4; // something divisible by 2
+
+        let expected_fee_paid = genesis_block.fee_calculator.lamports_per_signature;
+        let expected_fee_collected = genesis_block.fee_calculator.burn(expected_fee_paid);
+
         let mut bank = Bank::new(&genesis_block);
 
         let key = Keypair::new();
-        let tx =
-            system_transaction::transfer(&mint_keypair, &key.pubkey(), 2, bank.last_blockhash());
+        let tx = system_transaction::transfer(
+            &mint_keypair,
+            &key.pubkey(),
+            arbitrary_transfer_amount,
+            bank.last_blockhash(),
+        );
 
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 2);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5);
+        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount);
+        assert_eq!(
+            bank.get_balance(&mint_keypair.pubkey()),
+            mint - arbitrary_transfer_amount - expected_fee_paid
+        );
 
         assert_eq!(bank.get_balance(&leader), initial_balance);
         goto_end_of_slot(&mut bank);
         assert_eq!(bank.signature_count(), 1);
-        assert_eq!(bank.get_balance(&leader), initial_balance + 3); // Leader collects fee after the bank is frozen
+        assert_eq!(
+            bank.get_balance(&leader),
+            initial_balance + expected_fee_collected
+        ); // Leader collects fee after the bank is frozen
 
         // Verify that an InstructionError collects fees, too
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
@@ -1755,13 +1773,19 @@ mod tests {
 
         bank.process_transaction(&tx)
             .expect_err("instruction error");
-        assert_eq!(bank.get_balance(&key.pubkey()), 2); // no change
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3); // mint_keypair still pays a fee
+        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount); // no change
+        assert_eq!(
+            bank.get_balance(&mint_keypair.pubkey()),
+            mint - arbitrary_transfer_amount - 2 * expected_fee_paid
+        ); // mint_keypair still pays a fee
         goto_end_of_slot(&mut bank);
         assert_eq!(bank.signature_count(), 1);
 
         // Profit! 2 transaction signatures processed at 3 lamports each
-        assert_eq!(bank.get_balance(&leader), initial_balance + 6);
+        assert_eq!(
+            bank.get_balance(&leader),
+            initial_balance + 2 * expected_fee_collected
+        );
     }
 
     #[test]
@@ -1840,11 +1864,17 @@ mod tests {
                 InstructionError::new_result_with_negative_lamports(),
             )),
         ];
-
         let initial_balance = bank.get_balance(&leader);
+
         let results = bank.filter_program_errors_and_collect_fee(&vec![tx1, tx2], &results);
         bank.freeze();
-        assert_eq!(bank.get_balance(&leader), initial_balance + 2 + 2);
+        assert_eq!(
+            bank.get_balance(&leader),
+            initial_balance
+                + bank
+                    .fee_calculator
+                    .burn(bank.fee_calculator.lamports_per_signature * 2)
+        );
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Ok(()));
     }
@@ -2436,11 +2466,11 @@ mod tests {
     fn test_bank_inherit_fee_calculator() {
         let (mut genesis_block, _mint_keypair) = create_genesis_block(500);
         genesis_block.fee_calculator.target_lamports_per_signature = 123;
-        assert_eq!(genesis_block.fee_calculator.target_signatures_per_slot, 0);
+
         let bank0 = Arc::new(Bank::new(&genesis_block));
         let bank1 = Arc::new(new_from_parent(&bank0));
         assert_eq!(
-            bank0.fee_calculator.target_lamports_per_signature,
+            bank0.fee_calculator.target_lamports_per_signature / 2,
             bank1.fee_calculator.lamports_per_signature
         );
     }

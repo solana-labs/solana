@@ -316,7 +316,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         value_t_or_exit!(matches, "target_lamports_per_signature", u64);
     fee_calculator.target_signatures_per_slot =
         value_t_or_exit!(matches, "target_signatures_per_slot", usize);
-    builder = builder.fee_calculator(&FeeCalculator::new_derived(&fee_calculator, 0));
+    builder = builder.fee_calculator(FeeCalculator::new_derived(&fee_calculator, 0));
 
     let mut poh_config = PohConfig::default();
     poh_config.target_tick_duration =
@@ -345,7 +345,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             poh_config.hashes_per_tick = Some(value_t_or_exit!(matches, "hashes_per_tick", u64));
         }
     }
-    builder = builder.poh_config(&poh_config);
+    builder = builder.poh_config(poh_config);
 
     if let Some(file) = matches.value_of("primordial_accounts_file") {
         builder = append_primordial_accounts(file, AccountFileFormat::Pubkey, builder)?;

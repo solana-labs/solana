@@ -130,16 +130,16 @@ impl Builder {
         self.genesis_block.ticks_per_slot = ticks_per_slot;
         self
     }
-    pub fn poh_config(mut self, poh_config: &PohConfig) -> Self {
-        self.genesis_block.poh_config = poh_config.clone();
+    pub fn poh_config(mut self, poh_config: PohConfig) -> Self {
+        self.genesis_block.poh_config = poh_config;
         self
     }
-    pub fn fee_calculator(mut self, fee_calculator: &FeeCalculator) -> Self {
-        self.genesis_block.fee_calculator = fee_calculator.clone();
+    pub fn fee_calculator(mut self, fee_calculator: FeeCalculator) -> Self {
+        self.genesis_block.fee_calculator = fee_calculator;
         self
     }
-    pub fn inflation(mut self, inflation: &Inflation) -> Self {
-        self.genesis_block.inflation = inflation.clone();
+    pub fn inflation(mut self, inflation: Inflation) -> Self {
+        self.genesis_block.inflation = inflation;
         self
     }
 }
