@@ -17,6 +17,40 @@ use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::{Vote, VoteState};
 use std::sync::Arc;
 
+fn fill_epoch_with_votes(
+    bank: &Arc<Bank>,
+    vote_keypair: &Keypair,
+    mint_keypair: &Keypair,
+) -> Arc<Bank> {
+    let mint_pubkey = mint_keypair.pubkey();
+    let vote_pubkey = vote_keypair.pubkey();
+    let old_epoch = bank.epoch();
+    let mut bank = bank.clone();
+    while bank.epoch() != old_epoch + 1 {
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            1 + bank.slot(),
+        ));
+
+        let bank_client = BankClient::new_shared(&bank);
+        let parent = bank.parent().unwrap();
+
+        let message = Message::new_with_payer(
+            vec![vote_instruction::vote(
+                &vote_pubkey,
+                &vote_pubkey,
+                vec![Vote::new(parent.slot() as u64, parent.hash())],
+            )],
+            Some(&mint_pubkey),
+        );
+        assert!(bank_client
+            .send_message(&[&mint_keypair, &vote_keypair], message)
+            .is_ok());
+    }
+    bank
+}
+
 #[test]
 fn test_stake_account_delegate() {
     let staker_keypair = Keypair::new();
@@ -94,31 +128,8 @@ fn test_stake_account_delegate() {
 
     // Reward redemption
     // Submit enough votes to generate rewards
-    let mut old_epoch = bank.epoch();
-    while bank.epoch() != old_epoch + 1 {
-        bank = Arc::new(Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            1 + bank.slot(),
-        ));
-
-        let bank_client = BankClient::new_shared(&bank);
-
-        let message = Message::new_with_payer(
-            vec![vote_instruction::vote(
-                &vote_pubkey,
-                &vote_pubkey,
-                vec![Vote::new(
-                    (bank.slot() - 1) as u64,
-                    bank.parent().unwrap().hash(),
-                )],
-            )],
-            Some(&mint_pubkey),
-        );
-        assert!(bank_client
-            .send_message(&[&mint_keypair, &vote_keypair], message)
-            .is_ok());
-    }
+    let old_epoch = bank.epoch();
+    bank = fill_epoch_with_votes(&bank, &vote_keypair, &mint_keypair);
 
     // Test that votes and credits are there
     let account = bank.get_account(&vote_pubkey).expect("account not found");
@@ -128,33 +139,9 @@ fn test_stake_account_delegate() {
     assert_eq!(vote_state.votes.len(), 31);
     assert_eq!(vote_state.credits(), 1);
     assert_ne!(old_epoch, bank.epoch());
-    old_epoch = bank.epoch();
 
     // Cycle thru banks until we reach next epoch
-    while bank.epoch() != old_epoch + 1 {
-        bank = Arc::new(Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            1 + bank.slot(),
-        ));
-
-        let bank_client = BankClient::new_shared(&bank);
-
-        let message = Message::new_with_payer(
-            vec![vote_instruction::vote(
-                &vote_pubkey,
-                &vote_pubkey,
-                vec![Vote::new(
-                    (bank.slot() - 1) as u64,
-                    bank.parent().unwrap().hash(),
-                )],
-            )],
-            Some(&mint_pubkey),
-        );
-        assert!(bank_client
-            .send_message(&[&mint_keypair, &vote_keypair], message)
-            .is_ok());
-    }
+    bank = fill_epoch_with_votes(&bank, &vote_keypair, &mint_keypair);
 
     // Test that rewards are there
     let rewards_account = bank
