@@ -490,7 +490,7 @@ impl Bank {
         let rewards = rewards::Rewards::from(
             &self
                 .get_account(&rewards::id())
-                .unwrap_or(rewards::create_account(1, 0.0, 0.0)),
+                .unwrap_or_else(|| rewards::create_account(1, 0.0, 0.0)),
         )
         .unwrap_or_else(Default::default);
         if !validator_point_value.is_normal() {
