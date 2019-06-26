@@ -1,3 +1,4 @@
+use assert_matches::assert_matches;
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
 use solana_runtime::genesis_utils::{create_genesis_block, GenesisBlockInfo};
@@ -6,29 +7,35 @@ use solana_sdk::client::SyncClient;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::syscall;
+use solana_sdk::syscall::rewards::Rewards;
 use solana_stake_api::id;
 use solana_stake_api::stake_instruction;
 use solana_stake_api::stake_instruction::process_instruction;
 use solana_stake_api::stake_state::StakeState;
 use solana_vote_api::vote_instruction;
+use solana_vote_api::vote_state::{Vote, VoteState};
 use std::sync::Arc;
 
 #[test]
 fn test_stake_account_delegate() {
     let staker_keypair = Keypair::new();
     let staker_pubkey = staker_keypair.pubkey();
-    let vote_pubkey = Pubkey::new_rand();
+    let vote_keypair = Keypair::new();
+    let vote_pubkey = vote_keypair.pubkey();
     let node_pubkey = Pubkey::new_rand();
 
     let GenesisBlockInfo {
-        genesis_block,
+        mut genesis_block,
         mint_keypair,
         ..
-    } = create_genesis_block(1000);
-    let mut bank = Bank::new(&genesis_block);
+    } = create_genesis_block(100_000_000_000);
+    genesis_block
+        .native_instruction_processors
+        .push(solana_stake_program::solana_stake_program!());
+    let bank = Bank::new(&genesis_block);
     let mint_pubkey = mint_keypair.pubkey();
-    bank.add_instruction_processor(id(), process_instruction);
-    let bank = Arc::new(bank);
+    let mut bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
     // Create Vote Account
@@ -36,7 +43,7 @@ fn test_stake_account_delegate() {
         &mint_pubkey,
         &vote_pubkey,
         &node_pubkey,
-        1,
+        std::u32::MAX / 2,
         10,
     ));
     bank_client
@@ -48,7 +55,7 @@ fn test_stake_account_delegate() {
         &mint_pubkey,
         &staker_pubkey,
         &vote_pubkey,
-        200,
+        20000,
     ));
     bank_client
         .send_message(&[&mint_keypair, &staker_keypair], message)
@@ -58,7 +65,7 @@ fn test_stake_account_delegate() {
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
     if let StakeState::Stake(stake) = stake_state {
-        assert_eq!(stake.stake, 200);
+        assert_eq!(stake.stake, 20000);
     } else {
         assert!(false, "wrong account type found")
     }
@@ -68,7 +75,7 @@ fn test_stake_account_delegate() {
         vec![stake_instruction::withdraw(
             &staker_pubkey,
             &Pubkey::new_rand(),
-            100,
+            20000,
         )],
         Some(&mint_pubkey),
     );
@@ -80,8 +87,102 @@ fn test_stake_account_delegate() {
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
     if let StakeState::Stake(stake) = stake_state {
-        assert_eq!(stake.stake, 200);
+        assert_eq!(stake.stake, 20000);
     } else {
+        assert!(false, "wrong account type found")
+    }
+
+    // Reward redemption
+    // Submit enough votes to generate rewards
+    let mut old_epoch = bank.epoch();
+    while bank.epoch() != old_epoch + 1 {
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            1 + bank.slot(),
+        ));
+
+        let bank_client = BankClient::new_shared(&bank);
+
+        let message = Message::new_with_payer(
+            vec![vote_instruction::vote(
+                &vote_pubkey,
+                &vote_pubkey,
+                vec![Vote::new(
+                    (bank.slot() - 1) as u64,
+                    bank.parent().unwrap().hash(),
+                )],
+            )],
+            Some(&mint_pubkey),
+        );
+        assert!(bank_client
+            .send_message(&[&mint_keypair, &vote_keypair], message)
+            .is_ok());
+    }
+
+    // Test that votes and credits are there
+    let account = bank.get_account(&vote_pubkey).expect("account not found");
+    let vote_state: VoteState = account.state().expect("couldn't unpack account data");
+
+    // 1 less vote, as the first vote should have cleared the lockout
+    assert_eq!(vote_state.votes.len(), 31);
+    assert_eq!(vote_state.credits(), 1);
+    assert_ne!(old_epoch, bank.epoch());
+    old_epoch = bank.epoch();
+
+    // Cycle thru banks until we reach next epoch
+    while bank.epoch() != old_epoch + 1 {
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            1 + bank.slot(),
+        ));
+
+        let bank_client = BankClient::new_shared(&bank);
+
+        let message = Message::new_with_payer(
+            vec![vote_instruction::vote(
+                &vote_pubkey,
+                &vote_pubkey,
+                vec![Vote::new(
+                    (bank.slot() - 1) as u64,
+                    bank.parent().unwrap().hash(),
+                )],
+            )],
+            Some(&mint_pubkey),
+        );
+        assert!(bank_client
+            .send_message(&[&mint_keypair, &vote_keypair], message)
+            .is_ok());
+    }
+
+    // Test that rewards are there
+    let rewards_account = bank
+        .get_account(&syscall::rewards::id())
+        .expect("account not found");
+    assert_matches!(Rewards::from(&rewards_account), Some(_));
+
+    // Redeem the credit
+    let bank_client = BankClient::new_shared(&bank);
+    let message = Message::new_with_payer(
+        vec![stake_instruction::redeem_vote_credits(
+            &staker_pubkey,
+            &vote_pubkey,
+        )],
+        Some(&mint_pubkey),
+    );
+    assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
+
+    // Test that balance increased, and calculate the rewards
+    let rewards;
+    let account = bank.get_account(&staker_pubkey).expect("account not found");
+    let stake_state = account.state().expect("couldn't unpack account data");
+    if let StakeState::Stake(stake) = stake_state {
+        assert!(account.lamports > 20000);
+        assert_eq!(stake.stake, 20000);
+        rewards = account.lamports - 20000;
+    } else {
+        rewards = 0;
         assert!(false, "wrong account type found")
     }
 
@@ -99,7 +200,7 @@ fn test_stake_account_delegate() {
         vec![stake_instruction::withdraw(
             &staker_pubkey,
             &Pubkey::new_rand(),
-            100,
+            20000,
         )],
         Some(&mint_pubkey),
     );
@@ -107,9 +208,12 @@ fn test_stake_account_delegate() {
         .send_message(&[&mint_keypair, &staker_keypair], message)
         .is_err());
 
+    let old_epoch = bank.epoch();
+    let slots = bank.get_slots_in_epoch(old_epoch);
+
     // Create a new bank at later epoch (within cooldown period)
-    let mut bank = Bank::new_from_parent(&bank, &Pubkey::default(), 2 + bank.slot());
-    bank.add_instruction_processor(id(), process_instruction);
+    let bank = Bank::new_from_parent(&bank, &Pubkey::default(), slots + bank.slot());
+    assert_ne!(old_epoch, bank.epoch());
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -117,7 +221,7 @@ fn test_stake_account_delegate() {
         vec![stake_instruction::withdraw(
             &staker_pubkey,
             &Pubkey::new_rand(),
-            100,
+            20000,
         )],
         Some(&mint_pubkey),
     );
@@ -140,7 +244,7 @@ fn test_stake_account_delegate() {
         vec![stake_instruction::withdraw(
             &staker_pubkey,
             &Pubkey::new_rand(),
-            100,
+            20000,
         )],
         Some(&mint_pubkey),
     );
@@ -148,12 +252,12 @@ fn test_stake_account_delegate() {
         .send_message(&[&mint_keypair, &staker_keypair], message)
         .is_ok());
 
-    // Test that balance and stake is updated correctly
+    // Test that balance and stake is updated correctly (we have withdrawn all lamports except rewards)
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
     if let StakeState::Stake(stake) = stake_state {
-        assert_eq!(account.lamports, 100);
-        assert_eq!(stake.stake, 100);
+        assert_eq!(account.lamports, rewards);
+        assert_eq!(stake.stake, rewards);
     } else {
         assert!(false, "wrong account type found")
     }

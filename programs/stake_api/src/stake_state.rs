@@ -74,7 +74,7 @@ impl Stake {
             return 0;
         }
 
-        // curr slot   |   0   |  1  |  2   ... | 100  | 101 | 102 | 103
+        // curr epoch  |   0   |  1  |  2   ... | 100  | 101 | 102 | 103
         // action      | activate    |        de-activate    |     |
         //             |   |   |     |          |  |   |     |     |
         //             |   v   |     |          |  v   |     |     |
