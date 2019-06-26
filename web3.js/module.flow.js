@@ -34,9 +34,12 @@ declare module '@solana/web3.js' {
 
   // === src/fee-calculator.js ===
   declare export type FeeCalculator = {
+    burnPercent: number,
     lamportsPerSignature: number,
-    targetSignaturesPerSlot: number,
+    maxLamportsPerSignature: number,
+    minLamportsPerSignature: number,
     targetLamportsPerSignature: number,
+    targetSignaturesPerSlot: number,
   };
 
   // === src/budget-program.js ===

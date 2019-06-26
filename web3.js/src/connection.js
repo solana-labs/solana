@@ -225,6 +225,7 @@ const GetTotalSupplyRpcResult = jsonRpcResult('number');
 const GetRecentBlockhash = jsonRpcResult([
   'string',
   struct({
+    burnPercent: 'number',
     lamportsPerSignature: 'number',
     maxLamportsPerSignature: 'number',
     minLamportsPerSignature: 'number',
@@ -235,10 +236,14 @@ const GetRecentBlockhash = jsonRpcResult([
 /**
  * @ignore
  */
-const GetRecentBlockhash_015 = jsonRpcResult([
+const GetRecentBlockhash_016 = jsonRpcResult([
   'string',
   struct({
     lamportsPerSignature: 'number',
+    maxLamportsPerSignature: 'number',
+    minLamportsPerSignature: 'number',
+    targetLamportsPerSignature: 'number',
+    targetSignaturesPerSlot: 'number',
   }),
 ]);
 
@@ -548,22 +553,19 @@ export class Connection {
   async getRecentBlockhash(): Promise<BlockhashAndFeeCalculator> {
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', []);
 
-    // Legacy v0.15 response.  TODO: Remove in August 2019
+    // Legacy v0.16 response.  TODO: Remove in September 2019
     try {
-      const res_015 = GetRecentBlockhash_015(unsafeRes);
-      if (res_015.error) {
-        throw new Error(res_015.error.message);
+      const res_016 = GetRecentBlockhash_016(unsafeRes);
+      if (res_016.error) {
+        throw new Error(res_016.error.message);
       }
-      const [blockhash, feeCalculator] = res_015.result;
-      feeCalculator.targetSignaturesPerSlot = 42;
-      feeCalculator.targetLamportsPerSignature =
-        feeCalculator.lamportsPerSignature;
-
+      const [blockhash, feeCalculator] = res_016.result;
+      feeCalculator.burnPercent = 0;
       return [blockhash, feeCalculator];
     } catch (e) {
       // Not legacy format
     }
-    // End Legacy v0.15 response
+    // End Legacy v0.16 response
 
     const res = GetRecentBlockhash(unsafeRes);
     if (res.error) {
