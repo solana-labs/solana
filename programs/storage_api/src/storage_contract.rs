@@ -26,6 +26,16 @@ pub struct Credits {
     pub redeemable: u64,
 }
 
+impl Credits {
+    pub fn update_epoch(&mut self, current_epoch: u64) {
+        if self.epoch != current_epoch {
+            self.epoch = current_epoch;
+            self.redeemable += self.current_epoch;
+            self.current_epoch = 0;
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
 pub enum StorageError {
     InvalidSegment,
@@ -221,7 +231,7 @@ impl<'a> StorageAccount<'a> {
                     StorageError::ProofLimitReached as u32,
                 ));
             }
-            update_credits(credits, current.epoch);
+            credits.update_epoch(current.epoch);
             segment_proofs.push(proof);
             self.account.set_state(storage_contract)
         } else {
@@ -263,7 +273,7 @@ impl<'a> StorageAccount<'a> {
             // storage epoch updated, move the lockout_validations to credits
             let (_num_valid, total_validations) = count_valid_proofs(&lockout_validations);
             lockout_validations.clear();
-            update_credits(credits, current.epoch);
+            credits.update_epoch(current.epoch);
             credits.current_epoch += total_validations;
             self.account.set_state(storage_contract)
         } else {
@@ -391,7 +401,7 @@ impl<'a> StorageAccount<'a> {
                 ))?
             }
 
-            update_credits(credits, current.epoch);
+            credits.update_epoch(current.epoch);
             let pending = (credits.redeemable as f64 * rewards.storage_point_value) as u64;
             if rewards_pool.account.lamports < pending {
                 Err(InstructionError::CustomError(
@@ -417,7 +427,7 @@ impl<'a> StorageAccount<'a> {
                     StorageError::InvalidOwner as u32,
                 ))?
             }
-            update_credits(credits, current.epoch);
+            credits.update_epoch(current.epoch);
             let (num_validations, _total_proofs) = count_valid_proofs(&validations);
             credits.current_epoch += num_validations;
             validations.clear();
@@ -473,21 +483,12 @@ fn store_validation_result(
                 entry.insert(*me, proof_mask.to_vec());
             }
             let (total_validations, _) = count_valid_proofs(&validations);
-            update_credits(credits, current.epoch);
+            credits.update_epoch(current.epoch);
             credits.current_epoch += total_validations - recorded_validations;
         }
         _ => return Err(InstructionError::InvalidAccountData),
     }
     storage_account.account.set_state(&storage_contract)
-}
-
-fn update_credits(credits: &mut Credits, current_epoch: u64) {
-    if credits.epoch != current_epoch {
-        credits.epoch = current_epoch;
-        credits.last_epoch = credits.current_epoch;
-        credits.redeemable += credits.current_epoch;
-        credits.current_epoch = 0;
-    }
 }
 
 fn count_valid_proofs(
@@ -575,7 +576,7 @@ mod tests {
         // account has no space
         store_validation_result(
             &Pubkey::default(),
-            &Current::default(),
+            &syscall::current::Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::default(); 1],
@@ -602,7 +603,7 @@ mod tests {
         // proof is valid
         store_validation_result(
             &Pubkey::default(),
-            &Current::default(),
+            &syscall::current::Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::Valid],
@@ -612,7 +613,7 @@ mod tests {
         // proof failed verification but we should still be able to store it
         store_validation_result(
             &Pubkey::default(),
-            &Current::default(),
+            &syscall::current::Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::NotValid],
