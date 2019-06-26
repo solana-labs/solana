@@ -517,7 +517,7 @@ fn count_valid_proofs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::id;
+    use crate::{id, rewards_pools};
     use std::collections::BTreeMap;
 
     #[test]
@@ -621,5 +621,43 @@ mod tests {
             &vec![ProofStatus::NotValid],
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_redeemable() {
+        let mut credits = Credits {
+            epoch: 0,
+            current_epoch: 0,
+            redeemable: 100,
+        };
+        let mut owner_account = Account {
+            lamports: 1,
+            ..Account::default()
+        };
+        let mut rewards_pool = create_rewards_pool();
+        let pool_id = rewards_pools::id();
+        let mut keyed_pool_account = KeyedAccount::new(&pool_id, false, &mut rewards_pool);
+        let mut owner = StorageAccount {
+            id: Pubkey::default(),
+            account: &mut owner_account,
+        };
+
+        // check that redeeming from depleted pools fails
+        keyed_pool_account.account.lamports = 0;
+        assert_eq!(
+            check_redeemable(&mut credits, 1.0, &mut keyed_pool_account, &mut owner),
+            Err(InstructionError::CustomError(
+                StorageError::RewardPoolDepleted as u32,
+            ))
+        );
+        assert_eq!(owner.account.lamports, 1);
+
+        keyed_pool_account.account.lamports = 200;
+        assert_eq!(
+            check_redeemable(&mut credits, 1.0, &mut keyed_pool_account, &mut owner),
+            Ok(())
+        );
+        // check that the owner's balance increases
+        assert_eq!(owner.account.lamports, 101);
     }
 }
