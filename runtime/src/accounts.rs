@@ -407,8 +407,9 @@ impl Accounts {
                 }
                 for k in credit_only_keys {
                     let locks = credit_only_locks.read().unwrap();
-                    let lock = locks.get(&k).unwrap();
-                    *lock.lock_count.lock().unwrap() -= 1;
+                    if let Some(lock) = locks.get(&k) {
+                        *lock.lock_count.lock().unwrap() -= 1;
+                    }
                 }
             }
         }
