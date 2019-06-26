@@ -19,6 +19,11 @@ export function mockGetRecentBlockhash() {
         recentBlockhash.publicKey.toBase58(),
         {
           lamportsPerSignature: 42,
+          burnPercent: 50,
+          maxLamportsPerSignature: 42,
+          minLamportsPerSignature: 42,
+          targetLamportsPerSignature: 42,
+          targetSignaturesPerSlot: 42,
         },
       ],
     },
