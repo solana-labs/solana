@@ -16,7 +16,7 @@ crate::solana_name_id!(ID, "Sysca11Rewards11111111111111111111111111111");
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Rewards {
     pub validator_point_value: f64,
-    pub replicator_point_value: f64,
+    pub storage_point_value: f64,
 }
 
 impl Rewards {
@@ -34,13 +34,13 @@ impl Rewards {
 pub fn create_account(
     lamports: u64,
     validator_point_value: f64,
-    replicator_point_value: f64,
+    storage_point_value: f64,
 ) -> Account {
     Account::new_data(
         lamports,
         &Rewards {
             validator_point_value,
-            replicator_point_value,
+            storage_point_value,
         },
         &syscall::id(),
     )

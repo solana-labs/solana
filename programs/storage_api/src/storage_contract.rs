@@ -9,13 +9,32 @@ use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+use solana_sdk::syscall;
 use std::collections::BTreeMap;
 
-pub const VALIDATOR_REWARD: u64 = 200;
-pub const REPLICATOR_REWARD: u64 = 200;
-// Todo Tune this for actual use cases when replicators are feature complete
+// Todo Tune this for actual use cases when PoRep is feature complete
 pub const STORAGE_ACCOUNT_SPACE: u64 = 1024 * 8;
 pub const MAX_PROOFS_PER_SEGMENT: usize = 80;
+
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct Credits {
+    // current epoch
+    epoch: u64,
+    // currently pending credits
+    pub current_epoch: u64,
+    // credits ready to be claimed
+    pub redeemable: u64,
+}
+
+impl Credits {
+    pub fn update_epoch(&mut self, current_epoch: u64) {
+        if self.epoch != current_epoch {
+            self.epoch = current_epoch;
+            self.redeemable += self.current_epoch;
+            self.current_epoch = 0;
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
 pub enum StorageError {
@@ -64,11 +83,12 @@ pub enum StorageContract {
         // Most recently advertised blockhash
         hash: Hash,
         // Lockouts and Rewards are per segment per replicator. It needs to remain this way until
-        // the challenge stage is added. Once challenges are in rewards can just be a number
+        // the challenge stage is added.
         lockout_validations: BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
-        // lamports that are ready to be claimed
-        pending_lamports: u64,
+        // Used to keep track of ongoing credits
+        credits: Credits,
     },
+
     ReplicatorStorage {
         owner: Pubkey,
         // TODO what to do about duplicate proofs across segments? - Check the blockhashes
@@ -76,7 +96,9 @@ pub enum StorageContract {
         proofs: BTreeMap<usize, Vec<Proof>>,
         // Map of Rewards per segment, in a BTreeMap based on the validator account that verified
         // the proof. This can be used for challenge stage when its added
-        reward_validations: BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
+        validations: BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
+        // Used to keep track of ongoing credits
+        credits: Credits,
     },
 
     RewardsPool,
@@ -92,7 +114,7 @@ pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account
             slot: 0,
             hash: Hash::default(),
             lockout_validations: BTreeMap::new(),
-            pending_lamports: 0,
+            credits: Credits::default(),
         })
         .expect("set_state");
 
@@ -115,7 +137,8 @@ impl<'a> StorageAccount<'a> {
             *storage_contract = StorageContract::ReplicatorStorage {
                 owner,
                 proofs: BTreeMap::new(),
-                reward_validations: BTreeMap::new(),
+                validations: BTreeMap::new(),
+                credits: Credits::default(),
             };
             self.account.set_state(storage_contract)
         } else {
@@ -131,7 +154,7 @@ impl<'a> StorageAccount<'a> {
                 slot: 0,
                 hash: Hash::default(),
                 lockout_validations: BTreeMap::new(),
-                pending_lamports: 0,
+                credits: Credits::default(),
             };
             self.account.set_state(storage_contract)
         } else {
@@ -145,16 +168,17 @@ impl<'a> StorageAccount<'a> {
         segment_index: usize,
         signature: Signature,
         blockhash: Hash,
-        current_slot: u64,
+        current: syscall::current::Current,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ReplicatorStorage {
             proofs,
-            reward_validations,
+            validations,
+            credits,
             ..
         } = &mut storage_contract
         {
-            let current_segment = get_segment_from_slot(current_slot);
+            let current_segment = get_segment_from_slot(current.slot);
 
             // clean up the account
             // TODO check for time correctness - storage seems to run at a delay of about 3
@@ -163,7 +187,7 @@ impl<'a> StorageAccount<'a> {
                 .filter(|(segment, _)| **segment >= current_segment.saturating_sub(5))
                 .map(|(segment, proofs)| (*segment, proofs.clone()))
                 .collect();
-            *reward_validations = reward_validations
+            *validations = validations
                 .iter()
                 .filter(|(segment, _)| **segment >= current_segment.saturating_sub(10))
                 .map(|(segment, rewards)| (*segment, rewards.clone()))
@@ -207,6 +231,7 @@ impl<'a> StorageAccount<'a> {
                     StorageError::ProofLimitReached as u32,
                 ));
             }
+            credits.update_epoch(current.epoch);
             segment_proofs.push(proof);
             self.account.set_state(storage_contract)
         } else {
@@ -218,18 +243,18 @@ impl<'a> StorageAccount<'a> {
         &mut self,
         hash: Hash,
         slot: u64,
-        current_slot: u64,
+        current: syscall::current::Current,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ValidatorStorage {
             slot: state_slot,
             hash: state_hash,
             lockout_validations,
-            pending_lamports,
+            credits,
             ..
         } = &mut storage_contract
         {
-            let current_segment = get_segment_from_slot(current_slot);
+            let current_segment = get_segment_from_slot(current.slot);
             let original_segment = get_segment_from_slot(*state_slot);
             let segment = get_segment_from_slot(slot);
             debug!(
@@ -245,20 +270,11 @@ impl<'a> StorageAccount<'a> {
             *state_slot = slot;
             *state_hash = hash;
 
-            // storage epoch updated, move the lockout_validations to pending_lamports
-            let num_validations = count_valid_proofs(
-                &lockout_validations
-                    .iter()
-                    .flat_map(|(_segment, proofs)| {
-                        proofs
-                            .iter()
-                            .flat_map(|(_, proof)| proof.clone())
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>(),
-            );
+            // storage epoch updated, move the lockout_validations to credits
+            let (_num_valid, total_validations) = count_valid_proofs(&lockout_validations);
             lockout_validations.clear();
-            *pending_lamports += VALIDATOR_REWARD * num_validations;
+            credits.update_epoch(current.epoch);
+            credits.current_epoch += total_validations;
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
@@ -268,6 +284,7 @@ impl<'a> StorageAccount<'a> {
     pub fn proof_validation(
         &mut self,
         me: &Pubkey,
+        current: syscall::current::Current,
         segment: u64,
         proofs_per_account: Vec<Vec<ProofStatus>>,
         replicator_accounts: &mut [StorageAccount],
@@ -331,7 +348,14 @@ impl<'a> StorageAccount<'a> {
                 .into_iter()
                 .zip(accounts.into_iter())
                 .filter_map(|(checked_proofs, account)| {
-                    if store_validation_result(me, account, segment_index, &checked_proofs).is_ok()
+                    if store_validation_result(
+                        me,
+                        &current,
+                        account,
+                        segment_index,
+                        &checked_proofs,
+                    )
+                    .is_ok()
                     {
                         Some((account.id, checked_proofs))
                     } else {
@@ -359,13 +383,15 @@ impl<'a> StorageAccount<'a> {
     pub fn claim_storage_reward(
         &mut self,
         rewards_pool: &mut KeyedAccount,
+        current: syscall::current::Current,
+        rewards: syscall::rewards::Rewards,
         owner: &mut StorageAccount,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
 
         if let StorageContract::ValidatorStorage {
             owner: account_owner,
-            pending_lamports,
+            credits,
             ..
         } = &mut storage_contract
         {
@@ -375,21 +401,24 @@ impl<'a> StorageAccount<'a> {
                 ))?
             }
 
-            let pending = *pending_lamports;
+            credits.update_epoch(current.epoch);
+            let pending = (credits.redeemable as f64 * rewards.storage_point_value) as u64;
             if rewards_pool.account.lamports < pending {
-                println!("reward pool has {}", rewards_pool.account.lamports);
                 Err(InstructionError::CustomError(
                     StorageError::RewardPoolDepleted as u32,
                 ))?
             }
-            rewards_pool.account.lamports -= pending;
-            owner.account.lamports += pending;
-            //clear pending_lamports
-            *pending_lamports = 0;
+            if pending >= 1 {
+                rewards_pool.account.lamports -= pending;
+                owner.account.lamports += pending;
+                //clear credits
+                credits.redeemable = 0;
+            }
             self.account.set_state(storage_contract)
         } else if let StorageContract::ReplicatorStorage {
             owner: account_owner,
-            reward_validations,
+            validations,
+            credits,
             ..
         } = &mut storage_contract
         {
@@ -398,22 +427,21 @@ impl<'a> StorageAccount<'a> {
                     StorageError::InvalidOwner as u32,
                 ))?
             }
-
-            let checked_proofs = reward_validations
-                .iter()
-                .flat_map(|(_, proofs)| {
-                    proofs
-                        .iter()
-                        .flat_map(|(_, proofs)| proofs.clone())
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
-            reward_validations.clear();
-            let total_proofs = checked_proofs.len() as u64;
-            let num_validations = count_valid_proofs(&checked_proofs);
-            let reward = num_validations * REPLICATOR_REWARD * (num_validations / total_proofs);
-            rewards_pool.account.lamports -= reward;
-            owner.account.lamports += reward;
+            credits.update_epoch(current.epoch);
+            let (num_validations, _total_proofs) = count_valid_proofs(&validations);
+            credits.current_epoch += num_validations;
+            validations.clear();
+            let reward = (credits.redeemable as f64 * rewards.storage_point_value) as u64;
+            if rewards_pool.account.lamports < reward {
+                Err(InstructionError::CustomError(
+                    StorageError::RewardPoolDepleted as u32,
+                ))?
+            }
+            if reward >= 1 {
+                rewards_pool.account.lamports -= reward;
+                owner.account.lamports += reward;
+                credits.redeemable = 0;
+            }
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
@@ -428,6 +456,7 @@ pub fn create_rewards_pool() -> Account {
 /// Store the result of a proof validation into the replicator account
 fn store_validation_result(
     me: &Pubkey,
+    current: &syscall::current::Current,
     storage_account: &mut StorageAccount,
     segment: usize,
     proof_mask: &[ProofStatus],
@@ -436,7 +465,8 @@ fn store_validation_result(
     match &mut storage_contract {
         StorageContract::ReplicatorStorage {
             proofs,
-            reward_validations,
+            validations,
+            credits,
             ..
         } => {
             if !proofs.contains_key(&segment) {
@@ -447,24 +477,39 @@ fn store_validation_result(
                 return Err(InstructionError::InvalidAccountData);
             }
 
-            reward_validations
-                .entry(segment)
-                .or_default()
-                .insert(*me, proof_mask.to_vec());
+            let (recorded_validations, _) = count_valid_proofs(&validations);
+            let entry = validations.entry(segment).or_default();
+            if !entry.contains_key(me) {
+                entry.insert(*me, proof_mask.to_vec());
+            }
+            let (total_validations, _) = count_valid_proofs(&validations);
+            credits.update_epoch(current.epoch);
+            credits.current_epoch += total_validations - recorded_validations;
         }
         _ => return Err(InstructionError::InvalidAccountData),
     }
     storage_account.account.set_state(&storage_contract)
 }
 
-fn count_valid_proofs(proofs: &[ProofStatus]) -> u64 {
+fn count_valid_proofs(
+    validations: &BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
+) -> (u64, u64) {
+    let proofs = validations
+        .iter()
+        .flat_map(|(_, proofs)| {
+            proofs
+                .iter()
+                .flat_map(|(_, proofs)| proofs)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
     let mut num = 0;
-    for proof in proofs {
+    for proof in proofs.iter() {
         if let ProofStatus::Valid = proof {
             num += 1;
         }
     }
-    num
+    (num, proofs.len() as u64)
 }
 
 #[cfg(test)]
@@ -493,7 +538,7 @@ mod tests {
             slot: 0,
             hash: Hash::default(),
             lockout_validations: BTreeMap::new(),
-            pending_lamports: 0,
+            credits: Credits::default(),
         };
         storage_account.account.set_state(&contract).unwrap();
         if let StorageContract::ReplicatorStorage { .. } = contract {
@@ -502,7 +547,8 @@ mod tests {
         contract = StorageContract::ReplicatorStorage {
             owner: Pubkey::default(),
             proofs: BTreeMap::new(),
-            reward_validations: BTreeMap::new(),
+            validations: BTreeMap::new(),
+            credits: Credits::default(),
         };
         storage_account.account.set_state(&contract).unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
@@ -530,6 +576,7 @@ mod tests {
         // account has no space
         store_validation_result(
             &Pubkey::default(),
+            &syscall::current::Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::default(); 1],
@@ -547,7 +594,8 @@ mod tests {
             *storage_contract = StorageContract::ReplicatorStorage {
                 owner: Pubkey::default(),
                 proofs,
-                reward_validations: BTreeMap::new(),
+                validations: BTreeMap::new(),
+                credits: Credits::default(),
             };
         };
         account.account.set_state(storage_contract).unwrap();
@@ -555,6 +603,7 @@ mod tests {
         // proof is valid
         store_validation_result(
             &Pubkey::default(),
+            &syscall::current::Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::Valid],
@@ -564,6 +613,7 @@ mod tests {
         // proof failed verification but we should still be able to store it
         store_validation_result(
             &Pubkey::default(),
+            &syscall::current::Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::NotValid],

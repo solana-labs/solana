@@ -7,11 +7,15 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct StorageAccounts {
-    /// validator storage accounts
+    /// validator storage accounts and their credits
     validator_accounts: HashSet<Pubkey>,
 
-    /// replicator storage accounts
+    /// replicator storage accounts and their credits
     replicator_accounts: HashSet<Pubkey>,
+
+    /// unclaimed points.
+    //  1 point == 1 storage account credit
+    points: HashMap<Pubkey, u64>,
 }
 
 pub fn is_storage(account: &Account) -> bool {
@@ -21,20 +25,34 @@ pub fn is_storage(account: &Account) -> bool {
 impl StorageAccounts {
     pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
         if let Ok(storage_state) = account.state() {
-            if let StorageContract::ReplicatorStorage { .. } = storage_state {
+            if let StorageContract::ReplicatorStorage { credits, .. } = storage_state {
                 if account.lamports == 0 {
                     self.replicator_accounts.remove(pubkey);
                 } else {
                     self.replicator_accounts.insert(*pubkey);
+                    self.points.insert(*pubkey, credits.current_epoch);
                 }
-            } else if let StorageContract::ValidatorStorage { .. } = storage_state {
+            } else if let StorageContract::ValidatorStorage { credits, .. } = storage_state {
                 if account.lamports == 0 {
                     self.validator_accounts.remove(pubkey);
                 } else {
                     self.validator_accounts.insert(*pubkey);
+                    self.points.insert(*pubkey, credits.current_epoch);
                 }
             }
         };
+    }
+
+    /// currently unclaimed points
+    pub fn points(&self) -> u64 {
+        self.points.values().sum()
+    }
+
+    /// "claims" points, resets points to 0
+    pub fn claim_points(&mut self) -> u64 {
+        let points = self.points();
+        self.points.clear();
+        points
     }
 }
 
@@ -61,13 +79,14 @@ pub fn replicator_accounts(bank: &Bank) -> HashMap<Pubkey, Account> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_storage_api::storage_contract::{StorageAccount, STORAGE_ACCOUNT_SPACE};
     use solana_storage_api::{storage_instruction, storage_processor};
     use std::sync::Arc;
 
@@ -112,5 +131,98 @@ mod tests {
 
         assert_eq!(validator_accounts(bank.as_ref()).len(), 1);
         assert_eq!(replicator_accounts(bank.as_ref()).len(), 1);
+    }
+
+    #[test]
+    fn test_points() {
+        // note: storage_points == storage_credits
+        let credits = 42;
+        let mut storage_accounts = StorageAccounts::default();
+        assert_eq!(storage_accounts.points(), 0);
+        assert_eq!(storage_accounts.claim_points(), 0);
+
+        // create random validator and replicator accounts with `credits`
+        let ((validator_pubkey, validator_account), (replicator_pubkey, replicator_account)) =
+            create_storage_accounts_with_credits(credits);
+
+        storage_accounts.store(&validator_pubkey, &validator_account);
+        storage_accounts.store(&replicator_pubkey, &replicator_account);
+        // check that 2x credits worth of points are available
+        assert_eq!(storage_accounts.points(), credits * 2);
+
+        let ((validator_pubkey, validator_account), (replicator_pubkey, mut replicator_account)) =
+            create_storage_accounts_with_credits(credits);
+
+        storage_accounts.store(&validator_pubkey, &validator_account);
+        storage_accounts.store(&replicator_pubkey, &replicator_account);
+        // check that 4x credits worth of points are available
+        assert_eq!(storage_accounts.points(), credits * 2 * 2);
+
+        storage_accounts.store(&validator_pubkey, &validator_account);
+        storage_accounts.store(&replicator_pubkey, &replicator_account);
+        // check that storing again has no effect
+        assert_eq!(storage_accounts.points(), credits * 2 * 2);
+
+        let storage_contract = &mut replicator_account.state().unwrap();
+        if let StorageContract::ReplicatorStorage {
+            credits: account_credits,
+            ..
+        } = storage_contract
+        {
+            account_credits.current_epoch += 1;
+        }
+        replicator_account.set_state(storage_contract).unwrap();
+        storage_accounts.store(&replicator_pubkey, &replicator_account);
+
+        // check that incremental store increases credits
+        assert_eq!(storage_accounts.points(), credits * 2 * 2 + 1);
+
+        assert_eq!(storage_accounts.claim_points(), credits * 2 * 2 + 1);
+        // check that once redeemed, the points are gone
+        assert_eq!(storage_accounts.claim_points(), 0);
+    }
+
+    pub fn create_storage_accounts_with_credits(
+        credits: u64,
+    ) -> ((Pubkey, Account), (Pubkey, Account)) {
+        let validator_pubkey = Pubkey::new_rand();
+        let replicator_pubkey = Pubkey::new_rand();
+
+        let mut validator_account =
+            Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
+        let mut validator = StorageAccount::new(validator_pubkey, &mut validator_account);
+        validator
+            .initialize_validator_storage(validator_pubkey)
+            .unwrap();
+        let storage_contract = &mut validator_account.state().unwrap();
+        if let StorageContract::ValidatorStorage {
+            credits: account_credits,
+            ..
+        } = storage_contract
+        {
+            account_credits.current_epoch = credits;
+        }
+        validator_account.set_state(storage_contract).unwrap();
+
+        let mut replicator_account =
+            Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
+        let mut replicator = StorageAccount::new(replicator_pubkey, &mut replicator_account);
+        replicator
+            .initialize_replicator_storage(replicator_pubkey)
+            .unwrap();
+        let storage_contract = &mut replicator_account.state().unwrap();
+        if let StorageContract::ReplicatorStorage {
+            credits: account_credits,
+            ..
+        } = storage_contract
+        {
+            account_credits.current_epoch = credits;
+        }
+        replicator_account.set_state(storage_contract).unwrap();
+
+        (
+            (validator_pubkey, validator_account),
+            (replicator_pubkey, replicator_account),
+        )
     }
 }

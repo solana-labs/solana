@@ -12,14 +12,13 @@ use solana_sdk::instruction::{Instruction, InstructionError};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::syscall::current;
 use solana_sdk::syscall::current::Current;
+use solana_sdk::syscall::rewards::Rewards;
+use solana_sdk::syscall::{current, rewards};
 use solana_sdk::system_instruction;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_storage_api::storage_contract::StorageAccount;
-use solana_storage_api::storage_contract::{
-    ProofStatus, StorageContract, REPLICATOR_REWARD, STORAGE_ACCOUNT_SPACE, VALIDATOR_REWARD,
-};
+use solana_storage_api::storage_contract::{ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE};
 use solana_storage_api::storage_instruction;
 use solana_storage_api::storage_processor::process_instruction;
 use solana_storage_api::SLOTS_PER_SEGMENT;
@@ -153,12 +152,12 @@ fn test_storage_tx() {
 #[test]
 fn test_serialize_overflow() {
     let pubkey = Pubkey::new_rand();
-    let tick_pubkey = Pubkey::new_rand();
+    let current_id = current::id();
     let mut keyed_accounts = Vec::new();
     let mut user_account = Account::default();
     let mut current_account = current::create_account(1, 0, 0, 0);
     keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
-    keyed_accounts.push(KeyedAccount::new(&tick_pubkey, false, &mut current_account));
+    keyed_accounts.push(KeyedAccount::new(&current_id, false, &mut current_account));
 
     let ix = storage_instruction::advertise_recent_blockhash(
         &pubkey,
@@ -267,7 +266,7 @@ fn test_validate_mining() {
         mut genesis_block,
         mint_keypair,
         ..
-    } = create_genesis_block(100_000);
+    } = create_genesis_block(100_000_000_000);
     genesis_block
         .native_instruction_processors
         .push(solana_storage_program::solana_storage_program!());
@@ -402,6 +401,17 @@ fn test_validate_mining() {
 
     assert_eq!(bank_client.get_balance(&validator_storage_id).unwrap(), 10);
 
+    let bank = Arc::new(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        bank.slot() + bank.epoch_schedule().slots_per_epoch,
+    ));
+    let bank_client = BankClient::new_shared(&bank);
+
+    let rewards = bank
+        .get_account(&rewards::id())
+        .map(|account| Rewards::from(&account).unwrap())
+        .unwrap();
     let message = Message::new_with_payer(
         vec![storage_instruction::claim_reward(
             &owner_pubkey,
@@ -412,7 +422,7 @@ fn test_validate_mining() {
     assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
     assert_eq!(
         bank_client.get_balance(&owner_pubkey).unwrap(),
-        1 + (VALIDATOR_REWARD * 10)
+        1 + ((rewards.storage_point_value * 10_f64) as u64)
     );
 
     // tick the bank into the next storage epoch so that rewards can be claimed
@@ -432,12 +442,11 @@ fn test_validate_mining() {
         )],
         Some(&mint_pubkey),
     );
-
     assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
-
     assert_eq!(
         bank_client.get_balance(&owner_pubkey).unwrap(),
-        1 + (VALIDATOR_REWARD * 10) + (REPLICATOR_REWARD * 5)
+        1 + ((rewards.storage_point_value * 10_f64) as u64)
+            + (rewards.storage_point_value * 5_f64) as u64
     );
 
     let message = Message::new_with_payer(
@@ -448,10 +457,11 @@ fn test_validate_mining() {
         Some(&mint_pubkey),
     );
     assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
-
     assert_eq!(
         bank_client.get_balance(&owner_pubkey).unwrap(),
-        1 + (VALIDATOR_REWARD * 10) + (REPLICATOR_REWARD * 10)
+        1 + (rewards.storage_point_value * 10_f64) as u64
+            + (rewards.storage_point_value * 5_f64) as u64
+            + (rewards.storage_point_value * 5_f64) as u64
     );
 }
 

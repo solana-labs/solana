@@ -269,8 +269,6 @@ impl Default for BlockhashQueue {
     }
 }
 
-pub const DUMMY_REPLICATOR_POINTS: u64 = 100;
-
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
         Self::new_with_paths(&genesis_block, None)
@@ -463,22 +461,21 @@ impl Bank {
 
         let validator_points = self.stakes.write().unwrap().claim_points();
 
-        let replicator_rewards =
-            self.inflation.replicator(year) * self.capitalization() as f64 * period;
+        let storage_rewards = self.inflation.storage(year) * self.capitalization() as f64 * period;
 
-        let replicator_points = DUMMY_REPLICATOR_POINTS; // TODO: real value for points earned last epoch
+        let storage_points = self.storage_accounts.write().unwrap().claim_points();
 
         self.store_account(
             &rewards::id(),
             &rewards::create_account(
                 1,
                 validator_rewards / validator_points as f64,
-                replicator_rewards / replicator_points as f64,
+                storage_rewards / storage_points as f64,
             ),
         );
 
         self.capitalization.fetch_add(
-            (validator_rewards + replicator_rewards) as usize,
+            (validator_rewards + storage_rewards) as usize,
             Ordering::Relaxed,
         );
     }
@@ -1471,8 +1468,13 @@ mod tests {
         let ((vote_id, mut vote_account), stake) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
-        // set up stakes and vote accounts
+        let ((validator_id, validator_account), (replicator_id, replicator_account)) =
+            crate::storage_utils::tests::create_storage_accounts_with_credits(100);
+
+        // set up stakes,vote, and storage accounts
         bank.store_account(&stake.0, &stake.1);
+        bank.store_account(&validator_id, &validator_account);
+        bank.store_account(&replicator_id, &replicator_account);
 
         // generate some rewards
         let mut vote_state = VoteState::from(&vote_account).unwrap();
@@ -1484,6 +1486,7 @@ mod tests {
         bank.store_account(&vote_id, &vote_account);
 
         let validator_points = bank.stakes.read().unwrap().points();
+        let storage_points = bank.storage_accounts.read().unwrap().points();
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -1504,8 +1507,8 @@ mod tests {
 
         assert!(
             ((rewards.validator_point_value * validator_points as f64
-              + rewards.replicator_point_value * DUMMY_REPLICATOR_POINTS as f64) - // TODO: need replicator points per-epoch
-             inflation as f64)
+                + rewards.storage_point_value * storage_points as f64)
+                - inflation as f64)
                 .abs()
                 < 1.0 // rounding, truncating
         );
