@@ -471,12 +471,12 @@ fn store_validation_result(
             }
 
             let (recorded_validations, _) = count_valid_proofs(&validations);
-            validations
-                .entry(segment)
-                .or_default()
-                .insert(*me, proof_mask.to_vec());
-            update_credits(credits, current.epoch);
+            let entry = validations.entry(segment).or_default();
+            if !entry.contains_key(me) {
+                entry.insert(*me, proof_mask.to_vec());
+            }
             let (total_validations, _) = count_valid_proofs(&validations);
+            update_credits(credits, current.epoch);
             credits.current_epoch += total_validations - recorded_validations;
         }
         _ => return Err(InstructionError::InvalidAccountData),
@@ -578,6 +578,7 @@ mod tests {
         // account has no space
         store_validation_result(
             &Pubkey::default(),
+            &Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::default(); 1],
@@ -604,6 +605,7 @@ mod tests {
         // proof is valid
         store_validation_result(
             &Pubkey::default(),
+            &Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::Valid],
@@ -613,6 +615,7 @@ mod tests {
         // proof failed verification but we should still be able to store it
         store_validation_result(
             &Pubkey::default(),
+            &Current::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::NotValid],
