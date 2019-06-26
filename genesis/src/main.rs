@@ -355,6 +355,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         builder = append_primordial_accounts(file, AccountFileFormat::Keypair, builder)?;
     }
 
+    // add the reward pools
+    builder = solana_storage_api::rewards_pools::genesis(builder);
+    builder = solana_stake_api::rewards_pools::genesis(builder);
+
     create_new_ledger(ledger_path, &builder.build())?;
     Ok(())
 }
