@@ -13,7 +13,7 @@ gce)
   source "$here"/scripts/gce-provider.sh
 
   cpuBootstrapLeaderMachineType="--machine-type n1-standard-16 --min-cpu-platform Intel%20Skylake"
-  gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
+  gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=2,type=nvidia-tesla-v100"
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
