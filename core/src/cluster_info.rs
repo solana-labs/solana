@@ -47,7 +47,7 @@ use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp::min;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -206,7 +206,8 @@ impl ClusterInfo {
         let mut entry = CrdsValue::ContactInfo(my_data);
         entry.sign(&self.keypair);
         self.gossip.refresh_push_active_set(stakes);
-        self.gossip.process_push_message(vec![entry], now);
+        self.gossip
+            .process_push_message(&self.id(), vec![entry], now);
     }
 
     // TODO kill insert_info, only used by tests
@@ -316,7 +317,8 @@ impl ClusterInfo {
         let now = timestamp();
         let mut entry = CrdsValue::EpochSlots(EpochSlots::new(id, root, slots, now));
         entry.sign(&self.keypair);
-        self.gossip.process_push_message(vec![entry], now);
+        self.gossip
+            .process_push_message(&self.id(), vec![entry], now);
     }
 
     pub fn push_vote(&mut self, vote: Transaction) {
@@ -324,7 +326,8 @@ impl ClusterInfo {
         let vote = Vote::new(&self.id(), vote, now);
         let mut entry = CrdsValue::Vote(vote);
         entry.sign(&self.keypair);
-        self.gossip.process_push_message(vec![entry], now);
+        self.gossip
+            .process_push_message(&self.id(), vec![entry], now);
     }
 
     /// Get votes in the crds
@@ -1071,12 +1074,13 @@ impl ClusterInfo {
     fn handle_blob(
         obj: &Arc<RwLock<Self>>,
         blocktree: Option<&Arc<Blocktree>>,
+        stakes: &HashMap<Pubkey, u64>,
         blob: &Blob,
     ) -> Vec<SharedBlob> {
         deserialize(&blob.data[..blob.meta.size])
             .into_iter()
             .flat_map(|request| {
-                ClusterInfo::handle_protocol(obj, &blob.meta.addr(), blocktree, request)
+                ClusterInfo::handle_protocol(obj, &blob.meta.addr(), blocktree, stakes, request)
             })
             .collect()
     }
@@ -1120,6 +1124,7 @@ impl ClusterInfo {
         inc_new_counter_debug!("cluster_info-pull_request-rsp", len);
         to_shared_blob(rsp, from.gossip).ok().into_iter().collect()
     }
+
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: &Pubkey, data: Vec<CrdsValue>) {
         let len = data.len();
         let now = Instant::now();
@@ -1134,40 +1139,52 @@ impl ClusterInfo {
 
         report_time_spent("ReceiveUpdates", &now.elapsed(), &format!(" len: {}", len));
     }
+
     fn handle_push_message(
         me: &Arc<RwLock<Self>>,
         from: &Pubkey,
         data: Vec<CrdsValue>,
+        stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<SharedBlob> {
         let self_id = me.read().unwrap().gossip.id;
         inc_new_counter_debug!("cluster_info-push_message", 1, 0, 1000);
 
-        let prunes: Vec<_> = me
+        let updated: Vec<_> =
+            me.write()
+                .unwrap()
+                .gossip
+                .process_push_message(from, data, timestamp());
+
+        let updated_labels: Vec<_> = updated.into_iter().map(|u| u.value.label()).collect();
+        let prunes_map: HashMap<Pubkey, HashSet<Pubkey>> = me
             .write()
             .unwrap()
             .gossip
-            .process_push_message(data, timestamp());
+            .prune_received_cache(updated_labels, stakes);
 
-        if !prunes.is_empty() {
-            inc_new_counter_debug!("cluster_info-push_message-prunes", prunes.len());
-            let ci = me.read().unwrap().lookup(from).cloned();
-            let pushes: Vec<_> = me.write().unwrap().new_push_requests();
-            inc_new_counter_debug!("cluster_info-push_message-pushes", pushes.len());
-            let mut rsp: Vec<_> = ci
-                .and_then(|ci| {
+        let mut rsp: Vec<_> = prunes_map
+            .into_iter()
+            .map(|(from, prune_set)| {
+                inc_new_counter_debug!("cluster_info-push_message-prunes", prune_set.len());
+                me.read().unwrap().lookup(&from).cloned().and_then(|ci| {
                     let mut prune_msg = PruneData {
                         pubkey: self_id,
-                        prunes,
+                        prunes: prune_set.into_iter().collect(),
                         signature: Signature::default(),
-                        destination: *from,
+                        destination: from,
                         wallclock: timestamp(),
                     };
                     prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
                     to_shared_blob(rsp, ci.gossip).ok()
                 })
-                .into_iter()
-                .collect();
+            })
+            .flatten()
+            .collect();
+
+        if !rsp.is_empty() {
+            let pushes: Vec<_> = me.write().unwrap().new_push_requests();
+            inc_new_counter_debug!("cluster_info-push_message-pushes", pushes.len());
             let mut blobs: Vec<_> = pushes
                 .into_iter()
                 .filter_map(|(remote_gossip_addr, req)| {
@@ -1269,6 +1286,7 @@ impl ClusterInfo {
         me: &Arc<RwLock<Self>>,
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
+        stakes: &HashMap<Pubkey, u64>,
         request: Protocol,
     ) -> Vec<SharedBlob> {
         match request {
@@ -1300,7 +1318,7 @@ impl ClusterInfo {
                     }
                     ret
                 });
-                Self::handle_push_message(me, &from, data)
+                Self::handle_push_message(me, &from, data, stakes)
             }
             Protocol::PruneMessage(from, data) => {
                 if data.verify() {
@@ -1335,6 +1353,7 @@ impl ClusterInfo {
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
         blocktree: Option<&Arc<Blocktree>>,
+        bank_forks: Option<&Arc<RwLock<BankForks>>>,
         requests_receiver: &BlobReceiver,
         response_sender: &BlobSender,
     ) -> Result<()> {
@@ -1345,8 +1364,16 @@ impl ClusterInfo {
             reqs.append(&mut more);
         }
         let mut resps = Vec::new();
+
+        let stakes: HashMap<_, _> = match bank_forks {
+            Some(ref bank_forks) => {
+                staking_utils::staked_nodes(&bank_forks.read().unwrap().working_bank())
+            }
+            None => HashMap::new(),
+        };
+
         for req in reqs {
-            let mut resp = Self::handle_blob(obj, blocktree, &req.read().unwrap());
+            let mut resp = Self::handle_blob(obj, blocktree, &stakes, &req.read().unwrap());
             resps.append(&mut resp);
         }
         response_sender.send(resps)?;
@@ -1355,6 +1382,7 @@ impl ClusterInfo {
     pub fn listen(
         me: Arc<RwLock<Self>>,
         blocktree: Option<Arc<Blocktree>>,
+        bank_forks: Option<Arc<RwLock<BankForks>>>,
         requests_receiver: BlobReceiver,
         response_sender: BlobSender,
         exit: &Arc<AtomicBool>,
@@ -1366,6 +1394,7 @@ impl ClusterInfo {
                 let e = Self::run_listen(
                     &me,
                     blocktree.as_ref(),
+                    bank_forks.as_ref(),
                     &requests_receiver,
                     &response_sender,
                 );

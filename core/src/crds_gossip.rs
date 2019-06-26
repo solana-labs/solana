@@ -3,15 +3,16 @@
 //! designed to run with a simulator or over a UDP network connection with messages up to a
 //! packet::BLOB_DATA_SIZE size.
 
-use crate::crds::Crds;
+use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CrdsGossipPull;
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
-use crate::crds_value::CrdsValue;
+use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
+use solana_sdk::signature::Signable;
+use std::collections::{HashMap, HashSet};
 
 ///The min size for bloom filters
 pub const CRDS_GOSSIP_BLOOM_SIZE: usize = 1000;
@@ -39,30 +40,54 @@ impl CrdsGossip {
     pub fn set_self(&mut self, id: &Pubkey) {
         self.id = *id;
     }
+
     /// process a push message to the network
-    pub fn process_push_message(&mut self, values: Vec<CrdsValue>, now: u64) -> Vec<Pubkey> {
-        let labels: Vec<_> = values.iter().map(CrdsValue::label).collect();
-
-        let results: Vec<_> = values
+    pub fn process_push_message(
+        &mut self,
+        from: &Pubkey,
+        values: Vec<CrdsValue>,
+        now: u64,
+    ) -> Vec<VersionedCrdsValue> {
+        values
             .into_iter()
-            .map(|val| self.push.process_push_message(&mut self.crds, val, now))
-            .collect();
-
-        results
-            .into_iter()
-            .zip(labels)
-            .filter_map(|(r, d)| {
-                if r == Err(CrdsGossipError::PushMessagePrune) {
-                    Some(d.pubkey())
-                } else if let Ok(Some(val)) = r {
+            .filter_map(|val| {
+                let res = self
+                    .push
+                    .process_push_message(&mut self.crds, from, val, now);
+                if let Ok(Some(val)) = res {
                     self.pull
                         .record_old_hash(val.value_hash, val.local_timestamp);
-                    None
+                    Some(val)
                 } else {
                     None
                 }
             })
             .collect()
+    }
+
+    /// remove redundant paths in the network
+    pub fn prune_received_cache(
+        &mut self,
+        labels: Vec<CrdsValueLabel>,
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> HashMap<Pubkey, HashSet<Pubkey>> {
+        let id = &self.id;
+        let crds = &self.crds;
+        let push = &mut self.push;
+        let versioned = labels
+            .into_iter()
+            .filter_map(|label| crds.lookup_versioned(&label));
+
+        let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
+        for val in versioned {
+            let origin = val.value.pubkey();
+            let hash = val.value_hash;
+            let peers = push.prune_received_cache(id, &origin, hash, stakes);
+            for from in peers {
+                prune_map.entry(from).or_default().insert(origin);
+            }
+        }
+        prune_map
     }
 
     pub fn new_push_messages(&mut self, now: u64) -> (Pubkey, HashMap<Pubkey, Vec<CrdsValue>>) {
@@ -147,7 +172,7 @@ impl CrdsGossip {
         }
         if now > 5 * self.push.msg_timeout {
             let min = now - 5 * self.push.msg_timeout;
-            self.push.purge_old_pushed_once_messages(min);
+            self.push.purge_old_received_cache(min);
         }
         if now > self.pull.crds_timeout {
             let min = now - self.pull.crds_timeout;
