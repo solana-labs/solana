@@ -478,6 +478,3 @@ To also see the cluster messages:
 ```bash
 $ RUST_LOG=solana_bench_exchange=info,solana=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```
-
-
-
