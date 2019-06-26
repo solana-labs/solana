@@ -4,9 +4,9 @@ use crate::result::Result;
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use crate::{packet, sigverify};
+use crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::inc_new_counter_debug;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
@@ -20,7 +20,7 @@ impl ClusterInfoVoteListener {
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         sigverify_disabled: bool,
-        sender: Sender<VerifiedPackets>,
+        sender: CrossbeamSender<VerifiedPackets>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self {
         let exit = exit.clone();
@@ -45,7 +45,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sigverify_disabled: bool,
-        sender: &Sender<VerifiedPackets>,
+        sender: &CrossbeamSender<VerifiedPackets>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
         let mut last_ts = 0;

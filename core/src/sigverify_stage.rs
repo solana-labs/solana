@@ -10,9 +10,10 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
+use crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::{datapoint_info, inc_new_counter_info};
 use solana_sdk::timing;
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
@@ -34,7 +35,7 @@ impl SigVerifyStage {
     pub fn new(
         packet_receiver: Receiver<Packets>,
         sigverify_disabled: bool,
-        verified_sender: Sender<VerifiedPackets>,
+        verified_sender: CrossbeamSender<VerifiedPackets>,
     ) -> Self {
         sigverify::init();
         let thread_hdls =
@@ -53,7 +54,7 @@ impl SigVerifyStage {
 
     fn verifier(
         recvr: &Arc<Mutex<PacketReceiver>>,
-        sendr: &Sender<VerifiedPackets>,
+        sendr: &CrossbeamSender<VerifiedPackets>,
         sigverify_disabled: bool,
         id: usize,
     ) -> Result<()> {
@@ -107,7 +108,7 @@ impl SigVerifyStage {
 
     fn verifier_service(
         packet_receiver: Arc<Mutex<PacketReceiver>>,
-        verified_sender: Sender<VerifiedPackets>,
+        verified_sender: CrossbeamSender<VerifiedPackets>,
         sigverify_disabled: bool,
         id: usize,
     ) -> JoinHandle<()> {
@@ -132,7 +133,7 @@ impl SigVerifyStage {
 
     fn verifier_services(
         packet_receiver: PacketReceiver,
-        verified_sender: Sender<VerifiedPackets>,
+        verified_sender: CrossbeamSender<VerifiedPackets>,
         sigverify_disabled: bool,
     ) -> Vec<JoinHandle<()>> {
         let receiver = Arc::new(Mutex::new(packet_receiver));

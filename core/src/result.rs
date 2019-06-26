@@ -17,7 +17,10 @@ pub enum Error {
     AddrParse(std::net::AddrParseError),
     JoinError(Box<dyn Any + Send + 'static>),
     RecvError(std::sync::mpsc::RecvError),
+    TryCrossbeamRecvError(crossbeam_channel::TryRecvError),
+    CrossbeamRecvTimeoutError(crossbeam_channel::RecvTimeoutError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
+    CrossbeamSendError,
     TryRecvError(std::sync::mpsc::TryRecvError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
     TransactionError(transaction::TransactionError),
@@ -44,9 +47,19 @@ impl std::convert::From<std::sync::mpsc::RecvError> for Error {
         Error::RecvError(e)
     }
 }
+impl std::convert::From<crossbeam_channel::TryRecvError> for Error {
+    fn from(e: crossbeam_channel::TryRecvError) -> Error {
+        Error::TryCrossbeamRecvError(e)
+    }
+}
 impl std::convert::From<std::sync::mpsc::TryRecvError> for Error {
     fn from(e: std::sync::mpsc::TryRecvError) -> Error {
         Error::TryRecvError(e)
+    }
+}
+impl std::convert::From<crossbeam_channel::RecvTimeoutError> for Error {
+    fn from(e: crossbeam_channel::RecvTimeoutError) -> Error {
+        Error::CrossbeamRecvTimeoutError(e)
     }
 }
 impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
@@ -67,6 +80,11 @@ impl std::convert::From<cluster_info::ClusterInfoError> for Error {
 impl std::convert::From<reed_solomon_erasure::Error> for Error {
     fn from(e: reed_solomon_erasure::Error) -> Error {
         Error::ErasureError(e)
+    }
+}
+impl<T> std::convert::From<crossbeam_channel::SendError<T>> for Error {
+    fn from(_e: crossbeam_channel::SendError<T>) -> Error {
+        Error::CrossbeamSendError
     }
 }
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {

@@ -10,6 +10,7 @@ use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::{PohRecorder, WorkingBankEntries};
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
+use crossbeam_channel::unbounded;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -50,12 +51,12 @@ impl Tpu {
             &packet_sender,
             &poh_recorder,
         );
-        let (verified_sender, verified_receiver) = channel();
+        let (verified_sender, verified_receiver) = unbounded();
 
         let sigverify_stage =
             SigVerifyStage::new(packet_receiver, sigverify_disabled, verified_sender.clone());
 
-        let (verified_vote_sender, verified_vote_receiver) = channel();
+        let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             &exit,
             cluster_info.clone(),
