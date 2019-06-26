@@ -53,11 +53,14 @@ $ npm install --save @solana/web3.js
 ```
 
 ### BPF program development
-clang-7.0 must be installed to build BPF programs, such as
-`examples/bpf-c-noop/`.  See `bpf-sdk/README.md` for installation details.
+The Solana BPF SDK is located in the `bpf-sdk/` subdirectory if you installed
+solana-web3.js from npmjs.com.
 
-Rust must be installed to build Rust BPF programs, see: https://www.rust-lang.org/install.html such as
-`examples/bpf-rust-noop/`.  See https://www.rust-lang.org/install.html for installation details.
+From a git clone, run `npm run bpf-sdk:install` to fetch the latest BPF SDK.
+
+Additionally Rust must be installed to build Rust BPF programs such as
+`examples/bpf-rust-noop/`.  See https://www.rust-lang.org/install.html for
+installation details.
 
 ## Usage
 
@@ -119,8 +122,9 @@ node_modules/@solana/web3.js/module.flow.js
 See the [examples/](https://github.com/solana-labs/solana-web3.js/tree/master/examples) directory for small snippets.
 
 Standalone examples:
+* Message feed (BPF Rust and C): https://github.com/solana-labs/example-messagefeed
+* Tic-tac-toe (BPF C): https://github.com/solana-labs/example-tictactoe
 * Web wallet: https://github.com/solana-labs/example-webwallet
-* Tic-tac-toe: https://github.com/solana-labs/example-tictactoe
 
 ## Releases
 Releases are available on [Github](https://github.com/solana-labs/solana-web3.js/releases)
