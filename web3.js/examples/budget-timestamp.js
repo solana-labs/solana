@@ -31,9 +31,7 @@ function showBalance() {
       `Account2:       ${account2.publicKey} has a balance of ${toBalance}`,
     );
     console.log(
-      `Contract State: ${
-        contractState.publicKey
-      } has a balance of ${contractStateBalance}`,
+      `Contract State: ${contractState.publicKey} has a balance of ${contractStateBalance}`,
     );
   });
 }
