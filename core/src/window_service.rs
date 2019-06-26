@@ -328,12 +328,6 @@ mod test {
         blob.set_id(&leader_pubkey);
         blob.sign(&leader_keypair);
 
-        // without a Bank and blobs not from me, blob gets thrown out
-        assert_eq!(
-            should_retransmit_and_persist(&blob, None, &cache, &me_id),
-            false
-        );
-
         // with a Bank for slot 0, blob continues
         assert_eq!(
             should_retransmit_and_persist(&blob, Some(bank.clone()), &cache, &me_id),

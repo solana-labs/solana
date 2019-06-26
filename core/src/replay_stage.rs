@@ -346,7 +346,7 @@ impl ReplayStage {
             // Set root first in leader schedule_cache before bank_forks because bank_forks.root
             // is consumed by repair_service to update gossip, so we don't want to get blobs for
             // repair on gossip before we update leader schedule, otherwise they may get dropped.
-            leader_schedule_cache.set_root(new_root);
+            leader_schedule_cache.set_root(rooted_banks.last().unwrap());
             bank_forks.write().unwrap().set_root(new_root);
             Self::handle_new_root(&bank_forks, progress);
             root_bank_sender.send(rooted_banks)?;
