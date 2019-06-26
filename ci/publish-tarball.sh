@@ -120,16 +120,16 @@ if [[ "$CI_OS_NAME" = linux ]]; then
   MAYBE_METRICS_TARBALL=solana-metrics.tar.bz2
 fi
 
-echo --- Saving build artifacts
 source ci/upload-ci-artifact.sh
-upload-ci-artifact solana-release-$TARGET.tar.bz2
-
-if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
-  echo Skipped due to DO_NOT_PUBLISH_TAR
-  exit 0
-fi
 
 for file in solana-release-$TARGET.tar.bz2 solana-install-init-"$TARGET"* $MAYBE_METRICS_TARBALL; do
+  upload-ci-artifact "$file"
+
+  if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
+    echo "Skipped $file due to DO_NOT_PUBLISH_TAR"
+    continue
+  fi
+
   if [[ -n $BUILDKITE ]]; then
     echo --- AWS S3 Store: "$file"
     (
