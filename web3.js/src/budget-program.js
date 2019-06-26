@@ -277,7 +277,7 @@ export class BudgetProgram {
 
       default:
         throw new Error(
-          `A maximum of two conditions are support: ${conditions.length} provided`,
+          `A maximum of two conditions are supported: ${conditions.length} provided`,
         );
     }
   }
