@@ -74,7 +74,7 @@ impl Stake {
             return 0;
         }
 
-        // curr slot   |   0   |  1  |  2   ... | 100  | 101 | 102 | 103
+        // curr epoch  |   0   |  1  |  2   ... | 100  | 101 | 102 | 103
         // action      | activate    |        de-activate    |     |
         //             |   |   |     |          |  |   |     |     |
         //             |   v   |     |          |  v   |     |     |
@@ -303,10 +303,10 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     return Err(InstructionError::InsufficientFunds);
                 }
                 self.account.lamports -= lamports;
+                to.account.lamports += lamports;
                 // Adjust the stake (in case balance dropped below stake)
                 stake.stake = cmp::min(stake.stake, self.account.lamports);
-                to.account.lamports += lamports;
-                Ok(())
+                self.set_state(&StakeState::Stake(stake))
             }
             StakeState::Uninitialized => {
                 if lamports > self.account.lamports {
