@@ -79,7 +79,7 @@ pub fn replicator_accounts(bank: &Bank) -> HashMap<Pubkey, Account> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
@@ -182,14 +182,14 @@ mod tests {
         assert_eq!(storage_accounts.claim_points(), 0);
     }
 
-    fn create_storage_accounts_with_credits(
+    pub fn create_storage_accounts_with_credits(
         credits: u64,
     ) -> ((Pubkey, Account), (Pubkey, Account)) {
         let validator_pubkey = Pubkey::new_rand();
         let replicator_pubkey = Pubkey::new_rand();
 
         let mut validator_account =
-            Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &Pubkey::default());
+            Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
         let mut validator = StorageAccount::new(validator_pubkey, &mut validator_account);
         validator
             .initialize_validator_storage(validator_pubkey)
@@ -205,7 +205,7 @@ mod tests {
         validator_account.set_state(storage_contract).unwrap();
 
         let mut replicator_account =
-            Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &Pubkey::default());
+            Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
         let mut replicator = StorageAccount::new(replicator_pubkey, &mut replicator_account);
         replicator
             .initialize_replicator_storage(replicator_pubkey)

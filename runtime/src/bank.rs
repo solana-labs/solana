@@ -1466,8 +1466,13 @@ mod tests {
         let ((vote_id, mut vote_account), stake) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
-        // set up stakes and vote accounts
+        let ((validator_id, validator_account), (replicator_id, replicator_account)) =
+            crate::storage_utils::tests::create_storage_accounts_with_credits(100);
+
+        // set up stakes,vote, and storage accounts
         bank.store_account(&stake.0, &stake.1);
+        bank.store_account(&validator_id, &validator_account);
+        bank.store_account(&replicator_id, &replicator_account);
 
         // generate some rewards
         let mut vote_state = VoteState::from(&vote_account).unwrap();
