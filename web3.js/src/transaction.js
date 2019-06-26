@@ -203,9 +203,7 @@ export class Transaction {
 
     if (numRequiredSignatures > this.signatures.length) {
       throw new Error(
-        `Insufficent signatures: expected ${numRequiredSignatures} but got ${
-          this.signatures.length
-        }`,
+        `Insufficent signatures: expected ${numRequiredSignatures} but got ${this.signatures.length}`,
       );
     }
 
