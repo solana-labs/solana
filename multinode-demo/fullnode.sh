@@ -488,7 +488,9 @@ while true; do
         new_state_archive="$SOLANA_RSYNC_CONFIG_DIR"/new_state.tgz
         (
           rm -rf "$new_state_dir" "$new_state_archive"
-          cp -a "$state_dir" "$new_state_dir"
+          mkdir -p "$new_state_dir"
+          cp -a "$state_dir"/snapshots "$new_state_dir"
+          cp -a "$state_dir"/accounts "$new_state_dir"
           cd "$new_state_dir"
           tar zcfS "$new_state_archive" ./*
         )
