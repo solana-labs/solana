@@ -33,6 +33,7 @@ pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should b
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
 pub const BLOB_DATA_ALIGN: usize = 16; // safe for erasure input pointers, gf.c needs 16byte-aligned buffers
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
+pub const PACKETS_PER_BLOB: usize = 256; // reasonable estimate for payment packets per blob based on ~200b transaction size
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
