@@ -422,7 +422,8 @@ while true; do
         SECONDS=0
         set -x
         cd "$SOLANA_RSYNC_CONFIG_DIR"
-        $rsync -qPr "${rsync_entrypoint_url:?}"/config/{ledger,state.tgz} .
+        $rsync -qPr "${rsync_entrypoint_url:?}"/config/ledger .
+        $rsync -qP "${rsync_entrypoint_url:?}"/config/state.tgz .
         echo "Fetched snapshot in $SECONDS seconds"
       ) || true
     fi
