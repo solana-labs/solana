@@ -465,19 +465,41 @@ impl Bank {
 
         let storage_points = self.storage_accounts.write().unwrap().claim_points();
 
+        let (validator_point_value, storage_point_value) = self.check_point_values(
+            validator_rewards / validator_points as f64,
+            storage_rewards / storage_points as f64,
+        );
         self.store_account(
             &rewards::id(),
-            &rewards::create_account(
-                1,
-                validator_rewards / validator_points as f64,
-                storage_rewards / storage_points as f64,
-            ),
+            &rewards::create_account(1, validator_point_value, storage_point_value),
         );
 
         self.capitalization.fetch_add(
             (validator_rewards + storage_rewards) as usize,
             Ordering::Relaxed,
         );
+    }
+
+    // If the point values are not `normal`, bring them back into range and
+    // set them to the last value or 0.
+    fn check_point_values(
+        &self,
+        mut validator_point_value: f64,
+        mut storage_point_value: f64,
+    ) -> (f64, f64) {
+        let rewards = rewards::Rewards::from(
+            &self
+                .get_account(&rewards::id())
+                .unwrap_or_else(|| rewards::create_account(1, 0.0, 0.0)),
+        )
+        .unwrap_or_else(Default::default);
+        if !validator_point_value.is_normal() {
+            validator_point_value = rewards.validator_point_value;
+        }
+        if !storage_point_value.is_normal() {
+            storage_point_value = rewards.storage_point_value
+        }
+        (validator_point_value, storage_point_value)
     }
 
     fn set_hash(&self) -> bool {
@@ -2627,5 +2649,24 @@ mod tests {
         assert!(dbank.rc.update_from_stream(&mut reader).is_ok());
         assert_eq!(dbank.get_balance(&key.pubkey()), 10);
         bank.compare_bank(&dbank);
+    }
+
+    #[test]
+    fn test_check_point_values() {
+        let (genesis_block, _) = create_genesis_block(500);
+        let bank = Arc::new(Bank::new(&genesis_block));
+
+        // check that point values are 0 if no previous value was known and current values are not normal
+        assert_eq!(
+            bank.check_point_values(std::f64::INFINITY, std::f64::NAN),
+            (0.0, 0.0)
+        );
+
+        bank.store_account(&rewards::id(), &rewards::create_account(1, 1.0, 1.0));
+        // check that point values are the previous value if current values are not normal
+        assert_eq!(
+            bank.check_point_values(std::f64::INFINITY, std::f64::NAN),
+            (1.0, 1.0)
+        );
     }
 }
