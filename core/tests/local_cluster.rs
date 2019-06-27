@@ -118,7 +118,6 @@ fn test_leader_failure_4() {
     );
 }
 #[test]
-#[ignore]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     let mut validator_config = ValidatorConfig::default();
@@ -276,7 +275,6 @@ fn test_fail_entry_verification_leader() {
 }
 
 #[test]
-#[ignore]
 fn test_repairman_catchup() {
     run_repairman_catchup(3);
 }
