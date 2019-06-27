@@ -4,11 +4,14 @@ MD_SRCS=$(wildcard src/*.md)
 
 SVG_IMGS=$(BOB_SRCS:art/%.bob=src/img/%.svg) $(MSC_SRCS:art/%.msc=src/img/%.svg)
 
-all: html/index.html
+TARGET=html/index.html
+TEST_STAMP=src/tests.ok
 
-test: src/tests.ok
+all: $(TARGET)
 
-open: all
+test: $(TEST_STAMP)
+
+open: $(TEST_STAMP)
 	mdbook build --open
 
 watch: $(SVG_IMGS)
@@ -26,11 +29,11 @@ src/%.md: %.md
 	@mkdir -p $(@D)
 	@cp $< $@
 
-src/tests.ok: $(SVG_IMGS) $(MD_SRCS)
+$(TEST_STAMP): $(TARGET)
 	mdbook test
 	touch $@
 
-html/index.html: src/tests.ok
+$(TARGET): $(SVG_IMGS) $(MD_SRCS)
 	mdbook build
 
 clean:
