@@ -341,15 +341,10 @@ fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64)
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-pub fn fund_keys<T: Client>(
-    client: &T,
-    source: &Keypair,
-    dests: &[Keypair],
-    total: u64,
-    lamports_per_signature: u64,
-) {
+pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Keypair], total: u64) {
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
+    let lamports_per_account = total / (notfunded.len() as u64 + 1);
 
     println!("funding keys {}", dests.len());
     while !notfunded.is_empty() {
@@ -362,7 +357,7 @@ pub fn fund_keys<T: Client>(
                 break;
             }
             let start = notfunded.len() - max_units as usize;
-            let per_unit = (f.1 - max_units * lamports_per_signature) / max_units;
+            let per_unit = (f.1 - lamports_per_account) / max_units;
             let moves: Vec<_> = notfunded[start..]
                 .iter()
                 .map(|k| (k.pubkey(), per_unit))
@@ -587,9 +582,11 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> Vec<Keypair> {
     seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
 
-    let mut total_keys = 1;
+    let mut total_keys = 0;
+    let mut counter = 1;
     while total_keys < count {
-        total_keys *= MAX_SPENDS_PER_TX;
+        total_keys += MAX_SPENDS_PER_TX.pow(counter);
+        counter += 1;
     }
     rnd.gen_n_keypairs(total_keys)
 }
@@ -616,18 +613,12 @@ pub fn generate_and_fund_keypairs<T: Client>(
         let (_, fee_calculator) = client.get_recent_blockhash().unwrap();
         let extra =
             lamports_per_account - last_keypair_balance + fee_calculator.max_lamports_per_signature;
-        let total = extra * (keypairs.len() as u64);
+        let total = extra * (1 + keypairs.len() as u64);
         if client.get_balance(&funding_pubkey.pubkey()).unwrap_or(0) < total {
             airdrop_lamports(client, &drone_addr.unwrap(), funding_pubkey, total)?;
         }
         info!("adding more lamports {}", extra);
-        fund_keys(
-            client,
-            funding_pubkey,
-            &keypairs,
-            total,
-            fee_calculator.max_lamports_per_signature,
-        );
+        fund_keys(client, funding_pubkey, &keypairs, total);
     }
 
     // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
