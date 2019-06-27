@@ -318,7 +318,6 @@ impl Blocktree {
         let mut write_batch = batch_processor.batch()?;
 
         let new_blobs: Vec<_> = new_blobs.into_iter().collect();
-        let mut recovered_data = vec![];
 
         let mut prev_inserted_blob_datas = HashMap::new();
         let mut prev_inserted_coding = HashMap::new();
@@ -357,50 +356,26 @@ impl Blocktree {
             &mut write_batch,
         )?;
 
-        for (&(slot, _), erasure_meta) in erasure_meta_working_set.iter_mut() {
-            let index = index_working_set.get_mut(&slot).expect("Index");
-
-            if let Some((data, coding)) = try_erasure_recover(
-                &self.db,
-                &self.session,
-                &erasure_meta,
-                index,
-                slot,
-                &prev_inserted_blob_datas,
-                &prev_inserted_coding,
-            )? {
-                for data_blob in data {
-                    recovered_data.push(data_blob);
-                }
-
-                for coding_blob in coding {
-                    index.coding_mut().set_present(coding_blob.index(), true);
-
-                    write_batch.put_bytes::<cf::Coding>(
-                        (coding_blob.slot(), coding_blob.index()),
-                        &coding_blob.data[..coding_blob.data_size() as usize],
-                    )?;
-
-                    prev_inserted_coding.insert((slot, coding_blob.index()), coding_blob);
-                }
-            }
-        }
-
-        if !recovered_data.is_empty() {
-            info!(
-                "[insert_data_blobs] recovered {} data blobs",
-                recovered_data.len()
-            );
-        }
-
-        insert_data_blob_batch(
-            recovered_data.iter(),
-            &db,
-            &mut slot_meta_working_set,
+        let recovered_data_opt = handle_recovery(
+            &self.db,
+            &self.session,
+            &erasure_meta_working_set,
             &mut index_working_set,
-            &mut prev_inserted_blob_datas,
+            &prev_inserted_blob_datas,
+            &mut prev_inserted_coding,
             &mut write_batch,
         )?;
+
+        if let Some(recovered_data) = recovered_data_opt {
+            insert_data_blob_batch(
+                recovered_data.iter(),
+                &self.db,
+                &mut slot_meta_working_set,
+                &mut index_working_set,
+                &mut prev_inserted_blob_datas,
+                &mut write_batch,
+            )?;
+        }
 
         // Handle chaining for the working set
         handle_chaining(&db, &mut write_batch, &slot_meta_working_set)?;
@@ -554,12 +529,13 @@ impl Blocktree {
     {
         let mut batch_processor = self.batch_processor.write().unwrap();
         let mut writebatch = batch_processor.batch()?;
-        let mut recovered_data = vec![];
+
         let mut erasure_metas = HashMap::new();
         let mut slot_meta_working_set = HashMap::new();
         let mut index_working_set = HashMap::new();
 
         let mut prev_inserted_coding = HashMap::new();
+        let mut prev_inserted_blob_datas = HashMap::new();
 
         for blob_item in blobs {
             let blob = blob_item.borrow();
@@ -600,52 +576,26 @@ impl Blocktree {
                 .or_insert_with(|| blob.clone());
         }
 
-        let mut prev_inserted_blob_datas = HashMap::new();
-
-        for (&(slot, _), erasure_meta) in erasure_metas.iter_mut() {
-            let index = index_working_set.get_mut(&slot).expect("Index");
-
-            if let Some((data, coding)) = try_erasure_recover(
-                &self.db,
-                &self.session,
-                &erasure_meta,
-                index,
-                slot,
-                &prev_inserted_blob_datas,
-                &prev_inserted_coding,
-            )? {
-                for data_blob in data {
-                    recovered_data.push(data_blob);
-                }
-
-                for coding_blob in coding {
-                    index.coding_mut().set_present(coding_blob.index(), true);
-
-                    writebatch.put_bytes::<cf::Coding>(
-                        (coding_blob.slot(), coding_blob.index()),
-                        &coding_blob.data[..coding_blob.data_size() as usize],
-                    )?;
-
-                    prev_inserted_coding.insert((slot, coding_blob.index()), coding_blob);
-                }
-            }
-        }
-
-        if !recovered_data.is_empty() {
-            info!(
-                "[put_many_coding_blobs] recovered {} data blobs",
-                recovered_data.len()
-            );
-        }
-
-        insert_data_blob_batch(
-            recovered_data.iter(),
+        let recovered_data_opt = handle_recovery(
             &self.db,
-            &mut slot_meta_working_set,
+            &self.session,
+            &erasure_metas,
             &mut index_working_set,
-            &mut prev_inserted_blob_datas,
+            &prev_inserted_blob_datas,
+            &mut prev_inserted_coding,
             &mut writebatch,
         )?;
+
+        if let Some(recovered_data) = recovered_data_opt {
+            insert_data_blob_batch(
+                recovered_data.iter(),
+                &self.db,
+                &mut slot_meta_working_set,
+                &mut index_working_set,
+                &mut prev_inserted_blob_datas,
+                &mut writebatch,
+            )?;
+        }
 
         // Handle chaining for the working set
         handle_chaining(&self.db, &mut writebatch, &slot_meta_working_set)?;
@@ -1036,7 +986,7 @@ where
         if inserted {
             index_working_set
                 .get_mut(&blob.slot())
-                .unwrap()
+                .expect("Index must be present for all data blobs")
                 .data_mut()
                 .set_present(blob.index(), true);
         }
@@ -1518,6 +1468,66 @@ fn is_newly_completed_slot(slot_meta: &SlotMeta, backup_slot_meta: &Option<SlotM
     slot_meta.is_full()
         && (backup_slot_meta.is_none()
             || slot_meta.consumed != backup_slot_meta.as_ref().unwrap().consumed)
+}
+
+fn handle_recovery(
+    db: &Database,
+    session: &Session,
+    erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
+    index_working_set: &mut HashMap<u64, Index>,
+    prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
+    prev_inserted_coding: &mut HashMap<(u64, u64), Blob>,
+    writebatch: &mut WriteBatch,
+) -> Result<Option<Vec<Blob>>> {
+    let mut recovered_data = vec![];
+    let index_cf = db.column::<cf::Index>();
+
+    for (&(slot, _), erasure_meta) in erasure_metas.iter() {
+        let index = index_working_set.get_mut(&slot).expect("Index");
+
+        if let Some((mut data, coding)) = try_erasure_recover(
+            db,
+            session,
+            &erasure_meta,
+            index,
+            slot,
+            &prev_inserted_blob_datas,
+            &prev_inserted_coding,
+        )? {
+            recovered_data.append(&mut data);
+
+            for coding_blob in coding {
+                index.coding_mut().set_present(coding_blob.index(), true);
+
+                writebatch.put_bytes::<cf::Coding>(
+                    (coding_blob.slot(), coding_blob.index()),
+                    &coding_blob.data[..coding_blob.data_size() as usize],
+                )?;
+
+                prev_inserted_coding.insert((slot, coding_blob.index()), coding_blob);
+            }
+        }
+    }
+
+    if !recovered_data.is_empty() {
+        info!(
+            "[handle_recovery] recovered {} data blobs",
+            recovered_data.len()
+        );
+
+        for blob in recovered_data.iter() {
+            let _ = index_working_set.entry(blob.slot()).or_insert_with(|| {
+                index_cf
+                    .get(blob.slot())
+                    .unwrap()
+                    .unwrap_or_else(|| Index::new(blob.slot()))
+            });
+        }
+
+        Ok(Some(recovered_data))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Attempts recovery using erasure coding
