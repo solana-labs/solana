@@ -138,23 +138,25 @@ impl Session {
 
             if n < NUM_DATA {
                 let mut blob = Blob::new(&blocks[n]);
+                blob.meta.size = blob.data_size() as usize;
 
-                data_size = blob.data_size() as usize - BLOB_HEADER_SIZE;
+                data_size = blob.data_size() as usize;
                 idx = n as u64 + block_start_idx;
                 first_byte = blob.data[0];
 
-                blob.set_size(data_size);
                 recovered_data.push(blob);
             } else {
                 let mut blob = Blob::default();
-                blob.data_mut()[..size].copy_from_slice(&blocks[n]);
+                blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size].copy_from_slice(&blocks[n]);
+                blob.meta.size = size;
+
                 data_size = size;
-                idx = (n as u64 + block_start_idx) - NUM_DATA as u64;
+                idx = n as u64 + block_start_idx;
                 first_byte = blob.data[0];
 
                 blob.set_slot(slot);
                 blob.set_index(idx);
-                blob.set_size(data_size);
+                blob.set_coding();
                 recovered_coding.push(blob);
             }
 
@@ -240,7 +242,7 @@ impl CodingGenerator {
             if {
                 let mut coding_ptrs: Vec<_> = coding_blobs
                     .iter_mut()
-                    .map(|blob| &mut blob.data_mut()[..max_data_size])
+                    .map(|blob| &mut blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + max_data_size])
                     .collect();
 
                 self.session.encode(&data_ptrs, coding_ptrs.as_mut_slice())
@@ -427,7 +429,7 @@ pub mod test {
     }
 
     #[test]
-    fn test_erasure_generate_coding() {
+    fn test_generate_coding() {
         solana_logger::setup();
 
         // trivial case
@@ -449,10 +451,10 @@ pub mod test {
                 assert_eq!(coding_blobs.len(), NUM_CODING);
 
                 for j in 0..NUM_CODING {
-                    assert_eq!(
-                        coding_blobs[j].read().unwrap().index(),
-                        ((i / NUM_DATA) * NUM_DATA + j) as u64
-                    );
+                    let coding_blob = coding_blobs[j].read().unwrap();
+
+                    //assert_eq!(coding_blob.index(), (i * NUM_DATA + j % NUM_CODING) as u64);
+                    assert!(coding_blob.is_coding());
                 }
                 test_toss_and_recover(
                     &coding_generator.session,
@@ -738,8 +740,8 @@ pub mod test {
             .into_iter()
             .map(|_| {
                 let mut blob = Blob::default();
-                blob.data_mut()[..data.len()].copy_from_slice(&data);
-                blob.set_size(data.len());
+                blob.data_mut()[..].copy_from_slice(&data);
+                blob.set_size(BLOB_DATA_SIZE);
                 blob.sign(&Keypair::new());
                 Arc::new(RwLock::new(blob))
             })
@@ -771,7 +773,7 @@ pub mod test {
                     if i < NUM_DATA {
                         &mut blob.data[..size]
                     } else {
-                        &mut blob.data_mut()[..size]
+                        &mut blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size]
                     }
                 })
                 .collect();

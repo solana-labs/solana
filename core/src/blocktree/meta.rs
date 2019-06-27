@@ -105,6 +105,12 @@ impl CodingIndex {
     pub fn set_present(&mut self, index: u64, presence: bool) {
         self.index.insert(index, presence);
     }
+
+    pub fn set_many_present(&mut self, presence: impl IntoIterator<Item = (u64, bool)>) {
+        for (idx, present) in presence.into_iter() {
+            self.set_present(idx, present);
+        }
+    }
 }
 
 impl DataIndex {
@@ -121,6 +127,12 @@ impl DataIndex {
 
     pub fn set_present(&mut self, index: u64, presence: bool) {
         self.index.insert(index, presence);
+    }
+
+    pub fn set_many_present(&mut self, presence: impl IntoIterator<Item = (u64, bool)>) {
+        for (idx, present) in presence.into_iter() {
+            self.set_present(idx, present);
+        }
     }
 }
 
@@ -222,46 +234,56 @@ impl ErasureMeta {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    const NUM_DATA: u64 = super::NUM_DATA as u64;
-    const NUM_CODING: u64 = super::NUM_CODING as u64;
+    use rand::{seq::SliceRandom, thread_rng};
+    use std::iter::repeat;
 
     #[test]
     fn test_erasure_meta_status() {
+        use ErasureMetaStatus::*;
+
         let set_index = 0;
 
         let mut e_meta = ErasureMeta::new(set_index);
-        e_meta.size = 1;
+        let mut rng = thread_rng();
         let mut index = Index::new(0);
+        e_meta.size = 1;
 
-        assert_eq!(e_meta.status(&index), ErasureMetaStatus::StillNeed(8));
+        let data_indexes = 0..NUM_DATA as u64;
+        let coding_indexes = 0..NUM_CODING as u64;
 
-        for i in 0..NUM_DATA {
-            index.data_mut().set_present(i, true);
+        assert_eq!(e_meta.status(&index), StillNeed(NUM_DATA));
+
+        index
+            .data_mut()
+            .set_many_present(data_indexes.clone().zip(repeat(true)));
+
+        assert_eq!(e_meta.status(&index), DataFull);
+
+        index
+            .coding_mut()
+            .set_many_present(coding_indexes.clone().zip(repeat(true)));
+
+        for &idx in data_indexes
+            .clone()
+            .collect::<Vec<_>>()
+            .choose_multiple(&mut rng, NUM_DATA)
+        {
+            index.data_mut().set_present(idx, false);
+
+            assert_eq!(e_meta.status(&index), CanRecover);
         }
 
-        assert_eq!(e_meta.status(&index), ErasureMetaStatus::DataFull);
+        index
+            .data_mut()
+            .set_many_present(data_indexes.zip(repeat(true)));
 
-        index.data_mut().set_present(NUM_DATA - 1, false);
+        for &idx in coding_indexes
+            .collect::<Vec<_>>()
+            .choose_multiple(&mut rng, NUM_CODING)
+        {
+            index.coding_mut().set_present(idx, false);
 
-        assert_eq!(e_meta.status(&index), ErasureMetaStatus::StillNeed(1));
-
-        for i in 0..NUM_DATA - 2 {
-            index.data_mut().set_present(i, false);
-        }
-
-        assert_eq!(e_meta.status(&index), ErasureMetaStatus::StillNeed(7));
-
-        for i in 0..NUM_CODING {
-            index.coding_mut().set_present(i, true);
-        }
-
-        index.data_mut().set_present(NUM_DATA - 1, false);
-
-        for i in 0..NUM_DATA - 1 {
-            index.data_mut().set_present(i, true);
-
-            assert_eq!(e_meta.status(&index), ErasureMetaStatus::CanRecover);
+            assert_eq!(e_meta.status(&index), DataFull);
         }
     }
 }
