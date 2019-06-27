@@ -37,7 +37,7 @@ pub enum BudgetInstruction {
 fn initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
     let mut keys = vec![];
     if let BudgetExpr::Pay(payment) = &expr {
-        keys.push(AccountMeta::new(payment.to, false));
+        keys.push(AccountMeta::new_credit_only(payment.to, false));
     }
     keys.push(AccountMeta::new(*contract, false));
     Instruction::new(
@@ -128,7 +128,7 @@ pub fn apply_timestamp(
         AccountMeta::new(*contract, false),
     ];
     if from != to {
-        account_metas.push(AccountMeta::new(*to, false));
+        account_metas.push(AccountMeta::new_credit_only(*to, false));
     }
     Instruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), account_metas)
 }
@@ -139,7 +139,7 @@ pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruc
         AccountMeta::new(*contract, false),
     ];
     if from != to {
-        account_metas.push(AccountMeta::new(*to, false));
+        account_metas.push(AccountMeta::new_credit_only(*to, false));
     }
     Instruction::new(id(), &BudgetInstruction::ApplySignature, account_metas)
 }
@@ -147,9 +147,9 @@ pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruc
 /// Apply account data to a contract waiting on an AccountData witness.
 pub fn apply_account_data(witness_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*witness_pubkey, false),
+        AccountMeta::new_credit_only(*witness_pubkey, false),
         AccountMeta::new(*contract, false),
-        AccountMeta::new(*to, false),
+        AccountMeta::new_credit_only(*to, false),
     ];
     Instruction::new(id(), &BudgetInstruction::ApplyAccountData, account_metas)
 }
