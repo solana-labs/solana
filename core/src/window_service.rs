@@ -232,9 +232,15 @@ impl WindowService {
                             blob_filter(
                                 &id,
                                 blob,
-                                bank_forks
-                                    .as_ref()
-                                    .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
+                                bank_forks.as_ref().and_then(|bank_forks| {
+                                    match bank_forks.read() {
+                                        Ok(forks) => Some(forks.working_bank()),
+                                        Err(e) => {
+                                            error!("window error: {:?}", e);
+                                            None
+                                        }
+                                    }
+                                }),
                             )
                         },
                         &thread_pool,

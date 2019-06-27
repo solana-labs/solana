@@ -660,7 +660,7 @@ impl ReplayStage {
                 }
                 let leader = leader_schedule_cache
                     .slot_leader_at(child_id, Some(&parent_bank))
-                    .unwrap();
+                    .expect("slot leader from cached leader schedule");
                 info!("new fork:{} parent:{}", child_id, parent_id);
                 forks.insert(Bank::new_from_parent(&parent_bank, &leader, child_id));
             }
