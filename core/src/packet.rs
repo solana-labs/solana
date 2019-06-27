@@ -1,5 +1,7 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
+use crate::cuda_runtime::PinnedVec;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
+use crate::recycler::{Recycler, Reset};
 use crate::result::{Error, Result};
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
@@ -16,6 +18,7 @@ use std::fmt;
 use std::io;
 use std::io::Cursor;
 use std::io::Write;
+use std::mem;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::ops::{Deref, DerefMut};
@@ -124,21 +127,61 @@ impl Meta {
 
 #[derive(Debug, Clone)]
 pub struct Packets {
-    pub packets: Vec<Packet>,
+    pub packets: PinnedVec<Packet>,
+
+    recycler: Option<PacketsRecycler>,
+}
+
+impl Drop for Packets {
+    fn drop(&mut self) {
+        if let Some(ref recycler) = self.recycler {
+            let old = mem::replace(&mut self.packets, PinnedVec::default());
+            recycler.recycle(old)
+        }
+    }
+}
+
+impl Reset for Packets {
+    fn reset(&mut self) {
+        self.packets.resize(0, Packet::default());
+    }
+}
+
+impl Reset for PinnedVec<Packet> {
+    fn reset(&mut self) {
+        self.resize(0, Packet::default());
+    }
 }
 
 //auto derive doesn't support large arrays
 impl Default for Packets {
     fn default() -> Packets {
+        let packets = PinnedVec::with_capacity(NUM_RCVMMSGS);
         Packets {
-            packets: Vec::with_capacity(NUM_RCVMMSGS),
+            packets,
+            recycler: None,
         }
     }
 }
 
+pub type PacketsRecycler = Recycler<PinnedVec<Packet>>;
+
 impl Packets {
     pub fn new(packets: Vec<Packet>) -> Self {
-        Self { packets }
+        let packets = PinnedVec::from_vec(packets);
+        Self {
+            packets,
+            recycler: None,
+        }
+    }
+
+    pub fn new_with_recycler(recycler: PacketsRecycler, size: usize, name: &'static str) -> Self {
+        let mut packets = recycler.allocate(name);
+        packets.reserve_and_pin(size);
+        Packets {
+            packets,
+            recycler: Some(recycler),
+        }
     }
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
@@ -516,9 +559,8 @@ impl Blob {
     }
 
     // other side of store_packets
-    pub fn load_packets(&self) -> Vec<Packet> {
+    pub fn load_packets(&self, packets: &mut PinnedVec<Packet>) {
         // rough estimate
-        let mut packets: Vec<Packet> = Vec::with_capacity(self.size() / PACKET_DATA_SIZE);
         let mut pos = 0;
         let size_len = bincode::serialized_size(&0usize).unwrap() as usize;
 
@@ -538,7 +580,6 @@ impl Blob {
             pos += size;
             packets.push(packet);
         }
-        packets
     }
 
     pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
@@ -652,7 +693,7 @@ mod tests {
         // test that the address is actually being updated
         let send_addr = socketaddr!([127, 0, 0, 1], 123);
         let packets = vec![Packet::default()];
-        let mut msgs = Packets { packets };
+        let mut msgs = Packets::new(packets);
         msgs.set_addr(&send_addr);
         assert_eq!(SocketAddr::from(msgs.packets[0].meta.addr()), send_addr);
     }
@@ -678,7 +719,7 @@ mod tests {
 
         assert_eq!(recvd, p.packets.len());
 
-        for m in p.packets {
+        for m in &p.packets {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }
@@ -810,10 +851,12 @@ mod tests {
 
         let blobs = packets_to_blobs(&packets[..]);
 
-        let reconstructed_packets: Vec<Packet> =
-            blobs.iter().flat_map(|b| b.load_packets()).collect();
+        let mut reconstructed_packets = PinnedVec::default();
+        blobs
+            .iter()
+            .for_each(|b| b.load_packets(&mut reconstructed_packets));
 
-        assert_eq!(reconstructed_packets, packets);
+        assert_eq!(reconstructed_packets[..], packets[..]);
     }
 
     #[test]
@@ -861,5 +904,14 @@ mod tests {
         b.set_size(80);
         b.sign(&k);
         assert!(b.verify());
+    }
+
+    #[test]
+    fn test_packets_reset() {
+        let mut packets = Packets::default();
+        packets.packets.resize(10, Packet::default());
+        assert_eq!(packets.packets.len(), 10);
+        packets.reset();
+        assert_eq!(packets.packets.len(), 0);
     }
 }

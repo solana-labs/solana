@@ -5,10 +5,13 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if the `cuda` feature is enabled with `--features=cuda`.
 
+use crate::cuda_runtime::PinnedVec;
 use crate::packet::Packets;
+use crate::recycler::Recycler;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify;
+use crate::sigverify::TxOffset;
 use crate::streamer::{self, PacketReceiver};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::{datapoint_info, inc_new_counter_info};
@@ -19,7 +22,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
 #[cfg(feature = "cuda")]
-const RECV_BATCH_MAX: usize = 60_000;
+const RECV_BATCH_MAX: usize = 5_000;
 
 #[cfg(not(feature = "cuda"))]
 const RECV_BATCH_MAX: usize = 1000;
@@ -43,11 +46,16 @@ impl SigVerifyStage {
         Self { thread_hdls }
     }
 
-    fn verify_batch(batch: Vec<Packets>, sigverify_disabled: bool) -> VerifiedPackets {
+    fn verify_batch(
+        batch: Vec<Packets>,
+        sigverify_disabled: bool,
+        recycler: &Recycler<TxOffset>,
+        recycler_out: &Recycler<PinnedVec<u8>>,
+    ) -> VerifiedPackets {
         let r = if sigverify_disabled {
             sigverify::ed25519_verify_disabled(&batch)
         } else {
-            sigverify::ed25519_verify(&batch)
+            sigverify::ed25519_verify(&batch, recycler, recycler_out)
         };
         batch.into_iter().zip(r).collect()
     }
@@ -57,6 +65,8 @@ impl SigVerifyStage {
         sendr: &CrossbeamSender<VerifiedPackets>,
         sigverify_disabled: bool,
         id: usize,
+        recycler: &Recycler<TxOffset>,
+        recycler_out: &Recycler<PinnedVec<u8>>,
     ) -> Result<()> {
         let (batch, len, recv_time) = streamer::recv_batch(
             &recvr.lock().expect("'recvr' lock in fn verifier"),
@@ -69,11 +79,11 @@ impl SigVerifyStage {
         debug!(
             "@{:?} verifier: verifying: {} id: {}",
             timing::timestamp(),
-            batch.len(),
+            len,
             id
         );
 
-        let verified_batch = Self::verify_batch(batch, sigverify_disabled);
+        let verified_batch = Self::verify_batch(batch, sigverify_disabled, recycler, recycler_out);
         inc_new_counter_info!("sigverify_stage-verified_packets_send", len);
 
         if sendr.send(verified_batch).is_err() {
@@ -114,17 +124,26 @@ impl SigVerifyStage {
     ) -> JoinHandle<()> {
         Builder::new()
             .name(format!("solana-verifier-{}", id))
-            .spawn(move || loop {
-                if let Err(e) =
-                    Self::verifier(&packet_receiver, &verified_sender, sigverify_disabled, id)
-                {
-                    match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::SendError => {
-                            break;
+            .spawn(move || {
+                let recycler = Recycler::default();
+                let recycler_out = Recycler::default();
+                loop {
+                    if let Err(e) = Self::verifier(
+                        &packet_receiver,
+                        &verified_sender,
+                        sigverify_disabled,
+                        id,
+                        &recycler,
+                        &recycler_out,
+                    ) {
+                        match e {
+                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                            Error::SendError => {
+                                break;
+                            }
+                            _ => error!("{:?}", e),
                         }
-                        _ => error!("{:?}", e),
                     }
                 }
             })

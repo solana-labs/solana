@@ -1,4 +1,5 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
+use solana::packet::PacketsRecycler;
 use solana::packet::{Packet, Packets, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
@@ -16,7 +17,7 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
     let mut msgs = Packets::default();
     msgs.packets.resize(10, Packet::default());
-    for w in &mut msgs.packets {
+    for w in msgs.packets.iter_mut() {
         w.meta.size = PACKET_DATA_SIZE;
         w.meta.set_addr(&addr);
     }
@@ -74,6 +75,7 @@ fn main() -> Result<()> {
 
     let mut read_channels = Vec::new();
     let mut read_threads = Vec::new();
+    let recycler = PacketsRecycler::default();
     for _ in 0..num_sockets {
         let read = solana_netutil::bind_to(port, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
@@ -83,7 +85,13 @@ fn main() -> Result<()> {
 
         let (s_reader, r_reader) = channel();
         read_channels.push(r_reader);
-        read_threads.push(receiver(Arc::new(read), &exit, s_reader));
+        read_threads.push(receiver(
+            Arc::new(read),
+            &exit,
+            s_reader,
+            recycler.clone(),
+            "bench-streamer-test",
+        ));
     }
 
     let t_producer1 = producer(&addr, exit.clone());

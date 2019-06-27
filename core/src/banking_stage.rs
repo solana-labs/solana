@@ -818,6 +818,9 @@ impl BankingStage {
         packet_indexes: Vec<usize>,
     ) {
         if !packet_indexes.is_empty() {
+            if unprocessed_packets.len() > 400 {
+                unprocessed_packets.remove(0);
+            }
             unprocessed_packets.push((packets, packet_indexes));
         }
     }

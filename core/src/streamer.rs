@@ -1,7 +1,7 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{Blob, Packets, SharedBlobs};
+use crate::packet::{Blob, Packets, PacketsRecycler, SharedBlobs};
 use crate::result::{Error, Result};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -16,9 +16,15 @@ pub type PacketSender = Sender<Packets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
 
-fn recv_loop(sock: &UdpSocket, exit: Arc<AtomicBool>, channel: &PacketSender) -> Result<()> {
+fn recv_loop(
+    sock: &UdpSocket,
+    exit: Arc<AtomicBool>,
+    channel: &PacketSender,
+    recycler: &PacketsRecycler,
+    name: &'static str,
+) -> Result<()> {
     loop {
-        let mut msgs = Packets::default();
+        let mut msgs = Packets::new_with_recycler(recycler.clone(), 256, name);
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader trasaction socket)
@@ -37,6 +43,8 @@ pub fn receiver(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
     packet_sender: PacketSender,
+    recycler: PacketsRecycler,
+    name: &'static str,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
     if res.is_err() {
@@ -46,7 +54,7 @@ pub fn receiver(
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
-            let _ = recv_loop(&sock, exit, &packet_sender);
+            let _ = recv_loop(&sock, exit, &packet_sender, &recycler.clone(), name);
         })
         .unwrap()
 }
@@ -126,7 +134,7 @@ pub fn blob_receiver(
         .unwrap()
 }
 
-fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
+fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender, recycler: &PacketsRecycler) -> Result<()> {
     trace!(
         "recv_blob_packets: receiving on {}",
         sock.local_addr().unwrap()
@@ -134,8 +142,9 @@ fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
 
     let blobs = Blob::recv_from(sock)?;
     for blob in blobs {
-        let packets = blob.read().unwrap().load_packets();
-        s.send(Packets::new(packets))?;
+        let mut packets = Packets::new_with_recycler(recycler.clone(), 256, "recv_blob_packets");
+        blob.read().unwrap().load_packets(&mut packets.packets);
+        s.send(packets)?;
     }
 
     Ok(())
@@ -152,13 +161,14 @@ pub fn blob_packet_receiver(
     sock.set_read_timeout(Some(timer))
         .expect("set socket timeout");
     let exit = exit.clone();
+    let recycler = PacketsRecycler::default();
     Builder::new()
         .name("solana-blob_packet_receiver".to_string())
         .spawn(move || loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            let _ = recv_blob_packets(&sock, &s);
+            let _ = recv_blob_packets(&sock, &s, &recycler);
         })
         .unwrap()
 }
@@ -167,6 +177,7 @@ pub fn blob_packet_receiver(
 mod test {
     use super::*;
     use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::recycler::Recycler;
     use crate::streamer::{receiver, responder};
     use std::io;
     use std::io::Write;
@@ -207,7 +218,7 @@ mod test {
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(Arc::new(read), &exit, s_reader);
+        let t_receiver = receiver(Arc::new(read), &exit, s_reader, Recycler::default(), "test");
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

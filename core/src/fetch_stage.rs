@@ -2,6 +2,7 @@
 
 use crate::banking_stage::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET;
 use crate::poh_recorder::PohRecorder;
+use crate::recycler::Recycler;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
@@ -87,9 +88,16 @@ impl FetchStage {
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self {
-        let tpu_threads = sockets
-            .into_iter()
-            .map(|socket| streamer::receiver(socket, &exit, sender.clone()));
+        let recycler = Recycler::default();
+        let tpu_threads = sockets.into_iter().map(|socket| {
+            streamer::receiver(
+                socket,
+                &exit,
+                sender.clone(),
+                recycler.clone(),
+                "fetch_stage",
+            )
+        });
 
         let (forward_sender, forward_receiver) = channel();
         let tpu_via_blobs_threads = tpu_via_blobs_sockets
