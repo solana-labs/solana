@@ -92,8 +92,9 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     solana_logger::setup();
     let num_threads = BankingStage::num_threads() as usize;
     //   a multiple of packet chunk  2X duplicates to avoid races
-    const CHUNKS: usize = 32;
-    let txes = 192 * num_threads * CHUNKS;
+    const CHUNKS: usize = 8;
+    const PACKETS_PER_BATCH: usize = 192;
+    let txes = PACKETS_PER_BATCH * num_threads * CHUNKS;
     let mint_total = 1_000_000_000_000;
     let GenesisBlockInfo {
         mut genesis_block,
@@ -110,7 +111,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let bank = Arc::new(Bank::new(&genesis_block));
     let to_pubkey = Pubkey::new_rand();
     let dummy = system_transaction::transfer(&mint_keypair, &to_pubkey, 1, genesis_block.hash());
-    trace!("txs: {}", txes);
+    debug!("threads: {} txs: {}", num_threads, txes);
     let transactions: Vec<_> = (0..txes)
         .into_par_iter()
         .map(|_| {
@@ -147,7 +148,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         assert!(r.is_ok(), "sanity parallel execution");
     }
     bank.clear_signatures();
-    let verified: Vec<_> = to_packets_chunked(&transactions.clone(), 192)
+    let verified: Vec<_> = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH)
         .into_iter()
         .map(|x| {
             let len = x.packets.len();
@@ -183,12 +184,13 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             let now = Instant::now();
             let mut sent = 0;
 
-            for v in verified[start..start + chunk_len].chunks(verified.len() / num_threads) {
-                trace!(
-                    "sending... {}..{} {}",
+            for v in verified[start..start + chunk_len].chunks(chunk_len / num_threads) {
+                debug!(
+                    "sending... {}..{} {} v.len: {}",
                     start,
                     start + chunk_len,
-                    timestamp()
+                    timestamp(),
+                    v.len(),
                 );
                 for xv in v {
                     sent += xv.0.packets.len();
