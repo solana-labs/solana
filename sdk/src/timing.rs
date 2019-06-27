@@ -13,7 +13,7 @@ pub const DEFAULT_TICKS_PER_SLOT: u64 = 4;
 // 1 Epoch = 400 * 8192 ms ~= 55 minutes
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 8192;
 
-pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 1;
+pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
 /// The time window of recent block hash values that the bank will track the signatures
 /// of over. Once the bank discards a block hash, it will reject any transactions that use
