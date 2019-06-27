@@ -183,13 +183,11 @@ if $installCheck && [[ -r update_manifest_keypair.json ]]; then
 
   (
     set -x
-    update_manifest_pubkey=$($solana_keygen pubkey update_manifest_keypair.json)
     rm -rf install-data-dir
     $solana_install init \
       --no-modify-path \
       --data-dir install-data-dir \
       --url http://"$sanityTargetIp":8899 \
-      --pubkey "$update_manifest_pubkey"
 
     $solana_install info
   )
