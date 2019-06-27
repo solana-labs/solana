@@ -939,10 +939,23 @@ impl Bank {
     ) -> (
         Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
         Vec<Result<()>>,
+        Vec<usize>,
     ) {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
+
+        let retryable_txs: Vec<_> = lock_results
+            .locked_accounts_results()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, res)| match res {
+                Err(TransactionError::AccountInUse) => Some(index),
+                Ok(_) => None,
+                Err(_) => None,
+            })
+            .collect();
+
         let sig_results = self.check_transactions(
             txs,
             lock_results.locked_accounts_results(),
@@ -1004,7 +1017,7 @@ impl Bank {
         inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count, 0, 1000);
         Self::update_error_counters(&error_counters);
-        (loaded_accounts, executed)
+        (loaded_accounts, executed, retryable_txs)
     }
 
     fn filter_program_errors_and_collect_fee(
@@ -1089,7 +1102,7 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
-        let (loaded_accounts, executed) =
+        let (loaded_accounts, executed, _) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
 
         self.commit_transactions(txs, &loaded_accounts, &executed)
