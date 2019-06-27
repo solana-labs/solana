@@ -311,7 +311,7 @@ mod tests {
         let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
         let mut keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&to, false, &mut to_account),
+            KeyedAccount::new_credit_only(&to, false, &mut to_account),
         ];
         transfer_lamports(&mut keyed_accounts, 50).unwrap();
         let from_lamports = from_account.lamports;
@@ -322,7 +322,7 @@ mod tests {
         // Attempt to move more lamports than remaining in from_account
         keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&to, false, &mut to_account),
+            KeyedAccount::new_credit_only(&to, false, &mut to_account),
         ];
         let result = transfer_lamports(&mut keyed_accounts, 100);
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports));

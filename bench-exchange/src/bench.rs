@@ -646,6 +646,20 @@ where
     false
 }
 
+fn verify_funding_transfer<T: SyncClient + ?Sized>(
+    client: &T,
+    tx: &Transaction,
+    amount: u64,
+) -> bool {
+    for a in &tx.message().account_keys[1..] {
+        if client.get_balance(a).unwrap_or(0) >= amount {
+            return true;
+        }
+    }
+
+    false
+}
+
 pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamports: u64) {
     let total = lamports * (dests.len() as u64 + 1);
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
@@ -703,6 +717,7 @@ pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamp
                 .collect();
 
             let mut retries = 0;
+            let amount = chunk[0].1[0].1;
             while !to_fund_txs.is_empty() {
                 let receivers = to_fund_txs
                     .iter()
@@ -731,7 +746,7 @@ pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamp
                 let mut waits = 0;
                 loop {
                     sleep(Duration::from_millis(200));
-                    to_fund_txs.retain(|(_, tx)| !verify_transfer(client, &tx));
+                    to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, &tx, amount));
                     if to_fund_txs.is_empty() {
                         break;
                     }

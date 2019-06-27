@@ -345,6 +345,7 @@ impl Bank {
         self.collector_id = *collector_id;
 
         self.rc.accounts = Arc::new(Accounts::new_from_parent(&parent.rc.accounts));
+        self.clear_credit_only_account_locks();
 
         self.epoch_stakes = {
             let mut epoch_stakes = parent.epoch_stakes.clone();
@@ -742,10 +743,12 @@ impl Bank {
         }
     }
 
-    /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
+    /// Process a Transaction. This is used for unit tests and simply calls the vector
+    /// Bank::process_transactions method, and commits credit-only credits.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
         self.process_transactions(&txs)[0].clone()?;
+        self.commit_credits();
         tx.signatures
             .get(0)
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
@@ -1063,7 +1066,11 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         txs: &[Transaction],
-        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+        loaded_accounts: &mut [Result<(
+            InstructionAccounts,
+            InstructionLoaders,
+            InstructionCredits,
+        )>],
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
@@ -1102,10 +1109,10 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
-        let (loaded_accounts, executed, _) =
+        let (mut loaded_accounts, executed, _) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
 
-        self.commit_transactions(txs, &loaded_accounts, &executed)
+        self.commit_transactions(txs, &mut loaded_accounts, &executed)
     }
 
     #[must_use]
@@ -1410,6 +1417,15 @@ impl Bank {
             dbank.rc.accounts.hash_internal_state(dbank.slot)
         );
     }
+
+    pub fn commit_credits(&self) {
+        self.rc
+            .accounts
+            .commit_credits(&self.ancestors, self.slot());
+    }
+    fn clear_credit_only_account_locks(&self) {
+        self.rc.accounts.clear_credit_only_account_locks();
+    }
 }
 
 impl Drop for Bank {
@@ -1575,6 +1591,7 @@ mod tests {
         let t1 = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_block.hash());
         let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_block.hash());
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
+        bank.commit_credits();
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Err(TransactionError::AccountInUse));
@@ -1943,33 +1960,51 @@ mod tests {
     }
 
     #[test]
-    fn test_need_credit_only_accounts() {
-        let (genesis_block, mint_keypair) = create_genesis_block(10);
+    fn test_credit_only_accounts() {
+        let (genesis_block, mint_keypair) = create_genesis_block(100);
         let bank = Bank::new(&genesis_block);
         let payer0 = Keypair::new();
         let payer1 = Keypair::new();
-        let recipient = Pubkey::new_rand();
+        let recipient = Keypair::new();
         // Fund additional payers
         bank.transfer(3, &mint_keypair, &payer0.pubkey()).unwrap();
         bank.transfer(3, &mint_keypair, &payer1.pubkey()).unwrap();
-        let tx0 = system_transaction::transfer(&mint_keypair, &recipient, 1, genesis_block.hash());
-        let tx1 = system_transaction::transfer(&payer0, &recipient, 1, genesis_block.hash());
-        let tx2 = system_transaction::transfer(&payer1, &recipient, 1, genesis_block.hash());
+        let tx0 = system_transaction::transfer(
+            &mint_keypair,
+            &recipient.pubkey(),
+            1,
+            genesis_block.hash(),
+        );
+        let tx1 =
+            system_transaction::transfer(&payer0, &recipient.pubkey(), 1, genesis_block.hash());
+        let tx2 =
+            system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
+        bank.commit_credits();
 
-        // If multiple transactions attempt to deposit into the same account, only the first will
-        // succeed, even though such atomic adds are safe. A System Transfer `To` account should be
-        // given credit-only handling
+        // If multiple transactions attempt to deposit into the same account, they should succeed,
+        // since System Transfer `To` accounts are given credit-only handling
+        assert_eq!(results[0], Ok(()));
+        assert_eq!(results[1], Ok(()));
+        assert_eq!(results[2], Ok(()));
+        assert_eq!(bank.get_balance(&recipient.pubkey()), 3);
 
+        let tx0 = system_transaction::transfer(
+            &mint_keypair,
+            &recipient.pubkey(),
+            2,
+            genesis_block.hash(),
+        );
+        let tx1 =
+            system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
+        let txs = vec![tx0, tx1];
+        let results = bank.process_transactions(&txs);
+        bank.commit_credits();
+
+        // However, an account may not be locked as credit-only and credit-debit at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
-        assert_eq!(results[2], Err(TransactionError::AccountInUse));
-
-        // After credit-only account handling is implemented, the following checks should pass instead:
-        // assert_eq!(results[0], Ok(()));
-        // assert_eq!(results[1], Ok(()));
-        // assert_eq!(results[2], Ok(()));
     }
 
     #[test]
@@ -2016,11 +2051,12 @@ mod tests {
     fn test_credit_only_relaxed_locks() {
         use solana_sdk::message::{Message, MessageHeader};
 
-        let (genesis_block, mint_keypair) = create_genesis_block(3);
+        let (genesis_block, _) = create_genesis_block(3);
         let bank = Bank::new(&genesis_block);
         let key0 = Keypair::new();
-        let key1 = Pubkey::new_rand();
-        let key2 = Pubkey::new_rand();
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let key3 = Pubkey::new_rand();
 
         let message = Message {
             header: MessageHeader {
@@ -2028,23 +2064,50 @@ mod tests {
                 num_credit_only_signed_accounts: 0,
                 num_credit_only_unsigned_accounts: 1,
             },
-            account_keys: vec![key0.pubkey(), key1, key2],
+            account_keys: vec![key0.pubkey(), key3],
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
-        let tx0 = Transaction::new(&[&key0], message, genesis_block.hash());
-        let txs = vec![tx0];
+        let tx = Transaction::new(&[&key0], message, genesis_block.hash());
+        let txs = vec![tx];
 
-        let lock_result = bank.lock_accounts(&txs);
-        assert_eq!(lock_result.locked_accounts_results(), &vec![Ok(())]);
+        let lock_result0 = bank.lock_accounts(&txs);
+        assert!(lock_result0.locked_accounts_results()[0].is_ok());
 
-        // Try executing a tx loading a credit-only account from tx0
-        assert!(bank.transfer(1, &mint_keypair, &key2).is_ok());
-        // Try executing a tx loading a account locked as credit-debit in tx0
-        assert_eq!(
-            bank.transfer(1, &mint_keypair, &key1),
-            Err(TransactionError::AccountInUse)
-        );
+        // Try locking accounts, locking a previously credit-only account as credit-debit
+        // should fail
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_credit_only_signed_accounts: 0,
+                num_credit_only_unsigned_accounts: 0,
+            },
+            account_keys: vec![key1.pubkey(), key3],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let tx = Transaction::new(&[&key1], message, genesis_block.hash());
+        let txs = vec![tx];
+
+        let lock_result1 = bank.lock_accounts(&txs);
+        assert!(lock_result1.locked_accounts_results()[0].is_err());
+
+        // Try locking a previously credit-only account a 2nd time; should succeed
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_credit_only_signed_accounts: 0,
+                num_credit_only_unsigned_accounts: 1,
+            },
+            account_keys: vec![key2.pubkey(), key3],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let tx = Transaction::new(&[&key2], message, genesis_block.hash());
+        let txs = vec![tx];
+
+        let lock_result2 = bank.lock_accounts(&txs);
+        assert!(lock_result2.locked_accounts_results()[0].is_ok());
     }
 
     #[test]

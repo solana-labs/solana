@@ -435,7 +435,7 @@ impl BankingStage {
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (loaded_accounts, results, mut retryable_txs) =
+        let (mut loaded_accounts, results, mut retryable_txs) =
             bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
         let load_execute_time = now.elapsed();
 
@@ -454,7 +454,7 @@ impl BankingStage {
 
         let commit_time = {
             let now = Instant::now();
-            bank.commit_transactions(txs, &loaded_accounts, &results);
+            bank.commit_transactions(txs, &mut loaded_accounts, &results);
             now.elapsed()
         };
 
@@ -1500,7 +1500,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Pubkey::new_rand();
 
-        let transactions = vec![system_transaction::transfer(
+        let transactions = vec![system_transaction::create_user_account(
             &mint_keypair,
             &pubkey,
             1,

@@ -1,7 +1,9 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount, LamportCredit};
+use solana_sdk::account::{
+    create_keyed_credit_only_accounts, Account, KeyedAccount, LamportCredit,
+};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::message::Message;
@@ -139,17 +141,28 @@ impl MessageProcessor {
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
 
-        let mut keyed_accounts = create_keyed_accounts(executable_accounts);
+        let mut keyed_accounts = create_keyed_credit_only_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
             .accounts
             .iter()
             .map(|&index| {
                 let index = index as usize;
                 let key = &message.account_keys[index];
-                (key, index < message.header.num_required_signatures as usize)
+                let is_debitable = message.is_debitable(index);
+                (
+                    key,
+                    index < message.header.num_required_signatures as usize,
+                    is_debitable,
+                )
             })
             .zip(program_accounts.iter_mut())
-            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
+            .map(|((key, is_signer, is_debitable), account)| {
+                if is_debitable {
+                    KeyedAccount::new(key, is_signer, account)
+                } else {
+                    KeyedAccount::new_credit_only(key, is_signer, account)
+                }
+            })
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
 
@@ -184,6 +197,7 @@ impl MessageProcessor {
         credits: &mut [&mut LamportCredit],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
+        assert_eq!(instruction.accounts.len(), program_accounts.len());
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard-coded programs not to clobber or allocate
         let pre_total: u128 = program_accounts
@@ -202,7 +216,13 @@ impl MessageProcessor {
                 program_accounts
                     .iter()
                     .enumerate()
-                    .map(|(i, program_account)| (i, program_account, message.is_debitable(i))),
+                    .map(|(i, program_account)| {
+                        (
+                            i,
+                            program_account,
+                            message.is_debitable(instruction.accounts[i] as usize),
+                        )
+                    }),
             )
         {
             verify_instruction(
