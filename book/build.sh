@@ -3,4 +3,4 @@ set -e
 
 cd "$(dirname "$0")"
 
-make -j"$(nproc)"
+make -j"$(nproc)" test
