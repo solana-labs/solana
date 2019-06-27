@@ -4,6 +4,7 @@ extern crate test;
 #[macro_use]
 extern crate solana;
 
+use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
@@ -26,7 +27,7 @@ use solana_sdk::timing::{
 };
 use std::iter;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
@@ -104,8 +105,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     // during the benchmark
     genesis_block.ticks_per_slot = 10_000;
 
-    let (verified_sender, verified_receiver) = channel();
-    let (vote_sender, vote_receiver) = channel();
+    let (verified_sender, verified_receiver) = unbounded();
+    let (vote_sender, vote_receiver) = unbounded();
     let bank = Arc::new(Bank::new(&genesis_block));
     let to_pubkey = Pubkey::new_rand();
     let dummy = system_transaction::transfer(&mint_keypair, &to_pubkey, 1, genesis_block.hash());
@@ -230,8 +231,8 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         ..
     } = create_genesis_block(mint_total);
 
-    let (verified_sender, verified_receiver) = channel();
-    let (vote_sender, vote_receiver) = channel();
+    let (verified_sender, verified_receiver) = unbounded();
+    let (vote_sender, vote_receiver) = unbounded();
     let bank = Arc::new(Bank::new(&genesis_block));
     let to_pubkey = Pubkey::new_rand();
     let dummy = system_transaction::transfer(&mint_keypair, &to_pubkey, 1, genesis_block.hash());
