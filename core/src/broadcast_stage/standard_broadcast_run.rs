@@ -82,7 +82,9 @@ impl BroadcastRun for StandardBroadcastRun {
             &mut broadcast.coding_generator,
         );
 
-        blocktree.write_shared_blobs(data_blobs.iter().chain(coding_blobs.iter()))?;
+        blocktree.write_shared_blobs(data_blobs.iter())?;
+        blocktree.put_shared_coding_blobs(coding_blobs.iter())?;
+
         let to_blobs_elapsed = to_blobs_start.elapsed();
 
         // 3) Start broadcast step
