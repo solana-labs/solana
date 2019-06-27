@@ -28,6 +28,7 @@ use rayon::ThreadPool;
 use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
+use solana_measure::measure::Measure;
 use solana_sdk::account::{Account, LamportCredit};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
@@ -530,10 +531,12 @@ impl AccountsDB {
     ) -> (Vec<(Fork, AccountInfo)>, u64) {
         let mut reclaims: Vec<(Fork, AccountInfo)> = Vec::with_capacity(infos.len() * 2);
         let mut index = self.accounts_index.write().unwrap();
+        let mut update_index_work = Measure::start("update_index_work");
         for (info, account) in infos.into_iter().zip(accounts.iter()) {
             let key = &account.0;
             index.insert(fork_id, key, info, &mut reclaims);
         }
+        update_index_work.stop();
         (reclaims, index.last_root)
     }
 
@@ -582,20 +585,30 @@ impl AccountsDB {
 
     /// Store the account update.
     pub fn store(&self, fork_id: Fork, accounts: &HashMap<&Pubkey, &Account>) {
+        let mut store_accounts = Measure::start("store::store_accounts");
         let infos = self.store_accounts(fork_id, accounts);
+        store_accounts.stop();
 
+        let mut update_index = Measure::start("store::update_index");
         let (reclaims, last_root) = self.update_index(fork_id, infos, accounts);
+        update_index.stop();
         trace!("reclaim: {}", reclaims.len());
 
+        let mut remove_dead_accounts = Measure::start("store::remove_dead");
         let mut dead_forks = self.remove_dead_accounts(reclaims);
+        remove_dead_accounts.stop();
         trace!("dead_forks: {}", dead_forks.len());
 
+        let mut cleanup_dead_forks = Measure::start("store::cleanup_dead_forks");
         self.cleanup_dead_forks(&mut dead_forks, last_root);
+        cleanup_dead_forks.stop();
         trace!("purge_forks: {}", dead_forks.len());
 
+        let mut purge_forks = Measure::start("store::purge_forks");
         for fork in dead_forks {
             self.purge_fork(fork);
         }
+        purge_forks.stop();
     }
 
     pub fn add_root(&self, fork: Fork) {

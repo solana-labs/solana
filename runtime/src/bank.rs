@@ -21,6 +21,7 @@ use crate::storage_utils::StorageAccounts;
 use bincode::{deserialize_from, serialize, serialize_into, serialized_size};
 use log::*;
 use serde::{Deserialize, Serialize};
+use solana_measure::measure::Measure;
 use solana_metrics::{
     datapoint_info, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
@@ -38,7 +39,7 @@ use solana_sdk::syscall::{
     tick_height,
 };
 use solana_sdk::system_transaction;
-use solana_sdk::timing::{duration_as_ms, duration_as_ns, duration_as_us, MAX_RECENT_BLOCKHASHES};
+use solana_sdk::timing::{duration_as_ns, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
 use std::collections::HashMap;
@@ -46,7 +47,6 @@ use std::fmt;
 use std::io::{BufReader, Cursor, Read};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard};
-use std::time::Instant;
 
 pub const SECONDS_PER_YEAR: f64 = (365.0 * 24.0 * 60.0 * 60.0);
 
@@ -538,23 +538,23 @@ impl Bank {
         let parents = self.parents();
         *self.rc.parent.write().unwrap() = None;
 
-        let squash_accounts_start = Instant::now();
+        let mut squash_accounts_time = Measure::start("squash_accounts_time");
         for p in parents.iter().rev() {
             // root forks cannot be purged
             self.rc.accounts.add_root(p.slot());
         }
-        let squash_accounts_ms = duration_as_ms(&squash_accounts_start.elapsed());
+        squash_accounts_time.stop();
 
-        let squash_cache_start = Instant::now();
+        let mut squash_cache_time = Measure::start("squash_cache_time");
         parents
             .iter()
             .for_each(|p| self.src.status_cache.write().unwrap().add_root(p.slot()));
-        let squash_cache_ms = duration_as_ms(&squash_cache_start.elapsed());
+        squash_cache_time.stop();
 
         datapoint_info!(
             "tower-observed",
-            ("squash_accounts_ms", squash_accounts_ms, i64),
-            ("squash_cache_ms", squash_cache_ms, i64)
+            ("squash_accounts_ms", squash_accounts_time.as_ms(), i64),
+            ("squash_cache_ms", squash_cache_time.as_ms(), i64)
         );
     }
 
@@ -946,7 +946,7 @@ impl Bank {
     ) {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
-        let now = Instant::now();
+        let mut load_time = Measure::start("accounts_load");
 
         let retryable_txs: Vec<_> = lock_results
             .locked_accounts_results()
@@ -966,9 +966,9 @@ impl Bank {
             &mut error_counters,
         );
         let mut loaded_accounts = self.load_accounts(txs, sig_results, &mut error_counters);
+        load_time.stop();
 
-        let load_elapsed = now.elapsed();
-        let now = Instant::now();
+        let mut execution_time = Measure::start("execution_time");
         let mut signature_count = 0;
         let executed: Vec<Result<()>> = loaded_accounts
             .iter_mut()
@@ -983,12 +983,12 @@ impl Bank {
             })
             .collect();
 
-        let execution_elapsed = now.elapsed();
+        execution_time.stop();
 
         debug!(
             "load: {}us execute: {}us txs_len={}",
-            duration_as_us(&load_elapsed),
-            duration_as_us(&execution_elapsed),
+            load_time.as_us(),
+            execution_time.as_us(),
             txs.len(),
         );
         let mut tx_count = 0;
@@ -1083,7 +1083,7 @@ impl Bank {
 
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        let now = Instant::now();
+        let mut write_time = Measure::start("write_time");
         self.rc
             .accounts
             .store_accounts(self.slot(), txs, executed, loaded_accounts);
@@ -1091,12 +1091,8 @@ impl Bank {
         self.update_cached_accounts(txs, executed, loaded_accounts);
 
         // once committed there is no way to unroll
-        let write_elapsed = now.elapsed();
-        debug!(
-            "store: {}us txs_len={}",
-            duration_as_us(&write_elapsed),
-            txs.len(),
-        );
+        write_time.stop();
+        debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
         self.update_transaction_statuses(txs, &executed);
         self.filter_program_errors_and_collect_fee(txs, executed)
     }

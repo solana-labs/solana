@@ -1,0 +1,14 @@
+[package]
+name = "solana-measure"
+description = "Blockchain, Rebuilt for Scale"
+version = "0.17.0"
+documentation = "https://docs.rs/solana"
+homepage = "https://solana.com/"
+readme = "../README.md"
+repository = "https://github.com/solana-labs/solana"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+solana-sdk = { path = "../sdk", version = "0.17.0" }
