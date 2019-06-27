@@ -2625,7 +2625,7 @@ dependencies = [
 
 [[package]]
 name = "solana-poh-sys"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "cc 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

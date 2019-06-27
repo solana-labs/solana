@@ -244,7 +244,7 @@ fn verify_entries_scalar(entries: &[Entry], start_hash: &Hash) -> bool {
             hash: *start_hash,
             transactions: vec![],
         }];
-        let entry_pairs = genesis.par_iter().chain(self).zip(self);
+        let entry_pairs = genesis.par_iter().chain(entries).zip(entries);
         let res = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 entry_pairs.all(|(x0, x1)| {

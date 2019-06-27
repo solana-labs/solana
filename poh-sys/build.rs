@@ -1,67 +1,29 @@
 use std::env;
-use std::process::Command;
+use std::fs;
+use std::path::Path;
 
 fn main() {
-    let out_dir = env::var("OUT_DIR").unwrap();
+    println!("cargo:rerun-if-changed=build.rs");
 
-    println!("cargo:rerun-if-changed=poh-simd/poh-verify.ipsc");
-    println!("cargo:rerun-if-changed=poh-simd/sha256.h");
+    let perf_libs_dir = {
+        let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+        let mut path = Path::new(&manifest_dir);
+        path = path.parent().unwrap();
+        let path = path.join(Path::new("target/perf-libs"));
+        path
+    };
+    let perf_libs_dir = perf_libs_dir.to_str().unwrap();
 
-    Command::new("ispc")
-        .args(&[
-            "-O2",
-            "--target=sse2-i32x4",
-            "-DNAME_SUFFIX=sse2",
-            "poh-simd/poh-verify.ipsc",
-            "-o",
-            &format!("{}/poh-verify-sse2.o", out_dir),
-        ])
-        .status()
-        .unwrap();
-
-    Command::new("ispc")
-        .args(&[
-            "-O2",
-            "--target=sse4-i32x4",
-            "-DNAME_SUFFIX=sse4",
-            "poh-simd/poh-verify.ipsc",
-            "-o",
-            &format!("{}/poh-verify-sse4.o", out_dir),
-        ])
-        .status()
-        .unwrap();
-
-    Command::new("ispc")
-        .args(&[
-            "-O2",
-            "--target=avx1-i32x8",
-            "-DNAME_SUFFIX=avx1",
-            "poh-simd/poh-verify.ipsc",
-            "-o",
-            &format!("{}/poh-verify-avx1.o", out_dir),
-        ])
-        .status()
-        .unwrap();
-
-    Command::new("ispc")
-        .args(&[
-            "-O2",
-            "--target=avx2-i32x8",
-            "-DNAME_SUFFIX=avx2",
-            "poh-simd/poh-verify.ipsc",
-            "-o",
-            &format!("{}/poh-verify-avx2.o", out_dir),
-        ])
-        .status()
-        .unwrap();
-
-    cc::Build::new()
-        .object(&format!("{}/poh-verify-sse2.o", out_dir))
-        .object(&format!("{}/poh-verify-sse4.o", out_dir))
-        .object(&format!("{}/poh-verify-avx1.o", out_dir))
-        .object(&format!("{}/poh-verify-avx2.o", out_dir))
-        .compile("poh-simd");
-
-    println!("cargo:rustc-link-search=native={}", out_dir);
-    println!("cargo:rustc-link-lib=static=poh-simd");
+    // Ensure `perf_libs_dir` exists.  It's been observed that
+    // a cargo:rerun-if-changed= directive with a non-existent
+    // directory triggers a rebuild on every |cargo build| invocation
+    fs::create_dir_all(&perf_libs_dir).unwrap_or_else(|err| {
+        if err.kind() != std::io::ErrorKind::AlreadyExists {
+            panic!("Unable to create {}: {:?}", perf_libs_dir, err);
+        }
+    });
+    println!("cargo:rerun-if-changed={}", perf_libs_dir);
+    println!("cargo:rerun-if-changed={}/libpoh-simd.a", perf_libs_dir);
+    println!("cargo:rustc-link-search=native={}", perf_libs_dir);
+//    println!("cargo:rustc-link-lib=static=poh-simd");
 }
