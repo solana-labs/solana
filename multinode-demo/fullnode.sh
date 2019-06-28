@@ -402,8 +402,20 @@ new_gensis_block() {
 
 set -e
 PS4="$(basename "$0"): "
+
 pid=
-trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
+kill_fullnode() {
+  if [[ -n $pid ]]; then
+    declare _pid=$pid
+    pid=
+    echo "killing pid $_pid"
+    kill "$_pid" || true
+    wait "$_pid" || true
+    echo "$_pid killed"
+  fi
+}
+trap 'kill_fullnode' INT TERM ERR
+
 while true; do
   if new_gensis_block; then
     # If the genesis block has changed remove the now stale ledger and vote
@@ -464,6 +476,7 @@ while true; do
   echo "$PS4$program ${args[*]}"
   $program "${args[@]}" &
   pid=$!
+  echo "pid: $pid"
   oom_score_adj "$pid" 1000
 
   if ((no_restart)); then
@@ -517,15 +530,16 @@ while true; do
       ) || (
         echo "Error: failed to rsync ledger"
       )
-      new_gensis_block && break
+      if new_gensis_block; then
+        echo "############## New genesis detected, restarting $node_type ##############"
+        break
+      fi
       secs_to_next_genesis_poll=60
     fi
 
   done
 
-  echo "############## New genesis detected, restarting $node_type ##############"
-  kill "$pid" || true
-  wait "$pid" || true
+  kill_fullnode
   # give the cluster time to come back up
   (
     set -x
