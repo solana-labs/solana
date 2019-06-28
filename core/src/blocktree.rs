@@ -1494,6 +1494,27 @@ fn handle_recovery(
             &prev_inserted_blob_datas,
             &prev_inserted_coding,
         )? {
+            for blob in data.iter() {
+                warn!(
+                    "[handle_recovery] recovered blob at ({}, {})",
+                    blob.slot(),
+                    blob.index()
+                );
+
+                let blob_index = blob.index();
+                let blob_slot = blob.slot();
+                if blob_slot != slot {
+                    error!("[handle_recovery] CORRUPTION: slot = {}, index = {}, erasure_meta = {:?}, index = {:?}", blob_slot, blob_index, erasure_meta, index);
+                    panic!("Corruption in recovery");
+                }
+                assert_eq!(blob_slot, slot);
+
+                assert!(
+                    blob_index >= erasure_meta.start_index()
+                        && blob_index < erasure_meta.end_indexes().0
+                );
+            }
+
             recovered_data.append(&mut data);
 
             for coding_blob in coding {
@@ -1661,6 +1682,8 @@ fn recover(
 
     for i in start_idx..data_end_idx {
         if index.data().is_present(i) {
+            trace!("[recover] present data blob at {}", i);
+
             let mut blob_bytes = match prev_inserted_blob_datas.get(&(slot, i)) {
                 Some(bytes) => bytes.to_vec(),
                 None => data_cf
@@ -1673,6 +1696,8 @@ fn recover(
 
             blobs.push(blob_bytes);
         } else {
+            trace!("[recover] absent data blob at {}", i);
+
             let set_relative_idx = (i - start_idx) as usize;
             blobs.push(vec![0u8; size]);
             present[set_relative_idx] = false;
@@ -1681,6 +1706,7 @@ fn recover(
 
     for i in start_idx..coding_end_idx {
         if index.coding().is_present(i) {
+            trace!("[recover] present coding blob at {}", i);
             let blob = match prev_inserted_coding.get(&(slot, i)) {
                 Some(blob) => (*blob).clone(),
                 _ => {
@@ -1694,6 +1720,7 @@ fn recover(
 
             blobs.push(blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size].to_vec());
         } else {
+            trace!("[recover] absent coding blob at {}", i);
             let set_relative_idx = (i - start_idx) as usize + NUM_DATA;
             blobs.push(vec![0; size]);
             present[set_relative_idx] = false;

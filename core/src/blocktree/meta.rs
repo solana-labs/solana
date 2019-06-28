@@ -1,6 +1,9 @@
 use crate::erasure::{NUM_CODING, NUM_DATA};
 use solana_metrics::datapoint;
-use std::{collections::BTreeMap, ops::RangeBounds};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::RangeBounds,
+};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
@@ -37,17 +40,15 @@ pub struct Index {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct DataIndex {
-    slot: u64,
     /// Map representing presence/absence of data blobs
-    index: BTreeMap<u64, bool>,
+    index: BTreeSet<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 /// Erasure coding information
 pub struct CodingIndex {
-    slot: u64,
     /// Map from set index, to hashmap from blob index to presence bool
-    index: BTreeMap<u64, bool>,
+    index: BTreeSet<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -90,20 +91,22 @@ impl Index {
     }
 }
 
+/// TODO: Mark: Change this when coding
 impl CodingIndex {
     pub fn present_in_bounds(&self, bounds: impl RangeBounds<u64>) -> usize {
-        self.index
-            .range(bounds)
-            .filter(|(_, presence)| **presence)
-            .count()
+        self.index.range(bounds).count()
     }
 
     pub fn is_present(&self, index: u64) -> bool {
-        *self.index.get(&index).unwrap_or(&false)
+        self.index.contains(&index)
     }
 
     pub fn set_present(&mut self, index: u64, presence: bool) {
-        self.index.insert(index, presence);
+        if presence {
+            self.index.insert(index);
+        } else {
+            self.index.remove(&index);
+        }
     }
 
     pub fn set_many_present(&mut self, presence: impl IntoIterator<Item = (u64, bool)>) {
@@ -115,18 +118,19 @@ impl CodingIndex {
 
 impl DataIndex {
     pub fn present_in_bounds(&self, bounds: impl RangeBounds<u64>) -> usize {
-        self.index
-            .range(bounds)
-            .filter(|(_, presence)| **presence)
-            .count()
+        self.index.range(bounds).count()
     }
 
     pub fn is_present(&self, index: u64) -> bool {
-        *self.index.get(&index).unwrap_or(&false)
+        self.index.contains(&index)
     }
 
     pub fn set_present(&mut self, index: u64, presence: bool) {
-        self.index.insert(index, presence);
+        if presence {
+            self.index.insert(index);
+        } else {
+            self.index.remove(&index);
+        }
     }
 
     pub fn set_many_present(&mut self, presence: impl IntoIterator<Item = (u64, bool)>) {
