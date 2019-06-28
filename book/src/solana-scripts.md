@@ -1,4 +1,4 @@
-# Resources
+# Solana Scripts
 
 This architecture describes how the Pipeline runtime supports scripts. 
 
