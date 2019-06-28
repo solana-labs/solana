@@ -279,8 +279,8 @@ impl ClusterInfoRepairListener {
         let max_confirmed_repairee_slot =
             epoch_schedule.get_last_slot_in_epoch(max_confirmed_repairee_epoch);
 
-        // Skip the first slot in the iterator b/c we know it's the root slot which the repairee already
-        // has
+        // Skip the first slot in the iterator because we know it's the root slot which the repairee
+        // already has
         slot_iter.next();
         for (slot, slot_meta) in slot_iter {
             if slot > my_root
