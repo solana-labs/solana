@@ -470,7 +470,7 @@ impl RpcClient {
                 // TODO: Return a better error.
                 return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
             }
-            sleep(Duration::from_millis(250));
+            sleep(Duration::from_secs(1));
         }
         Ok(())
     }
