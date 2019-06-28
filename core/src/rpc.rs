@@ -70,6 +70,15 @@ impl JsonRpcRequestProcessor {
             .ok_or_else(Error::invalid_request)
     }
 
+    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Result<Vec<(String, Account)>> {
+        Ok(self
+            .bank()
+            .get_program_accounts_modified_since_parent(&program_id)
+            .into_iter()
+            .map(|(pubkey, account)| (pubkey.to_string(), account))
+            .collect())
+    }
+
     pub fn get_balance(&self, pubkey: &Pubkey) -> u64 {
         self.bank().get_balance(&pubkey)
     }
@@ -210,6 +219,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getAccountInfo")]
     fn get_account_info(&self, _: Self::Metadata, _: String) -> Result<Account>;
 
+    #[rpc(meta, name = "getProgramAccounts")]
+    fn get_program_accounts(&self, _: Self::Metadata, _: String) -> Result<Vec<(String, Account)>>;
+
     #[rpc(meta, name = "getBalance")]
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
@@ -295,6 +307,19 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_account_info(&pubkey)
+    }
+
+    fn get_program_accounts(
+        &self,
+        meta: Self::Metadata,
+        id: String,
+    ) -> Result<Vec<(String, Account)>> {
+        debug!("get_program_accounts rpc request received: {:?}", id);
+        let program_id = verify_pubkey(id)?;
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_program_accounts(&program_id)
     }
 
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<u64> {
@@ -535,7 +560,7 @@ mod tests {
 
     fn start_rpc_handler_with_tx(
         pubkey: &Pubkey,
-    ) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair, Pubkey) {
+    ) -> (MetaIoHandler<Meta>, Meta, Arc<Bank>, Hash, Keypair, Pubkey) {
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
         let exit = Arc::new(AtomicBool::new(false));
@@ -567,7 +592,7 @@ mod tests {
             request_processor,
             cluster_info,
         };
-        (io, meta, blockhash, alice, leader.id)
+        (io, meta, bank, blockhash, alice, leader.id)
     }
 
     #[test]
@@ -595,7 +620,8 @@ mod tests {
     #[test]
     fn test_rpc_get_balance() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _blockhash, _alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
@@ -613,7 +639,8 @@ mod tests {
     #[test]
     fn test_rpc_get_cluster_nodes() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _blockhash, _alice, leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, _blockhash, _alice, leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getClusterNodes"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -633,7 +660,8 @@ mod tests {
     #[test]
     fn test_rpc_get_slot_leader() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _blockhash, _alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getSlotLeader"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -649,7 +677,8 @@ mod tests {
     #[test]
     fn test_rpc_get_tx_count() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _blockhash, _alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -664,7 +693,8 @@ mod tests {
     #[test]
     fn test_rpc_get_total_supply() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _blockhash, _alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTotalSupply"}}"#);
         let rep = io.handle_request_sync(&req, meta);
@@ -689,7 +719,8 @@ mod tests {
     #[test]
     fn test_rpc_get_account_info() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _blockhash, _alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
@@ -714,9 +745,45 @@ mod tests {
     }
 
     #[test]
+    fn test_rpc_get_program_accounts() {
+        let bob = Keypair::new();
+        let (io, meta, bank, blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob.pubkey());
+
+        let new_program_id = Pubkey::new_rand();
+        let tx = system_transaction::assign(&bob, blockhash, &new_program_id);
+        bank.process_transaction(&tx).unwrap();
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getProgramAccounts","params":["{}"]}}"#,
+            new_program_id
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "result":[["{}", {{
+                    "owner": {:?},
+                    "lamports": 20,
+                    "data": [],
+                    "executable": false
+                }}]],
+                "id":1}}
+            "#,
+            bob.pubkey(),
+            new_program_id.as_ref()
+        );
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
     fn test_rpc_confirm_tx() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, blockhash, alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, blockhash, alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
 
         let req = format!(
@@ -735,7 +802,8 @@ mod tests {
     #[test]
     fn test_rpc_get_signature_status() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, blockhash, alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, blockhash, alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
 
         let req = format!(
@@ -799,7 +867,8 @@ mod tests {
     #[test]
     fn test_rpc_get_recent_blockhash() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, blockhash, _alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -825,7 +894,8 @@ mod tests {
     #[test]
     fn test_rpc_fail_request_airdrop() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _blockhash, _alice, _leader_pubkey) = start_rpc_handler_with_tx(&bob_pubkey);
+        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
 
         // Expect internal error because no drone is available
         let req = format!(
