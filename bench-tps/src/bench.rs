@@ -586,18 +586,20 @@ fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
     i % (num_lamports_per_account / 4) == 0 && (i >= (3 * num_lamports_per_account) / 4)
 }
 
-pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u32) {
+pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
 
     let mut total_keys = 0;
-    let mut counter = 0;
+    let mut extra = 0; // This variable tracks the number of keypairs needing extra transaction fees funded
+    let mut delta = 1;
     while total_keys < count {
-        counter += 1;
-        total_keys += MAX_SPENDS_PER_TX.pow(counter);
+        extra += delta;
+        delta *= MAX_SPENDS_PER_TX;
+        total_keys += delta;
     }
-    (rnd.gen_n_keypairs(total_keys), counter)
+    (rnd.gen_n_keypairs(total_keys), extra)
 }
 
 pub fn generate_and_fund_keypairs<T: Client>(
@@ -608,7 +610,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
     lamports_per_account: u64,
 ) -> Result<(Vec<Keypair>, u64)> {
     info!("Creating {} keypairs...", tx_count * 2);
-    let (mut keypairs, depth) = generate_keypairs(funding_pubkey, tx_count as u64 * 2);
+    let (mut keypairs, extra) = generate_keypairs(funding_pubkey, tx_count as u64 * 2);
     info!("Get lamports...");
 
     // Sample the first keypair, see if it has lamports, if so then resume.
@@ -621,7 +623,6 @@ pub fn generate_and_fund_keypairs<T: Client>(
         let (_, fee_calculator) = client.get_recent_blockhash().unwrap();
         let account_desired_balance =
             lamports_per_account - last_keypair_balance + fee_calculator.max_lamports_per_signature;
-        let extra: u64 = (0..depth).map(|i| 4u64.pow(i)).sum();
         let extra_fees = extra * fee_calculator.max_lamports_per_signature;
         let total = account_desired_balance * (1 + keypairs.len() as u64) + extra_fees;
         if client.get_balance(&funding_pubkey.pubkey()).unwrap_or(0) < total {
@@ -744,7 +745,7 @@ mod tests {
             generate_and_fund_keypairs(&client, None, &id, tx_count, lamports).unwrap();
 
         for kp in &keypairs {
-            assert!(client.get_balance(&kp.pubkey()).unwrap() == lamports);
+            assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports);
         }
     }
 
@@ -767,7 +768,10 @@ mod tests {
             .1
             .max_lamports_per_signature;
         for kp in &keypairs {
-            assert!(client.get_balance(&kp.pubkey()).unwrap() == lamports + max_fee);
+            assert_eq!(
+                client.get_balance(&kp.pubkey()).unwrap(),
+                lamports + max_fee
+            );
         }
     }
 }
