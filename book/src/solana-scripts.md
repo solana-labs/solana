@@ -12,97 +12,126 @@ Contract composition has led to multiple multi-million dollar bugs in Ethereum
 
 ## Scripts
 
-The purpose of scripts is to execute logic between instructions.
+The ideal solution to this problem is an infallible Trusted Third Party. For
+example, users that want to bet on an outcome of an on-chain game of
+Tic-Tac-Toe, transfer their tokens to the TTP, and the TTP transfers the prize
+to the winner at the end of the game.
 
-For example, assignment of tokens to the winner based on an output of a game can
-be defined as a script.
+Scripts are on-chain programs that can act as a TTP.
 
-### `Loader::CreateScript`
+### Signatures and Permissions
 
-`Loader::CreateScript` designates that the loaded executable bytecode is a
-script. The difference between scripts and programs is that script execution
-yields to external process instructions.
+A TTP needs the ability to create pubkeys and generate signatures for those
+keys.  At script creation time the loader program may be authorize specific
+pubkeys that the script and only the script can sign with.  To ensure that these
+keys cannot be signed by the user, the addresses are derived from a sha256 of
+the script pubkey and the key sequence number.
+
+* `fn script::keypair_pubkey(key_index: u64) -> Pubkey`
+
+Retrivies the script keypair at index `key_index`.  The pubkey of the keypair is
+`sha256.hash(program_id).hash(key_index)`, and therefore has no real private
+key.  This keypair can only be used to sign messages witn the `sign_instruction`
+function by the script.
+
+* `fn script::sign_instruction(ix: &mut Instruction, key_index: u64) -> ()`
+
+Signs the message for the script pubkey that is generated with `key_index`.
+Users can generate these keys locally and encode them into the instruction
+vector.  During the script execution, the script will call `sign_instruction`
+and set the `KeyedAccounts::is_signer` flag.
+
+### `fn script::process_instruction(ix: Instruction) -> Result<(), InstructionError>`
+
+This method is available to scripts to execute an instruction in the runtime.
+
+### `LoaderInstruction::FinalizeScript`
+
+`LoaderInstruction::FinalizeScript` designates that the loaded executable
+bytecode is a script, and creates a new instance of the script. The difference
+between scripts and programs is that script execution yields to external program
+instructions, and scripts have the capability to sign.  `FinalizeScript` may be
+called more than once on the same loaded bytecode to create unique instances of
+scripts each with their own signing keys.
 
 ### Script Execution
 
-The general idea to script execution is that the client knows a head of time
-what branches the script will take, and therefore can encode all the expected
-instructions the script will generate into the transaction.
+During the script execution, calls to `process_instruction` yield, and the next
+instruction to be processed is invoked.  Users know ahead of time which
+instructions the script will generate, and if signatures are required for the
+instructions.
 
-Transactions that include instructions that invoke scripts encode all the
-instructions that the script will make during its execution in the message
-instruction vector.  The additional instructions appear before the script, in the
-exact same order and the same parameters as the script would make during
+The transaction invoked by the client must declare all the accounts that the
+script will need up front and provide all the necessary client signatures, as
+well as encode the instruction vector that the script will generate.  The latter
+provides clear authorization for the script to take actions on behalf of the
+client, since each instruction specifies the clients keys and explicit
+signatures for each explicit instruction.  Users do not need to guess which
+instructions the script will execute, and authorize each one explicitly.
+
+Once the instruction is invoked, the script is resumed from the last point of
 execution.
-
-During the script execution, calls to instructions "yield", and the next
-instruction to be processed in the instruction vector is invoked.  The
-instruction that is called must match the one that the script is expecting to
-call through its execution path.  If the instruction doesn't match, the program
-fails.  During script execution, the runtime simply verifies that the
-instruction invoked by the script is exactly the same as the one encoded by the
-user in the message instruction vector.
 
 ### Script Execution Example
 
 ```
-//Swap some tokens for lamports
+enum BetOnTicTacToe {
+	Initialize {amount: u64, game: Pubkey},
+	Claim,
+};
+
 pub fn process_instruction(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-  let amounts: (u64, u64) = deserialize(data)?;
-  let to_alice = Message::new(vec![system_instruction::transfer(keyed_accounts[0], keyed_accounts[1], amounts.0)];
-  send_message(to_alice)?;
-  let to_bob = Message::new(vec![token_instruction::transfer(keyed_accounts[2], keyed_accounts[3], amounts.1)];
-  send_message(to_bob)?;
+    let cmd = deserialize(data)?;
+    match cmd {
+        case BetOnTicTacToe::Initialize{ amount, game} => {
+            let script_key = script::keypair_pubkey(0);
+            let from_alice = system_instruction::transfer(
+                            keyed_accounts[1].key, //alice
+                            script_key,
+                            amount);
+
+            //alice must have signed this instruction
+            script::process_instruction(from_alice)?;
+            let from_bob = system_instruction::transfer(
+                            keyed_accounts[2].key, //bob
+                            script_key,
+                            amount);
+
+            //bob must have signed this instruction
+            script::process_instruction(from_bob)?;
+
+            //save the game
+            assert_eq!(script_key, keyed_accounts[3].key);
+            assert_eq!(program_id, keyed_accounts[3].account.owner);
+            serialize(keyed_accounts[1].account.data, game)?;
+        },
+        case BetOnTicTacToe::TransferToWinner => {
+            //script pubkey 0 is always the same
+            let script_key = script::keypair_pubkey(0);
+
+            assert_eq!(script_key, keyed_accounts[1].key);
+            let game_key = deserialize(&keyed_accounts[1].account.data)?;
+
+            assert_eq!(game_key, keyed_accounts[2].key);
+            let game = deserialize(&keyed_accounts[2].account.data)?;
+
+            assert!(game.is_over);
+
+            //Ignoring ties for brevity 
+            //transfer from the script to the winner of the game
+            let mut to_winner = system_instruction::transfer(
+                            script_key,
+                            game.winner_key,
+                            keyed_accounts[1].account.lamports);
+            script::sign_instruction(&mut to_winner, 0);
+            script::process_instruction(to_winner)?;
+        },
+    }
 }
 
 ```
-
-To successfully call the above script, the user would submit a transaction that
-contains an instruction vector that looks like
-
-```
-Message {
-    instructions: vec![
-        //first instruction that is called by the script
-        system_instruction_transfer,
-        //second instruction that is called by the script
-        token_instruction_transfer,
-        //instruction to the entry point of the above script
-        script_instruction,
-    ]
-}
-```
-
-When the script reaches the following line:
-
-```
-  send_message(to_alice)?;
-```
-
-The script "yields", and the next instruction in the instruction vector is
-checked.  The runtime checks that the address is the source is the sender the
-amount matches amount by verifying the instruction arguments declared in the
-vector.
-
-Effectively, calls to external processes are encoded as instructions, and the
-runtime can validate that when the script yields the accounts and data
-in the instruction match what is encoded in the message instruction vector.
-
-### Signatures and Permissions
-
-`Loader::CreateScript` may be authorize specific pubkeys that the script and
-only the script can sign with.  To ensure that these keys cannot be signed by
-the user, the addresses are derived from a sha256 of the script pubkey and a
-the key sequence number.
-
-* `sign_msg(msg: &mut Message, key_index: u64)`
-
-Signs the message for the key `sha256.hash(program_id).hash(key_index)`.  Users
-can generate these keys locally and encode them into the instruction vector.
-During the script execution, the script will call `sign_msg` and attach the
-appropriate signature.
 
