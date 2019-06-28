@@ -260,14 +260,16 @@ impl ClusterInfoRepairListener {
         num_slots_to_repair: usize,
         epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
-        let slot_iter = blocktree.rooted_slot_iterator(repairee_epoch_slots.root + 1);
-
+        let slot_iter = blocktree.rooted_slot_iterator(repairee_epoch_slots.root);
         if slot_iter.is_err() {
-            warn!("Root for repairee is on different fork OR replay_stage hasn't marked this slot as root yet");
+            info!(
+                "Root for repairee is on different fork. My root: {}, repairee_root: {}",
+                my_root, repairee_epoch_slots.root
+            );
             return Ok(());
         }
 
-        let slot_iter = slot_iter?;
+        let mut slot_iter = slot_iter?;
 
         let mut total_data_blobs_sent = 0;
         let mut total_coding_blobs_sent = 0;
@@ -276,6 +278,10 @@ impl ClusterInfoRepairListener {
             epoch_schedule.get_stakers_epoch(repairee_epoch_slots.root);
         let max_confirmed_repairee_slot =
             epoch_schedule.get_last_slot_in_epoch(max_confirmed_repairee_epoch);
+
+        // Skip the first slot in the iterator because we know it's the root slot which the repairee
+        // already has
+        slot_iter.next();
         for (slot, slot_meta) in slot_iter {
             if slot > my_root
                 || num_slots_repaired >= num_slots_to_repair
