@@ -514,7 +514,7 @@ pub fn init(
         false
     };
 
-    if !path_modified {
+    if !path_modified && !no_modify_path {
         check_env_path_for_bin_dir(&config);
     }
     Ok(())
