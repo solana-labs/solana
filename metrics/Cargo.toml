@@ -18,7 +18,7 @@ solana-sdk = { path = "../sdk", version = "0.17.0" }
 sys-info = "0.5.7"
 
 [dev-dependencies]
-rand = "0.6.5"
+rand = "0.7.0"
 
 [lib]
 name = "solana_metrics"
