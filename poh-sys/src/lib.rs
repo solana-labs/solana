@@ -7,4 +7,6 @@ extern "C" {
     pub fn poh_verify_many_simd_avx1(hashes: *mut u8, num_hashes_arr: *const u64);
 
     pub fn poh_verify_many_simd_avx2(hashes: *mut u8, num_hashes_arr: *const u64);
+
+    pub fn poh_verify_many_simd_avx512skl(hashes: *mut u8, num_hashes_arr: *const u64);
 }
