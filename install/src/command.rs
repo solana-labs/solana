@@ -793,7 +793,8 @@ pub fn run(
                 Ok(true) => {
                     // Update successful, kill current process so it will be restart
                     if let Some(ref mut child) = child_option {
-                        println!("Killing program: {:?}", child.kill());
+                        let id = child.id();
+                        println!("Killing pid {}: {:?}", id, child.kill());
                     }
                 }
                 Ok(false) => {} // No update available
