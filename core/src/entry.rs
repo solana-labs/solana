@@ -346,8 +346,8 @@ impl EntrySlice for [Entry] {
 
         if let Ok(val) = std::env::var("SOLANA_SIMD") {
             match &val[..] {
-                "avx512skl" => {
-                    res = verify_entries_simd(self, start_hash, poh_verify_many_simd_avx512skl, 16);
+                "avx512skx" => {
+                    res = verify_entries_simd(self, start_hash, poh_verify_many_simd_avx512skx, 16);
                 }
                 "avx2" => {
                     res = verify_entries_simd(self, start_hash, poh_verify_many_simd_avx2, 8);
@@ -368,7 +368,7 @@ impl EntrySlice for [Entry] {
             // For small batches, simd is actually slower
             res = verify_entries_scalar(self, start_hash);
         } else if is_x86_feature_detected!("avx512bw") {
-            res = verify_entries_simd(self, start_hash, poh_verify_many_simd_avx512skl, 16);
+            res = verify_entries_simd(self, start_hash, poh_verify_many_simd_avx512skx, 16);
         } else if is_x86_feature_detected!("avx2") {
             res = verify_entries_simd(self, start_hash, poh_verify_many_simd_avx2, 8);
         } else if is_x86_feature_detected!("avx") {
