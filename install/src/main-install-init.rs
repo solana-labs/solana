@@ -1,21 +1,20 @@
+use atty;
 use std::process::exit;
 
-#[cfg(windows)]
 fn press_enter() {
     // On windows, where installation happens in a console that may have opened just for this
     // purpose, give the user an opportunity to see the error before the window closes.
-    println!();
-    println!("Press the Enter key to continue.");
+    if cfg!(windows) && atty::is(atty::Stream::Stdin) {
+        println!();
+        println!("Press the Enter key to continue.");
 
-    use std::io::BufRead;
-    let stdin = std::io::stdin();
-    let stdin = stdin.lock();
-    let mut lines = stdin.lines();
-    lines.next();
+        use std::io::BufRead;
+        let stdin = std::io::stdin();
+        let stdin = stdin.lock();
+        let mut lines = stdin.lines();
+        lines.next();
+    }
 }
-
-#[cfg(not(windows))]
-fn press_enter() {}
 
 fn main() {
     solana_install::main_init().unwrap_or_else(|err| {
