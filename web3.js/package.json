@@ -55,7 +55,7 @@
     "localnet:logs": "bin/localnet.sh logs -f",
     "localnet:up": "bin/localnet.sh up $npm_package_testnetDefaultChannel",
     "localnet:update": "bin/localnet.sh update $npm_package_testnetDefaultChannel",
-    "ok": "run-s --serial lint flow test doc",
+    "ok": "run-s lint flow test doc",
     "prepare": "run-s clean bpf-sdk:install bpf-sdk:remove-symlinks build",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.js'",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
