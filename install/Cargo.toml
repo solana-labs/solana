@@ -13,6 +13,7 @@ cuda = []
 
 
 [dependencies]
+atty = "0.2.11"
 bincode = "1.1.4"
 bs58 = "0.2.0"
 bzip2 = "0.3.3"
