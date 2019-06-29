@@ -1,5 +1,12 @@
 // @flow
-import {Account, Connection, BpfLoader, Loader, SystemProgram} from '../src';
+import {
+  Account,
+  Connection,
+  BpfLoader,
+  Loader,
+  SystemProgram,
+  sendAndConfirmTransaction,
+} from '../src';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
@@ -35,6 +42,48 @@ test('get account info - error', () => {
   expect(connection.getAccountInfo(account.publicKey)).rejects.toThrow(
     errorMessage,
   );
+});
+
+test('get program accounts', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url);
+  const account0 = new Account();
+  const account1 = new Account();
+  const programId = new Account();
+  await connection.requestAirdrop(account0.publicKey, 42);
+  await connection.requestAirdrop(account1.publicKey, 84);
+
+  let transaction = SystemProgram.assign(
+    account0.publicKey,
+    programId.publicKey,
+  );
+  await sendAndConfirmTransaction(connection, transaction, account0);
+
+  transaction = SystemProgram.assign(account1.publicKey, programId.publicKey);
+  await sendAndConfirmTransaction(connection, transaction, account1);
+
+  const [, feeCalculator] = await connection.getRecentBlockhash();
+
+  const programAccounts = await connection.getProgramAccounts(
+    programId.publicKey,
+  );
+  expect(programAccounts.length).toBe(2);
+
+  programAccounts.forEach(function(element) {
+    expect([
+      account0.publicKey.toBase58(),
+      account1.publicKey.toBase58(),
+    ]).toEqual(expect.arrayContaining([element[0]]));
+    if (element[0] == account0.publicKey) {
+      expect(element[1].lamports).toBe(42 - feeCalculator.lamportsPerSignature);
+    } else {
+      expect(element[1].lamports).toBe(84 - feeCalculator.lamportsPerSignature);
+    }
+  });
 });
 
 test('fullnodeExit', async () => {

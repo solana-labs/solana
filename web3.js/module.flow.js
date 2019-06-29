@@ -87,6 +87,9 @@ declare module '@solana/web3.js' {
   declare export class Connection {
     constructor(endpoint: string): Connection;
     getAccountInfo(publicKey: PublicKey): Promise<AccountInfo>;
+    getProgramAccounts(
+      programId: PublicKey,
+    ): Promise<Array<[PublicKey, AccountInfo]>>;
     getBalance(publicKey: PublicKey): Promise<number>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getEpochVoteAccounts(): Promise<Array<VoteAccountInfo>>;

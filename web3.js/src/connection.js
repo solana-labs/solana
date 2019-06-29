@@ -149,6 +149,13 @@ const ProgramAccountNotificationResult = struct({
 });
 
 /**
+ * Expected JSON RPC response for the "getProgramAccounts" message
+ */
+const GetProgramAccountsRpcResult = jsonRpcResult(
+  struct.list([ProgramAccountInfoResult]),
+);
+
+/**
  * Expected JSON RPC response for the "confirmTransaction" message
  */
 const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
@@ -339,6 +346,11 @@ export type TransactionError = {|
 type BlockhashAndFeeCalculator = [Blockhash, FeeCalculator]; // This type exists to workaround an esdoc parse error
 
 /**
+ * @ignore
+ */
+type PublicKeyAndAccount = [PublicKey, AccountInfo]; // This type exists to workaround an esdoc parse error
+
+/**
  * A connection to a fullnode JSON RPC endpoint
  */
 export class Connection {
@@ -433,6 +445,36 @@ export class Connection {
       lamports: result.lamports,
       data: Buffer.from(result.data),
     };
+  }
+
+  /**
+   * Fetch all the accounts owned by the specified program id
+   */
+  async getProgramAccounts(
+    programId: PublicKey,
+  ): Promise<Array<PublicKeyAndAccount>> {
+    const unsafeRes = await this._rpcRequest('getProgramAccounts', [
+      programId.toBase58(),
+    ]);
+    const res = GetProgramAccountsRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+
+    const {result} = res;
+    assert(typeof result !== 'undefined');
+
+    return result.map(result => {
+      return [
+        result[0],
+        {
+          executable: result[1].executable,
+          owner: new PublicKey(result[1].owner),
+          lamports: result[1].lamports,
+          data: Buffer.from(result[1].data),
+        },
+      ];
+    });
   }
 
   /**
