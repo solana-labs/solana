@@ -535,7 +535,7 @@ export class Connection {
   }
 
   /**
-   * Fetch the current total currency supply of the cluster
+   * Fetch the current total currency supply of the cluster in lamports
    */
   async getTotalSupply(): Promise<number> {
     const unsafeRes = await this._rpcRequest('getTotalSupply', []);
