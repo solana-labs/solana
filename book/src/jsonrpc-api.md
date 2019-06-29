@@ -25,6 +25,7 @@ Methods
 * [getAccountInfo](#getaccountinfo)
 * [getBalance](#getbalance)
 * [getClusterNodes](#getclusternodes)
+* [getProgramAccounts](#getprogramaccounts)
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
 * [getSlotLeader](#getslotleader)
@@ -98,6 +99,32 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 ---
 
+### getAccountInfo
+Returns all information associated with the account of provided Pubkey
+
+##### Parameters:
+* `string` - Pubkey of account to query, as base-58 encoded string
+
+##### Results:
+The result field will be a JSON object with the following sub fields:
+
+* `lamports`, number of lamports assigned to this account, as a signed 64-bit integer
+* `owner`, array of 32 bytes representing the program this account has been assigned to
+* `data`, array of bytes representing any data associated with the account
+* `executable`, boolean indicating if the account contains a program (and is strictly read-only)
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["2gVkYWexTHR5Hb2aLeQN3tnngvWzisFKXDUPrgMHpdST"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"executable":false,"owner":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lamports":1,"data":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"id":1}
+```
+
+
+---
+
 ### getBalance
 Returns the balance of the account of provided Pubkey
 
@@ -142,28 +169,29 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 ---
 
-### getAccountInfo
-Returns all information associated with the account of provided Pubkey
+### getProgramAccounts
+Returns all accounts owned by the provided program Pubkey
 
 ##### Parameters:
-* `string` - Pubkey of account to query, as base-58 encoded string
+* `string` - Pubkey of program, as base-58 encoded string
 
 ##### Results:
-The result field will be a JSON object with the following sub fields:
+The result field will be an array of arrays. Each sub array will contain:
+* `string` - a the account Pubkey as base-58 encoded string
+and a JSON object, with the following sub fields:
 
 * `lamports`, number of lamports assigned to this account, as a signed 64-bit integer
 * `owner`, array of 32 bytes representing the program this account has been assigned to
 * `data`, array of bytes representing any data associated with the account
 * `executable`, boolean indicating if the account contains a program (and is strictly read-only)
-* `loader`, array of 32 bytes representing the loader for this program (if `executable`), otherwise all
 
 ##### Example:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["2gVkYWexTHR5Hb2aLeQN3tnngvWzisFKXDUPrgMHpdST"]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["8nQwAgzN2yyUzrukXsCa3JELBYqDQrqJ3UyHiWazWxHR"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"owner":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lamports":1,"data":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"id":1}
+{"jsonrpc":"2.0","result":[["BqGKYtAKu69ZdWEBtZHh4xgJY1BYa2YBiBReQE3pe383", {"executable":false,"owner":[50,28,250,90,221,24,94,136,147,165,253,136,1,62,196,215,225,34,222,212,99,84,202,223,245,13,149,99,149,231,91,96],"lamports":1,"data":[]], ["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", {"executable":false,"owner":[50,28,250,90,221,24,94,136,147,165,253,136,1,62,196,215,225,34,222,212,99,84,202,223,245,13,149,99,149,231,91,96],"lamports":10,"data":[]]]},"id":1}
 ```
 
 ---
@@ -402,7 +430,7 @@ for a given account public key changes
 
 ##### Notification Format:
 ```bash
-{"jsonrpc": "2.0","method": "accountNotification", "params": {"result": {"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"owner":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lamports":1,"data":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"subscription":0}}
+{"jsonrpc": "2.0","method": "accountNotification", "params": {"result": {"executable":false,"owner":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lamports":1,"data":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"subscription":0}}
 ```
 
 ---
