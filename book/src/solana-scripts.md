@@ -15,7 +15,7 @@ A few solutions that have been tried:
 * Libra: resources
 
 The ideal solution to this problem is an infallible Trusted Third Party. For
-example, users that want to bet on an outcome of an on-chain game of
+example, clients that want to bet on an outcome of an on-chain game of
 Tic-Tac-Toe, transfer their tokens to the TTP, and the TTP transfers the prize
 to the winner at the end of the game.
 
@@ -32,7 +32,7 @@ instructions, generate their own keys, and sign instructions with those keys.
 A TTP needs the ability to create pubkeys and generate signatures for those
 keys.  At script creation time the loader program may authorize specific
 pubkeys that the script and only the script can sign with.  To ensure that these
-keys cannot be signed by the user, the addresses are derived from a sha256 of
+keys cannot be signed by the client, the addresses are derived from a sha256 of
 the script pubkey and the key sequence number.
 
 * `pub fn keypair_pubkey(key_index: u64) -> Pubkey`
