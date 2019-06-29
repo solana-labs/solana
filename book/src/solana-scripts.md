@@ -97,7 +97,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    let cmd = deserialize(data)?;
+    let cmd = deserialize(&data)?;
     match cmd {
         case BetOnTicTacToe::Initialize{ amount, game} => {
             //The scripts system account to store lamports
@@ -134,7 +134,8 @@ pub fn process_instruction(
             // this is a bit awkward
             assert_eq!(script_data_key, keyed_accounts[3].key);
             assert_eq!(program_id, keyed_accounts[3].account.owner);
-            serialize(keyed_accounts[1].account.data, game)?;
+            let prize = amount * 2 - 1;
+            serialize_into(&mut keyed_accounts[1].account.data, (prize, game))?;
         },
         case BetOnTicTacToe::Claim => {
             //script pubkey 0 is always the same
@@ -144,7 +145,7 @@ pub fn process_instruction(
 
             //get the game key
             assert_eq!(script_data_key, keyed_accounts[1].key);
-            let game_key = deserialize(&keyed_accounts[1].account.data)?;
+            let (prize, game_key) = deserialize(&keyed_accounts[1].account.data)?;
 
             //read the game
             assert_eq!(game_key, keyed_accounts[2].key);
@@ -158,7 +159,7 @@ pub fn process_instruction(
             let mut to_winner = system_instruction::transfer(
                             script_tokens_key,
                             game.winner_key,
-                            keyed_accounts[3].account.lamports);
+                            prize);
             script::sign_instruction(&mut to_winner, 0);
             script::process_instruction(to_winner)?;
         },
@@ -166,7 +167,8 @@ pub fn process_instruction(
 }
 
 ```
-#### Instruction Vector
+
+### Script Instruction Vector
 
 To execute `BetOnTicTacToe::Initialize` Bob and Alice need to sign a transaction
 with the following instruction vector
@@ -175,8 +177,8 @@ with the following instruction vector
 Message {
   instructions: vec![
     BetOnTicTacToe::Initialize{...},    //the script
-    SystemInstruction::Transfer{...},   //alice to script token key
-    SystemInstruction::Transfer{...},   //bob to script token key
+    SystemInstruction::Transfer{...},   //transfer alice's lamports to the script
+    SystemInstruction::Transfer{...},   //transfer bob's lamports to the script
     SystemInstruction::Create{...},     //allocate the scripts data key
   ],
 }
