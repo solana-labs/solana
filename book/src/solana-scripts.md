@@ -22,7 +22,7 @@ Scripts are on-chain programs that can act as a TTP.
 ### Signatures and Permissions
 
 A TTP needs the ability to create pubkeys and generate signatures for those
-keys.  At script creation time the loader program may be authorize specific
+keys.  At script creation time the loader program may authorize specific
 pubkeys that the script and only the script can sign with.  To ensure that these
 keys cannot be signed by the user, the addresses are derived from a sha256 of
 the script pubkey and the key sequence number.
