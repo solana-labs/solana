@@ -16,6 +16,7 @@ members = [
     "ledger-tool",
     "logger",
     "merkle-tree",
+    "measure",
     "metrics",
     "netutil",
     "programs/bpf",

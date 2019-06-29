@@ -2212,6 +2212,7 @@ dependencies = [
  "solana-exchange-program 0.17.0",
  "solana-kvstore 0.17.0",
  "solana-logger 0.17.0",
+ "solana-measure 0.17.0",
  "solana-merkle-tree 0.17.0",
  "solana-metrics 0.17.0",
  "solana-netutil 0.17.0",
@@ -2589,6 +2590,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-measure"
+version = "0.17.0"
+dependencies = [
+ "solana-sdk 0.17.0",
+]
+
+[[package]]
 name = "solana-merkle-tree"
 version = "0.17.0"
 dependencies = [
@@ -2667,6 +2675,7 @@ dependencies = [
  "solana-bpf-loader-api 0.17.0",
  "solana-bpf-loader-program 0.17.0",
  "solana-logger 0.17.0",
+ "solana-measure 0.17.0",
  "solana-metrics 0.17.0",
  "solana-noop-program 0.17.0",
  "solana-sdk 0.17.0",

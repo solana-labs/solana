@@ -14,12 +14,12 @@ use crate::sigverify;
 use crate::sigverify::TxOffset;
 use crate::streamer::{self, PacketReceiver};
 use crossbeam_channel::Sender as CrossbeamSender;
+use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_info, inc_new_counter_info};
 use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
-use std::time::Instant;
 
 #[cfg(feature = "cuda")]
 const RECV_BATCH_MAX: usize = 5_000;
@@ -74,7 +74,7 @@ impl SigVerifyStage {
         )?;
         inc_new_counter_info!("sigverify_stage-packets_received", len);
 
-        let now = Instant::now();
+        let mut verify_batch_time = Measure::start("sigverify_batch_time");
         let batch_len = batch.len();
         debug!(
             "@{:?} verifier: verifying: {} id: {}",
@@ -86,31 +86,33 @@ impl SigVerifyStage {
         let verified_batch = Self::verify_batch(batch, sigverify_disabled, recycler, recycler_out);
         inc_new_counter_info!("sigverify_stage-verified_packets_send", len);
 
-        if sendr.send(verified_batch).is_err() {
-            return Err(Error::SendError);
+        for v in verified_batch {
+            if sendr.send(vec![v]).is_err() {
+                return Err(Error::SendError);
+            }
         }
 
-        let total_time_ms = timing::duration_as_ms(&now.elapsed());
-        let total_time_s = timing::duration_as_s(&now.elapsed());
+        verify_batch_time.stop();
+
         inc_new_counter_info!(
             "sigverify_stage-time_ms",
-            (total_time_ms + recv_time) as usize
+            (verify_batch_time.as_ms() + recv_time) as usize
         );
         debug!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} id: {} verified: {} v/s {}",
             timing::timestamp(),
             batch_len,
-            total_time_ms,
+            verify_batch_time.as_ms(),
             id,
             len,
-            (len as f32 / total_time_s)
+            (len as f32 / verify_batch_time.as_s())
         );
 
         datapoint_info!(
             "sigverify_stage-total_verify_time",
             ("batch_len", batch_len, i64),
             ("len", len, i64),
-            ("total_time_ms", total_time_ms, i64)
+            ("total_time_ms", verify_batch_time.as_ms(), i64)
         );
 
         Ok(())
