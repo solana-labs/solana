@@ -82,7 +82,6 @@ mod bpf {
         use solana_sdk::hash;
         use solana_sdk::instruction::{AccountMeta, Instruction};
         use solana_sdk::signature::{Keypair, KeypairUtil};
-        use solana_sdk::syscall::tick_height;
         use std::io::Read;
 
         #[test]
@@ -97,7 +96,6 @@ mod bpf {
                 // ("solana_bpf_rust_many_args", true),  // Issue #3099
                 ("solana_bpf_rust_noop", true),
                 ("solana_bpf_rust_panic", false),
-                ("solana_bpf_rust_tick_height", true),
             ];
             for program in programs.iter() {
                 let filename = create_bpf_path(program.0);
@@ -123,7 +121,6 @@ mod bpf {
                 let account_metas = vec![
                     AccountMeta::new(mint_keypair.pubkey(), true),
                     AccountMeta::new(Keypair::new().pubkey(), false),
-                    AccountMeta::new(tick_height::id(), false),
                 ];
                 let instruction = Instruction::new(program_id, &1u8, account_metas);
                 let result = bank_client.send_instruction(&mint_keypair, instruction);
