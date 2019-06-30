@@ -424,23 +424,20 @@ impl BankingStage {
     ) -> (Result<()>, Vec<usize>) {
         let mut ok_txs = vec![];
         let mut processed_generation = Measure::start("record::process_generation");
-        let processed_transactions: Vec<_> = results
+        let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
             .iter()
             .zip(txs.iter())
             .enumerate()
             .filter_map(|(i, (r, x))| {
-                if r.is_ok() {
-                    ok_txs.push(i);
-                }
                 if Bank::can_commit(r) {
-                    Some(x.clone())
+                    Some((x.clone(), i))
                 } else {
                     None
                 }
             })
-            .collect();
-        processed_generation.stop();
+            .unzip();
 
+        processed_generation.stop();
         debug!("processed: {} ", processed_transactions.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
@@ -463,9 +460,9 @@ impl BankingStage {
             match res {
                 Ok(()) => (),
                 Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                    // If record errors, return all the ok transactions as retryable, filter out
-                    // all the transactions we know were errors
-                    return (res, ok_txs);
+                    // If record errors, add all the committable transactions (the ones
+                    // we just attempted to record) as retryable
+                    return (res, processed_transactions_indexes);
                 }
                 Err(_) => panic!("Poh recorder returned unexpected error"),
             }
