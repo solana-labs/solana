@@ -422,7 +422,6 @@ impl BankingStage {
         results: &[transaction::Result<()>],
         poh: &Arc<Mutex<PohRecorder>>,
     ) -> (Result<()>, Vec<usize>) {
-        let mut ok_txs = vec![];
         let mut processed_generation = Measure::start("record::process_generation");
         let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
             .iter()
@@ -592,14 +591,10 @@ impl BankingStage {
                 // process_and_record_transactions has returned all retryable errors in
                 // transactions[chunk_start..chunk_end], so we just need to push the remaining
                 // transactions into the unprocessed queue.
-                let range: Vec<usize> = (chunk_end..transactions.len()).collect();
-                unprocessed_txs.extend_from_slice(&range);
-                unprocessed_txs.sort_unstable();
-                unprocessed_txs.dedup();
+                unprocessed_txs.extend(chunk_end..transactions.len());
                 break;
             }
             // Don't exit early on any other type of error, continue processing...
-
             chunk_start = chunk_end;
         }
 
