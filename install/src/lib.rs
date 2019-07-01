@@ -8,6 +8,7 @@ mod build_env;
 mod command;
 mod config;
 mod defaults;
+mod stop_process;
 mod update_manifest;
 
 // Return an error if a url cannot be parsed.

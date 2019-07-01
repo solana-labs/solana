@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::stop_process::stop_process;
 use crate::update_manifest::{SignedUpdateManifest, UpdateManifest};
 use chrono::{Local, TimeZone};
 use console::{style, Emoji};
@@ -793,8 +794,9 @@ pub fn run(
                 Ok(true) => {
                     // Update successful, kill current process so it will be restart
                     if let Some(ref mut child) = child_option {
-                        let id = child.id();
-                        println!("Killing pid {}: {:?}", id, child.kill());
+                        stop_process(child).unwrap_or_else(|err| {
+                            eprintln!("Failed to stop child: {:?}", err);
+                        });
                     }
                 }
                 Ok(false) => {} // No update available
