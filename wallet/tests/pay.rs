@@ -12,10 +12,20 @@ use std::sync::mpsc::channel;
 
 #[cfg(test)]
 use solana::validator::new_validator_for_tests;
+use std::thread::sleep;
+use std::time::Duration;
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
-    let balance = client.retry_get_balance(pubkey, 1).unwrap().unwrap();
-    assert_eq!(balance, expected_balance);
+    (0..5).for_each(|tries| {
+        let balance = client.retry_get_balance(pubkey, 1).unwrap().unwrap();
+        if balance == expected_balance {
+            return;
+        }
+        if tries == 4 {
+            assert_eq!(balance, expected_balance);
+        }
+        sleep(Duration::from_millis(500));
+    });
 }
 
 #[test]
