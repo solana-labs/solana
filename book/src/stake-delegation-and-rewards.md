@@ -20,7 +20,7 @@ stakes delegated to it and has no staking weight.
 
 A separate Stake account (created by a staker) names a Vote account to which the
 stake is delegated.  Rewards generated are proportional to the amount of
-lamports staked.  The Stake account is owned by the staker only.  Lamports
+lamports staked.  The Stake account is owned by the staker only.  Some portion of the lamports
 stored in this account are the stake.
 
 ## Passive Delegation
@@ -31,7 +31,7 @@ the Vote account or submitting votes to the account.
 
 The total stake allocated to a Vote account can be calculated by the sum of
 all the Stake accounts that have the Vote account pubkey as the
-`StakeState::Delegate::voter_pubkey`.
+`StakeState::Stake::voter_pubkey`.
 
 ## Vote and Stake accounts
 
@@ -46,15 +46,15 @@ program that its delegate has participated in validating the ledger.
 VoteState is the current state of all the votes the validator has submitted to
 the network. VoteState contains the following state information:
 
-* votes - The submitted votes data structure.
+* `votes` - The submitted votes data structure.
 
-* credits - The total number of rewards this vote program has generated over its
+* `credits` - The total number of rewards this vote program has generated over its
 lifetime.
 
-* root\_slot - The last slot to reach the full lockout commitment necessary for
+* `root_slot` - The last slot to reach the full lockout commitment necessary for
 rewards.
 
-* commission - The commission taken by this VoteState for any rewards claimed by
+* `commission` - The commission taken by this VoteState for any rewards claimed by
 staker's Stake accounts.  This is the percentage ceiling of the reward.
 
 * Account::lamports - The accumulated lamports from the commission.  These do not
@@ -71,8 +71,12 @@ count as stakes.
 ### VoteInstruction::AuthorizeVoteSigner(Pubkey)
 
 * `account[0]` - RW - The VoteState
-  `VoteState::authorized_vote_signer` is set to to `Pubkey`, instruction must by
-   signed by Pubkey
+  `VoteState::authorized_vote_signer` is set to to `Pubkey`, the transaction must by
+   signed by the Vote account's current `authorized_vote_signer`.  <br>
+   `VoteInstruction::AuthorizeVoter` allows a staker to choose a signing service
+for its votes. That service is responsible for ensuring the vote won't cause
+the staker to be slashed.
+
 
 ### VoteInstruction::Vote(Vec<Vote>)
 
@@ -85,14 +89,16 @@ count as stakes.
 
 ### StakeState
 
-A StakeState takes one of two forms, StakeState::Delegate and StakeState::MiningPool.
+A StakeState takes one of three forms, StakeState::Uninitialized, StakeState::Stake and StakeState::RewardsPool.
 
-### StakeState::Delegate
+### StakeState::Stake
 
-StakeState is the current delegation preference of the **staker**. StakeState
+StakeState::Stake is the current delegation preference of the **staker** and
 contains the following state information:
 
-* Account::lamports - The staked lamports.
+* Account::lamports - The lamports available for staking.
+
+* `stake` - the staked amount (subject to warm up and cool down) for generating rewards, always less than or equal to Account::lamports
 
 * `voter_pubkey` - The pubkey of the VoteState instance the lamports are
 delegated to.
@@ -100,56 +106,53 @@ delegated to.
 * `credits_observed` - The total credits claimed over the lifetime of the
 program.
 
-### StakeState::MiningPool
+* `activated` - the epoch at which this stake was activated/delegated. The full stake will be counted after warm up.
 
-There are two approaches to the mining pool.  The bank could allow the
-StakeState program to bypass the token balance check, or a program representing
-the mining pool could run on the network.  To avoid a single network wide lock,
-the pool can be split into several mining pools.  This design focuses on using
-StakeState::MiningPool instances as the cluster wide mining pools.
+* `deactivated` - the epoch at which this stake will be completely de-activated, which is `cool down` epochs after StakeInstruction::Deactivate is issued.
 
-* 256 StakeState::MiningPool are initialized, each with 1/256 number of mining pool
-tokens stored as `Account::lamports`.
+### StakeState::RewardsPool
 
-The stakes and the MiningPool are accounts that are owned by the same `Stake`
-program.
+To avoid a single network wide lock or contention in redemption, 256 RewardsPools are part of genesis under pre-determined keys, each with std::u64::MAX credits to be able to satisfy redemptions according to point value.
 
-### StakeInstruction::Initialize
+The Stakes and the RewardsPool are accounts that are owned by the same `Stake` program.
 
-* `account[0]` - RW - The StakeState::Delegate instance.
-  `StakeState::Delegate::credits_observed` is initialized to `VoteState::credits`.
-  `StakeState::Delegate::voter_pubkey` is initialized to `account[1]`
+### StakeInstruction::DelegateStake(u64)
+
+The Stake account is moved from Unitialized to StakeState::Stake form.  This is
+how stakers choose their initial delegate validator node and activate their
+stake account lamports.
+
+* `account[0]` - RW - The StakeState::Stake instance. <br>
+      `StakeState::Stake::credits_observed` is initialized to `VoteState::credits`,<br>
+      `StakeState::Stake::voter_pubkey` is initialized to `account[1]`,<br>
+      `StakeState::Stake::stake` is initialized to the u64 passed as an argument above,<br>
+      `StakeState::Stake::activated` is initialized to current Bank epoch, and<br>
+      `StakeState::Stake::deactivated` is initialized to std::u64::MAX
 
 * `account[1]` - R - The VoteState instance.
 
+* `account[2]` - R - syscall::current account, carries information about current Bank epoch
+
 ### StakeInstruction::RedeemVoteCredits
 
-The Staker or the owner of the Stake account sends a transaction with this
+The staker or the owner of the Stake account sends a transaction with this
 instruction to claim rewards.
 
-The Vote account and the Stake account pair maintain a lifetime counter
-of total rewards generated and claimed.  When claiming rewards, the total lamports
-deposited into the Stake account and as validator commission is proportional to
-`VoteState::credits - StakeState::credits_observed`.
+The Vote account and the Stake account pair maintain a lifetime counter of total
+rewards generated and claimed.  Rewards are paid according to a point value
+supplied by the Bank from inflation.  A `point` is one credit * one staked
+lamport, rewards paid are proportional to the number of lamports staked.
 
-
-* `account[0]` - RW - The StakeState::MiningPool instance that will fulfill the
-reward.
-* `account[1]` - RW - The StakeState::Delegate instance that is redeeming votes
-credits.
-* `account[2]` - R - The VoteState instance, must be the same as
-`StakeState::voter_pubkey`
+* `account[0]` - RW - The StakeState::Stake instance that is redeeming rewards.
+* `account[1]` - R - The VoteState instance, must be the same as `StakeState::voter_pubkey`
+* `account[2]` - RW - The StakeState::RewardsPool instance that will fulfill the request (picked at random).
+* `account[3]` - R - syscall::rewards account from the Bank that carries point value.
 
 Reward is paid out for the difference between `VoteState::credits` to
-`StakeState::Delgate.credits_observed`, and `credits_observed` is updated to
-`VoteState::credits`.  The commission is deposited into the Vote account token
+`StakeState::Stake::credits_observed`, multiplied by `syscall::rewards::Rewards::validator_point_value`.
+`StakeState::Stake::credits_observed` is updated to`VoteState::credits`.  The commission is deposited into the Vote account token
 balance, and the reward is deposited to the Stake account token balance.
 
-The total lamports paid is a percentage-rate of the lamports staked muiltplied by
-the ratio of rewards being redeemed to rewards that could have been generated
-during the rate period.
-
-Any random MiningPool can be used to redeem the credits.
 
 ```rust,ignore
 let credits_to_claim = vote_state.credits - stake_state.credits_observed;
@@ -157,24 +160,26 @@ stake_state.credits_observed = vote_state.credits;
 ```
 
 `credits_to_claim` is used to compute the reward and commission, and
-`StakeState::Delegate::credits_observed` is updated to the latest
+`StakeState::Stake::credits_observed` is updated to the latest
 `VoteState::credits` value.
 
-## Collecting network fees into the MiningPool
+### StakeInstruction::Deactivate
+A staker may wish to withdraw from the network.  To do so he must first deactivate his stake, and wait for cool down.
 
-At the end of the block, before the bank is frozen, but after it processed all
-the transactions for the block, a virtual instruction is executed to collect
-the transaction fees.
+* `account[0]` - RW - The StakeState::Stake instance that is deactivating, the transaction must be signed by this key.
+* `account[1]` - R - syscall::current account from the Bank that carries current epoch
 
-* A portion of the fees are deposited into the leader's account.
-* A portion of the fees are deposited into the smallest StakeState::MiningPool
-account.
+StakeState::Stake::deactivated is set to the current epoch + cool down.  The account's stake will ramp down to zero by
+that epoch, and Account::lamports will be available for withdrawal.
 
-## Authorizing a Vote Signer
 
-`VoteInstruction::AuthorizeVoter` allows a staker to choose a signing service
-for its votes. That service is responsible for ensuring the vote won't cause
-the staker to be slashed.
+### StakeInstruction::Withdraw(u64)
+Lamports build up over time in a Stake account and any excess over activated stake can be withdrawn.
+
+* `account[0]` - RW - The StakeState::Stake from which to withdraw, the transaction must be signed by this key.
+* `account[1]` - RW - Account that should be credited with the withdrawn lamports.
+* `account[2]` - R - syscall::current account from the Bank that carries current epoch, to calculate stake.
+
 
 ## Benefits of the design
 
@@ -186,9 +191,6 @@ the staker to be slashed.
 
 * Commission for the work is deposited when a reward is claimed by the delegated
 stake.
-
-This proposal would benefit from the `read-only` accounts proposal to allow for
-many rewards to be claimed concurrently.
 
 ## Example Callflow
 
