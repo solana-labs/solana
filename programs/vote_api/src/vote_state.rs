@@ -69,9 +69,9 @@ pub struct VoteState {
     pub votes: VecDeque<Lockout>,
     pub node_pubkey: Pubkey,
     pub authorized_voter_pubkey: Pubkey,
-    /// fraction of std::u32::MAX that represents what part of a rewards
+    /// fraction of std::u8::MAX that represents what part of a rewards
     ///  payout should be given to this VoteAccount
-    pub commission: u32,
+    pub commission: u8,
     pub root_slot: Option<u64>,
 
     /// current epoch
@@ -88,7 +88,7 @@ pub struct VoteState {
 }
 
 impl VoteState {
-    pub fn new(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u32) -> Self {
+    pub fn new(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u8) -> Self {
         Self {
             node_pubkey: *node_pubkey,
             authorized_voter_pubkey: *vote_pubkey,
@@ -140,9 +140,9 @@ impl VoteState {
     pub fn commission_split(&self, on: f64) -> (f64, f64, bool) {
         match self.commission {
             0 => (0.0, on, false),
-            std::u32::MAX => (on, 0.0, false),
+            std::u8::MAX => (on, 0.0, false),
             split => {
-                let mine = on * f64::from(split) / f64::from(std::u32::MAX);
+                let mine = on * f64::from(split) / f64::from(std::u8::MAX);
                 (mine, on - mine, true)
             }
         }
@@ -306,7 +306,7 @@ pub fn authorize_voter(
 pub fn initialize_account(
     vote_account: &mut KeyedAccount,
     node_pubkey: &Pubkey,
-    commission: u32,
+    commission: u8,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
 
@@ -351,7 +351,7 @@ pub fn process_votes(
 pub fn create_account(
     vote_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
-    commission: u32,
+    commission: u8,
     lamports: u64,
 ) -> Account {
     let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
@@ -367,7 +367,7 @@ pub fn create_account(
 pub fn create_bootstrap_leader_account(
     vote_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
-    commission: u32,
+    commission: u8,
     vote_lamports: u64,
 ) -> (Account, VoteState) {
     // Construct a vote account for the bootstrap_leader such that the leader_scheduler
@@ -799,10 +799,10 @@ mod tests {
 
         assert_eq!(vote_state.commission_split(1.0), (0.0, 1.0, false));
 
-        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), std::u32::MAX);
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), std::u8::MAX);
         assert_eq!(vote_state.commission_split(1.0), (1.0, 0.0, false));
 
-        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), std::u32::MAX / 2);
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), std::u8::MAX / 2);
         let (voter_portion, staker_portion, was_split) = vote_state.commission_split(10.0);
 
         assert_eq!(

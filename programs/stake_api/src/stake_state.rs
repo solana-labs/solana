@@ -695,7 +695,7 @@ mod tests {
             None, // would be Some((0, 2 * 1 + 1 * 2, 3)),
             stake.calculate_rewards(1.0, &vote_state)
         );
-        vote_state.commission = std::u32::MAX - 1;
+        vote_state.commission = std::u8::MAX - 1;
         assert_eq!(
             None, // would be pSome((0, 2 * 1 + 1 * 2, 3)),
             stake.calculate_rewards(1.0, &vote_state)
