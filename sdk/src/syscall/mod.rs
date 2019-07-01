@@ -6,13 +6,9 @@ pub mod current;
 pub mod fees;
 pub mod rewards;
 pub mod slot_hashes;
-pub mod tick_height;
 
 pub fn is_syscall_id(id: &Pubkey) -> bool {
-    current::check_id(id)
-        || fees::check_id(id)
-        || slot_hashes::check_id(id)
-        || tick_height::check_id(id)
+    current::check_id(id) || fees::check_id(id) || slot_hashes::check_id(id)
 }
 
 /// "Sysca11111111111111111111111111111111111111"
