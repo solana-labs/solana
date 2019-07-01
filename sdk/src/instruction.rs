@@ -127,7 +127,7 @@ impl AccountMeta {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct CompiledInstruction {
     /// Index into the transaction keys array indicating the program account that executes this instruction
-    pub program_ids_index: u8,
+    pub program_id_index: u8,
     /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
     #[serde(with = "short_vec")]
     pub accounts: Vec<u8>,
@@ -140,13 +140,13 @@ impl CompiledInstruction {
     pub fn new<T: Serialize>(program_ids_index: u8, data: &T, accounts: Vec<u8>) -> Self {
         let data = serialize(data).unwrap();
         Self {
-            program_ids_index,
+            program_id_index: program_ids_index,
             data,
             accounts,
         }
     }
 
     pub fn program_id<'a>(&self, program_ids: &'a [Pubkey]) -> &'a Pubkey {
-        &program_ids[self.program_ids_index as usize]
+        &program_ids[self.program_id_index as usize]
     }
 }

@@ -236,11 +236,11 @@ impl Accounts {
             .instructions
             .iter()
             .map(|ix| {
-                if message.account_keys.len() <= ix.program_ids_index as usize {
+                if message.account_keys.len() <= ix.program_id_index as usize {
                     error_counters.account_not_found += 1;
                     return Err(TransactionError::AccountNotFound);
                 }
-                let program_id = message.account_keys[ix.program_ids_index as usize];
+                let program_id = message.account_keys[ix.program_id_index as usize];
                 Self::load_executable_accounts(
                     storage,
                     ancestors,
