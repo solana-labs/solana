@@ -1096,7 +1096,7 @@ impl ClusterInfo {
         if caller.contact_info().is_none() {
             return vec![];
         }
-        let from = caller.contact_info()unwrap();
+        let from = caller.contact_info().unwrap();
         if from.id == self_id {
             warn!(
                 "PullRequest ignored, I'm talking to myself: me={} remoteme={}",
