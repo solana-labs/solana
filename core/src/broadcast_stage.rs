@@ -37,7 +37,7 @@ pub enum BroadcastStageReturnType {
 pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
-    BroadcastDifferentBlobs,
+    BroadcastFakeBlobs,
 }
 
 impl BroadcastStageType {
@@ -68,7 +68,7 @@ impl BroadcastStageType {
                 FailEntryVerificationBroadcastRun::new(),
             ),
 
-            BroadcastStageType::BroadcastDifferentBlobs => BroadcastStage::new(
+            BroadcastStageType::BroadcastFakeBlobs => BroadcastStage::new(
                 sock,
                 cluster_info,
                 receiver,

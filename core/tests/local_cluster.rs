@@ -275,6 +275,60 @@ fn test_fail_entry_verification_leader() {
 }
 
 #[test]
+#[ignore]
+fn test_fake_blobs_broadcast_leader() {
+    solana_logger::setup();
+    let num_nodes = 4;
+    let validator_config = ValidatorConfig::default();
+    let mut error_validator_config = ValidatorConfig::default();
+    error_validator_config.broadcast_stage_type = BroadcastStageType::BroadcastFakeBlobs;
+    let mut validator_configs = vec![validator_config; num_nodes - 1];
+    validator_configs.push(error_validator_config);
+
+    let cluster_config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes: vec![100; 4],
+        validator_configs: validator_configs,
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
+        ..ClusterConfig::default()
+    };
+
+    let cluster = LocalCluster::new(&cluster_config);
+    let epoch_schedule = EpochSchedule::new(
+        cluster_config.slots_per_epoch,
+        cluster_config.stakers_slot_offset,
+        true,
+    );
+    let num_warmup_epochs = epoch_schedule.get_stakers_epoch(0) + 1;
+
+    // Wait for the corrupted leader to be scheduled afer the warmup epochs expire
+    cluster_tests::sleep_n_epochs(
+        (num_warmup_epochs + 1) as f64,
+        &cluster.genesis_block.poh_config,
+        cluster_config.ticks_per_slot,
+        cluster_config.slots_per_epoch,
+    );
+
+    let corrupt_node = cluster
+        .fullnode_infos
+        .iter()
+        .find(|(_, v)| v.config.broadcast_stage_type == BroadcastStageType::BroadcastFakeBlobs)
+        .unwrap()
+        .0;
+    let mut ignore = HashSet::new();
+    ignore.insert(*corrupt_node);
+
+    // Verify that we can still spend and verify even in the presence of corrupt nodes
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        num_nodes,
+        ignore,
+    );
+}
+
+#[test]
 fn test_repairman_catchup() {
     run_repairman_catchup(3);
 }
