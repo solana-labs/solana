@@ -751,7 +751,7 @@ impl ClusterInfo {
 
     /// retransmit messages to a list of nodes
     /// # Remarks
-    /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    /// We need to avoid having obj locked while doing a io, such as the `send_to`
     pub fn retransmit_to(
         obj: &Arc<RwLock<Self>>,
         peers: &[ContactInfo],
@@ -1096,7 +1096,7 @@ impl ClusterInfo {
         if caller.contact_info().is_none() {
             return vec![];
         }
-        let mut from = caller.contact_info().cloned().unwrap();
+        let from = caller.contact_info().unwrap();
         if from.id == self_id {
             warn!(
                 "PullRequest ignored, I'm talking to myself: me={} remoteme={}",
@@ -1114,15 +1114,10 @@ impl ClusterInfo {
         let len = data.len();
         trace!("get updates since response {}", len);
         let rsp = Protocol::PullResponse(self_id, data);
-        // The remote node may not know its public IP:PORT. Record what it looks like to us.
-        // This may or may not be correct for everybody, but it's better than leaving the remote with
-        // an unspecified address in our table
-        if from.gossip.ip().is_unspecified() {
-            inc_new_counter_debug!("cluster_info-window-request-updates-unspec-gossip", 1);
-            from.gossip = *from_addr;
-        }
+        // The remote node may not know its public IP:PORT. Instead of responding to the caller's
+        // gossip addr, respond to the origin addr.
         inc_new_counter_debug!("cluster_info-pull_request-rsp", len);
-        to_shared_blob(rsp, from.gossip).ok().into_iter().collect()
+        to_shared_blob(rsp, *from_addr).ok().into_iter().collect()
     }
 
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: &Pubkey, data: Vec<CrdsValue>) {

@@ -42,12 +42,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Monitor the gossip entrypoint")
                 .setting(AppSettings::DisableVersion)
                 .arg(
-                    clap::Arg::with_name("pull_only")
-                        .long("pull-only")
-                        .takes_value(false)
-                        .help("Use a partial gossip node (Pulls only) to spy on the cluster. By default it will use a full fledged gossip node (Pushes and Pulls). Useful when behind a NAT"),
-                )
-                .arg(
                     Arg::with_name("num_nodes")
                         .short("N")
                         .long("num-nodes")
@@ -120,9 +114,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_of("node_pubkey")
                 .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
 
-            let gossip_addr = if matches.is_present("pull_only") {
-                None
-            } else {
+            let gossip_addr = {
                 let mut addr = socketaddr_any!();
                 addr.set_ip(
                     solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
