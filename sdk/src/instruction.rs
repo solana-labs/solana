@@ -76,7 +76,7 @@ impl InstructionError {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Instruction {
     /// Pubkey of the instruction processor that executes this instruction
-    pub program_ids_index: Pubkey,
+    pub program_id: Pubkey,
     /// Metadata for what accounts should be passed to the instruction processor
     pub accounts: Vec<AccountMeta>,
     /// Opaque data passed to the instruction processor
@@ -84,14 +84,10 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    pub fn new<T: Serialize>(
-        program_ids_index: Pubkey,
-        data: &T,
-        accounts: Vec<AccountMeta>,
-    ) -> Self {
+    pub fn new<T: Serialize>(program_id: Pubkey, data: &T, accounts: Vec<AccountMeta>) -> Self {
         let data = serialize(data).unwrap();
         Self {
-            program_ids_index,
+            program_id,
             data,
             accounts,
         }
