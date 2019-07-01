@@ -88,3 +88,18 @@ default_arg() {
     args+=("$name")
   fi
 }
+
+replace_arg() {
+  declare name=$1
+  declare value=$2
+
+  default_arg "$name" "$value"
+
+  declare index=0
+  for arg in "${args[@]}"; do
+    index=$((index + 1))
+    if [[ $arg = "$name" ]]; then
+      args[$index]="$value"
+    fi
+  done
+}
