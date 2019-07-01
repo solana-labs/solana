@@ -6,14 +6,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 // rate at any given time should be expected to drift
 pub const DEFAULT_NUM_TICKS_PER_SECOND: u64 = 10;
 
-// At 10 ticks/s, 8 ticks per slot implies that leader rotation and voting will happen
-// every 800 ms. A fast voting cadence ensures faster finality and convergence
-pub const DEFAULT_TICKS_PER_SLOT: u64 = 8;
+// At 10 ticks/s, 4 ticks per slot implies that leader rotation and voting will happen
+// every 400 ms. A fast voting cadence ensures faster finality and convergence
+pub const DEFAULT_TICKS_PER_SLOT: u64 = 4;
 
-// 1 Epoch = 800 * 4096 ms ~= 55 minutes
-pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 4096;
+// 1 Epoch = 400 * 8192 ms ~= 55 minutes
+pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 8192;
 
-pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 8;
+pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
 /// The time window of recent block hash values that the bank will track the signatures
 /// of over. Once the bank discards a block hash, it will reject any transactions that use
@@ -32,11 +32,11 @@ pub const MAX_PROCESSING_AGE: usize = MAX_RECENT_BLOCKHASHES / 2;
 /// This is maximum time consumed in forwarding a transaction from one node to next, before
 /// it can be processed in the target node
 #[cfg(feature = "cuda")]
-pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 4;
+pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 2;
 
 /// More delay is expected if CUDA is not enabled (as signature verification takes longer)
 #[cfg(not(feature = "cuda"))]
-pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 12;
+pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 6;
 
 pub fn duration_as_ns(d: &Duration) -> u64 {
     d.as_secs() * 1_000_000_000 + u64::from(d.subsec_nanos())
