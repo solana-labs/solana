@@ -2,19 +2,21 @@ use super::*;
 use crate::entry::Entry;
 use solana_sdk::hash::Hash;
 
-pub(super) struct BroadcastDifferentBlobsRun {
+pub(super) struct BroadcastFakeBlobsRun {
     last_blockhash: Hash,
+    partition: usize,
 }
 
-impl BroadcastDifferentBlobsRun {
-    pub(super) fn new() -> Self {
+impl BroadcastFakeBlobsRun {
+    pub(super) fn new(partition: usize) -> Self {
         Self {
             last_blockhash: Hash::default(),
+            partition,
         }
     }
 }
 
-impl BroadcastRun for BroadcastDifferentBlobsRun {
+impl BroadcastRun for BroadcastFakeBlobsRun {
     fn run(
         &mut self,
         broadcast: &mut Broadcast,
@@ -73,23 +75,48 @@ impl BroadcastRun for BroadcastDifferentBlobsRun {
 
         blocktree.write_shared_blobs(data_blobs.iter().chain(coding_blobs.iter()))?;
 
+        // Set the forwarded flag to true, so that the blobs won't be forwarded to peers
+        data_blobs
+            .iter()
+            .for_each(|blob| blob.write().unwrap().set_forwarded(true));
+        coding_blobs
+            .iter()
+            .for_each(|blob| blob.write().unwrap().set_forwarded(true));
+        fake_data_blobs
+            .iter()
+            .for_each(|blob| blob.write().unwrap().set_forwarded(true));
+        fake_coding_blobs
+            .iter()
+            .for_each(|blob| blob.write().unwrap().set_forwarded(true));
+
         // 3) Start broadcast step
-        let bank_epoch = bank.get_stakers_epoch(bank.slot());
-        let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
-
-        // Broadcast data + erasures
-        cluster_info.read().unwrap().broadcast(
-            sock,
-            data_blobs.iter().chain(coding_blobs.iter()),
-            stakes.as_ref(),
-        )?;
-
-        // Broadcast fake data + erasures
-        cluster_info.read().unwrap().broadcast(
-            sock,
-            fake_data_blobs.iter().chain(fake_coding_blobs.iter()),
-            stakes.as_ref(),
-        )?;
+        let peers = cluster_info.read().unwrap().tvu_peers();
+        peers.iter().enumerate().for_each(|(i, peer)| {
+            if i <= self.partition {
+                // Send fake blobs to the first N peers
+                fake_data_blobs.iter().for_each(|b| {
+                    let blob = b.read().unwrap();
+                    sock.send_to(&blob.data[..blob.meta.size], &peer.tvu)
+                        .unwrap();
+                });
+                fake_coding_blobs.iter().for_each(|b| {
+                    let blob = b.read().unwrap();
+                    sock.send_to(&blob.data[..blob.meta.size], &peer.tvu)
+                        .unwrap();
+                });
+            } else {
+                data_blobs.iter().for_each(|b| {
+                    let blob = b.read().unwrap();
+                    sock.send_to(&blob.data[..blob.meta.size], &peer.tvu)
+                        .unwrap();
+                });
+                coding_blobs.iter().for_each(|b| {
+                    let blob = b.read().unwrap();
+                    sock.send_to(&blob.data[..blob.meta.size], &peer.tvu)
+                        .unwrap();
+                });
+            }
+        });
 
         Ok(())
     }

@@ -1,5 +1,5 @@
 //! A stage to broadcast data from a leader node to validators
-use self::broadcast_different_blobs_run::BroadcastDifferentBlobsRun;
+use self::broadcast_fake_blobs_run::BroadcastFakeBlobsRun;
 use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun;
 use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
@@ -21,7 +21,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
-mod broadcast_different_blobs_run;
+mod broadcast_fake_blobs_run;
 mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
@@ -74,7 +74,7 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blocktree,
-                BroadcastDifferentBlobsRun::new(),
+                BroadcastFakeBlobsRun::new(0),
             ),
         }
     }
