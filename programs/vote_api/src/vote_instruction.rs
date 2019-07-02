@@ -17,7 +17,7 @@ use solana_sdk::system_instruction;
 pub enum VoteInstruction {
     /// Initialize the VoteState for this `vote account`
     /// takes a node_pubkey and commission
-    InitializeAccount(Pubkey, u32),
+    InitializeAccount(Pubkey, u8),
 
     /// Authorize a voter to send signed votes.
     AuthorizeVoter(Pubkey),
@@ -26,7 +26,7 @@ pub enum VoteInstruction {
     Vote(Vec<Vote>),
 }
 
-fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u32) -> Instruction {
+fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u8) -> Instruction {
     let account_metas = vec![AccountMeta::new(*vote_pubkey, false)];
     Instruction::new(
         id(),
@@ -39,7 +39,7 @@ pub fn create_account(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
-    commission: u32,
+    commission: u8,
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;

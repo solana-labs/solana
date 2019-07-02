@@ -48,7 +48,7 @@ pub enum WalletCommand {
     Cancel(Pubkey),
     Confirm(Signature),
     AuthorizeVoter(Pubkey, Keypair, Pubkey),
-    CreateVoteAccount(Pubkey, Pubkey, u32, u64),
+    CreateVoteAccount(Pubkey, Pubkey, u8, u64),
     ShowVoteAccount(Pubkey),
     CreateStakeAccount(Pubkey, u64),
     DelegateStake(Keypair, Pubkey, u64),
@@ -466,7 +466,7 @@ fn process_create_vote_account(
     config: &WalletConfig,
     voting_account_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
-    commission: u32,
+    commission: u8,
     lamports: u64,
 ) -> ProcessResult {
     let ixs = vote_instruction::create_account(
@@ -1378,7 +1378,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("commission")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("The commission taken on reward redemption, default: 0"),
+                        .help("The commission taken on reward redemption (0-255), default: 0"),
                 ),
         )
         .subcommand(
