@@ -14,7 +14,7 @@ use solana_sdk::transaction::Transaction;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::thread::sleep;
+use std::sync::mpsc;
 use std::time::SystemTime;
 use std::time::{Duration, Instant};
 use tempdir::TempDir;
@@ -759,6 +759,19 @@ pub fn run(
 
     let mut child_option: Option<std::process::Child> = None;
     let mut now = Instant::now();
+
+    let (signal_sender, signal_receiver) = mpsc::channel();
+    if !cfg!(windows) {
+        use signal_hook::{iterator::Signals, SIGTERM};
+        let signals = Signals::new(&[SIGTERM]).unwrap();
+        std::thread::spawn(move || {
+            for sig in signals.forever() {
+                eprintln!("run: received signal {:?}", sig);
+                let _ = signal_sender.send(());
+            }
+        });
+    }
+
     loop {
         child_option = match child_option {
             Some(mut child) => match child.try_wait() {
@@ -806,6 +819,15 @@ pub fn run(
             };
             now = Instant::now();
         }
-        sleep(Duration::from_secs(1));
+
+        if let Ok(()) = signal_receiver.recv_timeout(Duration::from_secs(1)) {
+            // Handle SIGTERM...
+            if let Some(ref mut child) = child_option {
+                stop_process(child).unwrap_or_else(|err| {
+                    eprintln!("Failed to stop child: {:?}", err);
+                });
+            }
+            std::process::exit(0);
+        }
     }
 }
