@@ -58,6 +58,7 @@ fn test_spend_and_verify_all_nodes_3() {
     );
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
 #[ignore]
@@ -76,6 +77,7 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
     );
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
 #[should_panic]
