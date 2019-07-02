@@ -34,6 +34,7 @@ solana-client = { path = "../client", version = "0.16.2" }
 solana-config-api = { path = "../programs/config_api", version = "0.16.2" }
 solana-logger = { path = "../logger", version = "0.16.2" }
 solana-sdk = { path = "../sdk", version = "0.16.2" }
+signal-hook = "0.1.9"
 tar = "0.4.26"
 tempdir = "0.3.7"
 url = "1.7.2"
