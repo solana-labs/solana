@@ -81,7 +81,7 @@ pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instr
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new(crate::rewards_pools::random_id(), false),
-        AccountMeta::new(syscall::rewards::id(), false),
+        AccountMeta::new_credit_only(syscall::rewards::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
@@ -90,7 +90,7 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
         AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new(syscall::current::id(), false),
+        AccountMeta::new_credit_only(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
 }
@@ -99,7 +99,7 @@ pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Ins
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
-        AccountMeta::new(syscall::current::id(), false),
+        AccountMeta::new_credit_only(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
@@ -107,7 +107,7 @@ pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Ins
 pub fn deactivate_stake(stake_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
-        AccountMeta::new(syscall::current::id(), false),
+        AccountMeta::new_credit_only(syscall::current::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
 }
