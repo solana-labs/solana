@@ -2106,7 +2106,7 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, genesis_block.hash());
 
         let mut tx_invalid_program_index = tx.clone();
-        tx_invalid_program_index.message.instructions[0].program_ids_index = 42;
+        tx_invalid_program_index.message.instructions[0].program_id_index = 42;
         assert_eq!(
             bank.process_transaction(&tx_invalid_program_index),
             Err(TransactionError::InvalidAccountIndex)

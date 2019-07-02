@@ -18,7 +18,7 @@ fn compile_instruction(ix: Instruction, keys: &[Pubkey]) -> CompiledInstruction 
         .collect();
 
     CompiledInstruction {
-        program_ids_index: position(keys, &ix.program_ids_index),
+        program_id_index: position(keys, &ix.program_id),
         data: ix.data.clone(),
         accounts,
     }
@@ -118,7 +118,7 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
 fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
     instructions
         .iter()
-        .map(|ix| ix.program_ids_index)
+        .map(|ix| ix.program_id)
         .unique()
         .collect()
 }
@@ -205,7 +205,7 @@ impl Message {
     pub fn program_ids(&self) -> Vec<&Pubkey> {
         self.instructions
             .iter()
-            .map(|ix| &self.account_keys[ix.program_ids_index as usize])
+            .map(|ix| &self.account_keys[ix.program_id_index as usize])
             .collect()
     }
 

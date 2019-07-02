@@ -256,7 +256,7 @@ mod tests {
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         message.account_keys.insert(3, alice_pubkey);
         message.instructions[0].accounts[0] = 3;
-        message.instructions[0].program_ids_index = 4;
+        message.instructions[0].program_id_index = 4;
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
@@ -305,7 +305,7 @@ mod tests {
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         message.account_keys.insert(3, alice_pubkey);
         message.instructions[0].accounts[0] = 3;
-        message.instructions[0].program_ids_index = 4;
+        message.instructions[0].program_id_index = 4;
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
