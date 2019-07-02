@@ -30,6 +30,7 @@ ring = "0.13.2"
 serde = "1.0.94"
 serde_derive = "1.0.94"
 serde_yaml = "0.8.9"
+signal-hook = "0.1.9"
 solana-client = { path = "../client", version = "0.17.0" }
 solana-config-api = { path = "../programs/config_api", version = "0.17.0" }
 solana-logger = { path = "../logger", version = "0.17.0" }
