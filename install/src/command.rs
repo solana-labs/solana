@@ -760,14 +760,15 @@ pub fn run(
     let mut child_option: Option<std::process::Child> = None;
     let mut now = Instant::now();
 
-    let (signal_sender, signal_receiver) = mpsc::channel();
-    if !cfg!(windows) {
+    let (_signal_sender, signal_receiver) = mpsc::channel();
+    #[cfg(not(windows))]
+    {
         use signal_hook::{iterator::Signals, SIGTERM};
         let signals = Signals::new(&[SIGTERM]).unwrap();
         std::thread::spawn(move || {
             for sig in signals.forever() {
                 eprintln!("run: received signal {:?}", sig);
-                let _ = signal_sender.send(());
+                let _ = _signal_sender.send(());
             }
         });
     }
