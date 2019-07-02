@@ -19,6 +19,7 @@ use solana_sdk::system_instruction;
 use solana_sdk::timing::{duration_as_ms, MAX_PROCESSING_AGE};
 use solana_sdk::transaction::{self, Transaction};
 use solana_sdk::transport::Result as TransportResult;
+use std::cmp;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -233,7 +234,7 @@ impl ThinClient {
                     // all pending confirmations. Resending the transaction could result into
                     // extra transaction fees
                     pending_confirmations -= confirmed_blocks;
-                    wait_time = MAX_PROCESSING_AGE * pending_confirmations;
+                    wait_time = cmp::max(wait_time, MAX_PROCESSING_AGE * pending_confirmations);
                 }
             }
             info!(
