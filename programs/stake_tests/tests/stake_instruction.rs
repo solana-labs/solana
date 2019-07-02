@@ -77,7 +77,7 @@ fn test_stake_account_delegate() {
         &mint_pubkey,
         &vote_pubkey,
         &node_pubkey,
-        std::u32::MAX / 2,
+        std::u8::MAX / 2,
         10,
     ));
     bank_client

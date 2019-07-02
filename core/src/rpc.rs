@@ -205,8 +205,8 @@ pub struct RpcVoteAccountInfo {
     /// The current stake, in lamports, delegated to this vote account
     pub stake: u64,
 
-    /// A 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
-    pub commission: u32,
+    /// An 8-bit integer used as a fraction (commission/MAX_U8) for rewards payout
+    pub commission: u8,
 }
 
 #[rpc(server)]
