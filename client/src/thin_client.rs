@@ -209,20 +209,31 @@ impl ThinClient {
             let now = Instant::now();
             let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
+            let mut pending_confirmations = min_confirmed_blocks;
+            let mut wait_time = MAX_PROCESSING_AGE;
             serialize_into(&mut wr, &transaction)
                 .expect("serialize Transaction in pub fn transfer_signed");
             // resend the same transaction until the transaction has no chance of succeeding
-            while now.elapsed().as_secs() < MAX_PROCESSING_AGE as u64 {
-                self.transactions_socket
-                    .send_to(&buf[..], &self.transactions_addr())?;
-                if self
-                    .poll_for_signature_confirmation(
-                        &transaction.signatures[0],
-                        min_confirmed_blocks,
-                    )
-                    .is_ok()
-                {
-                    return Ok(transaction.signatures[0]);
+            while now.elapsed().as_secs() < wait_time as u64 {
+                if pending_confirmations == min_confirmed_blocks {
+                    // Send the transaction if there has been no confirmation (e.g. the first time)
+                    self.transactions_socket
+                        .send_to(&buf[..], &self.transactions_addr())?;
+                }
+
+                if let Ok(confirmed_blocks) = self.poll_for_signature_confirmation(
+                    &transaction.signatures[0],
+                    pending_confirmations,
+                ) {
+                    if confirmed_blocks >= pending_confirmations {
+                        return Ok(transaction.signatures[0]);
+                    }
+                    // Update number of pending confirmations
+                    // Also, since network has seen the transaction, wait longer to receive
+                    // all pending confirmations. Resending the transaction could result into
+                    // extra transaction fees
+                    pending_confirmations -= confirmed_blocks;
+                    wait_time = MAX_PROCESSING_AGE * pending_confirmations;
                 }
             }
             info!(
@@ -385,7 +396,7 @@ impl SyncClient for ThinClient {
         &self,
         signature: &Signature,
         min_confirmed_blocks: usize,
-    ) -> TransportResult<()> {
+    ) -> TransportResult<usize> {
         Ok(self
             .rpc_client()
             .poll_for_signature_confirmation(signature, min_confirmed_blocks)?)
