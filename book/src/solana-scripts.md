@@ -23,9 +23,25 @@ Scripts are on-chain programs that act as an infallible TTP.
 
 ## Scripts
 
-Scripts are programs that execute in an environment with additional features
-that are unavailble to regular programs.  Scripts can make synchronous calls to
-instructions, generate their own keys, and sign instructions with those keys.
+To implement an infallible TTP, scripts behave as on-chain clients, with an
+on-chain wallet that has access to script unique keypairs that only the script
+can sign with.  Additionally, like regular clients, scripts cannot directly
+mutate state or transfer funds, and must do those things via calls to
+instructions.
+
+Scripts are executable bytecode that run in an environment with additional
+features and restrictions than programs.
+
+Scripts have the following additional features:
+* `process_instruction`, a synchronous call to process an instructions.
+* `keypair_pubkey`, generate a persistent key that only this script can sign with.
+* `sign_instruction`, sign an instruction with a script key.
+
+Scripts cannot:
+* Directly mutate state, or move funds.
+
+Scripts rely on programs to move funds or mutate state, and act purely as
+coordinators.
 
 ### Signatures and Permissions
 
@@ -87,10 +103,19 @@ In this example, a script accepts tokens from two different accounts, and pays
 out the total to whoever wins the game of Tic-Tac-Toe.
 
 ```
-enum BetOnTicTacToe {
+enum BetOnTicTacToeScript {
     Initialize {amount: u64, game: Pubkey},
     Claim,
 };
+
+// This is an additional program that implements some features that this script
+// needs.  Scripts cannot mutate state directly, and rely on programs to handle
+// state mutation.
+const BetOnTicTacToeProgramId: Pubkey = [];
+enum BetOnTicTacToeProgram {
+    // copy the game id from account 2 to account 1
+    StoreGame,
+}
 
 pub fn process_instruction(
     program_id: &Pubkey,
@@ -99,7 +124,7 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     let cmd = deserialize(&data)?;
     match cmd {
-        case BetOnTicTacToe::Initialize{ amount, game} => {
+        case BetOnTicTacToeScript::Initialize{ amount, game} => {
             //The scripts system account to store lamports
             let script_tokens_key = script::keypair_pubkey(0);
 
@@ -125,19 +150,20 @@ pub fn process_instruction(
             let mut create = system_instruction::create(
                             script_token_key,
                             script_data_key,
-                            1,
+                            2,
                             size_of(game),
-                            program_id);
+                            BetOnTicTacToeProgramId);
             script::sign_instruction(&mut create, 0);
             script::process_instruction(create)?;
 
-            // this is a bit awkward
-            assert_eq!(script_data_key, keyed_accounts[3].key);
-            assert_eq!(program_id, keyed_accounts[3].account.owner);
-            let prize = amount * 2 - 1;
-            serialize_into(&mut keyed_accounts[1].account.data, (prize, game))?;
+            let prize = amount * 2 - 2;
+            //call BetOnTicTacToeProgramId
+            let store_game = betontictactoe::store_game(
+                            script_data_key,
+                            &serialize((prize, game)?);
+            script::process_instruction(store_game)?;
         },
-        case BetOnTicTacToe::Claim => {
+        case BetOnTicTacToeScript::Claim => {
             //script pubkey 0 is always the same
             let script_tokens_key = script::keypair_pubkey(0);
             //script pubkey 1 is always the same
@@ -190,4 +216,4 @@ following transfers.  The script execution succeeds if and only if the script
 generates the exact same instruction vector during execution.  Bob and Alice
 have no way to ensure what the state of any of the programs will be during the
 start of the script. The explicit instruction vector ensures that the script
-behaves as an infallable TTP.
+behaves as an infallible TTP.
