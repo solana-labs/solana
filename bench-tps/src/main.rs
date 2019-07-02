@@ -40,7 +40,7 @@ fn main() {
     } = cli_config;
 
     if write_to_client_file {
-        let keypairs = generate_keypairs(&id, tx_count as u64 * 2);
+        let (keypairs, _) = generate_keypairs(&id, tx_count as u64 * 2);
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeCalculator::new(target_lamports_per_signature).max_lamports_per_signature;
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
