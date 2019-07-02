@@ -30,7 +30,6 @@ ring = "0.13.2"
 serde = "1.0.94"
 serde_derive = "1.0.94"
 serde_yaml = "0.8.9"
-signal-hook = "0.1.9"
 solana-client = { path = "../client", version = "0.17.0" }
 solana-config-api = { path = "../programs/config_api", version = "0.17.0" }
 solana-logger = { path = "../logger", version = "0.17.0" }
@@ -38,6 +37,9 @@ solana-sdk = { path = "../sdk", version = "0.17.0" }
 tar = "0.4.26"
 tempdir = "0.3.7"
 url = "1.7.2"
+
+[target."cfg(not(windows))".dependencies]
+signal-hook = "0.1.9"
 
 [target."cfg(windows)".dependencies]
 winapi = "0.3.7"
