@@ -749,7 +749,11 @@ pub fn run(
 ) -> Result<(), String> {
     let config = Config::load(config_file)?;
 
-    let full_program_path = config.active_release_bin_dir().join(program_name);
+    let mut full_program_path = config.active_release_bin_dir().join(program_name);
+    if cfg!(windows) {
+        full_program_path.set_extension("exe");
+    }
+
     if !full_program_path.exists() {
         Err(format!(
             "{} does not exist",
