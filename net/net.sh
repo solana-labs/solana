@@ -477,7 +477,8 @@ start() {
       declare updateDownloadUrl=http://release.solana.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
       (
         set -x
-        curl -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
+        curl --retry 5 --retry-delay 2 --retry-connrefused \
+          -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
       )
       tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
     else
