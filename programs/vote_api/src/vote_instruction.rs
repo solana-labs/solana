@@ -95,9 +95,9 @@ pub fn vote(
         authorized_voter_pubkey,
         &[
             // request slot_hashes syscall account after vote_pubkey
-            AccountMeta::new(syscall::slot_hashes::id(), false),
+            AccountMeta::new_credit_only(syscall::slot_hashes::id(), false),
             // request current syscall account after that
-            AccountMeta::new(syscall::current::id(), false),
+            AccountMeta::new_credit_only(syscall::current::id(), false),
         ],
     );
 
