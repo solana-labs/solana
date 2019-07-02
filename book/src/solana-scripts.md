@@ -16,10 +16,10 @@ A few solutions that have been tried:
 
 The ideal solution to this problem is an infallible Trusted Third Party. For
 example, clients that want to bet on an outcome of an on-chain game of
-Tic-Tac-Toe, transfer their tokens to the TTP, and the TTP transfers the prize
-to the winner at the end of the game.
+Tic-Tac-Toe, transfer their tokens to the TTP client, and the TTP transfers the
+prize to the winner at the end of the game.
 
-Scripts are on-chain programs that act as an infallible TTP.
+Scripts are on-chain programs that act as an infallible TTP client.
 
 ## Scripts
 
@@ -37,13 +37,59 @@ Scripts have the following additional features:
 * `keypair_pubkey`, generate a persistent key that only this script can sign with.
 * `sign_instruction`, sign an instruction with a script key.
 
-Scripts cannot:
-* Directly mutate state, or move funds.
+Since scripts are clients, they cannot:
+* Directly mutate state, or directly move funds between accounts.
 
 Scripts rely on programs to move funds or mutate state, and act purely as
-coordinators.
+clients.
 
-### Signatures and Permissions
+## Secure Script Execution
+
+During the script execution, calls to `process_instruction` yield, and the next
+instruction to be processed is invoked.  Scripts execute dynamically, and the
+execution path based on the current on-chain state.  The state may not match the
+same state that clients observed when signing the transaction.  Since script
+execute multiple programs, any change to any of the programs in the execution
+path could potentially change the outcome of the script.
+
+Several solutions exist to this problem:
+
+* clients sign a transaction with a specific blockhash, if any of the state that
+the script depends on have changed signed the signature the transaction fails.
+
+This solution is problematic because the stable blockhash is the root, but the
+transaction will be encoded at the head.  So the maximum throughput per script
+is going to be limited by the speed at which each transaction finalizes with a
+high confidence, which could be at least 10 blocks.
+
+* clients sign the expected merkle root of the changes to state after the
+transaction.  If the changes fail to match, the transaction fails.
+
+This solution has better performance characteristics, but users must serialize
+all the transactions to the script, because changes cannot be applied out of
+order.
+
+This design proposes another approach.  Users know ahead of time which
+instructions the script will generate, and if signatures are required for the
+instructions.
+
+The transaction invoked by the client must declare all the accounts that the
+script will need up front and provide all the necessary client signatures, as
+well as encode the instruction vector that the script will generate.
+
+The latter provides clear authorization for the script to take actions on behalf
+of the client, since each instruction specifies the clients keys and explicit
+signatures for each explicit instruction.  Users do not need to guess which
+instructions the script will execute, and authorize each one explicitly.  If the
+on-chain state has changed such that the script will take a different branch and
+execute a different instruction, then the script fails.  This allows the
+programs to implement out of order composition and for users to take advantage
+of those performance benefits.
+
+Once the instruction is invoked, the script is resumed from the last point of
+execution.
+
+## Methods
 
 A TTP needs the ability to create pubkeys and generate signatures for those
 keys.  At script creation time the loader program may authorize specific
@@ -65,11 +111,13 @@ Users can generate these keys locally and encode them into the instruction
 vector.  During the script execution, the script will call `sign_instruction`
 and set the `KeyedAccounts::is_signer` flag.
 
-### `fn process_instruction(ix: Instruction) -> Result<(), InstructionError>`
+* `fn process_instruction(ix: Instruction) -> Result<(), InstructionError>`
 
 This method is available to scripts to execute an instruction in the runtime.
 
-### `LoaderInstruction::FinalizeScript`
+## Scirpt Initialization
+
+* `LoaderInstruction::FinalizeScript`
 
 `LoaderInstruction::FinalizeScript` designates that the loaded executable
 bytecode is a script, and creates a new instance of the script. The difference
@@ -78,26 +126,32 @@ instructions, and scripts have the capability to sign.  `FinalizeScript` may be
 called more than once on the same loaded bytecode to create unique instances of
 scripts each with their own signing keys.
 
-### Secure Script Execution
+## Script Instruction Vector
 
-During the script execution, calls to `process_instruction` yield, and the next
-instruction to be processed is invoked.  Users know ahead of time which
-instructions the script will generate, and if signatures are required for the
-instructions.
+In the (script example)[#Script Example] to execute a transaction that calls
+`BetOnTicTacToe::Initialize` Bob and Alice need to sign a transaction with the
+following instruction vector
 
-The transaction invoked by the client must declare all the accounts that the
-script will need up front and provide all the necessary client signatures, as
-well as encode the instruction vector that the script will generate.
+```
+Message {
+  instructions: vec![
+    BetOnTicTacToe::Initialize{...},    //the script
+    SystemInstruction::Transfer{...},   //transfer alice's lamports to the script
+    SystemInstruction::Transfer{...},   //transfer bob's lamports to the script
+    SystemInstruction::Create{...},     //allocate the scripts data key
+  ],
+}
+```
 
-The latter provides clear authorization for the script to take actions on behalf
-of the client, since each instruction specifies the clients keys and explicit
-signatures for each explicit instruction.  Users do not need to guess which
-instructions the script will execute, and authorize each one explicitly.
+Both Bob and Alice must provide signatures for the Transfers. Since Bob and
+Alice signed this transaction, they have authorized the script to perform the
+following transfers.  The script execution succeeds if and only if the script
+generates the exact same instruction vector during execution.  Bob and Alice
+have no way to ensure what the state of any of the programs will be during the
+start of the script. The explicit instruction vector ensures that the script
+behaves as an infallible TTP.
 
-Once the instruction is invoked, the script is resumed from the last point of
-execution.
-
-### Script Example
+## Script Example
 
 In this example, a script accepts tokens from two different accounts, and pays
 out the total to whoever wins the game of Tic-Tac-Toe.
@@ -193,27 +247,3 @@ pub fn process_instruction(
 }
 
 ```
-
-### Script Instruction Vector
-
-To execute `BetOnTicTacToe::Initialize` Bob and Alice need to sign a transaction
-with the following instruction vector
-
-```
-Message {
-  instructions: vec![
-    BetOnTicTacToe::Initialize{...},    //the script
-    SystemInstruction::Transfer{...},   //transfer alice's lamports to the script
-    SystemInstruction::Transfer{...},   //transfer bob's lamports to the script
-    SystemInstruction::Create{...},     //allocate the scripts data key
-  ],
-}
-```
-
-Both Bob and Alice must provide signatures for the Transfers. Since Bob and
-Alice signed this transaction, they have authorized the script to perform the
-following transfers.  The script execution succeeds if and only if the script
-generates the exact same instruction vector during execution.  Bob and Alice
-have no way to ensure what the state of any of the programs will be during the
-start of the script. The explicit instruction vector ensures that the script
-behaves as an infallible TTP.
