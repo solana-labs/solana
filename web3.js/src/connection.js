@@ -41,7 +41,7 @@ type ContactInfo = {
  * @property {string} votePubkey Public key of the vote account
  * @property {string} nodePubkey Identity public key of the node voting with this account
  * @property {string} stake The stake, in lamports, delegated to this vote account
- * @property {string} commission A 32-bit integer used as a fraction (commission/0xFFFFFFFF) for rewards payout
+ * @property {string} commission A 8-bit unsigned integer used as a fraction (commission/0xFF) for rewards payout
  */
 type VoteAccountInfo = {
   votePubkey: string,
