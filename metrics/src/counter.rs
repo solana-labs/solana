@@ -194,6 +194,7 @@ mod tests {
     use crate::counter::{Counter, DEFAULT_LOG_RATE};
     use log::Level;
     use log::*;
+    use serial_test_derive::serial;
     use std::env;
     use std::sync::atomic::Ordering;
     use std::sync::{Once, RwLock, ONCE_INIT};
@@ -211,9 +212,11 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_counter() {
         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
-            .init();
+            .try_init()
+            .ok();
         let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 1000, 1);
         let count = 1;
@@ -237,6 +240,7 @@ mod tests {
         }
     }
     #[test]
+    #[serial]
     fn test_inc_new_counter() {
         let _readlock = get_env_lock().read();
         //make sure that macros are syntactically correct
@@ -246,7 +250,11 @@ mod tests {
         inc_new_counter_info!("3", 1, 2, 1);
     }
     #[test]
+    #[serial]
     fn test_lograte() {
+        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
+            .try_init()
+            .ok();
         let _readlock = get_env_lock().read();
         assert_eq!(
             Counter::default_log_rate(),
@@ -263,7 +271,11 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_lograte_env() {
+        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
+            .try_init()
+            .ok();
         assert_ne!(DEFAULT_LOG_RATE, 0);
         let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0, 1);

@@ -2,6 +2,7 @@ extern crate solana;
 
 use hashbrown::HashSet;
 use log::*;
+use serial_test_derive::serial;
 use solana::broadcast_stage::BroadcastStageType;
 use solana::cluster::Cluster;
 use solana::cluster_tests;
@@ -16,6 +17,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
+#[serial]
 fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup();
     let num_nodes = 1;
@@ -29,6 +31,7 @@ fn test_spend_and_verify_all_nodes_1() {
 }
 
 #[test]
+#[serial]
 fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
     let num_nodes = 2;
@@ -42,6 +45,7 @@ fn test_spend_and_verify_all_nodes_2() {
 }
 
 #[test]
+#[serial]
 fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
     let num_nodes = 3;
@@ -54,7 +58,9 @@ fn test_spend_and_verify_all_nodes_3() {
     );
 }
 
+#[allow(unused_attributes)]
 #[test]
+#[serial]
 #[ignore]
 fn test_spend_and_verify_all_nodes_env_num_nodes() {
     solana_logger::setup();
@@ -71,7 +77,9 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
     );
 }
 
+#[allow(unused_attributes)]
 #[test]
+#[serial]
 #[should_panic]
 fn test_fullnode_exit_default_config_should_panic() {
     solana_logger::setup();
@@ -81,6 +89,7 @@ fn test_fullnode_exit_default_config_should_panic() {
 }
 
 #[test]
+#[serial]
 fn test_fullnode_exit_2() {
     solana_logger::setup();
     let num_nodes = 2;
@@ -98,6 +107,7 @@ fn test_fullnode_exit_2() {
 
 // Cluster needs a supermajority to remain, so the minimum size for this test is 4
 #[test]
+#[serial]
 fn test_leader_failure_4() {
     solana_logger::setup();
     let num_nodes = 4;
@@ -118,6 +128,7 @@ fn test_leader_failure_4() {
     );
 }
 #[test]
+#[serial]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     let mut validator_config = ValidatorConfig::default();
@@ -179,6 +190,7 @@ fn test_forwarding() {
 }
 
 #[test]
+#[serial]
 fn test_restart_node() {
     let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
     let ticks_per_slot = 16;
@@ -208,6 +220,7 @@ fn test_restart_node() {
 }
 
 #[test]
+#[serial]
 fn test_listener_startup() {
     let config = ClusterConfig {
         node_stakes: vec![100; 1],
@@ -222,6 +235,7 @@ fn test_listener_startup() {
 }
 
 #[test]
+#[serial]
 fn test_fail_entry_verification_leader() {
     solana_logger::setup();
     let num_nodes = 4;
@@ -329,6 +343,7 @@ fn test_fake_blobs_broadcast_leader() {
 }
 
 #[test]
+#[serial]
 fn test_repairman_catchup() {
     run_repairman_catchup(3);
 }

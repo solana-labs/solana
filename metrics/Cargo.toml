@@ -19,6 +19,8 @@ sys-info = "0.5.7"
 
 [dev-dependencies]
 rand = "0.6.5"
+serial_test = "0.2.0"
+serial_test_derive = "0.2.0"
 
 [lib]
 name = "solana_metrics"

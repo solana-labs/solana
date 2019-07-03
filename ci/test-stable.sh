@@ -33,7 +33,7 @@ test-stable)
   echo "Executing $testName"
 
   _ cargo +"$rust_stable" build --all ${V:+--verbose}
-  _ cargo +"$rust_stable" test --all ${V:+--verbose} -- --nocapture --test-threads=1
+  _ cargo +"$rust_stable" test --all ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"
@@ -77,7 +77,7 @@ test-stable-perf)
 
   # Run root package library tests
   _ cargo +"$rust_stable" build --all ${V:+--verbose} --features="$ROOT_FEATURES"
-  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
+  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
   ;;
 *)
   echo "Error: Unknown test: $testName"

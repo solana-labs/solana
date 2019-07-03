@@ -2,6 +2,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::*;
+use serial_test_derive::serial;
 use solana::cluster_info::{compute_retransmit_peers, ClusterInfo};
 use solana::contact_info::ContactInfo;
 use solana_sdk::pubkey::Pubkey;
@@ -190,6 +191,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
 
 // Run with a single layer
 #[test]
+#[serial]
 fn test_retransmit_small() {
     let stakes: Vec<_> = (0..200).map(|i| i).collect();
     run_simulation(&stakes, 200);
@@ -197,6 +199,7 @@ fn test_retransmit_small() {
 
 // Make sure at least 2 layers are used
 #[test]
+#[serial]
 fn test_retransmit_medium() {
     let num_nodes = 2000;
     let stakes: Vec<_> = (0..num_nodes).map(|i| i).collect();
@@ -205,6 +208,7 @@ fn test_retransmit_medium() {
 
 // Make sure at least 2 layers are used but with equal stakes
 #[test]
+#[serial]
 fn test_retransmit_medium_equal_stakes() {
     let num_nodes = 2000;
     let stakes: Vec<_> = (0..num_nodes).map(|_| 10).collect();
@@ -213,6 +217,7 @@ fn test_retransmit_medium_equal_stakes() {
 
 // Scale down the network and make sure many layers are used
 #[test]
+#[serial]
 fn test_retransmit_large() {
     let num_nodes = 4000;
     let stakes: Vec<_> = (0..num_nodes).map(|i| i).collect();
