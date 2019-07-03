@@ -11,7 +11,7 @@ homepage = "https://solana.com/"
 [dependencies]
 clap = "2.33.0"
 log = "0.4.2"
-serde_json = "1.0.39"
+serde_json = "1.0.40"
 solana = { path = "../core", version = "0.17.0" }
 solana-drone = { path = "../drone", version = "0.17.0" }
 solana-logger = { path = "../logger", version = "0.17.0" }
