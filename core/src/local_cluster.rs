@@ -1,4 +1,4 @@
-use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
+use crate::blocktree::create_new_tmp_ledger;
 use crate::cluster::Cluster;
 use crate::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
@@ -110,7 +110,6 @@ pub struct LocalCluster {
     pub fullnode_infos: HashMap<Pubkey, ClusterValidatorInfo>,
     pub listener_infos: HashMap<Pubkey, ClusterValidatorInfo>,
     fullnodes: HashMap<Pubkey, Validator>,
-    genesis_ledger_path: String,
     pub genesis_block: GenesisBlock,
     replicators: Vec<Replicator>,
     pub replicator_infos: HashMap<Pubkey, ReplicatorInfo>,
@@ -163,8 +162,7 @@ impl LocalCluster {
             .native_instruction_processors
             .push(solana_storage_program!());
 
-        let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
-        let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
+        let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_contact_info = leader_node.info.clone();
         let leader_storage_keypair = Arc::new(storage_keypair);
         let leader_voting_keypair = Arc::new(voting_keypair);
@@ -200,7 +198,6 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             fullnodes,
             replicators: vec![],
-            genesis_ledger_path,
             genesis_block,
             fullnode_infos,
             replicator_infos: HashMap::new(),
@@ -269,7 +266,7 @@ impl LocalCluster {
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let contact_info = validator_node.info.clone();
-        let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
 
         if validator_config.voting_disabled {
             // setup as a listener
