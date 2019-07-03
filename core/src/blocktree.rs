@@ -347,15 +347,6 @@ impl Blocktree {
             }
         }
 
-        insert_data_blob_batch(
-            new_blobs.iter().map(Borrow::borrow),
-            &db,
-            &mut slot_meta_working_set,
-            &mut index_working_set,
-            &mut prev_inserted_blob_datas,
-            &mut write_batch,
-        )?;
-
         let recovered_data_opt = handle_recovery(
             &self.db,
             &self.session,
@@ -366,10 +357,30 @@ impl Blocktree {
             &mut write_batch,
         )?;
 
+        //insert_data_blob_batch(
+        //new_blobs.iter().map(Borrow::borrow),
+        //&db,
+        //&mut slot_meta_working_set,
+        //&mut index_working_set,
+        //&mut prev_inserted_blob_datas,
+        //&mut write_batch,
+        //)?;
+
         if let Some(recovered_data) = recovered_data_opt {
             insert_data_blob_batch(
-                recovered_data.iter(),
+                recovered_data
+                    .iter()
+                    .chain(new_blobs.iter().map(Borrow::borrow)),
                 &self.db,
+                &mut slot_meta_working_set,
+                &mut index_working_set,
+                &mut prev_inserted_blob_datas,
+                &mut write_batch,
+            )?;
+        } else {
+            insert_data_blob_batch(
+                new_blobs.iter().map(Borrow::borrow),
+                &db,
                 &mut slot_meta_working_set,
                 &mut index_working_set,
                 &mut prev_inserted_blob_datas,
@@ -595,10 +606,10 @@ impl Blocktree {
                 &mut prev_inserted_blob_datas,
                 &mut writebatch,
             )?;
-        }
 
-        // Handle chaining for the working set
-        handle_chaining(&self.db, &mut writebatch, &slot_meta_working_set)?;
+            // Handle chaining for the working set
+            handle_chaining(&self.db, &mut writebatch, &slot_meta_working_set)?;
+        }
 
         let (should_signal, newly_completed_slots) = prepare_signals(
             &slot_meta_working_set,
@@ -1479,8 +1490,9 @@ fn handle_recovery(
     prev_inserted_coding: &mut HashMap<(u64, u64), Blob>,
     writebatch: &mut WriteBatch,
 ) -> Result<Option<Vec<Blob>>> {
-    let mut recovered_data = vec![];
-    let index_cf = db.column::<cf::Index>();
+    use solana_sdk::signature::Signable;
+
+    let (mut recovered_data, mut recovered_coding) = (vec![], vec![]);
 
     for (&(slot, _), erasure_meta) in erasure_metas.iter() {
         let index = index_working_set.get_mut(&slot).expect("Index");
@@ -1495,7 +1507,7 @@ fn handle_recovery(
             &prev_inserted_coding,
         )? {
             for blob in data.iter() {
-                warn!(
+                debug!(
                     "[handle_recovery] recovered blob at ({}, {})",
                     blob.slot(),
                     blob.index()
@@ -1503,10 +1515,7 @@ fn handle_recovery(
 
                 let blob_index = blob.index();
                 let blob_slot = blob.slot();
-                if blob_slot != slot {
-                    error!("[handle_recovery] CORRUPTION: slot = {}, index = {}, erasure_meta = {:?}, index = {:?}", blob_slot, blob_index, erasure_meta, index);
-                    panic!("Corruption in recovery");
-                }
+
                 assert_eq!(blob_slot, slot);
 
                 assert!(
@@ -1518,34 +1527,66 @@ fn handle_recovery(
             recovered_data.append(&mut data);
 
             for coding_blob in coding {
-                index.coding_mut().set_present(coding_blob.index(), true);
-
-                writebatch.put_bytes::<cf::Coding>(
-                    (coding_blob.slot(), coding_blob.index()),
-                    &coding_blob.data[..coding_blob.data_size() as usize],
-                )?;
-
-                prev_inserted_coding.insert((slot, coding_blob.index()), coding_blob);
+                if !index.coding().is_present(coding_blob.index()) {
+                    recovered_coding.push(coding_blob);
+                }
             }
         }
     }
 
-    if !recovered_data.is_empty() {
+    if !recovered_coding.is_empty() {
         info!(
-            "[handle_recovery] recovered {} data blobs",
-            recovered_data.len()
+            "[handle_recovery] recovered {} coding blobs",
+            recovered_coding.len()
         );
 
-        for blob in recovered_data.iter() {
-            let _ = index_working_set.entry(blob.slot()).or_insert_with(|| {
-                index_cf
-                    .get(blob.slot())
-                    .unwrap()
-                    .unwrap_or_else(|| Index::new(blob.slot()))
-            });
+        for coding_blob in recovered_coding {
+            let (blob_slot, blob_index) = (coding_blob.slot(), coding_blob.index());
+            let index = index_working_set.get_mut(&blob_slot).expect("Index");
+
+            index.coding_mut().set_present(coding_blob.index(), true);
+
+            writebatch.put_bytes::<cf::Coding>(
+                (blob_slot, blob_index),
+                &coding_blob.data[..coding_blob.data_size() as usize],
+            )?;
+
+            prev_inserted_coding.insert((blob_slot, blob_index), coding_blob);
+        }
+    }
+
+    if !recovered_data.is_empty() {
+        let mut new_data = vec![];
+
+        for blob in recovered_data {
+            let index = index_working_set
+                .get_mut(&blob.slot())
+                .expect("Index must have been present if blob was recovered");
+
+            let (blob_slot, blob_index) = (blob.slot(), blob.index());
+
+            if !index.data().is_present(blob.index()) {
+                if blob.verify() {
+                    trace!(
+                        "[handle_recovery] successful verification at slot = {}, index={}",
+                        blob_slot,
+                        blob_index
+                    );
+
+                    new_data.push(blob);
+                } else {
+                    warn!(
+                        "[handle_recovery] failed verification at slot={}, index={}, discarding",
+                        blob.slot(),
+                        blob.index()
+                    );
+                }
+            }
         }
 
-        Ok(Some(recovered_data))
+        info!("[handle_recovery] recovered {} data blobs", new_data.len());
+
+        Ok(Some(new_data))
     } else {
         Ok(None)
     }
@@ -1640,9 +1681,10 @@ fn try_erasure_recover(
         ErasureMetaStatus::DataFull => {
             submit_metrics(false, "complete".into());
 
-            debug!(
+            trace!(
                 "[try_erasure] slot: {}, set_index: {}, set full",
-                slot, set_index,
+                slot,
+                set_index,
             );
 
             None
@@ -3574,6 +3616,74 @@ pub mod tests {
             drop(blocktree);
 
             Blocktree::destroy(&ledger_path).expect("Expect successful Blocktree destruction");
+        }
+
+        #[test]
+        fn test_recovery_is_accurate() {
+            const SLOT: u64 = 0;
+            const SET_INDEX: u64 = 0;
+
+            solana_logger::setup();
+
+            let ledger_path = get_tmp_ledger_path!();
+            let blocktree = Blocktree::open(&ledger_path).unwrap();
+            let data_blobs = make_slot_entries(SLOT, 0, NUM_DATA as u64)
+                .0
+                .into_iter()
+                .map(Blob::into)
+                .collect::<Vec<_>>();
+
+            let mut coding_generator = CodingGenerator::new(Arc::clone(&blocktree.session));
+
+            let shared_coding_blobs = coding_generator.next(&data_blobs);
+            assert_eq!(shared_coding_blobs.len(), NUM_CODING);
+
+            let mut prev_coding = HashMap::new();
+            let prev_data = HashMap::new();
+            let mut index = Index::new(SLOT);
+            let mut erasure_meta = ErasureMeta::new(SET_INDEX);
+            erasure_meta.size = shared_coding_blobs[0].read().unwrap().size();
+
+            for shared_blob in shared_coding_blobs.iter() {
+                let blob = shared_blob.read().unwrap();
+
+                prev_coding.insert((blob.slot(), blob.index()), blob.clone());
+            }
+
+            index
+                .coding_mut()
+                .set_many_present((0..NUM_CODING as u64).zip(std::iter::repeat(true)));
+
+            let (recovered_data, recovered_coding) = recover(
+                &blocktree.db,
+                &blocktree.session,
+                SLOT,
+                &erasure_meta,
+                &index,
+                &prev_data,
+                &prev_coding,
+            )
+            .expect("Successful recovery");
+
+            for (original, recovered) in data_blobs.iter().zip(recovered_data.iter()) {
+                let original = original.read().unwrap();
+
+                assert_eq!(original.slot(), recovered.slot());
+                assert_eq!(original.index(), recovered.index());
+
+                assert_eq!(original.data(), recovered.data());
+                assert_eq!(&*original, recovered);
+            }
+
+            for (original, recovered) in shared_coding_blobs.iter().zip(recovered_coding.iter()) {
+                let original = original.read().unwrap();
+
+                assert_eq!(original.slot(), recovered.slot());
+                assert_eq!(original.index(), recovered.index());
+
+                assert_eq!(original.data(), recovered.data());
+                assert_eq!(&*original, recovered);
+            }
         }
 
         #[test]

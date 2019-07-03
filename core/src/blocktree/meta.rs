@@ -1,9 +1,6 @@
 use crate::erasure::{NUM_CODING, NUM_DATA};
 use solana_metrics::datapoint;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::RangeBounds,
-};
+use std::{collections::BTreeSet, ops::RangeBounds};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family

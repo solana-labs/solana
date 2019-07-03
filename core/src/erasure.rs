@@ -151,7 +151,7 @@ impl Session {
                 blob.meta.size = size;
 
                 data_size = size;
-                idx = n as u64 + block_start_idx;
+                idx = n as u64 + block_start_idx - NUM_CODING as u64;
                 first_byte = blob.data[0];
 
                 blob.set_slot(slot);
