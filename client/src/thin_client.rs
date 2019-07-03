@@ -204,19 +204,19 @@ impl ThinClient {
         keypairs: &[&Keypair],
         transaction: &mut Transaction,
         tries: usize,
-        min_confirmed_blocks: usize,
+        pending_confirmations: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
             let now = Instant::now();
             let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
-            let mut pending_confirmations = min_confirmed_blocks;
+            let mut num_confirmed = 0;
             let mut wait_time = MAX_PROCESSING_AGE;
             serialize_into(&mut wr, &transaction)
                 .expect("serialize Transaction in pub fn transfer_signed");
             // resend the same transaction until the transaction has no chance of succeeding
             while now.elapsed().as_secs() < wait_time as u64 {
-                if pending_confirmations == min_confirmed_blocks {
+                if num_confirmed == 0 {
                     // Send the transaction if there has been no confirmation (e.g. the first time)
                     self.transactions_socket
                         .send_to(&buf[..], &self.transactions_addr())?;
@@ -226,15 +226,17 @@ impl ThinClient {
                     &transaction.signatures[0],
                     pending_confirmations,
                 ) {
+                    num_confirmed = confirmed_blocks;
                     if confirmed_blocks >= pending_confirmations {
                         return Ok(transaction.signatures[0]);
                     }
-                    // Update number of pending confirmations
-                    // Also, since network has seen the transaction, wait longer to receive
+                    // Since network has seen the transaction, wait longer to receive
                     // all pending confirmations. Resending the transaction could result into
                     // extra transaction fees
-                    pending_confirmations -= confirmed_blocks;
-                    wait_time = cmp::max(wait_time, MAX_PROCESSING_AGE * pending_confirmations);
+                    wait_time = cmp::max(
+                        wait_time,
+                        MAX_PROCESSING_AGE * pending_confirmations.saturating_sub(num_confirmed),
+                    );
                 }
             }
             info!(
