@@ -443,10 +443,9 @@ impl RpcClient {
         &self,
         signature: &Signature,
         min_confirmed_blocks: usize,
-    ) -> io::Result<()> {
+    ) -> io::Result<usize> {
         let mut now = Instant::now();
         let mut confirmed_blocks = 0;
-        let mut wait_time = 15;
         loop {
             let response = self.get_num_blocks_since_signature_confirmation(signature);
             match response {
@@ -461,12 +460,6 @@ impl RpcClient {
                         );
                         now = Instant::now();
                         confirmed_blocks = count;
-                        // If the signature has been confirmed once, wait extra while reconfirming it
-                        // One confirmation means the transaction has been seen by the network, so
-                        // next confirmation (for a higher block count) should come through.
-                        // Returning an error prematurely will cause a valid transaction to be deemed
-                        // as failure.
-                        wait_time = 30;
                     }
                     if count >= min_confirmed_blocks {
                         break;
@@ -476,7 +469,7 @@ impl RpcClient {
                     debug!("check_confirmations request failed: {:?}", err);
                 }
             };
-            if now.elapsed().as_secs() > wait_time {
+            if now.elapsed().as_secs() > 15 {
                 info!(
                     "signature {} confirmed {} out of {} failed after {} ms",
                     signature,
@@ -484,12 +477,16 @@ impl RpcClient {
                     min_confirmed_blocks,
                     now.elapsed().as_millis()
                 );
-                // TODO: Return a better error.
-                return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
+                if confirmed_blocks > 0 {
+                    return Ok(confirmed_blocks);
+                } else {
+                    // TODO: Return a better error.
+                    return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
+                }
             }
             sleep(Duration::from_secs(1));
         }
-        Ok(())
+        Ok(confirmed_blocks)
     }
 
     pub fn get_num_blocks_since_signature_confirmation(

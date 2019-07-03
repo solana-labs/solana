@@ -64,7 +64,7 @@ pub trait SyncClient {
         &self,
         signature: &Signature,
         min_confirmed_blocks: usize,
-    ) -> Result<()>;
+    ) -> Result<usize>;
 
     /// Poll to confirm a transaction.
     fn poll_for_signature(&self, signature: &Signature) -> Result<()>;

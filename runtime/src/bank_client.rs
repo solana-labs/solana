@@ -127,7 +127,7 @@ impl SyncClient for BankClient {
         &self,
         signature: &Signature,
         min_confirmed_blocks: usize,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let mut now = Instant::now();
         let mut confirmed_blocks = 0;
         loop {
@@ -152,7 +152,7 @@ impl SyncClient for BankClient {
             }
             sleep(Duration::from_millis(250));
         }
-        Ok(())
+        Ok(confirmed_blocks)
     }
 
     fn poll_for_signature(&self, signature: &Signature) -> Result<()> {
