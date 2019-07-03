@@ -21,16 +21,16 @@ parameter to all program instructions for the process.
 
 Resources are implemented as Processes.
 
-### `Loader::CreateProcess`
+### `LoaderInstruction::CreateProcess`
 
-The ‘Loader::CreateProcess’ instruction is used to create a specific instance of
-a program with an associated read-only context. Once a process has been created,
-it can be used as an account "owner".
+The ‘LoaderInstruction::CreateProcess’ instruction is used to create a specific
+instance of a program with an associated read-only context. Once a process has
+been created, it can be used as an account "owner".
 
 Loaders create processes by pairing a program pubkey and a context.  The
 pipeline will pass the context as the first parameter to all the program
-instructions.  Initial implementation of `Loader::CreateProcess` only supports a
-single read-only context that is fixed as the first parameter.
+instructions.  Initial implementation of `LoaderInstruction::CreateProcess` only
+supports a single read-only context that is fixed as the first parameter.
 
 ## Accounts Organization for Programs and Processes
 
@@ -46,23 +46,29 @@ Accounts are a map of an address to an account.
 ### Account Address
 
 The `AccountAddress` is a hash of the account pubkey that users self-generate
-and the owner pubkey.  With this change, a user only needs one pubkey, and it
-exists for all owners.  The Account database stores the Account pubkey
+and the owner process pubkey.  With this change, a user only needs one pubkey,
+and it exists for all owners.  The Account database stores the Account pubkey
 and the Owner pubkey such that the index is recoverable.
 
-* `AccountAddress = hash(Account pubkey, Owner pubkey)`
+* `AccountAddress` is a sha256 hash of the Account pubkey and the Owner pubkey.
 
 * `Accounts = Map<AccountAddress, Account>`
 
 * `owner: Pubkey` - The process responsible for the state transitions of the
 tokens and data in the ‘AccountAddress.’
 
-### Account memory Allocation
+Instructions must specify the owner pubkey as well as the account pubkey when
+referencing accounts.
 
-* `System::Allocate`
-
-This instruction is available to every program or process and appears as
-instruction 0.
-
-* `size: u64` - allocate the memory length in ‘size’ in bytes.  The memory is
-zero-initialized.
+```
+pub struct AccountMeta {
+    /// An account's public key
+    pub pubkey: Pubkey,
+    /// An account's owner pubkey
+    pub owner: Pubkey,
+    /// True if an Instruciton requires a Transaction signature matching `pubkey`.
+    pub is_signer: bool,
+    /// True if the `pubkey` can be loaded as a credit-debit account.
+    pub is_debitable: bool,
+}
+```
