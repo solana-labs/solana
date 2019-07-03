@@ -34,7 +34,7 @@ program, but not foo accounts created by the `foo` program.
 ## Proposed Solution
 
 The goal of this design is to modify Solana's runtime such that an on-chain
-program can invoke an instruction from other program.
+program can invoke an instruction from another program.
 
 Given two on-chain programs `foo` and `bar`, each implementing instructions
 `foo` and `bar` respectively, we would like to implement bar as close as
@@ -86,7 +86,8 @@ for routing the given instruction to the `foo` program via the instruction's
 `program_id` field. Before invoking `foo()`, the runtime must also ensure
 that `bar` didn't modify any accounts owned by `foo`. Likewise, after invoking
 `foo()`, the runtime must ensure that `foo` didn't modify any accounts owned
-by `bar`.
+by `bar`. And once again, after `foobar()` completes, the runtime needs to ensure
+`bar` didn't make any additional changes to `foo` accounts.
 
 ### Setting `KeyedAccount.is_signer`
 
