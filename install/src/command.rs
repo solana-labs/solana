@@ -750,7 +750,7 @@ pub fn run(
     let config = Config::load(config_file)?;
 
     let mut full_program_path = config.active_release_bin_dir().join(program_name);
-    if cfg!(windows) {
+    if cfg!(windows) && full_program_path.extension().is_none() {
         full_program_path.set_extension("exe");
     }
 
