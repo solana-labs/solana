@@ -92,7 +92,7 @@ fn main() {
     );
 
     let entrypoint_info = ContactInfo::new_gossip_entry_point(&entrypoint_addr);
-    let mut replicator = Replicator::new(
+    let replicator = Replicator::new(
         ledger_path,
         node,
         entrypoint_info,
@@ -101,6 +101,5 @@ fn main() {
     )
     .unwrap();
 
-    replicator.run();
-    replicator.close();
+    replicator.join();
 }
