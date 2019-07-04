@@ -288,7 +288,9 @@ impl Replicator {
                     .for_each(|t| t.join().unwrap());
                 fetch_stage.join().unwrap();
                 gossip_service.join().unwrap();
-                window_service.map(|window| window.join().unwrap());
+                if let Some(window) = window_service {
+                    window.join().unwrap()
+                }
             })
         };
 
