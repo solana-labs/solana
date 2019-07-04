@@ -260,7 +260,6 @@ impl Replicator {
             };
             spawn(move || {
                 // setup replicator
-                // run replicator
                 let window_service = Self::setup(
                     &mut meta,
                     cluster_info.clone(),
@@ -272,9 +271,9 @@ impl Replicator {
                     blob_fetch_receiver,
                     slot_sender,
                 )
-                .unwrap();
-
+                .ok();
                 info!("setup complete");
+                // run replicator
                 Self::run(
                     &mut meta,
                     &blocktree,
@@ -289,7 +288,7 @@ impl Replicator {
                     .for_each(|t| t.join().unwrap());
                 fetch_stage.join().unwrap();
                 gossip_service.join().unwrap();
-                window_service.join().unwrap();
+                window_service.map(|window| window.join().unwrap());
             })
         };
 
