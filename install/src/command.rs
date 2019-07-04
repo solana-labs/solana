@@ -750,7 +750,7 @@ pub fn run(
     let config = Config::load(config_file)?;
 
     let mut full_program_path = config.active_release_bin_dir().join(program_name);
-    if cfg!(windows) {
+    if cfg!(windows) && full_program_path.extension().is_none() {
         full_program_path.set_extension("exe");
     }
 
@@ -764,18 +764,11 @@ pub fn run(
     let mut child_option: Option<std::process::Child> = None;
     let mut now = Instant::now();
 
-    let (_signal_sender, signal_receiver) = mpsc::channel();
-    #[cfg(not(windows))]
-    {
-        use signal_hook::{iterator::Signals, SIGTERM};
-        let signals = Signals::new(&[SIGTERM]).unwrap();
-        std::thread::spawn(move || {
-            for sig in signals.forever() {
-                eprintln!("run: received signal {:?}", sig);
-                let _ = _signal_sender.send(());
-            }
-        });
-    }
+    let (signal_sender, signal_receiver) = mpsc::channel();
+    ctrlc::set_handler(move || {
+        let _ = signal_sender.send(());
+    })
+    .expect("Error setting Ctrl-C handler");
 
     loop {
         child_option = match child_option {
