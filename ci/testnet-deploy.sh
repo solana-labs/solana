@@ -349,10 +349,10 @@ if ! $skipStart; then
     fi
 
     if $stakeNodesInGenesisBlock; then
-      args+=("-s $stakeNodesInGenesisBlock")
+      args+="-s $stakeNodesInGenesisBlock"
     fi
     if $externalPrimordialAccountsFile; then
-      args+=("-x $externalPrimordialAccountsFile")
+      args+="-x $externalPrimordialAccountsFile"
     fi
     if [[ -n $maybeLamports ]]; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeLamports
