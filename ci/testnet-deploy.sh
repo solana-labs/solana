@@ -24,6 +24,8 @@ blockstreamer=false
 deployUpdateManifest=true
 fetchLogs=true
 maybeHashesPerTick=
+stakeNodesInGenesisBlock=
+externalPrimordialAccountsFile=
 
 usage() {
   exitcode=0
@@ -64,7 +66,8 @@ Deploys a CD testnet
    -f                   - Discard validator nodes that didn't bootup successfully
    -w                   - Skip time-consuming "bells and whistles" that are
                           unnecessary for a high-node count demo testnet
-
+   -k                   - Amount to stake internal nodes.  If set, airdrops are disabled.
+   -K                   - Path to external Primordial Accounts file.
    --hashes-per-tick NUM_HASHES|sleep|auto
                         - Override the default --hashes-per-tick for the cluster
 
@@ -91,7 +94,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[@]}"; do
+while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfewk:K:" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -164,6 +167,12 @@ while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[@]}"; do
   w)
     fetchLogs=false
     deployUpdateManifest=false
+    ;;
+  k)
+    stakeNodesInGenesisBlock=$OPTARG
+    ;;
+  K)
+    externalPrimordialAccountsFile=$OPTARG
     ;;
   *)
     usage "Unknown option: $opt"
@@ -332,6 +341,13 @@ if ! $skipStart; then
       args+=(--deploy-update linux)
       args+=(--deploy-update osx)
       args+=(--deploy-update windows)
+    fi
+
+    if $stakeNodesInGenesisBlock; then
+      args+=(-s $stakeNodesInGenesisBlock)
+    fi
+    if $externalPrimordialAccountsFile; then
+      args+=(-x $externalPrimordialAccountsFile)
     fi
 
     # shellcheck disable=SC2086 # Don't want to double quote the $maybeXYZ variables

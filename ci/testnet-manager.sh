@@ -473,7 +473,9 @@ deploy() {
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          -k 1000 -K /tmp/stakes.yml
+
     )
     ;;
   *)
