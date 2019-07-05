@@ -244,10 +244,11 @@ fn test_fail_entry_verification_leader() {
     error_validator_config.broadcast_stage_type = BroadcastStageType::FailEntryVerification;
     let mut validator_configs = vec![validator_config; num_nodes - 1];
     validator_configs.push(error_validator_config);
-
+    let mut node_stakes = vec![100; num_nodes - 1];
+    node_stakes.push(50);
     let cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
-        node_stakes: vec![100; 4],
+        node_stakes,
         validator_configs: validator_configs,
         slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
         stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
