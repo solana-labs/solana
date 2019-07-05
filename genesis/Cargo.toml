@@ -31,6 +31,8 @@ solana-storage-api = { path = "../programs/storage_api", version = "0.17.0" }
 solana-storage-program = { path = "../programs/storage_program", version = "0.17.0" }
 solana-token-api = { path = "../programs/token_api", version = "0.17.0" }
 solana-token-program = { path = "../programs/token_program", version = "0.17.0" }
+solana-validator-info-api = { path = "../programs/validator_info_api", version = "0.17.0" }
+solana-validator-info-program = { path = "../programs/validator_info_program", version = "0.17.0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.17.0" }
 solana-vote-program = { path = "../programs/vote_program", version = "0.17.0" }
 
@@ -40,4 +42,3 @@ hashbrown = "0.3.0"
 
 [features]
 cuda = ["solana/cuda"]
-

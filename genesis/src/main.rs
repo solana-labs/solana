@@ -15,6 +15,8 @@ extern crate solana_config_program;
 extern crate solana_exchange_program;
 #[macro_use]
 extern crate solana_storage_program;
+#[macro_use]
+extern crate solana_validator_info_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
@@ -307,6 +309,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             solana_config_program!(),
             solana_exchange_program!(),
             solana_storage_program!(),
+            solana_validator_info_program!(),
         ])
         .ticks_per_slot(value_t_or_exit!(matches, "ticks_per_slot", u64))
         .slots_per_epoch(value_t_or_exit!(matches, "slots_per_epoch", u64));
@@ -388,6 +391,7 @@ mod tests {
             solana_stake_api::id(),
             solana_config_api::id(),
             solana_exchange_api::id(),
+            solana_validator_info_api::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
