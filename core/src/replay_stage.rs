@@ -616,7 +616,6 @@ impl ReplayStage {
         slot_full_sender: &Sender<(u64, Pubkey)>,
     ) {
         bank.freeze();
-        bank.commit_credits();
         info!("bank frozen {}", bank.slot());
         if let Err(e) = slot_full_sender.send((bank.slot(), *bank.collector_id())) {
             trace!("{} slot_full alert failed: {:?}", my_pubkey, e);

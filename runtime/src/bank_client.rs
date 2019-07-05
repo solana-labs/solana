@@ -197,7 +197,6 @@ impl BankClient {
                 transactions.push(tx);
             }
             let _ = bank.process_transactions(&transactions);
-            bank.commit_credits();
         }
     }
 
