@@ -156,8 +156,8 @@ testnet-demo)
   : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
   ;;
 testnet-tds)
-  CHANNEL_OR_TAG=edge # TODO: Set this to beta once v0.16 is branched
-  CHANNEL_BRANCH=$EDGE_CHANNEL # TODO: Set this to $BETA_CHANNEL once v0.16 is branched
+  CHANNEL_OR_TAG=beta
+  CHANNEL_BRANCH=$BETA_CHANNEL
   : "${GCE_NODE_COUNT:=3}"
   ;;
 *)
