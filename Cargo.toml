@@ -43,6 +43,7 @@ members = [
     "runtime",
     "sdk",
     "upload-perf",
+    "validator-info",
     "vote-signer",
     "wallet",
 ]
