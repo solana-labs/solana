@@ -41,6 +41,7 @@ members = [
     "programs/validator_info_program",
     "programs/vote_api",
     "programs/vote_program",
+    "register",
     "replicator",
     "runtime",
     "sdk",
