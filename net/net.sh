@@ -53,6 +53,8 @@ Operate a configured testnet
 
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
+   --lamports NUM_LAMPORTS_TO_MINT
+                                      - Override the default 100000000000000 lamports minted in genesis
    -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
 
    -x Accounts and Stakes for external nodes
@@ -109,6 +111,9 @@ while [[ -n $1 ]]; do
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --target-lamports-per-signature ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --lamports ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --deploy-update ]]; then

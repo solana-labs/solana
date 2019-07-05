@@ -26,6 +26,7 @@ fetchLogs=true
 maybeHashesPerTick=
 stakeNodesInGenesisBlock=
 externalPrimordialAccountsFile=
+maybeLamports=
 
 usage() {
   exitcode=0
@@ -70,7 +71,8 @@ Deploys a CD testnet
    -K                   - Path to external Primordial Accounts file.
    --hashes-per-tick NUM_HASHES|sleep|auto
                         - Override the default --hashes-per-tick for the cluster
-
+   --lamports NUM_LAMPORTS
+                        - Specify the number of lamports to mint (default 100000000000000)
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
 EOF
@@ -84,6 +86,9 @@ while [[ -n $1 ]]; do
   if [[ ${1:0:2} = -- ]]; then
     if [[ $1 = --hashes-per-tick ]]; then
       maybeHashesPerTick="$1 $2"
+      shift 2
+    elif [[ $1 = --lamports ]]; then
+      maybeLamports="$1 $2"
       shift 2
     else
       usage "Unknown long option: $1"
@@ -344,10 +349,14 @@ if ! $skipStart; then
     fi
 
     if $stakeNodesInGenesisBlock; then
-      args+=(-s $stakeNodesInGenesisBlock)
+      args+=("-s $stakeNodesInGenesisBlock")
     fi
     if $externalPrimordialAccountsFile; then
-      args+=(-x $externalPrimordialAccountsFile)
+      args+=("-x $externalPrimordialAccountsFile")
+    fi
+    if [[ -n $maybeLamports ]]; then
+      # shellcheck disable=SC2206 # Do not want to quote $maybeLamports
+      args+=($maybeLamports)
     fi
 
     # shellcheck disable=SC2086 # Don't want to double quote the $maybeXYZ variables
