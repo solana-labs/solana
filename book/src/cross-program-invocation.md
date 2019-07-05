@@ -83,11 +83,19 @@ fn foobar(keyed_accounts: &[KeyedAccount]) -> Result<()> {
 
 where `process_instruction()` is built into Solana's runtime and responsible
 for routing the given instruction to the `foo` program via the instruction's
-`program_id` field. Before invoking `foo()`, the runtime must also ensure
-that `bar` didn't modify any accounts owned by `foo`. Likewise, after invoking
-`foo()`, the runtime must ensure that `foo` didn't modify any accounts owned
-by `bar`. And once again, after `foobar()` completes, the runtime needs to ensure
-`bar` didn't make any additional changes to `foo` accounts.
+`program_id` field. Before invoking `foo()`, the runtime must also ensure that
+`bar` didn't modify any accounts owned by `foo`. It does this by calling
+`runtime::verify_instruction()` and then afterward updating all the `pre_*`
+variables to tentatively commit `bar`'s account modifications. After `foo()`
+completes, the runtime must again ensure that `foo` didn't modify any accounts
+owned by `bar`. It should call `verify_instruction()` again, but this time with
+the `foo` program ID. Lastly, after `foobar()` completes, the runtime must call
+`verify_instruction()` one more time, where it normally would, but using all
+updated `pre_*` variables.  If `foobar()` up to `foo()` makes no invalid
+changes, then `foo()` makes no invalid changes, then the code from `foo()`
+until `foobar()` returns makes no invalid changes, the runtime can transitively
+assume `foobar()` as whole made no invalid changes, and commit all account
+modifications.
 
 ### Setting `KeyedAccount.is_signer`
 
