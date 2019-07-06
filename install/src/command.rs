@@ -6,13 +6,14 @@ use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use ring::digest::{Context, Digest, SHA256};
 use solana_client::rpc_client::RpcClient;
-use solana_config_api::config_instruction;
+use solana_config_api::config_instruction::{self, ConfigSigners};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil, Signable};
 use solana_sdk::transaction::Transaction;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read};
+use std::mem;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::SystemTime;
@@ -203,7 +204,8 @@ fn new_update_manifest(
         let new_account = config_instruction::create_account::<SignedUpdateManifest>(
             &from_keypair.pubkey(),
             &update_manifest_keypair.pubkey(),
-            1, // lamports
+            1,      // lamports
+            vec![], // additional_signers
         );
         let mut transaction = Transaction::new_unsigned_instructions(vec![new_account]);
         transaction.sign(&[from_keypair], recent_blockhash);
@@ -225,6 +227,8 @@ fn store_update_manifest(
     let signers = [from_keypair, update_manifest_keypair];
     let instruction = config_instruction::store::<SignedUpdateManifest>(
         &update_manifest_keypair.pubkey(),
+        0,      // account_type default
+        vec![], // additional_signers
         update_manifest,
     );
 
@@ -239,9 +243,10 @@ fn get_update_manifest(
     rpc_client: &RpcClient,
     update_manifest_pubkey: &Pubkey,
 ) -> Result<UpdateManifest, String> {
-    let data = rpc_client
+    let mut data = rpc_client
         .get_account_data(update_manifest_pubkey)
         .map_err(|err| format!("Unable to fetch update manifest: {}", err))?;
+    data.split_off(mem::size_of::<u32>() + ConfigSigners::serialized_size(vec![]));
 
     let signed_update_manifest =
         SignedUpdateManifest::deserialize(update_manifest_pubkey, &data)
