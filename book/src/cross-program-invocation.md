@@ -37,8 +37,8 @@ The goal of this design is to modify Solana's runtime such that an on-chain
 program can invoke an instruction from another program.
 
 Given two on-chain programs `token` and `acme`, each implementing instructions
-`token` and `acme` respectively, we would like to implement acme as close as
-possible to as the following Rust code of a cross-module function call:
+`pay()` and `launch_missiles()` respectively, we would like to implement acme as
+close as possible to as the following Rust code of a cross-module function call:
 
 ```rust,ignore
 use token;
@@ -62,7 +62,7 @@ permitted to modify the `token` account, and only the `acme` program is
 permitted to modify the `acme` account.
 
 Backing off from that ideal cross-program call, a slightly more
-verbose solution to is expose token's existing `process_instruction()`
+verbose solution is to expose token's existing `process_instruction()`
 entrypoint to the acme program:
 
 ```rust,ignore
@@ -91,12 +91,12 @@ completes, the runtime must again ensure that `token` didn't modify any
 accounts owned by `acme`. It should call `verify_instruction()` again, but this
 time with the `token` program ID. Lastly, after `pay_and_launch_missiles()`
 completes, the runtime must call `verify_instruction()` one more time, where it
-normally would, but using all updated `pre_*` variables.  If
-`pay_and_launch_missiles()` up to `pay()` makes no invalid changes, then
-`pay()` makes no invalid changes, then the code from `pay()` until
-`pay_and_launch_missiles()` returns makes no invalid changes, the runtime can
-transitively assume `pay_and_launch_missiles()` as whole made no invalid
-changes, and commit all account modifications.
+normally would, but using all updated `pre_*` variables.  If executing
+`pay_and_launch_missiles()` up to `pay()` made no invalid account changes,
+`pay()` made no invalid changes, and executing from `pay()` until
+`pay_and_launch_missiles()` returns made no invalid changes, then the runtime
+can transitively assume `pay_and_launch_missiles()` as whole made no invalid
+account changes, and therefore commit all account modifications.
 
 ### Setting `KeyedAccount.is_signer`
 
