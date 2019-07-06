@@ -1,7 +1,7 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::Blocktree;
+use crate::blocktree::{Blocktree, BlocktreeError};
 use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::consensus::{StakeLockout, Tower};
@@ -283,6 +283,7 @@ impl ReplayStage {
                 !Bank::can_commit(&tx_error)
             }
             Err(Error::BlobError(BlobError::VerificationFailed)) => true,
+            Err(Error::BlocktreeError(BlocktreeError::InvalidBlobData(_))) => true,
             _ => false,
         }
     }
@@ -292,10 +293,23 @@ impl ReplayStage {
         blocktree: &Blocktree,
         progress: &mut HashMap<u64, ForkProgress>,
     ) -> Result<()> {
-        let (entries, num) = Self::load_blocktree_entries(bank, blocktree, progress)?;
-        let result = Self::replay_entries_into_bank(bank, entries, progress, num);
+        let result = {
+            let load_result = Self::load_blocktree_entries(bank, blocktree, progress);
+            if let Ok((entries, num)) = load_result {
+                Self::replay_entries_into_bank(bank, entries, progress, num)
+            } else {
+                // Just to appease the compiler so that the Result types match in both branches.
+                // Must be an error at this point so the map will never run.
+                load_result.map(|_| ())
+            }
+        };
 
         if Self::is_replay_result_fatal(&result) {
+            warn!(
+                "Fatal replay result in slot: {}, result: {:?}",
+                bank.slot(),
+                result
+            );
             Self::mark_dead_slot(bank.slot(), blocktree, progress);
         }
 
