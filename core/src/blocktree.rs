@@ -3457,6 +3457,23 @@ pub mod tests {
         }
 
         #[test]
+        fn test_deserialize_corrupted_blob() {
+            let path = get_tmp_ledger_path!();
+            let blocktree = Blocktree::open(&path).unwrap();
+            let (mut blobs, _) = make_slot_entries(0, 0, 1);
+            {
+                let blob0 = &mut blobs[0];
+                // corrupt the size
+                blob0.set_size(BLOB_HEADER_SIZE);
+            }
+            blocktree.insert_data_blobs(&blobs).unwrap();
+            assert_matches!(
+                blocktree.get_slot_entries(0, 0, None),
+                Err(Error::BlocktreeError(BlocktreeError::InvalidBlobData(_)))
+            );
+        }
+
+        #[test]
         fn test_recovery_multi_slot_multi_thread() {
             use rand::{rngs::SmallRng, seq::SliceRandom, SeedableRng};
             use std::thread;
