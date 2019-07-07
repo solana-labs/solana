@@ -72,7 +72,7 @@ pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 #[derive(Debug)]
 pub enum BlocktreeError {
     BlobForIndexExists,
-    InvalidBlobData,
+    InvalidBlobData(Box<bincode::ErrorKind>),
     RocksDb(rocksdb::Error),
     #[cfg(feature = "kvstore")]
     KvsDb(kvstore::Error),
@@ -801,7 +801,9 @@ impl Blocktree {
             max_entries,
         )?;
         let num = consecutive_blobs.len();
-        Ok((deserialize_blobs(&consecutive_blobs), num))
+        let blobs =
+            deserialize_blobs(&consecutive_blobs).map_err(BlocktreeError::InvalidBlobData)?;
+        Ok((blobs, num))
     }
 
     // Returns slots connecting to any element of the list `slots`.
@@ -831,7 +833,7 @@ impl Blocktree {
         Ok(result)
     }
 
-    pub fn deserialize_blob_data(data: &[u8]) -> Result<Vec<Entry>> {
+    pub fn deserialize_blob_data(data: &[u8]) -> bincode::Result<Vec<Entry>> {
         let entries = deserialize(data)?;
         Ok(entries)
     }
@@ -1525,18 +1527,27 @@ fn recover(
     Ok((recovered_data, recovered_coding))
 }
 
-fn deserialize_blobs<I>(blob_datas: &[I]) -> Vec<Entry>
+fn deserialize_blobs<I>(blob_datas: &[I]) -> bincode::Result<Vec<Entry>>
 where
     I: Borrow<[u8]>,
 {
-    blob_datas
-        .iter()
-        .flat_map(|blob_data| {
-            let serialized_entries_data = &blob_data.borrow()[BLOB_HEADER_SIZE..];
-            Blocktree::deserialize_blob_data(serialized_entries_data)
-                .expect("Ledger should only contain well formed data")
-        })
-        .collect()
+    let blob_results = blob_datas.iter().map(|blob_data| {
+        let serialized_entries_data = &blob_data.borrow()[BLOB_HEADER_SIZE..];
+        Blocktree::deserialize_blob_data(serialized_entries_data)
+    });
+
+    let mut entries = vec![];
+
+    // We want to early exit in this loop to prevent needless work if any blob is corrupted.
+    // However, there's no way to early exit from a flat_map, so we're flattening manually
+    // instead of calling map().flatten() to avoid allocating a vector for the map results above,
+    // and then allocating another vector for flattening the results
+    for r in blob_results {
+        let blob_entries = r?;
+        entries.extend(blob_entries);
+    }
+
+    Ok(entries)
 }
 
 fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -> bool {
@@ -3443,6 +3454,23 @@ pub mod tests {
             let recovered_blobs_opt = attempt_result.unwrap();
 
             assert!(recovered_blobs_opt.is_none());
+        }
+
+        #[test]
+        fn test_deserialize_corrupted_blob() {
+            let path = get_tmp_ledger_path!();
+            let blocktree = Blocktree::open(&path).unwrap();
+            let (mut blobs, _) = make_slot_entries(0, 0, 1);
+            {
+                let blob0 = &mut blobs[0];
+                // corrupt the size
+                blob0.set_size(BLOB_HEADER_SIZE);
+            }
+            blocktree.insert_data_blobs(&blobs).unwrap();
+            assert_matches!(
+                blocktree.get_slot_entries(0, 0, None),
+                Err(Error::BlocktreeError(BlocktreeError::InvalidBlobData(_)))
+            );
         }
 
         #[test]
