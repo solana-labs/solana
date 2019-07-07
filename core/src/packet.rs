@@ -652,7 +652,10 @@ impl Signable for Blob {
     }
 
     fn signable_data(&self) -> Cow<[u8]> {
-        let end = cmp::max(SIGNABLE_START, self.data_size() as usize);
+        let end = cmp::min(
+            cmp::max(SIGNABLE_START, self.data_size() as usize),
+            BLOB_SIZE,
+        );
         Cow::Borrowed(&self.data[SIGNABLE_START..end])
     }
 
