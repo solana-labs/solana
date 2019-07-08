@@ -325,7 +325,7 @@ startBootstrapLeader() {
   (
     set -x
     startCommon "$ipAddress" || exit 1
-    remoteExternalPrimordialAccountsFile=~/solana/net/config/external-primodial-accounts.yml
+    remoteExternalPrimordialAccountsFile=/home/solana/solana/net/config/external-primodial-accounts.yml
     [[ -z "$externalPrimordialAccountsFile" ]] || rsync -vPrc -e "ssh ${sshOptions[*]}" "$externalPrimordialAccountsFile" \
       "$ipAddress:$remoteExternalPrimordialAccountsFile"
     case $deployMethod in
