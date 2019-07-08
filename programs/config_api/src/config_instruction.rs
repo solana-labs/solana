@@ -7,8 +7,11 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::short_vec;
 use solana_sdk::system_instruction;
 
+/// A collection of keys to be stored in Config account data.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct ConfigKeys {
+    // Each key tuple comprises a unique `Pubkey` identifier,
+    // and `bool` whether that key is a signer of the data
     #[serde(with = "short_vec")]
     pub keys: Vec<(Pubkey, bool)>,
 }
