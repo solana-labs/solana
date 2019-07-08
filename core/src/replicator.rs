@@ -586,7 +586,7 @@ impl Replicator {
         let blockhash = match client.get_recent_blockhash() {
             Ok((blockhash, _)) => blockhash,
             Err(_) => {
-                println!("unable to get recent blockhash, can't submit proof");
+                error!("unable to get recent blockhash, can't submit proof");
                 return;
             }
         };
