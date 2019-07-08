@@ -1,6 +1,7 @@
 use super::*;
 use crate::packet::BLOB_HEADER_SIZE;
 use solana_sdk::hash::Hash;
+use solana_sdk::signature::Signable;
 
 pub(super) struct BroadcastBadBlobSizes {}
 
@@ -58,6 +59,8 @@ impl BroadcastRun for BroadcastBadBlobSizes {
             let real_size = w_b.meta.size;
             // corrupt the size in the header
             w_b.set_size(std::usize::MAX - BLOB_HEADER_SIZE);
+            // resign the blob
+            w_b.sign(&keypair);
             // don't corrupt the size in the meta so that broadcast will still work
             w_b.meta.size = real_size;
         }
