@@ -15,7 +15,7 @@ pub struct SolKeyedAccount<'a> {
     /// Public key of the account
     pub is_signer: bool,
     /// Number of lamports owned by this account
-    pub lamports: u64,
+    pub lamports: &'a mut u64,
     /// On-chain data within this account
     pub data: &'a mut [u8],
     /// Program that owns this account
@@ -79,7 +79,7 @@ pub unsafe fn deserialize<'a>(
         offset += size_of::<SolPubkey>();
 
         #[allow(clippy::cast_ptr_alignment)]
-        let lamports = *(input.add(offset) as *const u64);
+        let lamports = &mut *(input.add(offset) as *mut u64);
         offset += size_of::<u64>();
 
         #[allow(clippy::cast_ptr_alignment)]

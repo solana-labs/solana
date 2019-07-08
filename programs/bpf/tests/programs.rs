@@ -94,6 +94,7 @@ mod bpf {
                 ("solana_bpf_rust_dep_crate", true),
                 ("solana_bpf_rust_iter", true),
                 // ("solana_bpf_rust_many_args", true),  // Issue #3099
+                ("solana_bpf_rust_external_spend", false),
                 ("solana_bpf_rust_noop", true),
                 ("solana_bpf_rust_panic", false),
             ];
@@ -110,6 +111,7 @@ mod bpf {
                     ..
                 } = create_genesis_block(50);
                 let bank = Bank::new(&genesis_block);
+
                 // register some ticks, used by solana_bpf_rust_tick_height
                 for i in 0..10 {
                     bank.register_tick(&hash::hash(format!("hashing {}", i).as_bytes()));
