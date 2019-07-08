@@ -1,5 +1,7 @@
 //! Config program
 
+use crate::config_instruction::ConfigKeys;
+use bincode::deserialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
@@ -15,12 +17,34 @@ pub fn process_instruction(
         Err(InstructionError::MissingRequiredSignature)?;
     }
 
+    let key_list: ConfigKeys = deserialize(data).unwrap();
+    for (i, (signer, _)) in key_list
+        .keys
+        .iter()
+        .filter(|(_, is_signer)| *is_signer)
+        .enumerate()
+    {
+        let account_index = i + 1;
+        let signer_account = keyed_accounts[account_index].signer_key();
+        if signer_account.is_none() {
+            error!("account[{:?}].signer_key().is_none()", account_index);
+            Err(InstructionError::MissingRequiredSignature)?;
+        }
+        if signer_account.unwrap() != signer {
+            error!(
+                "account[{:?}].signer_key() does not match Config data)",
+                account_index
+            );
+            Err(InstructionError::MissingRequiredSignature)?;
+        }
+    }
+
     if keyed_accounts[0].account.data.len() < data.len() {
         error!("instruction data too large");
         Err(InstructionError::InvalidInstructionData)?;
     }
 
-    keyed_accounts[0].account.data[0..data.len()].copy_from_slice(data);
+    keyed_accounts[0].account.data[0..data.len()].copy_from_slice(&data);
     Ok(())
 }
 
@@ -64,7 +88,11 @@ mod tests {
         (bank, mint_keypair)
     }
 
-    fn create_config_account(bank: Bank, mint_keypair: &Keypair) -> (BankClient, Keypair) {
+    fn create_config_account(
+        bank: Bank,
+        mint_keypair: &Keypair,
+        keys: Vec<(Pubkey, bool)>,
+    ) -> (BankClient, Keypair) {
         let config_keypair = Keypair::new();
         let config_pubkey = config_keypair.pubkey();
 
@@ -76,6 +104,7 @@ mod tests {
                     &mint_keypair.pubkey(),
                     &config_pubkey,
                     1,
+                    keys,
                 ),
             )
             .expect("new_account");
@@ -87,7 +116,7 @@ mod tests {
     fn test_process_create_ok() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (bank_client, config_keypair) = create_config_account(bank, &mint_keypair);
+        let (bank_client, config_keypair) = create_config_account(bank, &mint_keypair, vec![]);
         let config_account_data = bank_client
             .get_account_data(&config_keypair.pubkey())
             .unwrap()
@@ -102,13 +131,16 @@ mod tests {
     fn test_process_store_ok() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (bank_client, config_keypair) = create_config_account(bank, &mint_keypair);
+        let keys = vec![];
+        let (bank_client, config_keypair) =
+            create_config_account(bank, &mint_keypair, keys.clone());
         let config_pubkey = config_keypair.pubkey();
 
         let my_config = MyConfig::new(42);
 
-        let instruction = config_instruction::store(&config_pubkey, &my_config);
+        let instruction = config_instruction::store(&config_pubkey, keys.clone(), &my_config);
         let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+
         bank_client
             .send_message(&[&mint_keypair, &config_keypair], message)
             .unwrap();
@@ -117,6 +149,8 @@ mod tests {
             .get_account_data(&config_pubkey)
             .unwrap()
             .unwrap();
+        let meta_length = ConfigKeys::serialized_size(keys);
+        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
         assert_eq!(
             my_config,
             MyConfig::deserialize(&config_account_data).unwrap()
@@ -127,12 +161,12 @@ mod tests {
     fn test_process_store_fail_instruction_data_too_large() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (bank_client, config_keypair) = create_config_account(bank, &mint_keypair);
+        let (bank_client, config_keypair) = create_config_account(bank, &mint_keypair, vec![]);
         let config_pubkey = config_keypair.pubkey();
 
         let my_config = MyConfig::new(42);
 
-        let mut instruction = config_instruction::store(&config_pubkey, &my_config);
+        let mut instruction = config_instruction::store(&config_pubkey, vec![], &my_config);
         instruction.data = vec![0; 123]; // <-- Replace data with a vector that's too large
         let message = Message::new(vec![instruction]);
         bank_client
@@ -148,18 +182,90 @@ mod tests {
         let system_pubkey = system_keypair.pubkey();
 
         bank.transfer(42, &mint_keypair, &system_pubkey).unwrap();
-        let (bank_client, config_keypair) = create_config_account(bank, &mint_keypair);
+        let (bank_client, config_keypair) = create_config_account(bank, &mint_keypair, vec![]);
         let config_pubkey = config_keypair.pubkey();
 
         let transfer_instruction =
             system_instruction::transfer(&system_pubkey, &Pubkey::new_rand(), 42);
         let my_config = MyConfig::new(42);
-        let mut store_instruction = config_instruction::store(&config_pubkey, &my_config);
+        let mut store_instruction = config_instruction::store(&config_pubkey, vec![], &my_config);
         store_instruction.accounts[0].is_signer = false; // <----- not a signer
 
         let message = Message::new(vec![transfer_instruction, store_instruction]);
         bank_client
             .send_message(&[&system_keypair], message)
+            .unwrap_err();
+    }
+
+    #[test]
+    fn test_process_store_with_additional_signers() {
+        solana_logger::setup();
+        let (bank, mint_keypair) = create_bank(10_000);
+        let pubkey = Pubkey::new_rand();
+        let signer0 = Keypair::new();
+        let signer1 = Keypair::new();
+        let keys = vec![
+            (pubkey, false),
+            (signer0.pubkey(), true),
+            (signer1.pubkey(), true),
+        ];
+        let (bank_client, config_keypair) =
+            create_config_account(bank, &mint_keypair, keys.clone());
+        let config_pubkey = config_keypair.pubkey();
+
+        let my_config = MyConfig::new(42);
+
+        let instruction = config_instruction::store(&config_pubkey, keys.clone(), &my_config);
+        let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+
+        bank_client
+            .send_message(
+                &[&mint_keypair, &config_keypair, &signer0, &signer1],
+                message,
+            )
+            .unwrap();
+
+        let config_account_data = bank_client
+            .get_account_data(&config_pubkey)
+            .unwrap()
+            .unwrap();
+        let meta_length = ConfigKeys::serialized_size(keys.clone());
+        let meta_data: ConfigKeys = deserialize(&config_account_data[0..meta_length]).unwrap();
+        assert_eq!(meta_data.keys, keys);
+        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
+        assert_eq!(
+            my_config,
+            MyConfig::deserialize(&config_account_data).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_process_store_with_bad_additional_signer() {
+        solana_logger::setup();
+        let (bank, mint_keypair) = create_bank(10_000);
+        let signer0 = Keypair::new();
+        let signer1 = Keypair::new();
+        let keys = vec![(signer0.pubkey(), true)];
+        let (bank_client, config_keypair) =
+            create_config_account(bank, &mint_keypair, keys.clone());
+        let config_pubkey = config_keypair.pubkey();
+
+        let my_config = MyConfig::new(42);
+
+        // Config-data pubkey doesn't match signer
+        let instruction = config_instruction::store(&config_pubkey, keys.clone(), &my_config);
+        let mut message =
+            Message::new_with_payer(vec![instruction.clone()], Some(&mint_keypair.pubkey()));
+        message.account_keys[2] = signer1.pubkey();
+        bank_client
+            .send_message(&[&mint_keypair, &config_keypair, &signer1], message)
+            .unwrap_err();
+
+        // Config-data pubkey not a signer
+        let mut message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+        message.header.num_required_signatures = 2;
+        bank_client
+            .send_message(&[&mint_keypair, &config_keypair], message)
             .unwrap_err();
     }
 }
