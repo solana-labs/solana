@@ -1490,8 +1490,6 @@ fn recover(
         }
     }
 
-    assert_ne!(size, 0);
-
     for i in start_idx..data_end_idx {
         let set_relative_idx = erasure_meta.data_index_in_set(i).unwrap() as usize;
 
