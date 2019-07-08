@@ -513,31 +513,33 @@ impl Replicator {
             return;
         }
 
-        if let Ok((blockhash, _)) = client.get_recent_blockhash() {
-            let instruction = storage_instruction::mining_proof(
-                &self.storage_keypair.pubkey(),
-                self.sha_state,
-                get_segment_from_slot(self.slot),
-                Signature::new(&self.signature.to_bytes()),
-                self.blockhash,
-            );
-            let message = Message::new_with_payer(vec![instruction], Some(&self.keypair.pubkey()));
-            let mut transaction = Transaction::new(
-                &[self.keypair.as_ref(), self.storage_keypair.as_ref()],
-                message,
-                blockhash,
-            );
-            if let Err(err) = client.send_and_confirm_transaction(
-                &[&self.keypair, &self.storage_keypair],
-                &mut transaction,
-                10,
-                0,
-            ) {
-                error!("Error: {:?}; while sending mining proof", err);
+        let blockhash = match client.get_recent_blockhash() {
+            Ok((blockhash, _)) => blockhash,
+            Err(e) => {
+                error!("unable to get recent blockhash, can't submit proof");
+                return;
             }
-        } else {
-            error!("No recent blockhash found");
-            return;
+        };
+        let instruction = storage_instruction::mining_proof(
+            &self.storage_keypair.pubkey(),
+            self.sha_state,
+            get_segment_from_slot(self.slot),
+            Signature::new(&self.signature.to_bytes()),
+            self.blockhash,
+        );
+        let message = Message::new_with_payer(vec![instruction], Some(&self.keypair.pubkey()));
+        let mut transaction = Transaction::new(
+            &[self.keypair.as_ref(), self.storage_keypair.as_ref()],
+            message,
+            blockhash,
+        );
+        if let Err(err) = client.send_and_confirm_transaction(
+            &[&self.keypair, &self.storage_keypair],
+            &mut transaction,
+            10,
+            0,
+        ) {
+            error!("Error: {:?}; while sending mining proof", err);
         }
     }
 
