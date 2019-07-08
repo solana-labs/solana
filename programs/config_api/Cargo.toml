@@ -22,4 +22,3 @@ solana-runtime = { path = "../../runtime", version = "0.17.0" }
 [lib]
 crate-type = ["lib"]
 name = "solana_config_api"
-
