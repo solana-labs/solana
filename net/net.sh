@@ -325,8 +325,9 @@ startBootstrapLeader() {
   (
     set -x
     startCommon "$ipAddress" || exit 1
+    remoteExternalPrimordialAccountsFile=~/solana/net/config/external-primodial-accounts.yml
     [[ -z "$externalPrimordialAccountsFile" ]] || rsync -vPrc -e "ssh ${sshOptions[*]}" "$externalPrimordialAccountsFile" \
-      "$ipAddress:~/solana/config/external-primodial-accounts.yml"
+      "$ipAddress:$remoteExternalPrimordialAccountsFile"
     case $deployMethod in
     tar)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
@@ -348,7 +349,7 @@ startBootstrapLeader() {
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
-         \"$externalPrimordialAccountsFile\" \
+         \"$remoteExternalPrimordialAccountsFile\" \
          \"$stakeNodesInGenesisBlock\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
@@ -382,7 +383,7 @@ startNode() {
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
-         \"$externalPrimordialAccountsFile\" \
+         \"$remoteExternalPrimordialAccountsFile\" \
          \"$stakeNodesInGenesisBlock\" \
          $nodeIndex \
          \"$genesisOptions\" \
