@@ -1198,7 +1198,7 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().1, 1);
 
             // Let's test that if a node overshoots the ticks for its target
-            // leader slot, reached_leader_tick() will return false
+            // leader slot, reached_leader_tick() will return true, because it's overdue
             // Set the leader slot 1 slot down
             poh_recorder.reset(
                 poh_recorder.tick_height(),
@@ -1212,8 +1212,8 @@ mod tests {
                 poh_recorder.tick();
             }
 
-            // We are not the leader, as expected
-            assert_eq!(poh_recorder.reached_leader_tick().0, false);
+            // We are overdue to lead
+            assert_eq!(poh_recorder.reached_leader_tick().0, true);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
