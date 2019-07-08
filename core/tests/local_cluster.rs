@@ -235,7 +235,7 @@ fn test_listener_startup() {
 }
 
 #[test]
-#[serial]
+#[ignore]
 fn test_fail_entry_verification_leader() {
     solana_logger::setup();
     let num_nodes = 4;
