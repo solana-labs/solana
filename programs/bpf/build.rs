@@ -73,6 +73,7 @@ fn main() {
             "dep_crate",
             "iter",
             "many_args",
+            "external_spend",
             "noop",
             "panic",
             "tick_height",
