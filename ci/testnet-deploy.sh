@@ -348,10 +348,10 @@ if ! $skipStart; then
       args+=(--deploy-update windows)
     fi
 
-    if $stakeNodesInGenesisBlock; then
+    if [[ -n $stakeNodesInGenesisBlock ]]; then
       args+=("-s" "${stakeNodesInGenesisBlock}")
     fi
-    if $externalPrimordialAccountsFile; then
+    if [[ -n $externalPrimordialAccountsFile ]]; then
       args+=("-x" "${externalPrimordialAccountsFile}")
     fi
     if [[ -n $maybeLamports ]]; then
