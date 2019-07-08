@@ -495,16 +495,24 @@ impl Bank {
         (validator_point_value, storage_point_value)
     }
 
+    fn collect_fees(&self) {
+        let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
+
+        if collector_fees != 0 {
+            // burn a portion of fees
+            self.deposit(&self.collector_id, self.fee_calculator.burn(collector_fees));
+        }
+    }
+
     fn set_hash(&self) -> bool {
         let mut hash = self.hash.write().unwrap();
-        if *hash == Hash::default() {
-            let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
 
-            if collector_fees != 0 {
-                // burn a portion of fees
-                self.deposit(&self.collector_id, self.fee_calculator.burn(collector_fees));
-            }
-            //  freeze is a one-way trip, idempotent
+        if *hash == Hash::default() {
+            // finish up any deferred changes to account state
+            self.commit_credits();
+            self.collect_fees();
+
+            // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
             true
         } else {
@@ -1404,7 +1412,7 @@ impl Bank {
         );
     }
 
-    pub fn commit_credits(&self) {
+    fn commit_credits(&self) {
         self.rc
             .accounts
             .commit_credits(&self.ancestors, self.slot());
@@ -1578,6 +1586,7 @@ mod tests {
         let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_block.hash());
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
         bank.commit_credits();
+
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Err(TransactionError::AccountInUse));
@@ -1987,7 +1996,6 @@ mod tests {
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
         bank.commit_credits();
-
         // However, an account may not be locked as credit-only and credit-debit at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
@@ -2129,8 +2137,8 @@ mod tests {
         bank.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
         let tx = system_transaction::transfer(&key1, &key1.pubkey(), 1, genesis_block.hash());
-        let res = bank.process_transactions(&vec![tx.clone()]);
-        assert_eq!(res.len(), 1);
+        let _res = bank.process_transaction(&tx);
+
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
 
         // TODO: Why do we convert errors to Oks?
