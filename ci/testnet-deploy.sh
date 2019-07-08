@@ -24,8 +24,8 @@ blockstreamer=false
 deployUpdateManifest=true
 fetchLogs=true
 maybeHashesPerTick=
-maybeStakeNodesInGenesisBlock=
-maybeExternalPrimordialAccountsFile=
+stakeNodesInGenesisBlock=
+externalPrimordialAccountsFile=
 maybeLamports=
 
 usage() {
@@ -67,10 +67,8 @@ Deploys a CD testnet
    -f                   - Discard validator nodes that didn't bootup successfully
    -w                   - Skip time-consuming "bells and whistles" that are
                           unnecessary for a high-node count demo testnet
-   --stakeNodesInGenesisBlock [number]
-                        - Amount to stake internal nodes.  If set, airdrops are disabled.
-   --externalPrimordialAccountsFile [path]
-                        - Path to external Primordial Accounts file.
+   -k                   - Amount to stake internal nodes.  If set, airdrops are disabled.
+   -K                   - Path to external Primordial Accounts file.
    --hashes-per-tick NUM_HASHES|sleep|auto
                         - Override the default --hashes-per-tick for the cluster
    --lamports NUM_LAMPORTS
@@ -92,12 +90,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --lamports ]]; then
       maybeLamports="$1 $2"
       shift 2
-    elif [[ $1 = --stakeNodesInGenesisBlock ]]; then
-      maybeStakeNodesInGenesisBlock="$1 $2"
-      shift 2
-    elif [[ $1 = --externalPrimordialAccountsFile ]]; then
-      maybeExternalPrimordialAccountsFile="$1 $2"
-      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -107,7 +99,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[@]}"; do
+while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfewk:K:" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -180,6 +172,12 @@ while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[@]}"; do
   w)
     fetchLogs=false
     deployUpdateManifest=false
+    ;;
+  k)
+    stakeNodesInGenesisBlock=$OPTARG
+    ;;
+  K)
+    externalPrimordialAccountsFile=$OPTARG
     ;;
   *)
     usage "Unknown option: $opt"
@@ -350,13 +348,11 @@ if ! $skipStart; then
       args+=(--deploy-update windows)
     fi
 
-    if [[ -n $maybeStakeNodesInGenesisBlock ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeStakeNodesInGenesisBlock
-      args+=($maybeStakeNodesInGenesisBlock)
+    if $stakeNodesInGenesisBlock; then
+      args+=("-s" "${stakeNodesInGenesisBlock}")
     fi
-    if [[ -n $maybeExternalPrimordialAccountsFile ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeExternalPrimordialAccountsFile
-      args+=($maybeExternalPrimordialAccountsFile)
+    if $externalPrimordialAccountsFile; then
+      args+=("-x" "${externalPrimordialAccountsFile}")
     fi
     if [[ -n $maybeLamports ]]; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeLamports
