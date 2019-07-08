@@ -6,17 +6,16 @@ use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::short_vec;
 use solana_sdk::system_instruction;
-use std::mem;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct ConfigSigners {
+pub struct ConfigKeys {
     #[serde(with = "short_vec")]
-    pub additional_signers: Vec<Pubkey>,
+    pub keys: Vec<(Pubkey, bool)>,
 }
 
-impl ConfigSigners {
-    pub fn serialized_size(additional_signers: Vec<Pubkey>) -> usize {
-        serialize(&ConfigSigners { additional_signers })
+impl ConfigKeys {
+    pub fn serialized_size(keys: Vec<(Pubkey, bool)>) -> usize {
+        serialize(&ConfigKeys { keys })
             .unwrap_or_else(|_| vec![])
             .len()
     }
@@ -27,11 +26,9 @@ pub fn create_account<T: ConfigState>(
     from_account_pubkey: &Pubkey,
     config_account_pubkey: &Pubkey,
     lamports: u64,
-    additional_signers: Vec<Pubkey>,
+    keys: Vec<(Pubkey, bool)>,
 ) -> Instruction {
-    let space = T::max_space()
-        + mem::size_of::<u32>() as u64
-        + ConfigSigners::serialized_size(additional_signers) as u64;
+    let space = T::max_space() + ConfigKeys::serialized_size(keys) as u64;
     system_instruction::create_account(
         from_account_pubkey,
         config_account_pubkey,
@@ -44,14 +41,13 @@ pub fn create_account<T: ConfigState>(
 /// Store new data in a configuration account
 pub fn store<T: ConfigState>(
     config_account_pubkey: &Pubkey,
-    account_type: u32,
-    additional_signers: Vec<Pubkey>,
+    keys: Vec<(Pubkey, bool)>,
     data: &T,
 ) -> Instruction {
     let mut account_metas = vec![AccountMeta::new(*config_account_pubkey, true)];
-    for signer_pubkey in additional_signers.iter() {
+    for (signer_pubkey, _) in keys.iter().filter(|(_, is_signer)| *is_signer) {
         account_metas.push(AccountMeta::new(*signer_pubkey, true));
     }
-    let account_data = (account_type, ConfigSigners { additional_signers }, data);
+    let account_data = (ConfigKeys { keys }, data);
     Instruction::new(id(), &account_data, account_metas)
 }
