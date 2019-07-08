@@ -531,7 +531,15 @@ impl Replicator {
         // check if the storage account exists
         let balance = client.poll_get_balance(&storage_keypair.pubkey());
         if balance.is_err() || balance.unwrap() == 0 {
-            let (blockhash, _fee_calculator) = client.get_recent_blockhash().expect("blockhash");
+            let blockhash = match client.get_recent_blockhash() {
+                Ok((blockhash, _)) => blockhash,
+                Err(_) => {
+                    return Err(Error::IO(<io::Error>::new(
+                        io::ErrorKind::Other,
+                        "unable to get recent blockhash, can't submit proof",
+                    )))
+                }
+            };
 
             let ix = storage_instruction::create_replicator_storage_account(
                 &keypair.pubkey(),
@@ -563,17 +571,25 @@ impl Replicator {
         // No point if we've got no storage account...
         let nodes = cluster_info.read().unwrap().tvu_peers();
         let client = crate::gossip_service::get_client(&nodes);
-        assert!(client.poll_get_balance(&storage_keypair.pubkey()).unwrap() > 0);
+        let storage_balance = client.poll_get_balance(&storage_keypair.pubkey());
+        if storage_balance.is_err() || storage_balance.unwrap() == 0 {
+            error!("Unable to submit mining proof, no storage account");
+            return;
+        }
         // ...or no lamports for fees
-        let balance = client
-            .poll_get_balance(&replicator_keypair.pubkey())
-            .unwrap();
-        if balance == 0 {
+        let balance = client.poll_get_balance(&replicator_keypair.pubkey());
+        if balance.is_err() || balance.unwrap() == 0 {
             error!("Unable to submit mining proof, insufficient Replicator Account balance");
             return;
         }
 
-        let (blockhash, _) = client.get_recent_blockhash().expect("No recent blockhash");
+        let blockhash = match client.get_recent_blockhash() {
+            Ok((blockhash, _)) => blockhash,
+            Err(_) => {
+                error!("unable to get recent blockhash, can't submit proof");
+                return;
+            }
+        };
         let instruction = storage_instruction::mining_proof(
             &storage_keypair.pubkey(),
             meta.sha_state,
@@ -588,14 +604,14 @@ impl Replicator {
             message,
             blockhash,
         );
-        client
-            .send_and_confirm_transaction(
-                &[&replicator_keypair, &storage_keypair],
-                &mut transaction,
-                10,
-                0,
-            )
-            .expect("transfer didn't work!");
+        if let Err(err) = client.send_and_confirm_transaction(
+            &[&replicator_keypair, &storage_keypair],
+            &mut transaction,
+            10,
+            0,
+        ) {
+            error!("Error: {:?}; while sending mining proof", err);
+        }
     }
 
     pub fn close(self) {
