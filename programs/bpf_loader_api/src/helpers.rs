@@ -215,8 +215,8 @@ pub fn helper_sol_log_(
     _context: &mut Option<Box<Any + 'static>>,
 ) -> u64 {
     let ptr: *const u8 = addr as *const u8;
-    let message = unsafe { from_utf8(from_raw_parts(ptr, len as usize)) };
-    info!("sol_log: {:?}", message);
+    let message = unsafe { from_utf8(from_raw_parts(ptr, len as usize)).unwrap() };
+    info!("info: {:?}", message);
     0
 }
 pub fn helper_sol_log_u64(
