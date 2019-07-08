@@ -527,6 +527,8 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_block(10_000);
+        path.remove_all();
+        spath.remove_all();
         for index in 0..10 {
             let bank0 = Bank::new_with_paths(&genesis_block, Some(path.paths.clone()));
             bank0.freeze();
