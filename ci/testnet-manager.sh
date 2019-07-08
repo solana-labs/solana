@@ -474,7 +474,8 @@ deploy() {
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
-          -k 1000 -K /tmp/stakes.yml \
+          --stakeNodesInGenesisBlock 1000 \
+          --externalPrimordialAccountsFile /tmp/stakes.yml \
           --lamports 8589934592000000000
 
     )
