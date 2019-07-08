@@ -138,7 +138,11 @@ where
             .collect()
     });
 
-    retransmit_blobs(&blobs, retransmit, my_pubkey)?;
+    match retransmit_blobs(&blobs, retransmit, my_pubkey) {
+        Ok(_) => Ok(()),
+        Err(Error::SendError) => Ok(()),
+        Err(e) => Err(e),
+    }?;
 
     trace!("{} num blobs received: {}", my_pubkey, blobs.len());
 
