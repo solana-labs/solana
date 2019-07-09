@@ -274,6 +274,40 @@ impl RpcClient {
         self.get_account(pubkey).map(|account| account.lamports)
     }
 
+    pub fn get_program_accounts(&self, pubkey: &Pubkey) -> io::Result<Vec<(Pubkey, Account)>> {
+        let params = json!([format!("{}", pubkey)]);
+        let response = self
+            .client
+            .send(&RpcRequest::GetProgramAccounts, Some(params), 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("AccountNotFound: pubkey={}: {}", pubkey, err),
+                )
+            })?;
+
+        let accounts: Vec<(String, Account)> =
+            serde_json::from_value::<Vec<(String, Account)>>(response).map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetProgramAccounts parse failure: {:?}", err),
+                )
+            })?;
+        println!("{:?}", accounts);
+
+        let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
+        for (string, account) in accounts.into_iter() {
+            let pubkey = string.parse().map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetProgramAccounts parse failure: {:?}", err),
+                )
+            })?;
+            pubkey_accounts.push((pubkey, account));
+        }
+        Ok(pubkey_accounts)
+    }
+
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will try again 5 times.
     pub fn get_transaction_count(&self) -> io::Result<u64> {

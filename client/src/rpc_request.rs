@@ -10,6 +10,7 @@ pub enum RpcRequest {
     GetBalance,
     GetClusterNodes,
     GetNumBlocksSinceSignatureConfirmation,
+    GetProgramAccounts,
     GetRecentBlockhash,
     GetSignatureStatus,
     GetSlot,
@@ -39,6 +40,7 @@ impl RpcRequest {
             RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
                 "getNumBlocksSinceSignatureConfirmation"
             }
+            RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetSignatureStatus => "getSignatureStatus",
             RpcRequest::GetSlot => "getSlot",
