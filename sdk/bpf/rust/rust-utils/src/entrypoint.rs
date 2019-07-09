@@ -117,4 +117,3 @@ pub unsafe fn deserialize<'a>(
 
     Ok((kas, info, data))
 }
-
