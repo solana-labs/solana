@@ -417,6 +417,7 @@ impl StorageStage {
             match chacha_cbc_encrypt_file_many_keys(
                 _blocktree,
                 segment as u64,
+                statew.slots_per_segment,
                 &mut statew.storage_keys,
                 &samples,
             ) {
