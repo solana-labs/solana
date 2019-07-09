@@ -3,19 +3,21 @@
 cd "$(dirname "$0")"
 
 usage() {
-    echo ""
-    echo "  Usage: do.sh action <project>"
-    echo ""
-    echo "  If relative_project_path is ommitted then action will"
-    echo "  be performed on all projects"
-    echo ""
-    echo "  Supported actions:"
-    echo "    build"
-    echo "    clean"
-    echo "    test"
-    echo "    clippy"
-    echo "    fmt"
-    echo ""
+    cat <<EOF
+
+Usage: do.sh action <project>
+
+If relative_project_path is ommitted then action will
+be performed on all projects
+
+Supported actions:
+    build
+    clean
+    test
+    clippy
+    fmt
+
+EOF
 }
 
 perform_action() {
@@ -23,31 +25,31 @@ perform_action() {
     case "$1" in
     build)
          ./../../../sdk/bpf/rust/build.sh "$2"
-    ;;
+        ;;
     clean)
          ./../../../sdk/bpf/rust/clean.sh "$2"
-    ;;
+        ;;
     test)
         (
             cd "$2"
             echo "test $2"
             cargo +nightly test
         )
-    ;;
+        ;;
     clippy)
         (
             cd "$2"
             echo "clippy $2"
             cargo +nightly clippy
         )
-    ;;
+        ;;
     fmt)
         (
             cd "$2"
             echo "formatting $2"
             cargo fmt
         )
-    ;;
+        ;;
     dump)
         # Dump depends on tools that are not installed by default and must be installed manually
         # - greadelf
@@ -93,7 +95,7 @@ perform_action() {
         echo "Error: Unknown command"
         usage
         exit
-    ;;
+        ;;
     esac
 }
 
