@@ -1,4 +1,22 @@
-use solana_sdk::hash::{hash, hashv, Hash};
+use solana_sdk::hash::{hashv, Hash};
+
+// We need to discern between leaf and intermediate nodes to prevent trivial second
+// pre-image attacks.
+// https://flawed.net.nz/2018/02/21/attacking-merkle-trees-with-a-second-preimage-attack
+const LEAF_PREFIX: &[u8] = &[0];
+const INTERMEDIATE_PREFIX: &[u8] = &[1];
+
+macro_rules! hash_leaf {
+    {$d:ident} => {
+        hashv(&[LEAF_PREFIX, $d])
+    }
+}
+
+macro_rules! hash_intermediate {
+    {$l:ident, $r:ident} => {
+        hashv(&[INTERMEDIATE_PREFIX, $l.as_ref(), $r.as_ref()])
+    }
+}
 
 #[derive(Debug)]
 pub struct MerkleTree {
@@ -32,7 +50,7 @@ impl<'a> Proof<'a> {
         let result = self.0.iter().try_fold(candidate, |candidate, pe| {
             let lsib = pe.1.unwrap_or(&candidate);
             let rsib = pe.2.unwrap_or(&candidate);
-            let hash = hashv(&[lsib.as_ref(), rsib.as_ref()]);
+            let hash = hash_intermediate!(lsib, rsib);
 
             if hash == *pe.0 {
                 Some(hash)
@@ -74,7 +92,7 @@ impl MerkleTree {
         };
 
         for item in items {
-            let hash = hash(item);
+            let hash = hash_leaf!(item);
             mt.nodes.push(hash);
         }
 
@@ -93,7 +111,7 @@ impl MerkleTree {
                     &mt.nodes[prev_level_start + prev_level_idx]
                 };
 
-                let hash = hashv(&[lsib.as_ref(), rsib.as_ref()]);
+                let hash = hash_intermediate!(lsib, rsib);
                 mt.nodes.push(hash);
             }
             prev_level_start = level_start;
@@ -168,7 +186,7 @@ mod tests {
     fn test_tree_from_one() {
         let input = b"test";
         let mt = MerkleTree::new(&[input]);
-        let expected = hash(input);
+        let expected = hash_leaf!(input);
         assert_eq!(mt.get_root(), Some(&expected));
     }
 
@@ -176,8 +194,9 @@ mod tests {
     fn test_tree_from_many() {
         let mt = MerkleTree::new(TEST);
         // This golden hash will need to be updated whenever the contents of `TEST` change in any
-        // way, including addition, removal and reordering
-        let bytes = hex::decode("7e6791d2b9a6338e1446ad4776f267b97e7e4ed968ae2592cfd9c1607bd7dbbb")
+        // way, including addition, removal and reordering or any of the tree calculation algo
+        // changes
+        let bytes = hex::decode("b40c847546fdceea166f927fc46c5ca33c3638236a36275c1346d3dffb84e1bc")
             .unwrap();
         let expected = Hash::new(&bytes);
         assert_eq!(mt.get_root(), Some(&expected));
@@ -201,7 +220,7 @@ mod tests {
     fn test_path_verify_good() {
         let mt = MerkleTree::new(TEST);
         for (i, s) in TEST.iter().enumerate() {
-            let hash = hash(s);
+            let hash = hash_leaf!(s);
             let path = mt.find_path(i).unwrap();
             assert!(path.verify(hash));
         }
@@ -211,7 +230,7 @@ mod tests {
     fn test_path_verify_bad() {
         let mt = MerkleTree::new(TEST);
         for (i, s) in BAD.iter().enumerate() {
-            let hash = hash(s);
+            let hash = hash_leaf!(s);
             let path = mt.find_path(i).unwrap();
             assert!(!path.verify(hash));
         }
