@@ -439,7 +439,9 @@ deploy() {
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f -w \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
+          --skip-deploy-update \
+          --skip-remote-log-retrieval \
           -a demo-testnet-solana-com \
           ${skipCreate:+-e} \
           ${maybeSkipStart:+-s} \
@@ -451,7 +453,9 @@ deploy() {
         NO_LEDGER_VERIFY=1 \
         NO_VALIDATOR_SANITY=1 \
           ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
-            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x -w \
+            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
+            --skip-deploy-update \
+            --skip-remote-log-retrieval \
             ${skipCreate:+-e} \
             ${skipStart:+-s} \
             ${maybeStop:+-S} \
@@ -476,7 +480,8 @@ deploy() {
           ${maybeDelete:+-D} \
           --stake-internal-nodes 1000000000000 \
           --external-accounts-file /tmp/stakes.yml \
-          --lamports 8589934592000000000
+          --lamports 8589934592000000000 \
+          --skip-deploy-update
 
     )
     ;;

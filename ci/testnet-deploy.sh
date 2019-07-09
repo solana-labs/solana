@@ -65,8 +65,6 @@ Deploys a CD testnet
    -s                   - Skip start.  Nodes will still be created or configured, but network software will not be started.
    -S                   - Stop network software without tearing down nodes.
    -f                   - Discard validator nodes that didn't bootup successfully
-   -w                   - Skip time-consuming "bells and whistles" that are
-                          unnecessary for a high-node count demo testnet
    --stake-internal-nodes NUM_LAMPORTS
                         - Amount to stake internal nodes.  If set, airdrops are disabled.
    --external-accounts-file FILE_PATH
@@ -75,6 +73,10 @@ Deploys a CD testnet
                         - Override the default --hashes-per-tick for the cluster
    --lamports NUM_LAMPORTS
                         - Specify the number of lamports to mint (default 100000000000000)
+   --skip-deploy-update
+                        - If set, will skip software update deployment
+   --skip-remote-log-retrieval
+                        - If set, will not fetch logs from remote nodes
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
 EOF
@@ -98,6 +100,12 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --external-accounts-file ]]; then
       maybeExternalPrimordialAccountsFile="$1 $2"
       shift 2
+    elif [[ $1 = --skip-deploy-update ]]; then
+      deployUpdateManifest=false
+      shift 1
+    elif [[ $1 = --skip-remote-log-retrieval ]]; then
+      fetchLogs=false
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
