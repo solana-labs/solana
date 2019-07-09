@@ -59,6 +59,8 @@ test-stable-perf)
     (
         cd sdk/bpf/rust/rust-utils
         _ cargo +"$rust_nightly" test
+    )
+    (
         cd sdk/bpf/rust/rust-test
         _ cargo +"$rust_nightly" test
     )
