@@ -6,10 +6,10 @@ learn how to start and interact with the exchange.
 
 ### Table of Contents
 [Overview](#Overview)<br>
-[Premiss](#Premiss)<br>
+[Premise](#Premise)<br>
 [Exchange startup](#Exchange-startup)<br>
-[Trade requests](#Trade-requests)<br>
-[Trade cancellations](#Trade-cancellations)<br>
+[Order Requests](#Trade-requests)<br>
+[Order Cancellations](#Trade-cancellations)<br>
 [Trade swap](#Trade-swap)<br>
 [Exchange program operations](#Exchange-program-operations)<br>
 [Quotes and OHLCV](#Quotes-and-OHLCV)<br>
@@ -22,9 +22,9 @@ An exchange is a marketplace where one asset can be traded for another.  This
 demo demonstrates one way to host an exchange on the Solana blockchain by
 emulating a currency exchange.
 
-The assets are virtual tokens held by investors who may post trade requests to
+The assets are virtual tokens held by investors who may post order requests to
 the exchange.  A Swapper monitors the exchange and posts swap requests for
-matching trade orders.  All the transactions can execute concurrently.
+matching orders.  All the transactions can execute concurrently.
 
 ## Premise
 
@@ -59,43 +59,43 @@ matching trade orders.  All the transactions can execute concurrently.
      ratios are represented as fixed point numbers.  The fixed point scaler is
      defined in
      [exchange_state.rs](https://github.com/solana-labs/solana/blob/c2fdd1362a029dcf89c8907c562d2079d977df11/programs/exchange_api/src/exchange_state.rs#L7)
-- Trade request
+- Order request
   - A Solana transaction executed by the exchange requesting the trade of one
-    type of token for another.  Trade requests are made up of the token pair,
+    type of token for another.  order requests are made up of the token pair,
     the direction of the trade, quantity of the primary token, the price ratio,
     and the two token accounts to be credited/deducted.  An example trade
     request looks like "T AB 5 2" which reads "Exchange 5 A tokens to B tokens
     at a price ratio of 1:2"  A fulfilled trade would result in 5 A tokens
     deducted and 10 B tokens credited to the trade initiator's token accounts.
-    Successful trade requests result in a trade order.
-- Trade order
-  - The result of a successful trade request.  Trade orders are stored in
-    accounts owned by the submitter of the trade request.  They can only be
+    Successful order requests result in an order.
+- Order
+  - The result of a successful order request.  orders are stored in
+    accounts owned by the submitter of the order request.  They can only be
     canceled by their owner but can be used by anyone in a trade swap.  They
-    contain the same information as the trade request.
+    contain the same information as the order request.
 - Price spread
-  - The difference between the two matching trade orders. The spread is the
+  - The difference between the two matching orders. The spread is the
     profit of the Swapper initiating the swap request.
 - Swap requirements
   - Policies that result in a successful trade swap.
 - Swap request
-  - A request to exchange tokens between to trade orders
+  - A request to exchange tokens between to orders
 - Trade swap
-  - A successful trade.  A swap consists of two matching trade orders that meet
+  - A successful trade.  A swap consists of two matching orders that meet
     swap requirements.  A trade swap may not wholly satisfy one or both of the
-    trade orders in which case the trade orders are adjusted appropriately.  As
+    orders in which case the orders are adjusted appropriately.  As
     long as the swap requirements are met there will be an exchange of tokens
     between accounts.  Any price spread is deposited into the Swapper's profit
     account.  All trade swaps are recorded in a new account for posterity.
 - Investor
   - Individual investors who hold a number of tokens and wish to trade them on
     the exchange.  Investors operate as Solana thin clients who own a set of
-    accounts containing tokens and/or trade requests.  Investors post
+    accounts containing tokens and/or order requests.  Investors post
     transactions to the exchange in order to request tokens and post or cancel
-    trade requests.
+    order requests.
 - Swapper
   - An agent who facilitates trading between investors.  Swappers operate as
-    Solana thin clients who monitor all the trade orders looking for a trade
+    Solana thin clients who monitor all the orders looking for a trade
     match.  Once found, the Swapper issues a swap request to the exchange.
     Swappers are the engine of the exchange and are rewarded for their efforts by
     accumulating the price spreads of the swaps they initiate.  Swappers also
@@ -123,7 +123,7 @@ the investors that trades submitted after that point will be analyzed.  <!--This
 is not ideal, and instead investors should be able to submit trades at any time,
 and the Swapper could come and go without missing a trade.  One way to achieve
 this is for the Swapper to read the current state of all accounts looking for all
-open trade orders.-->
+open orders.-->
 
 Investors will initially query the exchange to discover their current balance
 for each type of token.  If the investor does not already have an account for
@@ -181,19 +181,19 @@ pub enum ExchangeInstruction {
 }
 ```
 
-## Trade requests
+## Order Requests
 
 When an investor decides to exchange a token of one type for another, they
-submit a transaction to the Solana Blockchain containing a trade request, which,
-if successful, is turned into a trade order.  Trade orders do not expire but are
-cancellable. <!-- Trade orders should have a timestamp to enable trade
-expiration -->  When a trade order is created, tokens are deducted from a token
-account and the trade order acts as an escrow.  The tokens are held until the
-trade order is fulfilled or canceled. If the direction is `To`, then the number
+submit a transaction to the Solana Blockchain containing an order request, which,
+if successful, is turned into an order.  orders do not expire but are
+cancellable. <!-- orders should have a timestamp to enable trade
+expiration -->  When an order is created, tokens are deducted from a token
+account and the order acts as an escrow.  The tokens are held until the
+order is fulfilled or canceled. If the direction is `To`, then the number
 of `tokens` are deducted from the primary account, if `From` then `tokens`
-multiplied by `price` are deducted from the secondary account.  Trade orders are
+multiplied by `price` are deducted from the secondary account.  orders are
 no longer valid when the number of `tokens` goes to zero, at which point they
-can no longer be used. <!-- Could support refilling trade orders, so trade order
+can no longer be used. <!-- Could support refilling orders, so order
 accounts are refilled rather than accumulating -->
 
 ```rust
@@ -205,7 +205,7 @@ pub enum Direction {
     From,
 }
 
-pub struct TradeRequestInfo {
+pub struct OrderRequestInfo {
     /// Direction of trade
     pub direction: Direction,
 
@@ -224,7 +224,7 @@ pub struct TradeRequestInfo {
 }
 
 pub enum ExchangeInstruction {
-    /// Trade request
+    /// order request
     /// key 0 - Signer
     /// key 1 - Account in which to record the swap
     /// key 2 - Token account associated with this trade
@@ -233,7 +233,7 @@ pub enum ExchangeInstruction {
 
 /// Trade accounts are populated with this structure
 pub struct TradeOrderInfo {
-    /// Owner of the trade order
+    /// Owner of the order
     pub owner: Pubkey,
     /// Direction of the exchange
     pub direction: Direction,
@@ -252,7 +252,7 @@ pub struct TradeOrderInfo {
 }
 ```
 
-## Trade cancellations
+## Order cancellations
 
 An investor may cancel a trade at anytime, but only trades they own.  If the
 cancellation is successful, any tokens held in escrow are returned to the
@@ -260,9 +260,9 @@ account from which they came.
 
 ```rust
 pub enum ExchangeInstruction {
-    /// Trade cancellation
+    /// order cancellation
     /// key 0 - Signer
-    /// key 1 -Trade order to cancel
+    /// key 1 -order to cancel
     TradeCancellation,
 }
 ```
@@ -270,14 +270,14 @@ pub enum ExchangeInstruction {
 ## Trade swaps
 
 The Swapper is monitoring the accounts assigned to the exchange program and
-building a trade-order table.  The trade order table is used to identify
-matching trade orders which could be fulfilled.  When a match is found the
+building a trade-order table.  The order table is used to identify
+matching orders which could be fulfilled.  When a match is found the
 Swapper should issue a swap request.  Swap requests may not satisfy the entirety
 of either order, but the exchange will greedily fulfill it.  Any leftover tokens
-in either account will keep the trade order valid for further swap requests in
+in either account will keep the order valid for further swap requests in
 the future.
 
-Matching trade orders are defined by the following swap requirements:
+Matching orders are defined by the following swap requirements:
 
 - Opposite polarity (one `To` and one `From`)
 - Operate on the same token pair
@@ -379,8 +379,8 @@ pub enum ExchangeInstruction {
     /// Trade swap request
     /// key 0 - Signer
     /// key 1 - Account in which to record the swap
-    /// key 2 - 'To' trade order
-    /// key 3 - `From` trade order
+    /// key 2 - 'To' order
+    /// key 3 - `From` order
     /// key 4 - Token account associated with the To Trade
     /// key 5 - Token account associated with From trade
     /// key 6 - Token account in which to deposit the Swappers profit from the swap.
@@ -391,9 +391,9 @@ pub enum ExchangeInstruction {
 pub struct TradeSwapInfo {
     /// Pair swapped
     pub pair: TokenPair,
-    /// `To` trade order
+    /// `To` order
     pub to_trade_order: Pubkey,
-    /// `From` trade order
+    /// `From` order
     pub from_trade_order: Pubkey,
     /// Number of primary tokens exchanged
     pub primary_tokens: u64,
@@ -424,22 +424,22 @@ pub enum ExchangeInstruction {
     ///         the exchange has a limitless number of tokens it can transfer.
     TransferRequest(Token, u64),
 
-    /// Trade request
+    /// order request
     /// key 0 - Signer
     /// key 1 - Account in which to record the swap
     /// key 2 - Token account associated with this trade
     TradeRequest(TradeRequestInfo),
 
-    /// Trade cancellation
+    /// order cancellation
     /// key 0 - Signer
-    /// key 1 -Trade order to cancel
+    /// key 1 -order to cancel
     TradeCancellation,
 
     /// Trade swap request
     /// key 0 - Signer
     /// key 1 - Account in which to record the swap
-    /// key 2 - 'To' trade order
-    /// key 3 - `From` trade order
+    /// key 2 - 'To' order
+    /// key 3 - `From` order
     /// key 4 - Token account associated with the To Trade
     /// key 5 - Token account associated with From trade
     /// key 6 - Token account in which to deposit the Swappers profit from the swap.
@@ -478,6 +478,3 @@ To also see the cluster messages:
 ```bash
 $ RUST_LOG=solana_bench_exchange=info,solana=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```
-
-
-
