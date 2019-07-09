@@ -27,6 +27,7 @@ maybeHashesPerTick=
 maybeStakeNodesInGenesisBlock=
 maybeExternalPrimordialAccountsFile=
 maybeLamports=
+maybeLetsEncryptDomainName=
 
 usage() {
   exitcode=0
@@ -77,6 +78,9 @@ Deploys a CD testnet
                         - If set, will skip software update deployment
    --skip-remote-log-retrieval
                         - If set, will not fetch logs from remote nodes
+   --letsencrypt [dns name]
+                        - Attempt to generate a TLS certificate using this DNS name
+
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
 EOF
@@ -106,6 +110,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-remote-log-retrieval ]]; then
       fetchLogs=false
       shift 1
+    elif [[ $1 = --letsencrypt ]]; then
+      maybeLetsEncryptDomainName="$2"
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -342,7 +349,10 @@ if ! $skipStart; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeHashesPerTick
       args+=($maybeHashesPerTick)
     fi
-
+    if [[ -n $maybeLetsEncryptDomainName ]]; then
+      # shellcheck disable=SC2206 # Do not want to quote $maybeLetsEncryptDomainName
+      args+=($maybeLetsEncryptDomainName)
+    fi
     if $reuseLedger; then
       args+=(-r)
     fi
@@ -371,7 +381,6 @@ if ! $skipStart; then
       args+=($maybeLamports)
     fi
 
-    # shellcheck disable=SC2086 # Don't want to double quote the $maybeXYZ variables
     time net/net.sh "${args[@]}"
   ) || ok=false
 
