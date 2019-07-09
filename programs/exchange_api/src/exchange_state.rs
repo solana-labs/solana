@@ -150,7 +150,7 @@ impl fmt::Display for Direction {
 
 /// Trade accounts are populated with this structure
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct TradeOrderInfo {
+pub struct OrderInfo {
     /// Owner of the trade order
     pub owner: Pubkey,
     /// Direction of the exchange
@@ -167,7 +167,7 @@ pub struct TradeOrderInfo {
     /// token account by the owner.
     pub tokens_settled: u64,
 }
-impl Default for TradeOrderInfo {
+impl Default for OrderInfo {
     fn default() -> Self {
         Self {
             owner: Pubkey::default(),
@@ -179,7 +179,7 @@ impl Default for TradeOrderInfo {
         }
     }
 }
-impl TradeOrderInfo {
+impl OrderInfo {
     pub fn pair(mut self, pair: TokenPair) -> Self {
         self.pair = pair;
         self
@@ -228,7 +228,7 @@ pub enum ExchangeState {
     // Token account
     Account(TokenAccountInfo),
     // Trade order account
-    Trade(TradeOrderInfo),
+    Trade(OrderInfo),
     Invalid,
 }
 impl Default for ExchangeState {

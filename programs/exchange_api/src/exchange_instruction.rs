@@ -7,7 +7,7 @@ use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct TradeRequestInfo {
+pub struct OrderRequestInfo {
     /// Direction of trade
     pub direction: Direction,
 
@@ -35,16 +35,16 @@ pub enum ExchangeInstruction {
     ///         the exchange has a limitless number of tokens it can transfer.
     TransferRequest(Token, u64),
 
-    /// Trade request
+    /// Order request
     /// key 0 - Signer
     /// key 1 - Account in which to record the trade order
     /// key 2 - Token account to source tokens from
-    TradeRequest(TradeRequestInfo),
+    OrderRequest(OrderRequestInfo),
 
-    /// Trade cancellation
+    /// Order cancellation
     /// key 0 - Signer
-    /// key 1 - Trade order to cancel
-    TradeCancellation,
+    /// key 1 - Order to cancel
+    OrderCancellation,
 
     /// Trade swap request
     /// key 0 - Signer
@@ -97,7 +97,7 @@ pub fn trade_request(
     ];
     Instruction::new(
         id(),
-        &ExchangeInstruction::TradeRequest(TradeRequestInfo {
+        &ExchangeInstruction::OrderRequest(OrderRequestInfo {
             direction,
             pair,
             tokens,
@@ -107,12 +107,12 @@ pub fn trade_request(
     )
 }
 
-pub fn trade_cancellation(owner: &Pubkey, trade: &Pubkey) -> Instruction {
+pub fn order_cancellation(owner: &Pubkey, order: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*owner, true),
-        AccountMeta::new(*trade, false),
+        AccountMeta::new(*order, false),
     ];
-    Instruction::new(id(), &ExchangeInstruction::TradeCancellation, account_metas)
+    Instruction::new(id(), &ExchangeInstruction::OrderCancellation, account_metas)
 }
 
 pub fn swap_request(
