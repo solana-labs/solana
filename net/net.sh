@@ -98,6 +98,7 @@ failOnValidatorBootupFailure=true
 genesisOptions=
 numFullnodesRequested=
 externalPrimordialAccountsFile=
+remoteExternalPrimordialAccountsFile=/tmp/external-primodial-accounts.yml
 stakeNodesInGenesisBlock=
 
 command=$1
@@ -325,7 +326,6 @@ startBootstrapLeader() {
   (
     set -x
     startCommon "$ipAddress" || exit 1
-    remoteExternalPrimordialAccountsFile=/tmp/external-primodial-accounts.yml
     [[ -z "$externalPrimordialAccountsFile" ]] || rsync -vPrc -e "ssh ${sshOptions[*]}" "$externalPrimordialAccountsFile" \
       "$ipAddress:$remoteExternalPrimordialAccountsFile"
     case $deployMethod in
