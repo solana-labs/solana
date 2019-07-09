@@ -2,6 +2,7 @@ use hashbrown::HashMap;
 use std::ops::Index;
 use rand::distributions::{Uniform, Distribution};
 
+/// OrderedIterator allows iterating with specific order specified
 pub struct OrderedIterator<'a, T: 'a> {
     element_order : Option<&'a [usize]>,
     current: usize,
@@ -39,6 +40,8 @@ impl<'a, T> Iterator for OrderedIterator<'a, T> {
     }
 }
 
+/// generate_random_shuffle generates array of unique 
+/// random numbers in range of [0, vec_size)
 pub fn generate_random_shuffle(vec_size: usize) -> Vec<usize> {
     if vec_size <= 0 {
         return Vec::new();
