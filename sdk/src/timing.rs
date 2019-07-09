@@ -16,6 +16,9 @@ pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 8192;
 // Storage segment configuration
 pub const DEFAULT_SLOTS_PER_SEGMENT: u64 = 16;
 
+// 4 times longer than the max_lockout to allow enough time for PoRep (128 slots)
+pub const DEFAULT_SLOTS_PER_TURN: u64 = 32 * 4;
+
 pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
 /// The time window of recent block hash values that the bank will track the signatures

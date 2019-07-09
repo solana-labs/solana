@@ -574,7 +574,7 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
+    use crate::storage_stage::SLOTS_PER_TURN_TEST;
     use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 
     #[test]
@@ -591,7 +591,7 @@ mod test {
         solana_logger::setup();
         let mut validator_config = ValidatorConfig::default();
         validator_config.rpc_config.enable_fullnode_exit = true;
-        validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+        validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
         const NUM_NODES: usize = 1;
         let num_replicators = 1;
         let config = ClusterConfig {

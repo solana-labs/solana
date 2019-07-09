@@ -62,7 +62,6 @@ impl Tvu {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
-        storage_rotate_count: u64,
         storage_state: &StorageState,
         blockstream: Option<&String>,
         ledger_signal_receiver: Receiver<bool>,
@@ -145,7 +144,6 @@ impl Tvu {
             storage_keypair,
             &exit,
             &bank_forks,
-            storage_rotate_count,
             &cluster_info,
         );
 
@@ -181,7 +179,7 @@ pub mod tests {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
+    use crate::storage_stage::SLOTS_PER_TURN_TEST;
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
 
@@ -213,6 +211,7 @@ pub mod tests {
         let voting_keypair = Keypair::new();
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let storage_state = StorageState::new(&Hash::default(), SLOTS_PER_TURN_TEST);
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(&Arc::new(voting_keypair)),
@@ -227,8 +226,7 @@ pub mod tests {
                 }
             },
             blocktree,
-            STORAGE_ROTATE_TEST_COUNT,
-            &StorageState::default(),
+            &storage_state,
             None,
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),
