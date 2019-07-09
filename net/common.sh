@@ -25,6 +25,7 @@ entrypointIp=
 publicNetwork=
 netBasename=
 sshPrivateKey=
+letsEncryptDomainName=
 externalNodeSshKey=
 sshOptions=()
 fullnodeIpList=()
