@@ -96,11 +96,9 @@ pub fn sol_log_params(ka: &[SolKeyedAccount], data: &[u8]) {
 mod tests {
     extern crate std;
 
-    use self::std::ffi::CStr;
     use self::std::println;
     use self::std::string::String;
     use super::*;
-    use core::mem;
 
     static mut _LOG_SCENARIO: u64 = 4;
     fn get_log_scenario() -> u64 {
@@ -111,15 +109,15 @@ mod tests {
     }
 
     #[no_mangle]
-    fn sol_log_(message: *const u8) {
+    fn sol_log_(message: *const u8, length: u64) {
         let scenario = get_log_scenario();
-        let c_str = unsafe { CStr::from_ptr(message as *const i8) };
-        let string = c_str.to_str().unwrap();
+        let slice = unsafe { std::slice::from_raw_parts(message, length as usize) };
+        let string = std::str::from_utf8(&slice).unwrap();
         match scenario {
             1 => assert_eq!(string, "This is a test message"),
             2 => assert_eq!(string, "Attempted to log a string that is too long"),
             3 => {
-                let s: String = ['a'; 126].iter().collect();
+                let s: String = ['a'; 256].iter().collect();
                 assert_eq!(string, s);
             }
             4 => println!("{:?}", string),
@@ -177,13 +175,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sol_log_max_length() {
-        set_log_scenario(3);
-        let s: String = ['a'; 126].iter().collect();
-        sol_log(&s);
-    }
-
-    #[test]
     fn test_sol_log_64() {
         set_log_64_scenario(1);
         sol_log_64(1, 2, 3, 4, 5);
@@ -192,11 +183,10 @@ mod tests {
     #[test]
     fn test_sol_log_key() {
         set_log_64_scenario(2);
-        let key_array = [
+        let key: SolPubkey = [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
             25, 26, 27, 28, 29, 30, 31, 32,
         ];
-        let key = SolPubkey { key: &key_array };
         sol_log_key(&key);
     }
 
