@@ -29,6 +29,13 @@ mod test {
     extern crate std;
     use super::*;
 
+    #[no_mangle]
+    pub unsafe fn sol_log_(message: *const u8, length: u64) {
+        let slice = std::slice::from_raw_parts(message, length as usize);
+        let string = std::str::from_utf8(&slice).unwrap();
+        std::println!("{}", string);
+    }
+
     #[test]
     fn test_many_args() {
         assert_eq!(45, many_args(1, 2, 3, 4, 5, 6, 7, 8, 9));
