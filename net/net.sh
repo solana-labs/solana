@@ -50,19 +50,16 @@ Operate a configured testnet
                                             -c bench-tps=2="--tx_count 25000"
                                         This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                         to the bench-tps client.
+   -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
 
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
    --lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 100000000000000 lamports minted in genesis
-   -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
-
-   -x Accounts and Stakes for external nodes
-                                      - A YML file with a list of account pubkeys and corresponding stakes
-                                         for external nodes
-   -s Num lamports per node in genesis block
-                                      - Create account keypairs for internal nodes and assign these many lamports
-
+   --stake-internal-nodes NUM_LAMPORTS_PER_NODE
+                                      - Amount to stake internal nodes in genesis block.  If set, airdrops are disabled.
+   --external-accounts-file FILE_PATH
+                                      - A YML file with a list of account pubkeys and corresponding stakes for external nodes
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
@@ -119,6 +116,12 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
+      shift 2
+    elif [[ $1 = --stake-internal-nodes ]]; then
+      stakeNodesInGenesisBlock="$2"
+      shift 2
+    elif [[ $1 = --external-accounts-file ]]; then
+      externalPrimordialAccountsFile="$2"
       shift 2
     else
       usage "Unknown long option: $1"
