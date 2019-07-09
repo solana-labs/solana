@@ -1565,7 +1565,7 @@ fn handle_recovery(
 
             let (blob_slot, blob_index) = (blob.slot(), blob.index());
 
-            if !index.data().is_present(blob.index()) {
+            if !index.data().is_present(blob_index) {
                 if blob.verify() {
                     trace!(
                         "[handle_recovery] successful verification at slot = {}, index={}",
@@ -1574,6 +1574,7 @@ fn handle_recovery(
                     );
 
                     new_data.push(blob);
+                    index.data_mut().set_present(blob_index, true);
                 } else {
                     warn!(
                         "[handle_recovery] failed verification at slot={}, index={}, discarding",
@@ -3449,6 +3450,7 @@ pub mod tests {
         use crate::erasure::test::{generate_ledger_model, ErasureSpec, SlotSpec};
         use crate::erasure::{CodingGenerator, NUM_CODING, NUM_DATA};
         use rand::{thread_rng, Rng};
+        use solana_sdk::signature::Signable;
         use std::sync::RwLock;
 
         impl Into<SharedBlob> for Blob {
@@ -3470,7 +3472,12 @@ pub mod tests {
             let num_blobs = NUM_DATA as u64 * 2;
             let slot = 0;
 
-            let (blobs, _) = make_slot_entries(slot, 0, num_blobs);
+            let (mut blobs, _) = make_slot_entries(slot, 0, num_blobs);
+            let keypair = Keypair::new();
+            blobs.iter_mut().for_each(|blob| {
+                blob.set_id(&keypair.pubkey());
+                blob.sign(&keypair);
+            });
             let shared_blobs: Vec<_> = blobs
                 .iter()
                 .cloned()
@@ -3536,7 +3543,7 @@ pub mod tests {
                 .unwrap();
             let index = blocktree.get_index(slot).unwrap().unwrap();
 
-            assert_eq!(erasure_meta.status(&index), ErasureMetaStatus::DataFull);
+            assert_eq!(erasure_meta.status(&index), DataFull);
         }
 
         #[test]
@@ -3554,6 +3561,12 @@ pub mod tests {
                 .into_iter()
                 .map(Blob::into)
                 .collect::<Vec<_>>();
+            let keypair = Keypair::new();
+            data_blobs.iter().for_each(|blob: &Arc<RwLock<Blob>>| {
+                let mut b = blob.write().unwrap();
+                b.set_id(&keypair.pubkey());
+                b.sign(&keypair);
+            });
 
             let mut coding_generator = CodingGenerator::new(Arc::clone(&blocktree.session));
 
@@ -3819,7 +3832,7 @@ pub mod tests {
                 let blocktree = Arc::clone(&blocktree);
 
                 let model = model.clone();
-                let handle = thread::spawn(move || {
+                let handle = thread::Builder::new().stack_size(32* 1024 * 1024).spawn(move || {
                     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
 
                     for slot_model in model {
@@ -3912,7 +3925,7 @@ pub mod tests {
                             }
                         }
                     }
-                });
+                }).unwrap();
 
                 handles.push(handle);
             }

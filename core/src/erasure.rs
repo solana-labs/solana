@@ -151,7 +151,7 @@ impl Session {
                 blob.meta.size = size;
 
                 data_size = size;
-                idx = n as u64 + block_start_idx - NUM_CODING as u64;
+                idx = n as u64 + block_start_idx - NUM_DATA as u64;
                 first_byte = blob.data[0];
 
                 blob.set_slot(slot);
@@ -740,9 +740,11 @@ pub mod test {
             .into_iter()
             .map(|_| {
                 let mut blob = Blob::default();
+                let keypair = Keypair::new();
                 blob.data_mut()[..].copy_from_slice(&data);
                 blob.set_size(BLOB_DATA_SIZE);
-                blob.sign(&Keypair::new());
+                blob.set_id(&keypair.pubkey());
+                blob.sign(&keypair);
                 Arc::new(RwLock::new(blob))
             })
             .collect();

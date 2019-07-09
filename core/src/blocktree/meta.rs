@@ -54,7 +54,7 @@ pub struct ErasureMeta {
     /// Which erasure set in the slot this is
     pub set_index: u64,
     /// Size of shards in this erasure set
-    size: usize,
+    pub size: usize,
 }
 
 #[derive(Debug, PartialEq)]
