@@ -226,6 +226,7 @@ fn store_update_manifest(
     let signers = [from_keypair, update_manifest_keypair];
     let instruction = config_instruction::store::<SignedUpdateManifest>(
         &update_manifest_keypair.pubkey(),
+        true,   // update_manifest_keypair is signer
         vec![], // additional keys
         update_manifest,
     );
