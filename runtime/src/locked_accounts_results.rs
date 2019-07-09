@@ -54,7 +54,7 @@ mod tests {
         let (bank, txs) = setup();
 
         // Test getting locked accounts
-        let lock_results = bank.lock_accounts(&txs);
+        let lock_results = bank.lock_accounts(&txs, None);
 
         // Grab locks
         assert!(lock_results
@@ -63,7 +63,7 @@ mod tests {
             .all(|x| x.is_ok()));
 
         // Trying to grab locks again should fail
-        let lock_results2 = bank.lock_accounts(&txs);
+        let lock_results2 = bank.lock_accounts(&txs, None);
         assert!(lock_results2
             .locked_accounts_results()
             .iter()
@@ -73,7 +73,7 @@ mod tests {
         drop(lock_results);
 
         // Now grabbing locks should work again
-        let lock_results2 = bank.lock_accounts(&txs);
+        let lock_results2 = bank.lock_accounts(&txs, None);
         assert!(lock_results2
             .locked_accounts_results()
             .iter()
