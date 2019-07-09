@@ -44,10 +44,11 @@ pub fn create_account<T: ConfigState>(
 /// Store new data in a configuration account
 pub fn store<T: ConfigState>(
     config_account_pubkey: &Pubkey,
+    is_config_signer: bool,
     keys: Vec<(Pubkey, bool)>,
     data: &T,
 ) -> Instruction {
-    let mut account_metas = vec![AccountMeta::new(*config_account_pubkey, true)];
+    let mut account_metas = vec![AccountMeta::new(*config_account_pubkey, is_config_signer)];
     for (signer_pubkey, _) in keys.iter().filter(|(_, is_signer)| *is_signer) {
         account_metas.push(AccountMeta::new(*signer_pubkey, true));
     }
