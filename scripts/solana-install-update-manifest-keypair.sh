@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 #
-# Convenience script to easily deploy a software update to a testnet
-#
-# Prerequisites:
-# 1) The default keypair should have some lamports (eg, `solana-wallet airdrop 123`)
-# 2) The file update_manifest_keypair.json should exist if this script is not
-#    run from the CI environment
+# Creates update_manifest_keypair.json based on the current platform and
+# environment
 #
 set -e
 
