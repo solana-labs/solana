@@ -372,6 +372,23 @@ startNode() {
   (
     set -x
     startCommon "$ipAddress"
+
+    if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
+      #
+      # Create/renew TLS certificate
+      #
+      declare localArchive=~/letsencrypt-"$letsEncryptDomainName".tgz
+      if [[ -r "$localArchive" ]]; then
+        timeout 30s scp "${sshOptions[@]}" "$localArchive" "$ipAddress:letsencrypt.tgz"
+      fi
+      ssh "${sshOptions[@]}" -n "$ipAddress" \
+        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solana.com"
+      rm -f letsencrypt.tgz
+      timeout 30s scp "${sshOptions[@]}" "$ipAddress:/letsencrypt.tgz" letsencrypt.tgz
+      test -s letsencrypt.tgz # Ensure non-empty before overwriting $localArchive
+      cp letsencrypt.tgz "$localArchive"
+    fi
+
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
