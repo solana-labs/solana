@@ -40,9 +40,9 @@ impl<'a, T> Iterator for OrderedIterator<'a, T> {
     }
 }
 
-/// generate_random_shuffle generates array of unique 
-/// random numbers in range of [0, vec_size)
-pub fn generate_random_shuffle(vec_size: usize) -> Vec<usize> {
+/// generate_random_order generates random ordering
+/// for a slice with size `vec_size`
+pub fn generate_random_order(vec_size: usize) -> Vec<usize> {
     if vec_size <= 0 {
         return Vec::new();
     }
