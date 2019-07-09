@@ -442,6 +442,15 @@ mod tests {
         pub paths: String,
     }
 
+    impl TempPaths {
+        fn remove_all(&self) {
+            let paths: Vec<String> = self.paths.split(',').map(|s| s.to_string()).collect();
+            paths.iter().for_each(|p| {
+                let _ignored = remove_dir_all(p);
+            });
+        }
+    }
+
     #[macro_export]
     macro_rules! tmp_bank_accounts_name {
         () => {
@@ -458,10 +467,7 @@ mod tests {
 
     impl Drop for TempPaths {
         fn drop(&mut self) {
-            let paths: Vec<String> = self.paths.split(',').map(|s| s.to_string()).collect();
-            paths.iter().for_each(|p| {
-                let _ignored = remove_dir_all(p);
-            });
+            self.remove_all()
         }
     }
 
@@ -521,6 +527,8 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_block(10_000);
+        path.remove_all();
+        spath.remove_all();
         for index in 0..10 {
             let bank0 = Bank::new_with_paths(&genesis_block, Some(path.paths.clone()));
             bank0.freeze();

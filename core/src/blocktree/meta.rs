@@ -78,7 +78,7 @@ pub struct ErasureMeta {
     /// Which erasure set in the slot this is
     pub set_index: u64,
     /// Size of shards in this erasure set
-    pub size: usize,
+    size: usize,
     /// Bitfield representing presence/absence of data blobs
     data: u64,
     /// Bitfield representing presence/absence of coding blobs
@@ -106,7 +106,7 @@ impl ErasureMeta {
         let (data_missing, coding_missing) =
             (NUM_DATA - self.num_data(), NUM_CODING - self.num_coding());
         if data_missing > 0 && data_missing + coding_missing <= NUM_CODING {
-            assert!(self.size != 0);
+            //assert!(self.size != 0);
             ErasureMetaStatus::CanRecover
         } else if data_missing == 0 {
             ErasureMetaStatus::DataFull

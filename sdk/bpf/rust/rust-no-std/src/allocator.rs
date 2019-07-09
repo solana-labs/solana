@@ -1,7 +1,7 @@
 //! @brief Solana Rust-based BPF program memory allocator shim
 
-use crate::log::*;
 use core::alloc::{GlobalAlloc, Layout};
+use solana_sdk_bpf_utils::log::*;
 
 pub struct Allocator;
 unsafe impl GlobalAlloc for Allocator {

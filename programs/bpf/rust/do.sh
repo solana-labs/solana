@@ -12,6 +12,7 @@ usage() {
     echo "  Supported actions:"
     echo "    build"
     echo "    clean"
+    echo "    test"
     echo "    clippy"
     echo "    fmt"
     echo ""
@@ -25,6 +26,13 @@ perform_action() {
     ;;
     clean)
          ./../../../sdk/bpf/rust/clean.sh "$2"
+    ;;
+    test)
+        (
+            cd "$2"
+            echo "test $2"
+            cargo +nightly test
+        )
     ;;
     clippy)
         (

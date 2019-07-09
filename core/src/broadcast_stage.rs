@@ -1,4 +1,5 @@
 //! A stage to broadcast data from a leader node to validators
+use self::broadcast_bad_blob_sizes::BroadcastBadBlobSizes;
 use self::broadcast_fake_blobs_run::BroadcastFakeBlobsRun;
 use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun;
 use self::standard_broadcast_run::StandardBroadcastRun;
@@ -21,6 +22,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
+mod broadcast_bad_blob_sizes;
 mod broadcast_fake_blobs_run;
 mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
@@ -38,6 +40,7 @@ pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
     BroadcastFakeBlobs,
+    BroadcastBadBlobSizes,
 }
 
 impl BroadcastStageType {
@@ -75,6 +78,15 @@ impl BroadcastStageType {
                 exit_sender,
                 blocktree,
                 BroadcastFakeBlobsRun::new(0),
+            ),
+
+            BroadcastStageType::BroadcastBadBlobSizes => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                exit_sender,
+                blocktree,
+                BroadcastBadBlobSizes::new(),
             ),
         }
     }

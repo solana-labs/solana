@@ -1,7 +1,8 @@
+
 [package]
-name = "solana-logger"
+name = "solana-sdk-bpf-no-std"
 version = "0.17.0"
-description = "Solana Logger"
+description = "Solana BPF SDK Rust no_std support"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -9,7 +10,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-env_logger = "0.6.2"
+solana-sdk-bpf-utils = { path = "../rust-utils" }
 
-[lib]
-name = "solana_logger"
+[workspace]
+members = []

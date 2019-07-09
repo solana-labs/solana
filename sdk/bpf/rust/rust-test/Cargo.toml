@@ -1,15 +1,13 @@
+
 [package]
-name = "solana-logger"
+name = "solana-sdk-bpf-test"
 version = "0.17.0"
-description = "Solana Logger"
+description = "Solana BPF SDK Rust Cargo test utilities"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 edition = "2018"
 
-[dependencies]
-env_logger = "0.6.2"
-
-[lib]
-name = "solana_logger"
+[workspace]
+members = []

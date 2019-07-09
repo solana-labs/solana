@@ -92,7 +92,15 @@ impl AppendVec {
             .write(true)
             .create(create)
             .open(file)
-            .expect("Unable to open data file");
+            .map_err(|e| {
+                panic!(
+                    "Unable to {} data file {}, err {:?}",
+                    if create { "create" } else { "open" },
+                    file.display(),
+                    e
+                );
+            })
+            .unwrap();
 
         data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
         data.write_all(&[0]).unwrap();
