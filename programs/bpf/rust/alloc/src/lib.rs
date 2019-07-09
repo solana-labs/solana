@@ -4,6 +4,8 @@
 
 #[macro_use]
 extern crate alloc;
+#[cfg(not(test))]
+extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
 use alloc::vec::Vec;

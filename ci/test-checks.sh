@@ -12,6 +12,7 @@ export RUSTFLAGS="-D warnings"
 
 do_bpf_check() {
         _ cargo +"$rust_stable" fmt --all -- --check
+        _ cargo +"$rust_nightly" test --all
         _ cargo +"$rust_nightly" clippy --all -- --version
         _ cargo +"$rust_nightly" clippy --all -- --deny=warnings
         _ cargo +"$rust_stable" audit
@@ -19,7 +20,15 @@ do_bpf_check() {
 
 (
     (
+        cd sdk/bpf/rust/rust-no-std
+        do_bpf_check
+    )
+    (
         cd sdk/bpf/rust/rust-utils
+        do_bpf_check
+    )
+    (
+        cd sdk/bpf/rust/rust-test
         do_bpf_check
     )
     for project in programs/bpf/rust/*/ ; do

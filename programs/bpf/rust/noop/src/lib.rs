@@ -4,12 +4,15 @@
 #![allow(unreachable_code)]
 #![allow(unused_attributes)]
 
+#[cfg(not(test))]
+extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
 use solana_sdk_bpf_utils::entrypoint::*;
 use solana_sdk_bpf_utils::log::*;
 use solana_sdk_bpf_utils::{entrypoint, info};
 
+#[derive(Debug, PartialEq)]
 struct SStruct {
     x: u64,
     y: u64,
@@ -58,4 +61,14 @@ fn process_instruction(ka: &mut [SolKeyedAccount], info: &SolClusterInfo, data: 
 
     info!("Success");
     true
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_return_sstruct() {
+        assert_eq!(SStruct { x: 1, y: 2, z: 3 }, return_sstruct());
+    }
 }

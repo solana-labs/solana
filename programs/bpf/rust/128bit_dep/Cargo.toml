@@ -16,4 +16,3 @@ solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust/rust-utils", version =
 
 [workspace]
 members = []
-
