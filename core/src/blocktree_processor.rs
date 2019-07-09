@@ -1321,9 +1321,10 @@ pub mod tests {
             )
             .expect("process ticks failed");
 
-            i += 1;
-            bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), i as u64);
             bank.squash();
+            i += 1;
+
+            bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), i as u64);
         }
     }
 
