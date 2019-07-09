@@ -9,6 +9,7 @@ use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use log::*;
 use rayon::slice::ParallelSliceMut;
+use solana_merkle_tree::MerkleTree;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{Hash, Hasher};
@@ -511,11 +512,8 @@ impl Accounts {
         if account_hashes.is_empty() {
             None
         } else {
-            let mut hasher = Hasher::default();
-            for hash in account_hashes {
-                hasher.hash(hash.as_ref());
-            }
-            Some(hasher.result())
+            let merkle_tree = MerkleTree::new(&account_hashes);
+            merkle_tree.get_root().and_then(|h| Some(*h))
         }
     }
 
