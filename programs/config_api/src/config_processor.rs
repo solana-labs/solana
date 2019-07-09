@@ -12,29 +12,41 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    if keyed_accounts[0].signer_key().is_none() {
-        error!("account[0].signer_key().is_none()");
-        Err(InstructionError::MissingRequiredSignature)?;
-    }
-
-    let key_list: ConfigKeys = deserialize(data).unwrap();
+    let key_list: ConfigKeys = deserialize(data).map_err(|err| {
+        error!("Invalid ConfigKeys data: {:?} {:?}", data, err);
+        InstructionError::InvalidInstructionData
+    })?;
+    let mut counter = 0;
     for (i, (signer, _)) in key_list
         .keys
         .iter()
         .filter(|(_, is_signer)| *is_signer)
         .enumerate()
     {
+        counter += 1;
         let account_index = i + 1;
-        let signer_account = keyed_accounts[account_index].signer_key();
+        let signer_account = keyed_accounts.get(account_index);
         if signer_account.is_none() {
-            error!("account[{:?}].signer_key().is_none()", account_index);
+            error!("account {:?} is not in account list", signer);
             Err(InstructionError::MissingRequiredSignature)?;
         }
-        if signer_account.unwrap() != signer {
+        let signer_key = signer_account.unwrap().signer_key();
+        if signer_key.is_none() {
+            error!("account {:?} signer_key().is_none()", signer);
+            Err(InstructionError::MissingRequiredSignature)?;
+        }
+        if signer_key.unwrap() != signer {
             error!(
                 "account[{:?}].signer_key() does not match Config data)",
                 account_index
             );
+            Err(InstructionError::MissingRequiredSignature)?;
+        }
+    }
+    if counter == 0 {
+        // If Config data does not specify any signers, Config account keypair must be a signer
+        if keyed_accounts[0].signer_key().is_none() {
+            error!("account[0].signer_key().is_none()");
             Err(InstructionError::MissingRequiredSignature)?;
         }
     }
