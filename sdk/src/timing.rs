@@ -64,7 +64,7 @@ pub fn timestamp() -> u64 {
     duration_as_ms(&now)
 }
 
-pub fn get_segment_from_slot(slot: u64, slots_per_segment: u64) -> u64 {
+pub fn get_segment_from_slot(slot: Slot, slots_per_segment: u64) -> Segment {
     ((slot + (slots_per_segment - 1)) / slots_per_segment)
 }
 
