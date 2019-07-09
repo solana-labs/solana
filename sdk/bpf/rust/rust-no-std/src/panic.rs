@@ -3,7 +3,6 @@
 use core::panic::PanicInfo;
 use core::ptr;
 
-#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     // Message is ignored for now to avoid incurring formatting program size overhead

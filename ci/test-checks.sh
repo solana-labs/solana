@@ -19,7 +19,11 @@ do_bpf_check() {
 
 (
     (
+        cd sdk/bpf/rust/rust-no-std
+        do_bpf_check
         cd sdk/bpf/rust/rust-utils
+        do_bpf_check
+        cd sdk/bpf/rust/rust-test
         do_bpf_check
     )
     for project in programs/bpf/rust/*/ ; do
