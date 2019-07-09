@@ -1,5 +1,4 @@
 use crate::blocktree::Blocktree;
-use solana_storage_api::SLOTS_PER_SEGMENT;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -14,6 +13,7 @@ pub const CHACHA_KEY_SIZE: usize = 32;
 pub fn chacha_cbc_encrypt_ledger(
     blocktree: &Arc<Blocktree>,
     slice: u64,
+    slots_per_segment: u64,
     out_path: &Path,
     ivec: &mut [u8; CHACHA_BLOCK_SIZE],
 ) -> io::Result<usize> {
@@ -28,7 +28,7 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut entry = slice;
 
     loop {
-        match blocktree.read_blobs_bytes(0, SLOTS_PER_SEGMENT - total_entries, &mut buffer, entry) {
+        match blocktree.read_blobs_bytes(0, slots_per_segment - total_entries, &mut buffer, entry) {
             Ok((num_entries, entry_len)) => {
                 debug!(
                     "chacha: encrypting slice: {} num_entries: {} entry_len: {}",
@@ -113,10 +113,11 @@ mod tests {
         let ledger_dir = "chacha_test_encrypt_file";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
+        let slots_per_segment = 32;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
-        let entries = make_tiny_deterministic_test_entries(32);
+        let entries = make_tiny_deterministic_test_entries(slots_per_segment);
         blocktree
             .write_entries(0, 0, 0, ticks_per_slot, &entries)
             .unwrap();
@@ -125,7 +126,8 @@ mod tests {
             "abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234
                             abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234"
         );
-        chacha_cbc_encrypt_ledger(&blocktree, 0, out_path, &mut key).unwrap();
+        chacha_cbc_encrypt_ledger(&blocktree, 0, slots_per_segment as u64, out_path, &mut key)
+            .unwrap();
         let mut out_file = File::open(out_path).unwrap();
         let mut buf = vec![];
         let size = out_file.read_to_end(&mut buf).unwrap();
@@ -133,7 +135,7 @@ mod tests {
         hasher.hash(&buf[..size]);
 
         //  golden needs to be updated if blob stuff changes....
-        let golden: Hash = "53P7UXH7JstJa994fZsfuyr7nrRDrDDpvS3WSPvMUs45"
+        let golden: Hash = "5FzYtpCqL7v6ZxZ1fW4wRkn8TK96NdiD8cLV59Rr7yav"
             .parse()
             .unwrap();
 

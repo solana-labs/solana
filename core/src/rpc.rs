@@ -143,6 +143,10 @@ impl JsonRpcRequestProcessor {
         Ok(self.storage_state.get_slot())
     }
 
+    fn get_slots_per_segment(&self) -> Result<u64> {
+        Ok(self.bank().slots_per_segment())
+    }
+
     fn get_storage_pubkeys_for_slot(&self, slot: u64) -> Result<Vec<Pubkey>> {
         Ok(self
             .storage_state
@@ -264,6 +268,9 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getStorageSlot")]
     fn get_storage_slot(&self, _: Self::Metadata) -> Result<u64>;
+
+    #[rpc(meta, name = "getSlotsPerSegment")]
+    fn get_slots_per_segment(&self, _: Self::Metadata) -> Result<u64>;
 
     #[rpc(meta, name = "getStoragePubkeysForSlot")]
     fn get_storage_pubkeys_for_slot(&self, _: Self::Metadata, _: u64) -> Result<Vec<Pubkey>>;
@@ -529,6 +536,13 @@ impl RpcSol for RpcSolImpl {
 
     fn get_storage_slot(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor.read().unwrap().get_storage_slot()
+    }
+
+    fn get_slots_per_segment(&self, meta: Self::Metadata) -> Result<u64> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_slots_per_segment()
     }
 
     fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<Pubkey>> {

@@ -23,8 +23,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::timestamp;
-use solana_storage_api::SLOTS_PER_SEGMENT;
+use solana_sdk::timing::{timestamp, DEFAULT_SLOTS_PER_SEGMENT};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
@@ -48,7 +47,7 @@ impl Default for ValidatorConfig {
         // TODO: remove this, temporary parameter to configure
         // storage amount differently for test configurations
         // so tests don't take forever to run.
-        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = SLOTS_PER_SEGMENT;
+        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = DEFAULT_SLOTS_PER_SEGMENT;
         Self {
             sigverify_disabled: false,
             voting_disabled: false,
@@ -158,7 +157,7 @@ impl Validator {
             keypair.clone(),
         )));
 
-        let storage_state = StorageState::new(&bank.last_blockhash());
+        let storage_state = StorageState::new(&bank.last_blockhash(), bank.slots_per_segment());
 
         let rpc_service = if node.info.rpc.port() == 0 {
             None

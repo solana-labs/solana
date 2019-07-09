@@ -168,7 +168,7 @@ mod tests {
             .iter()
             .map(|meta| {
                 if syscall::current::check_id(&meta.pubkey) {
-                    syscall::current::create_account(1, 0, 0, 0)
+                    syscall::current::create_account(1, 0, 0, 0, 0)
                 } else if syscall::slot_hashes::check_id(&meta.pubkey) {
                     syscall::slot_hashes::create_account(1, &[])
                 } else {

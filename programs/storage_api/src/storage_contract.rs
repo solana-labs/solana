@@ -1,4 +1,3 @@
-use crate::get_segment_from_slot;
 use log::*;
 use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
@@ -68,8 +67,8 @@ pub struct Proof {
     pub blockhash: Hash,
     /// The resulting sampled state
     pub sha_state: Hash,
-    /// The start index of the segment proof is for
-    pub segment_index: usize,
+    /// The segment this proof is for
+    pub segment_index: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -78,13 +77,13 @@ pub enum StorageContract {
 
     ValidatorStorage {
         owner: Pubkey,
-        // Most recently advertised slot
-        slot: u64,
+        // Most recently advertised segment
+        segment: u64,
         // Most recently advertised blockhash
         hash: Hash,
         // Lockouts and Rewards are per segment per replicator. It needs to remain this way until
         // the challenge stage is added.
-        lockout_validations: BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
+        lockout_validations: BTreeMap<u64, BTreeMap<Pubkey, Vec<ProofStatus>>>,
         // Used to keep track of ongoing credits
         credits: Credits,
     },
@@ -93,10 +92,10 @@ pub enum StorageContract {
         owner: Pubkey,
         // TODO what to do about duplicate proofs across segments? - Check the blockhashes
         // Map of Proofs per segment, in a Vec
-        proofs: BTreeMap<usize, Vec<Proof>>,
+        proofs: BTreeMap<u64, Vec<Proof>>,
         // Map of Rewards per segment, in a BTreeMap based on the validator account that verified
         // the proof. This can be used for challenge stage when its added
-        validations: BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
+        validations: BTreeMap<u64, BTreeMap<Pubkey, Vec<ProofStatus>>>,
         // Used to keep track of ongoing credits
         credits: Credits,
     },
@@ -111,7 +110,7 @@ pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account
     storage_account
         .set_state(&StorageContract::ValidatorStorage {
             owner,
-            slot: 0,
+            segment: 0,
             hash: Hash::default(),
             lockout_validations: BTreeMap::new(),
             credits: Credits::default(),
@@ -151,7 +150,7 @@ impl<'a> StorageAccount<'a> {
         if let StorageContract::Uninitialized = storage_contract {
             *storage_contract = StorageContract::ValidatorStorage {
                 owner,
-                slot: 0,
+                segment: 0,
                 hash: Hash::default(),
                 lockout_validations: BTreeMap::new(),
                 credits: Credits::default(),
@@ -165,7 +164,7 @@ impl<'a> StorageAccount<'a> {
     pub fn submit_mining_proof(
         &mut self,
         sha_state: Hash,
-        segment_index: usize,
+        segment_index: u64,
         signature: Signature,
         blockhash: Hash,
         current: syscall::current::Current,
@@ -178,7 +177,7 @@ impl<'a> StorageAccount<'a> {
             ..
         } = &mut storage_contract
         {
-            let current_segment = get_segment_from_slot(current.slot);
+            let current_segment = current.segment;
 
             // clean up the account
             // TODO check for time correctness - storage seems to run at a delay of about 3
@@ -242,32 +241,29 @@ impl<'a> StorageAccount<'a> {
     pub fn advertise_storage_recent_blockhash(
         &mut self,
         hash: Hash,
-        slot: u64,
+        segment: u64,
         current: syscall::current::Current,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ValidatorStorage {
-            slot: state_slot,
+            segment: state_segment,
             hash: state_hash,
             lockout_validations,
             credits,
             ..
         } = &mut storage_contract
         {
-            let current_segment = get_segment_from_slot(current.slot);
-            let original_segment = get_segment_from_slot(*state_slot);
-            let segment = get_segment_from_slot(slot);
             debug!(
                 "advertise new segment: {} orig: {}",
-                segment, current_segment
+                segment, current.segment
             );
-            if segment < original_segment || segment >= current_segment {
+            if segment < *state_segment || segment > current.segment {
                 return Err(InstructionError::CustomError(
                     StorageError::InvalidSegment as u32,
                 ));
             }
 
-            *state_slot = slot;
+            *state_segment = segment;
             *state_hash = hash;
 
             // storage epoch updated, move the lockout_validations to credits
@@ -285,21 +281,18 @@ impl<'a> StorageAccount<'a> {
         &mut self,
         me: &Pubkey,
         current: syscall::current::Current,
-        segment: u64,
+        segment_index: u64,
         proofs_per_account: Vec<Vec<ProofStatus>>,
         replicator_accounts: &mut [StorageAccount],
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ValidatorStorage {
-            slot: state_slot,
+            segment: state_segment,
             lockout_validations,
             ..
         } = &mut storage_contract
         {
-            let segment_index = segment as usize;
-            let state_segment = get_segment_from_slot(*state_slot);
-
-            if segment_index > state_segment {
+            if segment_index > *state_segment {
                 return Err(InstructionError::CustomError(
                     StorageError::InvalidSegment as u32,
                 ));
@@ -460,7 +453,7 @@ fn store_validation_result(
     me: &Pubkey,
     current: &syscall::current::Current,
     storage_account: &mut StorageAccount,
-    segment: usize,
+    segment: u64,
     proof_mask: &[ProofStatus],
 ) -> Result<(), InstructionError> {
     let mut storage_contract = storage_account.account.state()?;
@@ -494,7 +487,7 @@ fn store_validation_result(
 }
 
 fn count_valid_proofs(
-    validations: &BTreeMap<usize, BTreeMap<Pubkey, Vec<ProofStatus>>>,
+    validations: &BTreeMap<u64, BTreeMap<Pubkey, Vec<ProofStatus>>>,
 ) -> (u64, u64) {
     let proofs = validations
         .iter()
@@ -537,7 +530,7 @@ mod tests {
 
         contract = StorageContract::ValidatorStorage {
             owner: Pubkey::default(),
-            slot: 0,
+            segment: 0,
             hash: Hash::default(),
             lockout_validations: BTreeMap::new(),
             credits: Credits::default(),
@@ -569,7 +562,7 @@ mod tests {
                 executable: false,
             },
         };
-        let segment_index = 0_usize;
+        let segment_index = 0;
         let proof = Proof {
             segment_index,
             ..Proof::default()
