@@ -677,7 +677,7 @@ impl Replicator {
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("No RPC peers...".to_string()),
+                format!("No RPC peers...").to_string(),
             ))?
         }
     }
