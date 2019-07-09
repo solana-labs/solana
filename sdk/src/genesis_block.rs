@@ -8,7 +8,7 @@ use crate::poh_config::PohConfig;
 use crate::pubkey::Pubkey;
 use crate::signature::{Keypair, KeypairUtil};
 use crate::system_program;
-use crate::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
+use crate::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT};
 use bincode::{deserialize, serialize};
 use memmap::Mmap;
 use std::fs::{File, OpenOptions};
@@ -24,6 +24,7 @@ pub struct GenesisBlock {
     pub stakers_slot_offset: u64,
     pub epoch_warmup: bool,
     pub ticks_per_slot: u64,
+    pub slots_per_segment: u64,
     pub poh_config: PohConfig,
     pub fee_calculator: FeeCalculator,
     pub inflation: Inflation,
@@ -54,6 +55,7 @@ impl Default for GenesisBlock {
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
             stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
+            slots_per_segment: DEFAULT_SLOTS_PER_SEGMENT,
             poh_config: PohConfig::default(),
             inflation: Inflation::default(),
             fee_calculator: FeeCalculator::default(),

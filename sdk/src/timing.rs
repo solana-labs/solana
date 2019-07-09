@@ -13,6 +13,9 @@ pub const DEFAULT_TICKS_PER_SLOT: u64 = 4;
 // 1 Epoch = 400 * 8192 ms ~= 55 minutes
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 8192;
 
+// Storage segment configuration
+pub const DEFAULT_SLOTS_PER_SEGMENT: u64 = 16;
+
 pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
 /// The time window of recent block hash values that the bank will track the signatures
@@ -61,9 +64,16 @@ pub fn timestamp() -> u64 {
     duration_as_ms(&now)
 }
 
+pub fn get_segment_from_slot(slot: Slot, slots_per_segment: u64) -> Segment {
+    ((slot + (slots_per_segment - 1)) / slots_per_segment)
+}
+
 /// Slot is a unit of time given to a leader for encoding,
 ///  is some some number of Ticks long.  Use a u64 to count them.
 pub type Slot = u64;
+
+/// A segment is some number of slots stored by replicators
+pub type Segment = u64;
 
 /// Epoch is a unit of time a given leader schedule is honored,
 ///  some number of Slots.  Use a u64 to count them.

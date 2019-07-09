@@ -38,7 +38,7 @@ use solana_sdk::syscall::{
     slot_hashes::{self, SlotHashes},
 };
 use solana_sdk::system_transaction;
-use solana_sdk::timing::{duration_as_ns, MAX_RECENT_BLOCKHASHES};
+use solana_sdk::timing::{duration_as_ns, get_segment_from_slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
 use std::collections::HashMap;
@@ -219,6 +219,9 @@ pub struct Bank {
     /// The number of slots per year, used for inflation
     slots_per_year: f64,
 
+    /// The number of slots per Storage segment
+    slots_per_segment: u64,
+
     /// Bank fork (i.e. slot, i.e. block)
     slot: u64,
 
@@ -307,6 +310,7 @@ impl Bank {
 
         // TODO: clean this up, soo much special-case copying...
         self.ticks_per_slot = parent.ticks_per_slot;
+        self.slots_per_segment = parent.slots_per_segment;
         self.slots_per_year = parent.slots_per_year;
         self.epoch_schedule = parent.epoch_schedule;
 
@@ -410,6 +414,7 @@ impl Bank {
             &current::create_account(
                 1,
                 self.slot,
+                get_segment_from_slot(self.slot, self.slots_per_segment),
                 self.epoch_schedule.get_epoch(self.slot),
                 self.epoch_schedule.get_stakers_epoch(self.slot),
             ),
@@ -590,6 +595,7 @@ impl Bank {
             .genesis_hash(&genesis_block.hash(), &self.fee_calculator);
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
+        self.slots_per_segment = genesis_block.slots_per_segment;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
         //   ticks/year     =      seconds/year ...
         self.slots_per_year = SECONDS_PER_YEAR
@@ -1262,6 +1268,11 @@ impl Bank {
     /// Return the number of ticks per slot
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
+    }
+
+    /// Return the number of slots per segment
+    pub fn slots_per_segment(&self) -> u64 {
+        self.slots_per_segment
     }
 
     /// Return the number of ticks since genesis.

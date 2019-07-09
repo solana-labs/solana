@@ -16,17 +16,18 @@ use solana_sdk::syscall::current::Current;
 use solana_sdk::syscall::rewards::Rewards;
 use solana_sdk::syscall::{current, rewards};
 use solana_sdk::system_instruction;
-use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
+use solana_sdk::timing::{
+    get_segment_from_slot, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT,
+};
+use solana_storage_api::id;
 use solana_storage_api::storage_contract::StorageAccount;
 use solana_storage_api::storage_contract::{ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE};
 use solana_storage_api::storage_instruction;
 use solana_storage_api::storage_processor::process_instruction;
-use solana_storage_api::SLOTS_PER_SEGMENT;
-use solana_storage_api::{get_segment_from_slot, id};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-const TICKS_IN_SEGMENT: u64 = SLOTS_PER_SEGMENT * DEFAULT_TICKS_PER_SLOT;
+const TICKS_IN_SEGMENT: u64 = DEFAULT_SLOTS_PER_SEGMENT * DEFAULT_TICKS_PER_SLOT;
 
 fn test_instruction(
     ix: &Instruction,
@@ -125,10 +126,11 @@ fn test_proof_bounds() {
         Hash::default(),
     );
     // the proof is for segment 0, need to move the slot into segment 2
-    let mut current_account = current::create_account(1, 0, 0, 0);
+    let mut current_account = current::create_account(1, 0, 0, 0, 0);
     Current::to(
         &Current {
-            slot: SLOTS_PER_SEGMENT * 2,
+            slot: DEFAULT_SLOTS_PER_SEGMENT * 2,
+            segment: 2,
             epoch: 0,
             stakers_epoch: 0,
         },
@@ -155,15 +157,11 @@ fn test_serialize_overflow() {
     let current_id = current::id();
     let mut keyed_accounts = Vec::new();
     let mut user_account = Account::default();
-    let mut current_account = current::create_account(1, 0, 0, 0);
+    let mut current_account = current::create_account(1, 0, 0, 0, 0);
     keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
     keyed_accounts.push(KeyedAccount::new(&current_id, false, &mut current_account));
 
-    let ix = storage_instruction::advertise_recent_blockhash(
-        &pubkey,
-        Hash::default(),
-        SLOTS_PER_SEGMENT,
-    );
+    let ix = storage_instruction::advertise_recent_blockhash(&pubkey, Hash::default(), 1);
 
     assert_eq!(
         process_instruction(&id(), &mut keyed_accounts, &ix.data),
@@ -184,10 +182,11 @@ fn test_invalid_accounts_len() {
         Hash::default(),
     );
     // move tick height into segment 1
-    let mut current_account = current::create_account(1, 0, 0, 0);
+    let mut current_account = current::create_account(1, 0, 0, 0, 0);
     Current::to(
         &Current {
             slot: 16,
+            segment: 1,
             epoch: 0,
             stakers_epoch: 0,
         },
@@ -243,10 +242,11 @@ fn test_submit_mining_ok() {
         Hash::default(),
     );
     // move slot into segment 1
-    let mut current_account = current::create_account(1, 0, 0, 0);
+    let mut current_account = current::create_account(1, 0, 0, 0, 0);
     Current::to(
         &Current {
-            slot: SLOTS_PER_SEGMENT,
+            slot: DEFAULT_SLOTS_PER_SEGMENT,
+            segment: 1,
             epoch: 0,
             stakers_epoch: 0,
         },
@@ -300,7 +300,7 @@ fn test_validate_mining() {
     let bank = Arc::new(Bank::new_from_parent(
         &bank,
         &Pubkey::default(),
-        SLOTS_PER_SEGMENT * 2,
+        DEFAULT_SLOTS_PER_SEGMENT * 2,
     ));
     let bank_client = BankClient::new_shared(&bank);
 
@@ -309,7 +309,7 @@ fn test_validate_mining() {
         vec![storage_instruction::advertise_recent_blockhash(
             &validator_storage_id,
             Hash::default(),
-            SLOTS_PER_SEGMENT,
+            1,
         )],
         Some(&mint_pubkey),
     );
@@ -344,17 +344,17 @@ fn test_validate_mining() {
         vec![storage_instruction::advertise_recent_blockhash(
             &validator_storage_id,
             Hash::default(),
-            SLOTS_PER_SEGMENT * 2,
+            2,
         )],
         Some(&mint_pubkey),
     );
 
     // move banks into the next segment
-    let proof_segment = get_segment_from_slot(bank.slot());
+    let proof_segment = get_segment_from_slot(bank.slot(), bank.slots_per_segment());
     let bank = Arc::new(Bank::new_from_parent(
         &bank,
         &Pubkey::default(),
-        SLOTS_PER_SEGMENT + bank.slot(),
+        DEFAULT_SLOTS_PER_SEGMENT + bank.slot(),
     ));
     let bank_client = BankClient::new_shared(&bank);
 
@@ -381,7 +381,7 @@ fn test_validate_mining() {
         vec![storage_instruction::advertise_recent_blockhash(
             &validator_storage_id,
             Hash::default(),
-            SLOTS_PER_SEGMENT * 3,
+            3,
         )],
         Some(&mint_pubkey),
     );
@@ -390,7 +390,7 @@ fn test_validate_mining() {
     let bank = Arc::new(Bank::new_from_parent(
         &bank,
         &Pubkey::default(),
-        SLOTS_PER_SEGMENT + bank.slot(),
+        DEFAULT_SLOTS_PER_SEGMENT + bank.slot(),
     ));
     let bank_client = BankClient::new_shared(&bank);
 
@@ -505,21 +505,21 @@ fn init_storage_accounts(
     client.send_message(&[mint], message).unwrap();
 }
 
-fn get_storage_slot<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {
+fn get_storage_segment<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {
     match client.get_account_data(&account).unwrap() {
         Some(storage_system_account_data) => {
             let contract = deserialize(&storage_system_account_data);
             if let Ok(contract) = contract {
                 match contract {
-                    StorageContract::ValidatorStorage { slot, .. } => {
-                        return slot;
+                    StorageContract::ValidatorStorage { segment, .. } => {
+                        return segment;
                     }
-                    _ => info!("error in reading slot"),
+                    _ => info!("error in reading segment"),
                 }
             }
         }
         None => {
-            info!("error in reading slot");
+            info!("error in reading segment");
         }
     }
     0
@@ -536,7 +536,7 @@ fn submit_proof(
         vec![storage_instruction::mining_proof(
             &storage_keypair.pubkey(),
             sha_state,
-            segment_index as usize,
+            segment_index,
             Signature::default(),
             bank_client.get_recent_blockhash().unwrap().0,
         )],
@@ -584,7 +584,11 @@ fn test_bank_storage() {
     let bank = Bank::new(&genesis_block);
     // tick the bank up until it's moved into storage segment 2
     // create a new bank in storage segment 2
-    let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::new_rand(), SLOTS_PER_SEGMENT * 2);
+    let bank = Bank::new_from_parent(
+        &Arc::new(bank),
+        &Pubkey::new_rand(),
+        DEFAULT_SLOTS_PER_SEGMENT * 2,
+    );
     let bank_client = BankClient::new(bank);
 
     let x = 42;
@@ -615,7 +619,7 @@ fn test_bank_storage() {
         vec![storage_instruction::advertise_recent_blockhash(
             &validator_pubkey,
             storage_blockhash,
-            SLOTS_PER_SEGMENT as u64,
+            1,
         )],
         Some(&mint_pubkey),
     );
@@ -641,10 +645,7 @@ fn test_bank_storage() {
         Ok(_)
     );
 
-    assert_eq!(
-        get_storage_slot(&bank_client, &validator_pubkey),
-        SLOTS_PER_SEGMENT
-    );
+    assert_eq!(get_storage_segment(&bank_client, &validator_pubkey), 1);
     assert_eq!(
         get_storage_blockhash(&bank_client, &validator_pubkey),
         storage_blockhash

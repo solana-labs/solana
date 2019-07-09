@@ -28,11 +28,11 @@ use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::timing::timestamp;
+use solana_sdk::timing::{get_segment_from_slot, timestamp};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
 use solana_storage_api::storage_contract::StorageContract;
-use solana_storage_api::{get_segment_from_slot, storage_instruction, SLOTS_PER_SEGMENT};
+use solana_storage_api::storage_instruction;
 use std::fs::File;
 use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::mem::size_of;
@@ -59,6 +59,7 @@ pub struct Replicator {
 #[derive(Default)]
 struct ReplicatorMeta {
     slot: u64,
+    slots_per_segment: u64,
     ledger_path: String,
     signature: Signature,
     ledger_data_file_encrypted: PathBuf,
@@ -103,15 +104,19 @@ pub(crate) fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<
     Ok(hasher.result())
 }
 
-fn get_slot_from_blockhash(signature: &ed25519_dalek::Signature, storage_slot: u64) -> u64 {
+fn get_slot_from_blockhash(
+    signature: &ed25519_dalek::Signature,
+    storage_turn: u64,
+    slots_per_segment: u64,
+) -> u64 {
     let signature_vec = signature.to_bytes();
     let mut segment_index = u64::from(signature_vec[0])
         | (u64::from(signature_vec[1]) << 8)
         | (u64::from(signature_vec[1]) << 16)
         | (u64::from(signature_vec[2]) << 24);
-    let max_segment_index = get_segment_from_slot(storage_slot);
+    let max_segment_index = get_segment_from_slot(storage_turn, slots_per_segment);
     segment_index %= max_segment_index as u64;
-    segment_index * SLOTS_PER_SEGMENT
+    segment_index * slots_per_segment
 }
 
 fn create_request_processor(
@@ -333,17 +338,20 @@ impl Replicator {
 
             // TODO make this a lot more frequent by picking a "new" blockhash instead of picking a storage blockhash
             // prep the next proof
-            let (storage_blockhash, _) =
-                match Self::poll_for_blockhash_and_slot(&cluster_info, &meta.blockhash) {
-                    Ok(blockhash_and_slot) => blockhash_and_slot,
-                    Err(e) => {
-                        warn!(
-                            "Error couldn't get a newer blockhash than {:?}. {:?}",
-                            meta.blockhash, e
-                        );
-                        break;
-                    }
-                };
+            let (storage_blockhash, _) = match Self::poll_for_blockhash_and_slot(
+                &cluster_info,
+                meta.slots_per_segment,
+                &meta.blockhash,
+            ) {
+                Ok(blockhash_and_slot) => blockhash_and_slot,
+                Err(e) => {
+                    warn!(
+                        "Error couldn't get a newer blockhash than {:?}. {:?}",
+                        meta.blockhash, e
+                    );
+                    break;
+                }
+            };
             meta.blockhash = storage_blockhash;
             Self::redeem_rewards(&cluster_info, replicator_keypair, storage_keypair);
         }
@@ -393,26 +401,39 @@ impl Replicator {
         blob_fetch_receiver: BlobReceiver,
         slot_sender: Sender<u64>,
     ) -> Result<(WindowService)> {
-        let (storage_blockhash, storage_slot) =
-            match Self::poll_for_blockhash_and_slot(&cluster_info, &Hash::default()) {
-                Ok(blockhash_and_slot) => blockhash_and_slot,
-                Err(e) => {
-                    //shutdown services before exiting
-                    exit.store(true, Ordering::Relaxed);
-                    return Err(e);
-                }
-            };
-
+        let slots_per_segment = match Self::get_segment_config(&cluster_info) {
+            Ok(slots_per_segment) => slots_per_segment,
+            Err(e) => {
+                error!("unable to get segment size configuration, exiting...");
+                //shutdown services before exiting
+                exit.store(true, Ordering::Relaxed);
+                return Err(e);
+            }
+        };
+        let (storage_blockhash, storage_slot) = match Self::poll_for_blockhash_and_slot(
+            &cluster_info,
+            slots_per_segment,
+            &Hash::default(),
+        ) {
+            Ok(blockhash_and_slot) => blockhash_and_slot,
+            Err(e) => {
+                error!("unable to get turn status, exiting...");
+                //shutdown services before exiting
+                exit.store(true, Ordering::Relaxed);
+                return Err(e);
+            }
+        };
         let signature = storage_keypair.sign(storage_blockhash.as_ref());
-        let slot = get_slot_from_blockhash(&signature, storage_slot);
+        let slot = get_slot_from_blockhash(&signature, storage_slot, slots_per_segment);
         info!("replicating slot: {}", slot);
         slot_sender.send(slot)?;
         meta.slot = slot;
+        meta.slots_per_segment = slots_per_segment;
         meta.signature = Signature::new(&signature.to_bytes());
         meta.blockhash = storage_blockhash;
 
         let mut repair_slot_range = RepairSlotRange::default();
-        repair_slot_range.end = slot + SLOTS_PER_SEGMENT;
+        repair_slot_range.end = slot + slots_per_segment;
         repair_slot_range.start = slot;
 
         let (retransmit_sender, _) = channel();
@@ -428,12 +449,20 @@ impl Replicator {
             |_, _, _| true,
         );
         info!("waiting for ledger download");
-        Self::wait_for_segment_download(slot, &blocktree, &exit, &node_info, cluster_info);
+        Self::wait_for_segment_download(
+            slot,
+            slots_per_segment,
+            &blocktree,
+            &exit,
+            &node_info,
+            cluster_info,
+        );
         Ok(window_service)
     }
 
     fn wait_for_segment_download(
         start_slot: u64,
+        slots_per_segment: u64,
         blocktree: &Arc<Blocktree>,
         exit: &Arc<AtomicBool>,
         node_info: &ContactInfo,
@@ -448,7 +477,7 @@ impl Replicator {
             while blocktree.is_full(current_slot) {
                 current_slot += 1;
                 info!("current slot: {}", current_slot);
-                if current_slot >= start_slot + SLOTS_PER_SEGMENT {
+                if current_slot >= start_slot + slots_per_segment {
                     break 'outer;
                 }
             }
@@ -481,6 +510,7 @@ impl Replicator {
             let num_encrypted_bytes = chacha_cbc_encrypt_ledger(
                 blocktree,
                 meta.slot,
+                meta.slots_per_segment,
                 &meta.ledger_data_file_encrypted,
                 &mut ivec,
             )?;
@@ -593,7 +623,7 @@ impl Replicator {
         let instruction = storage_instruction::mining_proof(
             &storage_keypair.pubkey(),
             meta.sha_state,
-            get_segment_from_slot(meta.slot),
+            get_segment_from_slot(meta.slot, meta.slots_per_segment),
             Signature::new(&meta.signature.as_ref()),
             meta.blockhash,
         );
@@ -625,9 +655,37 @@ impl Replicator {
         }
     }
 
+    fn get_segment_config(cluster_info: &Arc<RwLock<ClusterInfo>>) -> result::Result<u64, Error> {
+        let rpc_peers = {
+            let cluster_info = cluster_info.read().unwrap();
+            cluster_info.rpc_peers()
+        };
+        debug!("rpc peers: {:?}", rpc_peers);
+        if !rpc_peers.is_empty() {
+            let rpc_client = {
+                let node_index = thread_rng().gen_range(0, rpc_peers.len());
+                RpcClient::new_socket(rpc_peers[node_index].rpc)
+            };
+            Ok(rpc_client
+                .retry_make_rpc_request(&RpcRequest::GetSlotsPerSegment, None, 0)
+                .map_err(|err| {
+                    warn!("Error while making rpc request {:?}", err);
+                    Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
+                })?
+                .as_u64()
+                .unwrap())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "No RPC peers...".to_string(),
+            ))?
+        }
+    }
+
     /// Poll for a different blockhash and associated max_slot than `previous_blockhash`
     fn poll_for_blockhash_and_slot(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        slots_per_segment: u64,
         previous_blockhash: &Hash,
     ) -> result::Result<(Hash, u64), Error> {
         for _ in 0..10 {
@@ -673,7 +731,7 @@ impl Replicator {
                         .as_u64()
                         .unwrap();
                     info!("storage slot: {}", storage_slot);
-                    if get_segment_from_slot(storage_slot) != 0 {
+                    if get_segment_from_slot(storage_slot, slots_per_segment) != 0 {
                         return Ok((storage_blockhash, storage_slot));
                     }
                 }
@@ -696,6 +754,7 @@ impl Replicator {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         replicator_info: &ContactInfo,
         blocktree: &Arc<Blocktree>,
+        slots_per_segment: u64,
     ) -> Result<(u64)> {
         // Create a client which downloads from the replicator and see that it
         // can respond with blobs.
@@ -714,7 +773,7 @@ impl Replicator {
         );
         let repair_slot_range = RepairSlotRange {
             start: start_slot,
-            end: start_slot + SLOTS_PER_SEGMENT,
+            end: start_slot + slots_per_segment,
         };
         // try for upto 180 seconds //TODO needs tuning if segments are huge
         for _ in 0..120 {
@@ -761,7 +820,7 @@ impl Replicator {
                 window_service::process_blobs(&blobs, blocktree)?;
             }
             // check if all the slots in the segment are complete
-            if Self::segment_complete(start_slot, blocktree) {
+            if Self::segment_complete(start_slot, slots_per_segment, blocktree) {
                 break;
             }
             sleep(Duration::from_millis(500));
@@ -770,7 +829,7 @@ impl Replicator {
         t_receiver.join().unwrap();
 
         // check if all the slots in the segment are complete
-        if !Self::segment_complete(start_slot, blocktree) {
+        if !Self::segment_complete(start_slot, slots_per_segment, blocktree) {
             Err(io::Error::new(
                 ErrorKind::Other,
                 "Unable to download the full segment",
@@ -779,8 +838,12 @@ impl Replicator {
         Ok(start_slot)
     }
 
-    fn segment_complete(start_slot: u64, blocktree: &Arc<Blocktree>) -> bool {
-        for slot in start_slot..(start_slot + SLOTS_PER_SEGMENT) {
+    fn segment_complete(
+        start_slot: u64,
+        slots_per_segment: u64,
+        blocktree: &Arc<Blocktree>,
+    ) -> bool {
+        for slot in start_slot..(start_slot + slots_per_segment) {
             if !blocktree.is_full(slot) {
                 return false;
             }

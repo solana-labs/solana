@@ -16,6 +16,7 @@ use solana::validator::ValidatorConfig;
 use solana_client::thin_client::create_client;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::timing::DEFAULT_SLOTS_PER_SEGMENT;
 use std::fs::remove_dir_all;
 use std::sync::{Arc, RwLock};
 
@@ -28,7 +29,7 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     let mut validator_config = ValidatorConfig::default();
     validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
-        validator_configs: vec![ValidatorConfig::default(); num_nodes],
+        validator_configs: vec![validator_config; num_nodes],
         num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,
@@ -62,7 +63,13 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     let path = get_tmp_ledger_path("test");
     let blocktree = Arc::new(Blocktree::open(&path).unwrap());
     assert_eq!(
-        Replicator::download_from_replicator(&cluster_info, &replicator_info, &blocktree).unwrap(),
+        Replicator::download_from_replicator(
+            &cluster_info,
+            &replicator_info,
+            &blocktree,
+            DEFAULT_SLOTS_PER_SEGMENT,
+        )
+        .unwrap(),
         0
     );
 }
