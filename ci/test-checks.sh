@@ -26,6 +26,7 @@ do_bpf_check() {
         cd sdk/bpf/rust/rust-utils
         do_bpf_check
     )
+    (
         cd sdk/bpf/rust/rust-test
         do_bpf_check
     )
