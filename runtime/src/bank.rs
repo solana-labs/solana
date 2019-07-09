@@ -344,7 +344,6 @@ impl Bank {
         self.collector_id = *collector_id;
 
         self.rc.accounts = Arc::new(Accounts::new_from_parent(&parent.rc.accounts));
-        self.clear_credit_only_account_locks();
 
         self.epoch_stakes = {
             let mut epoch_stakes = parent.epoch_stakes.clone();
@@ -1416,9 +1415,6 @@ impl Bank {
         self.rc
             .accounts
             .commit_credits(&self.ancestors, self.slot());
-    }
-    fn clear_credit_only_account_locks(&self) {
-        self.rc.accounts.clear_credit_only_account_locks();
     }
 }
 
