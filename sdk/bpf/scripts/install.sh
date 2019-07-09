@@ -54,7 +54,7 @@ if [[ ! -r criterion-$machine-$version.md ]]; then
 fi
 
 # Install LLVM
-version=v0.0.10
+version=v0.0.11
 if [[ ! -f llvm-native-$machine-$version.md ]]; then
   (
     filename=solana-llvm-$machine.tar.bz2
