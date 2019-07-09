@@ -6,7 +6,6 @@
 #![feature(panic_info_message)]
 #![feature(compiler_builtins_lib)]
 #![feature(lang_items)]
-
 #![cfg(not(test))]
 
 #[lang = "eh_personality"]
