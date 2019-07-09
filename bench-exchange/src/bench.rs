@@ -332,7 +332,7 @@ fn do_tx_transfers<T>(
 
 struct TradeInfo {
     trade_account: Pubkey,
-    order_info: TradeOrderInfo,
+    order_info: OrderInfo,
 }
 #[allow(clippy::too_many_arguments)]
 fn swapper<T>(
@@ -538,7 +538,7 @@ fn trader<T>(
             } else {
                 Direction::To
             };
-            let order_info = TradeOrderInfo {
+            let order_info = OrderInfo {
                 /// Owner of the trade order
                 owner: Pubkey::default(), // don't care
                 direction,

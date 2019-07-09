@@ -10,7 +10,7 @@ use std::{error, fmt};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ToOrder {
     pub pubkey: Pubkey,
-    pub info: TradeOrderInfo,
+    pub info: OrderInfo,
 }
 
 impl Ord for ToOrder {
@@ -26,7 +26,7 @@ impl PartialOrd for ToOrder {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FromOrder {
     pub pubkey: Pubkey,
-    pub info: TradeOrderInfo,
+    pub info: OrderInfo,
 }
 
 impl Ord for FromOrder {
@@ -95,11 +95,7 @@ impl OrderBook {
     // pub fn cancel(&mut self, pubkey: Pubkey) -> Result<(), Box<dyn error::Error>> {
     //     Ok(())
     // }
-    pub fn push(
-        &mut self,
-        pubkey: Pubkey,
-        info: TradeOrderInfo,
-    ) -> Result<(), Box<dyn error::Error>> {
+    pub fn push(&mut self, pubkey: Pubkey, info: OrderInfo) -> Result<(), Box<dyn error::Error>> {
         check_trade(info.direction, info.tokens, info.price)?;
         match info.direction {
             Direction::To => {
