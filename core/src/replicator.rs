@@ -666,19 +666,19 @@ impl Replicator {
                 let node_index = thread_rng().gen_range(0, rpc_peers.len());
                 RpcClient::new_socket(rpc_peers[node_index].rpc)
             };
-            return Ok(rpc_client
+            Ok(rpc_client
                 .retry_make_rpc_request(&RpcRequest::GetSlotsPerSegment, None, 0)
                 .map_err(|err| {
                     warn!("Error while making rpc request {:?}", err);
                     Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
                 })?
                 .as_u64()
-                .unwrap());
+                .unwrap())
         } else {
-            return Err(io::Error::new(
+            Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("No RPC peers..."),
-            ))?;
+            ))?
         }
     }
 
