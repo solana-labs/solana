@@ -7,7 +7,6 @@ use crate::cluster_info::ClusterInfo;
 use crate::consensus::{StakeLockout, Tower};
 use crate::entry::{Entry, EntrySlice};
 use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::leader_schedule_utils;
 use crate::packet::BlobError;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
@@ -101,7 +100,6 @@ impl ReplayStage {
         let bank_forks = bank_forks.clone();
         let poh_recorder = poh_recorder.clone();
         let my_pubkey = *my_pubkey;
-        let mut ticks_per_slot = 0;
         let mut tower = Tower::new_from_forks(&bank_forks.read().unwrap(), &my_pubkey);
         // Start the replay stage loop
         let leader_schedule_cache = leader_schedule_cache.clone();
@@ -125,22 +123,13 @@ impl ReplayStage {
                         &leader_schedule_cache,
                     );
 
-                    let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
-
                     Self::replay_active_banks(
                         &blocktree,
                         &bank_forks,
                         &my_pubkey,
-                        &mut ticks_per_slot,
                         &mut progress,
                         &slot_full_sender,
                     )?;
-
-                    if ticks_per_slot == 0 {
-                        let frozen_banks = bank_forks.read().unwrap().frozen_banks();
-                        let bank = frozen_banks.values().next().unwrap();
-                        ticks_per_slot = bank.ticks_per_slot();
-                    }
 
                     let votable = Self::generate_votable_banks(&bank_forks, &tower, &mut progress);
 
@@ -165,38 +154,18 @@ impl ReplayStage {
                             &blocktree,
                             &bank,
                             &poh_recorder,
-                            ticks_per_slot,
                             &leader_schedule_cache,
                         );
-
-                        is_tpu_bank_active = false;
+                        assert!(!poh_recorder.lock().unwrap().has_bank());
                     }
 
-                    let (reached_leader_tick, grace_ticks) = if !is_tpu_bank_active {
-                        let poh = poh_recorder.lock().unwrap();
-                        poh.reached_leader_tick()
-                    } else {
-                        (false, 0)
-                    };
-
-                    if !is_tpu_bank_active {
-                        assert!(ticks_per_slot > 0);
-                        let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
-                        let poh_slot = leader_schedule_utils::tick_height_to_slot(
-                            ticks_per_slot,
-                            poh_tick_height + 1,
-                        );
-                        Self::start_leader(
-                            &my_pubkey,
-                            &bank_forks,
-                            &poh_recorder,
-                            &cluster_info,
-                            poh_slot,
-                            reached_leader_tick,
-                            grace_ticks,
-                            &leader_schedule_cache,
-                        );
-                    }
+                    Self::maybe_start_leader(
+                        &my_pubkey,
+                        &bank_forks,
+                        &poh_recorder,
+                        &cluster_info,
+                        &leader_schedule_cache,
+                    );
 
                     inc_new_counter_info!(
                         "replicate_stage-duration",
@@ -215,61 +184,93 @@ impl ReplayStage {
             .unwrap();
         (Self { t_replay }, slot_full_receiver, root_bank_receiver)
     }
-    pub fn start_leader(
+
+    fn maybe_start_leader(
         my_pubkey: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        poh_slot: u64,
-        reached_leader_tick: bool,
-        grace_ticks: u64,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
-        trace!("{} checking poh slot {}", my_pubkey, poh_slot);
-        if bank_forks.read().unwrap().get(poh_slot).is_none() {
-            let parent_slot = poh_recorder.lock().unwrap().start_slot();
-            let parent = {
-                let r_bf = bank_forks.read().unwrap();
-                r_bf.get(parent_slot)
-                    .expect("start slot doesn't exist in bank forks")
-                    .clone()
-            };
-            assert!(parent.is_frozen());
+        let (reached_leader_tick, grace_ticks, poh_slot, parent_slot) = {
+            let poh_recorder = poh_recorder.lock().unwrap();
 
-            leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent))
-                .map(|next_leader| {
-                    debug!(
-                        "me: {} leader {} at poh slot {}",
-                        my_pubkey, next_leader, poh_slot
+            // we're done
+            if poh_recorder.has_bank() {
+                trace!("{} poh_recorder already has a bank", my_pubkey);
+                return;
+            }
+
+            poh_recorder.reached_leader_tick()
+        };
+
+        trace!(
+            "{} reached_leader_tick: {} poh_slot: {} parent_slot: {}",
+            my_pubkey,
+            reached_leader_tick,
+            poh_slot,
+            parent_slot,
+        );
+
+        if bank_forks.read().unwrap().get(poh_slot).is_some() {
+            trace!("{} already have bank in forks at {}", my_pubkey, poh_slot);
+            return;
+        }
+
+        let parent = bank_forks
+            .read()
+            .unwrap()
+            .get(parent_slot)
+            .expect("parent_slot doesn't exist in bank forks")
+            .clone();
+
+        // the parent was still in poh_recorder last time we looked for votable banks
+        //  break out and re-run the consensus loop above
+        if !parent.is_frozen() {
+            trace!(
+                "{} parent {} isn't frozen, must be re-considered",
+                my_pubkey,
+                parent.slot()
+            );
+            return;
+        }
+
+        if let Some(next_leader) = leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent)) {
+            trace!(
+                "{} leader {} at poh slot: {}",
+                my_pubkey,
+                next_leader,
+                poh_slot
+            );
+            // TODO: remove me?
+            cluster_info.write().unwrap().set_leader(&next_leader);
+
+            if next_leader == *my_pubkey && reached_leader_tick {
+                trace!("{} starting tpu for slot {}", my_pubkey, poh_slot);
+                datapoint_warn!(
+                    "replay_stage-new_leader",
+                    ("count", poh_slot, i64),
+                    ("grace", grace_ticks, i64)
+                );
+
+                let tpu_bank = Bank::new_from_parent(&parent, my_pubkey, poh_slot);
+                bank_forks.write().unwrap().insert(tpu_bank);
+                if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
+                    assert_eq!(
+                        bank_forks.read().unwrap().working_bank().slot(),
+                        tpu_bank.slot()
                     );
-                    cluster_info.write().unwrap().set_leader(&next_leader);
-                    if next_leader == *my_pubkey && reached_leader_tick {
-                        debug!("{} starting tpu for slot {}", my_pubkey, poh_slot);
-                        datapoint_warn!(
-                            "replay_stage-new_leader",
-                            ("count", poh_slot, i64),
-                            ("grace", grace_ticks, i64));
-                        let tpu_bank = Bank::new_from_parent(&parent, my_pubkey, poh_slot);
-                        bank_forks.write().unwrap().insert(tpu_bank);
-                        if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
-                            assert_eq!(
-                                bank_forks.read().unwrap().working_bank().slot(),
-                                tpu_bank.slot()
-                            );
-                            debug!(
-                                "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
-                                my_pubkey,
-                                tpu_bank.slot(),
-                                next_leader
-                            );
-                            poh_recorder.lock().unwrap().set_bank(&tpu_bank);
-                        }
-                    }
-                })
-                .or_else(|| {
-                    warn!("{} No next leader found", my_pubkey);
-                    None
-                });
+                    debug!(
+                        "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
+                        my_pubkey,
+                        tpu_bank.slot(),
+                        next_leader
+                    );
+                    poh_recorder.lock().unwrap().set_bank(&tpu_bank);
+                }
+            }
+        } else {
+            error!("{} No next leader found", my_pubkey);
         }
     }
 
@@ -337,6 +338,7 @@ impl ReplayStage {
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
+        trace!("handle votable bank {}", bank.slot());
         if let Some(new_root) = tower.record_vote(bank.slot(), bank.hash()) {
             // get the root bank before squash
             let root_bank = bank_forks
@@ -357,7 +359,11 @@ impl ReplayStage {
             leader_schedule_cache.set_root(rooted_banks.last().unwrap());
             bank_forks.write().unwrap().set_root(new_root);
             Self::handle_new_root(&bank_forks, progress);
-            root_bank_sender.send(rooted_banks)?;
+            trace!("new root {}", new_root);
+            if let Err(e) = root_bank_sender.send(rooted_banks) {
+                trace!("root_bank_sender failed: {:?}", e);
+                Err(e)?;
+            }
         }
         tower.update_epoch(&bank);
         if let Some(ref voting_keypair) = voting_keypair {
@@ -371,7 +377,7 @@ impl ReplayStage {
             );
 
             let mut vote_tx =
-                Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));;
+                Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
 
             let blockhash = bank.last_blockhash();
             vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
@@ -386,7 +392,6 @@ impl ReplayStage {
         blocktree: &Blocktree,
         bank: &Arc<Bank>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        ticks_per_slot: u64,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
         let next_leader_slot =
@@ -396,7 +401,6 @@ impl ReplayStage {
             bank.last_blockhash(),
             bank.slot(),
             next_leader_slot,
-            ticks_per_slot,
         );
         debug!(
             "{:?} voted and reset poh at {}. next leader slot {:?}",
@@ -410,7 +414,6 @@ impl ReplayStage {
         blocktree: &Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
         my_pubkey: &Pubkey,
-        ticks_per_slot: &mut u64,
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
     ) -> Result<()> {
@@ -424,19 +427,26 @@ impl ReplayStage {
             }
 
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
-            *ticks_per_slot = bank.ticks_per_slot();
             if bank.collector_id() != my_pubkey
                 && Self::is_replay_result_fatal(&Self::replay_blocktree_into_bank(
                     &bank, &blocktree, progress,
                 ))
             {
+                trace!("replay_result_fatal slot {}", bank_slot);
                 // If the bank was corrupted, don't try to run the below logic to check if the
                 // bank is completed
                 continue;
             }
-            let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
-            if bank.tick_height() == max_tick_height {
+            assert_eq!(*bank_slot, bank.slot());
+            if bank.tick_height() == bank.max_tick_height() {
                 Self::process_completed_bank(my_pubkey, bank, slot_full_sender);
+            } else {
+                trace!(
+                    "bank {} not completed tick_height: {}, max_tick_height: {}",
+                    bank.slot(),
+                    bank.tick_height(),
+                    bank.max_tick_height()
+                );
             }
         }
 
