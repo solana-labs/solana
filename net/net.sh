@@ -132,7 +132,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:c:Fn:i:x:s:" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rD:c:Fn:i:" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -210,12 +210,6 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:x:s:" opt "${shortArgs[@]}"; do
     ;;
   F)
     failOnValidatorBootupFailure=false
-    ;;
-  x)
-    externalPrimordialAccountsFile=$OPTARG
-    ;;
-  s)
-    stakeNodesInGenesisBlock=$OPTARG
     ;;
   i)
     nodeAddress=$OPTARG

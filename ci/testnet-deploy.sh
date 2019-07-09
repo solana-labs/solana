@@ -107,7 +107,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfewk:K:" opt "${shortArgs[@]}"; do
+while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -180,12 +180,6 @@ while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfewk:K:" opt "${shortArgs[@]}"; do
   w)
     fetchLogs=false
     deployUpdateManifest=false
-    ;;
-  k)
-    stakeNodesInGenesisBlock=$OPTARG
-    ;;
-  K)
-    externalPrimordialAccountsFile=$OPTARG
     ;;
   *)
     usage "Unknown option: $opt"
