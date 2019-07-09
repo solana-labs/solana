@@ -54,24 +54,6 @@ test-stable-perf)
     exit 0
   }
 
-  # BPF program unit tests
-  (
-    (
-        cd sdk/bpf/rust/rust-utils
-        _ cargo +"$rust_nightly" test
-    )
-    (
-        cd sdk/bpf/rust/rust-test
-        _ cargo +"$rust_nightly" test
-    )
-    for project in programs/bpf/rust/*/ ; do
-    (
-        cd "$project"
-        _ cargo +"$rust_nightly" test
-    )
-    done
-)
-
   # BPF program tests
   _ make -C programs/bpf/c tests
   _ cargo +"$rust_stable" test \
