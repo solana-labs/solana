@@ -50,17 +50,16 @@ Operate a configured testnet
                                             -c bench-tps=2="--tx_count 25000"
                                         This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                         to the bench-tps client.
+   -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
 
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
-   -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
-
-   -x Accounts and Stakes for external nodes
-                                      - A YML file with a list of account pubkeys and corresponding stakes
-                                         for external nodes
-   -s Num lamports per node in genesis block
-                                      - Create account keypairs for internal nodes and assign these many lamports
-
+   --lamports NUM_LAMPORTS_TO_MINT
+                                      - Override the default 100000000000000 lamports minted in genesis
+   --stake-internal-nodes NUM_LAMPORTS_PER_NODE
+                                      - Amount to stake internal nodes in genesis block.  If set, airdrops are disabled.
+   --external-accounts-file FILE_PATH
+                                      - A YML file with a list of account pubkeys and corresponding stakes for external nodes
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
@@ -96,6 +95,7 @@ failOnValidatorBootupFailure=true
 genesisOptions=
 numFullnodesRequested=
 externalPrimordialAccountsFile=
+remoteExternalPrimordialAccountsFile=/tmp/external-primodial-accounts.yml
 stakeNodesInGenesisBlock=
 
 command=$1
@@ -111,8 +111,17 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --target-lamports-per-signature ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
+    elif [[ $1 = --lamports ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
+      shift 2
+    elif [[ $1 = --stake-internal-nodes ]]; then
+      stakeNodesInGenesisBlock="$2"
+      shift 2
+    elif [[ $1 = --external-accounts-file ]]; then
+      externalPrimordialAccountsFile="$2"
       shift 2
     else
       usage "Unknown long option: $1"
@@ -123,7 +132,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:c:Fn:i:x:s:" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rD:c:Fn:i:" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -201,12 +210,6 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:x:s:" opt "${shortArgs[@]}"; do
     ;;
   F)
     failOnValidatorBootupFailure=false
-    ;;
-  x)
-    externalPrimordialAccountsFile=$OPTARG
-    ;;
-  s)
-    stakeNodesInGenesisBlock=$OPTARG
     ;;
   i)
     nodeAddress=$OPTARG
@@ -321,7 +324,7 @@ startBootstrapLeader() {
     set -x
     startCommon "$ipAddress" || exit 1
     [[ -z "$externalPrimordialAccountsFile" ]] || rsync -vPrc -e "ssh ${sshOptions[*]}" "$externalPrimordialAccountsFile" \
-      "$ipAddress:~/solana/config/external-primodial-accounts.yml"
+      "$ipAddress:$remoteExternalPrimordialAccountsFile"
     case $deployMethod in
     tar)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
@@ -343,7 +346,7 @@ startBootstrapLeader() {
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
-         \"$externalPrimordialAccountsFile\" \
+         \"$remoteExternalPrimordialAccountsFile\" \
          \"$stakeNodesInGenesisBlock\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
@@ -377,7 +380,7 @@ startNode() {
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
-         \"$externalPrimordialAccountsFile\" \
+         \"$remoteExternalPrimordialAccountsFile\" \
          \"$stakeNodesInGenesisBlock\" \
          $nodeIndex \
          \"$genesisOptions\" \
