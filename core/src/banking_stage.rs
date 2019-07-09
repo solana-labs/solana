@@ -482,7 +482,7 @@ impl BankingStage {
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
         let (mut loaded_accounts, results, mut retryable_txs) =
-            bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
+            bank.load_and_execute_transactions(txs, None, lock_results, MAX_PROCESSING_AGE);
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();
@@ -529,7 +529,7 @@ impl BankingStage {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let lock_results = bank.lock_accounts(txs);
+        let lock_results = bank.lock_accounts(txs, None);
         lock_time.stop();
 
         let (result, mut retryable_txs) =
@@ -684,6 +684,7 @@ impl BankingStage {
         // Drop the transaction if it will expire by the time the next node receives and processes it
         let result = bank.check_transactions(
             transactions,
+            None,
             &filter,
             (MAX_PROCESSING_AGE)
                 .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY)
@@ -1119,7 +1120,7 @@ mod tests {
 
                 for entries in &ventries {
                     for entry in entries {
-                        bank.process_transactions(&entry.transactions)
+                        bank.process_transactions(&entry.transactions, None)
                             .iter()
                             .for_each(|x| assert_eq!(*x, Ok(())));
                     }
@@ -1229,7 +1230,7 @@ mod tests {
 
             let bank = Bank::new(&genesis_block);
             for entry in &entries {
-                bank.process_transactions(&entry.transactions)
+                bank.process_transactions(&entry.transactions, None)
                     .iter()
                     .for_each(|x| assert_eq!(*x, Ok(())));
             }
