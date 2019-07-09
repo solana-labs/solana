@@ -2,7 +2,6 @@
 
 #[no_mangle]
 pub unsafe fn sol_log_(message: *const u8, length: u64) {
-    std::println!("sol_log_");
     let slice = std::slice::from_raw_parts(message, length as usize);
     let string = std::str::from_utf8(&slice).unwrap();
     std::println!("{}", string);
