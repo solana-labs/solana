@@ -7,6 +7,7 @@ use crate::accounts_db::{
     AppendVecId, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::Fork;
+use crate::tx_utils::OrderedIterator;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
 use crate::locked_accounts_results::LockedAccountsResults;
@@ -737,7 +738,7 @@ impl Bank {
     /// Bank::process_transactions method, and commits credit-only credits.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
-        self.process_transactions(&txs)[0].clone()?;
+        self.process_transactions(&txs, None)[0].clone()?;
         self.commit_credits();
         tx.signatures
             .get(0)
@@ -747,13 +748,14 @@ impl Bank {
     pub fn lock_accounts<'a, 'b>(
         &'a self,
         txs: &'b [Transaction],
+        txs_iteration_order: Option<&[usize]>
     ) -> LockedAccountsResults<'a, 'b> {
         if self.is_frozen() {
             warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        let results = self.rc.accounts.lock_accounts(txs);
+        let results = self.rc.accounts.lock_accounts(txs, txs_iteration_order);
         LockedAccountsResults::new(results, &self, txs)
     }
 
@@ -770,12 +772,14 @@ impl Bank {
     fn load_accounts(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
+            txs_iteration_order,
             results,
             &self.blockhash_queue.read().unwrap(),
             error_counters,
@@ -784,10 +788,11 @@ impl Bank {
     fn check_refs(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         lock_results: &[Result<()>],
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        txs.iter()
+        OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results)
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && !tx.verify_refs() {
@@ -802,12 +807,13 @@ impl Bank {
     fn check_age(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
-        txs.iter()
+        OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok()
@@ -824,11 +830,12 @@ impl Bank {
     fn check_signatures(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         let rcache = self.src.status_cache.read().unwrap();
-        txs.iter()
+        OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if tx.signatures.is_empty() {
@@ -855,13 +862,14 @@ impl Bank {
     pub fn check_transactions(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let refs_results = self.check_refs(txs, lock_results, &mut error_counters);
-        let age_results = self.check_age(txs, refs_results, max_age, &mut error_counters);
-        self.check_signatures(txs, age_results, &mut error_counters)
+        let refs_results = self.check_refs(txs, txs_iteration_order, lock_results, &mut error_counters);
+        let age_results = self.check_age(txs, txs_iteration_order, refs_results, max_age, &mut error_counters);
+        self.check_signatures(txs, txs_iteration_order, age_results, &mut error_counters)
     }
 
     fn update_error_counters(error_counters: &ErrorCounters) {
@@ -927,6 +935,7 @@ impl Bank {
     pub fn load_and_execute_transactions(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> (
@@ -938,9 +947,7 @@ impl Bank {
         let mut error_counters = ErrorCounters::default();
         let mut load_time = Measure::start("accounts_load");
 
-        let retryable_txs: Vec<_> = lock_results
-            .locked_accounts_results()
-            .iter()
+        let retryable_txs: Vec<_> = OrderedIterator::new(lock_results.locked_accounts_results(), txs_iteration_order)
             .enumerate()
             .filter_map(|(index, res)| match res {
                 Err(TransactionError::AccountInUse) => Some(index),
@@ -951,18 +958,19 @@ impl Bank {
 
         let sig_results = self.check_transactions(
             txs,
+            txs_iteration_order,
             lock_results.locked_accounts_results(),
             max_age,
             &mut error_counters,
         );
-        let mut loaded_accounts = self.load_accounts(txs, sig_results, &mut error_counters);
+        let mut loaded_accounts = self.load_accounts(txs, txs_iteration_order, sig_results, &mut error_counters);
         load_time.stop();
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count = 0;
         let executed: Vec<Result<()>> = loaded_accounts
             .iter_mut()
-            .zip(txs.iter())
+            .zip(OrderedIterator::new(txs, txs_iteration_order))
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders, ref mut credits)) => {
@@ -1092,19 +1100,20 @@ impl Bank {
     pub fn load_execute_and_commit_transactions(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
         let (mut loaded_accounts, executed, _) =
-            self.load_and_execute_transactions(txs, lock_results, max_age);
+            self.load_and_execute_transactions(txs, txs_iteration_order, lock_results, max_age);
 
         self.commit_transactions(txs, &mut loaded_accounts, &executed)
     }
 
     #[must_use]
-    pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
-        let lock_results = self.lock_accounts(txs);
-        self.load_execute_and_commit_transactions(txs, &lock_results, MAX_RECENT_BLOCKHASHES)
+    pub fn process_transactions(&self, txs: &[Transaction], txs_iteration_order: Option<&[usize]>) -> Vec<Result<()>> {
+        let lock_results = self.lock_accounts(txs, txs_iteration_order);
+        self.load_execute_and_commit_transactions(txs, txs_iteration_order, &lock_results, MAX_RECENT_BLOCKHASHES)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1576,7 +1585,7 @@ mod tests {
 
         let t1 = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_block.hash());
         let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_block.hash());
-        let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
+        let res = bank.process_transactions(&vec![t1.clone(), t2.clone()], None);
         bank.commit_credits();
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
@@ -1938,7 +1947,7 @@ mod tests {
             genesis_block.hash(),
         );
         let txs = vec![tx0, tx1];
-        let results = bank.process_transactions(&txs);
+        let results = bank.process_transactions(&txs, None);
         assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.
@@ -1966,7 +1975,7 @@ mod tests {
         let tx2 =
             system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
-        let results = bank.process_transactions(&txs);
+        let results = bank.process_transactions(&txs, None);
         bank.commit_credits();
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
@@ -1985,7 +1994,7 @@ mod tests {
         let tx1 =
             system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
-        let results = bank.process_transactions(&txs);
+        let results = bank.process_transactions(&txs, None);
         bank.commit_credits();
 
         // However, an account may not be locked as credit-only and credit-debit at the same time.
@@ -2008,9 +2017,10 @@ mod tests {
         );
         let pay_alice = vec![tx1];
 
-        let lock_result = bank.lock_accounts(&pay_alice);
+        let lock_result = bank.lock_accounts(&pay_alice, None);
         let results_alice = bank.load_execute_and_commit_transactions(
             &pay_alice,
+            None,
             &lock_result,
             MAX_RECENT_BLOCKHASHES,
         );
@@ -2057,7 +2067,7 @@ mod tests {
         let tx = Transaction::new(&[&key0], message, genesis_block.hash());
         let txs = vec![tx];
 
-        let lock_result0 = bank.lock_accounts(&txs);
+        let lock_result0 = bank.lock_accounts(&txs, None);
         assert!(lock_result0.locked_accounts_results()[0].is_ok());
 
         // Try locking accounts, locking a previously credit-only account as credit-debit
@@ -2075,7 +2085,7 @@ mod tests {
         let tx = Transaction::new(&[&key1], message, genesis_block.hash());
         let txs = vec![tx];
 
-        let lock_result1 = bank.lock_accounts(&txs);
+        let lock_result1 = bank.lock_accounts(&txs, None);
         assert!(lock_result1.locked_accounts_results()[0].is_err());
 
         // Try locking a previously credit-only account a 2nd time; should succeed
@@ -2092,7 +2102,7 @@ mod tests {
         let tx = Transaction::new(&[&key2], message, genesis_block.hash());
         let txs = vec![tx];
 
-        let lock_result2 = bank.lock_accounts(&txs);
+        let lock_result2 = bank.lock_accounts(&txs, None);
         assert!(lock_result2.locked_accounts_results()[0].is_ok());
     }
 
@@ -2129,7 +2139,7 @@ mod tests {
         bank.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
         let tx = system_transaction::transfer(&key1, &key1.pubkey(), 1, genesis_block.hash());
-        let res = bank.process_transactions(&vec![tx.clone()]);
+        let res = bank.process_transactions(&vec![tx.clone()], None);
         assert_eq!(res.len(), 1);
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
 
