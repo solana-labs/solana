@@ -95,7 +95,7 @@ failOnValidatorBootupFailure=true
 genesisOptions=
 numFullnodesRequested=
 externalPrimordialAccountsFile=
-remoteExternalPrimordialAccountsFile=/tmp/external-primodial-accounts.yml
+remoteExternalPrimordialAccountsFile=
 stakeNodesInGenesisBlock=
 
 command=$1
@@ -122,6 +122,7 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --external-accounts-file ]]; then
       externalPrimordialAccountsFile="$2"
+      remoteExternalPrimordialAccountsFile=/tmp/external-primordial-accounts.yml
       shift 2
     else
       usage "Unknown long option: $1"
