@@ -463,7 +463,7 @@ impl BankingStage {
                     // we just attempted to record) as retryable
                     return (res, processed_transactions_indexes);
                 }
-                Err(_) => panic!("Poh recorder returned unexpected error"),
+                Err(e) => panic!(format!("Poh recorder returned unexpected error: {:?}", e)),
             }
             poh_record.stop();
         }

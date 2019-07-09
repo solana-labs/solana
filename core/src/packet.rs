@@ -414,7 +414,7 @@ impl Blob {
 
         let bytes = &data[..data_len];
         blob.data[..data_len].copy_from_slice(bytes);
-        blob.meta.size = blob.data_size() as usize;
+        blob.meta.size = data_len;
         blob
     }
 
@@ -504,7 +504,10 @@ impl Blob {
     }
 
     pub fn data_size(&self) -> u64 {
-        LittleEndian::read_u64(&self.data[SIZE_RANGE])
+        cmp::min(
+            LittleEndian::read_u64(&self.data[SIZE_RANGE]),
+            BLOB_SIZE as u64,
+        )
     }
 
     pub fn set_data_size(&mut self, size: u64) {
