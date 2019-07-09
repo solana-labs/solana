@@ -16,6 +16,9 @@ solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust/rust-utils", version =
 solana-sdk-bpf-no-std = { path = "../../../../sdk/bpf/rust/rust-no-std", version = "0.17.0" }
 solana-bpf-rust-128bit-dep = { path = "../128bit_dep", version = "0.17.0" }
 
+[dev_dependencies]
+solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/rust-test", version = "0.17.0" }
+
 [workspace]
 members = []
 

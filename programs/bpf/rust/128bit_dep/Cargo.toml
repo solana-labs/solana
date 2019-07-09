@@ -14,5 +14,8 @@ edition = "2018"
 [dependencies]
 solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust/rust-utils", version = "0.17.0" }
 
+[dev_dependencies]
+solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/rust-test", version = "0.17.0" }
+
 [workspace]
 members = []
