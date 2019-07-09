@@ -192,7 +192,7 @@ impl SyncClient for BankClient {
 impl BankClient {
     fn run(bank: &Bank, transaction_receiver: Receiver<Transaction>) {
         while let Ok(tx) = transaction_receiver.recv() {
-            let _ = bank.process_transaction(&tx, None);
+            let _ = bank.process_transaction(&tx);
         }
     }
 
