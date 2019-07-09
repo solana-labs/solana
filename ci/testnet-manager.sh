@@ -336,7 +336,8 @@ deploy() {
     (
       set -x
       ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
-        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0ccd4f2239886fa94 \
+        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
+        -a eipalloc-0ccd4f2239886fa94 --letsencrypt edge.testnet.solana.com \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
@@ -362,7 +363,8 @@ deploy() {
       set -x
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 -z us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
+          -a eipalloc-0f286cf8a0771ce35 --letsencrypt beta.testnet.solana.com \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
@@ -393,7 +395,8 @@ deploy() {
 
       # shellcheck disable=SC2068
       ci/testnet-deploy.sh -p testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -f -a eipalloc-0fa502bf95f6f18b2 \
+        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -f \
+        -a eipalloc-0fa502bf95f6f18b2 --letsencrypt testnet.solana.com \
         ${skipCreate:+-e} \
         ${maybeSkipStart:+-s} \
         ${maybeStop:+-S} \
@@ -473,7 +476,8 @@ deploy() {
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p tds-solana-com -C gce ${GCE_ZONE_ARGS[0]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
-          -a tds-solana-com --hashes-per-tick auto \
+          -a tds-solana-com --letsencrypt tds.solana.com \
+          --hashes-per-tick auto \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
