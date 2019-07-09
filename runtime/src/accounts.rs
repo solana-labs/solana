@@ -525,25 +525,24 @@ impl Accounts {
 
     /// Commit remaining credit-only changes, regardless of reference count
     pub fn commit_credits(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
-        let credit_only_account_locks = self.credit_only_account_locks.read().unwrap();
-        for (pubkey, credit_only_lock) in credit_only_account_locks.iter() {
-            let credit = credit_only_lock.credits.load(Ordering::Relaxed);
+        for (pubkey, lock) in self.credit_only_account_locks.write().unwrap().drain() {
+            let lock_count = *lock.lock_count.lock().unwrap();
+            if lock_count != 0 {
+                warn!(
+                    "dropping credit-only lock on {}, still has {} locks",
+                    pubkey, lock_count
+                );
+            }
+            let credit = lock.credits.load(Ordering::Relaxed);
             if credit > 0 {
                 let mut account = self
-                    .load_slow(ancestors, pubkey)
+                    .load_slow(ancestors, &pubkey)
                     .map(|(account, _)| account)
                     .unwrap_or_default();
                 account.lamports += credit;
-                self.store_slow(fork, pubkey, &account);
+                self.store_slow(fork, &pubkey, &account);
             }
         }
-        drop(credit_only_account_locks);
-        self.clear_credit_only_account_locks();
-    }
-
-    pub fn clear_credit_only_account_locks(&self) {
-        let mut credit_only_account_locks = self.credit_only_account_locks.write().unwrap();
-        credit_only_account_locks.clear();
     }
 
     fn collect_accounts<'a>(
