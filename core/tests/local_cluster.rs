@@ -346,6 +346,7 @@ fn test_fake_blobs_broadcast_leader() {
 #[test]
 #[serial]
 fn test_repairman_catchup() {
+    solana_logger::setup();
     run_repairman_catchup(3);
 }
 

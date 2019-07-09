@@ -165,7 +165,6 @@ impl ReplayStage {
                         &poh_recorder,
                         &cluster_info,
                         &leader_schedule_cache,
-                        &slot_full_sender,
                     );
 
                     inc_new_counter_info!(
@@ -192,27 +191,26 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        slot_full_sender: &Sender<(u64, Pubkey)>,
     ) {
-        let poh = poh_recorder.lock().unwrap();
+        let (reached_leader_tick, grace_ticks, poh_slot, parent_slot) = {
+            let poh_recorder = poh_recorder.lock().unwrap();
 
-        // we're done
-        if poh.has_bank() {
-            return;
-        }
+            // we're done
+            if poh_recorder.has_bank() {
+                trace!("{} poh_recorder already has a bank", my_pubkey);
+                return;
+            }
 
-        let (reached_leader_tick, grace_ticks, poh_slot, parent_slot) = poh.reached_leader_tick();
+            poh_recorder.reached_leader_tick()
+        };
 
         trace!(
-            "{} reached_leader_tick: {} poh_tick_height: {} poh_slot: {} parent_slot: {} ticks_per_slot: {}",
+            "{} reached_leader_tick: {} poh_slot: {} parent_slot: {}",
             my_pubkey,
             reached_leader_tick,
-            poh.tick_height(),
             poh_slot,
             parent_slot,
-            poh.ticks_per_slot(),
         );
-        drop(poh);
 
         if bank_forks.read().unwrap().get(poh_slot).is_some() {
             trace!("{} already have bank in forks at {}", my_pubkey, poh_slot);
@@ -226,8 +224,15 @@ impl ReplayStage {
             .expect("parent_slot doesn't exist in bank forks")
             .clone();
 
+        // the parent was still in poh_recorder last time we looked for votable banks
+        //  break out and re-run the consensus loop above
         if !parent.is_frozen() {
-            Self::process_completed_bank(my_pubkey, parent.clone(), slot_full_sender);
+            trace!(
+                "{} parent {} isn't frozen, must be re-considered",
+                my_pubkey,
+                parent.slot()
+            );
+            return;
         }
 
         if let Some(next_leader) = leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent)) {
@@ -265,7 +270,7 @@ impl ReplayStage {
                 }
             }
         } else {
-            warn!("{} No next leader found", my_pubkey);
+            error!("{} No next leader found", my_pubkey);
         }
     }
 
