@@ -656,6 +656,8 @@ pub mod test {
         S: Borrow<SlotSpec>,
     {
         let mut coding_generator = CodingGenerator::default();
+        let keypair = Keypair::new();
+        let bytes = keypair.to_bytes();
 
         specs.into_iter().map(move |spec| {
             let spec = spec.borrow();
@@ -668,14 +670,14 @@ pub mod test {
                     let set_index = erasure_spec.set_index as usize;
                     let start_index = set_index * NUM_DATA;
 
-                    let mut blobs = generate_test_blobs(0, NUM_DATA);
-                    index_blobs(
-                        &blobs,
-                        &Keypair::new().pubkey(),
-                        start_index as u64,
-                        slot,
-                        0,
-                    );
+                    let mut blobs = generate_test_blobs(start_index, NUM_DATA);
+                    let keypair = Keypair::from_bytes(&bytes).unwrap();
+                    index_blobs(&blobs, &keypair.pubkey(), start_index as u64, slot, 0);
+
+                    // Signing has to be deferred until all data/header fields are set correctly
+                    blobs.iter().for_each(|blob| {
+                        blob.write().unwrap().sign(&keypair);
+                    });
 
                     let mut coding_blobs = coding_generator.next(&blobs);
 
@@ -740,11 +742,8 @@ pub mod test {
             .into_iter()
             .map(|_| {
                 let mut blob = Blob::default();
-                let keypair = Keypair::new();
                 blob.data_mut()[..].copy_from_slice(&data);
                 blob.set_size(BLOB_DATA_SIZE);
-                blob.set_id(&keypair.pubkey());
-                blob.sign(&keypair);
                 Arc::new(RwLock::new(blob))
             })
             .collect();

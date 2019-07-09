@@ -1574,7 +1574,6 @@ fn handle_recovery(
                     );
 
                     new_data.push(blob);
-                    index.data_mut().set_present(blob_index, true);
                 } else {
                     warn!(
                         "[handle_recovery] failed verification at slot={}, index={}, discarding",
