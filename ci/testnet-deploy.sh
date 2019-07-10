@@ -259,6 +259,11 @@ if ! $skipCreate; then
   # shellcheck disable=SC2206
   create_args+=(${zone_args[@]})
 
+  if [[ -n $maybeLetsEncrypt ]]; then
+    # shellcheck disable=SC2206 # Do not want to quote $maybeLetsEncrypt
+    create_args+=($maybeLetsEncrypt)
+  fi
+
   if $blockstreamer; then
     create_args+=(-u)
   fi
@@ -348,10 +353,6 @@ if ! $skipStart; then
     if [[ -n $maybeHashesPerTick ]]; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeHashesPerTick
       args+=($maybeHashesPerTick)
-    fi
-    if [[ -n $maybeLetsEncrypt ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeLetsEncrypt
-      args+=($maybeLetsEncrypt)
     fi
     if $reuseLedger; then
       args+=(-r)
