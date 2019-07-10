@@ -14,7 +14,8 @@ use std::error;
 use std::process::exit;
 
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
-pub const MAX_LONG_FIELD_LENGTH: usize = 256;
+pub const MAX_LONG_FIELD_LENGTH: usize = 300;
+pub const MAX_VALIDATOR_INFO: u64 = 570;
 pub const JSON_RPC_URL: &str = "https://api.testnet.solana.com/";
 
 // Config account key: Va1idator1nfo111111111111111111111111111111
@@ -35,7 +36,7 @@ struct ValidatorInfo {
 
 impl ConfigState for ValidatorInfo {
     fn max_space() -> u64 {
-        512
+        MAX_VALIDATOR_INFO
     }
 }
 
@@ -127,7 +128,7 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<String, Box<dyn error::Error>>
     }
     if let Some(keybase_id) = matches.value_of("keybase_id") {
         map.insert(
-            "keybase_id".to_string(),
+            "keybaseId".to_string(),
             Value::String(keybase_id.to_string()),
         );
     }
@@ -396,7 +397,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 mod tests {
     use super::*;
     use bincode::{serialize, serialized_size};
-    use serde_json::json;
 
     #[test]
     fn test_validator_info_serde() {
@@ -423,5 +423,32 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(deserialized.info, info_string);
+    }
+
+    #[test]
+    fn test_validator_info_max_space() {
+        // 70-character string
+        let max_short_string =
+            "Max Length String KWpP299aFCBWvWg1MHpSuaoTsud7cv8zMJsh99aAtP8X1s26yrR1".to_string();
+        // 300-character string
+        let max_long_string = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut libero quam, volutpat et aliquet eu, varius in mi. Aenean vestibulum ex in tristique faucibus. Maecenas in imperdiet turpis. Nullam feugiat aliquet erat. Morbi malesuada turpis sed dui pulvinar lobortis. Pellentesque a lectus eu leo nullam.".to_string();
+        let mut info = Map::new();
+        info.insert("name".to_string(), Value::String(max_short_string.clone()));
+        info.insert(
+            "website".to_string(),
+            Value::String(max_short_string.clone()),
+        );
+        info.insert("keybaseId".to_string(), Value::String(max_short_string));
+        info.insert("details".to_string(), Value::String(max_long_string));
+        let info_string = serde_json::to_string(&Value::Object(info)).unwrap();
+
+        let validator_info = ValidatorInfo {
+            info: info_string.clone(),
+        };
+
+        assert_eq!(
+            serialized_size(&validator_info).unwrap(),
+            ValidatorInfo::max_space()
+        );
     }
 }
