@@ -16,6 +16,26 @@ pub fn process_instruction(
         error!("Invalid ConfigKeys data: {:?} {:?}", data, err);
         InstructionError::InvalidInstructionData
     })?;
+    let current_data: ConfigKeys = deserialize(&keyed_accounts[0].account.data).map_err(|err| {
+        error!("Invalid data in account[0]: {:?} {:?}", data, err);
+        InstructionError::InvalidAccountData
+    })?;
+
+    if current_data.keys.is_empty() || key_list.require_config_signature {
+        // Config account keypair must be a signer on account initilization,
+        // or when required by Config data
+        if keyed_accounts[0].signer_key().is_none() {
+            error!("account[0].signer_key().is_none()");
+            Err(InstructionError::MissingRequiredSignature)?;
+        }
+    }
+
+    let current_signer_keys: Vec<Pubkey> = current_data
+        .keys
+        .iter()
+        .filter(|(_, is_signer)| *is_signer)
+        .map(|(pubkey, _)| *pubkey)
+        .collect();
     let mut counter = 0;
     for (i, (signer, _)) in key_list
         .keys
@@ -42,13 +62,31 @@ pub fn process_instruction(
             );
             Err(InstructionError::MissingRequiredSignature)?;
         }
-    }
-    if counter == 0 {
-        // If Config data does not specify any signers, Config account keypair must be a signer
-        if keyed_accounts[0].signer_key().is_none() {
-            error!("account[0].signer_key().is_none()");
-            Err(InstructionError::MissingRequiredSignature)?;
+        if !current_data.keys.is_empty() && keyed_accounts[0].signer_key().is_none() {
+            // If Config account is already initialized, update signatures must match Config data
+            // or Config account keypair must be a signer
+            if current_signer_keys
+                .iter()
+                .find(|&pubkey| pubkey == signer)
+                .is_none()
+            {
+                error!("account {:?} is not in stored signer list", signer);
+                Err(InstructionError::MissingRequiredSignature)?;
+            }
         }
+    }
+
+    // Check for Config data signers not present in incoming account update
+    if !current_data.keys.is_empty()
+        && current_signer_keys.len() > counter
+        && keyed_accounts[0].signer_key().is_none()
+    {
+        error!(
+            "too few signers: {:?}; expected: {:?}",
+            counter,
+            current_signer_keys.len()
+        );
+        Err(InstructionError::MissingRequiredSignature)?;
     }
 
     if keyed_accounts[0].account.data.len() < data.len() {
@@ -150,7 +188,8 @@ mod tests {
 
         let my_config = MyConfig::new(42);
 
-        let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
+        let instruction =
+            config_instruction::store(&config_pubkey, true, true, keys.clone(), &my_config);
         let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
 
         bank_client
@@ -178,7 +217,8 @@ mod tests {
 
         let my_config = MyConfig::new(42);
 
-        let mut instruction = config_instruction::store(&config_pubkey, true, vec![], &my_config);
+        let mut instruction =
+            config_instruction::store(&config_pubkey, true, true, vec![], &my_config);
         instruction.data = vec![0; 123]; // <-- Replace data with a vector that's too large
         let message = Message::new(vec![instruction]);
         bank_client
@@ -201,7 +241,7 @@ mod tests {
             system_instruction::transfer(&system_pubkey, &Pubkey::new_rand(), 42);
         let my_config = MyConfig::new(42);
         let mut store_instruction =
-            config_instruction::store(&config_pubkey, true, vec![], &my_config);
+            config_instruction::store(&config_pubkey, true, true, vec![], &my_config);
         store_instruction.accounts[0].is_signer = false; // <----- not a signer
 
         let message = Message::new(vec![transfer_instruction, store_instruction]);
@@ -228,7 +268,8 @@ mod tests {
 
         let my_config = MyConfig::new(42);
 
-        let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
+        let instruction =
+            config_instruction::store(&config_pubkey, true, true, keys.clone(), &my_config);
         let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
 
         bank_client
@@ -266,25 +307,12 @@ mod tests {
         let my_config = MyConfig::new(42);
 
         let instruction =
-            config_instruction::store(&config_pubkey, false, keys.clone(), &my_config);
+            config_instruction::store(&config_pubkey, false, true, keys.clone(), &my_config);
         let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
 
         bank_client
             .send_message(&[&mint_keypair, &signer0], message)
-            .unwrap();
-
-        let config_account_data = bank_client
-            .get_account_data(&config_pubkey)
-            .unwrap()
-            .unwrap();
-        let meta_length = ConfigKeys::serialized_size(keys.clone());
-        let meta_data: ConfigKeys = deserialize(&config_account_data[0..meta_length]).unwrap();
-        assert_eq!(meta_data.keys, keys);
-        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
-        assert_eq!(
-            my_config,
-            MyConfig::deserialize(&config_account_data).unwrap()
-        );
+            .unwrap_err();
     }
 
     #[test]
@@ -301,7 +329,8 @@ mod tests {
         let my_config = MyConfig::new(42);
 
         // Config-data pubkey doesn't match signer
-        let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
+        let instruction =
+            config_instruction::store(&config_pubkey, true, true, keys.clone(), &my_config);
         let mut message =
             Message::new_with_payer(vec![instruction.clone()], Some(&mint_keypair.pubkey()));
         message.account_keys[2] = signer1.pubkey();
@@ -314,6 +343,111 @@ mod tests {
         message.header.num_required_signatures = 2;
         bank_client
             .send_message(&[&mint_keypair, &config_keypair], message)
+            .unwrap_err();
+    }
+
+    #[test]
+    fn test_config_updates() {
+        solana_logger::setup();
+        let (bank, mint_keypair) = create_bank(10_000);
+        let pubkey = Pubkey::new_rand();
+        let signer0 = Keypair::new();
+        let signer1 = Keypair::new();
+        let keys = vec![
+            (pubkey, false),
+            (signer0.pubkey(), true),
+            (signer1.pubkey(), true),
+        ];
+        let (bank_client, config_keypair) =
+            create_config_account(bank, &mint_keypair, keys.clone());
+        let config_pubkey = config_keypair.pubkey();
+
+        let my_config = MyConfig::new(42);
+
+        let instruction =
+            config_instruction::store(&config_pubkey, true, false, keys.clone(), &my_config);
+        let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+
+        bank_client
+            .send_message(
+                &[&mint_keypair, &config_keypair, &signer0, &signer1],
+                message,
+            )
+            .unwrap();
+
+        // Update with expected signatures
+        let new_config = MyConfig::new(84);
+        let instruction =
+            config_instruction::store(&config_pubkey, false, false, keys.clone(), &new_config);
+        let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+        bank_client
+            .send_message(&[&mint_keypair, &signer0, &signer1], message)
+            .unwrap();
+
+        let config_account_data = bank_client
+            .get_account_data(&config_pubkey)
+            .unwrap()
+            .unwrap();
+        let meta_length = ConfigKeys::serialized_size(keys.clone());
+        let meta_data: ConfigKeys = deserialize(&config_account_data[0..meta_length]).unwrap();
+        assert_eq!(meta_data.keys, keys);
+        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
+        assert_eq!(
+            new_config,
+            MyConfig::deserialize(&config_account_data).unwrap()
+        );
+
+        // Attempt update with incomplete signatures
+        let keys = vec![(pubkey, false), (signer0.pubkey(), true)];
+        let instruction =
+            config_instruction::store(&config_pubkey, false, false, keys.clone(), &my_config);
+        let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+        bank_client
+            .send_message(&[&mint_keypair, &signer0], message)
+            .unwrap_err();
+
+        // Attempt update with incorrect signatures
+        let signer2 = Keypair::new();
+        let keys = vec![
+            (pubkey, false),
+            (signer0.pubkey(), true),
+            (signer2.pubkey(), true),
+        ];
+        let instruction =
+            config_instruction::store(&config_pubkey, false, false, keys.clone(), &my_config);
+        let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+        bank_client
+            .send_message(&[&mint_keypair, &signer0, &signer2], message)
+            .unwrap_err();
+
+        // Update successfully with Config keypair, specifying new signer in data and required Config signature
+        let keys = vec![(signer2.pubkey(), true)];
+        let instruction =
+            config_instruction::store(&config_pubkey, true, true, keys.clone(), &my_config);
+        let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+        bank_client
+            .send_message(&[&mint_keypair, &config_keypair, &signer2], message)
+            .unwrap();
+
+        let config_account_data = bank_client
+            .get_account_data(&config_pubkey)
+            .unwrap()
+            .unwrap();
+        let meta_length = ConfigKeys::serialized_size(keys.clone());
+        let meta_data: ConfigKeys = deserialize(&config_account_data[0..meta_length]).unwrap();
+        assert_eq!(meta_data.keys, keys);
+        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
+        assert_eq!(
+            my_config,
+            MyConfig::deserialize(&config_account_data).unwrap()
+        );
+
+        // Attempt update without required Config incorrect signatures
+        let instruction =
+            config_instruction::store(&config_pubkey, false, true, keys.clone(), &my_config);
+        let message = Message::new_with_payer(vec![instruction], Some(&mint_keypair.pubkey()));
+        bank_client
+            .send_message(&[&mint_keypair, &signer2], message)
             .unwrap_err();
     }
 }
