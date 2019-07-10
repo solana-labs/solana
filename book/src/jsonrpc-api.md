@@ -29,6 +29,7 @@ Methods
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
 * [getSlotLeader](#getslotleader)
+* [getSlotsPerSegment](#getslotspersegment)
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [getTotalSupply](#gettotalsupply)
@@ -262,7 +263,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
 ```
 
------
+----
+
+### getSlotsPerSegment
+Returns the current storage segment size in terms of slots
+
+##### Parameters:
+None
+
+##### Results:
+* `u64` - Number of slots in a storage segment
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlotsPerSegment"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":"1024","id":1}
+```
+
+----
 
 ### getNumBlocksSinceSignatureConfirmation
 Returns the current number of blocks since signature has been confirmed.
