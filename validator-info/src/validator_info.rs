@@ -401,6 +401,51 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 mod tests {
     use super::*;
     use bincode::{serialize, serialized_size};
+    use serde_json::json;
+
+    #[test]
+    fn test_check_url() {
+        let url = "http://test.com";
+        assert_eq!(check_url(url.to_string()), Ok(()));
+        let long_url = "http://7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJ.com";
+        assert!(check_url(long_url.to_string()).is_err());
+        let non_url = "not parseable";
+        assert!(check_url(non_url.to_string()).is_err());
+    }
+
+    #[test]
+    fn test_check_name_length() {
+        let name = "Alice Validator";
+        assert_eq!(check_name_length(name.to_string()), Ok(()));
+        let long_name = "Alice 7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJt6rY";
+        assert!(check_url(long_name.to_string()).is_err());
+    }
+
+    #[test]
+    fn test_is_keybase_id() {
+        let keybase_id = "464bb0f2956f7e83";
+        assert_eq!(is_keybase_id(keybase_id.to_string()), Ok(()));
+        let long_keybase_id = "464bb0f2956f7e830";
+        assert!(is_keybase_id(long_keybase_id.to_string()).is_err());
+        let non_hex_keybase_id = "zyxbb0f2956f7e83";
+        assert!(is_keybase_id(non_hex_keybase_id.to_string()).is_err());
+    }
+
+    #[test]
+    fn test_parse_args() {
+        let matches = App::new("test")
+            .arg(Arg::with_name("name").short("n").takes_value(true))
+            .arg(Arg::with_name("website").short("w").takes_value(true))
+            .arg(Arg::with_name("keybase_id").short("k").takes_value(true))
+            .arg(Arg::with_name("details").short("d").takes_value(true))
+            .get_matches_from(vec!["test", "-n", "Alice", "-k", "464bb0f2956f7e83"]);
+        let expected_string = serde_json::to_string(&json!({
+            "name": "Alice",
+            "keybaseId": "464bb0f2956f7e83",
+        }))
+        .unwrap();
+        assert_eq!(parse_args(&matches).unwrap(), expected_string);
+    }
 
     #[test]
     fn test_validator_info_serde() {
@@ -427,6 +472,23 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(deserialized.info, info_string);
+    }
+
+    #[test]
+    fn test_parse_validator_info() {
+        let pubkey = Pubkey::new_rand();
+        let keys = vec![(id(), false), (pubkey, true)];
+        let config = ConfigKeys { keys };
+
+        let mut info = Map::new();
+        info.insert("name".to_string(), Value::String("Alice".to_string()));
+        let info_string = serde_json::to_string(&Value::Object(info)).unwrap();
+        let validator_info = ValidatorInfo {
+            info: info_string.clone(),
+        };
+        let data = serialize(&(config, validator_info)).unwrap();
+
+        assert_eq!(parse_validator_info(&data).unwrap(), (pubkey, info_string));
     }
 
     #[test]
