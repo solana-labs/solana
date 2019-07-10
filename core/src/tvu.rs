@@ -179,9 +179,7 @@ pub mod tests {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use crate::storage_stage::SLOTS_PER_TURN_TEST;
     use solana_runtime::bank::Bank;
-    use solana_sdk::timing::DEFAULT_SLOTS_PER_SEGMENT;
     use std::sync::atomic::Ordering;
 
     #[test]
