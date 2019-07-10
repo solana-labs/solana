@@ -367,6 +367,7 @@ impl Replicator {
             meta.blockhash = storage_blockhash;
             Self::redeem_rewards(&cluster_info, replicator_keypair, storage_keypair);
         }
+        exit.store(true, Ordering::Relaxed);
     }
 
     fn redeem_rewards(
