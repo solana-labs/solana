@@ -29,7 +29,7 @@ Methods
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
 * [getSlotLeader](#getslotleader)
-* [getSlotsPerSegment](#getslospersegment)
+* [getSlotsPerSegment](#getslotspersegment)
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [getTotalSupply](#gettotalsupply)
