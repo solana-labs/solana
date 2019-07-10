@@ -428,6 +428,7 @@ impl Blob {
             out.position() as usize
         };
         blob.set_size(pos);
+        blob.set_erasure_config(&ErasureConfig::default());
         blob
     }
 

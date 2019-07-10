@@ -267,6 +267,7 @@ impl CodingGenerator {
                 coding_blob.set_id(&id);
                 coding_blob.set_size(max_data_size);
                 coding_blob.set_coding();
+                coding_blob.set_erasure_config(&data_blob.erasure_config());
 
                 coding_blobs.push(coding_blob);
             }
@@ -776,6 +777,7 @@ pub mod test {
                 let mut blob = Blob::default();
                 blob.data_mut()[..].copy_from_slice(&data);
                 blob.set_size(BLOB_DATA_SIZE);
+                blob.set_erasure_config(&ErasureConfig::default());
                 Arc::new(RwLock::new(blob))
             })
             .collect();
