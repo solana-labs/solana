@@ -10,8 +10,6 @@ use solana_sdk::system_instruction;
 /// A collection of keys to be stored in Config account data.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct ConfigKeys {
-    // Whether the Config account keypair must sign any updates
-    pub require_config_signature: bool,
     // Each key tuple comprises a unique `Pubkey` identifier,
     // and `bool` whether that key is a signer of the data
     #[serde(with = "short_vec")]
@@ -20,12 +18,9 @@ pub struct ConfigKeys {
 
 impl ConfigKeys {
     pub fn serialized_size(keys: Vec<(Pubkey, bool)>) -> usize {
-        serialize(&ConfigKeys {
-            require_config_signature: true,
-            keys,
-        })
-        .unwrap_or_else(|_| vec![])
-        .len()
+        serialize(&ConfigKeys { keys })
+            .unwrap_or_else(|_| vec![])
+            .len()
     }
 }
 
@@ -50,20 +45,15 @@ pub fn create_account<T: ConfigState>(
 pub fn store<T: ConfigState>(
     config_account_pubkey: &Pubkey,
     is_config_signer: bool,
-    require_config_signature: bool,
     keys: Vec<(Pubkey, bool)>,
     data: &T,
 ) -> Instruction {
     let mut account_metas = vec![AccountMeta::new(*config_account_pubkey, is_config_signer)];
     for (signer_pubkey, _) in keys.iter().filter(|(_, is_signer)| *is_signer) {
-        account_metas.push(AccountMeta::new(*signer_pubkey, true));
+        if signer_pubkey != config_account_pubkey {
+            account_metas.push(AccountMeta::new(*signer_pubkey, true));
+        }
     }
-    let account_data = (
-        ConfigKeys {
-            require_config_signature,
-            keys,
-        },
-        data,
-    );
+    let account_data = (ConfigKeys { keys }, data);
     Instruction::new(id(), &account_data, account_metas)
 }
