@@ -44,8 +44,8 @@ steps:
             value: "testnet-beta-perf"
           - label: "testnet-demo"
             value: "testnet-demo"
-          - label: "testnet-tds"
-            value: "testnet-tds"
+          - label: "tds"
+            value: "tds"
       - select: "Operation"
         key: "testnet-operation"
         default: "sanity-or-restart"
@@ -155,7 +155,7 @@ testnet-demo)
   : "${GCE_NODE_COUNT:=150}"
   : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
   ;;
-testnet-tds)
+tds)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
   : "${GCE_NODE_COUNT:=3}"
@@ -294,7 +294,7 @@ sanity() {
       $ok
     )
     ;;
-  testnet-tds)
+  tds)
     (
       set -x
       NO_LEDGER_VERIFY=1 \
@@ -466,7 +466,7 @@ deploy() {
       fi
     )
     ;;
-  testnet-tds)
+  tds)
     (
       set -x
       # TODO: Should we spread the few nodes around multiple zones?
