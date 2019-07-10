@@ -2738,4 +2738,39 @@ mod tests {
             (1.0, 1.0)
         );
     }
+
+    #[test]
+    fn test_bank_get_program_accounts_squash() {
+        let (genesis_block, _mint_keypair) = create_genesis_block(500);
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let pubkey = Pubkey::new_rand();
+        let program_id = Pubkey::new(&[2; 32]);
+        let account = Account::new(1, 0, &program_id);
+        parent.store_account(&pubkey, &account);
+
+        assert_eq!(parent.get_program_accounts(&program_id), vec![(pubkey, account.clone())]);
+
+        let bank0 = Arc::new(new_from_parent(&parent));
+        let bank1 = Arc::new(new_from_parent(&bank0));
+        bank1.squash();
+        assert_eq!(bank0.get_program_accounts(&program_id), vec![(pubkey, account.clone())]);
+        assert_eq!(bank1.get_program_accounts(&program_id), vec![(pubkey, account.clone())]);
+
+        let bank2 = Arc::new(new_from_parent(&bank1));
+        let bank3 = Arc::new(new_from_parent(&bank2));
+        bank3.squash();
+        assert_eq!(bank0.get_program_accounts(&program_id), vec![(pubkey, account.clone())]);
+        assert_eq!(bank1.get_program_accounts(&program_id), vec![(pubkey, account.clone())]);
+        assert_eq!(bank2.get_program_accounts(&program_id), vec![]);
+        assert_eq!(bank3.get_program_accounts(&program_id), vec![]);
+
+        let bank4 = Arc::new(new_from_parent(&bank3));
+        bank4.squash();
+        assert_eq!(bank0.get_program_accounts(&program_id), vec![(pubkey, account.clone())]);
+        assert_eq!(bank1.get_program_accounts(&program_id), vec![(pubkey, account.clone())]);
+        assert_eq!(bank2.get_program_accounts(&program_id), vec![]);
+        assert_eq!(bank3.get_program_accounts(&program_id), vec![]);
+        assert_eq!(bank4.get_program_accounts(&program_id), vec![]);
+        }
 }
