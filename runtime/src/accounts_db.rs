@@ -379,6 +379,36 @@ impl AccountsDB {
         false
     }
 
+    pub fn scan_accounts<F, A>(&self, ancestors: &HashMap<Fork, usize>, scan_func: F) -> A
+    where
+        F: Fn(&mut A, Option<(&Pubkey, Account, Fork)>) -> (),
+        A: Default,
+    {
+        let mut collector = A::default();
+        let accounts_index = self.accounts_index.read().unwrap();
+        let storage = self.storage.read().unwrap();
+        accounts_index.scan_accounts(ancestors, |pubkey, (account_info, fork)| {
+            scan_func(
+                &mut collector,
+                storage
+                    .0
+                    .get(&fork)
+                    .and_then(|storage_map| storage_map.get(&account_info.id))
+                    .and_then(|store| {
+                        Some(
+                            store
+                                .accounts
+                                .get_account(account_info.offset)?
+                                .0
+                                .clone_account(),
+                        )
+                    })
+                    .map(|account| (pubkey, account, fork)),
+            )
+        });
+        collector
+    }
+
     /// Scan a specific fork through all the account storage in parallel with sequential read
     // PERF: Sequentially read each storage entry in parallel
     pub fn scan_account_storage<F, B>(&self, fork_id: Fork, scan_func: F) -> Vec<B>
@@ -776,6 +806,14 @@ mod tests {
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
+
+        let accounts: Vec<Account> =
+            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+                if let Some(data) = option {
+                    accounts.push(data.1);
+                }
+            });
+        assert_eq!(accounts, vec![account1]);
     }
 
     #[test]
@@ -1301,5 +1339,39 @@ mod tests {
         for t in thread_hdls {
             t.join().unwrap();
         }
+    }
+
+    #[test]
+    fn test_accountsdb_scan_accounts() {
+        solana_logger::setup();
+        let paths = get_tmp_accounts_path!();
+        let db = AccountsDB::new(&paths.paths);
+        let key = Pubkey::default();
+        let key0 = Pubkey::new_rand();
+        let account0 = Account::new(1, 0, &key);
+
+        db.store(0, &hashmap!(&key0 => &account0));
+
+        let key1 = Pubkey::new_rand();
+        let account1 = Account::new(2, 0, &key);
+        db.store(1, &hashmap!(&key1 => &account1));
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let accounts: Vec<Account> =
+            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+                if let Some(data) = option {
+                    accounts.push(data.1);
+                }
+            });
+        assert_eq!(accounts, vec![account0]);
+
+        let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
+        let accounts: Vec<Account> =
+            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+                if let Some(data) = option {
+                    accounts.push(data.1);
+                }
+            });
+        assert_eq!(accounts.len(), 2);
     }
 }
