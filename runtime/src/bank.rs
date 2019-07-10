@@ -1206,6 +1206,13 @@ impl Bank {
             .map(|(account, _)| account)
     }
 
+    pub fn get_program_accounts(
+        &self,
+        program_id: &Pubkey
+    ) -> Vec<(Pubkey, Account)> {
+        self.rc.accounts.load_by_program_slow(&self.ancestors, program_id)
+    }
+
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,

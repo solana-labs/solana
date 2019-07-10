@@ -329,6 +329,33 @@ impl Accounts {
         versions.into_iter().map(|s| (s.0, s.2)).collect()
     }
 
+    pub fn load_by_program_slow(&self, ancestors: &HashMap<Fork, usize>, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+        let mut accumulator: Vec<Vec<(Pubkey, u64, Account)>> = Vec::new();
+        for (fork, _) in ancestors.iter() {
+            let mut single_accumulator: Vec<Vec<(Pubkey, u64, Account)>> = self.accounts_db.scan_account_storage(
+                *fork,
+                |stored_account: &StoredAccount,
+                 _id: AppendVecId,
+                 accum: &mut Vec<(Pubkey, u64, Account)>| {
+                    if stored_account.balance.owner == *program_id {
+                        let val = (
+                            stored_account.meta.pubkey,
+                            stored_account.meta.write_version,
+                            stored_account.clone_account(),
+                        );
+                        accum.push(val)
+                    }
+                },
+            );
+            accumulator.append(&mut single_accumulator);
+        }
+        let mut versions: Vec<(Pubkey, u64, Account)> =
+            accumulator.into_iter().flat_map(|x| x).collect();
+        versions.sort_by_key(|s| (s.0, (s.1 as i64).neg()));
+        versions.dedup_by_key(|s| s.0);
+        versions.into_iter().map(|s| (s.0, s.2)).collect()
+    }
+
     /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
         let mut accounts = HashMap::new();
