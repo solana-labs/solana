@@ -13,7 +13,6 @@ use solana::packet::index_blobs;
 use solana::rpc_subscriptions::RpcSubscriptions;
 use solana::service::Service;
 use solana::storage_stage::StorageState;
-use solana::storage_stage::SLOTS_PER_TURN_TEST;
 use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
 use solana::validator;
@@ -116,7 +115,6 @@ fn test_replay() {
     let voting_keypair = Keypair::new();
     let storage_keypair = Arc::new(Keypair::new());
     let blocktree = Arc::new(blocktree);
-    let storage_state = StorageState::new(&Hash::default(), SLOTS_PER_TURN_TEST);
     {
         let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(&working_bank, &blocktree);
@@ -134,7 +132,7 @@ fn test_replay() {
                 }
             },
             blocktree,
-            &storage_state,
+            &StorageState::default(),
             None,
             ledger_signal_receiver,
             &Arc::new(RpcSubscriptions::default()),

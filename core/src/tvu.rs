@@ -181,6 +181,7 @@ pub mod tests {
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::storage_stage::SLOTS_PER_TURN_TEST;
     use solana_runtime::bank::Bank;
+    use solana_sdk::timing::DEFAULT_SLOTS_PER_SEGMENT;
     use std::sync::atomic::Ordering;
 
     #[test]
@@ -211,7 +212,6 @@ pub mod tests {
         let voting_keypair = Keypair::new();
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let storage_state = StorageState::new(&Hash::default(), SLOTS_PER_TURN_TEST);
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(&Arc::new(voting_keypair)),
@@ -226,7 +226,7 @@ pub mod tests {
                 }
             },
             blocktree,
-            &storage_state,
+            &StorageState::default(),
             None,
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),

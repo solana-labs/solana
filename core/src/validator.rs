@@ -23,7 +23,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::{timestamp, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_SLOTS_PER_TURN};
+use solana_sdk::timing::{timestamp, DEFAULT_SLOTS_PER_TURN};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;

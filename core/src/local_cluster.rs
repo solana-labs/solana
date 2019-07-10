@@ -16,8 +16,8 @@ use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
-use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
+use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT};
 use solana_sdk::transaction::Transaction;
 use solana_stake_api::stake_instruction;
 use solana_storage_api::storage_contract;
@@ -80,6 +80,7 @@ pub struct ClusterConfig {
     pub cluster_lamports: u64,
     pub ticks_per_slot: u64,
     pub slots_per_epoch: u64,
+    pub slots_per_segment: u64,
     pub stakers_slot_offset: u64,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub poh_config: PohConfig,
@@ -95,6 +96,7 @@ impl Default for ClusterConfig {
             cluster_lamports: 0,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+            slots_per_segment: DEFAULT_SLOTS_PER_SEGMENT,
             stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             native_instruction_processors: vec![],
             poh_config: PohConfig::default(),
@@ -147,6 +149,7 @@ impl LocalCluster {
         );
         genesis_block.ticks_per_slot = config.ticks_per_slot;
         genesis_block.slots_per_epoch = config.slots_per_epoch;
+        genesis_block.slots_per_segment = config.slots_per_segment;
         genesis_block.stakers_slot_offset = config.stakers_slot_offset;
         genesis_block.poh_config = config.poh_config.clone();
         genesis_block

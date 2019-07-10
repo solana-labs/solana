@@ -431,7 +431,7 @@ impl Replicator {
                 }
             };
         let signature = storage_keypair.sign(segment_blockhash.as_ref());
-        let slot = get_slot_from_blockhash(&signature, segment_slot, slots_per_segment);
+        let slot = get_slot_from_signature(&signature, segment_slot, slots_per_segment);
         info!("replicating slot: {}", slot);
         slot_sender.send(slot)?;
         meta.slot = slot;
@@ -749,7 +749,7 @@ impl Replicator {
                 })?;
                 if turn_blockhash != *previous_blockhash {
                     info!("turn slot: {}", turn_slot);
-                    if get_segment_from_slot(storage_slot, slots_per_segment) != 0 {
+                    if get_segment_from_slot(turn_slot, slots_per_segment) != 0 {
                         return Ok((turn_blockhash, turn_slot));
                     }
                 }
