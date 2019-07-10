@@ -324,7 +324,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         1,
                         keys.clone(),
                     ),
-                    config_instruction::store(&info_keypair.pubkey(), keys, &validator_info),
+                    config_instruction::store(&info_keypair.pubkey(), true, keys, &validator_info),
                 ];
                 let signers = [&validator_keypair, &info_keypair];
                 let message = Message::new(instructions);
@@ -337,6 +337,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 );
                 let instructions = vec![config_instruction::store(
                     &info_keypair.pubkey(),
+                    true,
                     keys,
                     &validator_info,
                 )];
@@ -365,8 +366,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             if matches.is_present("all") {
                 let all_validator_info =
                     rpc_client.get_program_accounts(&solana_config_api::id())?;
-                println!("{:?}", all_validator_info);
-                for (info_pubkey, account) in all_validator_info.iter() {
+                for (info_pubkey, account) in all_validator_info.iter().filter(|(_, account)| {
+                    let key_list: ConfigKeys =
+                        deserialize(&account.data).map_err(|_| false).unwrap();
+                    key_list.keys.contains(&(id(), false))
+                }) {
                     println!("Validator info from {:?}", info_pubkey);
                     let (validator_pubkey, validator_info) = parse_validator_info(&account.data)?;
                     println!("  Validator pubkey: {:?}", validator_pubkey);
