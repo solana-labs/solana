@@ -745,7 +745,7 @@ impl Bank {
     /// Bank::process_transactions method, and commits credit-only credits.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
-        self.process_transactions(&txs, None)[0].clone()?;
+        self.process_transactions(&txs)[0].clone()?;
         self.commit_credits();
         tx.signatures
             .get(0)
@@ -1118,9 +1118,9 @@ impl Bank {
     }
 
     #[must_use]
-    pub fn process_transactions(&self, txs: &[Transaction], txs_iteration_order: Option<&[usize]>) -> Vec<Result<()>> {
-        let lock_results = self.lock_accounts(txs, txs_iteration_order);
-        self.load_execute_and_commit_transactions(txs, txs_iteration_order, &lock_results, MAX_RECENT_BLOCKHASHES)
+    pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+        let lock_results = self.lock_accounts(txs, None);
+        self.load_execute_and_commit_transactions(txs, None, &lock_results, MAX_RECENT_BLOCKHASHES)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1589,7 +1589,7 @@ mod tests {
 
         let t1 = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_block.hash());
         let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_block.hash());
-        let res = bank.process_transactions(&vec![t1.clone(), t2.clone()], None);
+        let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
         bank.commit_credits();
 
         assert_eq!(res.len(), 2);
@@ -1952,7 +1952,7 @@ mod tests {
             genesis_block.hash(),
         );
         let txs = vec![tx0, tx1];
-        let results = bank.process_transactions(&txs, None);
+        let results = bank.process_transactions(&txs);
         assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.
@@ -1980,7 +1980,7 @@ mod tests {
         let tx2 =
             system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
-        let results = bank.process_transactions(&txs, None);
+        let results = bank.process_transactions(&txs);
         bank.commit_credits();
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
@@ -1999,7 +1999,7 @@ mod tests {
         let tx1 =
             system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
-        let results = bank.process_transactions(&txs, None);
+        let results = bank.process_transactions(&txs);
         bank.commit_credits();
         // However, an account may not be locked as credit-only and credit-debit at the same time.
         assert_eq!(results[0], Ok(()));

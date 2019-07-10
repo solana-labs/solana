@@ -1120,7 +1120,7 @@ mod tests {
 
                 for entries in &ventries {
                     for entry in entries {
-                        bank.process_transactions(&entry.transactions, None)
+                        bank.process_transactions(&entry.transactions)
                             .iter()
                             .for_each(|x| assert_eq!(*x, Ok(())));
                     }
@@ -1230,7 +1230,7 @@ mod tests {
 
             let bank = Bank::new(&genesis_block);
             for entry in &entries {
-                bank.process_transactions(&entry.transactions, None)
+                bank.process_transactions(&entry.transactions)
                     .iter()
                     .for_each(|x| assert_eq!(*x, Ok(())));
             }
