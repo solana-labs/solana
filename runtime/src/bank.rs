@@ -2143,7 +2143,7 @@ mod tests {
         bank.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
         let tx = system_transaction::transfer(&key1, &key1.pubkey(), 1, genesis_block.hash());
-        let _res = bank.process_transaction(&tx, None);
+        let _res = bank.process_transaction(&tx);
 
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
 
