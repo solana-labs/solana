@@ -6,7 +6,6 @@ use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_runtime::bank::Bank;
-use solana_runtime::tx_utils::generate_random_order;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing::duration_as_ms;
@@ -15,6 +14,9 @@ use solana_sdk::transaction::Result;
 use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use rand::thread_rng;
+use rand::seq::SliceRandom;
 
 pub const NUM_THREADS: u32 = 10;
 use std::cell::RefCell;
@@ -88,8 +90,10 @@ pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
         }
         // else loop on processing the entry
         loop {
+            let mut txs_execution_order : Vec<usize> =  (0..entry.transactions.len()).collect();
+            txs_execution_order.shuffle(&mut thread_rng());
+
             // try to lock the accounts
-            let txs_execution_order = generate_random_order(entry.transactions.len());
             let lock_results = bank.lock_accounts(&entry.transactions, Some(&txs_execution_order));
 
             let first_lock_err = first_err(lock_results.locked_accounts_results());

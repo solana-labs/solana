@@ -1,6 +1,4 @@
-use hashbrown::HashMap;
 use std::ops::Index;
-use rand::distributions::{Uniform, Distribution};
 
 /// OrderedIterator allows iterating with specific order specified
 pub struct OrderedIterator<'a, T: 'a> {
@@ -38,39 +36,4 @@ impl<'a, T> Iterator for OrderedIterator<'a, T> {
             Some(self.vec.index(index))
         }
     }
-}
-
-/// generate_random_order generates random ordering
-/// for a slice with size `vec_size`
-pub fn generate_random_order(vec_size: usize) -> Vec<usize> {
-    if vec_size <= 0 {
-        return Vec::new();
-    }
-
-    let mut rng = rand::thread_rng();
-    let uniform_distribution = Uniform::new(0usize, vec_size);
-    
-    let mut v : Vec<usize> = Vec::new();
-    let mut current_element = 0;
-    let mut hashmap : HashMap<usize, bool> = HashMap::with_capacity(vec_size);
-
-    v.resize(vec_size, 0);
-    
-    loop {
-        if current_element == vec_size {
-            break
-        }
-
-        let random_element = uniform_distribution.sample(&mut rng);
-
-        if let Some(_) = hashmap.get(&random_element) {
-            continue;
-        }
-
-        v[current_element] = random_element;
-        hashmap.insert(v[current_element], true);
-        current_element += 1;
-    }
-
-    v
 }
