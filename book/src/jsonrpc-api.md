@@ -30,6 +30,8 @@ Methods
 * [getSignatureStatus](#getsignaturestatus)
 * [getSlotLeader](#getslotleader)
 * [getSlotsPerSegment](#getslotspersegment)
+* [getStorageTurn](#getstorageturn)
+* [getStorageTurnRate](#getstorageturnrate)
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [getTotalSupply](#gettotalsupply)
@@ -278,9 +280,49 @@ None
 ```bash
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlotsPerSegment"}' http://localhost:8899
-
 // Result
 {"jsonrpc":"2.0","result":"1024","id":1}
+```
+
+----
+
+### getStorageTurn
+Returns the current storage turn's blockhash and slot
+
+##### Parameters:
+None
+
+##### Results:
+An array consisting of
+* `string` - a Hash as base-58 encoded string indicating the blockhash of the turn slot
+* `u64` - the current storage turn slot
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurn"}' http://localhost:8899
+ // Result
+{"jsonrpc":"2.0","result":["GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC", "2048"],"id":1}
+```
+
+----
+
+### getStorageTurnRate
+Returns the current storage turn rate in terms of slots per turn
+
+##### Parameters:
+None
+
+##### Results:
+* `u64` - Number of slots in storage turn
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurnRate"}' http://localhost:8899
+ // Result
+{"jsonrpc":"2.0","result":"1024","id":1}
+
 ```
 
 ----
