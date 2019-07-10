@@ -597,7 +597,7 @@ impl ReplayStage {
             );
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
-        blocktree_processor::process_entries(bank, entries)?;
+        blocktree_processor::process_entries(bank, entries, true)?;
 
         Ok(())
     }

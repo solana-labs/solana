@@ -716,6 +716,7 @@ mod tests {
                 blocktree_processor::process_entries(
                     &bank,
                     &entry::create_ticks(64, bank.last_blockhash()),
+                    true
                 )
                 .expect("failed process entries");
                 last_bank = Arc::new(bank);
@@ -830,6 +831,7 @@ mod tests {
                 DEFAULT_TICKS_PER_SLOT * SLOTS_PER_SEGMENT + 1,
                 bank.last_blockhash(),
             ),
+            true
         )
         .unwrap();
         let message = Message::new_with_payer(vec![mining_proof_ix], Some(&mint_keypair.pubkey()));

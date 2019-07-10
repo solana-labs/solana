@@ -77,7 +77,7 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults, V
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
+pub fn process_entries(bank: &Bank, entries: &[Entry], randomise_tx_execution_order: bool) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
     for entry in entries {
@@ -91,7 +91,9 @@ pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
         // else loop on processing the entry
         loop {
             let mut txs_execution_order : Vec<usize> =  (0..entry.transactions.len()).collect();
-            txs_execution_order.shuffle(&mut thread_rng());
+            if randomise_tx_execution_order {
+                txs_execution_order.shuffle(&mut thread_rng());
+            }
 
             // try to lock the accounts
             let lock_results = bank.lock_accounts(&entry.transactions, Some(&txs_execution_order));
@@ -220,7 +222,7 @@ pub fn process_blocktree(
                 return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
 
-            process_entries(&bank, &entries).map_err(|err| {
+            process_entries(&bank, &entries, true).map_err(|err| {
                 warn!("Failed to process entries for slot {}: {:?}", slot, err);
                 BlocktreeProcessorError::LedgerVerificationFailed
             })?;
@@ -674,7 +676,7 @@ pub mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries(&bank, &slot_entries).unwrap();
+        process_entries(&bank, &slot_entries, true).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -784,7 +786,7 @@ pub mod tests {
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_block.hash(), 1, vec![]);
-        assert_eq!(process_entries(&bank, &[tick.clone()]), Ok(()));
+        assert_eq!(process_entries(&bank, &[tick.clone()], true), Ok(()));
         assert_eq!(bank.tick_height(), 1);
     }
 
@@ -816,7 +818,7 @@ pub mod tests {
             bank.last_blockhash(),
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-        assert_eq!(process_entries(&bank, &[entry_1, entry_2]), Ok(()));
+        assert_eq!(process_entries(&bank, &[entry_1, entry_2], true), Ok(()));
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.last_blockhash(), blockhash);
@@ -870,7 +872,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1]),
+            process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1], false),
             Ok(())
         );
 
@@ -938,7 +940,8 @@ pub mod tests {
 
         assert!(process_entries(
             &bank,
-            &[entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()]
+            &[entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
+            false
         )
         .is_err());
 
@@ -1047,7 +1050,8 @@ pub mod tests {
                 entry_1_to_mint.clone(),
                 entry_2_to_3_and_1_to_mint.clone(),
                 entry_conflict_itself.clone()
-            ]
+            ],
+            false
         )
         .is_err());
 
@@ -1102,7 +1106,7 @@ pub mod tests {
             bank.last_blockhash(),
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-        assert_eq!(process_entries(&bank, &[entry_1, entry_2]), Ok(()));
+        assert_eq!(process_entries(&bank, &[entry_1, entry_2], true), Ok(()));
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_blockhash(), blockhash);
@@ -1155,7 +1159,7 @@ pub mod tests {
         );
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]),
+            process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()], true),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -1170,7 +1174,7 @@ pub mod tests {
         );
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, &[entry_3]),
+            process_entries(&bank, &[entry_3], true),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -1251,7 +1255,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries(&bank, &[entry_1_to_mint]),
+            process_entries(&bank, &[entry_1_to_mint], false),
             Err(TransactionError::AccountInUse)
         );
 
@@ -1299,7 +1303,7 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries(&bank, &entries).expect("paying failed");
+            process_entries(&bank, &entries, true).expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .map(|i| {
@@ -1317,7 +1321,7 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries(&bank, &entries).expect("refunding failed");
+            process_entries(&bank, &entries, true).expect("refunding failed");
 
             // advance to next block
             process_entries(
@@ -1325,6 +1329,7 @@ pub mod tests {
                 &(0..bank.ticks_per_slot())
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
                     .collect::<Vec<_>>(),
+                true
             )
             .expect("process ticks failed");
 
