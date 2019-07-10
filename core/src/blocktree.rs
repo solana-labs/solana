@@ -229,6 +229,7 @@ impl Blocktree {
         Ok(slot_iterator.take_while(move |((blob_slot, _), _)| *blob_slot == slot))
     }
 
+    /// Use this function to write data blobs to blocktree
     pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<()>
     where
         I: IntoIterator,
@@ -356,15 +357,6 @@ impl Blocktree {
             &mut prev_inserted_coding,
             &mut write_batch,
         )?;
-
-        //insert_data_blob_batch(
-        //new_blobs.iter().map(Borrow::borrow),
-        //&db,
-        //&mut slot_meta_working_set,
-        //&mut index_working_set,
-        //&mut prev_inserted_blob_datas,
-        //&mut write_batch,
-        //)?;
 
         if let Some(recovered_data) = recovered_data_opt {
             insert_data_blob_batch(
@@ -1714,8 +1706,6 @@ fn recover(
         "[recover] Attempting recovery: slot = {}, start_idx = {}, size = {}, erasure_meta = {:?}",
         slot, start_idx, size, erasure_meta
     );
-
-    assert_ne!(size, 0);
 
     let (data_end_idx, coding_end_idx) = erasure_meta.end_indexes();
 
