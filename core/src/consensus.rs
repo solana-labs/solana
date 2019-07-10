@@ -118,6 +118,10 @@ impl Tower {
             }
             let vote_state = VoteState::from(&account);
             if vote_state.is_none() {
+                info!(
+                    "vote state for bank: {}, validator: {} is none",
+                    bank_slot, key
+                );
                 datapoint_warn!(
                     "tower_warn",
                     (
@@ -129,6 +133,10 @@ impl Tower {
                 continue;
             }
             let mut vote_state = vote_state.unwrap();
+            info!(
+                "Vote states for slot: {}, account: {}, vote_states {:#?}",
+                bank_slot, key, vote_state.votes
+            );
 
             if key == self.epoch_stakes.delegate_pubkey
                 || vote_state.node_pubkey == self.epoch_stakes.delegate_pubkey
@@ -152,6 +160,10 @@ impl Tower {
             let start_root = vote_state.root_slot;
 
             vote_state.process_slot_vote_unchecked(bank_slot);
+            info!(
+                "After simultated vote, vote states for slot: {}, account: {}, vote_states {:#?}",
+                bank_slot, key, vote_state.votes
+            );
 
             for vote in &vote_state.votes {
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);

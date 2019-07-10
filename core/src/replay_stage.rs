@@ -340,7 +340,7 @@ impl ReplayStage {
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
-        trace!("handle votable bank {}", bank.slot());
+        info!("voting on bank {}", bank.slot());
         if let Some(new_root) = tower.record_vote(bank.slot(), bank.hash()) {
             // get the root bank before squash
             let root_bank = bank_forks
@@ -361,7 +361,7 @@ impl ReplayStage {
             leader_schedule_cache.set_root(rooted_banks.last().unwrap());
             bank_forks.write().unwrap().set_root(new_root);
             Self::handle_new_root(&bank_forks, progress);
-            trace!("new root {}", new_root);
+            info!("new root {}", new_root);
             if let Err(e) = root_bank_sender.send(rooted_banks) {
                 trace!("root_bank_sender failed: {:?}", e);
                 Err(e)?;
@@ -472,6 +472,9 @@ impl ReplayStage {
             .filter(|b| {
                 let is_votable = b.is_votable();
                 trace!("bank is votable: {} {}", b.slot(), is_votable);
+                if !is_votable {
+                    info!("bank is not votable: {}", b.slot());
+                }
                 is_votable
             })
             .filter(|b| {
@@ -503,6 +506,9 @@ impl ReplayStage {
                 let vote_threshold = tower.check_vote_stake_threshold(b.slot(), &stake_lockouts);
                 Self::confirm_forks(tower, stake_lockouts, progress, bank_forks);
                 debug!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
+                if !vote_threshold {
+                    info!("bank failed threshold check: {}", b.slot());
+                }
                 vote_threshold
             })
             .map(|(b, stake_lockouts)| (tower.calculate_weight(&stake_lockouts), b.clone()))
