@@ -271,6 +271,7 @@ mod test {
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::{make_consecutive_blobs, make_tiny_test_entries, Entry, EntrySlice};
+    use crate::erasure::ErasureConfig;
     use crate::genesis_utils::create_genesis_block_with_leader;
     use crate::packet::index_blobs;
     use crate::service::Service;
@@ -367,8 +368,9 @@ mod test {
         let t_receiver = blob_receiver(Arc::new(leader_node.sockets.gossip), &exit, s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let blocktree_path = get_tmp_ledger_path!();
-        let (blocktree, _, completed_slots_receiver) = Blocktree::open_with_signal(&blocktree_path)
-            .expect("Expected to be able to open database ledger");
+        let (blocktree, _, completed_slots_receiver) =
+            Blocktree::open_with_signal(&blocktree_path, &ErasureConfig::default())
+                .expect("Expected to be able to open database ledger");
         let blocktree = Arc::new(blocktree);
 
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).genesis_block);
@@ -453,8 +455,9 @@ mod test {
         let t_receiver = blob_receiver(Arc::new(leader_node.sockets.gossip), &exit, s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let blocktree_path = get_tmp_ledger_path!();
-        let (blocktree, _, completed_slots_receiver) = Blocktree::open_with_signal(&blocktree_path)
-            .expect("Expected to be able to open database ledger");
+        let (blocktree, _, completed_slots_receiver) =
+            Blocktree::open_with_signal(&blocktree_path, &ErasureConfig::default())
+                .expect("Expected to be able to open database ledger");
 
         let blocktree = Arc::new(blocktree);
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).genesis_block);

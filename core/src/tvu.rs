@@ -178,6 +178,7 @@ pub mod tests {
     use crate::banking_stage::create_test_recorder;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
+    use crate::erasure::ErasureConfig;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
@@ -201,7 +202,7 @@ pub mod tests {
 
         let blocktree_path = get_tmp_ledger_path!();
         let (blocktree, l_receiver, completed_slots_receiver) =
-            Blocktree::open_with_signal(&blocktree_path)
+            Blocktree::open_with_signal(&blocktree_path, &ErasureConfig::default())
                 .expect("Expected to successfully open ledger");
         let blocktree = Arc::new(blocktree);
         let bank = bank_forks.working_bank();

@@ -55,6 +55,38 @@ pub const NUM_CODING: usize = 8;
 /// Total number of blobs in an erasure set; includes data and coding blobs
 pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ErasureConfig {
+    num_data: usize,
+    num_coding: usize,
+}
+
+impl Default for ErasureConfig {
+    fn default() -> ErasureConfig {
+        ErasureConfig {
+            num_data: NUM_DATA,
+            num_coding: NUM_CODING,
+        }
+    }
+}
+
+impl ErasureConfig {
+    pub fn new(num_data: usize, num_coding: usize) -> ErasureConfig {
+        ErasureConfig {
+            num_data,
+            num_coding,
+        }
+    }
+
+    pub fn num_data(self) -> usize {
+        self.num_data
+    }
+
+    pub fn num_coding(self) -> usize {
+        self.num_coding
+    }
+}
+
 type Result<T> = std::result::Result<T, reed_solomon_erasure::Error>;
 
 /// Represents an erasure "session" with a particular configuration and number of data and coding

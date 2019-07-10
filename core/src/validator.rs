@@ -6,6 +6,7 @@ use crate::blocktree_processor::{self, BankForksInfo};
 use crate::broadcast_stage::BroadcastStageType;
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
+use crate::erasure::ErasureConfig;
 use crate::gossip_service::{discover_cluster, GossipService};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
@@ -40,6 +41,7 @@ pub struct ValidatorConfig {
     pub rpc_config: JsonRpcConfig,
     pub snapshot_path: Option<String>,
     pub broadcast_stage_type: BroadcastStageType,
+    pub erasure_config: ErasureConfig,
 }
 
 impl Default for ValidatorConfig {
@@ -53,6 +55,7 @@ impl Default for ValidatorConfig {
             rpc_config: JsonRpcConfig::default(),
             snapshot_path: None,
             broadcast_stage_type: BroadcastStageType::Standard,
+            erasure_config: ErasureConfig::default(),
         }
     }
 }
@@ -99,6 +102,7 @@ impl Validator {
             ledger_path,
             config.account_paths.clone(),
             config.snapshot_path.clone(),
+            &config.erasure_config,
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -328,6 +332,7 @@ pub fn new_banks_from_blocktree(
     blocktree_path: &str,
     account_paths: Option<String>,
     snapshot_path: Option<String>,
+    erasure_config: &ErasureConfig,
 ) -> (
     BankForks,
     Vec<BankForksInfo>,
@@ -341,7 +346,7 @@ pub fn new_banks_from_blocktree(
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
     let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
-        Blocktree::open_with_signal(blocktree_path)
+        Blocktree::open_with_signal(blocktree_path, erasure_config)
             .expect("Expected to successfully open database ledger");
 
     let (bank_forks, bank_forks_info, leader_schedule_cache) =
