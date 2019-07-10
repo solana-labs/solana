@@ -34,4 +34,6 @@ loadConfigFile
 PATH="$HOME"/.cargo/bin:"$PATH"
 
 set -x
-scripts/solana-install-deploy.sh localhost "$releaseChannel" "$updatePlatform"
+scripts/solana-install-deploy.sh \
+  --keypair config-local/mint-keypair.json \
+  localhost "$releaseChannel" "$updatePlatform"
