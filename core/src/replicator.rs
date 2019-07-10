@@ -353,6 +353,7 @@ impl Replicator {
                 &cluster_info,
                 meta.slots_per_segment,
                 &meta.blockhash,
+                exit,
             ) {
                 Ok(blockhash_and_slot) => blockhash_and_slot,
                 Err(e) => {
@@ -421,15 +422,19 @@ impl Replicator {
                 return Err(e);
             }
         };
-        let (segment_blockhash, segment_slot) =
-            match Self::poll_for_segment(&cluster_info, slots_per_segment, &Hash::default()) {
-                Ok(blockhash_and_slot) => blockhash_and_slot,
-                Err(e) => {
-                    //shutdown services before exiting
-                    exit.store(true, Ordering::Relaxed);
-                    return Err(e);
-                }
-            };
+        let (segment_blockhash, segment_slot) = match Self::poll_for_segment(
+            &cluster_info,
+            slots_per_segment,
+            &Hash::default(),
+            exit,
+        ) {
+            Ok(blockhash_and_slot) => blockhash_and_slot,
+            Err(e) => {
+                //shutdown services before exiting
+                exit.store(true, Ordering::Relaxed);
+                return Err(e);
+            }
+        };
         let signature = storage_keypair.sign(segment_blockhash.as_ref());
         let slot = get_slot_from_signature(&signature, segment_slot, slots_per_segment);
         info!("replicating slot: {}", slot);
@@ -694,12 +699,14 @@ impl Replicator {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         slots_per_segment: u64,
         previous_blockhash: &Hash,
+        exit: &Arc<AtomicBool>,
     ) -> result::Result<(Hash, u64), Error> {
         loop {
             let (blockhash, turn_slot) = Self::poll_for_blockhash_and_slot(
                 cluster_info,
                 slots_per_segment,
                 previous_blockhash,
+                exit,
             )?;
             if get_segment_from_slot(turn_slot, slots_per_segment) != 0 {
                 return Ok((blockhash, turn_slot));
@@ -712,6 +719,7 @@ impl Replicator {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         slots_per_segment: u64,
         previous_blockhash: &Hash,
+        exit: &Arc<AtomicBool>,
     ) -> result::Result<(Hash, u64), Error> {
         info!("waiting for the next turn...");
         loop {
@@ -753,6 +761,12 @@ impl Replicator {
                         return Ok((turn_blockhash, turn_slot));
                     }
                 }
+            }
+            if exit.load(Ordering::Relaxed) {
+                return Err(Error::IO(io::Error::new(
+                    ErrorKind::Other,
+                    "exit signalled...",
+                )));
             }
             sleep(Duration::from_secs(5));
         }
@@ -880,7 +894,7 @@ impl Replicator {
             }
             sleep(Duration::from_millis(500));
         }
-        panic!("Couldn't slot from replicator!");
+        panic!("Couldn't get segment slot from replicator!");
     }
 }
 
