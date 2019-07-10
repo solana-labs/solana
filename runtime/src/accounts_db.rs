@@ -446,7 +446,7 @@ impl AccountsDB {
         if let Some(fork_stores) = stores.0.get(&fork_id) {
             if !fork_stores.is_empty() {
                 // pick an available store at random by iterating from a random point
-                let to_skip = thread_rng().gen_range(0, stores.0.len());
+                let to_skip = thread_rng().gen_range(0, fork_stores.len());
 
                 for (i, store) in fork_stores.values().cycle().skip(to_skip).enumerate() {
                     if store.try_available() {
