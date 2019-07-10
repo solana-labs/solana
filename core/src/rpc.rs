@@ -109,6 +109,10 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank().slot())
     }
 
+    fn get_slot_leader(&self) -> Result<String> {
+        Ok(self.bank().collector_id().to_string())
+    }
+
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank().transaction_count() as u64)
     }
@@ -512,12 +516,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_slot_leader(&self, meta: Self::Metadata) -> Result<String> {
-        let cluster_info = meta.cluster_info.read().unwrap();
-        let leader_data_option = cluster_info.leader_data();
-        Ok(leader_data_option
-            .and_then(|leader_data| Some(leader_data.id))
-            .unwrap_or_default()
-            .to_string())
+        meta.request_processor.read().unwrap().get_slot_leader()
     }
 
     fn get_epoch_vote_accounts(&self, meta: Self::Metadata) -> Result<Vec<RpcVoteAccountInfo>> {
@@ -577,6 +576,7 @@ mod tests {
     ) -> (MetaIoHandler<Meta>, Meta, Arc<Bank>, Hash, Keypair, Pubkey) {
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
+        let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
 
         let blockhash = bank.confirmed_last_blockhash().0;
@@ -595,9 +595,14 @@ mod tests {
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::default(),
         )));
-        let leader = ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
-        cluster_info.write().unwrap().insert_info(leader.clone());
+        cluster_info
+            .write()
+            .unwrap()
+            .insert_info(ContactInfo::new_with_pubkey_socketaddr(
+                &leader_pubkey,
+                &socketaddr!("127.0.0.1:1234"),
+            ));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -606,7 +611,7 @@ mod tests {
             request_processor,
             cluster_info,
         };
-        (io, meta, bank, blockhash, alice, leader.id)
+        (io, meta, bank, blockhash, alice, leader_pubkey)
     }
 
     #[test]
@@ -674,13 +679,12 @@ mod tests {
     #[test]
     fn test_rpc_get_slot_leader() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
+        let (io, meta, _bank, _blockhash, _alice, leader_pubkey) =
             start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getSlotLeader"}}"#);
         let res = io.handle_request_sync(&req, meta);
-        let expected =
-            format!(r#"{{"jsonrpc":"2.0","result":"11111111111111111111111111111111","id":1}}"#);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, leader_pubkey);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))

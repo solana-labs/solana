@@ -163,7 +163,6 @@ impl ReplayStage {
                         &my_pubkey,
                         &bank_forks,
                         &poh_recorder,
-                        &cluster_info,
                         &leader_schedule_cache,
                     );
 
@@ -189,10 +188,9 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
-        let (reached_leader_tick, grace_ticks, poh_slot, parent_slot) = {
+        let (grace_ticks, poh_slot, parent_slot) = {
             let poh_recorder = poh_recorder.lock().unwrap();
 
             // we're done
@@ -201,19 +199,26 @@ impl ReplayStage {
                 return;
             }
 
-            poh_recorder.reached_leader_tick()
+            let (reached_leader_tick, grace_ticks, poh_slot, parent_slot) =
+                poh_recorder.reached_leader_tick();
+
+            if !reached_leader_tick {
+                trace!("{} poh_recorder hasn't reached_leader_tick", my_pubkey);
+                return;
+            }
+
+            (grace_ticks, poh_slot, parent_slot)
         };
 
         trace!(
-            "{} reached_leader_tick: {} poh_slot: {} parent_slot: {}",
+            "{} reached_leader_tick, poh_slot: {} parent_slot: {}",
             my_pubkey,
-            reached_leader_tick,
             poh_slot,
             parent_slot,
         );
 
         if bank_forks.read().unwrap().get(poh_slot).is_some() {
-            trace!("{} already have bank in forks at {}", my_pubkey, poh_slot);
+            warn!("{} already have bank in forks at {}", my_pubkey, poh_slot);
             return;
         }
 
@@ -242,33 +247,30 @@ impl ReplayStage {
                 next_leader,
                 poh_slot
             );
-            // TODO: remove me?
-            cluster_info.write().unwrap().set_leader(&next_leader);
 
-            if next_leader == *my_pubkey && reached_leader_tick {
-                trace!("{} starting tpu for slot {}", my_pubkey, poh_slot);
-                datapoint_warn!(
-                    "replay_stage-new_leader",
-                    ("count", poh_slot, i64),
-                    ("grace", grace_ticks, i64)
-                );
-
-                let tpu_bank = Bank::new_from_parent(&parent, my_pubkey, poh_slot);
-                bank_forks.write().unwrap().insert(tpu_bank);
-                if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
-                    assert_eq!(
-                        bank_forks.read().unwrap().working_bank().slot(),
-                        tpu_bank.slot()
-                    );
-                    debug!(
-                        "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
-                        my_pubkey,
-                        tpu_bank.slot(),
-                        next_leader
-                    );
-                    poh_recorder.lock().unwrap().set_bank(&tpu_bank);
-                }
+            // I guess I missed my slot
+            if next_leader != *my_pubkey {
+                return;
             }
+
+            datapoint_warn!(
+                "replay_stage-new_leader",
+                ("count", poh_slot, i64),
+                ("grace", grace_ticks, i64)
+            );
+
+            let tpu_bank = bank_forks
+                .write()
+                .unwrap()
+                .insert(Bank::new_from_parent(&parent, my_pubkey, poh_slot));
+
+            info!(
+                "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
+                my_pubkey,
+                tpu_bank.slot(),
+                next_leader
+            );
+            poh_recorder.lock().unwrap().set_bank(&tpu_bank);
         } else {
             error!("{} No next leader found", my_pubkey);
         }

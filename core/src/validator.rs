@@ -256,7 +256,6 @@ impl Validator {
         }
 
         let tpu = Tpu::new(
-            &id,
             &cluster_info,
             &poh_recorder,
             entry_receiver,

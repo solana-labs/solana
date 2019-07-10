@@ -78,9 +78,6 @@ pub struct ClusterInfo {
     pub gossip: CrdsGossip,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
     pub(crate) keypair: Arc<Keypair>,
-    // TODO: remove gossip_leader_pubkey once all usage of `set_leader()` and `leader_data()` is
-    // purged
-    gossip_leader_pubkey: Pubkey,
     /// The network entrypoint
     entrypoint: Option<ContactInfo>,
 }
@@ -181,7 +178,6 @@ impl ClusterInfo {
         let mut me = Self {
             gossip: CrdsGossip::default(),
             keypair,
-            gossip_leader_pubkey: Pubkey::default(),
             entrypoint: None,
         };
         let id = contact_info.id;
@@ -235,15 +231,6 @@ impl ClusterInfo {
 
     pub fn my_data(&self) -> ContactInfo {
         self.lookup(&self.id()).cloned().unwrap()
-    }
-
-    // Deprecated: don't use leader_data().
-    pub fn leader_data(&self) -> Option<&ContactInfo> {
-        let leader_pubkey = self.gossip_leader_pubkey;
-        if leader_pubkey == Pubkey::default() {
-            return None;
-        }
-        self.lookup(&leader_pubkey)
     }
 
     pub fn contact_info_trace(&self) -> String {
@@ -300,17 +287,6 @@ impl ClusterInfo {
                 "".to_string()
             }
         )
-    }
-
-    /// Record the id of the current leader for use by `leader_tpu_via_blobs()`
-    pub fn set_leader(&mut self, leader_pubkey: &Pubkey) {
-        if *leader_pubkey != self.gossip_leader_pubkey {
-            warn!(
-                "{}: LEADER_UPDATE TO {} from {}",
-                self.gossip.id, leader_pubkey, self.gossip_leader_pubkey,
-            );
-            self.gossip_leader_pubkey = *leader_pubkey;
-        }
     }
 
     pub fn push_epoch_slots(&mut self, id: Pubkey, root: u64, slots: BTreeSet<u64>) {
@@ -1949,17 +1925,6 @@ mod tests {
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
-    #[test]
-    fn test_default_leader() {
-        solana_logger::setup();
-        let contact_info = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
-        let network_entry_point =
-            ContactInfo::new_gossip_entry_point(&socketaddr!("127.0.0.1:1239"));
-        cluster_info.insert_info(network_entry_point);
-        assert!(cluster_info.leader_data().is_none());
-    }
-
     fn assert_in_range(x: u16, range: (u16, u16)) {
         assert!(x >= range.0);
         assert!(x < range.1);
@@ -2043,12 +2008,9 @@ mod tests {
         //create new cluster info, leader, and peer
         let keypair = Keypair::new();
         let peer_keypair = Keypair::new();
-        let leader_keypair = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let leader = ContactInfo::new_localhost(&leader_keypair.pubkey(), 0);
         let peer = ContactInfo::new_localhost(&peer_keypair.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
-        cluster_info.set_leader(&leader.id);
         cluster_info.insert_info(peer.clone());
         cluster_info.gossip.refresh_push_active_set(&HashMap::new());
         //check that all types of gossip messages are signed correctly
