@@ -177,7 +177,7 @@ impl Blocktree {
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
         blocktree.new_blobs_signals = vec![signal_sender];
         blocktree.completed_slots_senders = vec![completed_slots_sender];
-        blocktree.erasure_config = erasure_config.clone();
+        blocktree.erasure_config = *erasure_config;
 
         Ok((blocktree, signal_receiver, completed_slots_receiver))
     }

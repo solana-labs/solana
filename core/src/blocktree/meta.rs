@@ -189,7 +189,7 @@ impl ErasureMeta {
         ErasureMeta {
             set_index,
             size: 0,
-            config: config.clone(),
+            config: *config,
         }
     }
 
