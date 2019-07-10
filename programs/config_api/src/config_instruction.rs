@@ -50,7 +50,9 @@ pub fn store<T: ConfigState>(
 ) -> Instruction {
     let mut account_metas = vec![AccountMeta::new(*config_account_pubkey, is_config_signer)];
     for (signer_pubkey, _) in keys.iter().filter(|(_, is_signer)| *is_signer) {
-        account_metas.push(AccountMeta::new(*signer_pubkey, true));
+        if signer_pubkey != config_account_pubkey {
+            account_metas.push(AccountMeta::new(*signer_pubkey, true));
+        }
     }
     let account_data = (ConfigKeys { keys }, data);
     Instruction::new(id(), &account_data, account_metas)
