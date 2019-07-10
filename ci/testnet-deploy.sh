@@ -27,7 +27,7 @@ maybeHashesPerTick=
 maybeStakeNodesInGenesisBlock=
 maybeExternalPrimordialAccountsFile=
 maybeLamports=
-maybeLetsEncryptDomainName=
+maybeLetsEncrypt=
 
 usage() {
   exitcode=0
@@ -111,7 +111,7 @@ while [[ -n $1 ]]; do
       fetchLogs=false
       shift 1
     elif [[ $1 = --letsencrypt ]]; then
-      maybeLetsEncryptDomainName="$2"
+      maybeLetsEncrypt="$1 $2"
       shift 2
     else
       usage "Unknown long option: $1"
@@ -349,9 +349,9 @@ if ! $skipStart; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeHashesPerTick
       args+=($maybeHashesPerTick)
     fi
-    if [[ -n $maybeLetsEncryptDomainName ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeLetsEncryptDomainName
-      args+=($maybeLetsEncryptDomainName)
+    if [[ -n $maybeLetsEncrypt ]]; then
+      # shellcheck disable=SC2206 # Do not want to quote $maybeLetsEncrypt
+      args+=($maybeLetsEncrypt)
     fi
     if $reuseLedger; then
       args+=(-r)
