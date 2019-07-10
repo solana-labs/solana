@@ -8,6 +8,7 @@ use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use log::*;
+use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{Hash, Hasher};
@@ -100,12 +101,16 @@ impl Accounts {
     }
 
     pub fn new(in_paths: Option<String>) -> Self {
+        Self::new_with_num_stores(in_paths, 0)
+    }
+
+    pub fn new_with_num_stores(in_paths: Option<String>, min_num_stores: usize) -> Self {
         let (paths, own_paths) = if in_paths.is_none() {
             (Self::make_default_paths(), true)
         } else {
             (in_paths.unwrap(), false)
         };
-        let accounts_db = Arc::new(AccountsDB::new(&paths));
+        let accounts_db = Arc::new(AccountsDB::new_with_num_stores(&paths, min_num_stores));
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
@@ -332,7 +337,9 @@ impl Accounts {
         );
 
         let mut versions: Vec<(Pubkey, u64, B)> = accumulator.into_iter().flat_map(|x| x).collect();
-        versions.sort_by_key(|s| (s.0, s.1));
+        self.accounts_db.thread_pool.install(|| {
+            versions.par_sort_by_key(|s| (s.0, s.1));
+        });
         versions.dedup_by_key(|s| s.0);
         versions
             .into_iter()
