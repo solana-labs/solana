@@ -515,10 +515,10 @@ impl Blob {
     }
 
     pub fn data(&self) -> &[u8] {
-        &self.data[BLOB_HEADER_SIZE..]
+        &self.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + BLOB_DATA_SIZE]
     }
     pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data[BLOB_HEADER_SIZE..]
+        &mut self.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + BLOB_DATA_SIZE]
     }
     pub fn size(&self) -> usize {
         let size = self.data_size() as usize;
