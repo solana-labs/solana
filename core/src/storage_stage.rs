@@ -49,6 +49,7 @@ pub struct StorageStateInner {
     storage_blockhash: Hash,
     slot: u64,
     slots_per_segment: u64,
+    slots_per_turn: u64,
 }
 
 // Used to track root slots in storage stage
@@ -69,7 +70,7 @@ pub struct StorageStage {
     t_storage_create_accounts: JoinHandle<()>,
 }
 
-pub const STORAGE_ROTATE_TEST_COUNT: u64 = 2;
+pub const SLOTS_PER_TURN_TEST: u64 = 2;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
 pub const NUM_STORAGE_SAMPLES: usize = 4;
@@ -88,7 +89,7 @@ fn get_identity_index_from_signature(key: &Signature) -> usize {
 }
 
 impl StorageState {
-    pub fn new(hash: &Hash, slots_per_segment: u64) -> Self {
+    pub fn new(hash: &Hash, slots_per_turn: u64, slots_per_segment: u64) -> Self {
         let storage_keys = vec![0u8; KEY_SIZE * NUM_IDENTITIES];
         let storage_results = vec![Hash::default(); NUM_IDENTITIES];
         let replicator_map = vec![];
@@ -97,6 +98,7 @@ impl StorageState {
             storage_keys,
             storage_results,
             replicator_map,
+            slots_per_turn,
             slot: 0,
             slots_per_segment,
             storage_blockhash: *hash,
@@ -119,6 +121,10 @@ impl StorageState {
 
     pub fn get_storage_blockhash(&self) -> Hash {
         self.state.read().unwrap().storage_blockhash
+    }
+
+    pub fn get_storage_turn_rate(&self) -> u64 {
+        self.state.read().unwrap().slots_per_turn
     }
 
     pub fn get_slot(&self) -> u64 {
@@ -171,12 +177,12 @@ impl StorageStage {
         storage_keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        storage_rotate_count: u64,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
         let (instruction_sender, instruction_receiver) = channel();
 
         let t_storage_mining_verifier = {
+            let slots_per_turn = storage_state.state.read().unwrap().slots_per_turn;
             let storage_state_inner = storage_state.state.clone();
             let exit = exit.clone();
             let storage_keypair = storage_keypair.clone();
@@ -194,7 +200,7 @@ impl StorageStage {
                                 &some_blocktree,
                                 &mut storage_slots,
                                 &mut current_key,
-                                storage_rotate_count,
+                                slots_per_turn,
                                 &instruction_sender,
                             ) {
                                 match e {
@@ -488,7 +494,7 @@ impl StorageStage {
         blocktree: &Arc<Blocktree>,
         storage_slots: &mut StorageSlots,
         current_key_idx: &mut usize,
-        storage_rotate_count: u64,
+        slots_per_turn: u64,
         instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
@@ -503,8 +509,7 @@ impl StorageStage {
             if bank.slot() > storage_slots.last_root {
                 storage_slots.slot_count += 1;
                 storage_slots.last_root = bank.slot();
-
-                if storage_slots.slot_count % storage_rotate_count == 0 {
+                if storage_slots.slot_count % slots_per_turn == 0 {
                     // load all the replicator accounts in the bank. collect all their proofs at the current slot
                     let replicator_accounts = replicator_accounts(bank.as_ref());
                     // find proofs, and use them to update
@@ -656,7 +661,11 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
         let (_slot_sender, slot_receiver) = channel();
-        let storage_state = StorageState::new(&bank.last_blockhash(), bank.slots_per_segment());
+        let storage_state = StorageState::new(
+            &bank.last_blockhash(),
+            SLOTS_PER_TURN_TEST,
+            bank.slots_per_segment(),
+        );
         let storage_stage = StorageStage::new(
             &storage_state,
             slot_receiver,
@@ -665,7 +674,6 @@ mod tests {
             &storage_keypair,
             &exit.clone(),
             &bank_forks,
-            STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
         exit.store(true, Ordering::Relaxed);
@@ -695,7 +703,11 @@ mod tests {
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let (bank_sender, bank_receiver) = channel();
-        let storage_state = StorageState::new(&bank.last_blockhash(), bank.slots_per_segment());
+        let storage_state = StorageState::new(
+            &bank.last_blockhash(),
+            SLOTS_PER_TURN_TEST,
+            bank.slots_per_segment(),
+        );
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
@@ -704,7 +716,6 @@ mod tests {
             &storage_keypair,
             &exit.clone(),
             &bank_forks,
-            STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
         bank_sender.send(vec![bank.clone()]).unwrap();
@@ -784,7 +795,11 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (bank_sender, bank_receiver) = channel();
-        let storage_state = StorageState::new(&bank.last_blockhash(), bank.slots_per_segment());
+        let storage_state = StorageState::new(
+            &bank.last_blockhash(),
+            SLOTS_PER_TURN_TEST,
+            bank.slots_per_segment(),
+        );
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
@@ -793,7 +808,6 @@ mod tests {
             &storage_keypair,
             &exit.clone(),
             &bank_forks,
-            STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
         bank_sender.send(vec![bank.clone()]).unwrap();

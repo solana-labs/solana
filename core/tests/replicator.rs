@@ -11,12 +11,11 @@ use solana::contact_info::ContactInfo;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::replicator::Replicator;
-use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
+use solana::storage_stage::SLOTS_PER_TURN_TEST;
 use solana::validator::ValidatorConfig;
 use solana_client::thin_client::create_client;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::DEFAULT_SLOTS_PER_SEGMENT;
 use std::fs::remove_dir_all;
 use std::sync::{Arc, RwLock};
 
@@ -27,12 +26,15 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     info!("starting replicator test");
 
     let mut validator_config = ValidatorConfig::default();
-    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let slots_per_segment = 8;
+    validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
     let config = ClusterConfig {
         validator_configs: vec![validator_config; num_nodes],
         num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,
+        // keep a low slot/segment count to speed up the test
+        slots_per_segment,
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&config);
@@ -62,16 +64,13 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     )));
     let path = get_tmp_ledger_path("test");
     let blocktree = Arc::new(Blocktree::open(&path).unwrap());
-    assert_eq!(
-        Replicator::download_from_replicator(
-            &cluster_info,
-            &replicator_info,
-            &blocktree,
-            DEFAULT_SLOTS_PER_SEGMENT,
-        )
-        .unwrap(),
-        0
-    );
+    Replicator::download_from_replicator(
+        &cluster_info,
+        &replicator_info,
+        &blocktree,
+        slots_per_segment,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -131,7 +130,7 @@ fn test_replicator_startup_ledger_hang() {
     solana_logger::setup();
     info!("starting replicator test");
     let mut validator_config = ValidatorConfig::default();
-    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
     let cluster = LocalCluster::new_with_equal_stakes(2, 10_000, 100);;
 
     info!("starting replicator node");
@@ -160,7 +159,7 @@ fn test_account_setup() {
     let num_nodes = 1;
     let num_replicators = 1;
     let mut validator_config = ValidatorConfig::default();
-    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
     let config = ClusterConfig {
         validator_configs: vec![ValidatorConfig::default(); num_nodes],
         num_replicators,

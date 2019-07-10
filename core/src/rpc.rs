@@ -139,12 +139,15 @@ impl JsonRpcRequestProcessor {
             .collect::<Vec<_>>())
     }
 
-    fn get_storage_blockhash(&self) -> Result<String> {
-        Ok(self.storage_state.get_storage_blockhash().to_string())
+    fn get_storage_turn_rate(&self) -> Result<u64> {
+        Ok(self.storage_state.get_storage_turn_rate())
     }
 
-    fn get_storage_slot(&self) -> Result<u64> {
-        Ok(self.storage_state.get_slot())
+    fn get_storage_turn(&self) -> Result<(String, u64)> {
+        Ok((
+            self.storage_state.get_storage_blockhash().to_string(),
+            self.storage_state.get_slot(),
+        ))
     }
 
     fn get_slots_per_segment(&self) -> Result<u64> {
@@ -267,11 +270,11 @@ pub trait RpcSol {
     #[rpc(meta, name = "getEpochVoteAccounts")]
     fn get_epoch_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<RpcVoteAccountInfo>>;
 
-    #[rpc(meta, name = "getStorageBlockhash")]
-    fn get_storage_blockhash(&self, _: Self::Metadata) -> Result<String>;
+    #[rpc(meta, name = "getStorageTurnRate")]
+    fn get_storage_turn_rate(&self, _: Self::Metadata) -> Result<u64>;
 
-    #[rpc(meta, name = "getStorageSlot")]
-    fn get_storage_slot(&self, _: Self::Metadata) -> Result<u64>;
+    #[rpc(meta, name = "getStorageTurn")]
+    fn get_storage_turn(&self, _: Self::Metadata) -> Result<(String, u64)>;
 
     #[rpc(meta, name = "getSlotsPerSegment")]
     fn get_slots_per_segment(&self, _: Self::Metadata) -> Result<u64>;
@@ -526,15 +529,15 @@ impl RpcSol for RpcSolImpl {
             .get_epoch_vote_accounts()
     }
 
-    fn get_storage_blockhash(&self, meta: Self::Metadata) -> Result<String> {
+    fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_storage_blockhash()
+            .get_storage_turn_rate()
     }
 
-    fn get_storage_slot(&self, meta: Self::Metadata) -> Result<u64> {
-        meta.request_processor.read().unwrap().get_storage_slot()
+    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)> {
+        meta.request_processor.read().unwrap().get_storage_turn()
     }
 
     fn get_slots_per_segment(&self, meta: Self::Metadata) -> Result<u64> {
