@@ -60,6 +60,9 @@ additionalFullNodeCount=2
 clientNodeCount=1
 replicatorNodeCount=0
 blockstreamer=false
+fullNodeBootDiskSizeInGb=1000
+clientBootDiskSizeInGb=75
+replicatorBootDiskSizeInGb=1000
 fullNodeAdditionalDiskSizeInGb=
 externalNodes=false
 failOnValidatorBootupFailure=true
@@ -641,7 +644,7 @@ $(
     fi
 
     if [[ -n $fullNodeAdditionalDiskSizeInGb ]]; then
-      cat mount_Additional_disk.sh
+      cat mount_additional_disk.sh
     fi
 
 )
