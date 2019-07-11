@@ -28,7 +28,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
-use crate::tx_utils::OrderedIterator;
+use crate::transaction_utils::OrderedIterator;
 
 const ACCOUNTSDB_DIR: &str = "accountsdb";
 const NUM_ACCOUNT_DIRS: usize = 4;
