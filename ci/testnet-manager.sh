@@ -469,6 +469,12 @@ deploy() {
   tds)
     (
       set -x
+
+      EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
+      EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
+
+      wget ${EXTERNAL_ACCOUNTS_FILE_URL} -o ${EXTERNAL_ACCOUNTS_FILE}
+
       # Multiple V100 GPUs are available in us-west1, us-central1 and europe-west4
       # shellcheck disable=SC2068
       # shellcheck disable=SC2086
@@ -488,7 +494,7 @@ deploy() {
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
           --stake-internal-nodes 1000000000000 \
-          --external-accounts-file /tmp/stakes.yml \
+          --external-accounts-file "$EXTERNAL_ACCOUNTS_FILE" \
           --lamports 8589934592000000000 \
           --skip-deploy-update \
           --fullnode-additional-disk-size-gb 32000
