@@ -240,3 +240,18 @@ A local InfluxDB and Grafana instance is now running on your machine.  Define
 `start.sh` output and restart your validator.
 
 Metrics should now be streaming and visible from your local Grafana dashboard.
+
+#### Publishing Validator Info
+
+You can publish your validator information to the chain to be publicly visible
+to other users.
+
+Run the solana-validator-info CLI to populate a validator-info account:
+```bash
+$ solana-validator-info publish -k ~/validator-keypair.json <VALIDATOR_INFO_ARGS>
+```
+Available fields for VALIDATOR_INFO_ARGS:
+* Name (required)
+* Website
+* Keybase ID
+* Details
