@@ -46,7 +46,9 @@ pub struct Accounts {
     /// set of credit-debit accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
 
-    /// Set of credit-only accounts which are currently in the pipeline, caching account balance and number of locks
+    /// Set of credit-only accounts which are currently in the pipeline, caching account balance
+    /// and number of locks. On commit_credits(), we do a take() on the option so that the hashmap
+    /// is no longer available to be written to.
     credit_only_account_locks: Arc<RwLock<Option<HashMap<Pubkey, CreditOnlyLock>>>>,
 
     /// List of persistent stores
@@ -555,6 +557,15 @@ impl Accounts {
     }
 
     /// Commit remaining credit-only changes, regardless of reference count
+    ///
+    /// We do a take() on `self.credit_only_account_locks` so that the hashmap is no longer
+    /// available to be written to. This prevents any transactions from reinserting into the hashmap.
+    /// Then there are then only 2 cases for interleaving with commit_credits and lock_accounts.
+    /// Either:
+    //  1) Any transactions that tries to lock after commit_credits will find the HashMap is None
+    //     so will fail the lock
+    //  2) Any transaction that grabs a lock and then commit_credits clears the HashMap will find
+    //     the HashMap is None on unlock_accounts, and will perform a no-op.
     pub fn commit_credits(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
         // Clear the credit only hashmap so that no further transactions can modify it
         let credit_only_account_locks = Self::take_credit_only(&self.credit_only_account_locks)
