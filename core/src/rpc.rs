@@ -73,7 +73,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_program_accounts(&self, program_id: &Pubkey) -> Result<Vec<(String, Account)>> {
         Ok(self
             .bank()
-            .get_program_accounts_modified_since_parent(&program_id)
+            .get_program_accounts(&program_id)
             .into_iter()
             .map(|(pubkey, account)| (pubkey.to_string(), account))
             .collect())
