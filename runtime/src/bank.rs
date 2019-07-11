@@ -753,7 +753,9 @@ impl Bank {
         self.process_transactions(&txs)[0].clone()?;
         // Call this instead of commit_credits(), so that the credit-only locks hashmap on this
         // bank isn't deleted
-        self.commit_credits_unsafe();
+        self.rc
+            .accounts
+            .commit_credits_unsafe(&self.ancestors, self.slot());
         tx.signatures
             .get(0)
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
@@ -1429,12 +1431,6 @@ impl Bank {
             .accounts
             .commit_credits(&self.ancestors, self.slot());
     }
-
-    fn commit_credits_unsafe(&self) {
-        self.rc
-            .accounts
-            .commit_credits_unsafe(&self.ancestors, self.slot());
-    }
 }
 
 impl Drop for Bank {
@@ -1991,7 +1987,9 @@ mod tests {
             system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
-        bank.commit_credits_unsafe();
+        bank.rc
+            .accounts
+            .commit_credits_unsafe(&bank.ancestors, bank.slot());
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
         // since System Transfer `To` accounts are given credit-only handling
@@ -2010,7 +2008,9 @@ mod tests {
             system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
-        bank.commit_credits_unsafe();
+        bank.rc
+            .accounts
+            .commit_credits_unsafe(&bank.ancestors, bank.slot());
         // However, an account may not be locked as credit-only and credit-debit at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));

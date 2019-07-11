@@ -631,7 +631,7 @@ impl Accounts {
                             .read()
                             .unwrap()
                             .as_ref()
-                            .expect("Credit only locks didn't exist during a store")
+                            .expect("Collect accounts should only be called before a commit, and credit only account locks should exist before a commit")
                             .get(key)
                             .unwrap()
                             .credits
