@@ -1393,34 +1393,34 @@ mod tests {
         accounts.store_slow(0, &pubkey0, &account0);
         accounts.store_slow(0, &pubkey1, &account1);
 
-        let mut credit_only_account_locks = accounts.credit_only_account_locks.write().unwrap();
-        let credit_only_account_locks = credit_only_account_locks.as_mut().unwrap();
-        credit_only_account_locks.insert(
-            pubkey0,
-            CreditOnlyLock {
-                credits: AtomicU64::new(0),
-                lock_count: Mutex::new(1),
-            },
-        );
-        credit_only_account_locks.insert(
-            pubkey1,
-            CreditOnlyLock {
-                credits: AtomicU64::new(5),
-                lock_count: Mutex::new(1),
-            },
-        );
-        credit_only_account_locks.insert(
-            pubkey2,
-            CreditOnlyLock {
-                credits: AtomicU64::new(10),
-                lock_count: Mutex::new(1),
-            },
-        );
-
-        drop(credit_only_account_locks);
+        {
+            let mut credit_only_account_locks = accounts.credit_only_account_locks.write().unwrap();
+            let credit_only_account_locks = credit_only_account_locks.as_mut().unwrap();
+            credit_only_account_locks.insert(
+                pubkey0,
+                CreditOnlyLock {
+                    credits: AtomicU64::new(0),
+                    lock_count: Mutex::new(1),
+                },
+            );
+            credit_only_account_locks.insert(
+                pubkey1,
+                CreditOnlyLock {
+                    credits: AtomicU64::new(5),
+                    lock_count: Mutex::new(1),
+                },
+            );
+            credit_only_account_locks.insert(
+                pubkey2,
+                CreditOnlyLock {
+                    credits: AtomicU64::new(10),
+                    lock_count: Mutex::new(1),
+                },
+            );
+        }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        accounts.commit_credits(&ancestors, 0);
+        accounts.commit_credits_unsafe(&ancestors, 0);
 
         // No change when CreditOnlyLock credits are 0
         assert_eq!(
@@ -1506,16 +1506,17 @@ mod tests {
         let mut loaded = vec![loaded0, loaded1];
 
         let accounts = Accounts::new(None);
-        let mut credit_only_locks = accounts.credit_only_account_locks.write().unwrap();
-        let credit_only_locks = credit_only_locks.as_mut().unwrap();
-        credit_only_locks.insert(
-            pubkey,
-            CreditOnlyLock {
-                credits: AtomicU64::new(0),
-                lock_count: Mutex::new(1),
-            },
-        );
-        drop(credit_only_locks);
+        {
+            let mut credit_only_locks = accounts.credit_only_account_locks.write().unwrap();
+            let credit_only_locks = credit_only_locks.as_mut().unwrap();
+            credit_only_locks.insert(
+                pubkey,
+                CreditOnlyLock {
+                    credits: AtomicU64::new(0),
+                    lock_count: Mutex::new(1),
+                },
+            );
+        }
         let collected_accounts = accounts.collect_accounts(&txs, &loaders, &mut loaded);
         assert_eq!(collected_accounts.len(), 3);
         assert!(collected_accounts.contains_key(&keypair0.pubkey()));
