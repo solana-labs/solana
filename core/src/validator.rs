@@ -6,6 +6,7 @@ use crate::blocktree_processor::{self, BankForksInfo};
 use crate::broadcast_stage::BroadcastStageType;
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
+use crate::erasure::ErasureConfig;
 use crate::gossip_service::{discover_cluster, GossipService};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
@@ -40,6 +41,7 @@ pub struct ValidatorConfig {
     pub rpc_config: JsonRpcConfig,
     pub snapshot_path: Option<String>,
     pub broadcast_stage_type: BroadcastStageType,
+    pub erasure_config: ErasureConfig,
 }
 
 impl Default for ValidatorConfig {
@@ -53,6 +55,7 @@ impl Default for ValidatorConfig {
             rpc_config: JsonRpcConfig::default(),
             snapshot_path: None,
             broadcast_stage_type: BroadcastStageType::Standard,
+            erasure_config: ErasureConfig::default(),
         }
     }
 }
@@ -264,6 +267,7 @@ impl Validator {
             config.sigverify_disabled,
             &blocktree,
             &config.broadcast_stage_type,
+            &config.erasure_config,
             &exit,
         );
 

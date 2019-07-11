@@ -1652,6 +1652,7 @@ mod tests {
     use crate::blocktree::tests::make_many_slot_entries;
     use crate::blocktree::Blocktree;
     use crate::crds_value::CrdsValueLabel;
+    use crate::erasure::ErasureConfig;
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::repair_service::RepairType;
     use crate::result::Error;
@@ -1816,6 +1817,7 @@ mod tests {
                 w_blob.set_size(data_size);
                 w_blob.set_index(1);
                 w_blob.set_slot(2);
+                w_blob.set_erasure_config(&ErasureConfig::default());
                 w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
             }
 
@@ -1860,6 +1862,7 @@ mod tests {
                     blob.set_size(data_size);
                     blob.set_index(i);
                     blob.set_slot(2);
+                    blob.set_erasure_config(&ErasureConfig::default());
                     blob.meta.size = data_size + BLOB_HEADER_SIZE;
                     blob
                 })

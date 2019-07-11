@@ -1,4 +1,4 @@
-use crate::erasure::{NUM_CODING, NUM_DATA};
+use crate::erasure::ErasureConfig;
 use solana_metrics::datapoint;
 use std::{collections::BTreeSet, ops::RangeBounds};
 
@@ -55,6 +55,8 @@ pub struct ErasureMeta {
     pub set_index: u64,
     /// Size of shards in this erasure set
     pub size: usize,
+    /// Erasure configuration for this erasure set
+    config: ErasureConfig,
 }
 
 #[derive(Debug, PartialEq)]
@@ -183,8 +185,12 @@ impl SlotMeta {
 }
 
 impl ErasureMeta {
-    pub fn new(set_index: u64) -> ErasureMeta {
-        ErasureMeta { set_index, size: 0 }
+    pub fn new(set_index: u64, config: &ErasureConfig) -> ErasureMeta {
+        ErasureMeta {
+            set_index,
+            size: 0,
+            config: *config,
+        }
     }
 
     pub fn status(&self, index: &Index) -> ErasureMetaStatus {
@@ -196,16 +202,19 @@ impl ErasureMeta {
         let num_coding = index.coding().present_in_bounds(start_idx..coding_end_idx);
         let num_data = index.data().present_in_bounds(start_idx..data_end_idx);
 
-        let (data_missing, coding_missing) = (NUM_DATA - num_data, NUM_CODING - num_coding);
+        let (data_missing, coding_missing) = (
+            self.config.num_data() - num_data,
+            self.config.num_coding() - num_coding,
+        );
 
         let total_missing = data_missing + coding_missing;
 
-        if data_missing > 0 && total_missing <= NUM_CODING {
+        if data_missing > 0 && total_missing <= self.config.num_coding() {
             CanRecover
         } else if data_missing == 0 {
             DataFull
         } else {
-            StillNeed(total_missing - NUM_CODING)
+            StillNeed(total_missing - self.config.num_coding())
         }
     }
 
@@ -217,18 +226,21 @@ impl ErasureMeta {
         self.size
     }
 
-    pub fn set_index_for(index: u64) -> u64 {
-        index / NUM_DATA as u64
+    pub fn set_index_for(index: u64, num_data: usize) -> u64 {
+        index / num_data as u64
     }
 
     pub fn start_index(&self) -> u64 {
-        self.set_index * NUM_DATA as u64
+        self.set_index * self.config.num_data() as u64
     }
 
     /// returns a tuple of (data_end, coding_end)
     pub fn end_indexes(&self) -> (u64, u64) {
         let start = self.start_index();
-        (start + NUM_DATA as u64, start + NUM_CODING as u64)
+        (
+            start + self.config.num_data() as u64,
+            start + self.config.num_coding() as u64,
+        )
     }
 }
 
@@ -243,16 +255,17 @@ mod test {
         use ErasureMetaStatus::*;
 
         let set_index = 0;
+        let erasure_config = ErasureConfig::default();
 
-        let mut e_meta = ErasureMeta::new(set_index);
+        let mut e_meta = ErasureMeta::new(set_index, &erasure_config);
         let mut rng = thread_rng();
         let mut index = Index::new(0);
         e_meta.size = 1;
 
-        let data_indexes = 0..NUM_DATA as u64;
-        let coding_indexes = 0..NUM_CODING as u64;
+        let data_indexes = 0..erasure_config.num_data() as u64;
+        let coding_indexes = 0..erasure_config.num_coding() as u64;
 
-        assert_eq!(e_meta.status(&index), StillNeed(NUM_DATA));
+        assert_eq!(e_meta.status(&index), StillNeed(erasure_config.num_data()));
 
         index
             .data_mut()
@@ -267,7 +280,7 @@ mod test {
         for &idx in data_indexes
             .clone()
             .collect::<Vec<_>>()
-            .choose_multiple(&mut rng, NUM_DATA)
+            .choose_multiple(&mut rng, erasure_config.num_data())
         {
             index.data_mut().set_present(idx, false);
 
@@ -280,7 +293,7 @@ mod test {
 
         for &idx in coding_indexes
             .collect::<Vec<_>>()
-            .choose_multiple(&mut rng, NUM_CODING)
+            .choose_multiple(&mut rng, erasure_config.num_coding())
         {
             index.coding_mut().set_present(idx, false);
 

@@ -687,6 +687,7 @@ mod test {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::entry;
+    use crate::erasure::ErasureConfig;
     use crate::genesis_utils::create_genesis_block;
     use crate::packet::{Blob, BLOB_HEADER_SIZE};
     use crate::replay_stage::ReplayStage;
@@ -716,6 +717,7 @@ mod test {
             let mut blob_slot_1 = Blob::default();
             blob_slot_1.set_slot(1);
             blob_slot_1.set_parent(0);
+            blob_slot_1.set_erasure_config(&ErasureConfig::default());
             blocktree.insert_data_blobs(&vec![blob_slot_1]).unwrap();
             assert!(bank_forks.get(1).is_none());
             ReplayStage::generate_new_bank_forks(
@@ -729,6 +731,7 @@ mod test {
             let mut blob_slot_2 = Blob::default();
             blob_slot_2.set_slot(2);
             blob_slot_2.set_parent(0);
+            blob_slot_2.set_erasure_config(&ErasureConfig::default());
             blocktree.insert_data_blobs(&vec![blob_slot_2]).unwrap();
             assert!(bank_forks.get(2).is_none());
             ReplayStage::generate_new_bank_forks(

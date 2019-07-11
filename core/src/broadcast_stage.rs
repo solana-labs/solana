@@ -5,7 +5,7 @@ use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastR
 use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
-use crate::erasure::CodingGenerator;
+use crate::erasure::{CodingGenerator, ErasureConfig};
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -51,6 +51,7 @@ impl BroadcastStageType {
         receiver: Receiver<WorkingBankEntries>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
+        erasure_config: &ErasureConfig,
     ) -> BroadcastStage {
         match self {
             BroadcastStageType::Standard => BroadcastStage::new(
@@ -60,6 +61,7 @@ impl BroadcastStageType {
                 exit_sender,
                 blocktree,
                 StandardBroadcastRun::new(),
+                erasure_config,
             ),
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
@@ -69,6 +71,7 @@ impl BroadcastStageType {
                 exit_sender,
                 blocktree,
                 FailEntryVerificationBroadcastRun::new(),
+                erasure_config,
             ),
 
             BroadcastStageType::BroadcastFakeBlobs => BroadcastStage::new(
@@ -78,6 +81,7 @@ impl BroadcastStageType {
                 exit_sender,
                 blocktree,
                 BroadcastFakeBlobsRun::new(0),
+                erasure_config,
             ),
 
             BroadcastStageType::BroadcastBadBlobSizes => BroadcastStage::new(
@@ -87,6 +91,7 @@ impl BroadcastStageType {
                 exit_sender,
                 blocktree,
                 BroadcastBadBlobSizes::new(),
+                erasure_config,
             ),
         }
     }
@@ -138,8 +143,9 @@ impl BroadcastStage {
         receiver: &Receiver<WorkingBankEntries>,
         blocktree: &Arc<Blocktree>,
         mut broadcast_stage_run: impl BroadcastRun,
+        erasure_config: &ErasureConfig,
     ) -> BroadcastStageReturnType {
-        let coding_generator = CodingGenerator::default();
+        let coding_generator = CodingGenerator::new_from_config(erasure_config);
 
         let mut broadcast = Broadcast {
             coding_generator,
@@ -191,9 +197,11 @@ impl BroadcastStage {
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static,
+        erasure_config: &ErasureConfig,
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
+        let erasure_config = *erasure_config;
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -204,6 +212,7 @@ impl BroadcastStage {
                     &receiver,
                     &blocktree,
                     broadcast_stage_run,
+                    &erasure_config,
                 )
             })
             .unwrap();
@@ -277,6 +286,7 @@ mod test {
             &exit_sender,
             &blocktree,
             StandardBroadcastRun::new(),
+            &ErasureConfig::default(),
         );
 
         MockBroadcastStage {

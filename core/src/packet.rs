@@ -1,5 +1,6 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::cuda_runtime::PinnedVec;
+use crate::erasure::ErasureConfig;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::recycler::{Recycler, Reset};
 use crate::result::{Error, Result};
@@ -389,7 +390,8 @@ const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
 const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
 const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
-const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
+const ERASURE_CONFIG_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, ErasureConfig);
+const SIZE_RANGE: std::ops::Range<usize> = range!(ERASURE_CONFIG_RANGE.end, u64);
 
 macro_rules! align {
     ($x:expr, $align:expr) => {
@@ -426,6 +428,7 @@ impl Blob {
             out.position() as usize
         };
         blob.set_size(pos);
+        blob.set_erasure_config(&ErasureConfig::default());
         blob
     }
 
@@ -446,6 +449,14 @@ impl Blob {
     }
     pub fn set_index(&mut self, ix: u64) {
         LittleEndian::write_u64(&mut self.data[INDEX_RANGE], ix);
+    }
+
+    pub fn set_erasure_config(&mut self, config: &ErasureConfig) {
+        self.data[ERASURE_CONFIG_RANGE].copy_from_slice(&bincode::serialize(config).unwrap())
+    }
+
+    pub fn erasure_config(&self) -> ErasureConfig {
+        bincode::deserialize(&self.data[ERASURE_CONFIG_RANGE]).unwrap_or_default()
     }
 
     pub fn seed(&self) -> [u8; 32] {
@@ -805,6 +816,15 @@ mod tests {
         assert!(b.should_forward());
         b.set_forwarded(true);
         assert!(!b.should_forward());
+    }
+
+    #[test]
+    fn test_blob_erasure_config() {
+        let mut b = Blob::default();
+        let config = ErasureConfig::new(32, 16);
+        b.set_erasure_config(&config);
+
+        assert_eq!(config, b.erasure_config());
     }
 
     #[test]

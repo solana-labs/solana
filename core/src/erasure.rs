@@ -55,6 +55,38 @@ pub const NUM_CODING: usize = 8;
 /// Total number of blobs in an erasure set; includes data and coding blobs
 pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ErasureConfig {
+    num_data: usize,
+    num_coding: usize,
+}
+
+impl Default for ErasureConfig {
+    fn default() -> ErasureConfig {
+        ErasureConfig {
+            num_data: NUM_DATA,
+            num_coding: NUM_CODING,
+        }
+    }
+}
+
+impl ErasureConfig {
+    pub fn new(num_data: usize, num_coding: usize) -> ErasureConfig {
+        ErasureConfig {
+            num_data,
+            num_coding,
+        }
+    }
+
+    pub fn num_data(self) -> usize {
+        self.num_data
+    }
+
+    pub fn num_coding(self) -> usize {
+        self.num_coding
+    }
+}
+
 type Result<T> = std::result::Result<T, reed_solomon_erasure::Error>;
 
 /// Represents an erasure "session" with a particular configuration and number of data and coding
@@ -73,6 +105,12 @@ pub struct CodingGenerator {
 impl Session {
     pub fn new(data_count: usize, coding_count: usize) -> Result<Session> {
         let rs = ReedSolomon::new(data_count, coding_count)?;
+
+        Ok(Session(rs))
+    }
+
+    pub fn new_from_config(config: &ErasureConfig) -> Result<Session> {
+        let rs = ReedSolomon::new(config.num_data, config.num_coding)?;
 
         Ok(Session(rs))
     }
@@ -136,7 +174,7 @@ impl Session {
             let idx;
             let first_byte;
 
-            if n < NUM_DATA {
+            if n < self.0.data_shard_count() {
                 let mut blob = Blob::new(&blocks[n]);
                 blob.meta.size = blob.data_size() as usize;
 
@@ -178,6 +216,13 @@ impl CodingGenerator {
         CodingGenerator {
             leftover: Vec::with_capacity(session.0.data_shard_count()),
             session,
+        }
+    }
+
+    pub fn new_from_config(config: &ErasureConfig) -> Self {
+        CodingGenerator {
+            leftover: Vec::with_capacity(config.num_data),
+            session: Arc::new(Session::new_from_config(config).unwrap()),
         }
     }
 
@@ -235,6 +280,7 @@ impl CodingGenerator {
                 coding_blob.set_id(&id);
                 coding_blob.set_size(max_data_size);
                 coding_blob.set_coding();
+                coding_blob.set_erasure_config(&data_blob.erasure_config());
 
                 coding_blobs.push(coding_blob);
             }
@@ -744,6 +790,7 @@ pub mod test {
                 let mut blob = Blob::default();
                 blob.data_mut()[..].copy_from_slice(&data);
                 blob.set_size(BLOB_DATA_SIZE);
+                blob.set_erasure_config(&ErasureConfig::default());
                 Arc::new(RwLock::new(blob))
             })
             .collect();
