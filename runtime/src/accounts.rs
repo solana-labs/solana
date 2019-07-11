@@ -267,7 +267,7 @@ impl Accounts {
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
-            OrderedIterator::new(txs, txs_iteration_order)
+        OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, Ok(())) => {
@@ -457,7 +457,11 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts(&self, txs: &[Transaction], txs_iteration_order: Option<&[usize]>) -> Vec<Result<()>> {
+    pub fn lock_accounts(
+        &self,
+        txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
+    ) -> Vec<Result<()>> {
         let mut error_counters = ErrorCounters::default();
         let rv = OrderedIterator::new(txs, txs_iteration_order)
             .map(|tx| {
@@ -621,8 +625,14 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let res =
-            accounts.load_accounts(&ancestors, &[tx], None, vec![Ok(())], &hash_queue, error_counters);
+        let res = accounts.load_accounts(
+            &ancestors,
+            &[tx],
+            None,
+            vec![Ok(())],
+            &hash_queue,
+            error_counters,
+        );
         res
     }
 

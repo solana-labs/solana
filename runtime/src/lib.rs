@@ -1,5 +1,4 @@
 mod accounts;
-pub mod tx_utils;
 pub mod accounts_db;
 pub mod accounts_index;
 pub mod append_vec;
@@ -18,6 +17,7 @@ pub mod stakes;
 pub mod status_cache;
 pub mod storage_utils;
 mod system_instruction_processor;
+pub mod tx_utils;
 
 #[macro_use]
 extern crate solana_metrics;

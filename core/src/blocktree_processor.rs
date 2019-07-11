@@ -15,8 +15,8 @@ use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rand::thread_rng;
 use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 pub const NUM_THREADS: u32 = 10;
 use std::cell::RefCell;
@@ -35,7 +35,10 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults, Vec<usize>)]) -> Result<()> {
+fn par_execute_entries(
+    bank: &Bank,
+    entries: &[(&Entry, LockedAccountsResults, Vec<usize>)],
+) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", entries.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
@@ -77,7 +80,11 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults, V
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-pub fn process_entries(bank: &Bank, entries: &[Entry], randomise_tx_execution_order: bool) -> Result<()> {
+pub fn process_entries(
+    bank: &Bank,
+    entries: &[Entry],
+    randomise_tx_execution_order: bool,
+) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
     for entry in entries {
@@ -90,7 +97,7 @@ pub fn process_entries(bank: &Bank, entries: &[Entry], randomise_tx_execution_or
         }
         // else loop on processing the entry
         loop {
-            let mut txs_execution_order : Vec<usize> =  (0..entry.transactions.len()).collect();
+            let mut txs_execution_order: Vec<usize> = (0..entry.transactions.len()).collect();
             if randomise_tx_execution_order {
                 txs_execution_order.shuffle(&mut thread_rng());
             }
@@ -1159,7 +1166,11 @@ pub mod tests {
         );
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()], true),
+            process_entries(
+                &bank,
+                &[entry_1.clone(), tick.clone(), entry_2.clone()],
+                true
+            ),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -1329,7 +1340,7 @@ pub mod tests {
                 &(0..bank.ticks_per_slot())
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
                     .collect::<Vec<_>>(),
-                true
+                true,
             )
             .expect("process ticks failed");
 

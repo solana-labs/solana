@@ -7,7 +7,6 @@ use crate::accounts_db::{
     AppendVecId, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::Fork;
-use crate::tx_utils::OrderedIterator;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
 use crate::locked_accounts_results::LockedAccountsResults;
@@ -19,6 +18,7 @@ use crate::stakes::Stakes;
 use crate::status_cache::StatusCache;
 use crate::storage_utils;
 use crate::storage_utils::StorageAccounts;
+use crate::tx_utils::OrderedIterator;
 use bincode::{deserialize_from, serialize, serialize_into, serialized_size};
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -755,7 +755,7 @@ impl Bank {
     pub fn lock_accounts<'a, 'b>(
         &'a self,
         txs: &'b [Transaction],
-        txs_iteration_order: Option<&[usize]>
+        txs_iteration_order: Option<&[usize]>,
     ) -> LockedAccountsResults<'a, 'b> {
         if self.is_frozen() {
             warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
@@ -874,8 +874,15 @@ impl Bank {
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let refs_results = self.check_refs(txs, txs_iteration_order, lock_results, &mut error_counters);
-        let age_results = self.check_age(txs, txs_iteration_order, refs_results, max_age, &mut error_counters);
+        let refs_results =
+            self.check_refs(txs, txs_iteration_order, lock_results, &mut error_counters);
+        let age_results = self.check_age(
+            txs,
+            txs_iteration_order,
+            refs_results,
+            max_age,
+            &mut error_counters,
+        );
         self.check_signatures(txs, txs_iteration_order, age_results, &mut error_counters)
     }
 
@@ -954,14 +961,15 @@ impl Bank {
         let mut error_counters = ErrorCounters::default();
         let mut load_time = Measure::start("accounts_load");
 
-        let retryable_txs: Vec<_> = OrderedIterator::new(lock_results.locked_accounts_results(), txs_iteration_order)
-            .enumerate()
-            .filter_map(|(index, res)| match res {
-                Err(TransactionError::AccountInUse) => Some(index),
-                Ok(_) => None,
-                Err(_) => None,
-            })
-            .collect();
+        let retryable_txs: Vec<_> =
+            OrderedIterator::new(lock_results.locked_accounts_results(), txs_iteration_order)
+                .enumerate()
+                .filter_map(|(index, res)| match res {
+                    Err(TransactionError::AccountInUse) => Some(index),
+                    Ok(_) => None,
+                    Err(_) => None,
+                })
+                .collect();
 
         let sig_results = self.check_transactions(
             txs,
@@ -970,7 +978,8 @@ impl Bank {
             max_age,
             &mut error_counters,
         );
-        let mut loaded_accounts = self.load_accounts(txs, txs_iteration_order, sig_results, &mut error_counters);
+        let mut loaded_accounts =
+            self.load_accounts(txs, txs_iteration_order, sig_results, &mut error_counters);
         load_time.stop();
 
         let mut execution_time = Measure::start("execution_time");
