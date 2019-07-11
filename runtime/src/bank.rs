@@ -751,7 +751,9 @@ impl Bank {
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
         self.process_transactions(&txs)[0].clone()?;
-        self.commit_credits();
+        // Call this instead of commit_credits(), so that the credit-only locks hashmap on this
+        // bank isn't deleted
+        self.commit_credits_unsafe();
         tx.signatures
             .get(0)
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
@@ -1426,6 +1428,12 @@ impl Bank {
         self.rc
             .accounts
             .commit_credits(&self.ancestors, self.slot());
+    }
+
+    fn commit_credits_unsafe(&self) {
+        self.rc
+            .accounts
+            .commit_credits_unsafe(&self.ancestors, self.slot());
     }
 }
 
