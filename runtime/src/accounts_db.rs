@@ -1361,11 +1361,11 @@ mod tests {
         let key0 = Pubkey::new_rand();
         let account0 = Account::new(1, 0, &key);
 
-        db.store(0, &hashmap!(&key0 => &account0));
+        db.store(0, &hashmap!(&key0 => (&account0, 0)));
 
         let key1 = Pubkey::new_rand();
         let account1 = Account::new(2, 0, &key);
-        db.store(1, &hashmap!(&key1 => &account1));
+        db.store(1, &hashmap!(&key1 => (&account1, 0)));
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
