@@ -298,6 +298,11 @@ if ! $skipCreate; then
     create_args+=(-f)
   fi
 
+  if [[ -n $maybeFullnodeAdditionalDiskSize ]]; then
+    # shellcheck disable=SC2206 # Do not want to quote
+    create_args+=($maybeFullnodeAdditionalDiskSize)
+  fi
+
   time net/"$cloudProvider".sh create "${create_args[@]}"
 else
   echo "--- $cloudProvider.sh config"
@@ -316,11 +321,6 @@ else
 
   if ! $failOnValidatorBootupFailure; then
     config_args+=(-f)
-  fi
-
-  if [[ -n $maybeFullnodeAdditionalDiskSize ]]; then
-    # shellcheck disable=SC2206 # Do not want to quote
-    create_args+=($maybeFullnodeAdditionalDiskSize)
   fi
 
   time net/"$cloudProvider".sh config "${config_args[@]}"
