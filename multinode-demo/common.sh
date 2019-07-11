@@ -70,7 +70,12 @@ source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 SOLANA_RSYNC_CONFIG_DIR=$SOLANA_ROOT/config
 
 # Configuration that remains local
-SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
+secondary_disk_mount_point=$(df | grep sdb | awk '{print $6}')
+if [[ -n $secondary_disk_mount_point ]]; then
+  SOLANA_CONFIG_DIR=$secondary_disk_mount_point/config-local
+else
+  SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
+fi
 
 default_arg() {
   declare name=$1
