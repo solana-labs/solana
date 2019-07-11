@@ -326,7 +326,7 @@ impl Accounts {
             .collect()
     }
 
-    pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+    pub fn load_by_program_fork(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
         self.scan_fork(fork, |stored_account| {
             if stored_account.balance.owner == *program_id {
                 Some((stored_account.meta.pubkey, stored_account.clone_account()))
@@ -334,6 +334,24 @@ impl Accounts {
                 None
             }
         })
+    }
+
+    pub fn load_by_program(
+        &self,
+        ancestors: &HashMap<Fork, usize>,
+        program_id: &Pubkey,
+    ) -> Vec<(Pubkey, Account)> {
+        self.accounts_db.scan_accounts(
+            ancestors,
+            |collector: &mut Vec<(Pubkey, Account)>, option| {
+                if let Some(data) = option
+                    .filter(|(_, account, _)| account.owner == *program_id && account.lamports != 0)
+                    .map(|(pubkey, account, _fork)| (*pubkey, account))
+                {
+                    collector.push(data)
+                }
+            },
+        )
     }
 
     /// Slow because lock is held for 1 operation instead of many
@@ -948,7 +966,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_by_program() {
+    fn test_load_by_program_fork() {
         let accounts = Accounts::new(None);
 
         // Load accounts owned by various programs into AccountsDB
@@ -962,11 +980,11 @@ mod tests {
         let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts.store_slow(0, &pubkey2, &account2);
 
-        let loaded = accounts.load_by_program(0, &Pubkey::new(&[2; 32]));
+        let loaded = accounts.load_by_program_fork(0, &Pubkey::new(&[2; 32]));
         assert_eq!(loaded.len(), 2);
-        let loaded = accounts.load_by_program(0, &Pubkey::new(&[3; 32]));
+        let loaded = accounts.load_by_program_fork(0, &Pubkey::new(&[3; 32]));
         assert_eq!(loaded, vec![(pubkey2, account2)]);
-        let loaded = accounts.load_by_program(0, &Pubkey::new(&[4; 32]));
+        let loaded = accounts.load_by_program_fork(0, &Pubkey::new(&[4; 32]));
         assert_eq!(loaded, vec![]);
     }
 
