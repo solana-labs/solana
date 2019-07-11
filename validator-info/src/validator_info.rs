@@ -75,28 +75,13 @@ fn check_url(string: String) -> Result<(), String> {
     }
 }
 
-// Return an error if a validator name is longer than the max length.
-fn check_name_length(string: String) -> Result<(), String> {
+// Return an error if a validator field is longer than the max length.
+fn is_short_field(string: String) -> Result<(), String> {
     if string.len() > MAX_SHORT_FIELD_LENGTH {
         Err(format!(
-            "validator name longer than {:?}-byte limit",
+            "validator field longer than {:?}-byte limit",
             MAX_SHORT_FIELD_LENGTH
         ))
-    } else {
-        Ok(())
-    }
-}
-
-// Return an error if invalid keybase id is submitted.
-fn is_keybase_id(string: String) -> Result<(), String> {
-    let mut invalid = string.len() != 16;
-    for c in string.chars() {
-        if !c.is_digit(16) {
-            invalid = true;
-        }
-    }
-    if invalid {
-        Err("keybase id is invalid".to_string())
     } else {
         Ok(())
     }
@@ -173,13 +158,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("/path/to/id.json"),
                 )
                 .arg(
-                    Arg::with_name("info_keypair")
-                        .short("i")
-                        .long("info-keypair")
-                        .value_name("PATH")
+                    Arg::with_name("info_pubkey")
+                        .short("p")
+                        .long("info-pubkey")
+                        .value_name("PUBKEY")
                         .takes_value(true)
-                        .required(true)
-                        .help("/path/to/id.json"),
+                        .validator(is_pubkey)
+                        .help("The pubkey of the Validator info account to update"),
                 )
                 .arg(
                     Arg::with_name("name")
@@ -188,7 +173,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("STRING")
                         .takes_value(true)
                         .required(true)
-                        .validator(check_name_length)
+                        .validator(is_short_field)
                         .help("Validator name"),
                 )
                 .arg(
@@ -206,7 +191,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("keybase")
                         .value_name("STRING")
                         .takes_value(true)
-                        .validator(is_keybase_id)
+                        .validator(is_short_field)
                         .help("Validator Keybase id"),
                 )
                 .arg(
@@ -237,22 +222,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("JSON RPC URL for the solana cluster"),
                 )
                 .arg(
-                    Arg::with_name("info_keypair")
-                        .short("k")
-                        .long("info-keypair")
-                        .value_name("PATH")
-                        .takes_value(true)
-                        .required_unless_one(&["info_pubkey", "all"])
-                        .conflicts_with("all")
-                        .help("/path/to/id.json"),
-                )
-                .arg(
                     Arg::with_name("info_pubkey")
                         .short("p")
                         .long("info-pubkey")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .required_unless_one(&["info_keypair", "all"])
+                        .required_unless("all")
                         .conflicts_with("all")
                         .validator(is_pubkey)
                         .help("The pubkey of the Validator info account"),
@@ -261,7 +236,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::with_name("all")
                         .short("a")
                         .long("all")
-                        .required_unless_one(&["info_keypair", "info_pubkey"])
+                        .required_unless("info_pubkey")
                         .help("Return all current Validator info"),
                 ),
         )
@@ -286,19 +261,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             };
             let validator_keypair = read_keypair(id_path)?;
 
-            // Load validator-info keypair
-            let mut path = dirs::home_dir().expect("home directory");
-            let id_path = if matches.is_present("info_keypair") {
-                matches.value_of("info_keypair").unwrap()
+            // Create validator-info keypair to use if info_pubkey no provided or does not exist
+            let info_keypair = Keypair::new();
+            let mut info_pubkey = if let Some(pubkey) = matches.value_of("info_pubkey") {
+                pubkey.parse::<Pubkey>().unwrap()
             } else {
-                path.extend(&[".config", "solana", "validator-info.json"]);
-                if !path.exists() {
-                    println!("No info keypair file found. Run solana-keygen to create one.");
-                    exit(1);
-                }
-                path.to_str().unwrap()
+                info_keypair.pubkey()
             };
-            let info_keypair = read_keypair(id_path)?;
 
             // Prepare validator info
             let keys = vec![(id(), false), (validator_keypair.pubkey(), true)];
@@ -308,11 +277,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             };
 
             // Check existence of validator-info account
-            let balance = rpc_client
-                .poll_get_balance(&info_keypair.pubkey())
-                .unwrap_or(0);
+            let balance = rpc_client.poll_get_balance(&info_pubkey).unwrap_or(0);
 
-            let (message, signers): (Message, [&Keypair; 2]) = if balance == 0 {
+            let (message, signers): (Message, Vec<&Keypair>) = if balance == 0 {
+                if info_pubkey != info_keypair.pubkey() {
+                    println!(
+                        "Account {:?} does not exist. Generating new keypair...",
+                        info_pubkey
+                    );
+                    info_pubkey = info_keypair.pubkey();
+                }
                 println!(
                     "Publishing info for Validator {:?}",
                     validator_keypair.pubkey()
@@ -326,24 +300,24 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ),
                     config_instruction::store(&info_keypair.pubkey(), true, keys, &validator_info),
                 ];
-                let signers = [&validator_keypair, &info_keypair];
+                let signers = vec![&validator_keypair, &info_keypair];
                 let message = Message::new(instructions);
                 (message, signers)
             } else {
                 println!(
                     "Updating Validator {:?} info at: {:?}",
                     validator_keypair.pubkey(),
-                    info_keypair.pubkey()
+                    info_pubkey
                 );
                 let instructions = vec![config_instruction::store(
-                    &info_keypair.pubkey(),
-                    true,
+                    &info_pubkey,
+                    false,
                     keys,
                     &validator_info,
                 )];
                 let message =
                     Message::new_with_payer(instructions, Some(&validator_keypair.pubkey()));
-                let signers = [&validator_keypair, &info_keypair];
+                let signers = vec![&validator_keypair];
                 (message, signers)
             };
 
@@ -353,10 +327,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let signature_str =
                 rpc_client.send_and_confirm_transaction(&mut transaction, &signers)?;
 
-            println!(
-                "Success! Validator info published at: {:?}",
-                info_keypair.pubkey()
-            );
+            println!("Success! Validator info published at: {:?}", info_pubkey);
             println!("{}", signature_str);
         }
         ("get", Some(matches)) => {
@@ -414,21 +385,11 @@ mod tests {
     }
 
     #[test]
-    fn test_check_name_length() {
+    fn test_is_short_field() {
         let name = "Alice Validator";
-        assert_eq!(check_name_length(name.to_string()), Ok(()));
-        let long_name = "Alice 7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJt6rY";
-        assert!(check_url(long_name.to_string()).is_err());
-    }
-
-    #[test]
-    fn test_is_keybase_id() {
-        let keybase_id = "464bb0f2956f7e83";
-        assert_eq!(is_keybase_id(keybase_id.to_string()), Ok(()));
-        let long_keybase_id = "464bb0f2956f7e830";
-        assert!(is_keybase_id(long_keybase_id.to_string()).is_err());
-        let non_hex_keybase_id = "zyxbb0f2956f7e83";
-        assert!(is_keybase_id(non_hex_keybase_id.to_string()).is_err());
+        assert_eq!(is_short_field(name.to_string()), Ok(()));
+        let long_name = "Alice 7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJt6rY9";
+        assert!(is_short_field(long_name.to_string()).is_err());
     }
 
     #[test]
