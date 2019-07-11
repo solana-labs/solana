@@ -13,9 +13,9 @@ impl<'a, T> OrderedIterator<'a, T> {
             assert!(custom_order.len() == vec.len());
         }
         OrderedIterator {
-            element_order: element_order,
+            element_order,
             current: 0,
-            vec: vec,
+            vec,
         }
     }
 }
