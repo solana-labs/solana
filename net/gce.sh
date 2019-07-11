@@ -644,7 +644,7 @@ $(
     fi
 
     if [[ -n $fullNodeAdditionalDiskSizeInGb ]]; then
-      cat mount_additional_disk.sh
+      cat mount-additional-disk.sh
     fi
 
 )
