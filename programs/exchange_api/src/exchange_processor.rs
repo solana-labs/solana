@@ -39,7 +39,7 @@ impl ExchangeProcessor {
         }
     }
 
-    fn deserialize_trade(data: &[u8]) -> Result<TradeOrderInfo, InstructionError> {
+    fn deserialize_trade(data: &[u8]) -> Result<OrderInfo, InstructionError> {
         let state: ExchangeState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let ExchangeState::Trade(info) = state {
             Ok(info)
@@ -60,7 +60,7 @@ impl ExchangeProcessor {
         }
     }
 
-    fn trade_to_token_account(trade: &TradeOrderInfo) -> TokenAccountInfo {
+    fn trade_to_token_account(trade: &OrderInfo) -> TokenAccountInfo {
         // Turn trade order into token account
 
         let token = match trade.direction {
@@ -75,8 +75,8 @@ impl ExchangeProcessor {
 
     fn calculate_swap(
         scaler: u64,
-        to_trade: &mut TradeOrderInfo,
-        from_trade: &mut TradeOrderInfo,
+        to_trade: &mut OrderInfo,
+        from_trade: &mut OrderInfo,
         profit_account: &mut TokenAccountInfo,
     ) -> Result<(), InstructionError> {
         if to_trade.tokens == 0 || from_trade.tokens == 0 {
@@ -261,7 +261,7 @@ impl ExchangeProcessor {
 
     fn do_trade_request(
         keyed_accounts: &mut [KeyedAccount],
-        info: &TradeRequestInfo,
+        info: &OrderRequestInfo,
     ) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
         const TRADE_INDEX: usize = 1;
@@ -299,7 +299,7 @@ impl ExchangeProcessor {
         inc_new_counter_info!("exchange_processor-trades", 1, 1000, 1000);
 
         Self::serialize(
-            &ExchangeState::Trade(TradeOrderInfo {
+            &ExchangeState::Trade(OrderInfo {
                 owner: *keyed_accounts[OWNER_INDEX].unsigned_key(),
                 direction: info.direction,
                 pair: info.pair,
@@ -315,7 +315,7 @@ impl ExchangeProcessor {
         )
     }
 
-    fn do_trade_cancellation(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+    fn do_order_cancellation(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
         const TRADE_INDEX: usize = 1;
 
@@ -446,11 +446,11 @@ pub fn process_instruction(
         ExchangeInstruction::TransferRequest(token, tokens) => {
             ExchangeProcessor::do_transfer_request(keyed_accounts, token, tokens)
         }
-        ExchangeInstruction::TradeRequest(info) => {
+        ExchangeInstruction::OrderRequest(info) => {
             ExchangeProcessor::do_trade_request(keyed_accounts, &info)
         }
-        ExchangeInstruction::TradeCancellation => {
-            ExchangeProcessor::do_trade_cancellation(keyed_accounts)
+        ExchangeInstruction::OrderCancellation => {
+            ExchangeProcessor::do_order_cancellation(keyed_accounts)
         }
         ExchangeInstruction::SwapRequest => ExchangeProcessor::do_swap_request(keyed_accounts),
     }
@@ -487,8 +487,8 @@ mod test {
             secondary_tokens,
             secondary_price,
         );
-        let mut to_trade = TradeOrderInfo::default();
-        let mut from_trade = TradeOrderInfo::default().direction(Direction::From);
+        let mut to_trade = OrderInfo::default();
+        let mut from_trade = OrderInfo::default().direction(Direction::From);
         let mut profit_account = TokenAccountInfo::default();
 
         to_trade.tokens = primary_tokens;
@@ -714,7 +714,7 @@ mod test {
         // check results
 
         assert_eq!(
-            TradeOrderInfo {
+            OrderInfo {
                 owner: owner.pubkey(),
                 direction: Direction::To,
                 pair: TokenPair::AB,
@@ -773,7 +773,7 @@ mod test {
         // check results
 
         assert_eq!(
-            TradeOrderInfo {
+            OrderInfo {
                 owner: owner.pubkey(),
                 direction: Direction::To,
                 pair: TokenPair::AB,
