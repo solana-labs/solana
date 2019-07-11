@@ -174,7 +174,7 @@ impl Session {
             let idx;
             let first_byte;
 
-            if n < NUM_DATA {
+            if n < self.0.data_shard_count() {
                 let mut blob = Blob::new(&blocks[n]);
                 blob.meta.size = blob.data_size() as usize;
 

@@ -3728,6 +3728,71 @@ pub mod tests {
             }
         }
 
+        pub fn try_recovery_using_erasure_config(
+            erasure_config: &ErasureConfig,
+            num_drop_data: usize,
+            slot: u64,
+            blocktree: &Blocktree,
+        ) -> ErasureMetaStatus {
+            let entries = make_tiny_test_entries(erasure_config.num_data());
+            let mut blobs = entries_to_blobs_using_config(&entries, slot, 0, true, &erasure_config);
+
+            let keypair = Keypair::new();
+            blobs.iter_mut().for_each(|blob| {
+                blob.set_id(&keypair.pubkey());
+                blob.sign(&keypair);
+            });
+
+            let shared_blobs: Vec<_> = blobs
+                .iter()
+                .cloned()
+                .map(|blob| Arc::new(RwLock::new(blob)))
+                .collect();
+
+            blocktree
+                .write_blobs(&blobs[..(erasure_config.num_data() - num_drop_data)])
+                .unwrap();
+
+            let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
+            let coding_blobs = coding_generator.next(&shared_blobs[..erasure_config.num_data()]);
+
+            blocktree
+                .put_shared_coding_blobs(coding_blobs.iter())
+                .unwrap();
+
+            let erasure_meta = blocktree
+                .erasure_meta(slot, 0)
+                .expect("DB get must succeed")
+                .unwrap();
+            let index = blocktree.get_index(slot).unwrap().unwrap();
+
+            erasure_meta.status(&index)
+        }
+
+        #[test]
+        fn test_recovery_different_configs() {
+            use ErasureMetaStatus::DataFull;
+            solana_logger::setup();
+
+            let ledger_path = get_tmp_ledger_path!();
+            let blocktree = Blocktree::open(&ledger_path).unwrap();
+
+            assert_eq!(
+                try_recovery_using_erasure_config(&ErasureConfig::default(), 4, 0, &blocktree),
+                DataFull
+            );
+
+            assert_eq!(
+                try_recovery_using_erasure_config(&ErasureConfig::new(12, 8), 8, 1, &blocktree),
+                DataFull
+            );
+
+            assert_eq!(
+                try_recovery_using_erasure_config(&ErasureConfig::new(16, 4), 4, 2, &blocktree),
+                DataFull
+            );
+        }
+
         #[test]
         fn test_recovery_fails_safely() {
             const SLOT: u64 = 0;
@@ -4009,23 +4074,39 @@ pub mod tests {
         }
     }
 
-    pub fn entries_to_blobs(
+    pub fn entries_to_blobs_using_config(
         entries: &Vec<Entry>,
         slot: u64,
         parent_slot: u64,
         is_full_slot: bool,
+        config: &ErasureConfig,
     ) -> Vec<Blob> {
         let mut blobs = entries.clone().to_single_entry_blobs();
         for (i, b) in blobs.iter_mut().enumerate() {
             b.set_index(i as u64);
             b.set_slot(slot);
             b.set_parent(parent_slot);
-            b.set_erasure_config(&ErasureConfig::default());
+            b.set_erasure_config(config);
         }
         if is_full_slot {
             blobs.last_mut().unwrap().set_is_last_in_slot();
         }
         blobs
+    }
+
+    pub fn entries_to_blobs(
+        entries: &Vec<Entry>,
+        slot: u64,
+        parent_slot: u64,
+        is_full_slot: bool,
+    ) -> Vec<Blob> {
+        entries_to_blobs_using_config(
+            entries,
+            slot,
+            parent_slot,
+            is_full_slot,
+            &ErasureConfig::default(),
+        )
     }
 
     pub fn make_slot_entries(
