@@ -109,6 +109,12 @@ impl Session {
         Ok(Session(rs))
     }
 
+    pub fn new_from_config(config: &ErasureConfig) -> Result<Session> {
+        let rs = ReedSolomon::new(config.num_data, config.num_coding)?;
+
+        Ok(Session(rs))
+    }
+
     /// Create coding blocks by overwriting `parity`
     pub fn encode(&self, data: &[&[u8]], parity: &mut [&mut [u8]]) -> Result<()> {
         self.0.encode_sep(data, parity)?;
@@ -210,6 +216,13 @@ impl CodingGenerator {
         CodingGenerator {
             leftover: Vec::with_capacity(session.0.data_shard_count()),
             session,
+        }
+    }
+
+    pub fn new_from_config(config: &ErasureConfig) -> Self {
+        CodingGenerator {
+            leftover: Vec::with_capacity(config.num_data),
+            session: Arc::new(Session::new_from_config(config).unwrap()),
         }
     }
 

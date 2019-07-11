@@ -5,7 +5,7 @@ use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastR
 use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
-use crate::erasure::{CodingGenerator, ErasureConfig, Session};
+use crate::erasure::{CodingGenerator, ErasureConfig};
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -145,9 +145,7 @@ impl BroadcastStage {
         mut broadcast_stage_run: impl BroadcastRun,
         erasure_config: &ErasureConfig,
     ) -> BroadcastStageReturnType {
-        let coding_generator = CodingGenerator::new(Arc::new(
-            Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
-        ));
+        let coding_generator = CodingGenerator::new_from_config(erasure_config);
 
         let mut broadcast = Broadcast {
             coding_generator,

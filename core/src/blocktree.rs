@@ -1632,8 +1632,7 @@ fn try_erasure_recover(
 
     let blobs = match erasure_meta.status(index) {
         ErasureMetaStatus::CanRecover => {
-            let session =
-                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap();
+            let session = Session::new_from_config(erasure_config).unwrap();
             let erasure_result = recover(
                 db,
                 &session,
@@ -2962,9 +2961,7 @@ pub mod tests {
                     .cloned()
                     .map(|blob| Arc::new(RwLock::new(blob)))
                     .collect();
-                let mut coding_generator = CodingGenerator::new(Arc::new(
-                    Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
-                ));
+                let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
                 let coding_blobs = coding_generator.next(&shared_blobs);
                 assert_eq!(coding_blobs.len(), erasure_config.num_coding());
 
@@ -3512,9 +3509,7 @@ pub mod tests {
                 .unwrap();
 
             // insert all coding blobs in first set
-            let mut coding_generator = CodingGenerator::new(Arc::new(
-                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
-            ));
+            let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
             let coding_blobs = coding_generator.next(&shared_blobs[..erasure_config.num_data()]);
 
             blocktree
@@ -3589,9 +3584,7 @@ pub mod tests {
                 b.sign(&keypair);
             });
 
-            let mut coding_generator = CodingGenerator::new(Arc::new(
-                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
-            ));
+            let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
 
             for (set_index, data_blobs) in data_blobs
                 .chunks_exact(erasure_config.num_data())
@@ -3679,9 +3672,7 @@ pub mod tests {
                 .map(Blob::into)
                 .collect::<Vec<_>>();
 
-            let session = Arc::new(
-                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
-            );
+            let session = Arc::new(Session::new_from_config(&erasure_config).unwrap());
 
             let mut coding_generator = CodingGenerator::new(Arc::clone(&session));
 
@@ -3752,9 +3743,7 @@ pub mod tests {
                 .map(Blob::into)
                 .collect::<Vec<_>>();
 
-            let mut coding_generator = CodingGenerator::new(Arc::new(
-                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
-            ));
+            let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
 
             let shared_coding_blobs = coding_generator.next(&data_blobs);
             assert_eq!(shared_coding_blobs.len(), erasure_config.num_coding());
