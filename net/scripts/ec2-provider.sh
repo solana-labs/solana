@@ -381,3 +381,12 @@ cloud_FetchFile() {
       "solana@$publicIp:$remoteFile" "$localFile"
   )
 }
+
+#
+# cloud_CreateAndAttachPersistentDisk
+#
+# Not yet implemented for this cloud provider
+cloud_CreateAndAttachPersistentDisk() {
+  echo "ERROR: cloud_CreateAndAttachPersistentDisk is not yet implemented for ec2"
+  exit 1
+}
