@@ -7,7 +7,6 @@ use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node};
 use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
-use solana::erasure::ErasureConfig;
 use solana::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 use solana::gossip_service::GossipService;
 use solana::packet::index_blobs;
@@ -98,7 +97,7 @@ fn test_replay() {
         completed_slots_receiver,
         leader_schedule_cache,
         _,
-    ) = validator::new_banks_from_blocktree(&blocktree_path, None, None, &ErasureConfig::default());
+    ) = validator::new_banks_from_blocktree(&blocktree_path, None, None);
     let working_bank = bank_forks.working_bank();
     assert_eq!(
         working_bank.get_balance(&mint_keypair.pubkey()),

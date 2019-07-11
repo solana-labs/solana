@@ -102,7 +102,6 @@ impl Validator {
             ledger_path,
             config.account_paths.clone(),
             config.snapshot_path.clone(),
-            &config.erasure_config,
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -268,6 +267,7 @@ impl Validator {
             config.sigverify_disabled,
             &blocktree,
             &config.broadcast_stage_type,
+            &config.erasure_config,
             &exit,
         );
 
@@ -332,7 +332,6 @@ pub fn new_banks_from_blocktree(
     blocktree_path: &str,
     account_paths: Option<String>,
     snapshot_path: Option<String>,
-    erasure_config: &ErasureConfig,
 ) -> (
     BankForks,
     Vec<BankForksInfo>,
@@ -346,7 +345,7 @@ pub fn new_banks_from_blocktree(
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
     let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
-        Blocktree::open_with_signal(blocktree_path, erasure_config)
+        Blocktree::open_with_signal(blocktree_path)
             .expect("Expected to successfully open database ledger");
 
     let (bank_forks, bank_forks_info, leader_schedule_cache) =

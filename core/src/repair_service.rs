@@ -410,7 +410,6 @@ mod test {
     };
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::Node;
-    use crate::erasure::ErasureConfig;
     use rand::seq::SliceRandom;
     use rand::{thread_rng, Rng};
     use std::cmp::min;
@@ -692,7 +691,7 @@ mod test {
         {
             // Create blocktree
             let (blocktree, _, completed_slots_receiver) =
-                Blocktree::open_with_signal(&blocktree_path, &ErasureConfig::default()).unwrap();
+                Blocktree::open_with_signal(&blocktree_path).unwrap();
 
             let blocktree = Arc::new(blocktree);
 

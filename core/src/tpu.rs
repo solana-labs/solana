@@ -6,6 +6,7 @@ use crate::blocktree::Blocktree;
 use crate::broadcast_stage::{BroadcastStage, BroadcastStageType};
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
+use crate::erasure::ErasureConfig;
 use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::{PohRecorder, WorkingBankEntries};
 use crate::service::Service;
@@ -37,6 +38,7 @@ impl Tpu {
         sigverify_disabled: bool,
         blocktree: &Arc<Blocktree>,
         broadcast_type: &BroadcastStageType,
+        erasure_config: &ErasureConfig,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
@@ -74,6 +76,7 @@ impl Tpu {
             entry_receiver,
             &exit,
             blocktree,
+            erasure_config,
         );
 
         Self {

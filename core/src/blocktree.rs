@@ -92,7 +92,6 @@ pub struct Blocktree {
     batch_processor: Arc<RwLock<BatchProcessor>>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
-    pub erasure_config: ErasureConfig,
 }
 
 // Column family for metadata about a leader slot
@@ -158,13 +157,11 @@ impl Blocktree {
             new_blobs_signals: vec![],
             batch_processor,
             completed_slots_senders: vec![],
-            erasure_config: ErasureConfig::default(),
         })
     }
 
     pub fn open_with_signal(
         ledger_path: &str,
-        erasure_config: &ErasureConfig,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
         let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
@@ -172,7 +169,6 @@ impl Blocktree {
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
         blocktree.new_blobs_signals = vec![signal_sender];
         blocktree.completed_slots_senders = vec![completed_slots_sender];
-        blocktree.erasure_config = *erasure_config;
 
         Ok((blocktree, signal_receiver, completed_slots_receiver))
     }
@@ -334,7 +330,12 @@ impl Blocktree {
             assert!(!blob.is_coding());
 
             match erasure_config_opt {
-                Some(config) => assert_eq!(blob.erasure_config(), config),
+                Some(config) => {
+                    if config != blob.erasure_config() {
+                        // ToDo: This is a potential slashing condition
+                        error!("Multiple erasure config for the same slot.");
+                    }
+                }
                 None => erasure_config_opt = Some(blob.erasure_config()),
             }
 
@@ -553,7 +554,12 @@ impl Blocktree {
             assert!(blob.is_coding());
 
             match erasure_config_opt {
-                Some(config) => assert_eq!(blob.erasure_config(), config),
+                Some(config) => {
+                    if config != blob.erasure_config() {
+                        // ToDo: This is a potential slashing condition
+                        error!("Multiple erasure config for the same slot.");
+                    }
+                }
                 None => erasure_config_opt = Some(blob.erasure_config()),
             }
 
@@ -2519,8 +2525,7 @@ pub mod tests {
     pub fn test_new_blobs_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path("test_new_blobs_signal");
-        let (ledger, recvr, _) =
-            Blocktree::open_with_signal(&ledger_path, &ErasureConfig::default()).unwrap();
+        let (ledger, recvr, _) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -2600,8 +2605,7 @@ pub mod tests {
     pub fn test_completed_blobs_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal");
-        let (ledger, _, recvr) =
-            Blocktree::open_with_signal(&ledger_path, &ErasureConfig::default()).unwrap();
+        let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -2624,8 +2628,7 @@ pub mod tests {
     pub fn test_completed_blobs_signal_orphans() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal_orphans");
-        let (ledger, _, recvr) =
-            Blocktree::open_with_signal(&ledger_path, &ErasureConfig::default()).unwrap();
+        let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -2663,8 +2666,7 @@ pub mod tests {
     pub fn test_completed_blobs_signal_many() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal_many");
-        let (ledger, _, recvr) =
-            Blocktree::open_with_signal(&ledger_path, &ErasureConfig::default()).unwrap();
+        let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -2928,7 +2930,8 @@ pub mod tests {
             let branching_factor: u64 = 4;
             // Number of slots that will be in the tree
             let num_slots = (branching_factor.pow(num_tree_levels) - 1) / (branching_factor - 1);
-            let entries_per_slot = blocktree.erasure_config.num_data() as u64;
+            let erasure_config = ErasureConfig::default();
+            let entries_per_slot = erasure_config.num_data() as u64;
             assert!(entries_per_slot > 1);
 
             let (mut blobs, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
@@ -2960,14 +2963,10 @@ pub mod tests {
                     .map(|blob| Arc::new(RwLock::new(blob)))
                     .collect();
                 let mut coding_generator = CodingGenerator::new(Arc::new(
-                    Session::new(
-                        blocktree.erasure_config.num_data(),
-                        blocktree.erasure_config.num_coding(),
-                    )
-                    .unwrap(),
+                    Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
                 ));
                 let coding_blobs = coding_generator.next(&shared_blobs);
-                assert_eq!(coding_blobs.len(), blocktree.erasure_config.num_coding());
+                assert_eq!(coding_blobs.len(), erasure_config.num_coding());
 
                 let mut rng = thread_rng();
 
@@ -3483,8 +3482,9 @@ pub mod tests {
             let path = get_tmp_ledger_path!();
             let blocktree = Blocktree::open(&path).unwrap();
 
+            let erasure_config = ErasureConfig::default();
             // two erasure sets
-            let num_blobs = blocktree.erasure_config.num_data() as u64 * 2;
+            let num_blobs = erasure_config.num_data() as u64 * 2;
             let slot = 0;
 
             let (mut blobs, _) = make_slot_entries(slot, 0, num_blobs);
@@ -3508,19 +3508,14 @@ pub mod tests {
             assert!(erasure_meta_opt.is_none());
 
             blocktree
-                .write_blobs(&blobs[2..blocktree.erasure_config.num_data()])
+                .write_blobs(&blobs[2..erasure_config.num_data()])
                 .unwrap();
 
             // insert all coding blobs in first set
             let mut coding_generator = CodingGenerator::new(Arc::new(
-                Session::new(
-                    blocktree.erasure_config.num_data(),
-                    blocktree.erasure_config.num_coding(),
-                )
-                .unwrap(),
+                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
             ));
-            let coding_blobs =
-                coding_generator.next(&shared_blobs[..blocktree.erasure_config.num_data()]);
+            let coding_blobs = coding_generator.next(&shared_blobs[..erasure_config.num_data()]);
 
             blocktree
                 .put_shared_coding_blobs(coding_blobs.iter())
@@ -3535,12 +3530,11 @@ pub mod tests {
             assert_eq!(erasure_meta.status(&index), DataFull);
 
             // insert blob in the 2nd set so that recovery should be possible given all coding blobs
-            let set2 = &blobs[blocktree.erasure_config.num_data()..];
+            let set2 = &blobs[erasure_config.num_data()..];
             blocktree.write_blobs(&set2[..1]).unwrap();
 
             // insert all coding blobs in 2nd set. Should trigger recovery
-            let coding_blobs =
-                coding_generator.next(&shared_blobs[blocktree.erasure_config.num_data()..]);
+            let coding_blobs = coding_generator.next(&shared_blobs[erasure_config.num_data()..]);
 
             blocktree
                 .put_shared_coding_blobs(coding_blobs.iter())
@@ -3578,18 +3572,16 @@ pub mod tests {
             let slot = 0;
 
             let ledger_path = get_tmp_ledger_path!();
+            let erasure_config = ErasureConfig::default();
 
             let blocktree = Blocktree::open(&ledger_path).unwrap();
             let num_sets = 3;
-            let data_blobs = make_slot_entries(
-                slot,
-                0,
-                num_sets * blocktree.erasure_config.num_data() as u64,
-            )
-            .0
-            .into_iter()
-            .map(Blob::into)
-            .collect::<Vec<_>>();
+            let data_blobs =
+                make_slot_entries(slot, 0, num_sets * erasure_config.num_data() as u64)
+                    .0
+                    .into_iter()
+                    .map(Blob::into)
+                    .collect::<Vec<_>>();
             let keypair = Keypair::new();
             data_blobs.iter().for_each(|blob: &Arc<RwLock<Blob>>| {
                 let mut b = blob.write().unwrap();
@@ -3598,20 +3590,16 @@ pub mod tests {
             });
 
             let mut coding_generator = CodingGenerator::new(Arc::new(
-                Session::new(
-                    blocktree.erasure_config.num_data(),
-                    blocktree.erasure_config.num_coding(),
-                )
-                .unwrap(),
+                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
             ));
 
             for (set_index, data_blobs) in data_blobs
-                .chunks_exact(blocktree.erasure_config.num_data())
+                .chunks_exact(erasure_config.num_data())
                 .enumerate()
             {
                 let coding_blobs = coding_generator.next(&data_blobs);
 
-                assert_eq!(coding_blobs.len(), blocktree.erasure_config.num_coding());
+                assert_eq!(coding_blobs.len(), erasure_config.num_coding());
 
                 let deleted_data = data_blobs[0].clone();
 
@@ -3628,11 +3616,11 @@ pub mod tests {
                 let slot_meta = blocktree.meta(slot).unwrap().unwrap();
                 assert_eq!(
                     slot_meta.consumed,
-                    (blocktree.erasure_config.num_data() * (set_index + 1)) as u64
+                    (erasure_config.num_data() * (set_index + 1)) as u64
                 );
                 assert_eq!(
                     slot_meta.received,
-                    (blocktree.erasure_config.num_data() * (set_index + 1)) as u64
+                    (erasure_config.num_data() * (set_index + 1)) as u64
                 );
                 assert_eq!(slot_meta.parent_slot, 0);
                 assert!(slot_meta.next_slots.is_empty());
@@ -3640,7 +3628,7 @@ pub mod tests {
                 if set_index as u64 == num_sets - 1 {
                     assert_eq!(
                         slot_meta.last_index,
-                        (blocktree.erasure_config.num_data() * (set_index + 1) - 1) as u64
+                        (erasure_config.num_data() * (set_index + 1) - 1) as u64
                     );
                 }
 
@@ -3683,33 +3671,27 @@ pub mod tests {
             solana_logger::setup();
 
             let ledger_path = get_tmp_ledger_path!();
+            let erasure_config = ErasureConfig::default();
             let blocktree = Blocktree::open(&ledger_path).unwrap();
-            let data_blobs = make_slot_entries(SLOT, 0, blocktree.erasure_config.num_data() as u64)
+            let data_blobs = make_slot_entries(SLOT, 0, erasure_config.num_data() as u64)
                 .0
                 .into_iter()
                 .map(Blob::into)
                 .collect::<Vec<_>>();
 
             let session = Arc::new(
-                Session::new(
-                    blocktree.erasure_config.num_data(),
-                    blocktree.erasure_config.num_coding(),
-                )
-                .unwrap(),
+                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
             );
 
             let mut coding_generator = CodingGenerator::new(Arc::clone(&session));
 
             let shared_coding_blobs = coding_generator.next(&data_blobs);
-            assert_eq!(
-                shared_coding_blobs.len(),
-                blocktree.erasure_config.num_coding()
-            );
+            assert_eq!(shared_coding_blobs.len(), erasure_config.num_coding());
 
             let mut prev_coding = HashMap::new();
             let prev_data = HashMap::new();
             let mut index = Index::new(SLOT);
-            let mut erasure_meta = ErasureMeta::new(SET_INDEX, &blocktree.erasure_config);
+            let mut erasure_meta = ErasureMeta::new(SET_INDEX, &erasure_config);
             erasure_meta.size = shared_coding_blobs[0].read().unwrap().size();
 
             for shared_blob in shared_coding_blobs.iter() {
@@ -3719,7 +3701,7 @@ pub mod tests {
             }
 
             index.coding_mut().set_many_present(
-                (0..blocktree.erasure_config.num_coding() as u64).zip(std::iter::repeat(true)),
+                (0..erasure_config.num_coding() as u64).zip(std::iter::repeat(true)),
             );
 
             let (recovered_data, recovered_coding) = recover(
@@ -3730,7 +3712,7 @@ pub mod tests {
                 &index,
                 &prev_data,
                 &prev_coding,
-                &blocktree.erasure_config,
+                &erasure_config,
             )
             .expect("Successful recovery");
 
@@ -3762,26 +3744,20 @@ pub mod tests {
 
             solana_logger::setup();
             let ledger_path = get_tmp_ledger_path!();
+            let erasure_config = ErasureConfig::default();
             let blocktree = Blocktree::open(&ledger_path).unwrap();
-            let data_blobs = make_slot_entries(SLOT, 0, blocktree.erasure_config.num_data() as u64)
+            let data_blobs = make_slot_entries(SLOT, 0, erasure_config.num_data() as u64)
                 .0
                 .into_iter()
                 .map(Blob::into)
                 .collect::<Vec<_>>();
 
             let mut coding_generator = CodingGenerator::new(Arc::new(
-                Session::new(
-                    blocktree.erasure_config.num_data(),
-                    blocktree.erasure_config.num_coding(),
-                )
-                .unwrap(),
+                Session::new(erasure_config.num_data(), erasure_config.num_coding()).unwrap(),
             ));
 
             let shared_coding_blobs = coding_generator.next(&data_blobs);
-            assert_eq!(
-                shared_coding_blobs.len(),
-                blocktree.erasure_config.num_coding()
-            );
+            assert_eq!(shared_coding_blobs.len(), erasure_config.num_coding());
 
             // Insert coding blobs except 1 and no data. Not enough to do recovery
             blocktree
@@ -3809,7 +3785,7 @@ pub mod tests {
                 SLOT,
                 &prev_inserted_blob_datas,
                 &prev_inserted_coding,
-                &blocktree.erasure_config,
+                &erasure_config,
             );
 
             assert!(attempt_result.is_ok());
@@ -3846,6 +3822,7 @@ pub mod tests {
             let max_erasure_sets = 16;
             solana_logger::setup();
 
+            let erasure_config = ErasureConfig::default();
             let path = get_tmp_ledger_path!();
             let blocktree = Arc::new(Blocktree::open(&path).unwrap());
             let mut rng = thread_rng();
@@ -3863,13 +3840,13 @@ pub mod tests {
                         .map(|set_index| {
                             let (num_data, num_coding) = if set_index % 2 == 0 {
                                 (
-                                    blocktree.erasure_config.num_data() - rng.gen_range(1, 3),
-                                    blocktree.erasure_config.num_coding() - rng.gen_range(1, 3),
+                                    erasure_config.num_data() - rng.gen_range(1, 3),
+                                    erasure_config.num_coding() - rng.gen_range(1, 3),
                                 )
                             } else {
                                 (
-                                    blocktree.erasure_config.num_data() - rng.gen_range(1, 5),
-                                    blocktree.erasure_config.num_coding(),
+                                    erasure_config.num_data() - rng.gen_range(1, 5),
+                                    erasure_config.num_coding(),
                                 )
                             };
                             ErasureSpec {
@@ -4033,7 +4010,7 @@ pub mod tests {
                     // Should have all data
                     assert_eq!(
                         index.data().present_in_bounds(start_index..data_end_idx),
-                        blocktree.erasure_config.num_data()
+                        erasure_config.num_data()
                     );
                 }
             }
