@@ -67,6 +67,7 @@ externalNodes=false
 failOnValidatorBootupFailure=true
 
 publicNetwork=false
+letsEncryptDomainName=
 enableGpu=false
 customAddress=
 zones=()
@@ -122,6 +123,9 @@ Manage testnet instances
                       * For EC2, [address] is the "allocation ID" of the desired
                         Elastic IP.
    -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
+   --letsencrypt [dns name] - Attempt to generate a TLS certificate using this
+                              DNS name (useful only when the -a and -P options
+                              are also provided)
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -136,14 +140,28 @@ EOF
   exit $exitcode
 }
 
-
 command=$1
 [[ -n $command ]] || usage
 shift
 [[ $command = create || $command = config || $command = info || $command = delete ]] ||
   usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt; do
+shortArgs=()
+while [[ -n $1 ]]; do
+  if [[ ${1:0:2} = -- ]]; then
+    if [[ $1 = --letsencrypt ]]; then
+      letsEncryptDomainName="$2"
+      shift 2
+    else
+      usage "Unknown long option: $1"
+    fi
+  else
+    shortArgs+=("$1")
+    shift
+  fi
+done
+
+while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -199,7 +217,6 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt; do
     ;;
   esac
 done
-shift $((OPTIND - 1))
 
 [[ ${#zones[@]} -gt 0 ]] || zones+=("$(cloud_DefaultZone)")
 
@@ -328,6 +345,7 @@ prepareInstancesAndWriteConfigFile() {
 netBasename=$prefix
 publicNetwork=$publicNetwork
 sshPrivateKey=$sshPrivateKey
+letsEncryptDomainName=$letsEncryptDomainName
 EOF
   fi
   touch "$geoipConfigFile"
@@ -598,6 +616,7 @@ $(
     disable-background-upgrades.sh \
     create-solana-user.sh \
     add-solana-user-authorized_keys.sh \
+    install-certbot.sh \
     install-earlyoom.sh \
     install-libssl-compatability.sh \
     install-nodejs.sh \

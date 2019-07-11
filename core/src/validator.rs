@@ -23,8 +23,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::timestamp;
-use solana_storage_api::SLOTS_PER_SEGMENT;
+use solana_sdk::timing::{timestamp, DEFAULT_SLOTS_PER_TURN};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
@@ -36,7 +35,7 @@ pub struct ValidatorConfig {
     pub sigverify_disabled: bool,
     pub voting_disabled: bool,
     pub blockstream: Option<String>,
-    pub storage_rotate_count: u64,
+    pub storage_slots_per_turn: u64,
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
     pub snapshot_path: Option<String>,
@@ -45,15 +44,11 @@ pub struct ValidatorConfig {
 
 impl Default for ValidatorConfig {
     fn default() -> Self {
-        // TODO: remove this, temporary parameter to configure
-        // storage amount differently for test configurations
-        // so tests don't take forever to run.
-        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = SLOTS_PER_SEGMENT;
         Self {
             sigverify_disabled: false,
             voting_disabled: false,
             blockstream: None,
-            storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
+            storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
             account_paths: None,
             rpc_config: JsonRpcConfig::default(),
             snapshot_path: None,
@@ -158,7 +153,11 @@ impl Validator {
             keypair.clone(),
         )));
 
-        let storage_state = StorageState::new(&bank.last_blockhash());
+        let storage_state = StorageState::new(
+            &bank.last_blockhash(),
+            config.storage_slots_per_turn,
+            bank.slots_per_segment(),
+        );
 
         let rpc_service = if node.info.rpc.port() == 0 {
             None
@@ -241,7 +240,6 @@ impl Validator {
             &cluster_info,
             sockets,
             blocktree.clone(),
-            config.storage_rotate_count,
             &storage_state,
             config.blockstream.as_ref(),
             ledger_signal_receiver,
@@ -257,7 +255,6 @@ impl Validator {
         }
 
         let tpu = Tpu::new(
-            &id,
             &cluster_info,
             &poh_recorder,
             entry_receiver,

@@ -30,7 +30,9 @@ impl Backend for Rocks {
     type Error = rocksdb::Error;
 
     fn open(path: &Path) -> Result<Rocks> {
-        use crate::blocktree::db::columns::{Coding, Data, DeadSlots, ErasureMeta, Orphans, Root, SlotMeta};
+        use crate::blocktree::db::columns::{
+            Coding, Data, DeadSlots, ErasureMeta, Index, Orphans, Root, SlotMeta,
+        };
 
         fs::create_dir_all(&path)?;
 
@@ -40,12 +42,14 @@ impl Backend for Rocks {
         // Column family names
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
         let data_cf_descriptor = ColumnFamilyDescriptor::new(Data::NAME, get_cf_options());
-        let dead_slots_cf_descriptor = ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options());
+        let dead_slots_cf_descriptor =
+            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options());
         let erasure_cf_descriptor = ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options());
         let erasure_meta_cf_descriptor =
             ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
         let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
         let root_cf_descriptor = ColumnFamilyDescriptor::new(Root::NAME, get_cf_options());
+        let index_cf_descriptor = ColumnFamilyDescriptor::new(Index::NAME, get_cf_options());
 
         let cfs = vec![
             meta_cf_descriptor,
@@ -55,6 +59,7 @@ impl Backend for Rocks {
             erasure_meta_cf_descriptor,
             orphans_cf_descriptor,
             root_cf_descriptor,
+            index_cf_descriptor,
         ];
 
         // Open the database
@@ -64,13 +69,16 @@ impl Backend for Rocks {
     }
 
     fn columns(&self) -> Vec<&'static str> {
-        use crate::blocktree::db::columns::{Coding, Data, DeadSlots, ErasureMeta, Orphans, Root, SlotMeta};
+        use crate::blocktree::db::columns::{
+            Coding, Data, DeadSlots, ErasureMeta, Index, Orphans, Root, SlotMeta,
+        };
 
         vec![
             Coding::NAME,
             ErasureMeta::NAME,
             DeadSlots::NAME,
             Data::NAME,
+            Index::NAME,
             Orphans::NAME,
             Root::NAME,
             SlotMeta::NAME,
@@ -162,6 +170,25 @@ impl Column<Rocks> for cf::Data {
         let index = BigEndian::read_u64(&key[8..16]);
         (slot, index)
     }
+}
+
+impl Column<Rocks> for cf::Index {
+    const NAME: &'static str = super::INDEX_CF;
+    type Index = u64;
+
+    fn key(slot: u64) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], slot);
+        key
+    }
+
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
+}
+
+impl TypedColumn<Rocks> for cf::Index {
+    type Type = crate::blocktree::meta::Index;
 }
 
 impl Column<Rocks> for cf::DeadSlots {

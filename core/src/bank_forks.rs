@@ -107,12 +107,13 @@ impl BankForks {
         }
     }
 
-    pub fn insert(&mut self, bank: Bank) {
+    pub fn insert(&mut self, bank: Bank) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), bank.clone());
         assert!(prev.is_none());
 
         self.working_bank = bank.clone();
+        bank
     }
 
     // TODO: really want to kill this...

@@ -27,6 +27,7 @@ coverageFlags+=("-Coverflow-checks=off") # Disable overflow checks, which create
 export RUSTFLAGS="${coverageFlags[*]}"
 export CARGO_INCREMENTAL=0
 export RUST_BACKTRACE=1
+export RUST_MIN_STACK=8388608
 
 echo "--- remove old coverage results"
 if [[ -d target/cov ]]; then

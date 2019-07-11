@@ -20,10 +20,11 @@ use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::timing::get_segment_from_slot;
 use solana_sdk::transaction::Transaction;
 use solana_storage_api::storage_contract::{Proof, ProofStatus, StorageContract};
+use solana_storage_api::storage_instruction;
 use solana_storage_api::storage_instruction::proof_validation;
-use solana_storage_api::{get_segment_from_slot, storage_instruction};
 use std::collections::HashMap;
 use std::mem::size_of;
 use std::net::UdpSocket;
@@ -47,6 +48,8 @@ pub struct StorageStateInner {
     replicator_map: ReplicatorMap,
     storage_blockhash: Hash,
     slot: u64,
+    slots_per_segment: u64,
+    slots_per_turn: u64,
 }
 
 // Used to track root slots in storage stage
@@ -67,7 +70,7 @@ pub struct StorageStage {
     t_storage_create_accounts: JoinHandle<()>,
 }
 
-pub const STORAGE_ROTATE_TEST_COUNT: u64 = 2;
+pub const SLOTS_PER_TURN_TEST: u64 = 2;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
 pub const NUM_STORAGE_SAMPLES: usize = 4;
@@ -86,7 +89,7 @@ fn get_identity_index_from_signature(key: &Signature) -> usize {
 }
 
 impl StorageState {
-    pub fn new(hash: &Hash) -> Self {
+    pub fn new(hash: &Hash, slots_per_turn: u64, slots_per_segment: u64) -> Self {
         let storage_keys = vec![0u8; KEY_SIZE * NUM_IDENTITIES];
         let storage_results = vec![Hash::default(); NUM_IDENTITIES];
         let replicator_map = vec![];
@@ -95,7 +98,9 @@ impl StorageState {
             storage_keys,
             storage_results,
             replicator_map,
+            slots_per_turn,
             slot: 0,
+            slots_per_segment,
             storage_blockhash: *hash,
         };
 
@@ -118,6 +123,10 @@ impl StorageState {
         self.state.read().unwrap().storage_blockhash
     }
 
+    pub fn get_storage_turn_rate(&self) -> u64 {
+        self.state.read().unwrap().slots_per_turn
+    }
+
     pub fn get_slot(&self) -> u64 {
         self.state.read().unwrap().slot
     }
@@ -129,7 +138,8 @@ impl StorageState {
     ) -> Vec<Pubkey> {
         // TODO: keep track of age?
         const MAX_PUBKEYS_TO_RETURN: usize = 5;
-        let index = get_segment_from_slot(slot) as usize;
+        let index =
+            get_segment_from_slot(slot, self.state.read().unwrap().slots_per_segment) as usize;
         let replicator_map = &self.state.read().unwrap().replicator_map;
         let working_bank = bank_forks.read().unwrap().working_bank();
         let accounts = replicator_accounts(&working_bank);
@@ -167,12 +177,12 @@ impl StorageStage {
         storage_keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        storage_rotate_count: u64,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
         let (instruction_sender, instruction_receiver) = channel();
 
         let t_storage_mining_verifier = {
+            let slots_per_turn = storage_state.state.read().unwrap().slots_per_turn;
             let storage_state_inner = storage_state.state.clone();
             let exit = exit.clone();
             let storage_keypair = storage_keypair.clone();
@@ -190,7 +200,7 @@ impl StorageStage {
                                 &some_blocktree,
                                 &mut storage_slots,
                                 &mut current_key,
-                                storage_rotate_count,
+                                slots_per_turn,
                                 &instruction_sender,
                             ) {
                                 match e {
@@ -356,6 +366,7 @@ impl StorageStage {
         _blocktree: &Arc<Blocktree>,
         blockhash: Hash,
         slot: u64,
+        slots_per_segment: u64,
         instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
@@ -364,7 +375,7 @@ impl StorageStage {
         let ix = storage_instruction::advertise_recent_blockhash(
             &storage_keypair.pubkey(),
             blockhash,
-            slot,
+            get_segment_from_slot(slot, slots_per_segment),
         );
         instruction_sender.send(ix)?;
 
@@ -379,7 +390,7 @@ impl StorageStage {
         }
 
         // Regenerate the answers
-        let num_segments = get_segment_from_slot(slot) as usize;
+        let num_segments = get_segment_from_slot(slot, slots_per_segment) as usize;
         if num_segments == 0 {
             info!("Ledger has 0 segments!");
             return Ok(());
@@ -412,6 +423,7 @@ impl StorageStage {
             match chacha_cbc_encrypt_file_many_keys(
                 _blocktree,
                 segment as u64,
+                statew.slots_per_segment,
                 &mut statew.storage_keys,
                 &samples,
             ) {
@@ -430,6 +442,7 @@ impl StorageStage {
 
     fn collect_proofs(
         slot: u64,
+        slots_per_segment: u64,
         account_id: Pubkey,
         account: Account,
         storage_state: &Arc<RwLock<StorageStateInner>>,
@@ -437,7 +450,7 @@ impl StorageStage {
     ) {
         if let Ok(StorageContract::ReplicatorStorage { proofs, .. }) = account.state() {
             //convert slot to segment
-            let segment = get_segment_from_slot(slot);
+            let segment = get_segment_from_slot(slot, slots_per_segment);
             if let Some(proofs) = proofs.get(&segment) {
                 for proof in proofs.iter() {
                     {
@@ -454,10 +467,12 @@ impl StorageStage {
                     }
 
                     let mut statew = storage_state.write().unwrap();
-                    if statew.replicator_map.len() < segment {
-                        statew.replicator_map.resize(segment, HashMap::new());
+                    if statew.replicator_map.len() < segment as usize {
+                        statew
+                            .replicator_map
+                            .resize(segment as usize, HashMap::new());
                     }
-                    let proof_segment_index = proof.segment_index;
+                    let proof_segment_index = proof.segment_index as usize;
                     if proof_segment_index < statew.replicator_map.len() {
                         // TODO randomly select and verify the proof first
                         // Copy the submitted proof
@@ -479,7 +494,7 @@ impl StorageStage {
         blocktree: &Arc<Blocktree>,
         storage_slots: &mut StorageSlots,
         current_key_idx: &mut usize,
-        storage_rotate_count: u64,
+        slots_per_turn: u64,
         instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
@@ -494,8 +509,7 @@ impl StorageStage {
             if bank.slot() > storage_slots.last_root {
                 storage_slots.slot_count += 1;
                 storage_slots.last_root = bank.slot();
-
-                if storage_slots.slot_count % storage_rotate_count == 0 {
+                if storage_slots.slot_count % slots_per_turn == 0 {
                     // load all the replicator accounts in the bank. collect all their proofs at the current slot
                     let replicator_accounts = replicator_accounts(bank.as_ref());
                     // find proofs, and use them to update
@@ -503,6 +517,7 @@ impl StorageStage {
                     for (account_id, account) in replicator_accounts.into_iter() {
                         Self::collect_proofs(
                             bank.slot(),
+                            bank.slots_per_segment(),
                             account_id,
                             account,
                             storage_state,
@@ -517,10 +532,11 @@ impl StorageStage {
                         &blocktree,
                         bank.last_blockhash(),
                         bank.slot(),
+                        bank.slots_per_segment(),
                         instruction_sender,
                     );
                     Self::submit_verifications(
-                        get_segment_from_slot(bank.slot()),
+                        get_segment_from_slot(bank.slot(), bank.slots_per_segment()),
                         &storage_state,
                         &storage_keypair,
                         instruction_sender,
@@ -532,7 +548,7 @@ impl StorageStage {
     }
 
     fn submit_verifications(
-        current_segment: usize,
+        current_segment: u64,
         storage_state: &Arc<RwLock<StorageStateInner>>,
         storage_keypair: &Arc<Keypair>,
         ix_sender: &Sender<Instruction>,
@@ -578,7 +594,7 @@ impl StorageStage {
                         .map(|checked_proofs| {
                             proof_validation(
                                 &storage_keypair.pubkey(),
-                                current_segment as u64,
+                                current_segment,
                                 checked_proofs.to_vec(),
                             )
                         })
@@ -626,7 +642,6 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
-    use solana_storage_api::SLOTS_PER_SEGMENT;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -646,7 +661,11 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
         let (_slot_sender, slot_receiver) = channel();
-        let storage_state = StorageState::new(&bank.last_blockhash());
+        let storage_state = StorageState::new(
+            &bank.last_blockhash(),
+            SLOTS_PER_TURN_TEST,
+            bank.slots_per_segment(),
+        );
         let storage_stage = StorageStage::new(
             &storage_state,
             slot_receiver,
@@ -655,7 +674,6 @@ mod tests {
             &storage_keypair,
             &exit.clone(),
             &bank_forks,
-            STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
         exit.store(true, Ordering::Relaxed);
@@ -685,7 +703,11 @@ mod tests {
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let (bank_sender, bank_receiver) = channel();
-        let storage_state = StorageState::new(&bank.last_blockhash());
+        let storage_state = StorageState::new(
+            &bank.last_blockhash(),
+            SLOTS_PER_TURN_TEST,
+            bank.slots_per_segment(),
+        );
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
@@ -694,7 +716,6 @@ mod tests {
             &storage_keypair,
             &exit.clone(),
             &bank_forks,
-            STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
         bank_sender.send(vec![bank.clone()]).unwrap();
@@ -710,7 +731,7 @@ mod tests {
         assert_eq!(result, Hash::default());
 
         let mut last_bank = bank;
-        let rooted_banks = (slot..slot + SLOTS_PER_SEGMENT + 1)
+        let rooted_banks = (slot..slot + last_bank.slots_per_segment() + 1)
             .map(|i| {
                 let bank = Bank::new_from_parent(&last_bank, &keypair.pubkey(), i);
                 blocktree_processor::process_entries(
@@ -775,7 +796,11 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (bank_sender, bank_receiver) = channel();
-        let storage_state = StorageState::new(&bank.last_blockhash());
+        let storage_state = StorageState::new(
+            &bank.last_blockhash(),
+            SLOTS_PER_TURN_TEST,
+            bank.slots_per_segment(),
+        );
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
@@ -784,7 +809,6 @@ mod tests {
             &storage_keypair,
             &exit.clone(),
             &bank_forks,
-            STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
         bank_sender.send(vec![bank.clone()]).unwrap();
@@ -828,7 +852,7 @@ mod tests {
         blocktree_processor::process_entries(
             &next_bank,
             &entry::create_ticks(
-                DEFAULT_TICKS_PER_SLOT * SLOTS_PER_SEGMENT + 1,
+                DEFAULT_TICKS_PER_SLOT * next_bank.slots_per_segment() + 1,
                 bank.last_blockhash(),
             ),
             true,

@@ -73,7 +73,8 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             self.last_blockhash = Hash::default();
         }
 
-        blocktree.write_shared_blobs(data_blobs.iter().chain(coding_blobs.iter()))?;
+        blocktree.write_shared_blobs(data_blobs.iter())?;
+        blocktree.put_shared_coding_blobs(coding_blobs.iter())?;
 
         // Set the forwarded flag to true, so that the blobs won't be forwarded to peers
         data_blobs

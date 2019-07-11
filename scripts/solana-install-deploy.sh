@@ -5,6 +5,17 @@
 set -e
 SOLANA_ROOT="$(cd "$(dirname "$0")"/..; pwd)"
 
+maybeKeypair=
+while [[ ${1:0:2} = -- ]]; do
+  if [[ $1 = --keypair && -n $2 ]]; then
+    maybeKeypair="$1 $2"
+    shift 2
+  else
+    echo "Error: Unknown option: $1"
+    exit 1
+  fi
+done
+
 URL=$1
 TAG=$2
 OS=${3:-linux}
@@ -60,8 +71,12 @@ esac
 PATH="$SOLANA_ROOT"/target/debug:$PATH
 
 set -x
-balance=$(solana-wallet --url "$URL" balance)
+# shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair
+balance=$(solana-wallet $maybeKeypair --url "$URL" balance)
 if [[ $balance = "0 lamports" ]]; then
-  solana-wallet --url "$URL" airdrop 42
+  # shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair
+  solana-wallet $maybeKeypair --url "$URL" airdrop 42
 fi
-solana-install deploy --url "$URL" "$DOWNLOAD_URL" update_manifest_keypair.json
+
+# shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair
+solana-install deploy $maybeKeypair --url "$URL" "$DOWNLOAD_URL" update_manifest_keypair.json

@@ -51,13 +51,13 @@ pub fn process_instruction(
                 current,
             )
         }
-        StorageInstruction::AdvertiseStorageRecentBlockhash { hash, slot } => {
+        StorageInstruction::AdvertiseStorageRecentBlockhash { hash, segment } => {
             if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
             let current = syscall::current::from_keyed_account(&rest[0])?;
-            storage_account.advertise_storage_recent_blockhash(hash, slot, current)
+            storage_account.advertise_storage_recent_blockhash(hash, segment, current)
         }
         StorageInstruction::ClaimStorageReward => {
             if rest.len() != 4 {

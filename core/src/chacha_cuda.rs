@@ -7,7 +7,6 @@ use crate::sigverify::{
     chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state,
 };
 use solana_sdk::hash::Hash;
-use solana_storage_api::SLOTS_PER_SEGMENT;
 use std::io;
 use std::mem::size_of;
 use std::sync::Arc;
@@ -19,6 +18,7 @@ use std::sync::Arc;
 pub fn chacha_cbc_encrypt_file_many_keys(
     blocktree: &Arc<Blocktree>,
     segment: u64,
+    slots_per_segment: u64,
     ivecs: &mut [u8],
     samples: &[u64],
 ) -> io::Result<Vec<Hash>> {
@@ -46,7 +46,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match blocktree.read_blobs_bytes(entry, SLOTS_PER_SEGMENT - total_entries, &mut buffer, 0) {
+        match blocktree.read_blobs_bytes(entry, slots_per_segment - total_entries, &mut buffer, 0) {
             Ok((num_entries, entry_len)) => {
                 debug!(
                     "chacha_cuda: encrypting segment: {} num_entries: {} entry_len: {}",
@@ -76,9 +76,9 @@ pub fn chacha_cbc_encrypt_file_many_keys(
                 entry += num_entries;
                 debug!(
                     "total entries: {} entry: {} segment: {} entries_per_segment: {}",
-                    total_entries, entry, segment, SLOTS_PER_SEGMENT
+                    total_entries, entry, segment, slots_per_segment
                 );
-                if (entry - segment) >= SLOTS_PER_SEGMENT {
+                if (entry - segment) >= slots_per_segment {
                     break;
                 }
             }
@@ -113,6 +113,7 @@ mod tests {
     use crate::entry::make_tiny_test_entries;
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
+    use solana_sdk::timing::DEFAULT_SLOTS_PER_SEGMENT;
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
     use std::sync::Arc;
@@ -121,7 +122,8 @@ mod tests {
     fn test_encrypt_file_many_keys_single() {
         solana_logger::setup();
 
-        let entries = make_tiny_test_entries(32);
+        let slots_per_segment = 32;
+        let entries = make_tiny_test_entries(slots_per_segment);
         let ledger_dir = "test_encrypt_file_many_keys_single";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
@@ -140,12 +142,25 @@ mod tests {
         );
 
         let mut cpu_iv = ivecs.clone();
-        chacha_cbc_encrypt_ledger(&blocktree, 0, out_path, &mut cpu_iv).unwrap();
+        chacha_cbc_encrypt_ledger(
+            &blocktree,
+            0,
+            slots_per_segment as u64,
+            out_path,
+            &mut cpu_iv,
+        )
+        .unwrap();
 
         let ref_hash = sample_file(&out_path, &samples).unwrap();
 
-        let hashes =
-            chacha_cbc_encrypt_file_many_keys(&blocktree, 0, &mut ivecs, &samples).unwrap();
+        let hashes = chacha_cbc_encrypt_file_many_keys(
+            &blocktree,
+            0,
+            slots_per_segment as u64,
+            &mut ivecs,
+            &samples,
+        )
+        .unwrap();
 
         assert_eq!(hashes[0], ref_hash);
 
@@ -178,7 +193,14 @@ mod tests {
             );
             ivec[0] = i;
             ivecs.extend(ivec.clone().iter());
-            chacha_cbc_encrypt_ledger(&blocktree.clone(), 0, out_path, &mut ivec).unwrap();
+            chacha_cbc_encrypt_ledger(
+                &blocktree.clone(),
+                0,
+                DEFAULT_SLOTS_PER_SEGMENT,
+                out_path,
+                &mut ivec,
+            )
+            .unwrap();
 
             ref_hashes.push(sample_file(&out_path, &samples).unwrap());
             info!(
@@ -189,8 +211,14 @@ mod tests {
             );
         }
 
-        let hashes =
-            chacha_cbc_encrypt_file_many_keys(&blocktree, 0, &mut ivecs, &samples).unwrap();
+        let hashes = chacha_cbc_encrypt_file_many_keys(
+            &blocktree,
+            0,
+            DEFAULT_SLOTS_PER_SEGMENT,
+            &mut ivecs,
+            &samples,
+        )
+        .unwrap();
 
         assert_eq!(hashes, ref_hashes);
 
@@ -205,6 +233,13 @@ mod tests {
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let samples = [0];
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-        assert!(chacha_cbc_encrypt_file_many_keys(&blocktree, 0, &mut keys, &samples,).is_err());
+        assert!(chacha_cbc_encrypt_file_many_keys(
+            &blocktree,
+            0,
+            DEFAULT_SLOTS_PER_SEGMENT,
+            &mut keys,
+            &samples,
+        )
+        .is_err());
     }
 }

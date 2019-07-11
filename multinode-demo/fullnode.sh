@@ -346,7 +346,7 @@ if [[ -z $CI ]]; then # Skip in CI
   source "$here"/../scripts/tune-system.sh
 fi
 
-new_gensis_block() {
+new_genesis_block() {
   (
     set -x
     $rsync -r "${rsync_entrypoint_url:?}"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
@@ -374,7 +374,7 @@ kill_fullnode() {
 trap 'kill_fullnode' INT TERM ERR
 
 while true; do
-  if [[ $node_type != bootstrap_leader ]] && new_gensis_block; then
+  if [[ $node_type != bootstrap_leader ]] && new_genesis_block; then
     # If the genesis block has changed remove the now stale ledger and
     # vote/stake/storage keypairs for the node and start all over again
     (
@@ -522,7 +522,7 @@ EOF
 
     if ((poll_for_new_genesis_block && --secs_to_next_genesis_poll == 0)); then
       echo "Polling for new genesis block..."
-      if new_gensis_block; then
+      if new_genesis_block; then
         echo "############## New genesis detected, restarting $node_type ##############"
         break
       fi

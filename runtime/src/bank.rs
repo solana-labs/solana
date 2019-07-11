@@ -39,7 +39,7 @@ use solana_sdk::syscall::{
     slot_hashes::{self, SlotHashes},
 };
 use solana_sdk::system_transaction;
-use solana_sdk::timing::{duration_as_ns, MAX_RECENT_BLOCKHASHES};
+use solana_sdk::timing::{duration_as_ns, get_segment_from_slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
 use std::collections::HashMap;
@@ -220,6 +220,9 @@ pub struct Bank {
     /// The number of slots per year, used for inflation
     slots_per_year: f64,
 
+    /// The number of slots per Storage segment
+    slots_per_segment: u64,
+
     /// Bank fork (i.e. slot, i.e. block)
     slot: u64,
 
@@ -308,6 +311,7 @@ impl Bank {
 
         // TODO: clean this up, soo much special-case copying...
         self.ticks_per_slot = parent.ticks_per_slot;
+        self.slots_per_segment = parent.slots_per_segment;
         self.slots_per_year = parent.slots_per_year;
         self.epoch_schedule = parent.epoch_schedule;
 
@@ -411,6 +415,7 @@ impl Bank {
             &current::create_account(
                 1,
                 self.slot,
+                get_segment_from_slot(self.slot, self.slots_per_segment),
                 self.epoch_schedule.get_epoch(self.slot),
                 self.epoch_schedule.get_stakers_epoch(self.slot),
             ),
@@ -591,6 +596,7 @@ impl Bank {
             .genesis_hash(&genesis_block.hash(), &self.fee_calculator);
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
+        self.slots_per_segment = genesis_block.slots_per_segment;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
         //   ticks/year     =      seconds/year ...
         self.slots_per_year = SECONDS_PER_YEAR
@@ -1218,11 +1224,19 @@ impl Bank {
             .map(|(account, _)| account)
     }
 
+    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+        self.rc
+            .accounts
+            .load_by_program(&self.ancestors, program_id)
+    }
+
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
-        self.rc.accounts.load_by_program(self.slot(), program_id)
+        self.rc
+            .accounts
+            .load_by_program_fork(self.slot(), program_id)
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Fork)> {
@@ -1280,6 +1294,11 @@ impl Bank {
     /// Return the number of ticks per slot
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
+    }
+
+    /// Return the number of slots per segment
+    pub fn slots_per_segment(&self) -> u64 {
+        self.slots_per_segment
     }
 
     /// Return the number of ticks since genesis.
@@ -2738,5 +2757,52 @@ mod tests {
             bank.check_point_values(std::f64::INFINITY, std::f64::NAN),
             (1.0, 1.0)
         );
+    }
+
+    #[test]
+    fn test_bank_get_program_accounts() {
+        let (genesis_block, _mint_keypair) = create_genesis_block(500);
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let bank0 = Arc::new(new_from_parent(&parent));
+
+        let pubkey0 = Pubkey::new_rand();
+        let program_id = Pubkey::new(&[2; 32]);
+        let account0 = Account::new(1, 0, &program_id);
+        bank0.store_account(&pubkey0, &account0);
+
+        assert_eq!(
+            bank0.get_program_accounts_modified_since_parent(&program_id),
+            vec![(pubkey0, account0.clone())]
+        );
+
+        let bank1 = Arc::new(new_from_parent(&bank0));
+        bank1.squash();
+        assert_eq!(
+            bank0.get_program_accounts(&program_id),
+            vec![(pubkey0, account0.clone())]
+        );
+        assert_eq!(
+            bank1.get_program_accounts(&program_id),
+            vec![(pubkey0, account0.clone())]
+        );
+        assert_eq!(
+            bank1.get_program_accounts_modified_since_parent(&program_id),
+            vec![]
+        );
+
+        let bank2 = Arc::new(new_from_parent(&bank1));
+        let pubkey1 = Pubkey::new_rand();
+        let account1 = Account::new(3, 0, &program_id);
+        bank2.store_account(&pubkey1, &account1);
+        // Accounts with 0 lamports should be filtered out by Accounts::load_by_program()
+        let pubkey2 = Pubkey::new_rand();
+        let account2 = Account::new(0, 0, &program_id);
+        bank2.store_account(&pubkey2, &account2);
+
+        let bank3 = Arc::new(new_from_parent(&bank2));
+        bank3.squash();
+        assert_eq!(bank1.get_program_accounts(&program_id).len(), 2);
+        assert_eq!(bank3.get_program_accounts(&program_id).len(), 2);
     }
 }

@@ -194,7 +194,7 @@ mod tests {
             .iter()
             .map(|meta| {
                 if syscall::current::check_id(&meta.pubkey) {
-                    syscall::current::create_account(1, 0, 0, 0)
+                    syscall::current::create_account(1, 0, 0, 0, 0)
                 } else if syscall::rewards::check_id(&meta.pubkey) {
                     syscall::rewards::create_account(1, 0.0, 0.0)
                 } else {
@@ -288,7 +288,7 @@ mod tests {
                     KeyedAccount::new(
                         &syscall::current::id(),
                         false,
-                        &mut syscall::current::create_account(1, 0, 0, 0)
+                        &mut syscall::current::create_account(1, 0, 0, 0, 0)
                     ),
                 ],
                 &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),

@@ -17,6 +17,7 @@ const ID: [u8; 32] = [
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Current {
     pub slot: Slot,
+    pub segment: Segment,
     pub epoch: Epoch,
     pub stakers_epoch: Epoch,
 }
@@ -34,11 +35,18 @@ impl Current {
     }
 }
 
-pub fn create_account(lamports: u64, slot: Slot, epoch: Epoch, stakers_epoch: Epoch) -> Account {
+pub fn create_account(
+    lamports: u64,
+    slot: Slot,
+    segment: Segment,
+    epoch: Epoch,
+    stakers_epoch: Epoch,
+) -> Account {
     Account::new_data(
         lamports,
         &Current {
             slot,
+            segment,
             epoch,
             stakers_epoch,
         },
@@ -49,6 +57,8 @@ pub fn create_account(lamports: u64, slot: Slot, epoch: Epoch, stakers_epoch: Ep
 
 use crate::account::KeyedAccount;
 use crate::instruction::InstructionError;
+use crate::timing::Segment;
+
 pub fn from_keyed_account(account: &KeyedAccount) -> Result<Current, InstructionError> {
     if !check_id(account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);
@@ -62,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_create_account() {
-        let account = create_account(1, 0, 0, 0);
+        let account = create_account(1, 0, 0, 0, 0);
         let current = Current::from(&account).unwrap();
         assert_eq!(current, Current::default());
     }

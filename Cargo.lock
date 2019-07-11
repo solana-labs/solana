@@ -2866,6 +2866,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-validator-info"
+version = "0.17.0"
+dependencies = [
+ "bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dirs 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-client 0.17.0",
+ "solana-config-api 0.17.0",
+ "solana-sdk 0.17.0",
+ "url 1.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "solana-vote-api"
 version = "0.17.0"
 dependencies = [

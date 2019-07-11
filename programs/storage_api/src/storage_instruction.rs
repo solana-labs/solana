@@ -23,13 +23,13 @@ pub enum StorageInstruction {
 
     SubmitMiningProof {
         sha_state: Hash,
-        segment_index: usize,
+        segment_index: u64,
         signature: Signature,
         blockhash: Hash,
     },
     AdvertiseStorageRecentBlockhash {
         hash: Hash,
-        slot: u64,
+        segment: u64,
     },
     /// Redeem storage reward credits
     ///
@@ -132,7 +132,7 @@ pub fn create_replicator_storage_account(
 pub fn mining_proof(
     storage_pubkey: &Pubkey,
     sha_state: Hash,
-    segment_index: usize,
+    segment_index: u64,
     signature: Signature,
     blockhash: Hash,
 ) -> Instruction {
@@ -152,11 +152,11 @@ pub fn mining_proof(
 pub fn advertise_recent_blockhash(
     storage_pubkey: &Pubkey,
     storage_hash: Hash,
-    slot: u64,
+    segment: u64,
 ) -> Instruction {
     let storage_instruction = StorageInstruction::AdvertiseStorageRecentBlockhash {
         hash: storage_hash,
-        slot,
+        segment,
     };
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, true),

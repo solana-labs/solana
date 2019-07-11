@@ -81,7 +81,7 @@
             "FromPort": 3001,
             "IpRanges": [
                 {
-                    "Description": "blockexplorer API port",
+                    "Description": "blockexplorer http API port",
                     "CidrIp": "0.0.0.0/0"
                 }
             ],
@@ -91,7 +91,26 @@
             "Ipv6Ranges": [
                 {
                     "CidrIpv6": "::/0",
-                    "Description": "blockexplorer API port"
+                    "Description": "blockexplorer http API port"
+                }
+            ]
+        },
+        {
+            "PrefixListIds": [],
+            "FromPort": 3443,
+            "IpRanges": [
+                {
+                    "Description": "blockexplorer https API port",
+                    "CidrIp": "0.0.0.0/0"
+                }
+            ],
+            "ToPort": 3443,
+            "IpProtocol": "tcp",
+            "UserIdGroupPairs": [],
+            "Ipv6Ranges": [
+                {
+                    "CidrIpv6": "::/0",
+                    "Description": "blockexplorer https API port"
                 }
             ]
         },

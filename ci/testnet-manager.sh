@@ -44,6 +44,8 @@ steps:
             value: "testnet-beta-perf"
           - label: "testnet-demo"
             value: "testnet-demo"
+          - label: "tds"
+            value: "tds"
       - select: "Operation"
         key: "testnet-operation"
         default: "sanity-or-restart"
@@ -152,6 +154,11 @@ testnet-demo)
   CHANNEL_BRANCH=$BETA_CHANNEL
   : "${GCE_NODE_COUNT:=150}"
   : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
+  ;;
+tds)
+  CHANNEL_OR_TAG=beta
+  CHANNEL_BRANCH=$BETA_CHANNEL
+  : "${GCE_NODE_COUNT:=3}"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
@@ -287,6 +294,14 @@ sanity() {
       $ok
     )
     ;;
+  tds)
+    (
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh tds-solana-com gce "${GCE_ZONES[0]}" -f
+    )
+    ;;
   *)
     echo "Error: Invalid TESTNET=$TESTNET"
     exit 1
@@ -321,7 +336,8 @@ deploy() {
     (
       set -x
       ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
-        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0ccd4f2239886fa94 \
+        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
+        -a eipalloc-0ccd4f2239886fa94 --letsencrypt edge.testnet.solana.com \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
@@ -347,7 +363,8 @@ deploy() {
       set -x
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 -z us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
+          -a eipalloc-0f286cf8a0771ce35 --letsencrypt beta.testnet.solana.com \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
@@ -378,7 +395,8 @@ deploy() {
 
       # shellcheck disable=SC2068
       ci/testnet-deploy.sh -p testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -f -a eipalloc-0fa502bf95f6f18b2 \
+        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -f \
+        -a eipalloc-0fa502bf95f6f18b2 --letsencrypt testnet.solana.com \
         ${skipCreate:+-e} \
         ${maybeSkipStart:+-s} \
         ${maybeStop:+-S} \
@@ -424,7 +442,9 @@ deploy() {
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f -w \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
+          --skip-deploy-update \
+          --skip-remote-log-retrieval \
           -a demo-testnet-solana-com \
           ${skipCreate:+-e} \
           ${maybeSkipStart:+-s} \
@@ -436,12 +456,37 @@ deploy() {
         NO_LEDGER_VERIFY=1 \
         NO_VALIDATOR_SANITY=1 \
           ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
-            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x -w \
+            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
+            --skip-deploy-update \
+            --skip-remote-log-retrieval \
             ${skipCreate:+-e} \
             ${skipStart:+-s} \
             ${maybeStop:+-S} \
             ${maybeDelete:+-D}
       fi
+    )
+    ;;
+  tds)
+    (
+      set -x
+      # TODO: Should we spread the few nodes around multiple zones?
+      # shellcheck disable=SC2068
+      # shellcheck disable=SC2086
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh -p tds-solana-com -C gce ${GCE_ZONE_ARGS[0]} \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
+          -a tds-solana-com --letsencrypt tds.solana.com \
+          --hashes-per-tick auto \
+          ${skipCreate:+-e} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
+          ${maybeDelete:+-D} \
+          --stake-internal-nodes 1000000000000 \
+          --external-accounts-file /tmp/stakes.yml \
+          --lamports 8589934592000000000 \
+          --skip-deploy-update
+
     )
     ;;
   *)

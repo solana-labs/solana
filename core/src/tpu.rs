@@ -11,7 +11,6 @@ use crate::poh_recorder::{PohRecorder, WorkingBankEntries};
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
 use crossbeam_channel::unbounded;
-use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
@@ -29,7 +28,6 @@ pub struct Tpu {
 impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        id: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntries>,
@@ -41,8 +39,6 @@ impl Tpu {
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        cluster_info.write().unwrap().set_leader(id);
-
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,

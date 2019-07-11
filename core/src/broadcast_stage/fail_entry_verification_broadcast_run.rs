@@ -52,7 +52,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &mut broadcast.coding_generator,
         );
 
-        blocktree.write_shared_blobs(data_blobs.iter().chain(coding_blobs.iter()))?;
+        blocktree.write_shared_blobs(data_blobs.iter())?;
+        blocktree.put_shared_coding_blobs(coding_blobs.iter())?;
 
         // 3) Start broadcast step
         let bank_epoch = bank.get_stakers_epoch(bank.slot());

@@ -13,7 +13,6 @@ use solana::packet::index_blobs;
 use solana::rpc_subscriptions::RpcSubscriptions;
 use solana::service::Service;
 use solana::storage_stage::StorageState;
-use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
 use solana::validator;
@@ -133,7 +132,6 @@ fn test_replay() {
                 }
             },
             blocktree,
-            STORAGE_ROTATE_TEST_COUNT,
             &StorageState::default(),
             None,
             ledger_signal_receiver,
