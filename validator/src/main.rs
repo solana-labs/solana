@@ -11,6 +11,7 @@ use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
 use std::net::SocketAddr;
 use std::process::exit;
+use std::str::FromStr;
 use std::sync::Arc;
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
@@ -163,6 +164,13 @@ fn main() {
                 .takes_value(true)
                 .help("Snapshot path"),
         )
+        .arg(
+            clap::Arg::with_name("rollback_height")
+                .long("rollback-height")
+                .value_name("BLOCK HEIGHT")
+                .takes_value(true)
+                .help("Start the node at the given block height"),
+        )
          .get_matches();
 
     let mut validator_config = ValidatorConfig::default();
@@ -267,6 +275,10 @@ fn main() {
         node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
     };
 
+    let rollback_height = matches
+        .value_of("rollback_height")
+        .map_or(None, |height| u64::from_str(height).ok());
+
     let validator = Validator::new(
         node,
         &keypair,
@@ -275,6 +287,7 @@ fn main() {
         &Arc::new(voting_keypair),
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
+        rollback_height,
         &validator_config,
     );
 

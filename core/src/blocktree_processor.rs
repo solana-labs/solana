@@ -143,6 +143,15 @@ pub fn process_blocktree(
     blocktree: &Blocktree,
     account_paths: Option<String>,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
+    process_blocktree_until_height(genesis_block, blocktree, account_paths, None)
+}
+
+pub fn process_blocktree_until_height(
+    genesis_block: &GenesisBlock,
+    blocktree: &Blocktree,
+    account_paths: Option<String>,
+    rollback_height: Option<u64>,
+) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
     let now = Instant::now();
     info!("processing ledger...");
     // Setup bank for slot 0
@@ -176,6 +185,12 @@ pub fn process_blocktree(
         let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
 
+        if let Some(max_height) = rollback_height {
+            if slot >= max_height {
+                break;
+            }
+        }
+
         if last_status_report.elapsed() > Duration::from_secs(2) {
             info!("processing ledger...block {}", slot);
             last_status_report = Instant::now();
@@ -205,12 +220,14 @@ pub fn process_blocktree(
         }
 
         if !entries.is_empty() {
-            if !entries.verify(&last_entry_hash) {
-                warn!(
-                    "Ledger proof of history failed at slot: {}, entry: {}",
-                    slot, entry_height
-                );
-                return Err(BlocktreeProcessorError::LedgerVerificationFailed);
+            if rollback_height.is_none() {
+                if !entries.verify(&last_entry_hash) {
+                    warn!(
+                        "Ledger proof of history failed at slot: {}, entry: {}",
+                        slot, entry_height
+                    );
+                    return Err(BlocktreeProcessorError::LedgerVerificationFailed);
+                }
             }
 
             process_entries(&bank, &entries).map_err(|err| {
