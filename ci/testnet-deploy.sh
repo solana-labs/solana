@@ -28,6 +28,7 @@ maybeStakeNodesInGenesisBlock=
 maybeExternalPrimordialAccountsFile=
 maybeLamports=
 maybeLetsEncrypt=
+maybeFullnodeAdditionalDiskSize=
 
 usage() {
   exitcode=0
@@ -80,6 +81,8 @@ Deploys a CD testnet
                         - If set, will not fetch logs from remote nodes
    --letsencrypt [dns name]
                         - Attempt to generate a TLS certificate using this DNS name
+   --fullnode-additional-disk-size-gb [number]
+                    - Size of additional disk in GB for all fullnodes
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -112,6 +115,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --letsencrypt ]]; then
       maybeLetsEncrypt="$1 $2"
+      shift 2
+    elif [[ $1 = --fullnode-additional-disk-size-gb ]]; then
+      maybeFullnodeAdditionalDiskSize="$1 $2"
       shift 2
     else
       usage "Unknown long option: $1"
@@ -290,6 +296,11 @@ if ! $skipCreate; then
 
   if ! $failOnValidatorBootupFailure; then
     create_args+=(-f)
+  fi
+
+  if [[ -n $maybeFullnodeAdditionalDiskSize ]]; then
+    # shellcheck disable=SC2206 # Do not want to quote
+    create_args+=($maybeFullnodeAdditionalDiskSize)
   fi
 
   time net/"$cloudProvider".sh create "${create_args[@]}"
