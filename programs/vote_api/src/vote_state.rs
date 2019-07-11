@@ -173,14 +173,14 @@ impl VoteState {
                 for (slot, hash) in slot_hashes {
                     if vote.slot == *slot {
                         warn!(
-                            "dropped vote {:?} matched slot {}, but not hash {:?}",
-                            vote, *slot, *hash
+                            "{} dropped vote {:?} matched slot {}, but not hash {:?}",
+                            self.node_pubkey, vote, *slot, *hash
                         );
                     }
                     if vote.hash == *hash {
                         warn!(
-                            "dropped vote {:?} matched hash {:?}, but not slot {}",
-                            vote, *hash, *slot,
+                            "{} dropped vote {:?} matched hash {:?}, but not slot {}",
+                            self.node_pubkey, vote, *slot, *hash
                         );
                     }
                 }
