@@ -125,21 +125,26 @@ startNode() {
   echo "log: $log"
 }
 
+waitForNodeToInit() {
+  declare initCompleteFile=$1
+  while [[ ! -r $initCompleteFile ]]; do
+    if [[ $SECONDS -ge 240 ]]; then
+      echo "^^^ +++"
+      echo "Error: $initCompleteFile not found in $SECONDS seconds"
+      exit 1
+    fi
+    echo "Waiting for $initCompleteFile ($SECONDS)..."
+    sleep 2
+  done
+  echo "Found $initCompleteFile"
+}
+
 initCompleteFiles=()
 waitForAllNodesToInit() {
   echo "--- ${#initCompleteFiles[@]} nodes booting"
   SECONDS=
   for initCompleteFile in "${initCompleteFiles[@]}"; do
-    while [[ ! -r $initCompleteFile ]]; do
-      if [[ $SECONDS -ge 240 ]]; then
-        echo "^^^ +++"
-        echo "Error: $initCompleteFile not found in $SECONDS seconds"
-        exit 1
-      fi
-      echo "Waiting for $initCompleteFile ($SECONDS)..."
-      sleep 2
-    done
-    echo "Found $initCompleteFile"
+    waitForNodeToInit "$initCompleteFile"
   done
   echo "All nodes finished booting in $SECONDS seconds"
 }
@@ -161,6 +166,13 @@ startNodes() {
     startNode "$i" "$cmd"
     if $addLogs; then
       logs+=("$(getNodeLogFile "$i" "$cmd")")
+    fi
+
+    # 1 == bootstrap leader, wait until it boots before starting
+    # other validators
+    if [[ "$i" -eq 1 ]]; then
+      SECONDS=
+      waitForNodeToInit "$initCompleteFile"
     fi
   done
 
