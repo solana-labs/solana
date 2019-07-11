@@ -23,7 +23,6 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::remove_dir_all;
 use std::io::{BufReader, Read};
-use std::ops::Neg;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -306,27 +305,47 @@ impl Accounts {
             .filter(|(acc, _)| acc.lamports != 0)
     }
 
-    pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
-        let accumulator: Vec<Vec<(Pubkey, u64, Account)>> = self.accounts_db.scan_account_storage(
+    /// scans underlying accounts_db for this delta (fork) with a map function
+    ///   from StoredAccount to B
+    /// returns only the latest/current version of B for this fork
+    fn scan_fork<F, B>(&self, fork: Fork, func: F) -> Vec<B>
+    where
+        F: Fn(&StoredAccount) -> Option<B>,
+        F: Send + Sync,
+        B: Send + Default,
+    {
+        let accumulator: Vec<Vec<(Pubkey, u64, B)>> = self.accounts_db.scan_account_storage(
             fork,
             |stored_account: &StoredAccount,
              _id: AppendVecId,
-             accum: &mut Vec<(Pubkey, u64, Account)>| {
-                if stored_account.balance.owner == *program_id {
-                    let val = (
+             accum: &mut Vec<(Pubkey, u64, B)>| {
+                if let Some(val) = func(stored_account) {
+                    accum.push((
                         stored_account.meta.pubkey,
-                        stored_account.meta.write_version,
-                        stored_account.clone_account(),
-                    );
-                    accum.push(val)
+                        std::u64::MAX - stored_account.meta.write_version,
+                        val,
+                    ));
                 }
             },
         );
-        let mut versions: Vec<(Pubkey, u64, Account)> =
-            accumulator.into_iter().flat_map(|x| x).collect();
-        versions.sort_by_key(|s| (s.0, (s.1 as i64).neg()));
+
+        let mut versions: Vec<(Pubkey, u64, B)> = accumulator.into_iter().flat_map(|x| x).collect();
+        versions.sort_by_key(|s| (s.0, s.1));
         versions.dedup_by_key(|s| s.0);
-        versions.into_iter().map(|s| (s.0, s.2)).collect()
+        versions
+            .into_iter()
+            .map(|(_pubkey, _version, val)| val)
+            .collect()
+    }
+
+    pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+        self.scan_fork(fork, |stored_account| {
+            if stored_account.balance.owner == *program_id {
+                Some((stored_account.meta.pubkey, stored_account.clone_account()))
+            } else {
+                None
+            }
+        })
     }
 
     /// Slow because lock is held for 1 operation instead of many
@@ -423,28 +442,19 @@ impl Accounts {
     }
 
     pub fn hash_internal_state(&self, fork_id: Fork) -> Option<Hash> {
-        let accumulator: Vec<Vec<(Pubkey, u64, Hash)>> = self.accounts_db.scan_account_storage(
-            fork_id,
-            |stored_account: &StoredAccount,
-             _id: AppendVecId,
-             accum: &mut Vec<(Pubkey, u64, Hash)>| {
-                if !syscall::check_id(&stored_account.balance.owner) {
-                    accum.push((
-                        stored_account.meta.pubkey,
-                        stored_account.meta.write_version,
-                        Self::hash_account(stored_account),
-                    ));
-                }
-            },
-        );
-        let mut account_hashes: Vec<_> = accumulator.into_iter().flat_map(|x| x).collect();
-        account_hashes.sort_by_key(|s| (s.0, (s.1 as i64).neg()));
-        account_hashes.dedup_by_key(|s| s.0);
+        let account_hashes = self.scan_fork(fork_id, |stored_account| {
+            if !syscall::check_id(&stored_account.balance.owner) {
+                Some(Self::hash_account(stored_account))
+            } else {
+                None
+            }
+        });
+
         if account_hashes.is_empty() {
             None
         } else {
             let mut hasher = Hasher::default();
-            for (_, _, hash) in account_hashes {
+            for hash in account_hashes {
                 hasher.hash(hash.as_ref());
             }
             Some(hasher.result())
