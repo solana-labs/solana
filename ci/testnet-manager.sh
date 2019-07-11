@@ -490,7 +490,8 @@ deploy() {
           --stake-internal-nodes 1000000000000 \
           --external-accounts-file /tmp/stakes.yml \
           --lamports 8589934592000000000 \
-          --skip-deploy-update
+          --skip-deploy-update \
+          --fullnode-additional-disk-size-gb 32000
 
     )
     ;;
