@@ -83,7 +83,7 @@ fn par_execute_entries(
 pub fn process_entries(
     bank: &Bank,
     entries: &[Entry],
-    randomise_tx_execution_order: bool,
+    randomize_tx_execution_order: bool,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
@@ -98,7 +98,7 @@ pub fn process_entries(
         // else loop on processing the entry
         loop {
             let mut txs_execution_order: Vec<usize> = (0..entry.transactions.len()).collect();
-            if randomise_tx_execution_order {
+            if randomize_tx_execution_order {
                 txs_execution_order.shuffle(&mut thread_rng());
             }
 
