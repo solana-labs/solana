@@ -8,7 +8,7 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 
 #[bench]
-fn bench_ordered_iterator_random_order(bencher: &mut Bencher) {
+fn bench_ordered_iterator_with_order_shuffling(bencher: &mut Bencher) {
     let vec: Vec<usize> = (0..100_usize).collect();
     bencher.iter(|| {
         let mut order: Vec<usize> = (0..100_usize).collect();
