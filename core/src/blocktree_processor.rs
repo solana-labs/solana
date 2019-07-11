@@ -327,6 +327,7 @@ pub mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
+    use solana_sdk::transaction::Transaction;
     use solana_sdk::transaction::TransactionError;
 
     pub fn fill_blocktree_slot_with_ticks(
@@ -1117,6 +1118,77 @@ pub mod tests {
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_blockhash(), blockhash);
+    }
+
+    #[test]
+    fn test_process_entry_tx_random_execution_no_error() {
+        // number of accounts should be big enough to provide sufficient entropy
+        // but small enough to not take too much time.
+        let num_accounts: usize = 100;
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block((num_accounts + 1) as u64 * 100);
+
+        let bank = Bank::new(&genesis_block);
+
+        let mut keypairs: Vec<Keypair> = vec![];
+
+        for _ in 0..num_accounts {
+            let keypair = Keypair::new();
+            let create_account_tx = system_transaction::create_user_account(
+                &mint_keypair,
+                &keypair.pubkey(),
+                0,
+                bank.last_blockhash(),
+            );
+            assert_eq!(bank.process_transaction(&create_account_tx), Ok(()));
+            assert_matches!(bank.transfer(100, &mint_keypair, &keypair.pubkey()), Ok(_));
+            keypairs.push(keypair);
+        }
+
+        let mut tx_vector: Vec<Transaction> = vec![];
+        let mut i = 0;
+
+        loop {
+            if i >= num_accounts {
+                break;
+            }
+
+            tx_vector.append(&mut vec![
+                system_transaction::transfer(
+                    &keypairs[i + 1],
+                    &keypairs[i].pubkey(),
+                    100,
+                    bank.last_blockhash(),
+                ),
+                system_transaction::transfer(
+                    &keypairs[i + 3],
+                    &keypairs[i + 2].pubkey(),
+                    100,
+                    bank.last_blockhash(),
+                ),
+            ]);
+
+            i = i + 4;
+        }
+
+        // Transfer lamports to each other
+        let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
+        assert_eq!(process_entries(&bank, &vec![entry], true), Ok(()));
+        bank.squash();
+
+        // Even number keypair has balance of 200 and odd number keypair has balance of 0
+        // This proves that even in case of random order of execution, overall state remains
+        // consistent.
+        for i in 0..num_accounts {
+            if i % 2 == 0 {
+                assert_eq!(bank.get_balance(&keypairs[i].pubkey()), 200);
+            } else {
+                assert_eq!(bank.get_balance(&keypairs[i].pubkey()), 0);
+            }
+        }
     }
 
     #[test]
