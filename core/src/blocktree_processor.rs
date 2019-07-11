@@ -1122,14 +1122,19 @@ pub mod tests {
 
     #[test]
     fn test_process_entry_tx_random_execution_no_error() {
-        // number of accounts should be big enough to provide sufficient entropy
-        // but small enough to not take too much time.
-        let num_accounts: usize = 100;
+        // entropy multiplier should be big enough to provide sufficient entropy
+        // but small enough to not take too much time while executing the test.
+        let entropy_multiplier: usize = 25;
+        let initial_lamports = 100;
+
+        // number of accounts need to be in multiple of 4 for correct
+        // execution of the test.
+        let num_accounts = entropy_multiplier * 4;
         let GenesisBlockInfo {
             genesis_block,
             mint_keypair,
             ..
-        } = create_genesis_block((num_accounts + 1) as u64 * 100);
+        } = create_genesis_block((num_accounts + 1) as u64 * initial_lamports);
 
         let bank = Bank::new(&genesis_block);
 
@@ -1144,7 +1149,10 @@ pub mod tests {
                 bank.last_blockhash(),
             );
             assert_eq!(bank.process_transaction(&create_account_tx), Ok(()));
-            assert_matches!(bank.transfer(100, &mint_keypair, &keypair.pubkey()), Ok(_));
+            assert_matches!(
+                bank.transfer(initial_lamports, &mint_keypair, &keypair.pubkey()),
+                Ok(_)
+            );
             keypairs.push(keypair);
         }
 
@@ -1160,13 +1168,13 @@ pub mod tests {
                 system_transaction::transfer(
                     &keypairs[i + 1],
                     &keypairs[i].pubkey(),
-                    100,
+                    initial_lamports,
                     bank.last_blockhash(),
                 ),
                 system_transaction::transfer(
                     &keypairs[i + 3],
                     &keypairs[i + 2].pubkey(),
-                    100,
+                    initial_lamports,
                     bank.last_blockhash(),
                 ),
             ]);
@@ -1179,12 +1187,16 @@ pub mod tests {
         assert_eq!(process_entries(&bank, &vec![entry], true), Ok(()));
         bank.squash();
 
-        // Even number keypair has balance of 200 and odd number keypair has balance of 0
-        // This proves that even in case of random order of execution, overall state remains
+        // Even number keypair should have balance of 2 * initial_lamports and
+        // odd number keypair should have balance of 0, which proves
+        // that even in case of random order of execution, overall state remains
         // consistent.
         for i in 0..num_accounts {
             if i % 2 == 0 {
-                assert_eq!(bank.get_balance(&keypairs[i].pubkey()), 200);
+                assert_eq!(
+                    bank.get_balance(&keypairs[i].pubkey()),
+                    2 * initial_lamports
+                );
             } else {
                 assert_eq!(bank.get_balance(&keypairs[i].pubkey()), 0);
             }
