@@ -70,9 +70,9 @@ source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 SOLANA_RSYNC_CONFIG_DIR=$SOLANA_ROOT/config
 
 # Configuration that remains local
-secondary_disk_mount_point=$(df | grep sdb | awk '{print $6}')
-if [[ -n $secondary_disk_mount_point ]]; then
-  SOLANA_CONFIG_DIR=$secondary_disk_mount_point/config-local
+SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
+if [ -d $SECONDARY_DISK_MOUNT_POINT ]; then
+  SOLANA_CONFIG_DIR=$SECONDARY_DISK_MOUNT_POINT/config-local
 else
   SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
 fi
