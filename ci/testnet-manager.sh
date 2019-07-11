@@ -473,7 +473,7 @@ deploy() {
       EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
       EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
 
-      wget ${EXTERNAL_ACCOUNTS_FILE_URL} -o ${EXTERNAL_ACCOUNTS_FILE}
+      wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
 
       # Multiple V100 GPUs are available in us-west1, us-central1 and europe-west4
       # shellcheck disable=SC2068
