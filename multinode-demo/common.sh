@@ -71,6 +71,17 @@ SOLANA_RSYNC_CONFIG_DIR=$SOLANA_ROOT/config
 
 # Configuration that remains local
 SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
+<<<<<<< HEAD
+=======
+
+# If there is a secondary disk, symlink the config-local dir there
+SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
+if [[ -d $SECONDARY_DISK_MOUNT_POINT ]]; then
+  mkdir -p $SECONDARY_DISK_MOUNT_POINT/config-local
+  mkdir -p "$SOLANA_ROOT"
+  ln -s $SECONDARY_DISK_MOUNT_POINT/config-local "$SOLANA_ROOT"
+fi
+>>>>>>> 5ac173d20... Enable GPUs and secondary disks for TdS net, pull external account file (#5031)
 
 default_arg() {
   declare name=$1

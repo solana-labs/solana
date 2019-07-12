@@ -152,6 +152,15 @@ while [[ -n $1 ]]; do
     if [[ $1 = --letsencrypt ]]; then
       letsEncryptDomainName="$2"
       shift 2
+<<<<<<< HEAD
+=======
+    elif [[ $1 = --fullnode-additional-disk-size-gb ]]; then
+      fullNodeAdditionalDiskSizeInGb="$2"
+      shift 2
+    elif [[ $1 == --machine-type* ]]; then # Bypass quoted long args for GPUs
+      shortArgs+=("$1")
+      shift
+>>>>>>> 5ac173d20... Enable GPUs and secondary disks for TdS net, pull external account file (#5031)
     else
       usage "Unknown long option: $1"
     fi
