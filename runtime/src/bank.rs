@@ -33,11 +33,11 @@ use solana_sdk::inflation::Inflation;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::syscall::{
-    current, fees, rewards,
+use solana_sdk::system_transaction;
+use solana_sdk::sysvar::{
+    clock, fees, rewards,
     slot_hashes::{self, SlotHashes},
 };
-use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ns, get_segment_from_slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
@@ -289,7 +289,7 @@ impl Bank {
                 bank.epoch_stakes.insert(i, stakes.clone());
             }
         }
-        bank.update_current();
+        bank.update_clock();
         bank
     }
 
@@ -366,7 +366,7 @@ impl Bank {
         });
 
         self.update_rewards(parent.epoch());
-        self.update_current();
+        self.update_clock();
         self.update_fees();
         self
     }
@@ -408,10 +408,10 @@ impl Bank {
         *self.hash.read().unwrap() != Hash::default()
     }
 
-    fn update_current(&self) {
+    fn update_clock(&self) {
         self.store_account(
-            &current::id(),
-            &current::create_account(
+            &clock::id(),
+            &clock::create_account(
                 1,
                 self.slot,
                 get_segment_from_slot(self.slot, self.slots_per_segment),
@@ -1461,9 +1461,9 @@ mod tests {
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::poh_config::PohConfig;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::syscall::{fees::Fees, rewards::Rewards};
     use solana_sdk::system_instruction;
     use solana_sdk::system_transaction;
+    use solana_sdk::sysvar::{fees::Fees, rewards::Rewards};
     use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use solana_vote_api::vote_instruction;
     use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
@@ -2252,7 +2252,7 @@ mod tests {
         let bank0 = Arc::new(Bank::new(&create_genesis_block(10).0));
         let hash0 = bank0.hash_internal_state();
         // save hash0 because new_from_parent
-        // updates syscall entries
+        // updates sysvar entries
 
         let bank1 = Bank::new_from_parent(&bank0, &collector_id, 1);
 

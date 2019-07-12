@@ -8,7 +8,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_sdk::syscall;
+use solana_sdk::sysvar;
 use std::collections::BTreeMap;
 
 // Todo Tune this for actual use cases when PoRep is feature complete
@@ -167,7 +167,7 @@ impl<'a> StorageAccount<'a> {
         segment_index: u64,
         signature: Signature,
         blockhash: Hash,
-        current: syscall::current::Current,
+        clock: sysvar::clock::Clock,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ReplicatorStorage {
@@ -177,7 +177,7 @@ impl<'a> StorageAccount<'a> {
             ..
         } = &mut storage_contract
         {
-            let current_segment = current.segment;
+            let current_segment = clock.segment;
 
             // clean up the account
             // TODO check for time correctness - storage seems to run at a delay of about 3
@@ -230,7 +230,7 @@ impl<'a> StorageAccount<'a> {
                     StorageError::ProofLimitReached as u32,
                 ));
             }
-            credits.update_epoch(current.epoch);
+            credits.update_epoch(clock.epoch);
             segment_proofs.push(proof);
             self.account.set_state(storage_contract)
         } else {
@@ -242,7 +242,7 @@ impl<'a> StorageAccount<'a> {
         &mut self,
         hash: Hash,
         segment: u64,
-        current: syscall::current::Current,
+        clock: sysvar::clock::Clock,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ValidatorStorage {
@@ -253,11 +253,8 @@ impl<'a> StorageAccount<'a> {
             ..
         } = &mut storage_contract
         {
-            debug!(
-                "advertise new segment: {} orig: {}",
-                segment, current.segment
-            );
-            if segment < *state_segment || segment > current.segment {
+            debug!("advertise new segment: {} orig: {}", segment, clock.segment);
+            if segment < *state_segment || segment > clock.segment {
                 return Err(InstructionError::CustomError(
                     StorageError::InvalidSegment as u32,
                 ));
@@ -269,7 +266,7 @@ impl<'a> StorageAccount<'a> {
             // storage epoch updated, move the lockout_validations to credits
             let (_num_valid, total_validations) = count_valid_proofs(&lockout_validations);
             lockout_validations.clear();
-            credits.update_epoch(current.epoch);
+            credits.update_epoch(clock.epoch);
             credits.current_epoch += total_validations;
             self.account.set_state(storage_contract)
         } else {
@@ -280,7 +277,7 @@ impl<'a> StorageAccount<'a> {
     pub fn proof_validation(
         &mut self,
         me: &Pubkey,
-        current: syscall::current::Current,
+        clock: sysvar::clock::Clock,
         segment_index: u64,
         proofs_per_account: Vec<Vec<ProofStatus>>,
         replicator_accounts: &mut [StorageAccount],
@@ -341,14 +338,8 @@ impl<'a> StorageAccount<'a> {
                 .into_iter()
                 .zip(accounts.into_iter())
                 .filter_map(|(checked_proofs, account)| {
-                    if store_validation_result(
-                        me,
-                        &current,
-                        account,
-                        segment_index,
-                        &checked_proofs,
-                    )
-                    .is_ok()
+                    if store_validation_result(me, &clock, account, segment_index, &checked_proofs)
+                        .is_ok()
                     {
                         Some((account.id, checked_proofs))
                     } else {
@@ -376,8 +367,8 @@ impl<'a> StorageAccount<'a> {
     pub fn claim_storage_reward(
         &mut self,
         rewards_pool: &mut KeyedAccount,
-        current: syscall::current::Current,
-        rewards: syscall::rewards::Rewards,
+        clock: sysvar::clock::Clock,
+        rewards: sysvar::rewards::Rewards,
         owner: &mut StorageAccount,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
@@ -394,7 +385,7 @@ impl<'a> StorageAccount<'a> {
                 ))?
             }
 
-            credits.update_epoch(current.epoch);
+            credits.update_epoch(clock.epoch);
             check_redeemable(credits, rewards.storage_point_value, rewards_pool, owner)?;
 
             self.account.set_state(storage_contract)
@@ -410,7 +401,7 @@ impl<'a> StorageAccount<'a> {
                     StorageError::InvalidOwner as u32,
                 ))?
             }
-            credits.update_epoch(current.epoch);
+            credits.update_epoch(clock.epoch);
             let (num_validations, _total_proofs) = count_valid_proofs(&validations);
             credits.current_epoch += num_validations;
             validations.clear();
@@ -451,7 +442,7 @@ pub fn create_rewards_pool() -> Account {
 /// Store the result of a proof validation into the replicator account
 fn store_validation_result(
     me: &Pubkey,
-    current: &syscall::current::Current,
+    clock: &sysvar::clock::Clock,
     storage_account: &mut StorageAccount,
     segment: u64,
     proof_mask: &[ProofStatus],
@@ -478,7 +469,7 @@ fn store_validation_result(
                 entry.insert(*me, proof_mask.to_vec());
             }
             let (total_validations, _) = count_valid_proofs(&validations);
-            credits.update_epoch(current.epoch);
+            credits.update_epoch(clock.epoch);
             credits.current_epoch += total_validations - recorded_validations;
         }
         _ => return Err(InstructionError::InvalidAccountData),
@@ -571,7 +562,7 @@ mod tests {
         // account has no space
         store_validation_result(
             &Pubkey::default(),
-            &syscall::current::Current::default(),
+            &sysvar::clock::Clock::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::default(); 1],
@@ -598,7 +589,7 @@ mod tests {
         // proof is valid
         store_validation_result(
             &Pubkey::default(),
-            &syscall::current::Current::default(),
+            &sysvar::clock::Clock::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::Valid],
@@ -608,7 +599,7 @@ mod tests {
         // proof failed verification but we should still be able to store it
         store_validation_result(
             &Pubkey::default(),
-            &syscall::current::Current::default(),
+            &sysvar::clock::Clock::default(),
             &mut account,
             segment_index,
             &vec![ProofStatus::NotValid],

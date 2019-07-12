@@ -2,9 +2,9 @@ use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::syscall;
 use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
+use solana_sdk::sysvar;
 
 const FROM_ACCOUNT_INDEX: usize = 0;
 const TO_ACCOUNT_INDEX: usize = 1;
@@ -33,7 +33,7 @@ fn create_system_account(
         Err(SystemError::AccountAlreadyInUse)?;
     }
 
-    if syscall::check_id(&program_id) {
+    if sysvar::check_id(&program_id) {
         debug!(
             "CreateAccount: invalid argument; program id {} invalid",
             program_id
@@ -41,7 +41,7 @@ fn create_system_account(
         Err(SystemError::InvalidProgramId)?;
     }
 
-    if syscall::is_syscall_id(&keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()) {
+    if sysvar::is_sysvar_id(&keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()) {
         debug!(
             "CreateAccount: invalid argument; account id {} invalid",
             program_id
@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_syscall_invalid_id() {
+    fn test_create_sysvar_invalid_id() {
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
@@ -219,18 +219,18 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        // fail to create a syscall::id() owned account
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &syscall::id());
+        // fail to create a sysvar::id() owned account
+        let result = create_system_account(&mut keyed_accounts, 50, 2, &sysvar::id());
         assert_eq!(result, Err(SystemError::InvalidProgramId));
 
-        let to = syscall::fees::id();
+        let to = sysvar::fees::id();
         let mut to_account = Account::default();
 
         let mut keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        // fail to create an account with a syscall id
+        // fail to create an account with a sysvar id
         let result = create_system_account(&mut keyed_accounts, 50, 2, &system_program::id());
         assert_eq!(result, Err(SystemError::InvalidAccountId));
 

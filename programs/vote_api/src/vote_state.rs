@@ -9,7 +9,7 @@ use solana_sdk::account_utils::State;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::syscall::current::Current;
+use solana_sdk::sysvar::clock::Clock;
 pub use solana_sdk::timing::{Epoch, Slot};
 use std::collections::VecDeque;
 
@@ -74,9 +74,9 @@ pub struct VoteState {
     pub commission: u8,
     pub root_slot: Option<u64>,
 
-    /// current epoch
+    /// clock epoch
     epoch: Epoch,
-    /// current credits earned, monotonically increasing
+    /// clock credits earned, monotonically increasing
     credits: u64,
 
     /// credits as of previous epoch
@@ -286,7 +286,7 @@ pub fn authorize_voter(
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
-    // current authorized signer must say "yay"
+    // clock authorized signer must say "yay"
     let authorized = Some(&vote_state.authorized_voter_pubkey);
     if vote_account.signer_key() != authorized
         && other_signers
@@ -323,7 +323,7 @@ pub fn initialize_account(
 pub fn process_votes(
     vote_account: &mut KeyedAccount,
     slot_hashes: &[(Slot, Hash)],
-    current: &Current,
+    clock: &Clock,
     other_signers: &[KeyedAccount],
     votes: &[Vote],
 ) -> Result<(), InstructionError> {
@@ -343,7 +343,7 @@ pub fn process_votes(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    vote_state.process_votes(&votes, slot_hashes, current.epoch);
+    vote_state.process_votes(&votes, slot_hashes, clock.epoch);
     vote_account.set_state(&vote_state)
 }
 
@@ -427,9 +427,9 @@ mod tests {
         process_votes(
             &mut KeyedAccount::new(vote_pubkey, true, vote_account),
             slot_hashes,
-            &Current {
+            &Clock {
                 epoch,
-                ..Current::default()
+                ..Clock::default()
             },
             &[],
             &[vote.clone()],
@@ -533,7 +533,7 @@ mod tests {
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[(vote.slot, vote.hash)],
-            &Current::default(),
+            &Clock::default(),
             &[],
             &[vote],
         );
@@ -543,7 +543,7 @@ mod tests {
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &[(vote.slot, vote.hash)],
-            &Current::default(),
+            &Clock::default(),
             &[],
             &[vote],
         );
@@ -581,7 +581,7 @@ mod tests {
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &[(vote.slot, vote.hash)],
-            &Current::default(),
+            &Clock::default(),
             &[],
             &[vote],
         );
@@ -592,7 +592,7 @@ mod tests {
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[(vote.slot, vote.hash)],
-            &Current::default(),
+            &Clock::default(),
             &[KeyedAccount::new(
                 &authorized_voter_pubkey,
                 true,

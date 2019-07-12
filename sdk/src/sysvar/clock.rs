@@ -1,28 +1,28 @@
-//! This account contains the current slot, epoch, and stakers_epoch
+//! This account contains the clock slot, epoch, and stakers_epoch
 //!
 use crate::account::Account;
-use crate::syscall;
+use crate::sysvar;
 use bincode::serialized_size;
 
 pub use crate::timing::{Epoch, Slot};
 
-crate::solana_name_id!(ID, "Sysca11Current11111111111111111111111111111");
-
 const ID: [u8; 32] = [
-    6, 167, 211, 138, 69, 218, 14, 184, 34, 50, 188, 33, 201, 49, 63, 13, 15, 193, 33, 132, 208,
-    238, 129, 224, 101, 67, 14, 11, 160, 0, 0, 0,
+    6, 167, 213, 23, 24, 199, 116, 201, 40, 86, 99, 152, 105, 29, 94, 182, 139, 94, 184, 163, 155,
+    75, 109, 92, 115, 85, 91, 33, 0, 0, 0, 0,
 ];
+
+crate::solana_name_id!(ID, "SysvarC1ock11111111111111111111111111111111");
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
-pub struct Current {
+pub struct Clock {
     pub slot: Slot,
     pub segment: Segment,
     pub epoch: Epoch,
     pub stakers_epoch: Epoch,
 }
 
-impl Current {
+impl Clock {
     pub fn from(account: &Account) -> Option<Self> {
         account.deserialize_data().ok()
     }
@@ -44,13 +44,13 @@ pub fn create_account(
 ) -> Account {
     Account::new_data(
         lamports,
-        &Current {
+        &Clock {
             slot,
             segment,
             epoch,
             stakers_epoch,
         },
-        &syscall::id(),
+        &sysvar::id(),
     )
     .unwrap()
 }
@@ -59,11 +59,11 @@ use crate::account::KeyedAccount;
 use crate::instruction::InstructionError;
 use crate::timing::Segment;
 
-pub fn from_keyed_account(account: &KeyedAccount) -> Result<Current, InstructionError> {
+pub fn from_keyed_account(account: &KeyedAccount) -> Result<Clock, InstructionError> {
     if !check_id(account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);
     }
-    Current::from(account.account).ok_or(InstructionError::InvalidArgument)
+    Clock::from(account.account).ok_or(InstructionError::InvalidArgument)
 }
 
 #[cfg(test)]
@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn test_create_account() {
         let account = create_account(1, 0, 0, 0, 0);
-        let current = Current::from(&account).unwrap();
-        assert_eq!(current, Current::default());
+        let clock = Clock::from(&account).unwrap();
+        assert_eq!(clock, Clock::default());
     }
 }

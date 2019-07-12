@@ -5,8 +5,8 @@ use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_sdk::syscall::{current, rewards};
 use solana_sdk::system_instruction;
+use solana_sdk::sysvar::{clock, rewards};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {
@@ -35,7 +35,7 @@ pub enum StorageInstruction {
     ///
     /// Expects 1 Account:
     ///    0 - Storage account with credits to redeem
-    ///    1 - Current Syscall to figure out the current epoch
+    ///    1 - Clock Syscall to figure out the clock epoch
     ///    2 - Replicator account to credit - this account *must* be the owner
     ///    3 - MiningPool account to redeem credits from
     ///    4 - Rewards Syscall to figure out point values
@@ -144,7 +144,7 @@ pub fn mining_proof(
     };
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, true),
-        AccountMeta::new(current::id(), false),
+        AccountMeta::new(clock::id(), false),
     ];
     Instruction::new(id(), &storage_instruction, account_metas)
 }
@@ -160,7 +160,7 @@ pub fn advertise_recent_blockhash(
     };
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, true),
-        AccountMeta::new(current::id(), false),
+        AccountMeta::new(clock::id(), false),
     ];
     Instruction::new(id(), &storage_instruction, account_metas)
 }
@@ -172,7 +172,7 @@ pub fn proof_validation(
 ) -> Instruction {
     let mut account_metas = vec![
         AccountMeta::new(*storage_pubkey, true),
-        AccountMeta::new(current::id(), false),
+        AccountMeta::new(clock::id(), false),
     ];
     let mut proofs = vec![];
     checked_proofs.into_iter().for_each(|(id, p)| {
@@ -187,7 +187,7 @@ pub fn claim_reward(owner_pubkey: &Pubkey, storage_pubkey: &Pubkey) -> Instructi
     let storage_instruction = StorageInstruction::ClaimStorageReward;
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, false),
-        AccountMeta::new(current::id(), false),
+        AccountMeta::new(clock::id(), false),
         AccountMeta::new(rewards::id(), false),
         AccountMeta::new(rewards_pools::random_id(), false),
         AccountMeta::new(*owner_pubkey, false),

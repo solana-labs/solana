@@ -15,8 +15,8 @@ use solana_sdk::message::Message;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::syscall;
 use solana_sdk::system_program;
+use solana_sdk::sysvar;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
@@ -494,7 +494,7 @@ impl Accounts {
 
     pub fn hash_internal_state(&self, fork_id: Fork) -> Option<Hash> {
         let account_hashes = self.scan_fork(fork_id, |stored_account| {
-            if !syscall::check_id(&stored_account.balance.owner) {
+            if !sysvar::check_id(&stored_account.balance.owner) {
                 Some(Self::hash_account(stored_account))
             } else {
                 None
@@ -695,7 +695,7 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::syscall;
+    use solana_sdk::sysvar;
     use solana_sdk::transaction::Transaction;
     use std::io::Cursor;
     use std::sync::atomic::AtomicBool;
@@ -1183,7 +1183,7 @@ mod tests {
     fn test_accounts_empty_hash_internal_state() {
         let accounts = Accounts::new(None);
         assert_eq!(accounts.hash_internal_state(0), None);
-        accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &syscall::id()));
+        accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &sysvar::id()));
         assert_eq!(accounts.hash_internal_state(0), None);
     }
 

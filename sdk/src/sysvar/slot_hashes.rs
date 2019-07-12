@@ -4,27 +4,18 @@
 //!
 use crate::account::Account;
 use crate::hash::Hash;
-use crate::pubkey::Pubkey;
-use crate::syscall;
+use crate::sysvar;
 use bincode::serialized_size;
 use std::ops::Deref;
 
 pub use crate::timing::Slot;
 
-/// "Sysca11SlotHashes11111111111111111111111111"
-///  slot hashes account pubkey
 const ID: [u8; 32] = [
-    6, 167, 211, 138, 69, 219, 186, 157, 48, 170, 46, 66, 2, 146, 193, 59, 39, 59, 245, 188, 30,
-    60, 130, 78, 86, 27, 113, 191, 208, 0, 0, 0,
+    6, 167, 213, 23, 25, 44, 97, 55, 206, 224, 146, 217, 182, 146, 62, 225, 204, 214, 25, 3, 250,
+    130, 184, 161, 97, 145, 87, 141, 128, 0, 0, 0,
 ];
 
-pub fn id() -> Pubkey {
-    Pubkey::new(&ID)
-}
-
-pub fn check_id(pubkey: &Pubkey) -> bool {
-    pubkey.as_ref() == ID
-}
+crate::solana_name_id!(ID, "SysvarRewards111111111111111111111111111111");
 
 pub const MAX_SLOT_HASHES: usize = 512; // 512 slots to get your vote in
 
@@ -67,7 +58,7 @@ impl Deref for SlotHashes {
 }
 
 pub fn create_account(lamports: u64, slot_hashes: &[(Slot, Hash)]) -> Account {
-    let mut account = Account::new(lamports, SlotHashes::size_of(), &syscall::id());
+    let mut account = Account::new(lamports, SlotHashes::size_of(), &sysvar::id());
     SlotHashes::new(slot_hashes).to(&mut account).unwrap();
     account
 }

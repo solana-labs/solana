@@ -9,7 +9,7 @@ use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::account_utils::State;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::syscall;
+use solana_sdk::sysvar;
 use solana_sdk::timing::Epoch;
 use solana_vote_api::vote_state::VoteState;
 use std::cmp;
@@ -178,23 +178,20 @@ pub trait StakeAccount {
         &mut self,
         vote_account: &KeyedAccount,
         stake: u64,
-        current: &syscall::current::Current,
+        clock: &sysvar::clock::Clock,
     ) -> Result<(), InstructionError>;
-    fn deactivate_stake(
-        &mut self,
-        current: &syscall::current::Current,
-    ) -> Result<(), InstructionError>;
+    fn deactivate_stake(&mut self, clock: &sysvar::clock::Clock) -> Result<(), InstructionError>;
     fn redeem_vote_credits(
         &mut self,
         vote_account: &mut KeyedAccount,
         rewards_account: &mut KeyedAccount,
-        rewards: &syscall::rewards::Rewards,
+        rewards: &sysvar::rewards::Rewards,
     ) -> Result<(), InstructionError>;
     fn withdraw(
         &mut self,
         lamports: u64,
         to: &mut KeyedAccount,
-        current: &syscall::current::Current,
+        clock: &sysvar::clock::Clock,
     ) -> Result<(), InstructionError>;
 }
 
@@ -203,7 +200,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         &mut self,
         vote_account: &KeyedAccount,
         new_stake: u64,
-        current: &syscall::current::Current,
+        clock: &sysvar::clock::Clock,
     ) -> Result<(), InstructionError> {
         if self.signer_key().is_none() {
             return Err(InstructionError::MissingRequiredSignature);
@@ -220,7 +217,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 new_stake,
                 vote_account.unsigned_key(),
                 &vote_account.state()?,
-                current.epoch,
+                clock.epoch,
             );
 
             self.set_state(&StakeState::Stake(stake))
@@ -228,16 +225,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             Err(InstructionError::InvalidAccountData)
         }
     }
-    fn deactivate_stake(
-        &mut self,
-        current: &syscall::current::Current,
-    ) -> Result<(), InstructionError> {
+    fn deactivate_stake(&mut self, clock: &sysvar::clock::Clock) -> Result<(), InstructionError> {
         if self.signer_key().is_none() {
             return Err(InstructionError::MissingRequiredSignature);
         }
 
         if let StakeState::Stake(mut stake) = self.state()? {
-            stake.deactivate(current.epoch);
+            stake.deactivate(clock.epoch);
 
             self.set_state(&StakeState::Stake(stake))
         } else {
@@ -248,7 +242,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         &mut self,
         vote_account: &mut KeyedAccount,
         rewards_account: &mut KeyedAccount,
-        rewards: &syscall::rewards::Rewards,
+        rewards: &sysvar::rewards::Rewards,
     ) -> Result<(), InstructionError> {
         if let (StakeState::Stake(mut stake), StakeState::RewardsPool) =
             (self.state()?, rewards_account.state()?)
@@ -285,7 +279,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         &mut self,
         lamports: u64,
         to: &mut KeyedAccount,
-        current: &syscall::current::Current,
+        clock: &sysvar::clock::Clock,
     ) -> Result<(), InstructionError> {
         if self.signer_key().is_none() {
             return Err(InstructionError::MissingRequiredSignature);
@@ -293,7 +287,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
         match self.state()? {
             StakeState::Stake(mut stake) => {
-                let staked = if stake.stake(current.epoch) == 0 {
+                let staked = if stake.stake(clock.epoch) == 0 {
                     0
                 } else {
                     // Assume full stake if the stake is under warmup/cooldown
@@ -359,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_stake_delegate_stake() {
-        let current = syscall::current::Current::default();
+        let clock = sysvar::clock::Clock::default();
 
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
@@ -387,14 +381,14 @@ mod tests {
         }
 
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, 0, &current),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, 0, &clock),
             Err(InstructionError::MissingRequiredSignature)
         );
 
         // signed keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account, stake_lamports, &current)
+            .delegate_stake(&vote_keyed_account, stake_lamports, &clock)
             .is_ok());
 
         // verify that delegate_stake() looks right, compare against hand-rolled
@@ -412,14 +406,14 @@ mod tests {
         // verify that delegate_stake can't be called twice StakeState::default()
         // signed keyed account
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &current),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &clock),
             Err(InstructionError::InvalidAccountData)
         );
 
         // verify can only stake up to account lamports
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports + 1, &current),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports + 1, &clock),
             Err(InstructionError::InsufficientFunds)
         );
 
@@ -427,7 +421,7 @@ mod tests {
 
         stake_keyed_account.set_state(&stake_state).unwrap();
         assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account, 0, &current)
+            .delegate_stake(&vote_keyed_account, 0, &clock)
             .is_err());
     }
 
@@ -462,19 +456,19 @@ mod tests {
         let mut stake_account =
             Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
 
-        let current = syscall::current::Current::default();
+        let clock = sysvar::clock::Clock::default();
 
         // unsigned keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.deactivate_stake(&current),
+            stake_keyed_account.deactivate_stake(&clock),
             Err(InstructionError::MissingRequiredSignature)
         );
 
         // signed keyed account but not staked yet
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.deactivate_stake(&current),
+            stake_keyed_account.deactivate_stake(&clock),
             Err(InstructionError::InvalidAccountData)
         );
 
@@ -485,12 +479,12 @@ mod tests {
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &current),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &clock),
             Ok(())
         );
 
         // Deactivate after staking
-        assert_eq!(stake_keyed_account.deactivate_stake(&current), Ok(()));
+        assert_eq!(stake_keyed_account.deactivate_stake(&clock), Ok(()));
     }
 
     #[test]
@@ -501,7 +495,7 @@ mod tests {
         let mut stake_account =
             Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
 
-        let current = syscall::current::Current::default();
+        let clock = sysvar::clock::Clock::default();
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
@@ -510,7 +504,7 @@ mod tests {
         // unsigned keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &current),
+            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
             Err(InstructionError::MissingRequiredSignature)
         );
 
@@ -518,14 +512,14 @@ mod tests {
         // try withdrawing more than balance
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports + 1, &mut to_keyed_account, &current),
+            stake_keyed_account.withdraw(total_lamports + 1, &mut to_keyed_account, &clock),
             Err(InstructionError::InsufficientFunds)
         );
 
         // try withdrawing some (enough for rest of the test to carry forward)
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.withdraw(5, &mut to_keyed_account, &current),
+            stake_keyed_account.withdraw(5, &mut to_keyed_account, &clock),
             Ok(())
         );
         total_lamports -= 5;
@@ -537,7 +531,7 @@ mod tests {
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &current),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &clock),
             Ok(())
         );
 
@@ -546,7 +540,7 @@ mod tests {
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports + 1,
                 &mut to_keyed_account,
-                &current
+                &clock
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -556,7 +550,7 @@ mod tests {
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports,
                 &mut to_keyed_account,
-                &current
+                &clock
             ),
             Ok(())
         );
@@ -570,8 +564,8 @@ mod tests {
         let mut stake_account =
             Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
 
-        let current = syscall::current::Current::default();
-        let mut future = syscall::current::Current::default();
+        let clock = sysvar::clock::Clock::default();
+        let mut future = sysvar::clock::Clock::default();
         future.epoch += 16;
 
         let to = Pubkey::new_rand();
@@ -596,7 +590,7 @@ mod tests {
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports + 1,
                 &mut to_keyed_account,
-                &current
+                &clock
             ),
             Ok(())
         );
@@ -609,8 +603,8 @@ mod tests {
         let mut stake_account =
             Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
 
-        let current = syscall::current::Current::default();
-        let mut future = syscall::current::Current::default();
+        let clock = sysvar::clock::Clock::default();
+        let mut future = sysvar::clock::Clock::default();
         future.epoch += 16;
 
         let to = Pubkey::new_rand();
@@ -622,7 +616,7 @@ mod tests {
         stake_keyed_account.set_state(&stake_state).unwrap();
 
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &current),
+            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
             Err(InstructionError::InvalidAccountData)
         );
     }
@@ -704,8 +698,8 @@ mod tests {
 
     #[test]
     fn test_stake_redeem_vote_credits() {
-        let current = syscall::current::Current::default();
-        let mut rewards = syscall::rewards::Rewards::default();
+        let clock = sysvar::clock::Clock::default();
+        let mut rewards = sysvar::rewards::Rewards::default();
         rewards.validator_point_value = 100.0;
 
         let rewards_pool_pubkey = Pubkey::new_rand();
@@ -736,7 +730,7 @@ mod tests {
 
         // delegate the stake
         assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account, stake_lamports, &current)
+            .delegate_stake(&vote_keyed_account, stake_lamports, &clock)
             .is_ok());
         // no credits to claim
         assert_eq!(
