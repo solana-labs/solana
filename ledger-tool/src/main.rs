@@ -1,13 +1,66 @@
-use clap::{crate_description, crate_name, crate_version, App, Arg, SubCommand};
+use clap::{crate_description, crate_name, crate_version, value_t, App, Arg, SubCommand};
 use solana::blocktree::Blocktree;
 use solana::blocktree_processor::process_blocktree;
 use solana_sdk::genesis_block::GenesisBlock;
 use std::io::{stdout, Write};
 use std::process::exit;
 
+#[derive(PartialEq)]
+enum LedgerOutputMethod {
+    Print,
+    Json,
+}
+fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputMethod) {
+    let rooted_slot_iterator = blocktree
+        .rooted_slot_iterator(starting_slot)
+        .unwrap_or_else(|err| {
+            eprintln!(
+                "Failed to load entries starting from slot {}: {:?}",
+                starting_slot, err
+            );
+            exit(1);
+        });
+
+    if method == LedgerOutputMethod::Json {
+        stdout().write_all(b"{\"ledger\":[\n").expect("open array");
+    }
+
+    for (slot, slot_meta) in rooted_slot_iterator {
+        match method {
+            LedgerOutputMethod::Print => println!("Slot {}", slot),
+            LedgerOutputMethod::Json => {
+                serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
+                stdout().write_all(b",\n").expect("newline");
+            }
+        }
+
+        let entries = blocktree
+            .get_slot_entries(slot, 0, None)
+            .unwrap_or_else(|err| {
+                eprintln!("Failed to load entries for slot {}: {:?}", slot, err);
+                exit(1);
+            });
+
+        for entry in entries {
+            match method {
+                LedgerOutputMethod::Print => println!("{:?}", entry),
+                LedgerOutputMethod::Json => {
+                    serde_json::to_writer(stdout(), &entry).expect("serialize entry");
+                    stdout().write_all(b",\n").expect("newline");
+                }
+            }
+        }
+    }
+
+    if method == LedgerOutputMethod::Json {
+        stdout().write_all(b"\n]}\n").expect("close array");
+    }
+}
+
 fn main() {
     solana_logger::setup();
-    let matches = App::new(crate_name!()).about(crate_description!())
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("ledger")
@@ -19,26 +72,12 @@ fn main() {
                 .help("Use directory for ledger location"),
         )
         .arg(
-            Arg::with_name("head")
-                .short("n")
-                .long("head")
+            Arg::with_name("starting_slot")
+                .long("starting-slot")
                 .value_name("NUM")
                 .takes_value(true)
-                .help("Limit to at most the first NUM entries in ledger\n  (only applies to print and json commands)"),
-        )
-        .arg(
-            Arg::with_name("min-hashes")
-                .short("h")
-                .long("min-hashes")
-                .value_name("NUM")
-                .takes_value(true)
-                .help("Skip entries with fewer than NUM hashes\n  (only applies to print and json commands)"),
-        )
-        .arg(
-            Arg::with_name("continue")
-                .short("c")
-                .long("continue")
-                .help("Continue verify even if verification fails"),
+                .default_value("0")
+                .help("Start at this slot (only applies to print and json commands)"),
         )
         .subcommand(SubCommand::with_name("print").about("Print the ledger"))
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
@@ -63,63 +102,27 @@ fn main() {
         }
     };
 
-    let entries = match blocktree.read_ledger() {
-        Ok(entries) => entries,
-        Err(err) => {
-            eprintln!("Failed to read ledger at {}: {}", ledger_path, err);
-            exit(1);
-        }
-    };
-
-    let head = match matches.value_of("head") {
-        Some(head) => head.parse().expect("please pass a number for --head"),
-        None => <usize>::max_value(),
-    };
-
-    let min_hashes = match matches.value_of("min-hashes") {
-        Some(hashes) => hashes
-            .parse()
-            .expect("please pass a number for --min-hashes"),
-        None => 0,
-    } as u64;
+    let starting_slot = value_t!(matches, "starting_slot", u64).unwrap_or_else(|e| e.exit());
 
     match matches.subcommand() {
         ("print", _) => {
-            for (i, entry) in entries.enumerate() {
-                if i >= head {
-                    break;
-                }
-
-                if entry.num_hashes < min_hashes {
-                    continue;
-                }
-                println!("{:?}", entry);
-            }
+            output_ledger(blocktree, starting_slot, LedgerOutputMethod::Print);
         }
         ("json", _) => {
-            stdout().write_all(b"{\"ledger\":[\n").expect("open array");
-            for (i, entry) in entries.enumerate() {
-                if i >= head {
-                    break;
-                }
-
-                if entry.num_hashes < min_hashes {
-                    continue;
-                }
-                serde_json::to_writer(stdout(), &entry).expect("serialize");
-                stdout().write_all(b",\n").expect("newline");
-            }
-            stdout().write_all(b"\n]}\n").expect("close array");
+            output_ledger(blocktree, starting_slot, LedgerOutputMethod::Json);
         }
-        ("verify", _) => match process_blocktree(&genesis_block, &blocktree, None) {
-            Ok((_bank_forks, bank_forks_info, _)) => {
-                println!("{:?}", bank_forks_info);
+        ("verify", _) => {
+            println!("Verifying ledger...");
+            match process_blocktree(&genesis_block, &blocktree, None) {
+                Ok((_bank_forks, bank_forks_info, _)) => {
+                    println!("{:?}", bank_forks_info);
+                }
+                Err(err) => {
+                    eprintln!("Ledger verification failed: {:?}", err);
+                    exit(1);
+                }
             }
-            Err(err) => {
-                eprintln!("Ledger verification failed: {:?}", err);
-                exit(1);
-            }
-        },
+        }
         ("", _) => {
             eprintln!("{}", matches.usage());
             exit(1);
