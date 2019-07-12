@@ -1,16 +1,16 @@
 //! This account contains the current cluster rewards point values
 //!
 use crate::account::Account;
-use crate::syscall;
+use crate::sysvar;
 use bincode::serialized_size;
 
 ///  account pubkey
 const ID: [u8; 32] = [
-    6, 167, 211, 138, 69, 219, 174, 221, 84, 28, 161, 202, 169, 28, 9, 210, 255, 70, 57, 99, 48,
-    156, 150, 32, 59, 104, 53, 117, 192, 0, 0, 0,
+    6, 167, 213, 23, 25, 44, 97, 55, 206, 224, 146, 217, 182, 146, 62, 225, 204, 214, 25, 3, 250,
+    130, 184, 161, 97, 145, 87, 141, 128, 0, 0, 0,
 ];
 
-crate::solana_name_id!(ID, "Sysca11Rewards11111111111111111111111111111");
+crate::solana_name_id!(ID, "SysvarRewards111111111111111111111111111111");
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -42,7 +42,7 @@ pub fn create_account(
             validator_point_value,
             storage_point_value,
         },
-        &syscall::id(),
+        &sysvar::id(),
     )
     .unwrap()
 }

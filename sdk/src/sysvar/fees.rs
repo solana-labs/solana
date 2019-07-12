@@ -2,16 +2,16 @@
 //!
 use crate::account::Account;
 use crate::fee_calculator::FeeCalculator;
-use crate::syscall;
+use crate::sysvar;
 use bincode::serialized_size;
 
 ///  fees account pubkey
 const ID: [u8; 32] = [
-    6, 167, 211, 138, 69, 218, 104, 33, 3, 92, 89, 173, 16, 89, 109, 253, 49, 97, 98, 165, 87, 222,
-    119, 112, 253, 90, 76, 184, 0, 0, 0, 0,
+    6, 167, 213, 23, 24, 226, 90, 141, 131, 80, 60, 37, 26, 122, 240, 113, 38, 253, 114, 0, 223,
+    111, 196, 237, 82, 106, 156, 144, 0, 0, 0, 0,
 ];
 
-crate::solana_name_id!(ID, "Sysca11Fees11111111111111111111111111111111");
+crate::solana_name_id!(ID, "SysvarFees111111111111111111111111111111111");
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -38,7 +38,7 @@ pub fn create_account(lamports: u64, fee_calculator: &FeeCalculator) -> Account 
         &Fees {
             fee_calculator: fee_calculator.clone(),
         },
-        &syscall::id(),
+        &sysvar::id(),
     )
     .unwrap()
 }

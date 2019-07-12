@@ -7,8 +7,8 @@ use solana_sdk::client::SyncClient;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::syscall;
-use solana_sdk::syscall::rewards::Rewards;
+use solana_sdk::sysvar;
+use solana_sdk::sysvar::rewards::Rewards;
 use solana_stake_api::id;
 use solana_stake_api::stake_instruction;
 use solana_stake_api::stake_instruction::process_instruction;
@@ -145,7 +145,7 @@ fn test_stake_account_delegate() {
 
     // Test that rewards are there
     let rewards_account = bank
-        .get_account(&syscall::rewards::id())
+        .get_account(&sysvar::rewards::id())
         .expect("account not found");
     assert_matches!(Rewards::from(&rewards_account), Some(_));
 

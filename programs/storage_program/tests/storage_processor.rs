@@ -12,10 +12,10 @@ use solana_sdk::instruction::{Instruction, InstructionError};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::syscall::current::Current;
-use solana_sdk::syscall::rewards::Rewards;
-use solana_sdk::syscall::{current, rewards};
 use solana_sdk::system_instruction;
+use solana_sdk::sysvar::current::Current;
+use solana_sdk::sysvar::rewards::Rewards;
+use solana_sdk::sysvar::{current, rewards};
 use solana_sdk::timing::{
     get_segment_from_slot, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT,
 };

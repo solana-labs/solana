@@ -10,8 +10,8 @@ use solana_metrics::datapoint_warn;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::syscall;
 use solana_sdk::system_instruction;
+use solana_sdk::sysvar;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
@@ -94,10 +94,10 @@ pub fn vote(
         vote_pubkey,
         authorized_voter_pubkey,
         &[
-            // request slot_hashes syscall account after vote_pubkey
-            AccountMeta::new_credit_only(syscall::slot_hashes::id(), false),
-            // request current syscall account after that
-            AccountMeta::new_credit_only(syscall::current::id(), false),
+            // request slot_hashes sysvar account after vote_pubkey
+            AccountMeta::new_credit_only(sysvar::slot_hashes::id(), false),
+            // request clock sysvar account after that
+            AccountMeta::new_credit_only(sysvar::clock::id(), false),
         ],
     );
 
@@ -135,12 +135,12 @@ pub fn process_instruction(
             if rest.len() < 2 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            let (slot_hashes_and_current, other_signers) = rest.split_at_mut(2);
+            let (slot_hashes_and_clock, other_signers) = rest.split_at_mut(2);
 
             vote_state::process_votes(
                 me,
-                &syscall::slot_hashes::from_keyed_account(&slot_hashes_and_current[0])?,
-                &syscall::current::from_keyed_account(&slot_hashes_and_current[1])?,
+                &sysvar::slot_hashes::from_keyed_account(&slot_hashes_and_clock[0])?,
+                &sysvar::clock::from_keyed_account(&slot_hashes_and_clock[1])?,
                 other_signers,
                 &votes,
             )
@@ -167,10 +167,10 @@ mod tests {
             .accounts
             .iter()
             .map(|meta| {
-                if syscall::current::check_id(&meta.pubkey) {
-                    syscall::current::create_account(1, 0, 0, 0, 0)
-                } else if syscall::slot_hashes::check_id(&meta.pubkey) {
-                    syscall::slot_hashes::create_account(1, &[])
+                if sysvar::clock::check_id(&meta.pubkey) {
+                    sysvar::clock::create_account(1, 0, 0, 0, 0)
+                } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
+                    sysvar::slot_hashes::create_account(1, &[])
                 } else {
                     Account::default()
                 }
