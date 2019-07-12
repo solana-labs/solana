@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, crate_version, value_t, App, Arg, SubC
 use solana::blocktree::Blocktree;
 use solana::blocktree_processor::process_blocktree;
 use solana_sdk::genesis_block::GenesisBlock;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{stdout, Write};
 use std::process::exit;
@@ -87,11 +87,11 @@ fn main() {
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
         .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
         .subcommand(SubCommand::with_name("prune").about("Prune the ledger at the block height").arg(
-            Arg::with_name("heights")
-                .long("heights")
+            Arg::with_name("valid_slot_list")
+                .long("valid-slot-list")
                 .value_name("FILENAME")
                 .takes_value(true)
-                .help("The location of the YAML file with a list of valid rollback heights and hashes"),
+                .help("The location of the YAML file with a list of valid rollback slot heights and hashes"),
         ))
         .subcommand(SubCommand::with_name("list-roots").about("Output upto last <num-roots> root hashes and their heights starting at the given block height").arg(
             Arg::with_name("max_height")
@@ -151,10 +151,39 @@ fn main() {
             }
         }
         ("prune", Some(args_matches)) => {
-            if let Some(prune_list) = args_matches.value_of("heights") {
-                let prune_file = File::open(prune_list.to_string()).unwrap();
-                let _height_hashes: HashMap<u64, String> =
+            if let Some(prune_file_path) = args_matches.value_of("valid_slot_list") {
+                let prune_file = File::open(prune_file_path.to_string()).unwrap();
+                let slot_hashes: BTreeMap<u64, String> =
                     serde_yaml::from_reader(prune_file).unwrap();
+
+                let iter = blocktree
+                    .rooted_slot_iterator(0)
+                    .expect("Failed to get rooted slot");
+
+                let potential_hashes: Vec<_> = iter
+                    .filter_map(|(slot, meta)| {
+                        let blockhash = blocktree
+                            .get_slot_entries(slot, meta.last_index, Some(1))
+                            .unwrap()
+                            .first()
+                            .unwrap()
+                            .hash
+                            .to_string();
+
+                        slot_hashes.get(&slot).and_then(|hash| {
+                            if *hash == blockhash {
+                                Some((slot, blockhash))
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect();
+
+                let (target_slot, target_hash) = potential_hashes
+                    .last()
+                    .expect("Failed to find a valid slot");
+                println!("Prune at slot {:?} hash {:?}", target_slot, target_hash);
             }
         }
         ("list-roots", Some(args_matches)) => {
