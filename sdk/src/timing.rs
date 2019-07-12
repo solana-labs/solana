@@ -78,13 +78,11 @@ pub fn get_complete_segment_from_slot(
     rooted_slot: Slot,
     slots_per_segment: u64,
 ) -> Option<Segment> {
-    let current_segment = get_segment_from_slot(rooted_slot, slots_per_segment);
-    if current_segment == 1 {
+    let completed_segment = rooted_slot / slots_per_segment;
+    if rooted_slot < slots_per_segment {
         None
-    } else if rooted_slot < (current_segment * slots_per_segment) {
-        Some(current_segment - 1)
     } else {
-        Some(current_segment)
+        Some(completed_segment)
     }
 }
 
