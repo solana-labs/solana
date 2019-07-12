@@ -725,6 +725,14 @@ impl Bank {
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
         self.process_transactions(&txs)[0].clone()?;
+<<<<<<< HEAD
+=======
+        // Call this instead of commit_credits(), so that the credit-only locks hashmap on this
+        // bank isn't deleted
+        self.rc
+            .accounts
+            .commit_credits_unsafe(&self.ancestors, self.slot());
+>>>>>>> 22315d88e... Fix credit only commit_credits race (#5028)
         tx.signatures
             .get(0)
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
@@ -1897,11 +1905,34 @@ mod tests {
         let tx2 = system_transaction::transfer(&payer1, &recipient, 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
+<<<<<<< HEAD
+=======
+        bank.rc
+            .accounts
+            .commit_credits_unsafe(&bank.ancestors, bank.slot());
+>>>>>>> 22315d88e... Fix credit only commit_credits race (#5028)
 
         // If multiple transactions attempt to deposit into the same account, only the first will
         // succeed, even though such atomic adds are safe. A System Transfer `To` account should be
         // given credit-only handling
 
+<<<<<<< HEAD
+=======
+        let tx0 = system_transaction::transfer(
+            &mint_keypair,
+            &recipient.pubkey(),
+            2,
+            genesis_block.hash(),
+        );
+        let tx1 =
+            system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
+        let txs = vec![tx0, tx1];
+        let results = bank.process_transactions(&txs);
+        bank.rc
+            .accounts
+            .commit_credits_unsafe(&bank.ancestors, bank.slot());
+        // However, an account may not be locked as credit-only and credit-debit at the same time.
+>>>>>>> 22315d88e... Fix credit only commit_credits race (#5028)
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
         assert_eq!(results[2], Err(TransactionError::AccountInUse));
