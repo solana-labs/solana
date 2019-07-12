@@ -309,3 +309,12 @@ cloud_FetchFile() {
   cloud_GetConfigValueFromInstanceName "$instanceName" osProfile.adminUsername
   scp "${config_value}@${publicIp}:${remoteFile}" "$localFile"
 }
+
+#
+# cloud_CreateAndAttachPersistentDisk
+#
+# Not yet implemented for this cloud provider
+cloud_CreateAndAttachPersistentDisk() {
+  echo "ERROR: cloud_CreateAndAttachPersistentDisk is not yet implemented for azure"
+  exit 1
+}

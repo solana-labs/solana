@@ -63,6 +63,7 @@ blockstreamer=false
 fullNodeBootDiskSizeInGb=1000
 clientBootDiskSizeInGb=75
 replicatorBootDiskSizeInGb=1000
+fullNodeAdditionalDiskSizeInGb=
 externalNodes=false
 failOnValidatorBootupFailure=true
 
@@ -126,7 +127,10 @@ Manage testnet instances
    --letsencrypt [dns name] - Attempt to generate a TLS certificate using this
                               DNS name (useful only when the -a and -P options
                               are also provided)
-
+   --fullnode-additional-disk-size-gb [number]
+                    - Add an additional [number] GB SSD to all fullnodes to store the config-local directory.
+                      If not set, config-local will be written to the boot disk by default.
+                      Only supported on GCE.
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
 
@@ -151,6 +155,9 @@ while [[ -n $1 ]]; do
   if [[ ${1:0:2} = -- ]]; then
     if [[ $1 = --letsencrypt ]]; then
       letsEncryptDomainName="$2"
+      shift 2
+    elif [[ $1 = --fullnode-additional-disk-size-gb ]]; then
+      fullNodeAdditionalDiskSizeInGb="$2"
       shift 2
     else
       usage "Unknown long option: $1"
@@ -234,8 +241,14 @@ case $cloudProvider in
 gce)
   ;;
 ec2)
+  if [[ -n $fullNodeAdditionalDiskSizeInGb ]] ; then
+    usage "Error: --fullnode-additional-disk-size-gb currently only supported with cloud provider: gce"
+  fi
   ;;
 azure)
+  if [[ -n $fullNodeAdditionalDiskSizeInGb ]] ; then
+    usage "Error: --fullnode-additional-disk-size-gb currently only supported with cloud provider: gce"
+  fi
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -630,6 +643,10 @@ $(
       cat enable-nvidia-persistence-mode.sh
     fi
 
+    if [[ -n $fullNodeAdditionalDiskSizeInGb ]]; then
+      cat mount-additional-disk.sh
+    fi
+
 )
 
 cat > /etc/motd <<EOM
@@ -656,7 +673,7 @@ EOF
   else
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
+      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb"
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
@@ -676,7 +693,7 @@ EOF
       fi
       cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
         "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-        "$startupScript" "" "$bootDiskType" &
+        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" &
     done
 
     wait
