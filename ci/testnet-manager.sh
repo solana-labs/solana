@@ -524,7 +524,7 @@ deploy() {
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p tds-solana-com -C gce \
-          -G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+          -G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
           -d pd-ssd \
           -z us-west1-a \
           -z us-central1-a \
