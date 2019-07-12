@@ -341,7 +341,8 @@ macro_rules! range {
 const SIGNATURE_RANGE: std::ops::Range<usize> = range!(0, Signature);
 const FORWARDED_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, bool);
 const PARENT_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u64);
-const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
+const VERSION_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
+const SLOT_RANGE: std::ops::Range<usize> = range!(VERSION_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
 const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
 const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
@@ -390,6 +391,12 @@ impl Blob {
     }
     pub fn set_parent(&mut self, ix: u64) {
         LittleEndian::write_u64(&mut self.data[PARENT_RANGE], ix);
+    }
+    pub fn version(&self) -> u64 {
+        LittleEndian::read_u64(&self.data[VERSION_RANGE])
+    }
+    pub fn set_version(&mut self, version: u64) {
+        LittleEndian::write_u64(&mut self.data[VERSION_RANGE], version);
     }
     pub fn slot(&self) -> u64 {
         LittleEndian::read_u64(&self.data[SLOT_RANGE])
@@ -862,4 +869,24 @@ mod tests {
         b.sign(&k);
         assert!(b.verify());
     }
+<<<<<<< HEAD
+=======
+
+    #[test]
+    fn test_packets_reset() {
+        let mut packets = Packets::default();
+        packets.packets.resize(10, Packet::default());
+        assert_eq!(packets.packets.len(), 10);
+        packets.reset();
+        assert_eq!(packets.packets.len(), 0);
+    }
+
+    #[test]
+    fn test_version() {
+        let mut b = Blob::default();
+        assert_eq!(b.version(), 0);
+        b.set_version(1);
+        assert_eq!(b.version(), 1);
+    }
+>>>>>>> 7aecb87bc... Add a version field to blobs (#5057)
 }
