@@ -28,7 +28,7 @@ use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::timing::{get_segment_from_slot, timestamp};
+use solana_sdk::timing::{get_complete_segment_from_slot, get_segment_from_slot, timestamp};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
 use solana_storage_api::storage_contract::StorageContract;
@@ -44,6 +44,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
+
+static ENCRYPTED_FILENAME: &'static str = "ledger.enc";
 
 #[derive(Serialize, Deserialize)]
 pub enum ReplicatorRequest {
@@ -114,7 +116,8 @@ fn get_slot_from_signature(
         | (u64::from(signature_vec[1]) << 8)
         | (u64::from(signature_vec[1]) << 16)
         | (u64::from(signature_vec[2]) << 24);
-    let max_segment_index = get_segment_from_slot(storage_turn, slots_per_segment);
+    let max_segment_index =
+        get_complete_segment_from_slot(storage_turn, slots_per_segment).unwrap();
     segment_index %= max_segment_index as u64;
     segment_index * slots_per_segment
 }
@@ -514,7 +517,7 @@ impl Replicator {
 
     fn encrypt_ledger(meta: &mut ReplicatorMeta, blocktree: &Arc<Blocktree>) -> Result<()> {
         let ledger_path = Path::new(&meta.ledger_path);
-        meta.ledger_data_file_encrypted = ledger_path.join("ledger.enc");
+        meta.ledger_data_file_encrypted = ledger_path.join(ENCRYPTED_FILENAME);
 
         {
             let mut ivec = [0u8; 64];
@@ -709,7 +712,7 @@ impl Replicator {
                 previous_blockhash,
                 exit,
             )?;
-            if get_segment_from_slot(turn_slot, slots_per_segment) != 0 {
+            if get_complete_segment_from_slot(turn_slot, slots_per_segment).is_some() {
                 return Ok((blockhash, turn_slot));
             }
         }

@@ -67,8 +67,25 @@ pub fn timestamp() -> u64 {
     duration_as_ms(&now)
 }
 
-pub fn get_segment_from_slot(slot: Slot, slots_per_segment: u64) -> Segment {
-    ((slot + (slots_per_segment - 1)) / slots_per_segment)
+/// Converts a slot to a storage segment. Does not indicate that a segment is complete.
+pub fn get_segment_from_slot(rooted_slot: Slot, slots_per_segment: u64) -> Segment {
+    ((rooted_slot + (slots_per_segment - 1)) / slots_per_segment)
+}
+
+/// Given a slot returns the latest complete segment, if no segment could possibly be complete
+/// for a given slot it returns `None` (i.e if `slot < slots_per_segment`)
+pub fn get_complete_segment_from_slot(
+    rooted_slot: Slot,
+    slots_per_segment: u64,
+) -> Option<Segment> {
+    let current_segment = get_segment_from_slot(rooted_slot, slots_per_segment);
+    if current_segment == 1 {
+        None
+    } else if rooted_slot < (current_segment * slots_per_segment) {
+        Some(current_segment - 1)
+    } else {
+        Some(current_segment)
+    }
 }
 
 /// Slot is a unit of time given to a leader for encoding,
@@ -81,3 +98,29 @@ pub type Segment = u64;
 /// Epoch is a unit of time a given leader schedule is honored,
 ///  some number of Slots.  Use a u64 to count them.
 pub type Epoch = u64;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_segments(slot: Slot, slots_per_segment: u64) -> (Segment, Segment) {
+        (
+            get_segment_from_slot(slot, slots_per_segment),
+            get_complete_segment_from_slot(slot, slots_per_segment).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_complete_segment_impossible() {
+        // slot < slots_per_segment so there can be no complete segments
+        assert_eq!(get_complete_segment_from_slot(5, 10), None);
+    }
+
+    #[test]
+    fn test_segment_conversion() {
+        let (current, complete) = get_segments(2048, 1024);
+        assert_eq!(current, complete);
+        let (current, complete) = get_segments(2049, 1024);
+        assert!(complete < current);
+    }
+}
