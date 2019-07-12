@@ -99,6 +99,7 @@ numFullnodesRequested=
 externalPrimordialAccountsFile=
 remoteExternalPrimordialAccountsFile=
 stakeNodesInGenesisBlock=
+maybeNoSnapshot=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -117,7 +118,7 @@ while [[ -n $1 ]]; do
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --no-snapshot ]]; then
-      genesisOptions="$genesisOptions $1"
+      maybeNoSnapshot="$1"
       shift 1
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
@@ -358,6 +359,7 @@ startBootstrapLeader() {
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
+         $maybeNoSnapshot \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -407,6 +409,7 @@ startNode() {
          \"$stakeNodesInGenesisBlock\" \
          $nodeIndex \
          \"$genesisOptions\" \
+         $maybeNoSnapshot \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
