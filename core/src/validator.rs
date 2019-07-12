@@ -82,7 +82,7 @@ impl Validator {
         voting_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
-        rollback_height: Option<u64>,
+        verify_ledger: bool,
         config: &ValidatorConfig,
     ) -> Self {
         warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
@@ -103,7 +103,7 @@ impl Validator {
             ledger_path,
             config.account_paths.clone(),
             config.snapshot_path.clone(),
-            rollback_height,
+            verify_ledger,
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -304,9 +304,9 @@ fn get_bank_forks(
     blocktree: &Blocktree,
     account_paths: Option<String>,
     snapshot_path: Option<String>,
-    rollback_height: Option<u64>,
+    verify_ledger: bool,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
-    if rollback_height.is_none() && snapshot_path.is_some() {
+    if snapshot_path.is_some() {
         let bank_forks =
             BankForks::load_from_snapshot(&genesis_block, account_paths.clone(), &snapshot_path);
         match bank_forks {
@@ -322,11 +322,11 @@ fn get_bank_forks(
         }
     }
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) =
-        blocktree_processor::process_blocktree_until_height(
+        blocktree_processor::process_blocktree(
             &genesis_block,
             &blocktree,
             account_paths,
-            rollback_height,
+            verify_ledger,
         )
         .expect("process_blocktree failed");
     if snapshot_path.is_some() {
@@ -340,7 +340,7 @@ pub fn new_banks_from_blocktree(
     blocktree_path: &str,
     account_paths: Option<String>,
     snapshot_path: Option<String>,
-    rollback_height: Option<u64>,
+    verify_ledger: bool,
 ) -> (
     BankForks,
     Vec<BankForksInfo>,
@@ -362,7 +362,7 @@ pub fn new_banks_from_blocktree(
         &blocktree,
         account_paths,
         snapshot_path,
-        rollback_height,
+        verify_ledger,
     );
 
     (
@@ -427,7 +427,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, String) {
         &voting_keypair,
         &storage_keypair,
         None,
-        None,
+        true,
         &ValidatorConfig::default(),
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
@@ -463,7 +463,7 @@ mod tests {
             &voting_keypair,
             &storage_keypair,
             Some(&leader_node.info),
-            None,
+            true,
             &ValidatorConfig::default(),
         );
         validator.close().unwrap();
@@ -495,7 +495,7 @@ mod tests {
                     &voting_keypair,
                     &storage_keypair,
                     Some(&leader_node.info),
-                    None,
+                    true,
                     &ValidatorConfig::default(),
                 )
             })

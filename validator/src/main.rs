@@ -11,7 +11,6 @@ use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
 use std::net::SocketAddr;
 use std::process::exit;
-use std::str::FromStr;
 use std::sync::Arc;
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
@@ -165,11 +164,10 @@ fn main() {
                 .help("Snapshot path"),
         )
         .arg(
-            clap::Arg::with_name("rollback_height")
-                .long("rollback-height")
-                .value_name("BLOCK HEIGHT")
-                .takes_value(true)
-                .help("Start the node at the given block height"),
+            clap::Arg::with_name("skip_ledger_verify")
+                .long("skip-ledger-verify")
+                .takes_value(false)
+                .help("Skip ledger verification at node bootup"),
         )
          .get_matches();
 
@@ -275,9 +273,7 @@ fn main() {
         node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
     };
 
-    let rollback_height = matches
-        .value_of("rollback_height")
-        .map_or(None, |height| u64::from_str(height).ok());
+    let verify_ledger = !matches.is_present("skip_ledger_verify");
 
     let validator = Validator::new(
         node,
@@ -287,7 +283,7 @@ fn main() {
         &Arc::new(voting_keypair),
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
-        rollback_height,
+        verify_ledger,
         &validator_config,
     );
 

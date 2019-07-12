@@ -177,7 +177,7 @@ impl LocalCluster {
             &leader_voting_keypair,
             &leader_storage_keypair,
             None,
-            None,
+            true,
             &config.validator_configs[0],
         );
 
@@ -309,7 +309,7 @@ impl LocalCluster {
             &voting_keypair,
             &storage_keypair,
             Some(&self.entry_point_info),
-            None,
+            true,
             &validator_config,
         );
 
@@ -563,7 +563,7 @@ impl Cluster for LocalCluster {
             &fullnode_info.voting_keypair,
             &fullnode_info.storage_keypair,
             None,
-            None,
+            true,
             config,
         );
 

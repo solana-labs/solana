@@ -61,7 +61,7 @@ fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputM
 }
 
 fn main() {
-    const DEFAULT_ROOT_COUNT: &'static str = "32";
+    const DEFAULT_ROOT_COUNT: &str = "32";
     solana_logger::setup();
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -140,7 +140,7 @@ fn main() {
         }
         ("verify", _) => {
             println!("Verifying ledger...");
-            match process_blocktree(&genesis_block, &blocktree, None) {
+            match process_blocktree(&genesis_block, &blocktree, None, true) {
                 Ok((_bank_forks, bank_forks_info, _)) => {
                     println!("{:?}", bank_forks_info);
                 }
@@ -150,15 +150,6 @@ fn main() {
                 }
             }
         }
-        ("verify", _) => match process_blocktree(&genesis_block, &blocktree, None) {
-            Ok((_bank_forks, bank_forks_info, _)) => {
-                println!("{:?}", bank_forks_info);
-            }
-            Err(err) => {
-                eprintln!("Ledger verification failed: {:?}", err);
-                exit(1);
-            }
-        },
         ("prune", Some(args_matches)) => {
             if let Some(prune_list) = args_matches.value_of("heights") {
                 let prune_file = File::open(prune_list.to_string()).unwrap();
