@@ -28,6 +28,15 @@ pub struct StakeLockout {
     stake: u64,
 }
 
+impl StakeLockout {
+    pub fn lockout(&self) -> u64 {
+        self.lockout
+    }
+    pub fn stake(&self) -> u64 {
+        self.stake
+    }
+}
+
 #[derive(Default)]
 pub struct Tower {
     epoch_stakes: EpochStakes,
@@ -106,7 +115,7 @@ impl Tower {
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<u64, HashSet<u64>>,
-    ) -> HashMap<u64, StakeLockout>
+    ) -> (HashMap<u64, StakeLockout>, u64)
     where
         F: Iterator<Item = (Pubkey, (u64, Account))>,
     {
@@ -192,7 +201,7 @@ impl Tower {
                 Self::update_ancestor_stakes(&mut stake_lockouts, vote.slot, lamports, ancestors);
             }
         }
-        stake_lockouts
+        (stake_lockouts, self.epoch_stakes.total_staked)
     }
 
     pub fn is_slot_confirmed(&self, slot: u64, lockouts: &HashMap<u64, StakeLockout>) -> bool {
@@ -364,7 +373,7 @@ impl Tower {
     }
 
     fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<u64, HashSet<u64>>) -> u128 {
-        let stake_lockouts =
+        let (stake_lockouts, _) =
             self.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter(), ancestors);
         self.calculate_weight(&stake_lockouts)
     }
@@ -432,8 +441,10 @@ mod test {
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
-        let staked_lockouts = tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
+        let (staked_lockouts, epoch_stake) =
+            tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
         assert!(staked_lockouts.is_empty());
+        assert_eq!(epoch_stake, 2);
     }
 
     #[test]
@@ -445,9 +456,11 @@ mod test {
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
-        let staked_lockouts = tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
+        let (staked_lockouts, epoch_stake) =
+            tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
         assert_eq!(staked_lockouts[&0].stake, 2);
         assert_eq!(staked_lockouts[&0].lockout, 2 + 2 + 4 + 4);
+        assert_eq!(epoch_stake, 2);
     }
 
     #[test]
@@ -463,7 +476,7 @@ mod test {
             ancestors.insert(i as u64, (0..i as u64).into_iter().collect());
         }
         assert_eq!(tower.lockouts.root_slot, Some(0));
-        let staked_lockouts = tower.collect_vote_lockouts(
+        let (staked_lockouts, epoch_stake) = tower.collect_vote_lockouts(
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
             &ancestors,
@@ -471,6 +484,7 @@ mod test {
         for i in 0..MAX_LOCKOUT_HISTORY {
             assert_eq!(staked_lockouts[&(i as u64)].stake, 2);
         }
+        assert_eq!(epoch_stake, 2);
         // should be the sum of all the weights for root
         assert!(staked_lockouts[&0].lockout > (2 * (1 << MAX_LOCKOUT_HISTORY)));
     }
@@ -800,17 +814,17 @@ mod test {
         for vote in &tower_votes {
             tower.record_vote(*vote, Hash::default());
         }
-        let stakes_lockouts =
+        let (staked_lockouts, _) =
             tower.collect_vote_lockouts(vote_to_evaluate, accounts.clone().into_iter(), &ancestors);
-        assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &stakes_lockouts));
+        assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts));
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
         // will expire the vote in one of the vote accounts, so we should have insufficient
         // stake to pass the threshold
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64 + 1;
-        let stakes_lockouts =
+        let (staked_lockouts, _) =
             tower.collect_vote_lockouts(vote_to_evaluate, accounts.into_iter(), &ancestors);
-        assert!(!tower.check_vote_stake_threshold(vote_to_evaluate, &stakes_lockouts));
+        assert!(!tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts));
     }
 
     fn vote_and_check_recent(num_votes: usize) {

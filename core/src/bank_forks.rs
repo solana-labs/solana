@@ -20,6 +20,24 @@ pub struct BankForks {
     root: u64,
     slots: HashSet<u64>,
     snapshot_path: Option<String>,
+    confidence: HashMap<u64, Confidence>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct Confidence {
+    fork_stakes: u64,
+    epoch_stakes: u64,
+    lockouts: u64,
+}
+
+impl Confidence {
+    pub fn new(fork_stakes: u64, epoch_stakes: u64, lockouts: u64) -> Self {
+        Self {
+            fork_stakes,
+            epoch_stakes,
+            lockouts,
+        }
+    }
 }
 
 impl Index<u64> for BankForks {
@@ -40,6 +58,7 @@ impl BankForks {
             root: 0,
             slots: HashSet::new(),
             snapshot_path: None,
+            confidence: HashMap::new(),
         }
     }
 
@@ -104,6 +123,7 @@ impl BankForks {
             working_bank,
             slots: HashSet::new(),
             snapshot_path: None,
+            confidence: HashMap::new(),
         }
     }
 
@@ -173,6 +193,10 @@ impl BankForks {
             }
         }
         self.slots = slots.clone();
+    }
+
+    pub fn cache_fork_confidence(&mut self, fork: u64, confidence: Confidence) {
+        self.confidence.insert(fork, confidence);
     }
 
     fn get_io_error(error: &str) -> Error {
@@ -356,6 +380,7 @@ impl BankForks {
             root,
             slots,
             snapshot_path: snapshot_path.clone(),
+            confidence: HashMap::new(),
         })
     }
 }

@@ -1,6 +1,6 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
-use crate::bank_forks::BankForks;
+use crate::bank_forks::{BankForks, Confidence};
 use crate::blocktree::{Blocktree, BlocktreeError};
 use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
@@ -529,14 +529,24 @@ impl ReplayStage {
                 !is_locked_out
             })
             .map(|bank| {
-                (
-                    bank,
-                    tower.collect_vote_lockouts(
-                        bank.slot(),
-                        bank.vote_accounts().into_iter(),
-                        &ancestors,
-                    ),
-                )
+                let (lockouts, total_epoch_stakes) = tower.collect_vote_lockouts(
+                    bank.slot(),
+                    bank.vote_accounts().into_iter(),
+                    &ancestors,
+                );
+                let mut w_bank_forks = bank_forks.write().unwrap();
+                for (fork, stake_lockout) in lockouts.iter() {
+                    w_bank_forks.cache_fork_confidence(
+                        *fork,
+                        Confidence::new(
+                            stake_lockout.stake(),
+                            total_epoch_stakes,
+                            stake_lockout.lockout(),
+                        ),
+                    );
+                }
+                drop(w_bank_forks);
+                (bank, lockouts)
             })
             .filter(|(b, stake_lockouts)| {
                 let vote_threshold = tower.check_vote_stake_threshold(b.slot(), &stake_lockouts);
