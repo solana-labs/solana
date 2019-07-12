@@ -5,7 +5,7 @@ set -ex
 [[ $USER = root ]] || exit 1
 
 apt-get update
-add-apt-repository -m --yes ppa:certbot/certbot
+add-apt-repository --yes ppa:certbot/certbot
 apt-get --assume-yes install certbot
 
 cat > /certbot-restore.sh <<'EOF'
