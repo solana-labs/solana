@@ -61,7 +61,7 @@ fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputM
 }
 
 fn main() {
-    const DEFAULT_ROOT_COUNT: &str = "32";
+    const DEFAULT_ROOT_COUNT: &str = "1";
     solana_logger::setup();
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -87,11 +87,11 @@ fn main() {
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
         .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
         .subcommand(SubCommand::with_name("prune").about("Prune the ledger at the block height").arg(
-            Arg::with_name("valid_slot_list")
-                .long("valid-slot-list")
+            Arg::with_name("slot_list")
+                .long("slot-list")
                 .value_name("FILENAME")
                 .takes_value(true)
-                .help("The location of the YAML file with a list of valid rollback slot heights and hashes"),
+                .help("The location of the YAML file with a list of rollback slot heights and hashes"),
         ))
         .subcommand(SubCommand::with_name("list-roots").about("Output upto last <num-roots> root hashes and their heights starting at the given block height").arg(
             Arg::with_name("max_height")
@@ -100,6 +100,13 @@ fn main() {
                 .takes_value(true)
                 .required(true)
                 .help("Maximum block height"),
+        ).arg(
+            Arg::with_name("slot_list")
+                .long("slot-list")
+                .value_name("FILENAME")
+                .required(false)
+                .takes_value(true)
+                .help("The location of the output YAML file. A list of rollback slot heights and hashes will be written to the file."),
         ).arg(
             Arg::with_name("num_roots")
                 .long("num-roots")
@@ -151,7 +158,7 @@ fn main() {
             }
         }
         ("prune", Some(args_matches)) => {
-            if let Some(prune_file_path) = args_matches.value_of("valid_slot_list") {
+            if let Some(prune_file_path) = args_matches.value_of("slot_list") {
                 let prune_file = File::open(prune_file_path.to_string()).unwrap();
                 let slot_hashes: BTreeMap<u64, String> =
                     serde_yaml::from_reader(prune_file).unwrap();
@@ -184,6 +191,7 @@ fn main() {
                     .last()
                     .expect("Failed to find a valid slot");
                 println!("Prune at slot {:?} hash {:?}", target_slot, target_hash);
+                // ToDo: Do the actual pruning of the database
             }
         }
         ("list-roots", Some(args_matches)) => {
@@ -218,13 +226,25 @@ fn main() {
                 })
                 .collect();
 
+            let mut output_file: Box<Write> = if let Some(path) = args_matches.value_of("slot_list")
+            {
+                match File::create(path) {
+                    Ok(file) => Box::new(file),
+                    _ => Box::new(stdout()),
+                }
+            } else {
+                Box::new(stdout())
+            };
+
             slot_hash
                 .into_iter()
                 .rev()
                 .enumerate()
                 .for_each(|(i, (slot, hash))| {
                     if i < num_roots {
-                        println!("{:?}: {:?}", slot, hash);
+                        output_file
+                            .write_all(format!("{:?}: {:?}\n", slot, hash).as_bytes())
+                            .expect("failed to write");
                     }
                 });
         }
