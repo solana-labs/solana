@@ -2,8 +2,11 @@ use clap::{crate_description, crate_name, crate_version, value_t, App, Arg, SubC
 use solana::blocktree::Blocktree;
 use solana::blocktree_processor::process_blocktree;
 use solana_sdk::genesis_block::GenesisBlock;
+use std::collections::HashMap;
+use std::fs::File;
 use std::io::{stdout, Write};
 use std::process::exit;
+use std::str::FromStr;
 
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
@@ -58,6 +61,7 @@ fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputM
 }
 
 fn main() {
+    const DEFAULT_ROOT_COUNT: &'static str = "32";
     solana_logger::setup();
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -82,6 +86,29 @@ fn main() {
         .subcommand(SubCommand::with_name("print").about("Print the ledger"))
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
         .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
+        .subcommand(SubCommand::with_name("prune").about("Prune the ledger at the block height").arg(
+            Arg::with_name("heights")
+                .long("heights")
+                .value_name("FILENAME")
+                .takes_value(true)
+                .help("The location of the YAML file with a list of valid rollback heights and hashes"),
+        ))
+        .subcommand(SubCommand::with_name("list-roots").about("Output upto last <num-roots> root hashes and their heights starting at the given block height").arg(
+            Arg::with_name("max_height")
+                .long("max-height")
+                .value_name("NUM")
+                .takes_value(true)
+                .required(true)
+                .help("Maximum block height"),
+        ).arg(
+            Arg::with_name("num_roots")
+                .long("num-roots")
+                .value_name("NUM")
+                .takes_value(true)
+                .default_value(DEFAULT_ROOT_COUNT)
+                .required(false)
+                .help("Number of roots in the output"),
+        ))
         .get_matches();
 
     let ledger_path = matches.value_of("ledger").unwrap();
@@ -122,6 +149,64 @@ fn main() {
                     exit(1);
                 }
             }
+        }
+        ("verify", _) => match process_blocktree(&genesis_block, &blocktree, None) {
+            Ok((_bank_forks, bank_forks_info, _)) => {
+                println!("{:?}", bank_forks_info);
+            }
+            Err(err) => {
+                eprintln!("Ledger verification failed: {:?}", err);
+                exit(1);
+            }
+        },
+        ("prune", Some(args_matches)) => {
+            if let Some(prune_list) = args_matches.value_of("heights") {
+                let prune_file = File::open(prune_list.to_string()).unwrap();
+                let _height_hashes: HashMap<u64, String> =
+                    serde_yaml::from_reader(prune_file).unwrap();
+            }
+        }
+        ("list-roots", Some(args_matches)) => {
+            let max_height = if let Some(height) = args_matches.value_of("max_height") {
+                usize::from_str(height).expect("Maximum height must be a number")
+            } else {
+                panic!("Maximum height must be provided");
+            };
+            let num_roots = if let Some(roots) = args_matches.value_of("num_roots") {
+                usize::from_str(roots).expect("Number of roots must be a number")
+            } else {
+                usize::from_str(DEFAULT_ROOT_COUNT).unwrap()
+            };
+
+            let iter = blocktree
+                .rooted_slot_iterator(0)
+                .expect("Failed to get rooted slot");
+
+            let slot_hash: Vec<_> = iter
+                .filter_map(|(slot, meta)| {
+                    if slot <= max_height as u64 {
+                        let blockhash = blocktree
+                            .get_slot_entries(slot, meta.last_index, Some(1))
+                            .unwrap()
+                            .first()
+                            .unwrap()
+                            .hash;
+                        Some((slot, blockhash))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            slot_hash
+                .into_iter()
+                .rev()
+                .enumerate()
+                .for_each(|(i, (slot, hash))| {
+                    if i < num_roots {
+                        println!("{:?}: {:?}", slot, hash);
+                    }
+                });
         }
         ("", _) => {
             eprintln!("{}", matches.usage());

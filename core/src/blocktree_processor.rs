@@ -185,12 +185,6 @@ pub fn process_blocktree_until_height(
         let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
 
-        if let Some(max_height) = rollback_height {
-            if slot >= max_height {
-                break;
-            }
-        }
-
         if last_status_report.elapsed() > Duration::from_secs(2) {
             info!("processing ledger...block {}", slot);
             last_status_report = Instant::now();
@@ -220,14 +214,12 @@ pub fn process_blocktree_until_height(
         }
 
         if !entries.is_empty() {
-            if rollback_height.is_none() {
-                if !entries.verify(&last_entry_hash) {
-                    warn!(
-                        "Ledger proof of history failed at slot: {}, entry: {}",
-                        slot, entry_height
-                    );
-                    return Err(BlocktreeProcessorError::LedgerVerificationFailed);
-                }
+            if rollback_height.is_none() && !entries.verify(&last_entry_hash) {
+                warn!(
+                    "Ledger proof of history failed at slot: {}, entry: {}",
+                    slot, entry_height
+                );
+                return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
 
             process_entries(&bank, &entries).map_err(|err| {
