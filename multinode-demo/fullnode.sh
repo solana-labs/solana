@@ -168,6 +168,7 @@ identity_keypair_path=
 no_restart=0
 airdrops_enabled=1
 generate_snapshots=0
+boot_from_snapshot=1
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -184,6 +185,9 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --generate-snapshots ]]; then
       generate_snapshots=1
+      shift
+    elif [[ $1 = --no-snapshot ]]; then
+      boot_from_snapshot=0
       shift
     elif [[ $1 = --replicator ]]; then
       node_type=replicator
@@ -422,22 +426,24 @@ EOF
           done
           echo "Fetched genesis ledger in $SECONDS seconds"
 
-          SECONDS=
-          echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
-          if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
-            echo "State snapshot rsync failed"
-            rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-            exit
-          fi
-          echo "Fetched snapshot in $SECONDS seconds"
+          if ((boot_from_snapshot)); then
+            SECONDS=
+            echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
+            if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
+              echo "State snapshot rsync failed"
+              rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+              exit
+            fi
+            echo "Fetched snapshot in $SECONDS seconds"
 
-          SECONDS=
-          mkdir -p "$state_dir"
-          (
-            set -x
-            tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-          )
-          echo "Extracted snapshot in $SECONDS seconds"
+            SECONDS=
+            mkdir -p "$state_dir"
+            (
+              set -x
+              tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+            )
+            echo "Extracted snapshot in $SECONDS seconds"
+          fi
         )
       fi
 
