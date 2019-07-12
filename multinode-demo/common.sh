@@ -76,8 +76,8 @@ SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
 SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
 if [[ -d $SECONDARY_DISK_MOUNT_POINT ]]; then
   mkdir -p $SECONDARY_DISK_MOUNT_POINT/config-local
-  mkdir -p $SOLANA_ROOT
-  ln -s $SECONDARY_DISK_MOUNT_POINT/config-local $SOLANA_CONFIG_DIR
+  mkdir -p "$SOLANA_ROOT"
+  ln -s $SECONDARY_DISK_MOUNT_POINT/config-local "$SOLANA_ROOT"
 fi
 
 default_arg() {
