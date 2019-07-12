@@ -70,11 +70,14 @@ source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 SOLANA_RSYNC_CONFIG_DIR=$SOLANA_ROOT/config
 
 # Configuration that remains local
+SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
+
+# If there is a secondary disk, symlink the config-local dir there
 SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
 if [[ -d $SECONDARY_DISK_MOUNT_POINT ]]; then
-  SOLANA_CONFIG_DIR=$SECONDARY_DISK_MOUNT_POINT/config-local
-else
-  SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
+  mkdir -p $SECONDARY_DISK_MOUNT_POINT/config-local
+  mkdir -p "$SOLANA_ROOT"
+  ln -s $SECONDARY_DISK_MOUNT_POINT/config-local "$SOLANA_ROOT"
 fi
 
 default_arg() {

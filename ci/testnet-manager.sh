@@ -469,12 +469,23 @@ deploy() {
   tds)
     (
       set -x
-      # TODO: Should we spread the few nodes around multiple zones?
+
+      EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
+      EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
+
+      wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
+
+      # Multiple V100 GPUs are available in us-west1, us-central1 and europe-west4
       # shellcheck disable=SC2068
       # shellcheck disable=SC2086
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p tds-solana-com -C gce ${GCE_ZONE_ARGS[0]} \
+        ci/testnet-deploy.sh -p tds-solana-com -C gce \
+          -G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
+          -d pd-ssd \
+          -z us-west1-a \
+          -z us-central1-a \
+          -z europe-west4-a \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
           -a tds-solana-com --letsencrypt tds.solana.com \
           --hashes-per-tick auto \
@@ -483,9 +494,10 @@ deploy() {
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
           --stake-internal-nodes 1000000000000 \
-          --external-accounts-file /tmp/stakes.yml \
+          --external-accounts-file "$EXTERNAL_ACCOUNTS_FILE" \
           --lamports 8589934592000000000 \
-          --skip-deploy-update
+          --skip-deploy-update \
+          --fullnode-additional-disk-size-gb 32000
 
     )
     ;;
