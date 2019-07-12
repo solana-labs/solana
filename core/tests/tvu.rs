@@ -97,7 +97,7 @@ fn test_replay() {
         completed_slots_receiver,
         leader_schedule_cache,
         _,
-    ) = validator::new_banks_from_blocktree(&blocktree_path, None, None);
+    ) = validator::new_banks_from_blocktree(&blocktree_path, None, None, true);
     let working_bank = bank_forks.working_bank();
     assert_eq!(
         working_bank.get_balance(&mint_keypair.pubkey()),
