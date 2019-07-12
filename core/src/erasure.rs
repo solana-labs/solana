@@ -273,11 +273,13 @@ impl CodingGenerator {
                 let index = data_blob.index();
                 let slot = data_blob.slot();
                 let id = data_blob.id();
+                let version = data_blob.version();
 
                 let mut coding_blob = Blob::default();
                 coding_blob.set_index(index);
                 coding_blob.set_slot(slot);
                 coding_blob.set_id(&id);
+                coding_blob.set_version(version);
                 coding_blob.set_size(max_data_size);
                 coding_blob.set_coding();
                 coding_blob.set_erasure_config(&data_blob.erasure_config());
