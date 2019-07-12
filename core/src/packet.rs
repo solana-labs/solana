@@ -869,17 +869,6 @@ mod tests {
         b.sign(&k);
         assert!(b.verify());
     }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    fn test_packets_reset() {
-        let mut packets = Packets::default();
-        packets.packets.resize(10, Packet::default());
-        assert_eq!(packets.packets.len(), 10);
-        packets.reset();
-        assert_eq!(packets.packets.len(), 0);
-    }
 
     #[test]
     fn test_version() {
@@ -888,5 +877,4 @@ mod tests {
         b.set_version(1);
         assert_eq!(b.version(), 1);
     }
->>>>>>> 7aecb87bc... Add a version field to blobs (#5057)
 }
