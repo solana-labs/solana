@@ -77,7 +77,7 @@ impl Accounts {
     fn make_new_dir() -> String {
         static ACCOUNT_DIR: AtomicUsize = AtomicUsize::new(0);
         let dir = ACCOUNT_DIR.fetch_add(1, Ordering::Relaxed);
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
         let keypair = Keypair::new();
         format!(
             "{}/{}/{}/{}",

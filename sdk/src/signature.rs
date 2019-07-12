@@ -147,7 +147,7 @@ mod tests {
 
     fn tmp_file_path(name: &str) -> String {
         use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
         let keypair = Keypair::new();
 
         format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey()).to_string()

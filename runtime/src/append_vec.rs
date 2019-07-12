@@ -298,7 +298,7 @@ pub mod test_utils {
     }
 
     pub fn get_append_vec_dir() -> String {
-        std::env::var("OUT_DIR").unwrap_or_else(|_| "target/append_vec_tests".to_string())
+        std::env::var("OUT_DIR").unwrap_or_else(|_| "farf/append_vec_tests".to_string())
     }
 
     pub fn get_append_vec_path(path: &str) -> TempFile {

@@ -1820,10 +1820,10 @@ macro_rules! get_tmp_ledger_path {
 
 pub fn get_tmp_ledger_path(name: &str) -> String {
     use std::env;
-    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
     let keypair = Keypair::new();
 
-    let path = format!("{}/tmp/ledger/{}-{}", out_dir, name, keypair.pubkey());
+    let path = format!("{}/ledger/{}-{}", out_dir, name, keypair.pubkey());
 
     // whack any possible collision
     let _ignored = fs::remove_dir_all(&path);
