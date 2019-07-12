@@ -497,7 +497,8 @@ deploy() {
           --external-accounts-file "$EXTERNAL_ACCOUNTS_FILE" \
           --lamports 8589934592000000000 \
           --skip-deploy-update \
-          --fullnode-additional-disk-size-gb 32000
+          --fullnode-additional-disk-size-gb 32000 \
+          --no-snapshot
 
     )
     ;;

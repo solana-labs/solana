@@ -29,6 +29,7 @@ maybeExternalPrimordialAccountsFile=
 maybeLamports=
 maybeLetsEncrypt=
 maybeFullnodeAdditionalDiskSize=
+maybeNoSnapshot=
 
 usage() {
   exitcode=0
@@ -82,7 +83,9 @@ Deploys a CD testnet
    --letsencrypt [dns name]
                         - Attempt to generate a TLS certificate using this DNS name
    --fullnode-additional-disk-size-gb [number]
-                    - Size of additional disk in GB for all fullnodes
+                        - Size of additional disk in GB for all fullnodes
+   --no-snapshot
+                        - If set, disables booting validators from a snapshot
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -122,6 +125,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --machine-type* ]]; then # Bypass quoted long args for GPUs
       shortArgs+=("$1")
       shift
+    elif [[ $1 = --no-snapshot ]]; then
+      maybeNoSnapshot="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -394,6 +400,11 @@ if ! $skipStart; then
     if [[ -n $maybeLamports ]]; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeLamports
       args+=($maybeLamports)
+    fi
+
+    if [[ -n $maybeNoSnapshot ]]; then
+      # shellcheck disable=SC2206
+      args+=($maybeNoSnapshot)
     fi
 
     time net/net.sh "${args[@]}"
