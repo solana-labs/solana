@@ -2,6 +2,7 @@
 
 extern crate test;
 
+use solana_runtime::accounts::{Accounts, create_accounts};
 use solana_runtime::bank::*;
 use solana_sdk::account::Account;
 use solana_sdk::genesis_block::create_genesis_block;
@@ -56,3 +57,14 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         banks[1].squash();
     });
 }
+
+#[bench]
+fn test_accounts_hash_internal_state(bencher: &mut Bencher) {
+    let accounts = Accounts::new(Some("bench_accounts_hash_internal".to_string()));
+    let mut pubkeys: Vec<Pubkey> = vec![];
+    create_accounts(&accounts, &mut pubkeys, 100);
+    bencher.iter(|| {
+        accounts.hash_internal_state(0);
+    });
+}
+

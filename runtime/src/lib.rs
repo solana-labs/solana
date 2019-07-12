@@ -1,4 +1,4 @@
-mod accounts;
+pub mod accounts;
 pub mod accounts_db;
 pub mod accounts_index;
 pub mod append_vec;
