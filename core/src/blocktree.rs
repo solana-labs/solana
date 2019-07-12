@@ -793,70 +793,6 @@ impl Blocktree {
         iter.map(|(_, blob_data)| Blob::new(&blob_data))
     }
 
-    /// Return an iterator for all the entries in the given file.
-    pub fn read_ledger(&self) -> Result<impl Iterator<Item = Entry>> {
-        use crate::entry::EntrySlice;
-        use std::collections::VecDeque;
-
-        struct EntryIterator {
-            db_iterator: Cursor<cf::Data>,
-
-            // TODO: remove me when replay_stage is iterating by block (Blocktree)
-            //    this verification is duplicating that of replay_stage, which
-            //    can do this in parallel
-            blockhash: Option<Hash>,
-            // https://github.com/rust-rocksdb/rust-rocksdb/issues/234
-            //   rocksdb issue: the _blocktree member must be lower in the struct to prevent a crash
-            //   when the db_iterator member above is dropped.
-            //   _blocktree is unused, but dropping _blocktree results in a broken db_iterator
-            //   you have to hold the database open in order to iterate over it, and in order
-            //   for db_iterator to be able to run Drop
-            //    _blocktree: Blocktree,
-            entries: VecDeque<Entry>,
-        }
-
-        impl Iterator for EntryIterator {
-            type Item = Entry;
-
-            fn next(&mut self) -> Option<Entry> {
-                if !self.entries.is_empty() {
-                    return Some(self.entries.pop_front().unwrap());
-                }
-
-                if self.db_iterator.valid() {
-                    if let Some(value) = self.db_iterator.value_bytes() {
-                        if let Ok(next_entries) =
-                            deserialize::<Vec<Entry>>(&value[BLOB_HEADER_SIZE..])
-                        {
-                            if let Some(blockhash) = self.blockhash {
-                                if !next_entries.verify(&blockhash) {
-                                    return None;
-                                }
-                            }
-                            self.db_iterator.next();
-                            if next_entries.is_empty() {
-                                return None;
-                            }
-                            self.entries = VecDeque::from(next_entries);
-                            let entry = self.entries.pop_front().unwrap();
-                            self.blockhash = Some(entry.hash);
-                            return Some(entry);
-                        }
-                    }
-                }
-                None
-            }
-        }
-        let mut db_iterator = self.db.cursor::<cf::Data>()?;
-
-        db_iterator.seek_to_first();
-        Ok(EntryIterator {
-            entries: VecDeque::new(),
-            db_iterator,
-            blockhash: None,
-        })
-    }
-
     pub fn get_slot_entries_with_blob_count(
         &self,
         slot: u64,
@@ -1937,9 +1873,7 @@ pub fn tmp_copy_blocktree(from: &str, name: &str) -> String {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::entry::{
-        create_ticks, make_tiny_test_entries, make_tiny_test_entries_from_hash, Entry, EntrySlice,
-    };
+    use crate::entry::{create_ticks, make_tiny_test_entries, Entry, EntrySlice};
     use crate::erasure::{CodingGenerator, ErasureConfig};
     use crate::packet;
     use rand::seq::SliceRandom;
@@ -2465,59 +2399,6 @@ pub mod tests {
             assert_eq!(meta.last_index, num_unique_entries - 1);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
-    pub fn test_genesis_and_entry_iterator() {
-        let entries = make_tiny_test_entries_from_hash(&Hash::default(), 10);
-
-        let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
-        {
-            genesis(&ledger_path, &Keypair::new(), &entries).unwrap();
-
-            let ledger = Blocktree::open(&ledger_path).expect("open failed");
-
-            let read_entries: Vec<Entry> =
-                ledger.read_ledger().expect("read_ledger failed").collect();
-            assert!(read_entries.verify(&Hash::default()));
-            assert_eq!(entries, read_entries);
-        }
-
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
-    }
-    #[test]
-    pub fn test_entry_iterator_up_to_consumed() {
-        let entries = make_tiny_test_entries_from_hash(&Hash::default(), 3);
-        let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
-        {
-            // put entries except last 2 into ledger
-            genesis(&ledger_path, &Keypair::new(), &entries[..entries.len() - 2]).unwrap();
-
-            let ledger = Blocktree::open(&ledger_path).expect("open failed");
-
-            // now write the last entry, ledger has a hole in it one before the end
-            // +-+-+-+-+-+-+-+    +-+
-            // | | | | | | | |    | |
-            // +-+-+-+-+-+-+-+    +-+
-            ledger
-                .write_entries(
-                    0u64,
-                    0,
-                    (entries.len() - 1) as u64,
-                    16,
-                    &entries[entries.len() - 1..],
-                )
-                .unwrap();
-
-            let read_entries: Vec<Entry> =
-                ledger.read_ledger().expect("read_ledger failed").collect();
-            assert!(read_entries.verify(&Hash::default()));
-
-            // enumeration should stop at the hole
-            assert_eq!(entries[..entries.len() - 2].to_vec(), read_entries);
-        }
-
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
