@@ -2886,6 +2886,7 @@ dependencies = [
  "solana-drone 0.16.4",
  "solana-logger 0.16.4",
  "solana-netutil 0.16.4",
+ "solana-runtime 0.16.4",
  "solana-sdk 0.16.4",
  "solana-stake-api 0.16.4",
  "solana-storage-api 0.16.4",
