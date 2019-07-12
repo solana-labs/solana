@@ -473,11 +473,11 @@ deploy() {
       # Allow defaults to be overridden from env vars, or not set
 
       if [[ -z $ENABLE_GPU ]]; then
-        maybeGpu="-G \"--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100\""
+        maybeGpu=(-G \"--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100\")
       elif [[ $ENABLE_GPU == skip ]]; then
         maybeGpu=""
       else
-        maybeGpu="-G ${ENABLE_GPU}"
+        maybeGpu=(-G \"${ENABLE_GPU}\")
       fi
 
       if [[ -z $HASHES_PER_TICK ]]; then
@@ -532,7 +532,7 @@ deploy() {
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p tds-solana-com -C gce \
-          ${maybeGpu} \
+          ${maybeGpu[@]} \
           -d pd-ssd \
           -z us-west1-a \
           -z us-central1-a \
