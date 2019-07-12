@@ -84,6 +84,7 @@ impl Validator {
         voting_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
+        verify_ledger: bool,
         config: &ValidatorConfig,
     ) -> Self {
         warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
@@ -104,6 +105,7 @@ impl Validator {
             ledger_path,
             config.account_paths.clone(),
             config.snapshot_path.clone(),
+            verify_ledger,
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -301,6 +303,7 @@ fn get_bank_forks(
     blocktree: &Blocktree,
     account_paths: Option<String>,
     snapshot_path: Option<String>,
+    verify_ledger: bool,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
     if snapshot_path.is_some() {
         let bank_forks =
@@ -318,8 +321,13 @@ fn get_bank_forks(
         }
     }
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) =
-        blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
-            .expect("process_blocktree failed");
+        blocktree_processor::process_blocktree(
+            &genesis_block,
+            &blocktree,
+            account_paths,
+            verify_ledger,
+        )
+        .expect("process_blocktree failed");
     if snapshot_path.is_some() {
         bank_forks.set_snapshot_config(snapshot_path);
         let _ = bank_forks.add_snapshot(0, 0);
@@ -331,6 +339,7 @@ pub fn new_banks_from_blocktree(
     blocktree_path: &str,
     account_paths: Option<String>,
     snapshot_path: Option<String>,
+    verify_ledger: bool,
 ) -> (
     BankForks,
     Vec<BankForksInfo>,
@@ -347,8 +356,13 @@ pub fn new_banks_from_blocktree(
         Blocktree::open_with_signal(blocktree_path)
             .expect("Expected to successfully open database ledger");
 
-    let (bank_forks, bank_forks_info, leader_schedule_cache) =
-        get_bank_forks(&genesis_block, &blocktree, account_paths, snapshot_path);
+    let (bank_forks, bank_forks_info, leader_schedule_cache) = get_bank_forks(
+        &genesis_block,
+        &blocktree,
+        account_paths,
+        snapshot_path,
+        verify_ledger,
+    );
 
     (
         bank_forks,
@@ -412,6 +426,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, String) {
         &voting_keypair,
         &storage_keypair,
         None,
+        true,
         &ValidatorConfig::default(),
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
@@ -447,6 +462,7 @@ mod tests {
             &voting_keypair,
             &storage_keypair,
             Some(&leader_node.info),
+            true,
             &ValidatorConfig::default(),
         );
         validator.close().unwrap();
@@ -478,6 +494,7 @@ mod tests {
                     &voting_keypair,
                     &storage_keypair,
                     Some(&leader_node.info),
+                    true,
                     &ValidatorConfig::default(),
                 )
             })

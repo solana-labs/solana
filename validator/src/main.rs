@@ -163,6 +163,12 @@ fn main() {
                 .takes_value(true)
                 .help("Snapshot path"),
         )
+        .arg(
+            clap::Arg::with_name("skip_ledger_verify")
+                .long("skip-ledger-verify")
+                .takes_value(false)
+                .help("Skip ledger verification at node bootup"),
+        )
          .get_matches();
 
     let mut validator_config = ValidatorConfig::default();
@@ -267,6 +273,8 @@ fn main() {
         node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
     };
 
+    let verify_ledger = !matches.is_present("skip_ledger_verify");
+
     let validator = Validator::new(
         node,
         &keypair,
@@ -275,6 +283,7 @@ fn main() {
         &Arc::new(voting_keypair),
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
+        verify_ledger,
         &validator_config,
     );
 
