@@ -58,6 +58,7 @@
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Validator](validator-proposal.md)
   - [Simple Payment and State Verification](simple-payment-and-state-verification.md)
+  - [Embedding the Move Langauge](embedding-move.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Blocktree](blocktree.md)
