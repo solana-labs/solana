@@ -2555,15 +2555,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-failure-program"
-version = "0.17.0"
-dependencies = [
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-runtime 0.17.0",
- "solana-sdk 0.17.0",
-]
-
-[[package]]
 name = "solana-genesis"
 version = "0.17.0"
 dependencies = [

@@ -28,7 +28,6 @@ members = [
     "programs/config_program",
     "programs/exchange_api",
     "programs/exchange_program",
-    "programs/failure_program",
     "programs/noop_program",
     "programs/stake_api",
     "programs/stake_program",
