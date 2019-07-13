@@ -38,6 +38,11 @@ for Cargo_toml in $Cargo_tomls; do
 
   crate_name=$(grep -m 1 '^name = ' "$Cargo_toml" | cut -f 3 -d ' ' | tr -d \")
 
+  if grep -q "^publish = false" "$Cargo_toml"; then
+    echo "$crate_name is is marked as unpublishable"
+    continue
+  fi
+
   if [[ $(is_crate_version_uploaded "$crate_name" "$expectedCrateVersion") = True ]] ; then
     echo "${crate_name} version ${expectedCrateVersion} is already on crates.io"
     continue

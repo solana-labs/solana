@@ -9,6 +9,7 @@ repository = "https://github.com/solana-labs/solana"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 license = "Apache-2.0"
 edition = "2018"
+publish = false
 
 [features]
 bpf_c = []
