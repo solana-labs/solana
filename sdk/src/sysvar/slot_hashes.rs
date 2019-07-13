@@ -11,11 +11,11 @@ use std::ops::Deref;
 pub use crate::timing::Slot;
 
 const ID: [u8; 32] = [
-    6, 167, 213, 23, 25, 44, 97, 55, 206, 224, 146, 217, 182, 146, 62, 225, 204, 214, 25, 3, 250,
-    130, 184, 161, 97, 145, 87, 141, 128, 0, 0, 0,
+    6, 167, 213, 23, 25, 47, 10, 175, 198, 242, 101, 227, 251, 119, 204, 122, 218, 130, 197, 41,
+    208, 190, 59, 19, 110, 45, 0, 85, 32, 0, 0, 0,
 ];
 
-crate::solana_name_id!(ID, "SysvarRewards111111111111111111111111111111");
+crate::solana_name_id!(ID, "SysvarS1otHashes111111111111111111111111111");
 
 pub const MAX_SLOT_HASHES: usize = 512; // 512 slots to get your vote in
 
