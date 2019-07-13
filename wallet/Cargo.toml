@@ -22,6 +22,7 @@ solana-client = { path = "../client", version = "0.16.4" }
 solana-drone = { path = "../drone", version = "0.16.4" }
 solana-logger = { path = "../logger", version = "0.16.4" }
 solana-netutil = { path = "../netutil", version = "0.16.4" }
+solana-runtime = { path = "../runtime", version = "0.16.4" }
 solana-sdk = { path = "../sdk", version = "0.16.4" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.16.4" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.16.4" }
