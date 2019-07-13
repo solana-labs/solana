@@ -2,6 +2,7 @@ use bincode::deserialize;
 use clap::{
     crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
+use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use solana_client::rpc_client::RpcClient;
@@ -99,7 +100,30 @@ fn check_details_length(string: String) -> Result<(), String> {
     }
 }
 
-fn parse_args(matches: &ArgMatches<'_>) -> Result<String, Box<dyn error::Error>> {
+fn verify_keybase(
+    validator_pubkey: &Pubkey,
+    keybase_id: &Value,
+) -> Result<(), Box<dyn error::Error>> {
+    if let Some(keybase_id) = keybase_id.as_str() {
+        let url = format!(
+            "https://keybase.pub/{}/solana_pubkey_{:?}",
+            keybase_id, validator_pubkey
+        );
+        let client = Client::new();
+        if client.head(&url).send()?.status().is_success() {
+            Ok(())
+        } else {
+            Err(format!("keybase_id could not be confirmed at: {}. Please add this pubkey file to your keybase profile to connect", url))?
+        }
+    } else {
+        Err(format!(
+            "keybase_id could not be parsed as String: {}",
+            keybase_id
+        ))?
+    }
+}
+
+fn parse_args(matches: &ArgMatches<'_>) -> Value {
     let mut map = Map::new();
     map.insert(
         "name".to_string(),
@@ -117,8 +141,7 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<String, Box<dyn error::Error>>
             Value::String(keybase_id.to_string()),
         );
     }
-    let string = serde_json::to_string(&Value::Object(map))?;
-    Ok(string)
+    Value::Object(map)
 }
 
 fn parse_validator_info(account_data: &[u8]) -> Result<(Pubkey, String), Box<dyn error::Error>> {
@@ -271,9 +294,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             // Prepare validator info
             let keys = vec![(id(), false), (validator_keypair.pubkey(), true)];
-            let validator_info = parse_args(&matches)?;
+            let validator_info = parse_args(&matches);
+            if let Some(string) = validator_info.get("keybaseId") {
+                verify_keybase(&validator_keypair.pubkey(), &string)?;
+            }
+            let validator_string = serde_json::to_string(&validator_info)?;
             let validator_info = ValidatorInfo {
-                info: validator_info,
+                info: validator_string,
             };
 
             // Check existence of validator-info account
@@ -400,12 +427,11 @@ mod tests {
             .arg(Arg::with_name("keybase_id").short("k").takes_value(true))
             .arg(Arg::with_name("details").short("d").takes_value(true))
             .get_matches_from(vec!["test", "-n", "Alice", "-k", "464bb0f2956f7e83"]);
-        let expected_string = serde_json::to_string(&json!({
+        let expected = json!({
             "name": "Alice",
             "keybaseId": "464bb0f2956f7e83",
-        }))
-        .unwrap();
-        assert_eq!(parse_args(&matches).unwrap(), expected_string);
+        });
+        assert_eq!(parse_args(&matches), expected);
     }
 
     #[test]
