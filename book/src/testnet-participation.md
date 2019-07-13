@@ -255,3 +255,20 @@ Available fields for VALIDATOR_INFO_ARGS:
 * Website
 * Keybase ID
 * Details
+
+##### Keybase
+
+Including a Keybase ID allows client applications (like the Solana Network
+Explorer) to automatically pull in your validator public profile, including
+cryptographic proofs, brand identity, etc. To connect your validator pubkey with
+Keybase:
+
+1. Join https://keybase.io/ and complete the profile for your validator
+2. Add your validator **identity pubkey** to Keybase:
+  * Create an empty file on your local computer called `solana_pubkey_<PUBKEY>`
+  * In Keybase, navigate to the Files section, and upload your pubkey file to
+  your public folder: `/keybase/public/<KEYBASE_ID>`
+  * To check your pubkey, ensure you can successfully browse to
+  `https://keybase.pub/<KEYBASE_ID>/solana_pubkey_<PUBKEY>`
+3. Add or update your `solana-validator-info` with your Keybase ID. The CLI will
+verify the `solana_pubkey_<PUBKEY>` file
