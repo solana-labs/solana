@@ -7025,7 +7025,7 @@
       },
       "id": 51,
       "panels": [],
-      "title": "Locktower Consensus",
+      "title": "Tower Consensus",
       "type": "row"
     },
     {
@@ -7150,7 +7150,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Locktower Distance in Latest and Root Slot ($hostid)",
+      "title": "Tower Distance in Latest and Root Slot ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -7310,7 +7310,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Locktower Root Slot ($hostid)",
+      "title": "Tower Root Slot ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,

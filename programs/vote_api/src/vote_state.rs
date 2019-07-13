@@ -224,7 +224,7 @@ impl VoteState {
         self.credits += 1;
     }
 
-    /// "uncheckeds" used by tests, locktower
+    /// "unchecked" functions used by tests and Tower
     pub fn process_vote_unchecked(&mut self, vote: &Vote) {
         self.process_vote(vote, &[(vote.slot, vote.hash)], self.epoch);
     }
