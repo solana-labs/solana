@@ -245,7 +245,7 @@ fn get_update_manifest(
     let mut data = rpc_client
         .get_account_data(update_manifest_pubkey)
         .map_err(|err| format!("Unable to fetch update manifest: {}", err))?;
-    data.split_off(ConfigKeys::serialized_size(vec![]));
+    let data = data.split_off(ConfigKeys::serialized_size(vec![]));
 
     let signed_update_manifest =
         SignedUpdateManifest::deserialize(update_manifest_pubkey, &data)
