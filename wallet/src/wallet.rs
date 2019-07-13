@@ -540,11 +540,29 @@ fn process_show_vote_account(
         }
     );
     if !vote_state.votes.is_empty() {
-        println!("votes:");
-        for vote in vote_state.votes {
+        println!("recent votes:");
+        for vote in &vote_state.votes {
             println!(
-                "- slot={}, confirmation count={}",
+                "- slot: {}\n  confirmation count: {}",
                 vote.slot, vote.confirmation_count
+            );
+        }
+
+        // TODO: Use the real GenesisBlock from the cluster.
+        let genesis_block = solana_sdk::genesis_block::GenesisBlock::default();
+        let epoch_schedule = solana_runtime::epoch_schedule::EpochSchedule::new(
+            genesis_block.slots_per_epoch,
+            genesis_block.stakers_slot_offset,
+            genesis_block.epoch_warmup,
+        );
+
+        println!("epoch voting history:");
+        for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
+            let credits_earned = credits - prev_credits;
+            let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
+            println!(
+                "- epoch: {}\n  slots in epoch: {}\n  credits earned: {}",
+                epoch, slots_in_epoch, credits_earned,
             );
         }
     }
