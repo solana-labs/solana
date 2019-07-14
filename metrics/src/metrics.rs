@@ -8,7 +8,7 @@ use solana_sdk::hash::hash;
 use solana_sdk::timing;
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Barrier, Mutex, Once, ONCE_INIT};
+use std::sync::{Arc, Barrier, Mutex, Once};
 use std::thread;
 use std::time::{Duration, Instant};
 use std::{cmp, env};
@@ -379,7 +379,7 @@ impl Drop for MetricsAgent {
 }
 
 fn get_singleton_agent() -> Arc<Mutex<MetricsAgent>> {
-    static INIT: Once = ONCE_INIT;
+    static INIT: Once = Once::new();
     static mut AGENT: Option<Arc<Mutex<MetricsAgent>>> = None;
     unsafe {
         INIT.call_once(|| AGENT = Some(Arc::new(Mutex::new(MetricsAgent::default()))));
@@ -430,7 +430,7 @@ pub fn flush() {
 /// Hook the panic handler to generate a data point on each panic
 pub fn set_panic_hook(program: &'static str) {
     use std::panic;
-    static SET_HOOK: Once = ONCE_INIT;
+    static SET_HOOK: Once = Once::new();
     SET_HOOK.call_once(|| {
         let default_hook = panic::take_hook();
         panic::set_hook(Box::new(move |ono| {

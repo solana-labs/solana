@@ -69,7 +69,7 @@ impl fmt::Display for Pubkey {
     }
 }
 
-pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<error::Error>> {
+pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn error::Error>> {
     let printable = format!("{}", pubkey);
     let serialized = serde_json::to_string(&printable)?;
 
@@ -82,7 +82,7 @@ pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<error::Erro
     Ok(())
 }
 
-pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<error::Error>> {
+pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
     let f = File::open(infile.to_string())?;
     let printable: String = serde_json::from_reader(f)?;
     Ok(Pubkey::from_str(&printable)?)
@@ -166,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_write_pubkey() -> Result<(), Box<error::Error>> {
+    fn test_read_write_pubkey() -> Result<(), Box<dyn error::Error>> {
         let filename = "test_pubkey.json";
         let pubkey = Pubkey::new_rand();
         write_pubkey(filename, pubkey)?;
