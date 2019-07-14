@@ -342,6 +342,28 @@ impl Tower {
         }
     }
 
+    pub fn aggregate_stake_lockouts(
+        &self,
+        ancestors: &HashMap<u64, HashSet<u64>>,
+        stake_lockouts: &HashMap<u64, StakeLockout>,
+    ) -> HashMap<u64, u128> {
+        let mut stake_weighted_lockouts: HashMap<u64, u128> = HashMap::new();
+        let root = self.root();
+        for (fork, lockout) in stake_lockouts.iter() {
+            if root.is_none() || *fork >= root.unwrap() {
+                let mut slot_with_ancestors = vec![*fork];
+                slot_with_ancestors.extend(ancestors.get(&fork).unwrap_or(&HashSet::new()));
+                for slot in slot_with_ancestors {
+                    if root.is_none() || slot >= root.unwrap() {
+                        let entry = stake_weighted_lockouts.entry(slot).or_default();
+                        *entry += u128::from(lockout.lockout) * u128::from(lockout.stake);
+                    }
+                }
+            }
+        }
+        stake_weighted_lockouts
+    }
+
     /// Update lockouts for all the ancestors
     fn update_ancestor_lockouts(
         stake_lockouts: &mut HashMap<u64, StakeLockout>,
@@ -542,6 +564,58 @@ mod test {
         .into_iter()
         .collect();
         assert!(tower.check_vote_stake_threshold(0, &stakes));
+    }
+
+    #[test]
+    fn test_aggregate_stake_lockouts() {
+        let mut tower = Tower::new(EpochStakes::new_for_tests(2), 0, 0.67);
+        tower.lockouts.root_slot = Some(1);
+        let stakes = vec![
+            (
+                0,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 32,
+                },
+            ),
+            (
+                1,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 24,
+                },
+            ),
+            (
+                2,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 16,
+                },
+            ),
+            (
+                3,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 8,
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        let ancestors = vec![
+            (0, HashSet::new()),
+            (1, vec![0].into_iter().collect()),
+            (2, vec![0, 1].into_iter().collect()),
+            (3, vec![0, 1, 2].into_iter().collect()),
+        ]
+        .into_iter()
+        .collect();
+        let stake_weighted_lockouts = tower.aggregate_stake_lockouts(&ancestors, &stakes);
+        assert!(stake_weighted_lockouts.get(&0).is_none());
+        assert_eq!(*stake_weighted_lockouts.get(&1).unwrap(), 8 + 16 + 24);
+        assert_eq!(*stake_weighted_lockouts.get(&2).unwrap(), 8 + 16);
+        assert_eq!(*stake_weighted_lockouts.get(&3).unwrap(), 8);
     }
 
     #[test]

@@ -28,14 +28,21 @@ pub struct Confidence {
     fork_stakes: u64,
     epoch_stakes: u64,
     lockouts: u64,
+    stake_weighted_lockouts: u128,
 }
 
 impl Confidence {
-    pub fn new(fork_stakes: u64, epoch_stakes: u64, lockouts: u64) -> Self {
+    pub fn new(
+        fork_stakes: u64,
+        epoch_stakes: u64,
+        lockouts: u64,
+        stake_weighted_lockouts: u128,
+    ) -> Self {
         Self {
             fork_stakes,
             epoch_stakes,
             lockouts,
+            stake_weighted_lockouts,
         }
     }
 }
@@ -195,8 +202,25 @@ impl BankForks {
         self.slots = slots.clone();
     }
 
-    pub fn cache_fork_confidence(&mut self, fork: u64, confidence: Confidence) {
-        self.confidence.insert(fork, confidence);
+    pub fn cache_fork_confidence(
+        &mut self,
+        fork: u64,
+        fork_stakes: u64,
+        epoch_stakes: u64,
+        lockouts: u64,
+        stake_weighted_lockouts: u128,
+    ) {
+        self.confidence
+            .entry(fork)
+            .and_modify(|e| {
+                e.fork_stakes = fork_stakes;
+                e.epoch_stakes = epoch_stakes;
+                e.lockouts = lockouts;
+                e.stake_weighted_lockouts = stake_weighted_lockouts;
+            })
+            .or_insert_with(|| {
+                Confidence::new(fork_stakes, epoch_stakes, lockouts, stake_weighted_lockouts)
+            });
     }
 
     fn get_io_error(error: &str) -> Error {
@@ -462,6 +486,25 @@ mod tests {
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks.active_banks(), vec![1]);
+    }
+
+    #[test]
+    fn test_bank_forks_confidence_cache() {
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
+        let bank = Bank::new(&genesis_block);
+        let fork = bank.slot();
+        let mut bank_forks = BankForks::new(0, bank);
+        assert!(bank_forks.confidence.get(&fork).is_none());
+        bank_forks.cache_fork_confidence(fork, 11, 12, 13, 14);
+        assert_eq!(
+            bank_forks.confidence.get(&fork).unwrap(),
+            &Confidence {
+                fork_stakes: 11,
+                epoch_stakes: 12,
+                lockouts: 13,
+                stake_weighted_lockouts: 14,
+            }
+        );
     }
 
     struct TempPaths {
