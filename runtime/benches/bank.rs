@@ -5,7 +5,7 @@ extern crate test;
 use log::*;
 use solana_runtime::bank::*;
 use solana_runtime::bank_client::BankClient;
-use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
+use solana_runtime::loader_utils::create_invoke_instruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::AsyncClient;
 use solana_sdk::client::SyncClient;
@@ -43,29 +43,6 @@ pub fn create_builtin_transactions(
         .into_iter()
         .map(|_| {
             // Seed the signer account
-            let rando0 = Keypair::new();
-            bank_client
-                .transfer(10_000, &mint_keypair, &rando0.pubkey())
-                .expect(&format!("{}:{}", line!(), file!()));
-
-            let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
-            let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
-            Transaction::new_signed_instructions(&[&rando0], vec![instruction], blockhash)
-        })
-        .collect()
-}
-
-pub fn create_native_loader_transactions(
-    bank_client: &BankClient,
-    mint_keypair: &Keypair,
-) -> Vec<Transaction> {
-    let program = "solana_noop_program".as_bytes().to_vec();
-    let program_id = load_program(&bank_client, &mint_keypair, &native_loader::id(), program);
-
-    (0..4096)
-        .into_iter()
-        .map(|_| {
-            // Seed the signer account©41
             let rando0 = Keypair::new();
             bank_client
                 .transfer(10_000, &mint_keypair, &rando0.pubkey())
@@ -148,16 +125,6 @@ fn bench_bank_sync_process_builtin_transactions(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn bench_bank_sync_process_native_loader_transactions(bencher: &mut Bencher) {
-    do_bench_transactions(bencher, &sync_bencher, &create_native_loader_transactions);
-}
-
-#[bench]
 fn bench_bank_async_process_builtin_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &async_bencher, &create_builtin_transactions);
-}
-
-#[bench]
-fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
-    do_bench_transactions(bencher, &async_bencher, &create_native_loader_transactions);
 }
