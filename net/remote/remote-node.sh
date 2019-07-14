@@ -19,6 +19,7 @@ benchTpsExtraArgs="${12}"
 numBenchExchangeClients="${13}"
 benchExchangeExtraArgs="${14}"
 genesisOptions="${15}"
+noSnapshot="${16}"
 set +x
 export RUST_LOG
 
@@ -170,6 +171,7 @@ local|tar)
       args+=(--no-airdrop)
     fi
     args+=(--init-complete-file "$initCompleteFile")
+    args+=("$noSnapshot")
     nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
     waitForNodeToInit
     ;;
@@ -247,6 +249,7 @@ local|tar)
     fi
 
     args+=(--init-complete-file "$initCompleteFile")
+    args+=("$noSnapshot")
     nohup ./multinode-demo/validator.sh "${args[@]}" > fullnode.log 2>&1 &
     waitForNodeToInit
     ;;
@@ -264,6 +267,7 @@ local|tar)
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/clear-config.sh
     fi
+    args+=("$noSnapshot")
     nohup ./multinode-demo/replicator.sh "${args[@]}" > fullnode.log 2>&1 &
     sleep 1
     ;;
