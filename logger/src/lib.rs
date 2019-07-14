@@ -2,9 +2,9 @@
 //! `setup()` may be called multiple times.
 
 use env_logger;
-use std::sync::{Once, ONCE_INIT};
+use std::sync::Once;
 
-static INIT: Once = ONCE_INIT;
+static INIT: Once = Once::new();
 
 /// Setup function that is only run once, even if called multiple times.
 pub fn setup() {

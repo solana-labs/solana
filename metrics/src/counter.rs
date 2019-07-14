@@ -62,7 +62,7 @@ macro_rules! inc_new_counter {
         if log_enabled!($level) {
             static mut INC_NEW_COUNTER: $crate::counter::Counter =
                 create_counter!($name, $lograte, $metricsrate);
-            static INIT_HOOK: std::sync::Once = std::sync::ONCE_INIT;
+            static INIT_HOOK: std::sync::Once = std::sync::Once::new();
             unsafe {
                 INIT_HOOK.call_once(|| {
                     INC_NEW_COUNTER.init();
@@ -197,11 +197,11 @@ mod tests {
     use serial_test_derive::serial;
     use std::env;
     use std::sync::atomic::Ordering;
-    use std::sync::{Once, RwLock, ONCE_INIT};
+    use std::sync::{Once, RwLock};
 
     fn get_env_lock() -> &'static RwLock<()> {
         static mut ENV_LOCK: Option<RwLock<()>> = None;
-        static INIT_HOOK: Once = ONCE_INIT;
+        static INIT_HOOK: Once = Once::new();
 
         unsafe {
             INIT_HOOK.call_once(|| {

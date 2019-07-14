@@ -118,7 +118,7 @@ impl KeypairUtil for Keypair {
     }
 }
 
-pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
+pub fn read_keypair(path: &str) -> Result<Keypair, Box<dyn error::Error>> {
     let file = File::open(path.to_string())?;
     let bytes: Vec<u8> = serde_json::from_reader(file)?;
     let keypair = Keypair::from_bytes(&bytes)
@@ -126,7 +126,7 @@ pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
     Ok(keypair)
 }
 
-pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<error::Error>> {
+pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<dyn error::Error>> {
     let keypair_bytes = Keypair::new().to_bytes();
     let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
 
