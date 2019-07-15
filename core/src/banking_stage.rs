@@ -481,7 +481,7 @@ impl BankingStage {
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (mut loaded_accounts, results, mut retryable_txs) =
+        let (mut loaded_accounts, results, mut retryable_txs, tx_count, signature_count) =
             bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
         load_execute_time.stop();
 
@@ -501,7 +501,13 @@ impl BankingStage {
 
         let commit_time = {
             let mut commit_time = Measure::start("commit_time");
-            bank.commit_transactions(txs, &mut loaded_accounts, &results);
+            bank.commit_transactions(
+                txs,
+                &mut loaded_accounts,
+                &results,
+                tx_count,
+                signature_count,
+            );
             commit_time.stop();
             commit_time
         };
