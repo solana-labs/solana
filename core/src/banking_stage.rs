@@ -418,7 +418,7 @@ impl BankingStage {
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (loaded_accounts, results) =
+        let (loaded_accounts, results, tx_count, signature_count) =
             bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
         let load_execute_time = now.elapsed();
 
@@ -432,7 +432,7 @@ impl BankingStage {
 
         let commit_time = {
             let now = Instant::now();
-            bank.commit_transactions(txs, &loaded_accounts, &results);
+            bank.commit_transactions(txs, &loaded_accounts, &results, tx_count, signature_count);
             now.elapsed()
         };
 
