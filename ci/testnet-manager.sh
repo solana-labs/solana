@@ -547,7 +547,7 @@ deploy() {
           "${maybeGpu[@]}" \
           -d pd-ssd \
           ${GCE_CLOUD_ZONES[@]/#/-z } \
-          -t "$CHANNEL_OR_TAG"
+          -t "$CHANNEL_OR_TAG" \
           -n ${TDS_NODE_COUNT} \
           -c ${TDS_CLIENT_COUNT} \
           -P -u \
