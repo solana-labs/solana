@@ -2,41 +2,15 @@
 set -e
 
 cd "$(dirname "$0")/.."
+BOOK="book"
 
-book/build.sh
-
-echo --- create book repo
-(
-  set -x
-  cd book/html/
-  git init .
-  git config user.email "maintainers@solana.com"
-  git config user.name "$(basename "$0")"
-  git add ./* ./.nojekyll
-  git commit -m "${CI_COMMIT:-local}"
-)
-
-if [[ "$MANUAL_PUBLISH" = true ]]; then
-  case $BOOK in
-  book)
-    repo=git@github.com:solana-labs/book.git
-    ;;
-  book-edge)
-    echo "--- this book cannot be manually published: $BOOK"
-    exit 1
-    ;;
-  book-beta)
-    echo "--- this book cannot be manually published: $BOOK"
-    exit 1
-    ;;
-  *)
-   echo "--- unknown book: $BOOK"
-   exit 1
-   ;;
-  esac
+if [[ -n $PUBLISH_BOOK_TAG ]]; then
+  # book is manually published at a specified release tag
+  repo=git@github.com:solana-labs/book.git
+  git checkout ${PUBLISH_BOOK_TAG} book
 else
+  # book-edge and book-beta are published automatically on the tip of the branch
   eval "$(ci/channel-info.sh)"
-  # Only publish the book from the edge and beta channels for now.
   case $CHANNEL in
   edge)
     repo=git@github.com:solana-labs/book-edge.git
@@ -51,6 +25,19 @@ else
   esac
   BOOK=$CHANNEL
 fi
+
+book/build.sh
+
+echo --- create book repo
+(
+  set -x
+  cd book/html/
+  git init .
+  git config user.email "maintainers@solana.com"
+  git config user.name "$(basename "$0")"
+  git add ./* ./.nojekyll
+  git commit -m "${CI_COMMIT:-local}"
+)
 
 echo "--- publish $BOOK"
 cd book/html/
