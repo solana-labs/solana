@@ -418,9 +418,15 @@ impl BankingStage {
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
+<<<<<<< HEAD
         let (loaded_accounts, results) =
             bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
         let load_execute_time = now.elapsed();
+=======
+        let (mut loaded_accounts, results, mut retryable_txs, tx_count, signature_count) =
+            bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
+        load_execute_time.stop();
+>>>>>>> fe87c0542... fix transaction_count (#5110)
 
         let freeze_lock = bank.freeze_lock();
 
@@ -431,9 +437,22 @@ impl BankingStage {
         };
 
         let commit_time = {
+<<<<<<< HEAD
             let now = Instant::now();
             bank.commit_transactions(txs, &loaded_accounts, &results);
             now.elapsed()
+=======
+            let mut commit_time = Measure::start("commit_time");
+            bank.commit_transactions(
+                txs,
+                &mut loaded_accounts,
+                &results,
+                tx_count,
+                signature_count,
+            );
+            commit_time.stop();
+            commit_time
+>>>>>>> fe87c0542... fix transaction_count (#5110)
         };
 
         drop(freeze_lock);
