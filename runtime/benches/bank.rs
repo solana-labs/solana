@@ -5,13 +5,12 @@ extern crate test;
 use log::*;
 use solana_runtime::bank::*;
 use solana_runtime::bank_client::BankClient;
-use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
+use solana_runtime::loader_utils::create_invoke_instruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::AsyncClient;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
@@ -23,6 +22,11 @@ use test::Bencher;
 const BUILTIN_PROGRAM_ID: [u8; 32] = [
     098, 117, 105, 108, 116, 105, 110, 095, 112, 114, 111, 103, 114, 097, 109, 095, 105, 100, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+const NOOP_PROGRAM_ID: [u8; 32] = [
+    098, 117, 105, 108, 116, 105, 110, 095, 112, 114, 111, 103, 114, 097, 109, 095, 105, 100, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 ];
 
 fn process_instruction(
@@ -59,8 +63,7 @@ pub fn create_native_loader_transactions(
     bank_client: &BankClient,
     mint_keypair: &Keypair,
 ) -> Vec<Transaction> {
-    let program = "solana_noop_program".as_bytes().to_vec();
-    let program_id = load_program(&bank_client, &mint_keypair, &native_loader::id(), program);
+    let program_id = Pubkey::new(&NOOP_PROGRAM_ID);
 
     (0..4096)
         .into_iter()
@@ -120,6 +123,10 @@ fn do_bench_transactions(
     let (genesis_block, mint_keypair) = create_genesis_block(100_000_000);
     let mut bank = Bank::new(&genesis_block);
     bank.add_instruction_processor(Pubkey::new(&BUILTIN_PROGRAM_ID), process_instruction);
+    bank.register_native_instruction_processor(
+        "solana_noop_program",
+        &Pubkey::new(&NOOP_PROGRAM_ID),
+    );
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
     let transactions = create_transactions(&bank_client, &mint_keypair);
