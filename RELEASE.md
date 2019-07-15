@@ -61,7 +61,7 @@ There are three release channels that map to branches as follows:
 
 ## Release Steps
 
-### Advance the Channels
+### Creating a new branch from master
 
 #### Create the new branch
 1. Pick your branch point for release on master.
@@ -83,6 +83,12 @@ There are three release channels that map to branches as follows:
 
 At this point, `ci/channel-info.sh` should show your freshly cut release branch as
 "BETA_CHANNEL" and the previous release branch as "STABLE_CHANNEL".
+
+### Update documentation
+
+Document the new recommended version by updating
+```export SOLANA_RELEASE=[new scheduled TESTNET_TAG value]```
+in book/src/testnet-participation.md on the release (beta) branch.
 
 ### Make the Release
 
@@ -144,12 +150,6 @@ TESTNET=testnet
 TESTNET_TAG=[same value as used in TESTNET_TAG in the schedules]
 TESTNET_OP=create-and-start
 ```
-
-#### Update documentation
-
-Document the new recommended version by updating
-```export SOLANA_RELEASE=[new scheduled TESTNET_TAG value]```
-in book/src/testnet-participation.md for both edge and beta channel branches.
 
 ### Alert the community
 
