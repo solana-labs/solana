@@ -106,7 +106,7 @@ fn verify_keybase(
 ) -> Result<(), Box<dyn error::Error>> {
     if let Some(keybase_id) = keybase_id.as_str() {
         let url = format!(
-            "https://keybase.pub/{}/solana_pubkey_{:?}",
+            "https://keybase.pub/{}/solana/validator-{:?}",
             keybase_id, validator_pubkey
         );
         let client = Client::new();
