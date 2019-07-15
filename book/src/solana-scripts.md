@@ -34,6 +34,9 @@ features and restrictions than programs.
 
 Scripts have the following additional features:
 * `process_instruction`, a synchronous call to process an instructions.
+
+A wallet with the following APIs:
+
 * `keypair_pubkey`, generate a persistent key that only this script can sign with.
 * `sign_instruction`, sign an instruction with a script key.
 
@@ -41,16 +44,28 @@ Since scripts are clients, they cannot:
 * Directly mutate state, or directly move funds between accounts.
 
 Scripts rely on programs to move funds or mutate state, and act purely as
-clients.
+clients.  All instructions that a script issues must succeed, or the entire
+script fails.
 
 ## Secure Script Execution
 
-During the script execution, calls to `process_instruction` yield, and the next
-instruction to be processed is invoked.  Scripts execute dynamically, and the
-execution path based on the current on-chain state.  The state may not match the
-same state that clients observed when signing the transaction.  Since script
-execute multiple programs, any change to any of the programs in the execution
-path could potentially change the outcome of the script.
+Scripts execute as a single atomic transaction, either all the instructions the
+script issued succeed, or the entire script fails.
+
+While scripts execute as a single atomic unit, their execution may still choose
+a dynamic path.  The execution path based on the current on-chain state.  The
+state may not match the same state that clients observed when signing the
+transaction.  This is a problem for regular programs as well.  But a single
+program controls all the state transitions, and can define the rules for
+composing out of order messages.  Since script execute multiple programs, any
+change to any of the programs in the execution path could potentially change the
+outcome of the script.
+
+For example:
+
+A script calls program A followed by B or C.  Alice signs a transaction to the
+script, and Mallory signs a transaction for A only in such a way that causes the
+script to change its execution path.
 
 Several solutions exist to this problem:
 
@@ -63,15 +78,17 @@ is going to be limited by the speed at which each transaction finalizes with a
 high confidence, which could be at least 10 blocks.
 
 * clients sign the expected merkle root of the changes to state after the
-transaction.  If the changes fail to match, the transaction fails.
+transaction, such as the account updates.  If the changes fail to match, the
+transaction fails.
 
-This solution has better performance characteristics, but users must serialize
-all the transactions to the script, because changes cannot be applied out of
-order.
+This solution has better performance characteristics, but users must still
+linearize all the transactions to the script externally, because changes cannot
+be applied out of order.
 
 This design proposes another approach.  Users know ahead of time which
 instructions the script will generate, and if signatures are required for the
-instructions.
+instructions.  During the script execution, calls to `process_instruction`
+yield, and the next instruction to be processed is invoked.
 
 The transaction invoked by the client must declare all the accounts that the
 script will need up front and provide all the necessary client signatures, as
@@ -89,13 +106,13 @@ of those performance benefits.
 Once the instruction is invoked, the script is resumed from the last point of
 execution.
 
-## Methods
+## Script Wallet Methods
 
 A TTP needs the ability to create pubkeys and generate signatures for those
 keys.  At script creation time the loader program may authorize specific
 pubkeys that the script and only the script can sign with.  To ensure that these
 keys cannot be signed by the client, the addresses are derived from a sha256 of
-the script pubkey and the key sequence number.
+the script pubkey and the key index number.
 
 * `pub fn keypair_pubkey(key_index: u64) -> Pubkey`
 
@@ -109,23 +126,30 @@ function by the script.
 Signs the message for the script pubkey that is generated with `key_index`.
 Clients can generate these keys locally and encode them into the instruction
 vector.  Only scripts can sign with these keys.  While a client is expected to
-encode the key into the instruction vector, the execution of the script will
-will call `sign_instruction` and set the `KeyedAccounts::is_signer` flag.
+encode the key into the instruction vector, the execution of the scrip will call
+`sign_instruction` and set the `KeyedAccounts::is_signer` flag.
+
+## Script Instruction Execution Methods
+
+Scripts cannot directly mutate state like programs, but they can execute any
+program instructions.
 
 * `fn process_instruction(ix: Instruction) -> Result<(), InstructionError>`
 
 This method is available to scripts to execute an instruction in the runtime.
 
-## Scirpt Initialization
+## Script Initialization
 
 * `LoaderInstruction::FinalizeScript`
 
 `LoaderInstruction::FinalizeScript` designates that the loaded executable
 bytecode is a script, and creates a new instance of the script. The difference
 between scripts and programs is that script execution yields to external program
-instructions, and scripts have the capability to sign.  `FinalizeScript` may be
-called more than once on the same loaded bytecode to create unique instances of
-scripts each with their own signing keys.
+instructions, and scripts have the capability to sign.  Scripts also cannot
+modify any account data directly.
+
+`FinalizeScript` may be called more than once on the same loaded bytecode to
+create unique instances of scripts each with their own script wallet.
 
 ## Script Instruction Vector
 
