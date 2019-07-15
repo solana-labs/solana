@@ -74,7 +74,7 @@ The program should have a list of slots which are valid storage mining slots.
 This list should be maintained by keeping track of slots which are rooted slots in which a significant
 portion of the network has voted on with a high lockout value, maybe 32-votes old. Every SLOTS\_PER\_SEGMENT
 number of slots would be added to this set. The program should check that the slot is in this set. The set can
-be maintained by receiving a AdvertiseStorageRecentBlockHash and checking with its bank/locktower state.
+be maintained by receiving a AdvertiseStorageRecentBlockHash and checking with its bank/Tower BFT state.
 
 The program should do a signature verify check on the signature, public key from the transaction submitter and the message of
 the previous storage epoch PoH value.

@@ -55,7 +55,7 @@ Validators can ignore forks at other points (e.g. from the wrong leader), or
 slash the leader responsible for the fork.
 
 Validators vote based on a greedy choice to maximize their reward described in
-[forks selection](fork-selection.md).
+[Tower BFT](tower-bft.md).
 
 ### Validator's View
 

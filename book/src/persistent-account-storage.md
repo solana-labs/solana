@@ -60,7 +60,7 @@ The read is satisfied by pointing to a memory-mapped location in the
 
 ## Root Forks
 
-The [fork selection algorithm](fork-selection.md) eventually selects a fork as a
+[Tower BFT](tower-bft.md) eventually selects a fork as a
 root fork and the fork is squashed.  A squashed/root fork cannot be rolled back.
 
 When a fork is squashed, all accounts in its parents not already present in the

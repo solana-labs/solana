@@ -96,7 +96,7 @@ ends up scheduled for the first two epochs because the leader schedule is also
 generated at slot 0 for the next epoch.  The length of the first two epochs can
 be specified in the genesis block as well.  The minimum length of the first
 epochs must be greater than or equal to the maximum rollback depth as defined in
-[fork selection](fork-selection.md).
+[Tower BFT](tower-bft.md).
 
 ## Leader Schedule Generation Algorithm
 

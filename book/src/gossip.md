@@ -34,8 +34,8 @@ Nodes send push messages to `PUSH_FANOUT` push peers.
 
 Upon receiving a push message, a node examines the message for:
 
-1. Duplication: if the message has been seen before, the node responds with
-   `PushMessagePrune` and drops the message
+1. Duplication: if the message has been seen before, the node drops the message
+   and may respond with `PushMessagePrune` if forwarded from a low staked node
 
 2. New data: if the message is new to the node
    * Stores the new information with an updated version in its cluster info and
@@ -51,7 +51,7 @@ Upon receiving a push message, a node examines the message for:
 A nodes selects its push peers at random from the active set of known peers.
 The node keeps this selection for a relatively long time.  When a prune message
 is received, the node drops the push peer that sent the prune.  Prune is an
-indication that there is another, faster path to that node than direct push.
+indication that there is another, higher stake weighted path to that node than direct push.
 
 The set of push peers is kept fresh by rotating a new node into the set every
 `PUSH_MSG_TIMEOUT/2` milliseconds.
