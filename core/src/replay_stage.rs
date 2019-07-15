@@ -737,10 +737,11 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::bank_forks::Confidence;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::entry;
     use crate::erasure::ErasureConfig;
-    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::packet::{Blob, BLOB_HEADER_SIZE};
     use crate::replay_stage::ReplayStage;
     use solana_runtime::genesis_utils::GenesisBlockInfo;
@@ -748,6 +749,7 @@ mod test {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::TransactionError;
+    use solana_vote_api::vote_state::VoteState;
     use std::fs::remove_dir_all;
     use std::sync::{Arc, RwLock};
 
@@ -927,5 +929,86 @@ mod test {
         };
         let _ignored = remove_dir_all(&ledger_path);
         res
+    }
+
+    #[test]
+    fn test_replay_confidence_cache() {
+        fn leader_vote(bank: &Arc<Bank>, pubkey: &Pubkey) {
+            let mut leader_vote_account = bank.get_account(&pubkey).unwrap();
+            let mut vote_state = VoteState::from(&leader_vote_account).unwrap();
+            vote_state.process_slot_vote_unchecked(bank.slot());
+            vote_state.to(&mut leader_vote_account).unwrap();
+            bank.store_account(&pubkey, &leader_vote_account);
+        }
+
+        let leader_pubkey = Pubkey::new_rand();
+        let leader_lamports = 3;
+        let genesis_block_info =
+            create_genesis_block_with_leader(50, &leader_pubkey, leader_lamports);
+        let mut genesis_block = genesis_block_info.genesis_block;
+        let leader_voting_pubkey = genesis_block_info.voting_keypair.pubkey();
+        genesis_block.epoch_warmup = false;
+        genesis_block.ticks_per_slot = 4;
+        let bank0 = Bank::new(&genesis_block);
+        for _ in 1..genesis_block.ticks_per_slot {
+            bank0.register_tick(&Hash::default());
+        }
+        bank0.freeze();
+        let arc_bank0 = Arc::new(bank0);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
+            &[arc_bank0.clone()],
+            0,
+        )));
+        let pubkey = Pubkey::new_rand();
+        let mut tower = Tower::new_from_forks(&bank_forks.read().unwrap(), &pubkey);
+        let mut progress = HashMap::new();
+
+        leader_vote(&arc_bank0, &leader_voting_pubkey);
+        let _votable = ReplayStage::generate_votable_banks(&bank_forks, &tower, &mut progress);
+
+        assert_eq!(
+            bank_forks.read().unwrap().get_fork_confidence(0).unwrap(),
+            &Confidence::new(0, 1, 2, 0)
+        );
+        assert!(bank_forks.read().unwrap().get_fork_confidence(1).is_none());
+
+        tower.record_vote(arc_bank0.slot(), arc_bank0.hash());
+
+        let bank1 = Bank::new_from_parent(&arc_bank0, &Pubkey::default(), arc_bank0.slot() + 1);
+        let _res = bank1.transfer(10, &genesis_block_info.mint_keypair, &Pubkey::new_rand());
+        for _ in 0..genesis_block.ticks_per_slot {
+            bank1.register_tick(&Hash::default());
+        }
+        bank1.freeze();
+        bank_forks.write().unwrap().insert(bank1);
+        let arc_bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+        leader_vote(&arc_bank1, &leader_voting_pubkey);
+        let _votable = ReplayStage::generate_votable_banks(&bank_forks, &tower, &mut progress);
+
+        tower.record_vote(arc_bank1.slot(), arc_bank1.hash());
+
+        let bank2 = Bank::new_from_parent(&arc_bank1, &Pubkey::default(), arc_bank1.slot() + 1);
+        let _res = bank2.transfer(10, &genesis_block_info.mint_keypair, &Pubkey::new_rand());
+        for _ in 0..genesis_block.ticks_per_slot {
+            bank2.register_tick(&Hash::default());
+        }
+        bank2.freeze();
+        bank_forks.write().unwrap().insert(bank2);
+        let arc_bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        leader_vote(&arc_bank2, &leader_voting_pubkey);
+        let _votable = ReplayStage::generate_votable_banks(&bank_forks, &tower, &mut progress);
+
+        assert_eq!(
+            bank_forks.read().unwrap().get_fork_confidence(0).unwrap(),
+            &Confidence::new(1, 1, 14, 20)
+        );
+        assert_eq!(
+            bank_forks.read().unwrap().get_fork_confidence(1).unwrap(),
+            &Confidence::new(1, 1, 6, 6)
+        );
+        assert_eq!(
+            bank_forks.read().unwrap().get_fork_confidence(2).unwrap(),
+            &Confidence::new(0, 1, 2, 0)
+        );
     }
 }

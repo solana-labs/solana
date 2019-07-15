@@ -223,6 +223,10 @@ impl BankForks {
             });
     }
 
+    pub fn get_fork_confidence(&self, fork: u64) -> Option<&Confidence> {
+        self.confidence.get(&fork)
+    }
+
     fn get_io_error(error: &str) -> Error {
         warn!("BankForks error: {:?}", error);
         Error::new(ErrorKind::Other, error)
