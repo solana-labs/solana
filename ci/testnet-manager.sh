@@ -158,7 +158,6 @@ testnet-demo)
 tds)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
-  : "${GCE_NODE_COUNT:=3}"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
@@ -470,7 +469,20 @@ deploy() {
     (
       set -x
 
-      # Allow defaults to be overridden from env vars, or not set
+      # Allow cluster configuration to be overridden from env vars
+
+      if [[ -z $TDS_ZONES ]]; then
+        TDS_ZONES="us-west1-a,us-central1-a,europe-west4-a"
+      fi
+      GCE_CLOUD_ZONES=(); while read -r -d, ; do GCE_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TDS_ZONES},"
+
+      if [[ -z $TDS_NODE_COUNT ]]; then
+        TDS_NODE_COUNT="3"
+      fi
+
+      if [[ -z $TDS_CLIENT_COUNT ]]; then
+        TDS_CLIENT_COUNT="1"
+      fi
 
       if [[ -z $ENABLE_GPU ]]; then
         maybeGpu=(-G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100")
@@ -534,10 +546,11 @@ deploy() {
         ci/testnet-deploy.sh -p tds-solana-com -C gce \
           "${maybeGpu[@]}" \
           -d pd-ssd \
-          -z us-west1-a \
-          -z us-central1-a \
-          -z europe-west4-a \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
+          ${GCE_CLOUD_ZONES[@]/#/-z } \
+          -t "$CHANNEL_OR_TAG" \
+          -n ${TDS_NODE_COUNT} \
+          -c ${TDS_CLIENT_COUNT} \
+          -P -u \
           -a tds-solana-com --letsencrypt tds.solana.com \
           ${maybeHashesPerTick} \
           ${skipCreate:+-e} \
