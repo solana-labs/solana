@@ -919,12 +919,8 @@ impl Bank {
     ) -> (
         Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
         Vec<Result<()>>,
-<<<<<<< HEAD
-=======
-        Vec<usize>,
         usize,
         usize,
->>>>>>> fe87c0542... fix transaction_count (#5110)
     ) {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
@@ -985,17 +981,7 @@ impl Bank {
         }
 
         Self::update_error_counters(&error_counters);
-<<<<<<< HEAD
-        (loaded_accounts, executed)
-=======
-        (
-            loaded_accounts,
-            executed,
-            retryable_txs,
-            tx_count,
-            signature_count,
-        )
->>>>>>> fe87c0542... fix transaction_count (#5110)
+        (loaded_accounts, executed, tx_count, signature_count)
     }
 
     fn filter_program_errors_and_collect_fee(
@@ -1088,23 +1074,10 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
-<<<<<<< HEAD
-        let (loaded_accounts, executed) =
+        let (loaded_accounts, executed, tx_count, signature_count) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
 
-        self.commit_transactions(txs, &loaded_accounts, &executed)
-=======
-        let (mut loaded_accounts, executed, _, tx_count, signature_count) =
-            self.load_and_execute_transactions(txs, lock_results, max_age);
-
-        self.commit_transactions(
-            txs,
-            &mut loaded_accounts,
-            &executed,
-            tx_count,
-            signature_count,
-        )
->>>>>>> fe87c0542... fix transaction_count (#5110)
+        self.commit_transactions(txs, &loaded_accounts, &executed, tx_count, signature_count)
     }
 
     #[must_use]
