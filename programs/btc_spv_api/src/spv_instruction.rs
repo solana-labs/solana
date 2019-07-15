@@ -1,113 +1,76 @@
 //! Spv proof Verification Program
-
+use crate::id;
+use crate::spv_state::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 
 
-
-pub type BitcoinTxHash = [u8;32];
-
-pub struct ProofEntry    = {
-    // 32 byte merkle hashes
-    pub hash: [u8;32];
-    // side of the merkle tree
-    // T - Left, F - Right
-    pub side: bool;
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct BlockHeader {
-    // Block hash
-    pub digest      : BitcoinTxHash;
-    // Previous block's hash/digest
-    pub parent      : BitcoinTxHash;
-    //
-    pub merkle_root : ProofEntry;
-    // Bitcoin network version
-    pub version     : u32;
-    // the blocktime associate with the block
-    pub time        : u32;
-    // An encoded version of the target threshold this block’s header hash must be less than or equal to.
-    pub target      : u32;
-}
-
-pub type HeaderChain = Vec<BlockHeader>;
-// a vector of BlockHeaders used as part of a Proof
-// index 0    : the block header of the block prior to the proof Block
-// index 1    : the block header of the proof block
-// index 2-n* : the block headers for the confirmation chain
-// (where n is the confirmations value from the proof request)
-
-pub struct ProofEntry    = {
-    // 32 byte merkle hashes
-    pub hash: [u8;32];
-    // side of the merkle tree (None for root)
-    pub side: Option<bool>;
-}
-
-pub type MerkleProof = Vec<ProofEntry>;
-// a vector of ProofEntries used as part of a Proof
-// index 0     : a ProofEntry representing the txid
-// indices 0-n : ProofEntries linking the txhash and the merkle root
-// index n     : a ProofEntry representing the merkel root for the block in question
-
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct ClientRequestInfo {
-    // bitcoin transaction hash
-    pub txHash:        BitcoinTxHash;
-    // confirmation count
-    pub confirmations: u8;
-    // fee paid for tx verification
-    pub fee:           u64;
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct ProofRequest {
-    pub owner:         Pubkey;
-    // bitcoin transaction hash
-    pub txHash:        BitcoinTxHash;
-    // confirmation count
-    pub confirmations: u8;
-    // fee paid for tx verification
-    pub fee:           u64;
-    // minimum allowable difficulty
-    pub difficulty:    u64;
-
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct ProofSubmitInfo {
-    // merkle branch connecting txhash to block header merkle root
-    pub proof:   MerkleProof;
-    // chain of bitcoin headers provifing context for the proof
-    pub headers: HeaderChain;
-    //txhash to verify proof for (not technically necessary, see MerkleProof[0])
-    pub txhash:  Option<BitcoinTxHash>;
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Proof {
-    // the pubkey who submitted the proof in question, entitled to fees from any corresponding proof requests
-    pub submitter:  Pubkey;
-    // merkle branch connecting txhash to block header merkle root
-    pub proof:      MerkleProof;
-    // chain of bitcoin headers provifing context for the proof
-    pub headers:    HeaderChain;
-    // computed validity of the proof in question
-    pub validity:   Option<bool>;
-    // txhash associated with the Proof
-    pub txhash:     BitcoinTxHash;
-}
-
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum SpvInstruction {
     // Client Places request for a matching proof
+    // key 0 - Signer
+    // key 1 - Account in which to record the Request and proof
     ClientRequest(ClientRequestInfo);
-    // used to cancel a pending proof request
+
+    // Used by clients to cancel a pending proof request
+    // key 0 - signer
+    // key 1 - Request to cancel
     CancelRequest(BitcoinTxHash);
+
     // used to submit a proof matching a posted BitcoinTxHash or for own benefit
-    SubmitProof(ProofSubmitInfo);
+    // key 0 - signer
+    // key 1 - Request to prove
+    SubmitProof(SubmitProofInfo);
+}
+
+
+pub fn client_request(
+    owner         : &Pubkey,
+    txHash        : BitcoinTxHash,
+    fee           : u64,
+    confirmations : u8,
+    difficulty    : u64,
+) -> Instruction {
+    let account_meta = vec![AccountMeta::new(*owner, true)];
+    Instruction::new(
+        id(),
+        &SpvInstruction::ClientRequest(ClientRequestInfo{
+            txHash,
+            confirmations,
+            fee,
+            difficulty,
+        }),
+        account_meta,
+    )
+}
+
+pub fn cancel_request(
+    owner   : &Pubkey,
+    txHash  : BitcoinTxHash,
+) -> Instruction {
+    let account_meta = vec![AccountMeta::new(*owner, true)];
+    Instruction::new(
+        id(),
+        &SpvInstruction::CancelRequest(BitcoinTxHash),
+        account_meta,
+    )
+}
+
+pub fn submit_proof(
+    submitter : &Pubkey,
+    proof     : MerkleProof,
+    headers   : HeaderChain,
+    txhash    : BitcoinTxHash,
+) -> Instruction {
+    let account_meta = vec![AccountMeta::new(*submitter, true)];
+    Instruction::new(
+        id(),
+        &SpvInstruction::SubmitProof(SubmitProofInfo{
+            proof,
+            headers,
+            txhash,
+        }),
+        acccount_meta,
+    )
 }
