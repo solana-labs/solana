@@ -470,10 +470,61 @@ deploy() {
     (
       set -x
 
-      EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
-      EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
+      # Allow defaults to be overridden from env vars, or not set
 
-      wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
+      if [[ -z $ENABLE_GPU ]]; then
+        maybeGpu=(-G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100")
+      elif [[ $ENABLE_GPU == skip ]]; then
+        maybeGpu=()
+      else
+        maybeGpu=(-G "${ENABLE_GPU}")
+      fi
+
+      if [[ -z $HASHES_PER_TICK ]]; then
+        maybeHashesPerTick="--hashes-per-tick auto"
+      elif [[ $HASHES_PER_TICK == skip ]]; then
+        maybeHashesPerTick=""
+      else
+        maybeHashesPerTick="--hashes-per-tick ${HASHES_PER_TICK}"
+      fi
+
+      if [[ -z $STAKE_INTERNAL_NODES ]]; then
+        maybeStakeInternalNodes="--stake-internal-nodes 1000000000000"
+      elif [[ $STAKE_INTERNAL_NODES == skip ]]; then
+        maybeStakeInternalNodes=""
+      else
+        maybeStakeInternalNodes="--stake-internal-nodes ${STAKE_INTERNAL_NODES}"
+      fi
+
+      EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
+      if [[ -z $EXTERNAL_ACCOUNTS_FILE_URL ]]; then
+        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
+        wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
+        maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
+      elif [[ $EXTERNAL_ACCOUNTS_FILE_URL == skip ]]; then
+        maybeExternalAccountsFile=""
+      else
+        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
+        wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
+        maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
+      fi
+
+      if [[ -z $LAMPORTS ]]; then
+        maybeLamports="--lamports 8589934592000000000"
+      elif [[ $LAMPORTS == skip ]]; then
+        maybeLamports=""
+      else
+        maybeLamports="--lamports ${LAMPORTS}"
+      fi
+
+      if [[ -z $ADDITIONAL_DISK_SIZE_GB ]]; then
+        maybeAdditionalDisk="--fullnode-additional-disk-size-gb 32000"
+      elif [[ $ADDITIONAL_DISK_SIZE_GB == skip ]]; then
+        maybeAdditionalDisk=""
+      else
+        maybeAdditionalDisk="--fullnode-additional-disk-size-gb ${ADDITIONAL_DISK_SIZE_GB}"
+      fi
+
 
       # Multiple V100 GPUs are available in us-west1, us-central1 and europe-west4
       # shellcheck disable=SC2068
@@ -481,25 +532,24 @@ deploy() {
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p tds-solana-com -C gce \
-          -G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
+          "${maybeGpu[@]}" \
           -d pd-ssd \
           -z us-west1-a \
           -z us-central1-a \
           -z europe-west4-a \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
           -a tds-solana-com --letsencrypt tds.solana.com \
-          --hashes-per-tick auto \
+          ${maybeHashesPerTick} \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
-          --stake-internal-nodes 1000000000000 \
-          --external-accounts-file "$EXTERNAL_ACCOUNTS_FILE" \
-          --lamports 8589934592000000000 \
+          ${maybeStakeInternalNodes} \
+          ${maybeExternalAccountsFile} \
+          ${maybeLamports} \
+          ${maybeAdditionalDisk} \
           --skip-deploy-update \
-          --fullnode-additional-disk-size-gb 32000 \
           --no-snapshot
-
     )
     ;;
   *)
