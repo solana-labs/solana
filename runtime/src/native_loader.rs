@@ -1,6 +1,5 @@
 //! Native loader
 use crate::message_processor::SymbolCache;
-use bincode::deserialize;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
@@ -9,7 +8,6 @@ use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils;
-use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::path::PathBuf;
@@ -109,45 +107,15 @@ pub fn entrypoint(
                     .write()
                     .unwrap()
                     .insert(name_vec.to_vec(), entrypoint);
-                return ret;
+                ret
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
-                return Err(InstructionError::GenericError);
-            }
-        }
-    } else if let Ok(instruction) = deserialize(ix_data) {
-        if keyed_accounts[0].signer_key().is_none() {
-            warn!("key[0] did not sign the transaction");
-            return Err(InstructionError::GenericError);
-        }
-        match instruction {
-            LoaderInstruction::Write { offset, bytes } => {
-                trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
-                let offset = offset as usize;
-                if keyed_accounts[0].account.data.len() < offset + bytes.len() {
-                    warn!(
-                        "Error: Overflow, {} < {}",
-                        keyed_accounts[0].account.data.len(),
-                        offset + bytes.len()
-                    );
-                    return Err(InstructionError::GenericError);
-                }
-                // native loader takes a name and we assume it all comes in at once
-                keyed_accounts[0].account.data = bytes;
-            }
-
-            LoaderInstruction::Finalize => {
-                keyed_accounts[0].account.executable = true;
-                trace!(
-                    "NativeLoader::Finalize prog: {:?}",
-                    keyed_accounts[0].signer_key().unwrap()
-                );
+                Err(InstructionError::GenericError)
             }
         }
     } else {
         warn!("Invalid data in instruction: {:?}", ix_data);
-        return Err(InstructionError::GenericError);
+        Err(InstructionError::GenericError)
     }
-    Ok(())
 }
