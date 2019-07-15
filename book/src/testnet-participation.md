@@ -265,10 +265,10 @@ Keybase:
 
 1. Join https://keybase.io/ and complete the profile for your validator
 2. Add your validator **identity pubkey** to Keybase:
-  * Create an empty file on your local computer called `solana_pubkey_<PUBKEY>`
+  * Create an empty file on your local computer called `validator-<PUBKEY>`
   * In Keybase, navigate to the Files section, and upload your pubkey file to
-  your public folder: `/keybase/public/<KEYBASE_ID>`
+  a `solana` subdirectory in your public folder: `/keybase/public/<KEYBASE_ID>/solana`
   * To check your pubkey, ensure you can successfully browse to
-  `https://keybase.pub/<KEYBASE_ID>/solana_pubkey_<PUBKEY>`
+  `https://keybase.pub/<KEYBASE_ID>/solana/validator-<PUBKEY>`
 3. Add or update your `solana-validator-info` with your Keybase ID. The CLI will
-verify the `solana_pubkey_<PUBKEY>` file
+verify the `validator-<PUBKEY>` file
