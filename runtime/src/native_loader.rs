@@ -64,58 +64,53 @@ fn library_open(path: &PathBuf) -> std::io::Result<Library> {
     Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
 }
 
-pub fn entrypoint(
+pub fn invoke_entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     ix_data: &[u8],
     symbol_cache: &SymbolCache,
 ) -> Result<(), InstructionError> {
-    if keyed_accounts[0].account.executable {
-        // dispatch it
-        let (names, params) = keyed_accounts.split_at_mut(1);
-        let name_vec = &names[0].account.data;
-        if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
-            unsafe {
-                return entrypoint(program_id, params, ix_data);
-            }
+    // dispatch it
+    let (names, params) = keyed_accounts.split_at_mut(1);
+    let name_vec = &names[0].account.data;
+    if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
+        unsafe {
+            return entrypoint(program_id, params, ix_data);
         }
-        let name = match str::from_utf8(name_vec) {
-            Ok(v) => v,
-            Err(e) => {
-                warn!("Invalid UTF-8 sequence: {}", e);
-                return Err(InstructionError::GenericError);
-            }
-        };
-        trace!("Call native {:?}", name);
-        let path = create_path(&name);
-        match library_open(&path) {
-            Ok(library) => unsafe {
-                let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
-                    match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            warn!(
-                                "{:?}: Unable to find {:?} in program",
-                                e,
-                                instruction_processor_utils::ENTRYPOINT
-                            );
-                            return Err(InstructionError::GenericError);
-                        }
-                    };
-                let ret = entrypoint(program_id, params, ix_data);
-                symbol_cache
-                    .write()
-                    .unwrap()
-                    .insert(name_vec.to_vec(), entrypoint);
-                ret
-            },
-            Err(e) => {
-                warn!("Unable to load: {:?}", e);
-                Err(InstructionError::GenericError)
-            }
+    }
+    let name = match str::from_utf8(name_vec) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!("Invalid UTF-8 sequence: {}", e);
+            return Err(InstructionError::GenericError);
         }
-    } else {
-        warn!("Invalid data in instruction: {:?}", ix_data);
-        Err(InstructionError::GenericError)
+    };
+    trace!("Call native {:?}", name);
+    let path = create_path(&name);
+    match library_open(&path) {
+        Ok(library) => unsafe {
+            let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
+                match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        warn!(
+                            "{:?}: Unable to find {:?} in program",
+                            e,
+                            instruction_processor_utils::ENTRYPOINT
+                        );
+                        return Err(InstructionError::GenericError);
+                    }
+                };
+            let ret = entrypoint(program_id, params, ix_data);
+            symbol_cache
+                .write()
+                .unwrap()
+                .insert(name_vec.to_vec(), entrypoint);
+            ret
+        },
+        Err(e) => {
+            warn!("Unable to load: {:?}", e);
+            Err(InstructionError::GenericError)
+        }
     }
 }

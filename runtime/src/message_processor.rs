@@ -176,7 +176,11 @@ impl MessageProcessor {
             }
         }
 
-        native_loader::entrypoint(
+        assert!(
+            keyed_accounts[0].account.executable,
+            "loader not executable"
+        );
+        native_loader::invoke_entrypoint(
             &program_id,
             &mut keyed_accounts,
             &instruction.data,
