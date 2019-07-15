@@ -950,6 +950,8 @@ impl Bank {
         Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
         Vec<Result<()>>,
         Vec<usize>,
+        usize,
+        usize,
     ) {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
@@ -1021,13 +1023,14 @@ impl Bank {
             inc_new_counter_error!("bank-process_transactions-error_count", err_count, 0, 1000);
         }
 
-        self.increment_transaction_count(tx_count);
-        self.increment_signature_count(signature_count);
-
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
-        inc_new_counter_info!("bank-process_transactions-sigs", signature_count, 0, 1000);
         Self::update_error_counters(&error_counters);
-        (loaded_accounts, executed, retryable_txs)
+        (
+            loaded_accounts,
+            executed,
+            retryable_txs,
+            tx_count,
+            signature_count,
+        )
     }
 
     fn filter_program_errors_and_collect_fee(
@@ -1079,10 +1082,18 @@ impl Bank {
             InstructionCredits,
         )>],
         executed: &[Result<()>],
+        tx_count: usize,
+        signature_count: usize,
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
             warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
         }
+
+        self.increment_transaction_count(tx_count);
+        self.increment_signature_count(signature_count);
+
+        inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
+        inc_new_counter_info!("bank-process_transactions-sigs", signature_count, 0, 1000);
 
         if executed.iter().any(|res| Self::can_commit(res)) {
             self.is_delta.store(true, Ordering::Relaxed);
@@ -1112,10 +1123,16 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
-        let (mut loaded_accounts, executed, _) =
+        let (mut loaded_accounts, executed, _, tx_count, signature_count) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
 
-        self.commit_transactions(txs, &mut loaded_accounts, &executed)
+        self.commit_transactions(
+            txs,
+            &mut loaded_accounts,
+            &executed,
+            tx_count,
+            signature_count,
+        )
     }
 
     #[must_use]
