@@ -503,7 +503,7 @@ impl Accounts {
     pub fn hash_internal_state(&self, fork_id: Fork) -> Option<Hash> {
         let account_hashes = self.scan_fork(fork_id, |stored_account| {
             if !sysvar::check_id(&stored_account.balance.owner) {
-                Some(Self::hash_account(stored_account))
+                Some([&serialize(&stored_account.balance).unwrap(), stored_account.data].concat())
             } else {
                 None
             }
