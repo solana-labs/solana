@@ -89,43 +89,13 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
-    if keyed_accounts[0].account.executable {
-        let (progs, params) = keyed_accounts.split_at_mut(1);
-        let prog = &progs[0].account.data;
-        info!("Call BPF program");
-        let (mut vm, heap_region) = match create_vm(prog) {
-            Ok(info) => info,
-            Err(e) => {
-                warn!("Failed to create BPF VM: {}", e);
-                return Err(InstructionError::GenericError);
-            }
-        };
-        let mut v = serialize_parameters(program_id, params, &ix_data);
-
-        match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
-            Ok(status) => {
-                if 0 == status {
-                    warn!("BPF program failed: {}", status);
-                    return Err(InstructionError::GenericError);
-                }
-            }
-            Err(e) => {
-                warn!("BPF VM failed to run program: {}", e);
-                return Err(InstructionError::GenericError);
-            }
-        }
-        deserialize_parameters(params, &v);
-        info!(
-            "BPF program executed {} instructions",
-            vm.get_last_instruction_count()
-        );
-    } else if let Ok(instruction) = bincode::deserialize(ix_data) {
-        if keyed_accounts[0].signer_key().is_none() {
-            warn!("key[0] did not sign the transaction");
-            return Err(InstructionError::GenericError);
-        }
+    if let Ok(instruction) = bincode::deserialize(ix_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
+                if keyed_accounts[0].signer_key().is_none() {
+                    warn!("key[0] did not sign the transaction");
+                    return Err(InstructionError::GenericError);
+                }
                 let offset = offset as usize;
                 let len = bytes.len();
                 debug!("Write: offset={} length={}", offset, len);
@@ -140,10 +110,49 @@ pub fn process_instruction(
                 keyed_accounts[0].account.data[offset..offset + len].copy_from_slice(&bytes);
             }
             LoaderInstruction::Finalize => {
+                if keyed_accounts[0].signer_key().is_none() {
+                    warn!("key[0] did not sign the transaction");
+                    return Err(InstructionError::GenericError);
+                }
                 keyed_accounts[0].account.executable = true;
                 info!(
                     "Finalize: account {:?}",
                     keyed_accounts[0].signer_key().unwrap()
+                );
+            }
+            LoaderInstruction::InvokeMain { data } => {
+                if !keyed_accounts[0].account.executable {
+                    warn!("BPF account not executable");
+                    return Err(InstructionError::GenericError);
+                }
+                let (progs, params) = keyed_accounts.split_at_mut(1);
+                let prog = &progs[0].account.data;
+                info!("Call BPF program");
+                let (mut vm, heap_region) = match create_vm(prog) {
+                    Ok(info) => info,
+                    Err(e) => {
+                        warn!("Failed to create BPF VM: {}", e);
+                        return Err(InstructionError::GenericError);
+                    }
+                };
+                let mut v = serialize_parameters(program_id, params, &data);
+
+                match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
+                    Ok(status) => {
+                        if 0 == status {
+                            warn!("BPF program failed: {}", status);
+                            return Err(InstructionError::GenericError);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("BPF VM failed to run program: {}", e);
+                        return Err(InstructionError::GenericError);
+                    }
+                }
+                deserialize_parameters(params, &v);
+                info!(
+                    "BPF program executed {} instructions",
+                    vm.get_last_instruction_count()
                 );
             }
         }

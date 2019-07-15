@@ -6,6 +6,7 @@ use solana_sdk::account::{
 };
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
+use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
@@ -140,6 +141,7 @@ impl MessageProcessor {
         program_accounts: &mut [&mut Account],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
+        let is_loader = executable_accounts.len() > 1;
 
         let mut keyed_accounts = create_keyed_credit_only_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
@@ -180,6 +182,22 @@ impl MessageProcessor {
             keyed_accounts[0].account.executable,
             "loader not executable"
         );
+
+        // If invoking indirectly via a loader, wrap the instruction data with an
+        // instruction that tells the loader to invoke "main()".
+        if is_loader {
+            let ix = LoaderInstruction::InvokeMain {
+                data: instruction.data.clone(),
+            };
+            let ix_data = bincode::serialize(&ix).unwrap();
+            return native_loader::invoke_entrypoint(
+                &program_id,
+                &mut keyed_accounts,
+                &ix_data,
+                &self.symbol_cache,
+            );
+        }
+
         native_loader::invoke_entrypoint(
             &program_id,
             &mut keyed_accounts,
