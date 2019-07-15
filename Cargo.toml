@@ -3,6 +3,7 @@ members = [
     "bench-exchange",
     "bench-streamer",
     "bench-tps",
+    "sdk-c",
     "chacha-sys",
     "client",
     "core",
