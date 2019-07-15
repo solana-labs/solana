@@ -85,7 +85,7 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
 pub fn process_instruction(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    tx_data: &[u8],
+    ix_data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
@@ -100,7 +100,7 @@ pub fn process_instruction(
                 return Err(InstructionError::GenericError);
             }
         };
-        let mut v = serialize_parameters(program_id, params, &tx_data);
+        let mut v = serialize_parameters(program_id, params, &ix_data);
 
         match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
             Ok(status) => {
@@ -119,7 +119,7 @@ pub fn process_instruction(
             "BPF program executed {} instructions",
             vm.get_last_instruction_count()
         );
-    } else if let Ok(instruction) = bincode::deserialize(tx_data) {
+    } else if let Ok(instruction) = bincode::deserialize(ix_data) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
             return Err(InstructionError::GenericError);
@@ -148,7 +148,7 @@ pub fn process_instruction(
             }
         }
     } else {
-        warn!("Invalid program transaction: {:?}", tx_data);
+        warn!("Invalid instruction data: {:?}", ix_data);
         return Err(InstructionError::GenericError);
     }
     Ok(())
