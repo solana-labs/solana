@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
+# Allow release tag from cmd line
+if [[ -n $1 ]] ; then
+  PUBLISH_BOOK_TAG=$1
+fi
+
 cd "$(dirname "$0")/.."
 BOOK="book"
 
