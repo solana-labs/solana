@@ -22,10 +22,12 @@ if [[ "$MANUAL_PUBLISH" = true ]]; then
     repo=git@github.com:solana-labs/book.git
     ;;
   book-edge)
-    repo=git@github.com:solana-labs/book-edge.git
+    echo "--- this book cannot be manually published: $BOOK"
+    exit 1
     ;;
   book-beta)
-    repo=git@github.com:solana-labs/book-beta.git
+    echo "--- this book cannot be manually published: $BOOK"
+    exit 1
     ;;
   *)
    echo "--- unknown book: $BOOK"
