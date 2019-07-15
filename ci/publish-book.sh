@@ -12,7 +12,7 @@ BOOK="book"
 if [[ -n $PUBLISH_BOOK_TAG ]]; then
   # book is manually published at a specified release tag
   repo=git@github.com:solana-labs/book.git
-  git checkout ${PUBLISH_BOOK_TAG} book
+  git checkout "${PUBLISH_BOOK_TAG}" book
 else
   # book-edge and book-beta are published automatically on the tip of the branch
   eval "$(ci/channel-info.sh)"
