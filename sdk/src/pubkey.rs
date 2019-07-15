@@ -1,5 +1,4 @@
-use generic_array::typenum::U32;
-use generic_array::GenericArray;
+use std::convert::TryFrom;
 use std::error;
 use std::fmt;
 use std::fs::{self, File};
@@ -8,9 +7,9 @@ use std::mem;
 use std::path::Path;
 use std::str::FromStr;
 
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Pubkey(GenericArray<u8, U32>);
+pub struct Pubkey([u8; 32]);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsePubkeyError {
@@ -43,7 +42,10 @@ impl FromStr for Pubkey {
 
 impl Pubkey {
     pub fn new(pubkey_vec: &[u8]) -> Self {
-        Pubkey(GenericArray::clone_from_slice(&pubkey_vec))
+        Self(
+            <[u8; 32]>::try_from(<&[u8]>::clone(&pubkey_vec))
+                .expect("Slice must be the same length as a Pubkey"),
+        )
     }
 
     pub fn new_rand() -> Self {

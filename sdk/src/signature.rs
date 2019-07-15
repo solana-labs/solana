@@ -19,6 +19,7 @@ use std::str::FromStr;
 
 pub type Keypair = ed25519_dalek::Keypair;
 
+#[repr(transparent)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Signature(GenericArray<u8, U64>);
 
@@ -71,6 +72,12 @@ impl fmt::Debug for Signature {
 impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
+    }
+}
+
+impl Into<[u8; 64]> for Signature {
+    fn into(self) -> [u8; 64] {
+        <GenericArray<u8, U64> as Into<[u8; 64]>>::into(self.0)
     }
 }
 
