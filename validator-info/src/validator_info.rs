@@ -261,7 +261,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey)
-                        .help("The pubkey of the Validator info account"),
+                        .help("The pubkey of the Validator info account; without this argument, returns all"),
                 ),
         )
         .get_matches();
