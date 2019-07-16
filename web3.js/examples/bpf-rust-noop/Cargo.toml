@@ -13,10 +13,14 @@ edition = "2018"
 
 [dependencies]
 solana-sdk-bpf-utils = { path = "../../bpf-sdk/rust/rust-utils" }
+solana-sdk-bpf-no-std = { path = "../../bpf-sdk/rust/rust-no-std" }
+
+[dev_dependencies]
+solana-sdk-bpf-test = { path = "../../bpf-sdk/rust/rust-test"}
 
 [workspace]
 members = []
 
 [lib]
-crate-type = ["cdylib"]
 name = "solana_bpf_rust_noop"
+crate-type = ["cdylib"]
