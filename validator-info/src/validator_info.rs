@@ -157,7 +157,7 @@ fn parse_validator_info(
         Ok((validator_pubkey, validator_info))
     } else {
         Err(format!(
-            "account {} could not be parsed as ValidatorInfo",
+            "account {} found, but could not be parsed as ValidatorInfo",
             pubkey
         ))?
     }
@@ -257,21 +257,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
                 .arg(
                     Arg::with_name("info_pubkey")
-                        .short("p")
-                        .long("info-pubkey")
+                        .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .required_unless("all")
-                        .conflicts_with("all")
                         .validator(is_pubkey)
                         .help("The pubkey of the Validator info account"),
-                )
-                .arg(
-                    Arg::with_name("all")
-                        .short("a")
-                        .long("all")
-                        .required_unless("info_pubkey")
-                        .help("Return all current Validator info"),
                 ),
         )
         .get_matches();
@@ -372,7 +362,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
             let rpc_client = RpcClient::new(json_rpc_url.to_string());
 
-            if matches.is_present("all") {
+            if matches.is_present("info_pubkey") {
+                if let Some(pubkey) = matches.value_of("info_pubkey") {
+                    let info_pubkey = pubkey.parse::<Pubkey>().unwrap();
+                    let validator_info_data = rpc_client.get_account_data(&info_pubkey)?;
+                    let (validator_pubkey, validator_info) =
+                        parse_validator_info(&info_pubkey, &validator_info_data)?;
+                    println!("Validator pubkey: {:?}", validator_pubkey);
+                    println!("Info: {}", validator_info);
+                }
+            } else {
                 let all_config = rpc_client.get_program_accounts(&solana_config_api::id())?;
                 let all_validator_info: Vec<&(Pubkey, Account)> = all_config
                     .iter()
@@ -391,15 +390,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         parse_validator_info(&info_pubkey, &account.data)?;
                     println!("  Validator pubkey: {:?}", validator_pubkey);
                     println!("  Info: {}", validator_info);
-                }
-            } else {
-                if let Some(pubkey) = matches.value_of("info_pubkey") {
-                    let info_pubkey = pubkey.parse::<Pubkey>().unwrap();
-                    let validator_info_data = rpc_client.get_account_data(&info_pubkey)?;
-                    let (validator_pubkey, validator_info) =
-                        parse_validator_info(&info_pubkey, &validator_info_data)?;
-                    println!("Validator pubkey: {:?}", validator_pubkey);
-                    println!("Info: {}", validator_info);
                 }
             }
         }
