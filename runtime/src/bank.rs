@@ -50,6 +50,12 @@ use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 pub const SECONDS_PER_YEAR: f64 = (365.0 * 24.0 * 60.0 * 60.0);
 
+// Create many append vecs to increase parallelism in scan_ functions.
+fn default_num_stores() -> usize {
+    const DEFAULT_NUM_STORES: u32 = 8;
+    sys_info::cpu_num().unwrap_or(DEFAULT_NUM_STORES) as usize
+}
+
 type BankStatusCache = StatusCache<Result<()>>;
 
 #[derive(Default)]
@@ -63,7 +69,7 @@ pub struct BankRc {
 
 impl BankRc {
     pub fn new(account_paths: Option<String>, id: AppendVecId) -> Self {
-        let accounts = Accounts::new(account_paths);
+        let accounts = Accounts::new_with_num_stores(account_paths, default_num_stores());
         accounts
             .accounts_db
             .next_id
@@ -280,7 +286,7 @@ impl Bank {
     pub fn new_with_paths(genesis_block: &GenesisBlock, paths: Option<String>) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
-        bank.rc.accounts = Arc::new(Accounts::new(paths));
+        bank.rc.accounts = Arc::new(Accounts::new_with_num_stores(paths, default_num_stores()));
         bank.process_genesis_block(genesis_block);
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
