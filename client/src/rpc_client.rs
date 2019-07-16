@@ -293,7 +293,6 @@ impl RpcClient {
                     format!("GetProgramAccounts parse failure: {:?}", err),
                 )
             })?;
-        println!("{:?}", accounts);
 
         let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
         for (string, account) in accounts.into_iter() {
