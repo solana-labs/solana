@@ -216,7 +216,7 @@ impl Blocktree {
         match self.meta(slot) {
             Ok(meta) => match meta {
                 None => Ok(()),
-                Some(meta) => {
+                Some(_) => {
                     self.meta_cf.delete(slot)?;
                     self.delete_indexed_column(&self.data_cf, slot)?;
                     self.delete_indexed_column(&self.erasure_meta_cf, slot)?;
@@ -3410,6 +3410,59 @@ pub mod tests {
         for i in chained_slots {
             assert!(blocktree.is_root(i));
         }
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_prune() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let (blobs, _) = make_many_slot_entries(0, 50, 6);
+        blocktree.write_blobs(blobs).unwrap();
+        blocktree
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|(_, meta)| assert_eq!(meta.last_index, 5));
+
+        blocktree.prune(5);
+
+        blocktree
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|(slot, meta)| {
+                assert!(slot <= 5);
+                assert_eq!(meta.last_index, 5)
+            });
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[should_panic]
+    #[test]
+    fn test_prune_out_of_bounds() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // slot 5 does not exist, prune should panic
+        blocktree.prune(5);
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_iter_bounds() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // slot 5 does not exist, iter should be ok and should be a noop
+        blocktree
+            .slot_meta_iterator(5)
+            .unwrap()
+            .for_each(|_| assert!(false));
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
