@@ -109,10 +109,6 @@ impl PohRecorder {
         self.leader_after_slots(1)
     }
 
-    pub fn start_slot(&self) -> Slot {
-        self.start_slot
-    }
-
     pub fn bank(&self) -> Option<Arc<Bank>> {
         self.working_bank.clone().map(|w| w.bank)
     }
@@ -921,6 +917,8 @@ mod tests {
 
     #[test]
     fn test_reset_to_new_value() {
+        solana_logger::setup();
+
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree =
@@ -941,10 +939,10 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 3);
             assert_eq!(poh_recorder.tick_height, 3);
-            poh_recorder.reset(hash(b"hello"), 0, Some(4));
+            poh_recorder.reset(hash(b"hello"), 0, Some(4)); // parent slot 0 implies tick_height of 3
             assert_eq!(poh_recorder.tick_cache.len(), 0);
             poh_recorder.tick();
-            assert_eq!(poh_recorder.tick_height, 2);
+            assert_eq!(poh_recorder.tick_height, 4);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
@@ -1054,7 +1052,7 @@ mod tests {
                 .is_err());
             assert!(poh_recorder.working_bank.is_none());
             // Make sure the starting slot is updated
-            assert_eq!(poh_recorder.start_slot(), end_slot);
+            assert_eq!(poh_recorder.start_slot, end_slot);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
