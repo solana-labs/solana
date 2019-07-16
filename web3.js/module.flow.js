@@ -142,6 +142,22 @@ declare module '@solana/web3.js' {
     static assign(from: PublicKey, programId: PublicKey): Transaction;
   }
 
+  // === src/validator-info.js ===
+  declare export type Info = {|
+    name: string,
+    website?: string,
+    details?: string,
+    keybaseId?: string,
+  |};
+
+  declare export class ValidatorInfo {
+    key: PublicKey;
+    info: Info;
+
+    constructor(key: PublicKey, info: Info): ValidatorInfo;
+    static fromConfigData(buffer: Buffer): ?ValidatorInfo;
+  }
+
   // === src/transaction.js ===
   declare export type TransactionSignature = string;
 
