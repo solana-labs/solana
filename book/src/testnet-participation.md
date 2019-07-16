@@ -248,10 +248,9 @@ to other users.
 
 Run the solana-validator-info CLI to populate a validator-info account:
 ```bash
-$ solana-validator-info publish -k ~/validator-keypair.json <VALIDATOR_INFO_ARGS>
+$ solana-validator-info publish ~/validator-keypair.json <VALIDATOR_NAME> <VALIDATOR_INFO_ARGS>
 ```
-Available fields for VALIDATOR_INFO_ARGS:
-* Name (required)
+Optional fields for VALIDATOR_INFO_ARGS:
 * Website
 * Keybase ID
 * Details
