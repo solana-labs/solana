@@ -108,7 +108,7 @@ fn get_loader_instruction_data<'a>(
             data: ix_data.to_vec(),
         };
         let ix_data = bincode::serialize(&ix).unwrap();
-        loader_ix_data.write(&ix_data).unwrap();
+        loader_ix_data.write_all(&ix_data).unwrap();
         loader_ix_data
     } else {
         ix_data
