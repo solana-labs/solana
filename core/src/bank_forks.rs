@@ -18,7 +18,6 @@ pub struct BankForks {
     banks: HashMap<u64, Arc<Bank>>,
     working_bank: Arc<Bank>,
     root: u64,
-    slots: HashSet<u64>,
     snapshot_path: Option<String>,
 }
 
@@ -38,7 +37,6 @@ impl BankForks {
             banks,
             working_bank,
             root: 0,
-            slots: HashSet::new(),
             snapshot_path: None,
         }
     }
@@ -102,7 +100,6 @@ impl BankForks {
             root,
             banks,
             working_bank,
-            slots: HashSet::new(),
             snapshot_path: None,
         }
     }
@@ -122,6 +119,7 @@ impl BankForks {
     }
 
     pub fn set_root(&mut self, root: u64) {
+        let old_root = self.root;
         self.root = root;
         let set_root_start = Instant::now();
         let root_bank = self
@@ -135,7 +133,7 @@ impl BankForks {
             .unwrap_or(0);
         root_bank.squash();
         let new_tx_count = root_bank.transaction_count();
-        self.prune_non_root(root);
+        self.prune_non_root(root, old_root);
 
         inc_new_counter_info!(
             "bank-forks_set_root_ms",
@@ -151,28 +149,14 @@ impl BankForks {
         self.root
     }
 
-    fn prune_non_root(&mut self, root: u64) {
-        let slots: HashSet<u64> = self
-            .banks
-            .iter()
-            .filter(|(_, b)| b.is_frozen())
-            .map(|(k, _)| *k)
-            .collect();
+    fn prune_non_root(&mut self, root: u64, old_root: u64) {
         let descendants = self.descendants();
         self.banks
             .retain(|slot, _| descendants[&root].contains(slot));
         if self.snapshot_path.is_some() {
-            let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
-            trace!("prune non root {} - {:?}", root, diff);
-            for slot in diff.iter() {
-                if **slot > root {
-                    let _ = self.add_snapshot(**slot, root);
-                } else {
-                    BankForks::remove_snapshot(**slot, &self.snapshot_path);
-                }
-            }
+            let _ = self.add_snapshot(root, root);
+            BankForks::remove_snapshot(old_root, &self.snapshot_path);
         }
-        self.slots = slots.clone();
     }
 
     fn get_io_error(error: &str) -> Error {
@@ -281,9 +265,8 @@ impl BankForks {
         bank_maps: &mut Vec<(u64, u64, Bank)>,
         bank_rc: &BankRc,
         status_cache_rc: &StatusCacheRc,
-    ) -> (HashMap<u64, Arc<Bank>>, HashSet<u64>, u64) {
+    ) -> (HashMap<u64, Arc<Bank>>, u64) {
         let mut banks = HashMap::new();
-        let mut slots = HashSet::new();
         let (last_slot, last_parent_slot, mut last_bank) = bank_maps.remove(0);
         last_bank.set_bank_rc(&bank_rc, &status_cache_rc);
 
@@ -296,7 +279,6 @@ impl BankForks {
             }
             if slot > 0 {
                 banks.insert(slot, Arc::new(bank));
-                slots.insert(slot);
             }
         }
         if last_parent_slot != 0 {
@@ -305,9 +287,8 @@ impl BankForks {
             }
         }
         banks.insert(last_slot, Arc::new(last_bank));
-        slots.insert(last_slot);
 
-        (banks, slots, last_slot)
+        (banks, last_slot)
     }
 
     pub fn load_from_snapshot(
@@ -347,14 +328,13 @@ impl BankForks {
         }
 
         let root = bank_root.unwrap();
-        let (banks, slots, last_slot) =
+        let (banks, last_slot) =
             BankForks::setup_banks(&mut bank_maps, &bank0.rc, &status_cache_rc);
         let working_bank = banks[&last_slot].clone();
         Ok(BankForks {
             banks,
             working_bank,
             root,
-            slots,
             snapshot_path: snapshot_path.clone(),
         })
     }
