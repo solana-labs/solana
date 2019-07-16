@@ -398,12 +398,10 @@ impl ReplayStage {
     ) {
         let next_leader_slot =
             leader_schedule_cache.next_leader_slot(&my_pubkey, bank.slot(), &bank, Some(blocktree));
-        poh_recorder.lock().unwrap().reset(
-            bank.tick_height(),
-            bank.last_blockhash(),
-            bank.slot(),
-            next_leader_slot,
-        );
+        poh_recorder
+            .lock()
+            .unwrap()
+            .reset(bank.last_blockhash(), bank.slot(), next_leader_slot);
         debug!(
             "{:?} voted and reset poh at {}. next leader slot {:?}",
             my_pubkey,
