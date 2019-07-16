@@ -37,8 +37,8 @@ The goal of this design is to modify Solana's runtime such that an on-chain
 program can invoke an instruction from another program.
 
 Given two on-chain programs `token` and `acme`, each implementing instructions
-`pay()` and `launch_missiles()` respectively, we would like to implement acme as
-close as possible to as the following Rust code of a cross-module function call:
+`pay()` and `launch_missiles()` respectively, we would ideally like to implement
+the `acme` module with a call to a function defined in the `token` module:
 
 ```rust,ignore
 use token;
@@ -54,12 +54,12 @@ fn pay_and_launch_missiles(keyed_accounts: &[KeyedAccount]) -> Result<()> {
 }
 ```
 
-The above code would require that the `token` crate be dynamically
-linked, so that a custom linker could could intercept calls and
-validate accesses to `keyed_accounts`. That is, even though the client
-intends to modify both `token` and `acme` accounts, only `token` program is
-permitted to modify the `token` account, and only the `acme` program is
-permitted to modify the `acme` account.
+The above code would require that the `token` crate be dynamically linked,
+so that a custom linker could intercept calls and validate accesses to
+`keyed_accounts`. That is, even though the client intends to modify both
+`token` and `acme` accounts, only `token` program is permitted to modify
+the `token` account, and only the `acme` program is permitted to modify
+the `acme` account.
 
 Backing off from that ideal cross-program call, a slightly more
 verbose solution is to expose token's existing `process_instruction()`
