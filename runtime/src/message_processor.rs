@@ -6,11 +6,13 @@ use solana_sdk::account::{
 };
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
+use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::TransactionError;
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::RwLock;
 
 #[cfg(unix)]
@@ -92,6 +94,27 @@ fn verify_instruction(
     Ok(())
 }
 
+/// Return instruction data to pass to process_instruction().
+/// When a loader is detected, the instruction data is wrapped with a LoaderInstruction
+/// to signal to the loader that the instruction data should be used as arguments when
+/// invoking a "main()" function.
+fn get_loader_instruction_data<'a>(
+    loaders: &[(Pubkey, Account)],
+    ix_data: &'a [u8],
+    loader_ix_data: &'a mut Vec<u8>,
+) -> &'a [u8] {
+    if loaders.len() > 1 {
+        let ix = LoaderInstruction::InvokeMain {
+            data: ix_data.to_vec(),
+        };
+        let ix_data = bincode::serialize(&ix).unwrap();
+        loader_ix_data.write_all(&ix_data).unwrap();
+        loader_ix_data
+    } else {
+        ix_data
+    }
+}
+
 pub type ProcessInstruction =
     fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 
@@ -141,6 +164,13 @@ impl MessageProcessor {
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
 
+        let mut loader_ix_data = vec![];
+        let ix_data = get_loader_instruction_data(
+            executable_accounts,
+            &instruction.data,
+            &mut loader_ix_data,
+        );
+
         let mut keyed_accounts = create_keyed_credit_only_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
             .accounts
@@ -168,18 +198,19 @@ impl MessageProcessor {
 
         for (id, process_instruction) in &self.instruction_processors {
             if id == program_id {
-                return process_instruction(
-                    &program_id,
-                    &mut keyed_accounts[1..],
-                    &instruction.data,
-                );
+                return process_instruction(&program_id, &mut keyed_accounts[1..], &ix_data);
             }
         }
 
-        native_loader::entrypoint(
+        assert!(
+            keyed_accounts[0].account.executable,
+            "loader not executable"
+        );
+
+        native_loader::invoke_entrypoint(
             &program_id,
             &mut keyed_accounts,
-            &instruction.data,
+            ix_data,
             &self.symbol_cache,
         )
     }
@@ -522,5 +553,38 @@ mod tests {
                 InstructionError::UnbalancedInstruction
             ))
         );
+    }
+
+    #[test]
+    fn test_get_loader_instruction_data() {
+        // First ensure the ix_data is unaffected if not invoking via a loader.
+        let ix_data = [1];
+        let mut loader_ix_data = vec![];
+
+        let native_pubkey = Pubkey::new_rand();
+        let native_loader = (native_pubkey, Account::new(0, 0, &native_pubkey));
+        assert_eq!(
+            get_loader_instruction_data(&[native_loader.clone()], &ix_data, &mut loader_ix_data),
+            &ix_data
+        );
+
+        // Now ensure the ix_data is wrapped when there's a loader present.
+        let acme_pubkey = Pubkey::new_rand();
+        let acme_loader = (acme_pubkey, Account::new(0, 0, &native_pubkey));
+        let expected_ix = LoaderInstruction::InvokeMain {
+            data: ix_data.to_vec(),
+        };
+        let expected_ix_data = bincode::serialize(&expected_ix).unwrap();
+        assert_eq!(
+            get_loader_instruction_data(
+                &[native_loader.clone(), acme_loader.clone()],
+                &ix_data,
+                &mut loader_ix_data
+            ),
+            &expected_ix_data[..]
+        );
+
+        // Note there was an allocation in the input vector.
+        assert_eq!(loader_ix_data, expected_ix_data);
     }
 }
