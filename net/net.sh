@@ -659,7 +659,9 @@ stopNode() {
       ! tmux list-sessions || tmux kill-session
       for pid in solana/{net-stats,oom-monitor}.pid; do
         pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
-        sudo kill -- -\$pgid
+        if [[ -n \$pgid ]]; then
+          sudo kill -- -\$pgid
+        fi
       done
       for pattern in node solana- remote-; do
         pkill -9 \$pattern
