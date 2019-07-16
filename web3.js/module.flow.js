@@ -306,16 +306,6 @@ declare module '@solana/web3.js' {
     ): Promise<PublicKey>;
   }
 
-  // === src/native-loader.js ===
-  declare export class NativeLoader {
-    static programId: PublicKey;
-    static load(
-      connection: Connection,
-      payer: Account,
-      programName: string,
-    ): Promise<PublicKey>;
-  }
-
   // === src/util/send-and-confirm-transaction.js ===
   declare export function sendAndConfirmTransaction(
     connection: Connection,
