@@ -144,12 +144,22 @@ fn parse_args(matches: &ArgMatches<'_>) -> Value {
     Value::Object(map)
 }
 
-fn parse_validator_info(account_data: &[u8]) -> Result<(Pubkey, String), Box<dyn error::Error>> {
+fn parse_validator_info(
+    pubkey: &Pubkey,
+    account_data: &[u8],
+) -> Result<(Pubkey, String), Box<dyn error::Error>> {
     let key_list: ConfigKeys = deserialize(&account_data)?;
-    let (validator_pubkey, _) = key_list.keys[1];
-    let meta_length = ConfigKeys::serialized_size(key_list.keys);
-    let validator_info: String = deserialize(&account_data[meta_length..])?;
-    Ok((validator_pubkey, validator_info))
+    if !key_list.keys.is_empty() {
+        let (validator_pubkey, _) = key_list.keys[1];
+        let meta_length = ConfigKeys::serialized_size(key_list.keys);
+        let validator_info: String = deserialize(&account_data[meta_length..])?;
+        Ok((validator_pubkey, validator_info))
+    } else {
+        Err(format!(
+            "account {} could not be parsed as ValidatorInfo",
+            pubkey
+        ))?
+    }
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -370,23 +380,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     key_list.keys.contains(&(id(), false))
                 }) {
                     println!("Validator info from {:?}", info_pubkey);
-                    let (validator_pubkey, validator_info) = parse_validator_info(&account.data)?;
+                    let (validator_pubkey, validator_info) =
+                        parse_validator_info(&info_pubkey, &account.data)?;
                     println!("  Validator pubkey: {:?}", validator_pubkey);
                     println!("  Info: {}", validator_info);
                 }
             } else {
-                let info_pubkey = if let Some(keypair) = matches.value_of("info_keypair") {
-                    read_keypair(keypair)?.pubkey()
-                } else if let Some(pubkey) = matches.value_of("info_pubkey") {
-                    pubkey.parse::<Pubkey>().unwrap()
-                } else {
-                    Pubkey::default() // unreachable
-                };
-                let validator_info_data = rpc_client.get_account_data(&info_pubkey)?;
-                let (validator_pubkey, validator_info) =
-                    parse_validator_info(&validator_info_data)?;
-                println!("Validator pubkey: {:?}", validator_pubkey);
-                println!("Info: {}", validator_info);
+                if let Some(pubkey) = matches.value_of("info_pubkey") {
+                    let info_pubkey = pubkey.parse::<Pubkey>().unwrap();
+                    let validator_info_data = rpc_client.get_account_data(&info_pubkey)?;
+                    let (validator_pubkey, validator_info) =
+                        parse_validator_info(&info_pubkey, &validator_info_data)?;
+                    println!("Validator pubkey: {:?}", validator_pubkey);
+                    println!("Info: {}", validator_info);
+                }
             }
         }
         _ => unreachable!(),
@@ -475,7 +482,10 @@ mod tests {
         };
         let data = serialize(&(config, validator_info)).unwrap();
 
-        assert_eq!(parse_validator_info(&data).unwrap(), (pubkey, info_string));
+        assert_eq!(
+            parse_validator_info(&Pubkey::default(), &data).unwrap(),
+            (pubkey, info_string)
+        );
     }
 
     #[test]
