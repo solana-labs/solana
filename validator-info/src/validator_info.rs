@@ -184,8 +184,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
                 .arg(
                     Arg::with_name("validator_keypair")
-                        .short("v")
-                        .long("validator-keypair")
+                        .index(1)
                         .value_name("PATH")
                         .takes_value(true)
                         .required(true)
@@ -202,8 +201,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
                 .arg(
                     Arg::with_name("name")
-                        .short("n")
-                        .long("name")
+                        .index(2)
                         .value_name("STRING")
                         .takes_value(true)
                         .required(true)
