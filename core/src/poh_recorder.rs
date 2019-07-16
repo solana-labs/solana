@@ -75,7 +75,7 @@ impl PohRecorder {
             );
             assert_eq!(self.ticks_per_slot, bank.ticks_per_slot());
             let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
-                &next_leader_slot,
+                next_leader_slot,
                 self.ticks_per_slot,
                 self.grace_ticks,
             );
@@ -97,8 +97,8 @@ impl PohRecorder {
             })
     }
 
-    pub fn slot(&self) -> Slot {
-        self.tick_height / self.ticks_per_slot
+    fn slot(&self) -> Slot {
+        self.tick_height + 1 / self.ticks_per_slot
     }
 
     pub fn leader_after_slots(&self, slots: u64) -> Option<Pubkey> {
@@ -161,7 +161,7 @@ impl PohRecorder {
     // returns (start_leader_at_tick, last_leader_tick) given the next slot this
     //  recorder will lead
     fn compute_leader_slot_ticks(
-        next_leader_slot: &Option<Slot>,
+        next_leader_slot: Option<Slot>,
         ticks_per_slot: u64,
         grace_ticks: u64,
     ) -> (Option<u64>, u64) {
@@ -194,9 +194,8 @@ impl PohRecorder {
         self.start_tick = (start_slot + 1) * self.ticks_per_slot;
         self.tick_height = self.start_tick.saturating_sub(1);
 
-        self.grace_ticks = self.ticks_per_slot / GRACE_TICKS_FACTOR;
         let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
-            &next_leader_slot,
+            next_leader_slot,
             self.ticks_per_slot,
             self.grace_ticks,
         );
@@ -388,7 +387,7 @@ impl PohRecorder {
         let (sender, receiver) = channel();
         let grace_ticks = ticks_per_slot / GRACE_TICKS_FACTOR;
         let (start_leader_at_tick, last_leader_tick) =
-            Self::compute_leader_slot_ticks(&next_leader_slot, ticks_per_slot, grace_ticks);
+            Self::compute_leader_slot_ticks(next_leader_slot, ticks_per_slot, grace_ticks);
         (
             Self {
                 poh,
