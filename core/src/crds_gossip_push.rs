@@ -72,7 +72,7 @@ impl CrdsGossipPush {
 
     fn prune_stake_threshold(self_stake: u64, origin_stake: u64) -> u64 {
         let min_path_stake = self_stake.min(origin_stake);
-        (CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT * min_path_stake as f64).round() as u64
+        ((CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT * min_path_stake as f64).round() as u64).max(1)
     }
 
     pub fn prune_received_cache(

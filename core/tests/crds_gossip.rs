@@ -10,7 +10,7 @@ use solana::crds_value::CrdsValueLabel;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
@@ -40,15 +40,15 @@ impl Deref for Node {
 
 struct Network {
     nodes: HashMap<Pubkey, Node>,
-    pruned_count: usize,
     stake_pruned: u64,
+    connections_pruned: HashSet<(Pubkey, Pubkey)>,
 }
 
 impl Network {
     fn new(nodes: HashMap<Pubkey, Node>) -> Self {
         Network {
             nodes,
-            pruned_count: 0,
+            connections_pruned: HashSet::new(),
             stake_pruned: 0,
         }
     }
@@ -192,7 +192,7 @@ fn network_simulator_pull_only(network: &mut Network) {
     assert!(converged >= 0.9);
 }
 
-fn network_simulator(network: &mut Network) {
+fn network_simulator(network: &mut Network, max_convergance: f64) {
     let num = network.len();
     // run for a small amount of time
     let (converged, bytes_tx) = network_run_pull(network, 0, 10, 1.0);
@@ -239,7 +239,7 @@ fn network_simulator(network: &mut Network) {
             bytes_tx,
             total_bytes
         );
-        if converged > 0.9 {
+        if converged > max_convergance {
             break;
         }
     }
@@ -270,8 +270,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                 let mut bytes: usize = 0;
                 let mut delivered: usize = 0;
                 let mut num_msgs: usize = 0;
-                let mut prunes: usize = 0;
-                let mut stake_pruned: u64 = 0;
+                let mut pruned: HashSet<(Pubkey, Pubkey)> = HashSet::new();
                 for (to, msgs) in push_messages {
                     bytes += serialized_size(&msgs).unwrap() as usize;
                     num_msgs += 1;
@@ -297,13 +296,12 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
 
                     for (from, prune_set) in prunes_map {
                         let prune_keys: Vec<_> = prune_set.into_iter().collect();
+                        for prune_key in &prune_keys {
+                            pruned.insert((from, *prune_key));
+                        }
 
                         bytes += serialized_size(&prune_keys).unwrap() as usize;
                         delivered += 1;
-                        prunes += prune_keys.len();
-
-                        let stake_pruned_sum = stakes.get(&from).unwrap() * prune_keys.len() as u64;
-                        stake_pruned += stake_pruned_sum;
 
                         network
                             .get(&from)
@@ -317,16 +315,22 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                             .unwrap();
                     }
                 }
-                (bytes, delivered, num_msgs, prunes, stake_pruned)
+                (bytes, delivered, num_msgs, pruned)
             })
             .collect();
 
-        for (b, d, m, p, s) in transfered {
+        for (b, d, m, p) in transfered {
             bytes += b;
             delivered += d;
             num_msgs += m;
-            prunes += p;
-            stake_pruned += s;
+
+            for (from, to) in p {
+                let from_stake = stakes.get(&from).unwrap();
+                if network.connections_pruned.insert((from, to)) {
+                    prunes += 1;
+                    stake_pruned += *from_stake;
+                }
+            }
         }
         if now % CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS == 0 && now > 0 {
             network_values.par_iter().for_each(|node| {
@@ -351,8 +355,8 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                 delivered,
             );
     }
-    network.pruned_count = prunes;
-    network.stake_pruned = stake_pruned;
+
+    network.stake_pruned += stake_pruned;
     (total, bytes)
 }
 
@@ -450,36 +454,37 @@ fn test_star_network_pull_100() {
 #[test]
 fn test_star_network_push_star_200() {
     let mut network = star_network_create(200);
-    network_simulator(&mut network);
+    network_simulator(&mut network, 0.9);
 }
 #[test]
 fn test_star_network_push_rstar_200() {
     let mut network = rstar_network_create(200);
-    network_simulator(&mut network);
+    network_simulator(&mut network, 0.9);
 }
 #[test]
 fn test_star_network_push_ring_200() {
     let mut network = ring_network_create(200);
-    network_simulator(&mut network);
+    network_simulator(&mut network, 0.9);
 }
 #[test]
 fn test_connected_staked_network() {
     solana_logger::setup();
     let stakes = [
-        [1000; 5].to_vec(),
-        [100; 20].to_vec(),
-        [10; 50].to_vec(),
-        [1; 125].to_vec(),
+        [1000; 2].to_vec(),
+        [100; 3].to_vec(),
+        [10; 5].to_vec(),
+        [1; 15].to_vec(),
     ]
     .concat();
     let mut network = connected_staked_network_create(&stakes);
-    network_simulator(&mut network);
+    network_simulator(&mut network, 1.0);
 
     let stake_sum: u64 = stakes.iter().sum();
     let avg_stake: u64 = stake_sum / stakes.len() as u64;
-    let avg_stake_pruned = network.stake_pruned / network.pruned_count as u64;
+    let avg_stake_pruned = network.stake_pruned / network.connections_pruned.len() as u64;
     trace!(
-        "connected staked network, avg_stake: {}, avg_stake_pruned: {}",
+        "connected staked networks, connections_pruned: {}, avg_stake: {}, avg_stake_pruned: {}",
+        network.connections_pruned.len(),
         avg_stake,
         avg_stake_pruned
     );
@@ -500,21 +505,21 @@ fn test_star_network_large_pull() {
 fn test_rstar_network_large_push() {
     solana_logger::setup();
     let mut network = rstar_network_create(4000);
-    network_simulator(&mut network);
+    network_simulator(&mut network, 0.9);
 }
 #[test]
 #[ignore]
 fn test_ring_network_large_push() {
     solana_logger::setup();
     let mut network = ring_network_create(4001);
-    network_simulator(&mut network);
+    network_simulator(&mut network, 0.9);
 }
 #[test]
 #[ignore]
 fn test_star_network_large_push() {
     solana_logger::setup();
     let mut network = star_network_create(4002);
-    network_simulator(&mut network);
+    network_simulator(&mut network, 0.9);
 }
 #[test]
 fn test_prune_errors() {
