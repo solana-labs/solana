@@ -7,6 +7,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use solana_client::rpc_client::RpcClient;
 use solana_config_api::{config_instruction, config_instruction::ConfigKeys, ConfigState};
+use solana_sdk::account::Account;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
@@ -372,13 +373,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let rpc_client = RpcClient::new(json_rpc_url.to_string());
 
             if matches.is_present("all") {
-                let all_validator_info =
-                    rpc_client.get_program_accounts(&solana_config_api::id())?;
-                for (info_pubkey, account) in all_validator_info.iter().filter(|(_, account)| {
-                    let key_list: ConfigKeys =
-                        deserialize(&account.data).map_err(|_| false).unwrap();
-                    key_list.keys.contains(&(id(), false))
-                }) {
+                let all_config = rpc_client.get_program_accounts(&solana_config_api::id())?;
+                let all_validator_info: Vec<&(Pubkey, Account)> = all_config
+                    .iter()
+                    .filter(|(_, account)| {
+                        let key_list: ConfigKeys =
+                            deserialize(&account.data).map_err(|_| false).unwrap();
+                        key_list.keys.contains(&(id(), false))
+                    })
+                    .collect();
+                if all_validator_info.is_empty() {
+                    println!("No validator info accounts found");
+                }
+                for (info_pubkey, account) in all_validator_info.iter() {
                     println!("Validator info from {:?}", info_pubkey);
                     let (validator_pubkey, validator_info) =
                         parse_validator_info(&info_pubkey, &account.data)?;
