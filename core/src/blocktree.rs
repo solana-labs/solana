@@ -194,20 +194,21 @@ impl Blocktree {
     }
 
     // Helper that deletes columns that have `(Slot,Index)` as their Index
-    fn delete_indexed_column<C>(&self, column: &LedgerColumn<C>, slot: u64) -> Result<()>
+    fn delete_indexed_column<C>(&self, column: &LedgerColumn<C>, delete_slot: u64) -> Result<()>
     where
         C: Column<Index = (u64, u64)>,
     {
-        let mut iter = column.iter(Some((slot, 0)))?;
+        let iter = column.iter(Some((delete_slot, 0)))?;
         let mut max_index = 0;
-        while let Some(((slot, index), _)) = iter.next() {
-            if slot != slot {
+
+        for ((slot, index), _) in iter {
+            if slot != delete_slot {
                 break;
             }
             max_index = index;
         }
         for i in 0..max_index {
-            column.delete((slot, i))?;
+            column.delete((delete_slot, i))?;
         }
         Ok(())
     }
