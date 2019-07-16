@@ -193,6 +193,45 @@ impl Blocktree {
         false
     }
 
+    // Helper that deletes columns that have `(Slot,Index)` as their Index
+    fn delete_indexed_column<C>(&self, column: &LedgerColumn<C>, slot: u64) -> Result<()>
+    where
+        C: Column<Index = (u64, u64)>,
+    {
+        let mut iter = column.iter(Some((slot, 0)))?;
+        let mut max_index = 0;
+        while let Some(((slot, index), _)) = iter.next() {
+            if slot != slot {
+                break;
+            }
+            max_index = index;
+        }
+        for i in 0..max_index {
+            column.delete((slot, i))?;
+        }
+        Ok(())
+    }
+
+    fn delete_slot(&self, slot: u64) -> Result<()> {
+        match self.meta(slot) {
+            Ok(meta) => match meta {
+                None => Ok(()),
+                Some(meta) => {
+                    self.meta_cf.delete(slot)?;
+                    self.delete_indexed_column(&self.data_cf, slot)?;
+                    self.delete_indexed_column(&self.erasure_meta_cf, slot)?;
+                    self.delete_indexed_column(&self.erasure_cf, slot)?;
+                    self.orphans_cf.delete(slot)?;
+                    self.db.delete::<cf::Root>(slot)?;
+                    self.index_cf.delete(slot)?;
+                    self.dead_slots_cf.delete(slot)?;
+                    Ok(())
+                }
+            },
+            Err(e) => Err(e)?,
+        }
+    }
+
     pub fn erasure_meta(&self, slot: u64, set_index: u64) -> Result<Option<ErasureMeta>> {
         self.erasure_meta_cf.get((slot, set_index))
     }
@@ -201,7 +240,7 @@ impl Blocktree {
         self.orphans_cf.get(slot)
     }
 
-    pub fn rooted_slot_iterator<'a>(&'a self, slot: u64) -> Result<RootedSlotIterator<'a>> {
+    pub fn rooted_slot_iterator(&self, slot: u64) -> Result<RootedSlotIterator> {
         RootedSlotIterator::new(slot, self)
     }
 
@@ -510,6 +549,11 @@ impl Blocktree {
 
     pub fn get_data_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
         self.data_cf.get_bytes((slot, index))
+    }
+
+    /// Dangerous. Use with care.
+    pub fn put_meta_bytes(&self, slot: u64, bytes: &[u8]) -> Result<()> {
+        self.meta_cf.put_bytes(slot, bytes)
     }
 
     /// For benchmarks, testing, and setup.
@@ -920,6 +964,41 @@ impl Blocktree {
         }
         batch_processor.write(batch)?;
         Ok(())
+    }
+
+    /// Prune blocktree such that slots higher than `target_slot` are deleted and all references to
+    /// higher slots are removed
+    pub fn prune(&self, target_slot: u64) {
+        let mut meta = self
+            .meta(target_slot)
+            .expect("couldn't read slot meta")
+            .expect("no meta for root slot");
+        meta.next_slots.clear();
+        self.put_meta_bytes(
+            target_slot,
+            &bincode::serialize(&meta).expect("couldn't get meta bytes"),
+        )
+        .expect("unable to update meta");
+
+        self.slot_meta_iterator(target_slot + 1)
+            .expect("unable to iterate over meta")
+            .for_each(|(slot, _)| self.delete_slot(slot).unwrap());
+
+        // fixup anything that refers to non-root slots and delete the rest
+        for (slot, mut meta) in self
+            .slot_meta_iterator(0)
+            .expect("unable to iterate over meta")
+        {
+            meta.next_slots.retain(|slot| *slot <= target_slot);
+            self.put_meta_bytes(
+                slot,
+                &bincode::serialize(&meta).expect("couldn't update meta"),
+            )
+            .expect("couldn't update meta");
+            if slot > target_slot {
+                break;
+            }
+        }
     }
 }
 
