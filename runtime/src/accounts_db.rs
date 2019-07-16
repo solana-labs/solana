@@ -36,6 +36,7 @@ use std::fmt;
 use std::fs::remove_dir_all;
 use std::io::{BufReader, Cursor, Error, ErrorKind, Read};
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use sys_info;
@@ -81,8 +82,8 @@ pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 // Each fork has a set of storage entries.
 type ForkStores = HashMap<usize, Arc<AccountStorageEntry>>;
 
-#[derive(Default, Debug)]
-pub struct AccountStorage(HashMap<Fork, ForkStores>);
+#[derive(Clone, Default, Debug)]
+pub struct AccountStorage(pub HashMap<Fork, ForkStores>);
 
 struct AccountStorageVisitor;
 
@@ -122,11 +123,20 @@ impl Serialize for AccountStorage {
             len += storage.len();
         }
         let mut map = serializer.serialize_map(Some(len))?;
+        let mut count = 0;
+        let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
         for fork_storage in self.0.values() {
             for (storage_id, account_storage_entry) in fork_storage {
                 map.serialize_entry(storage_id, &**account_storage_entry)?;
+                count += 1;
             }
         }
+        serialize_account_storage_timer.stop();
+        datapoint_info!(
+            "serialize_account_storage_ms",
+            ("duration", serialize_account_storage_timer.as_ms(), i64),
+            ("num_entries", count, i64),
+        );
         map.end()
     }
 }
@@ -166,7 +176,7 @@ pub struct AccountStorageEntry {
 }
 
 impl AccountStorageEntry {
-    pub fn new(path: &str, fork_id: Fork, id: usize, file_size: u64) -> Self {
+    pub fn new(path: &Path, fork_id: Fork, id: usize, file_size: u64) -> Self {
         let tail = format!("{}.{}", fork_id, id);
         let path = Path::new(path).join(&tail);
         let accounts = AppendVec::new(&path, true, file_size as usize);
@@ -206,6 +216,14 @@ impl AccountStorageEntry {
 
     pub fn count(&self) -> usize {
         self.count_and_status.read().unwrap().0
+    }
+
+    pub fn fork_id(&self) -> Fork {
+        self.fork_id
+    }
+
+    pub fn append_vec_id(&self) -> AppendVecId {
+        self.id
     }
 
     fn add_account(&self) {
@@ -251,6 +269,10 @@ impl AccountStorageEntry {
             warn!("count value 0 for fork {}", self.fork_id);
         }
         count_and_status.0
+    }
+
+    pub fn get_path(&self) -> PathBuf {
+        self.accounts.get_path()
     }
 }
 
@@ -409,7 +431,7 @@ impl AccountsDB {
         Ok(())
     }
 
-    fn new_storage_entry(&self, fork_id: Fork, path: &str, size: u64) -> AccountStorageEntry {
+    fn new_storage_entry(&self, fork_id: Fork, path: &Path, size: u64) -> AccountStorageEntry {
         AccountStorageEntry::new(
             path,
             fork_id,
@@ -568,7 +590,7 @@ impl AccountsDB {
     ) -> Arc<AccountStorageEntry> {
         let paths = self.paths.read().unwrap();
         let path_index = thread_rng().gen_range(0, paths.len());
-        let store = Arc::new(self.new_storage_entry(fork_id, &paths[path_index], size));
+        let store = Arc::new(self.new_storage_entry(fork_id, &Path::new(&paths[path_index]), size));
         fork_storage.insert(store.id, store.clone());
         store
     }

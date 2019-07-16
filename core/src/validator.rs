@@ -1,6 +1,6 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
-use crate::bank_forks::BankForks;
+use crate::bank_forks::{BankForks, SnapshotConfig};
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::broadcast_stage::BroadcastStageType;
@@ -40,7 +40,7 @@ pub struct ValidatorConfig {
     pub storage_slots_per_turn: u64,
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
-    pub snapshot_path: Option<PathBuf>,
+    pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub erasure_config: ErasureConfig,
@@ -56,7 +56,7 @@ impl Default for ValidatorConfig {
             max_ledger_slots: None,
             account_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            snapshot_path: None,
+            snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             erasure_config: ErasureConfig::default(),
         }
@@ -105,7 +105,7 @@ impl Validator {
         ) = new_banks_from_blocktree(
             ledger_path,
             config.account_paths.clone(),
-            config.snapshot_path.as_ref(),
+            config.snapshot_config.clone(),
             verify_ledger,
         );
 
@@ -134,7 +134,7 @@ impl Validator {
             &leader_schedule_cache,
             &poh_config,
         );
-        if config.snapshot_path.is_some() {
+        if config.snapshot_config.is_some() {
             poh_recorder.set_bank(&bank);
         }
 
@@ -308,43 +308,57 @@ fn get_bank_forks(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     account_paths: Option<String>,
-    snapshot_path: Option<&PathBuf>,
+    snapshot_config: Option<SnapshotConfig>,
     verify_ledger: bool,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
-    if let Some(snapshot_path) = snapshot_path {
-        let bank_forks =
-            BankForks::load_from_snapshot(&genesis_block, account_paths.clone(), snapshot_path);
-        match bank_forks {
-            Ok(v) => {
-                let bank = &v.working_bank();
-                let fork_info = BankForksInfo {
-                    bank_slot: bank.slot(),
-                    entry_height: bank.tick_height(),
-                };
-                return (v, vec![fork_info], LeaderScheduleCache::new_from_bank(bank));
+    let (mut bank_forks, bank_forks_info, leader_schedule_cache) = {
+        let mut result = None;
+        if snapshot_config.is_some() {
+            let bank_forks = BankForks::load_from_snapshot(
+                &genesis_block,
+                account_paths.clone(),
+                snapshot_config.as_ref().unwrap(),
+            );
+            match bank_forks {
+                Ok(v) => {
+                    let bank = &v.working_bank();
+                    let fork_info = BankForksInfo {
+                        bank_slot: bank.slot(),
+                        entry_height: bank.tick_height(),
+                    };
+                    result = Some((v, vec![fork_info], LeaderScheduleCache::new_from_bank(bank)));
+                }
+                Err(_) => warn!("Failed to load from snapshot, fallback to load from ledger"),
             }
-            Err(_) => warn!("Failed to load from snapshot, fallback to load from ledger"),
         }
+
+        // If loading from a snapshot failed/snapshot didn't exist
+        if result.is_none() {
+            result = Some(
+                blocktree_processor::process_blocktree(
+                    &genesis_block,
+                    &blocktree,
+                    account_paths,
+                    verify_ledger,
+                )
+                .expect("process_blocktree failed"),
+            );
+        }
+
+        result.unwrap()
+    };
+
+    if snapshot_config.is_some() {
+        bank_forks.set_snapshot_config(snapshot_config.unwrap());
     }
-    let (mut bank_forks, bank_forks_info, leader_schedule_cache) =
-        blocktree_processor::process_blocktree(
-            &genesis_block,
-            &blocktree,
-            account_paths,
-            verify_ledger,
-        )
-        .expect("process_blocktree failed");
-    if let Some(snapshot_path) = snapshot_path {
-        bank_forks.set_snapshot_path(snapshot_path);
-        let _ = bank_forks.add_snapshot(0, 0);
-    }
+
     (bank_forks, bank_forks_info, leader_schedule_cache)
 }
 
 pub fn new_banks_from_blocktree(
     blocktree_path: &Path,
     account_paths: Option<String>,
-    snapshot_path: Option<&PathBuf>,
+    snapshot_config: Option<SnapshotConfig>,
     verify_ledger: bool,
 ) -> (
     BankForks,
@@ -366,7 +380,7 @@ pub fn new_banks_from_blocktree(
         &genesis_block,
         &blocktree,
         account_paths,
-        snapshot_path,
+        snapshot_config,
         verify_ledger,
     );
 

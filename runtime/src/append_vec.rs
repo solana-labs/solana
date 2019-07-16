@@ -235,6 +235,10 @@ impl AppendVec {
         Some((meta, stored.0.clone_account()))
     }
 
+    pub fn get_path(&self) -> PathBuf {
+        self.path.clone()
+    }
+
     pub fn accounts<'a>(&'a self, mut start: usize) -> Vec<StoredAccount<'a>> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(start) {

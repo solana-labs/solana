@@ -25,6 +25,9 @@ chrono = { version = "0.4.7", features = ["serde"] }
 core_affinity = "0.5.9"
 crc = { version = "1.8.1", optional = true }
 crossbeam-channel = "0.3"
+dir-diff = "0.3.1"
+flate2 = "1.0.9"
+fs_extra = "1.1.0"
 hashbrown = "0.2.0"
 indexmap = "1.0"
 itertools = "0.8.0"
@@ -65,7 +68,10 @@ solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre0"
 solana-storage-program = { path = "../programs/storage_program", version = "0.18.0-pre0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.18.0-pre0" }
+symlink = "0.1.0"
 sys-info = "0.5.7"
+tar = "0.4.26"
+tempfile = "3.1.0"
 tokio = "0.1"
 tokio-codec = "0.1"
 tokio-fs = "0.1"

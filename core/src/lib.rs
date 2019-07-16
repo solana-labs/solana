@@ -63,6 +63,8 @@ pub mod rpc_subscriptions;
 pub mod service;
 pub mod sigverify;
 pub mod sigverify_stage;
+pub mod snapshot_package;
+pub mod snapshot_utils;
 pub mod staking_utils;
 pub mod storage_stage;
 pub mod streamer;
@@ -101,3 +103,8 @@ extern crate solana_metrics;
 extern crate matches;
 
 extern crate crossbeam_channel;
+extern crate dir_diff;
+extern crate flate2;
+extern crate fs_extra;
+extern crate tar;
+extern crate tempfile;
