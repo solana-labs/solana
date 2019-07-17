@@ -695,7 +695,7 @@ pub fn create_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usiz
         let pubkey = Pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
         accounts.store_slow(0, &pubkey, &account);
-        pubkeys.push(pubkey.clone());
+        pubkeys.push(pubkey);
     }
 }
 
