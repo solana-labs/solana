@@ -24,6 +24,8 @@ Operate a configured testnet
  restart  - Shortcut for stop then start
  update   - Live update all network nodes
  logs     - Fetch remote logs from each network node
+ startnode- Start an individual node (previously stopped with stopNode)
+ stopnode - Stop an individual node
 
  start/update-specific options:
    -T [tarFilename]                   - Deploy the specified release tarball
@@ -75,6 +77,9 @@ Operate a configured testnet
  logs-specific options:
    none
 
+ startnode/stopnode-specific options:
+   -i [ip address]                    - IP Address of the node to start or stop
+
 Note: if RUST_LOG is set in the environment it will be propogated into the
       network nodes.
 EOF
@@ -89,6 +94,7 @@ skipSetup=false
 updateNodes=false
 customPrograms=
 updatePlatforms=
+nodeAddress=
 numBenchTpsClients=0
 numBenchExchangeClients=0
 benchTpsExtraArgs=
@@ -320,8 +326,8 @@ startCommon() {
 
 startBootstrapLeader() {
   declare ipAddress=$1
-  declare logFile="$2"
-  declare nodeIndex="$3"
+  declare nodeIndex="$2"
+  declare logFile="$3"
   echo "--- Starting bootstrap leader: $ipAddress"
   echo "start log: $logFile"
 
@@ -374,6 +380,16 @@ startNode() {
   declare nodeIndex="$3"
   declare logFile="$netLogDir/fullnode-$ipAddress.log"
 
+  if [[ -z $nodeType ]]; then
+    echo nodeType not specified
+    exit 1
+  fi
+
+  if [[ -z $nodeIndex ]]; then
+    echo nodeIndex not specified
+    exit 1
+  fi
+
   echo "--- Starting $nodeType: $ipAddress"
   echo "start log: $logFile"
   (
@@ -408,6 +424,8 @@ startNode() {
          \"$remoteExternalPrimordialAccountsFile\" \
          \"$stakeNodesInGenesisBlock\" \
          $nodeIndex \
+         $numBenchTpsClients \"$benchTpsExtraArgs\" \
+         $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
          $maybeNoSnapshot \
       "
@@ -495,7 +513,35 @@ deployUpdate() {
     ) || ok=false
     $ok || exit 1
   done
+}
 
+getNodeType() {
+  echo "getNodeType: $nodeAddress"
+  [[ -n $nodeAddress ]] || {
+    echo "Error: nodeAddress not set"
+    exit 1
+  }
+  nodeIndex=0 # <-- global
+  nodeType=validator # <-- global
+
+  for ipAddress in "${fullnodeIpList[@]}" b "${blockstreamerIpList[@]}" r "${replicatorIpList[@]}"; do
+    if [[ $ipAddress = b ]]; then
+      nodeType=blockstreamer
+      continue
+    elif [[ $ipAddress = r ]]; then
+      nodeType=replicator
+      continue
+    fi
+
+    if [[ $ipAddress = "$nodeAddress" ]]; then
+      echo "getNodeType: $nodeType ($nodeIndex)"
+      return
+    fi
+    ((nodeIndex = nodeIndex + 1))
+  done
+
+  echo "Error: Unknown node: $nodeAddress"
+  exit 1
 }
 
 start() {
@@ -539,23 +585,14 @@ start() {
   fi
 
   declare bootstrapLeader=true
-  declare nodeType=validator
-  declare loopCount=0
-  for ipAddress in "${fullnodeIpList[@]}" b "${blockstreamerIpList[@]}" r "${replicatorIpList[@]}"; do
-    if [[ $ipAddress = b ]]; then
-      nodeType=blockstreamer
-      continue
-    elif [[ $ipAddress = r ]]; then
-      nodeType=replicator
-      continue
-    fi
-    if $updateNodes; then
-      stopNode "$ipAddress" true
-    fi
+  for nodeAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${replicatorIpList[@]}"; do
+    nodeType=
+    nodeIndex=
+    getNodeType
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$ipAddress" "$netLogDir/bootstrap-leader-$ipAddress.log" $loopCount
+      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-leader-$ipAddress.log"
       bootstrapNodeDeployTime=$SECONDS
       $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
@@ -563,14 +600,17 @@ start() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" $nodeType $loopCount
+      startNode "$ipAddress" $nodeType $nodeIndex
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
       # it can handle.
-      ((loopCount++ % 2 == 0)) && sleep 2
+      if ((nodeIndex % 2 == 0)); then
+        sleep 2
+      fi
     fi
   done
+
 
   for pid in "${pids[@]}"; do
     declare ok=true
@@ -723,10 +763,21 @@ stop)
   stop
   ;;
 stopnode)
+  if [[ -z $nodeAddress ]]; then
+    usage "node address (-i) not specified"
+    exit 1
+  fi
   stopNode "$nodeAddress" true
   ;;
 startnode)
-  startNode "$nodeAddress" validator
+  if [[ -z $nodeAddress ]]; then
+    usage "node address (-i) not specified"
+    exit 1
+  fi
+  nodeType=
+  nodeIndex=
+  getNodeType
+  startNode "$nodeAddress" $nodeType $nodeIndex
   ;;
 logs)
   fetchRemoteLog() {
