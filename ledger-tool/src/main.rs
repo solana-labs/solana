@@ -91,6 +91,7 @@ fn main() {
                 .long("slot-list")
                 .value_name("FILENAME")
                 .takes_value(true)
+                .required(true)
                 .help("The location of the YAML file with a list of rollback slot heights and hashes"),
         ))
         .subcommand(SubCommand::with_name("list-roots").about("Output upto last <num-roots> root hashes and their heights starting at the given block height").arg(
@@ -191,7 +192,7 @@ fn main() {
                     .last()
                     .expect("Failed to find a valid slot");
                 println!("Prune at slot {:?} hash {:?}", target_slot, target_hash);
-                // ToDo: Do the actual pruning of the database
+                blocktree.prune(*target_slot);
             }
         }
         ("list-roots", Some(args_matches)) => {
