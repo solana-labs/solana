@@ -62,6 +62,10 @@ Operate a configured testnet
                                       - A YML file with a list of account pubkeys and corresponding stakes for external nodes
    --no-snapshot
                                       - If set, disables booting validators from a snapshot
+   --skip-ledger-verify
+                                      - If set, validators will skip verifying
+                                        the ledger they already have saved to disk at
+                                        boot (results in a much faster boot)
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
@@ -100,6 +104,7 @@ externalPrimordialAccountsFile=
 remoteExternalPrimordialAccountsFile=
 stakeNodesInGenesisBlock=
 maybeNoSnapshot=""
+maybeSkipLedgerVerify=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -119,6 +124,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --no-snapshot ]]; then
       maybeNoSnapshot="$1"
+      shift 1
+    elif [[ $1 = --skip-ledger-verify ]]; then
+      maybeSkipLedgerVerify="$1"
       shift 1
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
@@ -359,7 +367,7 @@ startBootstrapLeader() {
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         $maybeNoSnapshot \
+         "$maybeNoSnapshot $maybeSkipLedgerVerify" \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -409,7 +417,7 @@ startNode() {
          \"$stakeNodesInGenesisBlock\" \
          $nodeIndex \
          \"$genesisOptions\" \
-         $maybeNoSnapshot \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!

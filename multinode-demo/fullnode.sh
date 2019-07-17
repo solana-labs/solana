@@ -220,6 +220,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-voting ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --skip-ledger-verify ]]; then
+      args+=("$1")
+      shift
     elif [[ $1 = --no-sigverify ]]; then
       args+=("$1")
       shift
