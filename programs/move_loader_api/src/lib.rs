@@ -68,8 +68,9 @@ pub fn process_instruction(
 
                 let (programs, _params) = keyed_accounts.split_at_mut(1);
                 let program: Program = serde_json::from_slice(&programs[0].account.data).unwrap();
-                let code = str::from_utf8(&program.code()).unwrap();
 
+                // TODO: Read bytecode, not source code.
+                let code = str::from_utf8(&program.code()).unwrap();
                 compile_and_execute(&code, args).unwrap().unwrap();
 
                 info!("Call Move program");
@@ -80,4 +81,68 @@ pub fn process_instruction(
         return Err(InstructionError::GenericError);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    //use compiler::Compiler;
+    use solana_sdk::account::Account;
+    //use types::account_address::AccountAddress;
+
+    #[test]
+    fn test_invoke_main() {
+        let program_id = Pubkey::new(&MOVE_LOADER_PROGRAM_ID);
+
+        let code = "main() { return; }";
+
+        // TODO: Produce the same bytes as "compiler -o"
+        //
+        //let address = AccountAddress::default();
+        //let compiler = Compiler {
+        //    code,
+        //    address,
+        //    ..Compiler::default()
+        //};
+        //let compiled_program = compiler.into_compiled_program().expect("Failed to compile");
+        //
+        //let mut script = vec![];
+        //compiled_program
+        //    .script
+        //    .serialize(&mut script)
+        //    .expect("Unable to serialize script");
+        //let mut modules = vec![];
+        //for m in compiled_program.modules.iter() {
+        //    let mut buf = vec![];
+        //    m.serialize(&mut buf).expect("Unable to serialize module");
+        //    modules.push(buf);
+        //}
+        let modules = vec![];
+        let script = code.as_bytes().to_vec();
+
+        let program = Program::new(script, modules, vec![]);
+        let program_bytes = serde_json::to_vec(&program).unwrap();
+
+        let move_program_pubkey = Pubkey::new_rand();
+        let mut move_program_account = Account {
+            lamports: 1,
+            data: program_bytes,
+            owner: program_id,
+            executable: true,
+        };
+
+        let mut keyed_accounts = vec![KeyedAccount::new(
+            &move_program_pubkey,
+            false,
+            &mut move_program_account,
+        )];
+
+        let args: Vec<TransactionArgument> = vec![];
+        let data = bincode::serialize(&args).unwrap();
+        let ix = LoaderInstruction::InvokeMain { data };
+        let ix_data = bincode::serialize(&ix).unwrap();
+
+        // Ensure no panic.
+        process_instruction(&program_id, &mut keyed_accounts, &ix_data).unwrap();
+    }
 }
