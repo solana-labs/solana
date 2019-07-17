@@ -72,13 +72,16 @@ SOLANA_RSYNC_CONFIG_DIR=$SOLANA_ROOT/config
 # Configuration that remains local
 SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
 
-# If there is a secondary disk, symlink the config-local dir there
 SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
-if [[ -d $SECONDARY_DISK_MOUNT_POINT ]]; then
-  mkdir -p $SECONDARY_DISK_MOUNT_POINT/config-local
-  mkdir -p "$SOLANA_ROOT"
-  ln -s $SECONDARY_DISK_MOUNT_POINT/config-local "$SOLANA_ROOT"
-fi
+setup_secondary_mount() {
+  # If there is a secondary disk, symlink the config-local dir there
+  if [[ -d $SECONDARY_DISK_MOUNT_POINT ]]; then
+    mkdir -p $SECONDARY_DISK_MOUNT_POINT/config-local
+    rm -rf "$SOLANA_CONFIG_DIR"
+    ln -sfT $SECONDARY_DISK_MOUNT_POINT/config-local "$SOLANA_CONFIG_DIR"
+  fi
+}
+setup_secondary_mount
 
 default_arg() {
   declare name=$1
