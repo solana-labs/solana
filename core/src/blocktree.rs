@@ -1820,7 +1820,7 @@ macro_rules! get_tmp_ledger_path {
 
 pub fn get_tmp_ledger_path(name: &str) -> String {
     use std::env;
-    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
+    let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
     let keypair = Keypair::new();
 
     let path = format!("{}/ledger/{}-{}", out_dir, name, keypair.pubkey());

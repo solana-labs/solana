@@ -477,7 +477,7 @@ mod tests {
     }
 
     fn get_tmp_snapshots_path() -> TempPaths {
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let path = format!("{}/snapshots", out_dir);
         TempPaths {
             paths: path.to_string(),
@@ -486,7 +486,7 @@ mod tests {
 
     fn get_tmp_bank_accounts_path(paths: &str) -> TempPaths {
         let vpaths = get_paths_vec(paths);
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let vpaths: Vec<_> = vpaths
             .iter()
             .map(|path| format!("{}/{}", out_dir, path))

@@ -789,7 +789,7 @@ mod tests {
 
     fn get_tmp_accounts_path(paths: &str) -> TempPaths {
         let vpaths = get_paths_vec(paths);
-        let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let vpaths: Vec<_> = vpaths
             .iter()
             .map(|path| format!("{}/{}", out_dir, path))
