@@ -93,6 +93,10 @@ impl AppendVec {
             .create(create)
             .open(file)
             .map_err(|e| {
+                warn!("in current dir {:?}", std::env::current_dir());
+                for ancestor in file.ancestors() {
+                    warn!("{:?} is {:?}", ancestor, std::fs::metadata(ancestor));
+                }
                 panic!(
                     "Unable to {} data file {}, err {:?}",
                     if create { "create" } else { "open" },
