@@ -409,6 +409,16 @@ where
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
+    //TODO add a delete_until that goes the other way
+    pub fn force_delete_all(&self, start_from: Option<C::Index>) -> Result<()> {
+        let iter = self.iter(start_from)?;
+        iter.for_each(|(index, _)| match self.delete(index) {
+            Ok(_) => (),
+            Err(e) => error!("Error: {:?} while deleting {:?}", e, C::NAME),
+        });
+        Ok(())
+    }
+
     #[inline]
     pub fn handle(&self) -> B::ColumnFamily {
         self.backend.cf_handle(C::NAME).clone()
