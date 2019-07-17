@@ -8,23 +8,14 @@ solana_sdk::solana_name_id!(
     "MvLdr11111111111111111111111111111111111111"
 );
 
+use language_e2e_tests::compile_and_execute;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
-//use types::account_address::AccountAddress;
-use types::transaction::TransactionArgument;
-//use vm::file_format::CompiledModule;
-use language_e2e_tests::compile_and_execute;
-use serde::{Deserialize, Serialize};
 use std::str;
-
-#[derive(Serialize, Deserialize)]
-enum MoveAccountData {
-    Script { code: String },
-    CompiledModule { bytecode: Vec<u8> },
-}
+use types::transaction::{Program, TransactionArgument};
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -70,41 +61,16 @@ pub fn process_instruction(
                     return Err(InstructionError::GenericError);
                 }
 
-                //// Executable accounts contain Move modules.
-                //// The remaining accounts are used to pass data into the Move modules.
-
                 //// TODO: Check that keyed_accounts[0].owner is the Move program id.
-
-                //// TODO: Convert keyed_accounts[0].key (a Solana Pubkey) into a Libra AccountAddress?
-                //let address = AccountAddress::default();
 
                 // TODO: Return an error
                 let args: Vec<TransactionArgument> = bincode::deserialize(&data).unwrap();
 
                 let (programs, _params) = keyed_accounts.split_at_mut(1);
+                let program: Program = serde_json::from_slice(&programs[0].account.data).unwrap();
+                let code = str::from_utf8(&program.code()).unwrap();
 
-                //let compiled_module =
-                //    CompiledModule::deserialize(&programs[0].account.data).unwrap();
-                let account_data: MoveAccountData =
-                    bincode::deserialize(&programs[0].account.data).unwrap();
-                if let MoveAccountData::Script { code } = account_data {
-                    // TODO: Handle there errors
-                    compile_and_execute(&code, args).unwrap().unwrap();
-                } else {
-                    warn!("Unexpected Move account data");
-                    return Err(InstructionError::GenericError);
-                }
-
-                //let (script, modules) =
-                //    static_verify_program(&address, program.code(), compiled_program.modules())?;
-
-                //// TODO: Provide a data view of the remaining non-executable accounts.
-                //let mut data_view = FakeDataStore::default();
-                //data_view.set(
-                //    AccessPath::new(AccountAddress::random(), vec![]),
-                //    vec![0, 0],
-                //);
-                //execute_function(script, modules, args, &data_view)?;
+                compile_and_execute(&code, args).unwrap().unwrap();
 
                 info!("Call Move program");
             }
