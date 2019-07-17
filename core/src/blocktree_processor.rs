@@ -306,6 +306,7 @@ pub mod tests {
     use crate::genesis_utils::{
         create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
     };
+    use rand::{thread_rng, Rng};
     use solana_runtime::epoch_schedule::EpochSchedule;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::InstructionError;
@@ -1266,7 +1267,7 @@ pub mod tests {
         } = create_genesis_block(1_000_000_000);
         let mut bank = Bank::new(&genesis_block);
 
-        const NUM_TRANSFERS: usize = 100;
+        const NUM_TRANSFERS: usize = 128;
         let keypairs: Vec<_> = (0..NUM_TRANSFERS * 2).map(|_| Keypair::new()).collect();
 
         // give everybody one lamport
@@ -1277,6 +1278,7 @@ pub mod tests {
 
         let mut i = 0;
         let mut hash = bank.last_blockhash();
+        let mut root: Option<Arc<Bank>> = None;
         loop {
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .map(|i| {
@@ -1322,10 +1324,19 @@ pub mod tests {
             )
             .expect("process ticks failed");
 
-            bank.squash();
+            let parent = Arc::new(bank);
+
+            if i % 16 == 0 {
+                root.map(|old_root| old_root.squash());
+                root = Some(parent.clone());
+            }
             i += 1;
 
-            bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), i as u64);
+            bank = Bank::new_from_parent(
+                &parent,
+                &Pubkey::default(),
+                parent.slot() + thread_rng().gen_range(1, 3),
+            );
         }
     }
 
