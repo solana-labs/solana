@@ -112,15 +112,17 @@ setup_validator_accounts() {
     touch "$configured_flag"
   fi
 
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-    show-vote-account "$vote_pubkey"
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-    show-stake-account "$stake_pubkey"
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-    show-storage-account "$storage_pubkey"
-
   echo "Identity account balance:"
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance
+  (
+    set -x
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      show-vote-account "$vote_pubkey"
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      show-stake-account "$stake_pubkey"
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      show-storage-account "$storage_pubkey"
+  )
   return 0
 }
 
@@ -468,6 +470,7 @@ EOF
 ======================[ $node_type configuration ]======================
 identity pubkey: $identity_pubkey
 vote pubkey: $vote_pubkey
+stake pubkey: $stake_pubkey
 storage pubkey: $storage_pubkey
 ledger: $ledger_config_dir
 accounts: $accounts_config_dir
