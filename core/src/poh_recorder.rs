@@ -138,7 +138,9 @@ impl PohRecorder {
 
         if let Some(target_tick) = self.start_leader_at_tick {
             // we've reached target_tick OR poh was *just* reset
-            if next_tick >= target_tick || self.start_tick + self.grace_ticks == target_tick {
+            if next_tick >= target_tick
+                || next_tick >= self.start_tick && self.start_tick + self.grace_ticks == target_tick
+            {
                 let ideal_target_tick = target_tick.saturating_sub(self.grace_ticks);
 
                 return (
@@ -186,7 +188,7 @@ impl PohRecorder {
 
         self.start_slot = start_slot;
         self.start_tick = (start_slot + 1) * self.ticks_per_slot;
-        self.tick_height = self.start_tick.saturating_sub(1);
+        self.tick_height = self.start_tick - 1;
 
         let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
             next_leader_slot,
