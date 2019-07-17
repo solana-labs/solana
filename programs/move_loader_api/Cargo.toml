@@ -21,6 +21,7 @@ vm = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c83
 vm_runtime = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
 types = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
 language_e2e_tests = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
+bytecode_verifier = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
 
 [dev-dependencies]
 compiler = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }

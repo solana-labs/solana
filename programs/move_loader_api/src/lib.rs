@@ -8,14 +8,33 @@ solana_sdk::solana_name_id!(
     "MvLdr11111111111111111111111111111111111111"
 );
 
-use language_e2e_tests::compile_and_execute;
+use bytecode_verifier::{VerifiedModule, VerifiedScript};
+use language_e2e_tests::data_store::FakeDataStore;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
-use std::str;
+use types::access_path::AccessPath;
+use types::account_address::AccountAddress;
 use types::transaction::{Program, TransactionArgument};
+use vm::errors::VMResult;
+use vm::file_format::CompiledScript;
+use vm_runtime::{execute_function, static_verify_program};
+
+fn execute(
+    script: VerifiedScript,
+    args: Vec<TransactionArgument>,
+    modules: Vec<VerifiedModule>,
+) -> VMResult<()> {
+    // set up the DB
+    let mut data_view = FakeDataStore::default();
+    data_view.set(
+        AccessPath::new(AccountAddress::random(), vec![]),
+        vec![0, 0],
+    );
+    execute_function(script, modules, args, &data_view)
+}
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -68,10 +87,15 @@ pub fn process_instruction(
 
                 let (programs, _params) = keyed_accounts.split_at_mut(1);
                 let program: Program = serde_json::from_slice(&programs[0].account.data).unwrap();
+                dbg!(program.code());
+                let compiled_script = CompiledScript::deserialize(program.code()).unwrap();
+                let modules = vec![];
 
-                // TODO: Read bytecode, not source code.
-                let code = str::from_utf8(&program.code()).unwrap();
-                compile_and_execute(&code, args).unwrap().unwrap();
+                let sender_address = AccountAddress::default();
+                let (verified_script, modules) =
+                    static_verify_program(&sender_address, compiled_script, modules)
+                        .expect("verification failure");
+                execute(verified_script, args, modules).unwrap().unwrap();
 
                 info!("Call Move program");
             }
@@ -86,9 +110,8 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use compiler::Compiler;
+    use compiler::Compiler;
     use solana_sdk::account::Account;
-    //use types::account_address::AccountAddress;
 
     #[test]
     fn test_invoke_main() {
@@ -96,29 +119,25 @@ mod tests {
 
         let code = "main() { return; }";
 
-        // TODO: Produce the same bytes as "compiler -o"
-        //
-        //let address = AccountAddress::default();
-        //let compiler = Compiler {
-        //    code,
-        //    address,
-        //    ..Compiler::default()
-        //};
-        //let compiled_program = compiler.into_compiled_program().expect("Failed to compile");
-        //
-        //let mut script = vec![];
-        //compiled_program
-        //    .script
-        //    .serialize(&mut script)
-        //    .expect("Unable to serialize script");
-        //let mut modules = vec![];
-        //for m in compiled_program.modules.iter() {
-        //    let mut buf = vec![];
-        //    m.serialize(&mut buf).expect("Unable to serialize module");
-        //    modules.push(buf);
-        //}
-        let modules = vec![];
-        let script = code.as_bytes().to_vec();
+        let address = AccountAddress::default();
+        let compiler = Compiler {
+            code,
+            address,
+            ..Compiler::default()
+        };
+        let compiled_program = compiler.into_compiled_program().expect("Failed to compile");
+
+        let mut script = vec![];
+        compiled_program
+            .script
+            .serialize(&mut script)
+            .expect("Unable to serialize script");
+        let mut modules = vec![];
+        for m in compiled_program.modules.iter() {
+            let mut buf = vec![];
+            m.serialize(&mut buf).expect("Unable to serialize module");
+            modules.push(buf);
+        }
 
         let program = Program::new(script, modules, vec![]);
         let program_bytes = serde_json::to_vec(&program).unwrap();
