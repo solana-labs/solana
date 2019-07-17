@@ -910,7 +910,7 @@ mod tests {
 
     fn tmp_file_path(name: &str) -> PathBuf {
         use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let keypair = Keypair::new();
 
         let mut path = PathBuf::new();
