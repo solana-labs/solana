@@ -193,6 +193,70 @@ impl Blocktree {
         false
     }
 
+    // silently deletes all blocktree column families starting at the given slot
+    fn delete_all_columns(&self, starting_slot: u64) {
+        match self.meta_cf.force_delete_all(Some(starting_slot)) {
+            Ok(_) => (),
+            Err(e) => error!(
+                "Error: {:?} while deleting meta_cf for slot {:?}",
+                e, starting_slot
+            ),
+        }
+        match self.data_cf.force_delete_all(Some((starting_slot, 0))) {
+            Ok(_) => (),
+            Err(e) => error!(
+                "Error: {:?} while deleting data_cf for slot {:?}",
+                e, starting_slot
+            ),
+        }
+        match self
+            .erasure_meta_cf
+            .force_delete_all(Some((starting_slot, 0)))
+        {
+            Ok(_) => (),
+            Err(e) => error!(
+                "Error: {:?} while deleting erasure_meta_cf for slot {:?}",
+                e, starting_slot
+            ),
+        }
+        match self.erasure_cf.force_delete_all(Some((starting_slot, 0))) {
+            Ok(_) => (),
+            Err(e) => error!(
+                "Error: {:?} while deleting erasure_cf for slot {:?}",
+                e, starting_slot
+            ),
+        }
+        match self.orphans_cf.force_delete_all(Some(starting_slot)) {
+            Ok(_) => (),
+            Err(e) => error!(
+                "Error: {:?} while deleting orphans_cf for slot {:?}",
+                e, starting_slot
+            ),
+        }
+        match self.index_cf.force_delete_all(Some(starting_slot)) {
+            Ok(_) => (),
+            Err(e) => error!(
+                "Error: {:?} while deleting index_cf for slot {:?}",
+                e, starting_slot
+            ),
+        }
+        match self.dead_slots_cf.force_delete_all(Some(starting_slot)) {
+            Ok(_) => (),
+            Err(e) => error!(
+                "Error: {:?} while deleting dead_slots_cf for slot {:?}",
+                e, starting_slot
+            ),
+        }
+        let roots_cf = self.db.column::<cf::Root>();
+        match roots_cf.force_delete_all(Some(starting_slot)) {
+            Ok(_) => (),
+            Err(e) => error!(
+                "Error: {:?} while deleting roots_cf for slot {:?}",
+                e, starting_slot
+            ),
+        }
+    }
+
     pub fn erasure_meta(&self, slot: u64, set_index: u64) -> Result<Option<ErasureMeta>> {
         self.erasure_meta_cf.get((slot, set_index))
     }
@@ -201,7 +265,7 @@ impl Blocktree {
         self.orphans_cf.get(slot)
     }
 
-    pub fn rooted_slot_iterator<'a>(&'a self, slot: u64) -> Result<RootedSlotIterator<'a>> {
+    pub fn rooted_slot_iterator(&self, slot: u64) -> Result<RootedSlotIterator> {
         RootedSlotIterator::new(slot, self)
     }
 
@@ -510,6 +574,13 @@ impl Blocktree {
 
     pub fn get_data_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
         self.data_cf.get_bytes((slot, index))
+    }
+
+    /// Manually update the meta for a slot.
+    /// Can interfere with automatic meta update and potentially break chaining.
+    /// Dangerous. Use with care.
+    pub fn put_meta_bytes(&self, slot: u64, bytes: &[u8]) -> Result<()> {
+        self.meta_cf.put_bytes(slot, bytes)
     }
 
     /// For benchmarks, testing, and setup.
@@ -920,6 +991,39 @@ impl Blocktree {
         }
         batch_processor.write(batch)?;
         Ok(())
+    }
+
+    /// Prune blocktree such that slots higher than `target_slot` are deleted and all references to
+    /// higher slots are removed
+    pub fn prune(&self, target_slot: u64) {
+        let mut meta = self
+            .meta(target_slot)
+            .expect("couldn't read slot meta")
+            .expect("no meta for target slot");
+        meta.next_slots.clear();
+        self.put_meta_bytes(
+            target_slot,
+            &bincode::serialize(&meta).expect("couldn't get meta bytes"),
+        )
+        .expect("unable to update meta for target slot");
+
+        self.delete_all_columns(target_slot + 1);
+
+        // fixup anything that refers to non-root slots and delete the rest
+        for (slot, mut meta) in self
+            .slot_meta_iterator(0)
+            .expect("unable to iterate over meta")
+        {
+            if slot > target_slot {
+                break;
+            }
+            meta.next_slots.retain(|slot| *slot <= target_slot);
+            self.put_meta_bytes(
+                slot,
+                &bincode::serialize(&meta).expect("couldn't update meta"),
+            )
+            .expect("couldn't update meta");
+        }
     }
 }
 
@@ -3331,6 +3435,66 @@ pub mod tests {
         for i in chained_slots {
             assert!(blocktree.is_root(i));
         }
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_prune() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let (blobs, _) = make_many_slot_entries(0, 50, 6);
+        blocktree.write_blobs(blobs).unwrap();
+        blocktree
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|(_, meta)| assert_eq!(meta.last_index, 5));
+
+        blocktree.prune(5);
+
+        blocktree
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|(slot, meta)| {
+                assert!(slot <= 5);
+                assert_eq!(meta.last_index, 5)
+            });
+
+        let data_iter = blocktree.data_cf.iter(Some((0, 0))).unwrap();
+        for ((slot, _), _) in data_iter {
+            if slot > 5 {
+                assert!(false);
+            }
+        }
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[should_panic]
+    #[test]
+    fn test_prune_out_of_bounds() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // slot 5 does not exist, prune should panic
+        blocktree.prune(5);
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_iter_bounds() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // slot 5 does not exist, iter should be ok and should be a noop
+        blocktree
+            .slot_meta_iterator(5)
+            .unwrap()
+            .for_each(|_| assert!(false));
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
