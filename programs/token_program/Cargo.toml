@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-log = "0.4.2"
+log = "0.4.7"
 solana-logger = { path = "../../logger", version = "0.17.0" }
 solana-sdk = { path = "../../sdk", version = "0.17.0" }
 solana-token-api = { path = "../token_api", version = "0.17.0" }
