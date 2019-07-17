@@ -93,6 +93,10 @@ impl AppendVec {
             .create(create)
             .open(file)
             .map_err(|e| {
+                warn!("in current dir {:?}", std::env::current_dir());
+                for ancestor in file.ancestors() {
+                    warn!("{:?} is {:?}", ancestor, std::fs::metadata(ancestor));
+                }
                 panic!(
                     "Unable to {} data file {}, err {:?}",
                     if create { "create" } else { "open" },
@@ -298,7 +302,7 @@ pub mod test_utils {
     }
 
     pub fn get_append_vec_dir() -> String {
-        std::env::var("OUT_DIR").unwrap_or_else(|_| "farf/append_vec_tests".to_string())
+        std::env::var("FARF_DIR").unwrap_or_else(|_| "farf/append_vec_tests".to_string())
     }
 
     pub fn get_append_vec_path(path: &str) -> TempFile {

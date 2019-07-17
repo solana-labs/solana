@@ -1901,7 +1901,7 @@ mod tests {
         );
 
         fn make_tmp_path(name: &str) -> String {
-            let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "farf".to_string());
+            let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
             let keypair = Keypair::new();
 
             let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
