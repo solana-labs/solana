@@ -193,7 +193,7 @@ impl Blocktree {
         false
     }
 
-    // silently deletes all blocktree column families starting a the given slot
+    // silently deletes all blocktree column families starting at the given slot
     fn delete_all_columns(&self, starting_slot: u64) {
         match self.meta_cf.force_delete_all(Some(starting_slot)) {
             Ok(_) => (),
@@ -1005,7 +1005,7 @@ impl Blocktree {
             target_slot,
             &bincode::serialize(&meta).expect("couldn't get meta bytes"),
         )
-        .expect("unable to update meta for target  slot");
+        .expect("unable to update meta for target slot");
 
         self.delete_all_columns(target_slot + 1);
 
@@ -1014,15 +1014,15 @@ impl Blocktree {
             .slot_meta_iterator(0)
             .expect("unable to iterate over meta")
         {
+            if slot > target_slot {
+                break;
+            }
             meta.next_slots.retain(|slot| *slot <= target_slot);
             self.put_meta_bytes(
                 slot,
                 &bincode::serialize(&meta).expect("couldn't update meta"),
             )
             .expect("couldn't update meta");
-            if slot > target_slot {
-                break;
-            }
         }
     }
 }
