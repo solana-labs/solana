@@ -233,13 +233,6 @@ impl Blocktree {
                 e, starting_slot
             ),
         }
-        match self.index_cf.force_delete_all(Some(starting_slot)) {
-            Ok(_) => (),
-            Err(e) => error!(
-                "Error: {:?} while deleting index_cf for slot {:?}",
-                e, starting_slot
-            ),
-        }
         match self.dead_slots_cf.force_delete_all(Some(starting_slot)) {
             Ok(_) => (),
             Err(e) => error!(
