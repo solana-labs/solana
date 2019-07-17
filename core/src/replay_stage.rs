@@ -640,12 +640,15 @@ impl ReplayStage {
         // Find the next slot that chains to the old slot
         let frozen_banks = forks.frozen_banks();
         let frozen_bank_slots: Vec<u64> = frozen_banks.keys().cloned().collect();
-        trace!("frozen_banks {:?}", frozen_bank_slots);
         let next_slots = blocktree
             .get_slots_since(&frozen_bank_slots)
             .expect("Db error");
         // Filter out what we've already seen
-        trace!("generate new forks {:?}", next_slots);
+        trace!("generate new forks {:?}", {
+            let mut next_slots = next_slots.iter().collect::<Vec<_>>();
+            next_slots.sort();
+            next_slots
+        });
         for (parent_id, children) in next_slots {
             let parent_bank = frozen_banks
                 .get(&parent_id)
