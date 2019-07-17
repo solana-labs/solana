@@ -137,10 +137,8 @@ impl PohRecorder {
         let next_tick = self.tick_height + 1;
 
         if let Some(target_tick) = self.start_leader_at_tick {
-            // if we've reached the target tick OR poh was *just* reset
-            if next_tick >= target_tick
-                || next_tick >= self.start_tick && self.start_tick + self.grace_ticks == target_tick
-            {
+            // we've reached target_tick OR poh was *just* reset
+            if next_tick >= target_tick || self.start_tick + self.grace_ticks == target_tick {
                 let ideal_target_tick = target_tick.saturating_sub(self.grace_ticks);
 
                 return (
