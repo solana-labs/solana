@@ -207,7 +207,7 @@ impl Blocktree {
             }
             max_index = index;
         }
-        for i in 0..max_index {
+        for i in 0..=max_index {
             column.delete((delete_slot, i))?;
         }
         Ok(())
@@ -3436,6 +3436,13 @@ pub mod tests {
                 assert!(slot <= 5);
                 assert_eq!(meta.last_index, 5)
             });
+
+        let data_iter = blocktree.data_cf.iter(Some((0, 0))).unwrap();
+        for ((slot, _), _) in data_iter {
+            if slot > 5 {
+                assert!(false);
+            }
+        }
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
