@@ -1,6 +1,6 @@
 //! Bitcoin SPV proof verifier program
 //! Receive merkle proofs and block headers, validate transaction
-
+use crate::exchange_state::*;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::instruction::InstructionError;
 
