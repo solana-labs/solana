@@ -60,6 +60,7 @@
   - [Simple Payment and State Verification](simple-payment-and-state-verification.md)
   - [Embedding the Move Langauge](embedding-move.md)
   - [Cross-Program Invocation](cross-program-invocation.md)
+  - [Rent](rent.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Blocktree](blocktree.md)
