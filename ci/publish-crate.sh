@@ -61,8 +61,22 @@ for Cargo_toml in $Cargo_tomls; do
   for ((i = 1 ; i <= numRetries ; i++)); do
     echo "Attempt ${i} of ${numRetries}"
     if [[ $(is_crate_version_uploaded "$crate_name" "$expectedCrateVersion") = True ]] ; then
-      echo "Found ${crate_name} version ${expectedCrateVersion} on crates.io"
-      break
+      echo "Found ${crate_name} version ${expectedCrateVersion} on crates.io REST API"
+
+      really_uploaded=0
+      (
+        set -x
+        rm -rf crate-test
+        cargo init crate-test
+        cd crate-test/
+        echo "${crate_name} = \"${expectedCrateVersion}\"" >> Cargo.toml
+        echo "[workspace]" >> Cargo.toml
+        cargo check
+      ) && really_uploaded=1
+      if ((really_uploaded)); then
+        break;
+      fi
+      echo "${crate_name} not yet available for download from crates.io"
     fi
     echo "Did not find ${crate_name} version ${expectedCrateVersion} on crates.io.  Sleeping for 2 seconds."
     sleep 2
