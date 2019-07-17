@@ -455,7 +455,7 @@ impl ReplayStage {
                 );
             }
         }
-        return did_process_bank;
+        did_process_bank
     }
 
     fn generate_votable_banks(
