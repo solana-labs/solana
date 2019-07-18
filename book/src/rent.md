@@ -9,53 +9,34 @@ based fee for this resource consumption, also known as Rent.
 
 Accounts which maintain a minimum balance equivalent to 2 years of rent are exempt from
 rent.  Accounts whose balance falls below this threshold are charged rent 
-at a rate specified in genesis, in lamports per kilobyte per year.
+at a rate specified in genesis, in lamports per kilobyte-year.
 
 ## Collecting rent
 
-A field on each account (`Account::rent_due_slot`) keeps track of the next slot at which the account will 
-owe rent, similar to a time-to-live.
+The first bank in each new epoch scans all accounts for any that would owe rent for the previous epoch.
 
-Rent is charged directly from the account balance via issuance of `SystemInstruction::RentDue` and is deposited into 
-the current leader's account as transaction fees.  `SystemInstruction::RentDue` charges rent according to the genesis rent rate for:
+Rent is deducted from subject accounts according to the rate specified in genesis.
 
-1. any slots in arrears of the current slot
-2. one epoch worth of slots into the future
-
-Assumming sufficient funds are present, `SystemInstruction::RentDue` sets `Account::rent_due_slot` to a value that is `slots_per_epoch` (for the current epoch) ahead of the current slot.
-
-In this way, rent is charged and distributed in a stake-weighted round-robin fashion among the network's validators.
-
-## Initialization
-
-Initial `Account::rent_due_at_lot` is initialized by `SystemInstruction::CreateAccount`.  Rent is paid to the leader as in `RentDue`.
+The rent collected is then distributed to validator accounts by stake weight, a la transaction fees.  Any fractional lamports are destroyed.
 
 ## Deliquency
 
-Accounts whose balance reaches zero due to rent collection have their `Account::data` dropped and replaced with a hash of the contents.
+Accounts whose balance reaches zero due to rent collection are dropped.
 
-## Issuing `SystemInstruction::RentDue`
-
-Any node may issue `SystemInstruction::RentDue` and pay the required transaction fee, but the beneficiary is always the slot leader.
-
-## Design considerations
+## Design considerations, others considered
 
 ### Ad-hoc collection
 
 Collecting rent on an as-needed basis (i.e. whenever accounts were loaded/accessed) was considered. 
 The issues with such an approach are:
 * accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due, 
-but would not be debitable during any such  transaction
+but would not be debitable during any such transaction
 * a mechanism to "beat the bushes" (i.e. go find accounts that need to pay rent) is desirable, 
-lest accounts that are loaded infrequently get somewhat of a free ride.
+lest accounts that are loaded infrequently get a free ride
 
-### Collect from everybody instead?
+### System instruction for collecting rent
+Collecting rent via a system instruction was considered, as it would naturally have distributed rent to active and stake-weighted nodes and could have been done incrementally. However:
+* it would have adversely affected network throughput
+* it would require special-casing by the runtime, as accounts with non-SystemProgram owners may be debited by this instruction
+* someone would have to issue the transactions
 
-Use of a transaction to collect rent could be avoided with a per-slot or per-epoch scan of all current account state. 
-Such a scan would introduce additional delays for closing out a slot or epoch.  Per-epoch 
-payouts would introduce complexity in the form of stake-weighted distribution of collected rent.  Optimizations could be made, though.
-
-### Warts
-
-The introduction of `SystemInstruction::RentDue` requires special-casing by the runtime, as accounts with non-SystemProgram
-owners may be debited by this instruction.
