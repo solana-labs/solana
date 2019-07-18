@@ -151,9 +151,9 @@ local|tar)
     if [ -f ./solana-client-accounts/client-accounts.yml ]; then
       genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
     fi
-    if [[ $skipSetup != true ]]; then
+    if [[ $skipSetup != true && -n $stakeNodesInGenesisBlock ]]; then
       args=(
-        --bootstrap-leader-stake-lamports "$stake"
+        --bootstrap-leader-lamports "$stake"
       )
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
@@ -196,11 +196,9 @@ local|tar)
       args+=(
         --blockstream /tmp/solana-blockstream.sock
         --no-voting
-        --stake 0
         --generate-snapshots
       )
     else
-      args+=(--stake "$stake")
       args+=(--enable-rpc-exit)
     fi
 
@@ -210,6 +208,12 @@ local|tar)
 
     if [[ -n $stakeNodesInGenesisBlock ]]; then
       args+=(--no-airdrop)
+    else
+      if [[ $nodeType = blockstreamer ]]; then
+        args+=(--stake 0)
+      else
+        args+=(--stake "$stake")
+      fi
     fi
 
     set -x
