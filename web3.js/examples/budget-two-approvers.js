@@ -18,6 +18,12 @@ url = 'http://localhost:8899';
 //url = 'http://testnet.solana.com:8899';
 const connection = new solanaWeb3.Connection(url);
 
+function getTransactionFee() {
+  return connection.getRecentBlockhash().then(response => {
+    return response[1];
+  });
+}
+
 function showBalance() {
   console.log(`\n== Account State`);
   return Promise.all([
@@ -52,89 +58,101 @@ function confirmTransaction(signature) {
   });
 }
 
-function airDrop() {
-  console.log(`\n== Requesting airdrop of 100 to ${account1.publicKey}`);
+function airDrop(feeCalculator) {
+  const airdrop = 100 + 3 * feeCalculator.targetLamportsPerSignature;
+  console.log(`\n== Requesting airdrop of ${airdrop} to ${account1.publicKey}`);
   return connection
-    .requestAirdrop(account1.publicKey, 100)
+    .requestAirdrop(account1.publicKey, airdrop)
     .then(confirmTransaction);
 }
 
-showBalance()
-  .then(airDrop)
-  .then(() => {
-    console.log(`\n== Move 1 lamport to approver1`);
-    const transaction = solanaWeb3.SystemProgram.transfer(
-      account1.publicKey,
-      approver1.publicKey,
-      1,
-    );
-    return connection.sendTransaction(transaction, account1);
-  })
-  .then(confirmTransaction)
-  .then(() => {
-    console.log(`\n== Move 1 lamport to approver2`);
-    const transaction = solanaWeb3.SystemProgram.transfer(
-      account1.publicKey,
-      approver2.publicKey,
-      1,
-    );
-    return connection.sendTransaction(transaction, account1);
-  })
-  .then(confirmTransaction)
-  .then(showBalance)
-  .then(() => {
-    console.log(`\n== Initializing contract`);
-    const transaction = solanaWeb3.BudgetProgram.payOnBoth(
-      account1.publicKey,
-      contractState.publicKey,
-      account2.publicKey,
-      50,
-      solanaWeb3.BudgetProgram.signatureCondition(approver1.publicKey),
-      solanaWeb3.BudgetProgram.signatureCondition(approver2.publicKey),
-    );
-    return solanaWeb3.sendAndConfirmTransaction(
-      connection,
-      transaction,
-      account1,
-    );
-  })
-  .then(confirmTransaction)
-  .then(showBalance)
-  .then(() => {
-    console.log(`\n== Apply approver 1`);
-    const transaction = solanaWeb3.BudgetProgram.applySignature(
-      approver1.publicKey,
-      contractState.publicKey,
-      account2.publicKey,
-    );
-    return solanaWeb3.sendAndConfirmTransaction(
-      connection,
-      transaction,
-      approver1,
-    );
-  })
-  .then(confirmTransaction)
-  .then(showBalance)
-  .then(() => {
-    console.log(`\n== Apply approver 2`);
-    const transaction = solanaWeb3.BudgetProgram.applySignature(
-      approver2.publicKey,
-      contractState.publicKey,
-      account2.publicKey,
-    );
-    return solanaWeb3.sendAndConfirmTransaction(
-      connection,
-      transaction,
-      approver2,
-    );
-  })
-  .then(confirmTransaction)
-  .then(showBalance)
+getTransactionFee().then(feeCalculator => {
+  showBalance()
+    .then(airDrop(feeCalculator))
+    .then(() => {
+      console.log(`\n== Move 1 lamport to approver1`);
+      const transaction = solanaWeb3.SystemProgram.transfer(
+        account1.publicKey,
+        approver1.publicKey,
+        1 + feeCalculator.lamportsPerSignature,
+      );
+      return solanaWeb3.sendAndConfirmTransaction(
+        connection,
+        transaction,
+        account1,
+      );
+    })
+    .then(confirmTransaction)
+    .then(getTransactionFee)
+    .then(() => {
+      console.log(`\n== Move 1 lamport to approver2`);
+      const transaction = solanaWeb3.SystemProgram.transfer(
+        account1.publicKey,
+        approver2.publicKey,
+        1 + feeCalculator.lamportsPerSignature,
+      );
+      return solanaWeb3.sendAndConfirmTransaction(
+        connection,
+        transaction,
+        account1,
+      );
+    })
+    .then(confirmTransaction)
+    .then(showBalance)
+    .then(() => {
+      console.log(`\n== Initializing contract`);
+      const transaction = solanaWeb3.BudgetProgram.payOnBoth(
+        account1.publicKey,
+        contractState.publicKey,
+        account2.publicKey,
+        50,
+        solanaWeb3.BudgetProgram.signatureCondition(approver1.publicKey),
+        solanaWeb3.BudgetProgram.signatureCondition(approver2.publicKey),
+      );
+      return solanaWeb3.sendAndConfirmTransaction(
+        connection,
+        transaction,
+        account1,
+      );
+    })
+    .then(confirmTransaction)
+    .then(showBalance)
+    .then(() => {
+      console.log(`\n== Apply approver 1`);
+      const transaction = solanaWeb3.BudgetProgram.applySignature(
+        approver1.publicKey,
+        contractState.publicKey,
+        account2.publicKey,
+      );
+      return solanaWeb3.sendAndConfirmTransaction(
+        connection,
+        transaction,
+        approver1,
+      );
+    })
+    .then(confirmTransaction)
+    .then(showBalance)
+    .then(() => {
+      console.log(`\n== Apply approver 2`);
+      const transaction = solanaWeb3.BudgetProgram.applySignature(
+        approver2.publicKey,
+        contractState.publicKey,
+        account2.publicKey,
+      );
+      return solanaWeb3.sendAndConfirmTransaction(
+        connection,
+        transaction,
+        approver2,
+      );
+    })
+    .then(confirmTransaction)
+    .then(showBalance)
 
-  .then(() => {
-    console.log('\nDone');
-  })
+    .then(() => {
+      console.log('\nDone');
+    })
 
-  .catch(err => {
-    console.log(err);
-  });
+    .catch(err => {
+      console.log(err);
+    });
+});
