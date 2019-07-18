@@ -1,3 +1,5 @@
+mod data_store;
+
 const MOVE_LOADER_PROGRAM_ID: [u8; 32] = [
     5, 91, 237, 31, 90, 253, 197, 145, 157, 236, 147, 43, 6, 5, 157, 238, 63, 151, 181, 165, 118,
     224, 198, 97, 103, 136, 113, 64, 0, 0, 0, 0,
@@ -9,31 +11,47 @@ solana_sdk::solana_name_id!(
 );
 
 use bytecode_verifier::{VerifiedModule, VerifiedScript};
-use language_e2e_tests::data_store::FakeDataStore;
+use data_store::DataStore;
 use log::*;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::loader_instruction::LoaderInstruction;
-use solana_sdk::pubkey::Pubkey;
-use types::access_path::AccessPath;
-use types::account_address::AccountAddress;
-use types::transaction::{Program, TransactionArgument};
-use vm::errors::VMResult;
-use vm::file_format::CompiledScript;
-use vm_runtime::{execute_function, static_verify_program};
+use solana_sdk::{
+    account::KeyedAccount, instruction::InstructionError, loader_instruction::LoaderInstruction,
+    pubkey::Pubkey,
+};
+use types::{
+    account_address::AccountAddress,
+    transaction::{Program, TransactionArgument, TransactionOutput},
+};
+use vm::{
+    access::ModuleAccess, errors::*, file_format::CompiledScript,
+    transaction_metadata::TransactionMetadata,
+};
+use vm_cache_map::Arena;
+use vm_runtime::static_verify_program;
+use vm_runtime::{
+    code_cache::module_cache::{ModuleCache, VMModuleCache},
+    data_cache::RemoteCache,
+    txn_executor::TransactionExecutor,
+};
 
-fn execute(
+pub fn execute(
     script: VerifiedScript,
-    args: Vec<TransactionArgument>,
+    _args: Vec<TransactionArgument>,
     modules: Vec<VerifiedModule>,
-) -> VMResult<()> {
-    // set up the DB
-    let mut data_view = FakeDataStore::default();
-    data_view.set(
-        AccessPath::new(AccountAddress::random(), vec![]),
-        vec![0, 0],
-    );
-    execute_function(script, modules, args, &data_view)
+    data_cache: &dyn RemoteCache,
+) -> VMRuntimeResult<TransactionOutput> {
+    let allocator = Arena::new();
+    let module_cache = VMModuleCache::new(&allocator);
+    for m in modules {
+        module_cache.cache_module(m);
+    }
+    let main_module = script.into_module();
+    let module_id = main_module.self_id();
+    module_cache.cache_module(main_module);
+    let txn_metadata = TransactionMetadata::default();
+
+    let mut vm = TransactionExecutor::new(&module_cache, data_cache, txn_metadata);
+    let result = vm.execute_function(&module_id, &"main".to_string(), [].to_vec());
+    vm.make_write_set(vec![], result)
 }
 
 pub fn process_instruction(
@@ -85,9 +103,11 @@ pub fn process_instruction(
                 // TODO: Return an error
                 let args: Vec<TransactionArgument> = bincode::deserialize(&data).unwrap();
 
+                // TODO: Convert Accounts into data_cache.
+                let mut data_cache = DataStore::default();
+
                 let (programs, _params) = keyed_accounts.split_at_mut(1);
                 let program: Program = serde_json::from_slice(&programs[0].account.data).unwrap();
-                dbg!(program.code());
                 let compiled_script = CompiledScript::deserialize(program.code()).unwrap();
                 let modules = vec![];
 
@@ -95,9 +115,17 @@ pub fn process_instruction(
                 let (verified_script, modules) =
                     static_verify_program(&sender_address, compiled_script, modules)
                         .expect("verification failure");
-                execute(verified_script, args, modules).unwrap().unwrap();
 
                 info!("Call Move program");
+                let output = execute(verified_script, args, modules, &data_cache).unwrap();
+
+                for event in output.events() {
+                    error!("Event: {}", event);
+                }
+
+                data_cache.apply_write_set(&output.write_set());
+
+                // TODO: convert data_cache back into accounts.
             }
         }
     } else {
