@@ -29,7 +29,7 @@ export RUST_LOG
 # trouble
 #
 # Ref: https://github.com/solana-labs/solana/issues/3798
-stake=424243
+stake=${stakeNodesInGenesisBlock:=424243}
 
 missing() {
   echo "Error: $1 not specified"
@@ -151,13 +151,10 @@ local|tar)
     if [ -f ./solana-client-accounts/client-accounts.yml ]; then
       genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
     fi
-    args=()
     if [[ $skipSetup != true ]]; then
-      if [[ -z $stakeNodesInGenesisBlock ]] ; then
-      args+=(
-        --bootstrap-leader-lamports "$stake"
+      args=(
+        --bootstrap-leader-stake-lamports "$stake"
       )
-      fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
       ./multinode-demo/setup.sh "${args[@]}"
@@ -199,9 +196,11 @@ local|tar)
       args+=(
         --blockstream /tmp/solana-blockstream.sock
         --no-voting
+        --stake 0
         --generate-snapshots
       )
     else
+      args+=(--stake "$stake")
       args+=(--enable-rpc-exit)
     fi
 
@@ -211,12 +210,6 @@ local|tar)
 
     if [[ -n $stakeNodesInGenesisBlock ]]; then
       args+=(--no-airdrop)
-    else
-      if [[ $nodeType = blockstreamer ]]; then
-        args+=(--stake 0)
-      else
-        args+=(--stake "$stake")
-      fi
     fi
 
     set -x

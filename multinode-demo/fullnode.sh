@@ -162,8 +162,8 @@ ledger_not_setup() {
 
 args=()
 node_type=validator
-#node_lamports=424242  # number of lamports to assign the node for transaction fees if airdrops are enabled
-#stake_lamports=42     # number of lamports to assign as stake if airdrops are enabled
+node_lamports=424242  # number of lamports to assign the node for transaction fees
+stake_lamports=42     # number of lamports to assign as stake
 poll_for_new_genesis_block=0
 label=
 identity_keypair_path=
