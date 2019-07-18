@@ -123,7 +123,7 @@ impl ReplayStage {
                         &leader_schedule_cache,
                     );
 
-                    let did_process_bank = Self::replay_active_banks(
+                    let did_complete_bank = Self::replay_active_banks(
                         &blocktree,
                         &bank_forks,
                         &my_pubkey,
@@ -170,7 +170,7 @@ impl ReplayStage {
                         "replicate_stage-duration",
                         duration_as_ms(&now.elapsed()) as usize
                     );
-                    if did_process_bank {
+                    if did_complete_bank {
                         //just processed a bank, skip the signal; maybe there's more slots available
                         continue;
                     }
@@ -421,7 +421,7 @@ impl ReplayStage {
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
     ) -> bool {
-        let mut did_process_bank = false;
+        let mut did_complete_bank = false;
         let active_banks = bank_forks.read().unwrap().active_banks();
         trace!("active banks {:?}", active_banks);
 
@@ -444,7 +444,7 @@ impl ReplayStage {
             }
             assert_eq!(*bank_slot, bank.slot());
             if bank.tick_height() == bank.max_tick_height() {
-                did_process_bank = true;
+                did_complete_bank = true;
                 Self::process_completed_bank(my_pubkey, bank, slot_full_sender);
             } else {
                 trace!(
@@ -455,7 +455,7 @@ impl ReplayStage {
                 );
             }
         }
-        did_process_bank
+        did_complete_bank
     }
 
     fn generate_votable_banks(
