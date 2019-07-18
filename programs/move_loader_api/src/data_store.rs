@@ -65,8 +65,6 @@ impl DataStore {
     }
 }
 
-// This is used by the `execute_block` API.
-// TODO: only the "sync" get is implemented
 impl StateView for DataStore {
     fn get(&self, access_path: &AccessPath) -> Result<Option<Vec<u8>>> {
         // Since the data is in-memory, it can't fail.

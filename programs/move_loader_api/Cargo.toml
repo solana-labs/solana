@@ -23,8 +23,8 @@ failure = {git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc23833
 state_view = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
 types = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
 vm = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
-vm_runtime = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
 vm_cache_map = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
+vm_runtime = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
 
 [dev-dependencies]
 compiler = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }

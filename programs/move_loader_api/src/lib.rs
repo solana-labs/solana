@@ -1,5 +1,3 @@
-mod data_store;
-
 const MOVE_LOADER_PROGRAM_ID: [u8; 32] = [
     5, 91, 237, 31, 90, 253, 197, 145, 157, 236, 147, 43, 6, 5, 157, 238, 63, 151, 181, 165, 118,
     224, 198, 97, 103, 136, 113, 64, 0, 0, 0, 0,
@@ -10,28 +8,26 @@ solana_sdk::solana_name_id!(
     "MvLdr11111111111111111111111111111111111111"
 );
 
+mod data_store;
+
 use bytecode_verifier::{VerifiedModule, VerifiedScript};
 use data_store::DataStore;
 use log::*;
-use solana_sdk::{
-    account::KeyedAccount, instruction::InstructionError, loader_instruction::LoaderInstruction,
-    pubkey::Pubkey,
-};
-use types::{
-    account_address::AccountAddress,
-    transaction::{Program, TransactionArgument, TransactionOutput},
-};
-use vm::{
-    access::ModuleAccess, errors::*, file_format::CompiledScript,
-    transaction_metadata::TransactionMetadata,
-};
+use solana_sdk::account::KeyedAccount;
+use solana_sdk::instruction::InstructionError;
+use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::pubkey::Pubkey;
+use types::account_address::AccountAddress;
+use types::transaction::{Program, TransactionArgument, TransactionOutput};
+use vm::access::ModuleAccess;
+use vm::errors::VMRuntimeResult;
+use vm::file_format::CompiledScript;
+use vm::transaction_metadata::TransactionMetadata;
 use vm_cache_map::Arena;
+use vm_runtime::code_cache::module_cache::{ModuleCache, VMModuleCache};
+use vm_runtime::data_cache::RemoteCache;
 use vm_runtime::static_verify_program;
-use vm_runtime::{
-    code_cache::module_cache::{ModuleCache, VMModuleCache},
-    data_cache::RemoteCache,
-    txn_executor::TransactionExecutor,
-};
+use vm_runtime::txn_executor::TransactionExecutor;
 
 pub fn execute(
     script: VerifiedScript,
