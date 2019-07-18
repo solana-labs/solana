@@ -4,12 +4,11 @@
 use failure::prelude::*;
 use state_view::StateView;
 use std::collections::HashMap;
-use types::{
-    access_path::AccessPath,
-    language_storage::ModuleId,
-    write_set::{WriteOp, WriteSet},
-};
-use vm::{errors::*, CompiledModule};
+use types::access_path::AccessPath;
+use types::language_storage::ModuleId;
+use types::write_set::{WriteOp, WriteSet};
+use vm::errors::VMInvariantViolation;
+use vm::CompiledModule;
 use vm_runtime::data_cache::RemoteCache;
 
 /// An in-memory implementation of [`StateView`] and [`RemoteCache`] for the VM.
