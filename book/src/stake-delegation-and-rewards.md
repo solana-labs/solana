@@ -11,7 +11,7 @@ of getting its stake slashed.  The economics are covered in [staking
 rewards](staking-rewards.md).  This chapter, on the other hand, describes the
 underlying mechanics of its implementation.
 
-## Basic Besign
+## Basic Design
 
 The general idea is that the validator owns a Vote account. The Vote account
 tracks validator votes, counts validator generated credits, and provides any
@@ -118,7 +118,7 @@ The Stakes and the RewardsPool are accounts that are owned by the same `Stake` p
 
 ### StakeInstruction::DelegateStake(u64)
 
-The Stake account is moved from Unitialized to StakeState::Stake form.  This is
+The Stake account is moved from Uninitialized to StakeState::Stake form.  This is
 how stakers choose their initial delegate validator node and activate their
 stake account lamports.
 
