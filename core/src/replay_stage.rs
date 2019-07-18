@@ -124,17 +124,15 @@ impl ReplayStage {
                         &mut bank_forks.write().unwrap(),
                         &leader_schedule_cache,
                     );
-
                     let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
-
-                    Self::replay_active_banks(
+                    let did_process_bank = Self::replay_active_banks(
                         &blocktree,
                         &bank_forks,
                         &my_pubkey,
                         &mut ticks_per_slot,
                         &mut progress,
                         &slot_full_sender,
-                    )?;
+                    );
 
                     if ticks_per_slot == 0 {
                         let frozen_banks = bank_forks.read().unwrap().frozen_banks();
@@ -203,6 +201,10 @@ impl ReplayStage {
                         "replicate_stage-duration",
                         duration_as_ms(&now.elapsed()) as usize
                     );
+                    if did_process_bank {
+                        //just processed a bank, skip the signal; maybe there's more slots available
+                        continue;
+                    }
                     let timer = Duration::from_millis(100);
                     let result = ledger_signal_receiver.recv_timeout(timer);
                     match result {
@@ -406,7 +408,8 @@ impl ReplayStage {
         ticks_per_slot: &mut u64,
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
-    ) -> Result<()> {
+    ) -> bool {
+        let mut did_process_bank = false;
         let active_banks = bank_forks.read().unwrap().active_banks();
         trace!("active banks {:?}", active_banks);
 
@@ -429,11 +432,11 @@ impl ReplayStage {
             }
             let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
             if bank.tick_height() == max_tick_height {
+                did_process_bank = true;
                 Self::process_completed_bank(my_pubkey, bank, slot_full_sender);
             }
         }
-
-        Ok(())
+        did_process_bank
     }
 
     fn generate_votable_banks(
