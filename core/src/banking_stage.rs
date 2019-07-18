@@ -239,10 +239,10 @@ impl BankingStage {
     }
 
     fn consume_or_forward_packets(
+        my_pubkey: &Pubkey,
         leader_pubkey: Option<Pubkey>,
         bank_is_available: bool,
         would_be_leader: bool,
-        my_pubkey: &Pubkey,
     ) -> BufferedPacketsDecision {
         leader_pubkey.map_or(
             // If leader is not known, return the buffered packets as is
@@ -275,17 +275,23 @@ impl BankingStage {
         enable_forwarding: bool,
         batch_limit: usize,
     ) -> Result<()> {
-        let decision = {
+        let (poh_next_slot_leader, poh_has_bank, would_be_leader) = {
             let poh = poh_recorder.lock().unwrap();
-            Self::consume_or_forward_packets(
+            (
                 poh.next_slot_leader(),
-                poh.bank().is_some(),
+                poh.has_bank(),
                 poh.would_be_leader(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
                 ),
-                my_pubkey,
             )
         };
+
+        let decision = Self::consume_or_forward_packets(
+            my_pubkey,
+            poh_next_slot_leader,
+            poh_has_bank,
+            would_be_leader,
+        );
 
         match decision {
             BufferedPacketsDecision::Consume => {
@@ -300,9 +306,10 @@ impl BankingStage {
             }
             BufferedPacketsDecision::Forward => {
                 if enable_forwarding {
-                    let poh = poh_recorder.lock().unwrap();
-                    let next_leader =
-                        poh.leader_after_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
+                    let next_leader = poh_recorder
+                        .lock()
+                        .unwrap()
+                        .leader_after_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
                     next_leader.map_or(Ok(()), |leader_pubkey| {
                         let leader_addr = {
                             cluster_info
@@ -1507,60 +1514,60 @@ mod tests {
         let my_pubkey1 = Pubkey::new_rand();
 
         assert_eq!(
-            BankingStage::consume_or_forward_packets(None, true, false, &my_pubkey),
+            BankingStage::consume_or_forward_packets(&my_pubkey, None, true, false,),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(None, false, false, &my_pubkey),
+            BankingStage::consume_or_forward_packets(&my_pubkey, None, false, false),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(None, false, false, &my_pubkey1),
+            BankingStage::consume_or_forward_packets(&my_pubkey1, None, false, false),
             BufferedPacketsDecision::Hold
         );
 
         assert_eq!(
             BankingStage::consume_or_forward_packets(
+                &my_pubkey,
                 Some(my_pubkey1.clone()),
                 false,
                 false,
-                &my_pubkey
             ),
             BufferedPacketsDecision::Forward
         );
         assert_eq!(
             BankingStage::consume_or_forward_packets(
+                &my_pubkey,
                 Some(my_pubkey1.clone()),
                 false,
                 true,
-                &my_pubkey
             ),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
             BankingStage::consume_or_forward_packets(
+                &my_pubkey,
                 Some(my_pubkey1.clone()),
                 true,
                 false,
-                &my_pubkey
             ),
             BufferedPacketsDecision::Consume
         );
         assert_eq!(
             BankingStage::consume_or_forward_packets(
+                &my_pubkey1,
                 Some(my_pubkey1.clone()),
                 false,
                 false,
-                &my_pubkey1
             ),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
             BankingStage::consume_or_forward_packets(
+                &my_pubkey1,
                 Some(my_pubkey1.clone()),
                 true,
                 false,
-                &my_pubkey1
             ),
             BufferedPacketsDecision::Consume
         );

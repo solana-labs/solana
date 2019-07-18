@@ -105,11 +105,13 @@ impl ReplayStage {
         let leader_schedule_cache = leader_schedule_cache.clone();
         let vote_account = *vote_account;
         let voting_keypair = voting_keypair.cloned();
+
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
                 let mut progress = HashMap::new();
+
                 loop {
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
@@ -122,6 +124,8 @@ impl ReplayStage {
                         &mut bank_forks.write().unwrap(),
                         &leader_schedule_cache,
                     );
+
+                    let mut tpu_has_bank = poh_recorder.lock().unwrap().has_bank();
 
                     let did_complete_bank = Self::replay_active_banks(
                         &blocktree,
@@ -156,15 +160,17 @@ impl ReplayStage {
                             &poh_recorder,
                             &leader_schedule_cache,
                         );
-                        assert!(!poh_recorder.lock().unwrap().has_bank());
+                        tpu_has_bank = false;
                     }
 
-                    Self::maybe_start_leader(
-                        &my_pubkey,
-                        &bank_forks,
-                        &poh_recorder,
-                        &leader_schedule_cache,
-                    );
+                    if !tpu_has_bank {
+                        Self::maybe_start_leader(
+                            &my_pubkey,
+                            &bank_forks,
+                            &poh_recorder,
+                            &leader_schedule_cache,
+                        );
+                    }
 
                     inc_new_counter_info!(
                         "replicate_stage-duration",
@@ -194,37 +200,19 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
-        let (grace_ticks, poh_slot, parent_slot) = {
-            let poh_recorder = poh_recorder.lock().unwrap();
+        // all the individual calls to poh_recorder.lock() are designed to
+        // increase granularity, decrease contention
 
-            // we're done
-            if poh_recorder.has_bank() {
-                trace!("{} poh_recorder already has a bank", my_pubkey);
-                return;
-            }
+        assert!(!poh_recorder.lock().unwrap().has_bank());
 
-            let (reached_leader_tick, grace_ticks, poh_slot, parent_slot) =
-                poh_recorder.reached_leader_tick();
+        let (reached_leader_tick, grace_ticks, poh_slot, parent_slot) =
+            poh_recorder.lock().unwrap().reached_leader_tick();
 
-            if !reached_leader_tick {
-                trace!("{} poh_recorder hasn't reached_leader_tick", my_pubkey);
-                return;
-            }
-
-            (grace_ticks, poh_slot, parent_slot)
-        };
-
-        trace!(
-            "{} reached_leader_tick, poh_slot: {} parent_slot: {}",
-            my_pubkey,
-            poh_slot,
-            parent_slot,
-        );
-
-        if bank_forks.read().unwrap().get(poh_slot).is_some() {
-            warn!("{} already have bank in forks at {}", my_pubkey, poh_slot);
+        if !reached_leader_tick {
+            trace!("{} poh_recorder hasn't reached_leader_tick", my_pubkey);
             return;
         }
+        trace!("{} reached_leader_tick", my_pubkey,);
 
         let parent = bank_forks
             .read()
@@ -233,16 +221,18 @@ impl ReplayStage {
             .expect("parent_slot doesn't exist in bank forks")
             .clone();
 
-        // the parent was still in poh_recorder last time we looked for votable banks
-        //  break out and re-run the consensus loop above
-        if !parent.is_frozen() {
-            trace!(
-                "{} parent {} isn't frozen, must be re-considered",
-                my_pubkey,
-                parent.slot()
-            );
+        assert!(parent.is_frozen());
+
+        if bank_forks.read().unwrap().get(poh_slot).is_some() {
+            warn!("{} already have bank in forks at {}?", my_pubkey, poh_slot);
             return;
         }
+        trace!(
+            "{} poh_slot {} parent_slot {}",
+            my_pubkey,
+            poh_slot,
+            parent_slot
+        );
 
         if let Some(next_leader) = leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent)) {
             trace!(

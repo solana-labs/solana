@@ -101,6 +101,7 @@ impl PohRecorder {
         self.leader_schedule_cache
             .slot_leader_at(self.tick_height / self.ticks_per_slot + slots, None)
     }
+
     pub fn next_slot_leader(&self) -> Option<Pubkey> {
         self.leader_after_slots(1)
     }
