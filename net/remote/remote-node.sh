@@ -151,10 +151,13 @@ local|tar)
     if [ -f ./solana-client-accounts/client-accounts.yml ]; then
       genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
     fi
-    if [[ $skipSetup != true && -n $stakeNodesInGenesisBlock ]]; then
-      args=(
+    args=()
+    if [[ $skipSetup != true ]]; then
+      if [[ -z $stakeNodesInGenesisBlock ]] ; then
+      args+=(
         --bootstrap-leader-lamports "$stake"
       )
+      fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
       ./multinode-demo/setup.sh "${args[@]}"
