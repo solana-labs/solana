@@ -25,20 +25,20 @@ type ConfigKey = {|
  * @property {string} name validator name
  * @property {?string} website optional, validator website
  * @property {?string} details optional, extra information the validator chose to share
- * @property {?string} keybaseId optional, used to identify validators on keybase.io
+ * @property {?string} keybaseUsername optional, used to identify validators on keybase.io
  */
 export type Info = {|
   name: string,
   website?: string,
   details?: string,
-  keybaseId?: string,
+  keybaseUsername?: string,
 |};
 
 const InfoString = struct({
   name: 'string',
   website: 'string?',
   details: 'string?',
-  keybaseId: 'string?',
+  keybaseUsername: 'string?',
 });
 
 /**

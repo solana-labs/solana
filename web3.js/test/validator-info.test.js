@@ -13,7 +13,7 @@ test('from config account data', () => {
     new PublicKey(keypair.publicKey),
     {
       name: 'Validator',
-      keybaseId: 'validator_id',
+      keybaseUsername: 'validator_id',
     },
   );
 
@@ -27,7 +27,7 @@ test('from config account data', () => {
   // 4) Use modified `solana-validator-info` tool to publish validator info
   // 5) And then use it again to fetch the data! (feel free to trim some A's)
   const configData = Buffer.from(
-    'AgdRlwF0SPKsXcI8nrx6x4wKJyV6xhRFjeCk8W+AAAAAABOY9ixtGkV8UbpqS189vS9p/KkyFiGNyJl+QWvRfZPKAS8AAAAAAAAAeyJrZXliYXNlSWQiOiJ2YWxpZGF0b3JfaWQiLCJuYW1lIjoiVmFsaWRhdG9yIn0',
+    'AgdRlwF0SPKsXcI8nrx6x4wKJyV6xhRFjeCk8W+AAAAAABOY9ixtGkV8UbpqS189vS9p/KkyFiGNyJl+QWvRfZPKATUAAAAAAAAAeyJrZXliYXNlVXNlcm5hbWUiOiJ2YWxpZGF0b3JfaWQiLCJuYW1lIjoiVmFsaWRhdG9yIn0',
     'base64',
   );
   const info = ValidatorInfo.fromConfigData(configData);
