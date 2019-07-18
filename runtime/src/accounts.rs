@@ -690,7 +690,7 @@ impl Accounts {
     }
 }
 
-pub fn create_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {
+pub fn create_test_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {
     for t in 0..num {
         let pubkey = Pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
@@ -1219,7 +1219,7 @@ mod tests {
         let accounts = Accounts::new(Some("serialize_accounts".to_string()));
 
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_accounts(&accounts, &mut pubkeys, 100);
+        create_test_accounts(&accounts, &mut pubkeys, 100);
         check_accounts(&accounts, &pubkeys, 100);
         accounts.add_root(0);
 
