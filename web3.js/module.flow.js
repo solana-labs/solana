@@ -147,7 +147,7 @@ declare module '@solana/web3.js' {
     name: string,
     website?: string,
     details?: string,
-    keybaseId?: string,
+    keybaseUsername?: string,
   |};
 
   declare export class ValidatorInfo {
