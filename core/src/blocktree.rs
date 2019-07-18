@@ -1588,7 +1588,7 @@ fn handle_recovery(
     }
 
     if !recovered_coding.is_empty() {
-        info!(
+        debug!(
             "[handle_recovery] recovered {} coding blobs",
             recovered_coding.len()
         );
@@ -1637,7 +1637,7 @@ fn handle_recovery(
             }
         }
 
-        info!("[handle_recovery] recovered {} data blobs", new_data.len());
+        debug!("[handle_recovery] recovered {} data blobs", new_data.len());
 
         Ok(Some(new_data))
     } else {
