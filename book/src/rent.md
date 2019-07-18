@@ -51,8 +51,9 @@ lest accounts that are loaded infrequently get somewhat of a free ride.
 
 ### Collect from everybody instead?
 
-Use of a transcation to collect rent could have been avoided with a (likely costly) per-slot or per-epoch scan of all current 
-balances.
+Use of a transaction to collect rent could be avoided with a per-slot or per-epoch scan of all current 
+balances.  Such a scan would introduce additional delays for closing out a slot or epoch.  Per-epoch 
+payouts would introduce complexity in the form of stake-weighted distribution of collected rent.
 
 ### Warts
 
