@@ -124,13 +124,8 @@ impl ReplayStage {
                         &mut bank_forks.write().unwrap(),
                         &leader_schedule_cache,
                     );
-<<<<<<< HEAD
                     let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
-                    let did_process_bank = Self::replay_active_banks(
-=======
-
                     let did_complete_bank = Self::replay_active_banks(
->>>>>>> a3a91ba22... Fix misleading variable name (#5176)
                         &blocktree,
                         &bank_forks,
                         &my_pubkey,
@@ -435,15 +430,9 @@ impl ReplayStage {
                 // bank is completed
                 continue;
             }
-<<<<<<< HEAD
             let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
             if bank.tick_height() == max_tick_height {
-                did_process_bank = true;
-=======
-            assert_eq!(*bank_slot, bank.slot());
-            if bank.tick_height() == bank.max_tick_height() {
                 did_complete_bank = true;
->>>>>>> a3a91ba22... Fix misleading variable name (#5176)
                 Self::process_completed_bank(my_pubkey, bank, slot_full_sender);
             }
         }
