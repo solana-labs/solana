@@ -18,16 +18,16 @@ serde_json = "1.0.40"
 solana-logger = { path = "../../logger", version = "0.17.0" }
 solana-sdk = { path = "../../sdk", version = "0.17.0" }
 
-bytecode_verifier = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
-failure = {git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b", package = "failure_ext" }
-state_view = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
-types = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
-vm = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
-vm_cache_map = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
-vm_runtime = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
+bytecode_verifier = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
+failure = {git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0", package = "failure_ext" }
+state_view = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
+types = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
+vm = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
+vm_cache_map = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
+vm_runtime = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
 
 [dev-dependencies]
-compiler = { git = "https://github.com/libra/libra", rev = "3d2a68e95077b47bc238333c833db03223aaff7b" }
+compiler = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
 
 [lib]
 crate-type = ["lib"]
