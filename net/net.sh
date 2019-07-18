@@ -553,7 +553,7 @@ getNodeType() {
   exit 1
 }
 
-start() {
+prepare_deploy() {
   case $deployMethod in
   tar)
     if [[ -n $releaseChannel ]]; then
@@ -585,7 +585,9 @@ start() {
     usage "Internal error: invalid deployMethod: $deployMethod"
     ;;
   esac
+}
 
+deploy() {
   echo "Deployment started at $(date)"
   if $updateNodes; then
     $metricsWriteDatapoint "testnet-deploy net-update-begin=1"
@@ -754,11 +756,13 @@ stop() {
 
 case $command in
 restart)
+  prepare_deploy
   stop
-  start
+  deploy
   ;;
 start)
-  start
+  prepare_deploy
+  deploy
   ;;
 update)
   skipSetup=true
