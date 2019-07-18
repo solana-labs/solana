@@ -1,0 +1,23 @@
+[package]
+name = "solana-librapay-api"
+version = "0.18.0-pre0"
+description = "Solana Libra Payment"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+edition = "2018"
+
+[dependencies]
+bincode = "1.1.4"
+log = "0.4.2"
+solana-logger = { path = "../../logger", version = "0.18.0-pre0" }
+solana-sdk = { path = "../../sdk", version = "0.18.0-pre0" }
+solana-runtime = { path = "../../runtime", version = "0.18.0-pre0" }
+types = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_types" }
+language_e2e_tests = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_language_e2e_tests" }
+solana-move-loader-api = { path = "../move_loader_api", version = "0.18.0-pre0" }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_librapay_api"

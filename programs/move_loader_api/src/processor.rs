@@ -61,11 +61,11 @@ pub const GENESIS_INDEX: usize = 1;
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct InvokeInfo {
     /// Sender of the "transaction", the "sender" who is calling this program
-    sender_address: AccountAddress,
+    pub sender_address: AccountAddress,
     /// Name of the function to call
-    function_name: String,
+    pub function_name: String,
     /// Arguments to pass to the program being invoked
-    args: Vec<TransactionArgument>,
+    pub args: Vec<TransactionArgument>,
 }
 
 pub struct MoveProcessor {}
