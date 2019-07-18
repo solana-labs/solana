@@ -72,6 +72,11 @@ Operate a configured testnet
                                       - If set, validators will skip verifying
                                         the ledger they already have saved to disk at
                                         boot (results in a much faster boot)
+   --no-deploy
+                                      - Don't deploy new software, use the
+                                        existing deployment
+
+
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
@@ -136,6 +141,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --no-snapshot ]]; then
       maybeNoSnapshot="$1"
+      shift 1
+    elif [[ $1 = --no-deploy ]]; then
+      deployMethod=skip
       shift 1
     elif [[ $1 = --skip-ledger-verify ]]; then
       maybeSkipLedgerVerify="$1"
@@ -364,6 +372,8 @@ startBootstrapLeader() {
       ;;
     local)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
+      ;;
+    skip)
       ;;
     *)
       usage "Internal error: invalid deployMethod: $deployMethod"
@@ -597,6 +607,8 @@ prepare_deploy() {
   local)
     build
     ;;
+  skip)
+    ;;
   *)
     usage "Internal error: invalid deployMethod: $deployMethod"
     ;;
@@ -693,6 +705,8 @@ deploy() {
     ;;
   local)
     networkVersion="$(git rev-parse HEAD || echo local-unknown)"
+    ;;
+  skip)
     ;;
   *)
     usage "Internal error: invalid deployMethod: $deployMethod"
