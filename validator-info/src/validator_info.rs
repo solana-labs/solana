@@ -17,8 +17,8 @@ use std::process::exit;
 
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
 pub const MAX_LONG_FIELD_LENGTH: usize = 300;
-pub const MAX_VALIDATOR_INFO: u64 = 570;
-pub const JSON_RPC_URL: &str = "https://api.testnet.solana.com/";
+pub const MAX_VALIDATOR_INFO: u64 = 576;
+pub const JSON_RPC_URL: &str = "https://api.testnet.solana.com:8899";
 
 // Config account key: Va1idator1nfo111111111111111111111111111111
 pub const REGISTER_CONFIG_KEY: [u8; 32] = [
@@ -103,23 +103,23 @@ fn check_details_length(string: String) -> Result<(), String> {
 
 fn verify_keybase(
     validator_pubkey: &Pubkey,
-    keybase_id: &Value,
+    keybase_username: &Value,
 ) -> Result<(), Box<dyn error::Error>> {
-    if let Some(keybase_id) = keybase_id.as_str() {
+    if let Some(keybase_username) = keybase_username.as_str() {
         let url = format!(
             "https://keybase.pub/{}/solana/validator-{:?}",
-            keybase_id, validator_pubkey
+            keybase_username, validator_pubkey
         );
         let client = Client::new();
         if client.head(&url).send()?.status().is_success() {
             Ok(())
         } else {
-            Err(format!("keybase_id could not be confirmed at: {}. Please add this pubkey file to your keybase profile to connect", url))?
+            Err(format!("keybase_username could not be confirmed at: {}. Please add this pubkey file to your keybase profile to connect", url))?
         }
     } else {
         Err(format!(
-            "keybase_id could not be parsed as String: {}",
-            keybase_id
+            "keybase_username could not be parsed as String: {}",
+            keybase_username
         ))?
     }
 }
@@ -136,10 +136,10 @@ fn parse_args(matches: &ArgMatches<'_>) -> Value {
     if let Some(details) = matches.value_of("details") {
         map.insert("details".to_string(), Value::String(details.to_string()));
     }
-    if let Some(keybase_id) = matches.value_of("keybase_id") {
+    if let Some(keybase_username) = matches.value_of("keybase_username") {
         map.insert(
-            "keybaseId".to_string(),
-            Value::String(keybase_id.to_string()),
+            "keybaseUsername".to_string(),
+            Value::String(keybase_username.to_string()),
         );
     }
     Value::Object(map)
@@ -218,13 +218,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Validator website url"),
                 )
                 .arg(
-                    Arg::with_name("keybase_id")
+                    Arg::with_name("keybase_username")
                         .short("k")
                         .long("keybase")
                         .value_name("STRING")
                         .takes_value(true)
                         .validator(is_short_field)
-                        .help("Validator Keybase id"),
+                        .help("Validator Keybase username"),
                 )
                 .arg(
                     Arg::with_name("details")
@@ -294,7 +294,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // Prepare validator info
             let keys = vec![(id(), false), (validator_keypair.pubkey(), true)];
             let validator_info = parse_args(&matches);
-            if let Some(string) = validator_info.get("keybaseId") {
+            if let Some(string) = validator_info.get("keybaseUsername") {
                 verify_keybase(&validator_keypair.pubkey(), &string)?;
             }
             let validator_string = serde_json::to_string(&validator_info)?;
@@ -426,12 +426,16 @@ mod tests {
         let matches = App::new("test")
             .arg(Arg::with_name("name").short("n").takes_value(true))
             .arg(Arg::with_name("website").short("w").takes_value(true))
-            .arg(Arg::with_name("keybase_id").short("k").takes_value(true))
+            .arg(
+                Arg::with_name("keybase_username")
+                    .short("k")
+                    .takes_value(true),
+            )
             .arg(Arg::with_name("details").short("d").takes_value(true))
-            .get_matches_from(vec!["test", "-n", "Alice", "-k", "464bb0f2956f7e83"]);
+            .get_matches_from(vec!["test", "-n", "Alice", "-k", "alice_keybase"]);
         let expected = json!({
             "name": "Alice",
-            "keybaseId": "464bb0f2956f7e83",
+            "keybaseUsername": "alice_keybase",
         });
         assert_eq!(parse_args(&matches), expected);
     }
@@ -496,7 +500,10 @@ mod tests {
             "website".to_string(),
             Value::String(max_short_string.clone()),
         );
-        info.insert("keybaseId".to_string(), Value::String(max_short_string));
+        info.insert(
+            "keybaseUsername".to_string(),
+            Value::String(max_short_string),
+        );
         info.insert("details".to_string(), Value::String(max_long_string));
         let info_string = serde_json::to_string(&Value::Object(info)).unwrap();
 
