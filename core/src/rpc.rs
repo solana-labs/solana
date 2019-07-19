@@ -239,6 +239,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, _: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
 
+    #[rpc(meta, name = "getLeaderSchedule")]
+    fn get_leader_schedule(&self, _: Self::Metadata) -> Result<Option<Vec<String>>>;
+
     #[rpc(meta, name = "getRecentBlockhash")]
     fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<(String, FeeCalculator)>;
 
@@ -367,6 +370,21 @@ impl RpcSol for RpcSolImpl {
                 }
             })
             .collect())
+    }
+
+    fn get_leader_schedule(&self, meta: Self::Metadata) -> Result<Option<Vec<String>>> {
+        let bank = meta.request_processor.read().unwrap().bank();
+        Ok(
+            crate::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
+                |leader_schedule| {
+                    leader_schedule
+                        .get_slot_leaders()
+                        .iter()
+                        .map(|pubkey| pubkey.to_string())
+                        .collect()
+                },
+            ),
+        )
     }
 
     fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<(String, FeeCalculator)> {
