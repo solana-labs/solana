@@ -11,7 +11,7 @@ of getting its stake slashed.  The economics are covered in [staking
 rewards](staking-rewards.md).  This chapter, on the other hand, describes the
 underlying mechanics of its implementation.
 
-## Basic Besign
+## Basic Design
 
 The general idea is that the validator owns a Vote account. The Vote account
 tracks validator votes, counts validator generated credits, and provides any
@@ -114,7 +114,13 @@ tokens stored as `Account::lamports`.
 The stakes and the MiningPool are accounts that are owned by the same `Stake`
 program.
 
+<<<<<<< HEAD
 ### StakeInstruction::Initialize
+=======
+The Stake account is moved from Uninitialized to StakeState::Stake form.  This is
+how stakers choose their initial delegate validator node and activate their
+stake account lamports.
+>>>>>>> 25080f1a3... fix book typos (#5185)
 
 * `account[0]` - RW - The StakeState::Delegate instance.
   `StakeState::Delegate::credits_observed` is initialized to `VoteState::credits`.
