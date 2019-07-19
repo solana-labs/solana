@@ -220,6 +220,19 @@ pub struct RpcVoteAccountInfo {
     pub commission: u8,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcEpochInfo {
+    /// The current epoch
+    pub epoch: u64,
+
+    /// The number of slots in this epoch
+    pub slots_in_epoch: u64,
+
+    /// The current slot, relative to the start of the current epoch
+    pub slot_index: u64,
+}
+
 #[rpc(server)]
 pub trait RpcSol {
     type Metadata;
@@ -238,6 +251,12 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, _: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
+
+    #[rpc(meta, name = "getEpochInfo")]
+    fn get_epoch_info(&self, _: Self::Metadata) -> Result<RpcEpochInfo>;
+
+    #[rpc(meta, name = "getLeaderSchedule")]
+    fn get_leader_schedule(&self, _: Self::Metadata) -> Result<Option<Vec<String>>>;
 
     #[rpc(meta, name = "getRecentBlockhash")]
     fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<(String, FeeCalculator)>;
@@ -367,6 +386,32 @@ impl RpcSol for RpcSolImpl {
                 }
             })
             .collect())
+    }
+
+    fn get_epoch_info(&self, meta: Self::Metadata) -> Result<RpcEpochInfo> {
+        let bank = meta.request_processor.read().unwrap().bank();
+        let epoch_schedule = bank.epoch_schedule();
+        let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
+        Ok(RpcEpochInfo {
+            epoch,
+            slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
+            slot_index,
+        })
+    }
+
+    fn get_leader_schedule(&self, meta: Self::Metadata) -> Result<Option<Vec<String>>> {
+        let bank = meta.request_processor.read().unwrap().bank();
+        Ok(
+            crate::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
+                |leader_schedule| {
+                    leader_schedule
+                        .get_slot_leaders()
+                        .iter()
+                        .map(|pubkey| pubkey.to_string())
+                        .collect()
+                },
+            ),
+        )
     }
 
     fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<(String, FeeCalculator)> {

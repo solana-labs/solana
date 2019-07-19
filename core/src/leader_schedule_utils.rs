@@ -5,16 +5,16 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 
 /// Return the leader schedule for the given epoch.
-pub fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
-    staking_utils::staked_nodes_at_epoch(bank, epoch_height).map(|stakes| {
+pub fn leader_schedule(epoch: u64, bank: &Bank) -> Option<LeaderSchedule> {
+    staking_utils::staked_nodes_at_epoch(bank, epoch).map(|stakes| {
         let mut seed = [0u8; 32];
-        seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
+        seed[0..8].copy_from_slice(&epoch.to_le_bytes());
         let mut stakes: Vec<_> = stakes.into_iter().collect();
         sort_stakes(&mut stakes);
         LeaderSchedule::new(
             &stakes,
             seed,
-            bank.get_slots_in_epoch(epoch_height),
+            bank.get_slots_in_epoch(epoch),
             NUM_CONSECUTIVE_LEADER_SLOTS,
         )
     })

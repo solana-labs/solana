@@ -29,6 +29,10 @@ impl LeaderSchedule {
             .collect();
         Self { slot_leaders }
     }
+
+    pub(crate) fn get_slot_leaders(&self) -> &[Pubkey] {
+        &self.slot_leaders
+    }
 }
 
 impl Index<u64> for LeaderSchedule {
