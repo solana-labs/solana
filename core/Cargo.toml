@@ -72,7 +72,7 @@ solana-vote-signer = { path = "../vote-signer", version = "0.17.0" }
 sys-info = "0.5.7"
 tokio = "0.1"
 tokio-codec = "0.1"
-untrusted = "0.6.2"
+untrusted = "0.7.0"
 
 # reed-solomon-erasure's simd_c feature fails to build for x86_64-pc-windows-msvc, use pure-rust
 [target.'cfg(windows)'.dependencies]
