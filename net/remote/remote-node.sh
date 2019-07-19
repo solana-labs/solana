@@ -109,13 +109,13 @@ local|tar)
     fi
     set -x
     rm -rf ./solana-node-keys
-    rm -rf ./solana-node-stakes
-    mkdir ./solana-node-stakes
-    if [[ -n $internalNodesStakeLamports ]]; then
+    rm -rf ./solana-node-balances
+    mkdir ./solana-node-balances
+    if [[ -n $internalNodesLamports ]]; then
       for i in $(seq 0 "$numNodes"); do
         solana-keygen new -o ./solana-node-keys/"$i"
         pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
-        echo "${pubkey}: $internalNodesStakeLamports" >> ./solana-node-stakes/fullnode-stakes.yml
+        echo "${pubkey}: $internalNodesLamports" >> ./solana-node-balances/fullnode-balances.yml
       done
     fi
 
@@ -146,9 +146,9 @@ local|tar)
       tail -n +2 -q ./solana-client-accounts/bench-exchange"$i".yml >> ./solana-client-accounts/client-accounts.yml
       echo "" >> ./solana-client-accounts/client-accounts.yml
     done
-    [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-stakes/fullnode-stakes.yml
-    if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then
-      genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml"
+    [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-balances/fullnode-balances.yml
+    if [ -f ./solana-node-balances/fullnode-balances.yml ]; then
+      genesisOptions+=" --primordial-accounts-file ./solana-node-balances/fullnode-balances.yml"
     fi
     if [ -f ./solana-client-accounts/client-accounts.yml ]; then
       genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
@@ -184,6 +184,7 @@ local|tar)
   validator|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
     rm -f ~/solana/fullnode-identity.json
+    # TODO: Is this supposed to be Lamports or StakeLamports?
     [[ -z $internalNodesStakeLamports ]] || net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/solana-node-keys/"$nodeIndex" ~/solana/fullnode-identity.json
 
