@@ -40,6 +40,7 @@ pub struct ValidatorConfig {
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
     pub snapshot_path: Option<String>,
+    pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub erasure_config: ErasureConfig,
 }
@@ -51,6 +52,7 @@ impl Default for ValidatorConfig {
             voting_disabled: false,
             blockstream: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
+            max_ledger_slots: None,
             account_paths: None,
             rpc_config: JsonRpcConfig::default(),
             snapshot_path: None,
@@ -247,6 +249,7 @@ impl Validator {
             blocktree.clone(),
             &storage_state,
             config.blockstream.as_ref(),
+            config.max_ledger_slots,
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,

@@ -193,8 +193,10 @@ impl Blocktree {
         false
     }
 
-    // silently deletes all blocktree column families starting at the given slot until the `to` slot
-    fn delete_all_columns(&self, from_slot: u64, to_slot: Option<u64>) {
+    /// Silently deletes all blocktree column families starting at the given slot until the `to` slot
+    /// Use with care; does not check for integrity and does not update slot metas that
+    /// refer to deleted slots
+    pub fn delete_all_columns(&self, from_slot: u64, to_slot: Option<u64>) {
         let to_index = to_slot.map(|slot| (slot + 1, 0));
         match self.meta_cf.force_delete(Some(from_slot), to_slot) {
             Ok(_) => (),
@@ -3474,7 +3476,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_delete() {
+    fn test_delete_all_columns() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         let (blobs, _) = make_many_slot_entries(0, 50, 5);

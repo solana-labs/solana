@@ -134,6 +134,7 @@ fn test_replay() {
             blocktree,
             &StorageState::default(),
             None,
+            None,
             ledger_signal_receiver,
             &Arc::new(RpcSubscriptions::default()),
             &poh_recorder,
