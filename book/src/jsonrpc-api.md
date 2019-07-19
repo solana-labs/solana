@@ -25,6 +25,8 @@ Methods
 * [getAccountInfo](#getaccountinfo)
 * [getBalance](#getbalance)
 * [getClusterNodes](#getclusternodes)
+* [getEpochInfo](#getepochinfo)
+* [getLeaderSchedule](#getleaderschedule)
 * [getProgramAccounts](#getprogramaccounts)
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
@@ -168,6 +170,50 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 // Result
 {"jsonrpc":"2.0","result":[{"gossip":"10.239.6.48:8001","pubkey":"9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ","rpc":"10.239.6.48:8899","tpu":"10.239.6.48:8856"}],"id":1}
+```
+
+---
+
+### getEpochInfo
+Returns information about the current epoch
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be an object with the following fields:
+* `epoch`, the current epoch
+* `slotIndex`, the current slot relative to the start of the current epoch
+* `slotsInEpoch`, the number of slots in this epoch
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
+```
+
+---
+
+### getLeaderSchedule
+Returns the leader schedule for the current epoch
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be an array of leader public keys (as base-58 encoded
+strings) for each slot in the current epoch
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[...],"id":1}
 ```
 
 ---
