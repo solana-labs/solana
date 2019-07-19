@@ -380,6 +380,7 @@ kill_fullnode() {
     kill "$_pid" || true
     wait "$_pid" || true
   fi
+  exit
 }
 trap 'kill_fullnode' INT TERM ERR
 
@@ -498,8 +499,8 @@ EOF
   secs_to_next_genesis_poll=5
   secs_to_next_snapshot=30
   while true; do
-    if ! kill -0 "$pid"; then
-      wait "$pid" || true
+    if [[ -z $pid ]] || ! kill -0 "$pid"; then
+      [[ -z $pid ]] || wait "$pid"
       echo "############## $node_type exited, restarting ##############"
       break
     fi
