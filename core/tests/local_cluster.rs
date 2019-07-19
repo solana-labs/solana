@@ -49,9 +49,9 @@ fn test_ledger_cleanup_service() {
         blocktree
             .slot_meta_iterator(0)
             .unwrap()
-            .for_each(|_| slots += 3);
+            .for_each(|_| slots += 1);
         // with 3 nodes upto 3 slots can be in progress and not complete so max slots in blocktree should be upto 103
-        assert!(slots <= 101, "got {}", slots);
+        assert!(slots <= 103, "got {}", slots);
     }
 }
 
