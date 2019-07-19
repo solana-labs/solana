@@ -28,6 +28,8 @@ maybeStakeNodesInGenesisBlock=
 maybeExternalPrimordialAccountsFile=
 maybeLamports=
 maybeLetsEncrypt=
+maybeFullnodeAdditionalDiskSize=
+maybeNoSnapshot=
 
 usage() {
   exitcode=0
@@ -80,6 +82,10 @@ Deploys a CD testnet
                         - If set, will not fetch logs from remote nodes
    --letsencrypt [dns name]
                         - Attempt to generate a TLS certificate using this DNS name
+   --fullnode-additional-disk-size-gb [number]
+                        - Size of additional disk in GB for all fullnodes
+   --no-snapshot
+                        - If set, disables booting validators from a snapshot
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -113,6 +119,15 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --letsencrypt ]]; then
       maybeLetsEncrypt="$1 $2"
       shift 2
+    elif [[ $1 = --fullnode-additional-disk-size-gb ]]; then
+      maybeFullnodeAdditionalDiskSize="$1 $2"
+      shift 2
+    elif [[ $1 == --machine-type* ]]; then # Bypass quoted long args for GPUs
+      shortArgs+=("$1")
+      shift
+    elif [[ $1 = --no-snapshot ]]; then
+      maybeNoSnapshot="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -292,6 +307,11 @@ if ! $skipCreate; then
     create_args+=(-f)
   fi
 
+  if [[ -n $maybeFullnodeAdditionalDiskSize ]]; then
+    # shellcheck disable=SC2206 # Do not want to quote
+    create_args+=($maybeFullnodeAdditionalDiskSize)
+  fi
+
   time net/"$cloudProvider".sh create "${create_args[@]}"
 else
   echo "--- $cloudProvider.sh config"
@@ -380,6 +400,11 @@ if ! $skipStart; then
     if [[ -n $maybeLamports ]]; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeLamports
       args+=($maybeLamports)
+    fi
+
+    if [[ -n $maybeNoSnapshot ]]; then
+      # shellcheck disable=SC2206
+      args+=($maybeNoSnapshot)
     fi
 
     time net/net.sh "${args[@]}"

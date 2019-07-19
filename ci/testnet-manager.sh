@@ -158,7 +158,6 @@ testnet-demo)
 tds)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
-  : "${GCE_NODE_COUNT:=3}"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
@@ -469,24 +468,101 @@ deploy() {
   tds)
     (
       set -x
-      # TODO: Should we spread the few nodes around multiple zones?
+
+      # Allow cluster configuration to be overridden from env vars
+
+      if [[ -z $TDS_ZONES ]]; then
+        TDS_ZONES="us-west1-a,us-central1-a,europe-west4-a"
+      fi
+      GCE_CLOUD_ZONES=(); while read -r -d, ; do GCE_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TDS_ZONES},"
+
+      if [[ -z $TDS_NODE_COUNT ]]; then
+        TDS_NODE_COUNT="3"
+      fi
+
+      if [[ -z $TDS_CLIENT_COUNT ]]; then
+        TDS_CLIENT_COUNT="1"
+      fi
+
+      if [[ -z $ENABLE_GPU ]]; then
+        maybeGpu=(-G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100")
+      elif [[ $ENABLE_GPU == skip ]]; then
+        maybeGpu=()
+      else
+        maybeGpu=(-G "${ENABLE_GPU}")
+      fi
+
+      if [[ -z $HASHES_PER_TICK ]]; then
+        maybeHashesPerTick="--hashes-per-tick auto"
+      elif [[ $HASHES_PER_TICK == skip ]]; then
+        maybeHashesPerTick=""
+      else
+        maybeHashesPerTick="--hashes-per-tick ${HASHES_PER_TICK}"
+      fi
+
+      if [[ -z $STAKE_INTERNAL_NODES ]]; then
+        maybeStakeInternalNodes="--stake-internal-nodes 1000000000000"
+      elif [[ $STAKE_INTERNAL_NODES == skip ]]; then
+        maybeStakeInternalNodes=""
+      else
+        maybeStakeInternalNodes="--stake-internal-nodes ${STAKE_INTERNAL_NODES}"
+      fi
+
+      EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
+      if [[ -z $EXTERNAL_ACCOUNTS_FILE_URL ]]; then
+        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
+        wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
+        maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
+      elif [[ $EXTERNAL_ACCOUNTS_FILE_URL == skip ]]; then
+        maybeExternalAccountsFile=""
+      else
+        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
+        wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
+        maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
+      fi
+
+      if [[ -z $LAMPORTS ]]; then
+        maybeLamports="--lamports 8589934592000000000"
+      elif [[ $LAMPORTS == skip ]]; then
+        maybeLamports=""
+      else
+        maybeLamports="--lamports ${LAMPORTS}"
+      fi
+
+      if [[ -z $ADDITIONAL_DISK_SIZE_GB ]]; then
+        maybeAdditionalDisk="--fullnode-additional-disk-size-gb 32000"
+      elif [[ $ADDITIONAL_DISK_SIZE_GB == skip ]]; then
+        maybeAdditionalDisk=""
+      else
+        maybeAdditionalDisk="--fullnode-additional-disk-size-gb ${ADDITIONAL_DISK_SIZE_GB}"
+      fi
+
+
+      # Multiple V100 GPUs are available in us-west1, us-central1 and europe-west4
       # shellcheck disable=SC2068
       # shellcheck disable=SC2086
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p tds-solana-com -C gce ${GCE_ZONE_ARGS[0]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
+        ci/testnet-deploy.sh -p tds-solana-com -C gce \
+          "${maybeGpu[@]}" \
+          -d pd-ssd \
+          ${GCE_CLOUD_ZONES[@]/#/-z } \
+          -t "$CHANNEL_OR_TAG" \
+          -n ${TDS_NODE_COUNT} \
+          -c ${TDS_CLIENT_COUNT} \
+          -P -u \
           -a tds-solana-com --letsencrypt tds.solana.com \
-          --hashes-per-tick auto \
+          ${maybeHashesPerTick} \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
-          --stake-internal-nodes 1000000000000 \
-          --external-accounts-file /tmp/stakes.yml \
-          --lamports 8589934592000000000 \
-          --skip-deploy-update
-
+          ${maybeStakeInternalNodes} \
+          ${maybeExternalAccountsFile} \
+          ${maybeLamports} \
+          ${maybeAdditionalDisk} \
+          --skip-deploy-update \
+          --no-snapshot
     )
     ;;
   *)

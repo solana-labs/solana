@@ -74,8 +74,8 @@ The `solana-install` tool can be used to easily install and upgrade the cluster
 software on Linux x86_64 and mac OS systems.
 
 ```bash
-$ export SOLANA_RELEASE=v0.16.0  # skip this line to install the latest release
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.0/install/solana-install-init.sh | sh -s
+$ export SOLANA_RELEASE=v0.16.5  # skip this line to install the latest release
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.5/install/solana-install-init.sh | sh -s
 ```
 
 Alternatively build the `solana-install` program from source and run the
@@ -240,3 +240,34 @@ A local InfluxDB and Grafana instance is now running on your machine.  Define
 `start.sh` output and restart your validator.
 
 Metrics should now be streaming and visible from your local Grafana dashboard.
+
+#### Publishing Validator Info
+
+You can publish your validator information to the chain to be publicly visible
+to other users.
+
+Run the solana-validator-info CLI to populate a validator-info account:
+```bash
+$ solana-validator-info publish ~/validator-keypair.json <VALIDATOR_NAME> <VALIDATOR_INFO_ARGS>
+```
+Optional fields for VALIDATOR_INFO_ARGS:
+* Website
+* Keybase Username
+* Details
+
+##### Keybase
+
+Including a Keybase username allows client applications (like the Solana Network
+Explorer) to automatically pull in your validator public profile, including
+cryptographic proofs, brand identity, etc. To connect your validator pubkey with
+Keybase:
+
+1. Join https://keybase.io/ and complete the profile for your validator
+2. Add your validator **identity pubkey** to Keybase:
+  * Create an empty file on your local computer called `solana_pubkey_<PUBKEY>`
+  * In Keybase, navigate to the Files section, and upload your pubkey file to
+  a `solana` subdirectory in your public folder: `/keybase/public/<KEYBASE_USERNAME>/solana`
+  * To check your pubkey, ensure you can successfully browse to
+  `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<PUBKEY>`
+3. Add or update your `solana-validator-info` with your Keybase username. The
+CLI will verify the `validator-<PUBKEY>` file

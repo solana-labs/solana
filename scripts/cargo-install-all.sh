@@ -38,6 +38,7 @@ BIN_CRATES=(
   ledger-tool
   replicator
   validator
+  validator-info
   wallet
   bench-exchange
   bench-tps

@@ -1,14 +1,12 @@
-use hashbrown::HashMap;
 use log::*;
 use solana_sdk::pubkey::Pubkey;
-use std::collections;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub type Fork = u64;
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    pub account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
+    pub account_maps: hashbrown::HashMap<Pubkey, Vec<(Fork, T)>>,
 
     pub roots: HashSet<Fork>,
 
@@ -17,24 +15,42 @@ pub struct AccountsIndex<T> {
 }
 
 impl<T: Clone> AccountsIndex<T> {
-    /// Get an account
-    /// The latest account that appears in `ancestors` or `roots` is returned.
-    pub fn get(
+    /// call func with every pubkey and index visible from a given set of ancestors
+    pub fn scan_accounts<F>(&self, ancestors: &HashMap<Fork, usize>, mut func: F)
+    where
+        F: FnMut(&Pubkey, (&T, Fork)) -> (),
+    {
+        for (pubkey, list) in self.account_maps.iter() {
+            if let Some(fork_info) = self.latest_fork(ancestors, list) {
+                func(pubkey, fork_info);
+            }
+        }
+    }
+
+    // find the latest fork and T in a list for a given ancestor
+    fn latest_fork<'a>(
         &self,
-        pubkey: &Pubkey,
-        ancestors: &collections::HashMap<Fork, usize>,
-    ) -> Option<(&T, Fork)> {
-        let list = self.account_maps.get(pubkey)?;
+        ancestors: &HashMap<Fork, usize>,
+        list: &'a [(Fork, T)],
+    ) -> Option<(&'a T, Fork)> {
         let mut max = 0;
         let mut rv = None;
-        for e in list.iter().rev() {
-            if e.0 >= max && (ancestors.get(&e.0).is_some() || self.is_root(e.0)) {
-                trace!("GET {} {:?}", e.0, ancestors);
-                rv = Some((&e.1, e.0));
-                max = e.0;
+        for (fork, t) in list.iter().rev() {
+            if *fork >= max && (ancestors.get(fork).is_some() || self.is_root(*fork)) {
+                trace!("GET {} {:?}", fork, ancestors);
+                rv = Some((t, *fork));
+                max = *fork;
             }
         }
         rv
+    }
+
+    /// Get an account
+    /// The latest account that appears in `ancestors` or `roots` is returned.
+    pub fn get(&self, pubkey: &Pubkey, ancestors: &HashMap<Fork, usize>) -> Option<(&T, Fork)> {
+        self.account_maps
+            .get(pubkey)
+            .and_then(|list| self.latest_fork(ancestors, list))
     }
 
     pub fn get_max_root(roots: &HashSet<Fork>, fork_vec: &[(Fork, T)]) -> Fork {
@@ -119,8 +135,12 @@ mod tests {
     fn test_get_empty() {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
-        let ancestors = collections::HashMap::new();
+        let ancestors = HashMap::new();
         assert_eq!(index.get(&key.pubkey(), &ancestors), None);
+
+        let mut num = 0;
+        index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
+        assert_eq!(num, 0);
     }
 
     #[test]
@@ -131,8 +151,12 @@ mod tests {
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
 
-        let ancestors = collections::HashMap::new();
+        let ancestors = HashMap::new();
         assert_eq!(index.get(&key.pubkey(), &ancestors), None);
+
+        let mut num = 0;
+        index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
+        assert_eq!(num, 0);
     }
 
     #[test]
@@ -145,6 +169,10 @@ mod tests {
 
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(index.get(&key.pubkey(), &ancestors), None);
+
+        let mut num = 0;
+        index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
+        assert_eq!(num, 0);
     }
 
     #[test]
@@ -157,6 +185,17 @@ mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
+
+        let mut num = 0;
+        let mut found_key = false;
+        index.scan_accounts(&ancestors, |pubkey, _index| {
+            if pubkey == &key.pubkey() {
+                found_key = true
+            };
+            num += 1
+        });
+        assert_eq!(num, 1);
+        assert!(found_key);
     }
 
     #[test]
@@ -272,5 +311,17 @@ mod tests {
         assert_eq!(gc, vec![(0, true), (1, false), (2, true)]);
         let ancestors = vec![].into_iter().collect();
         assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 3)));
+
+        let mut num = 0;
+        let mut found_key = false;
+        index.scan_accounts(&ancestors, |pubkey, _index| {
+            if pubkey == &key.pubkey() {
+                found_key = true;
+                assert_eq!(_index, (&true, 3));
+            };
+            num += 1
+        });
+        assert_eq!(num, 1);
+        assert!(found_key);
     }
 }

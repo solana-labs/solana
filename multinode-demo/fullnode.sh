@@ -112,15 +112,17 @@ setup_validator_accounts() {
     touch "$configured_flag"
   fi
 
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-    show-vote-account "$vote_pubkey"
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-    show-stake-account "$stake_pubkey"
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-    show-storage-account "$storage_pubkey"
-
   echo "Identity account balance:"
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance
+  (
+    set -x
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      show-vote-account "$vote_pubkey"
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      show-stake-account "$stake_pubkey"
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      show-storage-account "$storage_pubkey"
+  )
   return 0
 }
 
@@ -168,6 +170,7 @@ identity_keypair_path=
 no_restart=0
 airdrops_enabled=1
 generate_snapshots=0
+boot_from_snapshot=1
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -184,6 +187,9 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --generate-snapshots ]]; then
       generate_snapshots=1
+      shift
+    elif [[ $1 = --no-snapshot ]]; then
+      boot_from_snapshot=0
       shift
     elif [[ $1 = --replicator ]]; then
       node_type=replicator
@@ -212,6 +218,9 @@ while [[ -n $1 ]]; do
       stake_lamports="$2"
       shift 2
     elif [[ $1 = --no-voting ]]; then
+      args+=("$1")
+      shift
+    elif [[ $1 = --skip-ledger-verify ]]; then
       args+=("$1")
       shift
     elif [[ $1 = --no-sigverify ]]; then
@@ -422,22 +431,24 @@ EOF
           done
           echo "Fetched genesis ledger in $SECONDS seconds"
 
-          SECONDS=
-          echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
-          if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
-            echo "State snapshot rsync failed"
-            rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-            exit
-          fi
-          echo "Fetched snapshot in $SECONDS seconds"
+          if ((boot_from_snapshot)); then
+            SECONDS=
+            echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
+            if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
+              echo "State snapshot rsync failed"
+              rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+              exit
+            fi
+            echo "Fetched snapshot in $SECONDS seconds"
 
-          SECONDS=
-          mkdir -p "$state_dir"
-          (
-            set -x
-            tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-          )
-          echo "Extracted snapshot in $SECONDS seconds"
+            SECONDS=
+            mkdir -p "$state_dir"
+            (
+              set -x
+              tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+            )
+            echo "Extracted snapshot in $SECONDS seconds"
+          fi
         )
       fi
 
@@ -462,6 +473,7 @@ EOF
 ======================[ $node_type configuration ]======================
 identity pubkey: $identity_pubkey
 vote pubkey: $vote_pubkey
+stake pubkey: $stake_pubkey
 storage pubkey: $storage_pubkey
 ledger: $ledger_config_dir
 accounts: $accounts_config_dir

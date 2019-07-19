@@ -22,7 +22,7 @@ gossip endpoint (a socket address).
 
 Records shared over gossip are arbitrary, but signed and versioned (with a
 timestamp) as needed to make sense to the node receiving them. If a node
-recieves two records from the same source, it it updates its own copy with the
+receives two records from the same source, it updates its own copy with the
 record with the most recent timestamp.
 
 ## Gossip Service Interface

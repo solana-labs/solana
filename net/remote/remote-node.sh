@@ -19,6 +19,7 @@ benchTpsExtraArgs="${12}"
 numBenchExchangeClients="${13}"
 benchExchangeExtraArgs="${14}"
 genesisOptions="${15}"
+extraNodeArgs="${16}"
 set +x
 export RUST_LOG
 
@@ -170,6 +171,8 @@ local|tar)
       args+=(--no-airdrop)
     fi
     args+=(--init-complete-file "$initCompleteFile")
+    # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
+    args+=($extraNodeArgs)
     nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
     waitForNodeToInit
     ;;
@@ -231,7 +234,7 @@ local|tar)
       fi
 
       export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
-      npm install @solana/blockexplorer@1.17.2
+      npm install @solana/blockexplorer@1.21.0
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
 
       # Confirm the blockexplorer is accessible
@@ -247,6 +250,8 @@ local|tar)
     fi
 
     args+=(--init-complete-file "$initCompleteFile")
+    # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
+    args+=($extraNodeArgs)
     nohup ./multinode-demo/validator.sh "${args[@]}" > fullnode.log 2>&1 &
     waitForNodeToInit
     ;;
@@ -264,6 +269,8 @@ local|tar)
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/clear-config.sh
     fi
+    # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
+    args+=($extraNodeArgs)
     nohup ./multinode-demo/replicator.sh "${args[@]}" > fullnode.log 2>&1 &
     sleep 1
     ;;

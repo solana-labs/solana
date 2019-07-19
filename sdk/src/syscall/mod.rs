@@ -11,13 +11,9 @@ pub mod tick_height;
 pub fn is_syscall_id(id: &Pubkey) -> bool {
     current::check_id(id)
         || fees::check_id(id)
-<<<<<<< HEAD
-        || slot_hashes::check_id(id)
-        || tick_height::check_id(id)
-=======
         || rewards::check_id(id)
         || slot_hashes::check_id(id)
->>>>>>> 5b95685e1... Add rewards to is_syscall_id() (#5035)
+        || tick_height::check_id(id)
 }
 
 /// "Sysca11111111111111111111111111111111111111"

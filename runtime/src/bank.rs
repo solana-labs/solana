@@ -18,7 +18,8 @@ use crate::stakes::Stakes;
 use crate::status_cache::StatusCache;
 use crate::storage_utils;
 use crate::storage_utils::StorageAccounts;
-use bincode::{deserialize_from, serialize, serialize_into, serialized_size};
+use bincode::{deserialize_from, serialize_into, serialized_size};
+use byteorder::{ByteOrder, LittleEndian};
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_metrics::{
@@ -27,7 +28,7 @@ use solana_metrics::{
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::{extend_and_hash, Hash};
+use solana_sdk::hash::{hashv, Hash};
 use solana_sdk::inflation::Inflation;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
@@ -918,6 +919,8 @@ impl Bank {
     ) -> (
         Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
         Vec<Result<()>>,
+        usize,
+        usize,
     ) {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
@@ -977,13 +980,8 @@ impl Bank {
             inc_new_counter_error!("bank-process_transactions-error_count", err_count, 0, 1000);
         }
 
-        self.increment_transaction_count(tx_count);
-        self.increment_signature_count(signature_count);
-
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
-        inc_new_counter_info!("bank-process_transactions-sigs", signature_count, 0, 1000);
         Self::update_error_counters(&error_counters);
-        (loaded_accounts, executed)
+        (loaded_accounts, executed, tx_count, signature_count)
     }
 
     fn filter_program_errors_and_collect_fee(
@@ -1031,10 +1029,18 @@ impl Bank {
         txs: &[Transaction],
         loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
         executed: &[Result<()>],
+        tx_count: usize,
+        signature_count: usize,
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
             warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
         }
+
+        self.increment_transaction_count(tx_count);
+        self.increment_signature_count(signature_count);
+
+        inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
+        inc_new_counter_info!("bank-process_transactions-sigs", signature_count, 0, 1000);
 
         if executed.iter().any(|res| Self::can_commit(res)) {
             self.is_delta.store(true, Ordering::Relaxed);
@@ -1068,10 +1074,10 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
-        let (loaded_accounts, executed) =
+        let (loaded_accounts, executed, tx_count, signature_count) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
 
-        self.commit_transactions(txs, &loaded_accounts, &executed)
+        self.commit_transactions(txs, &loaded_accounts, &executed, tx_count, signature_count)
     }
 
     #[must_use]
@@ -1166,11 +1172,19 @@ impl Bank {
             .map(|(account, _)| account)
     }
 
+    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+        self.rc
+            .accounts
+            .load_by_program(&self.ancestors, program_id)
+    }
+
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
-        self.rc.accounts.load_by_program(self.slot(), program_id)
+        self.rc
+            .accounts
+            .load_by_program_fork(self.slot(), program_id)
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Fork)> {
@@ -1219,7 +1233,14 @@ impl Bank {
         // If there are no accounts, return the same hash as we did before
         // checkpointing.
         if let Some(accounts_delta_hash) = self.rc.accounts.hash_internal_state(self.slot()) {
-            extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
+            let mut signature_count_buf = [0u8; 8];
+            LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
+
+            hashv(&[
+                &self.parent_hash.as_ref(),
+                &accounts_delta_hash.as_ref(),
+                &signature_count_buf,
+            ])
         } else {
             self.parent_hash
         }
@@ -1712,7 +1733,7 @@ mod tests {
     fn goto_end_of_slot(bank: &mut Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
-            tick_hash = extend_and_hash(&tick_hash, &[42]);
+            tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
             bank.register_tick(&tick_hash);
             if tick_hash == bank.last_blockhash() {
                 bank.freeze();
@@ -2594,5 +2615,52 @@ mod tests {
         assert!(dbank.rc.update_from_stream(&mut reader).is_ok());
         assert_eq!(dbank.get_balance(&key.pubkey()), 10);
         bank.compare_bank(&dbank);
+    }
+
+    #[test]
+    fn test_bank_get_program_accounts() {
+        let (genesis_block, _mint_keypair) = create_genesis_block(500);
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let bank0 = Arc::new(new_from_parent(&parent));
+
+        let pubkey0 = Pubkey::new_rand();
+        let program_id = Pubkey::new(&[2; 32]);
+        let account0 = Account::new(1, 0, &program_id);
+        bank0.store_account(&pubkey0, &account0);
+
+        assert_eq!(
+            bank0.get_program_accounts_modified_since_parent(&program_id),
+            vec![(pubkey0, account0.clone())]
+        );
+
+        let bank1 = Arc::new(new_from_parent(&bank0));
+        bank1.squash();
+        assert_eq!(
+            bank0.get_program_accounts(&program_id),
+            vec![(pubkey0, account0.clone())]
+        );
+        assert_eq!(
+            bank1.get_program_accounts(&program_id),
+            vec![(pubkey0, account0.clone())]
+        );
+        assert_eq!(
+            bank1.get_program_accounts_modified_since_parent(&program_id),
+            vec![]
+        );
+
+        let bank2 = Arc::new(new_from_parent(&bank1));
+        let pubkey1 = Pubkey::new_rand();
+        let account1 = Account::new(3, 0, &program_id);
+        bank2.store_account(&pubkey1, &account1);
+        // Accounts with 0 lamports should be filtered out by Accounts::load_by_program()
+        let pubkey2 = Pubkey::new_rand();
+        let account2 = Account::new(0, 0, &program_id);
+        bank2.store_account(&pubkey2, &account2);
+
+        let bank3 = Arc::new(new_from_parent(&bank2));
+        bank3.squash();
+        assert_eq!(bank1.get_program_accounts(&program_id).len(), 2);
+        assert_eq!(bank3.get_program_accounts(&program_id).len(), 2);
     }
 }
