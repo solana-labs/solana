@@ -622,13 +622,11 @@ impl ReplayStage {
     ) {
         bank.freeze();
         info!("bank frozen {}", bank.slot());
-        if let Err(e) = slot_full_senders
-            .iter()
-            .map(|sender| sender.send((bank.slot(), *bank.collector_id())))
-            .collect::<std::result::Result<Vec<_>, _>>()
-        {
-            trace!("{} slot_full alert failed: {:?}", my_pubkey, e);
-        }
+        slot_full_senders.iter().for_each(|sender| {
+            if let Err(e) = sender.send((bank.slot(), *bank.collector_id())) {
+                trace!("{} slot_full alert failed: {:?}", my_pubkey, e);
+            }
+        });
     }
 
     fn generate_new_bank_forks(

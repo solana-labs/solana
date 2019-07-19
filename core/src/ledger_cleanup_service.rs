@@ -40,7 +40,7 @@ impl LedgerCleanupService {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => info!("Error from process_entries: {:?}", e),
+                        _ => info!("Error from cleanup_ledger: {:?}", e),
                     }
                 }
             })
