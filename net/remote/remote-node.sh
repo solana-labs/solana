@@ -13,8 +13,8 @@ skipSetup="$6"
 failOnValidatorBootupFailure="$7"
 externalPrimordialAccountsFile="$8"
 maybeDisableAirdrops="$9"
-stakeNodesInGenesisBlock="${10}"
-fundNodesInGenesisBlock="${11}"
+internalNodesStakeLamports="${10}"
+internalNodesLamports="${11}"
 nodeIndex="${12}"
 numBenchTpsClients="${13}"
 benchTpsExtraArgs="${14}"
@@ -31,11 +31,7 @@ export RUST_LOG
 # trouble
 #
 # Ref: https://github.com/solana-labs/solana/issues/3798
-stake=${stakeNodesInGenesisBlock:=424243}
-
-# TODO: There is a default stake set here, but the existing static/default for node_lamports/fundNodes is in fullnode.sh.
-# TODO: Should there be a default value this deep if we are no longer assuming airdrops one way or the other?
-#fundNodesInGenesisBlock=${fundNodesInGenesisBlock:=0}
+stake=${internalNodesStakeLamports:=424243}
 
 missing() {
   echo "Error: $1 not specified"
@@ -115,11 +111,11 @@ local|tar)
     rm -rf ./solana-node-keys
     rm -rf ./solana-node-stakes
     mkdir ./solana-node-stakes
-    if [[ -n $stakeNodesInGenesisBlock ]]; then
+    if [[ -n $internalNodesStakeLamports ]]; then
       for i in $(seq 0 "$numNodes"); do
         solana-keygen new -o ./solana-node-keys/"$i"
         pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
-        echo "${pubkey}: $stakeNodesInGenesisBlock" >> ./solana-node-stakes/fullnode-stakes.yml
+        echo "${pubkey}: $internalNodesStakeLamports" >> ./solana-node-stakes/fullnode-stakes.yml
       done
     fi
 
@@ -160,8 +156,10 @@ local|tar)
     if [[ $skipSetup != true ]]; then
       args=(
         --bootstrap-leader-stake-lamports "$stake"
-        --bootstrap-leader-lamports "$fundNodesInGenesisBlock"
-      )
+        )
+        if [[ -n $internalNodesLamports ]]; then
+          args+=(--bootstrap-leader-lamports "$internalNodesLamports")
+        fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
       ./multinode-demo/setup.sh "${args[@]}"
@@ -186,7 +184,7 @@ local|tar)
   validator|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
     rm -f ~/solana/fullnode-identity.json
-    [[ -z $stakeNodesInGenesisBlock ]] || net/scripts/rsync-retry.sh -vPrc \
+    [[ -z $internalNodesStakeLamports ]] || net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/solana-node-keys/"$nodeIndex" ~/solana/fullnode-identity.json
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
@@ -209,8 +207,8 @@ local|tar)
     else
       args+=(--stake "$stake")
       args+=(--enable-rpc-exit)
-      if [[ -n $fundNodesInGenesisBlock ]] ; then
-        args+=(--node-lamports "$fundNodesInGenesisBlock")
+      if [[ -n $internalNodesLamports ]]; then
+        args+=(--node-lamports "$internalNodesLamports")
       fi
     fi
 
@@ -276,8 +274,8 @@ local|tar)
       args+=(--no-airdrop)
     fi
 
-    if [[ -n $fundNodesInGenesisBlock ]] ; then
-      args+=(--node-lamports "$fundNodesInGenesisBlock")
+    if [[ -n $internalNodesLamports ]] ; then
+      args+=(--node-lamports "$internalNodesLamports")
     fi
 
     if [[ $skipSetup != true ]]; then

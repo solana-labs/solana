@@ -60,12 +60,12 @@ Operate a configured testnet
                                       - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
    --lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 100000000000000 lamports minted in genesis
-   --stake-lamports-internal-nodes NUM_LAMPORTS_PER_NODE
-                                      - Amount to stake internal nodes in genesis block.
-   --lamports-internal-nodes NUM_LAMPORTS_PER_NODE
+   --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
+                                      - Amount to stake internal nodes.
+   --internal-nodes-lamports NUM_LAMPORTS_PER_NODE
                                       - Amount to fund internal nodes in genesis block.
    --external-accounts-file FILE_PATH
-                                      - A YML file with a list of account pubkeys and corresponding stakes for external nodes
+                                      - A YML file with a list of account pubkeys and corresponding lamport balances in genesis block for external nodes
    --no-snapshot
                                       - If set, disables booting validators from a snapshot
    --skip-ledger-verify
@@ -112,8 +112,8 @@ genesisOptions=
 numFullnodesRequested=
 externalPrimordialAccountsFile=
 remoteExternalPrimordialAccountsFile=
-stakeNodesInGenesisBlock=
-fundNodesInGenesisBlock=
+internalNodesStakeLamports=
+internalNodesLamports=
 maybeNoSnapshot=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
@@ -143,11 +143,11 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
       shift 2
-    elif [[ $1 = --stake-lamports-internal-nodes ]]; then
-      stakeNodesInGenesisBlock="$2"
+    elif [[ $1 = --internal-nodes-stake-lamports ]]; then
+      internalNodesStakeLamports="$2"
       shift 2
-    elif [[ $1 = --lamports-internal-nodes ]]; then
-      fundNodesInGenesisBlock="$2"
+    elif [[ $1 = --internal-nodes-lamports ]]; then
+      internalNodesLamports="$2"
       shift 2
     elif [[ $1 = --external-accounts-file ]]; then
       externalPrimordialAccountsFile="$2"
@@ -382,8 +382,8 @@ startBootstrapLeader() {
          $failOnValidatorBootupFailure \
          \"$remoteExternalPrimordialAccountsFile\" \
          \"$maybeDisableAirdrops\" \
-         \"$stakeNodesInGenesisBlock\" \
-         \"$fundNodesInGenesisBlock\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
@@ -446,8 +446,8 @@ startNode() {
          $failOnValidatorBootupFailure \
          \"$remoteExternalPrimordialAccountsFile\" \
          \"$maybeDisableAirdrops\" \
-         \"$stakeNodesInGenesisBlock\" \
-         \"$fundNodesInGenesisBlock\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \

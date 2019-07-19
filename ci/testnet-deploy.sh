@@ -25,8 +25,8 @@ deployUpdateManifest=true
 fetchLogs=true
 maybeHashesPerTick=
 maybeDisableAirdrops=
-maybeStakeNodesInGenesisBlock=
-maybeFundNodesInGenesisBlock=
+maybeInternalNodesStakeLamports=
+maybeInternalNodesLamports=
 maybeExternalPrimordialAccountsFile=
 maybeLamports=
 maybeLetsEncrypt=
@@ -72,9 +72,9 @@ Deploys a CD testnet
    -f                   - Discard validator nodes that didn't bootup successfully
    --no-airdrop
                         - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
-   --stake-lamports-internal-nodes NUM_LAMPORTS
+   --internal-nodes-stake-lamports NUM_LAMPORTS
                         - Amount to stake internal nodes.
-   --lamports-internal-nodes NUM_LAMPORTS
+   --internal-nodes-lamports NUM_LAMPORTS
                         - Amount to fund internal nodes in genesis block
    --external-accounts-file FILE_PATH
                         - Path to external Primordial Accounts file, if it exists.
@@ -113,11 +113,11 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-airdrop ]]; then
       maybeDisableAirdrops="$1"
       shift 1
-    elif [[ $1 = --stake-lamports-internal-nodes ]]; then
-      maybeStakeNodesInGenesisBlock="$1 $2"
+    elif [[ $1 = --internal-nodes-stake-lamports ]]; then
+      maybeInternalNodesStakeLamports="$1 $2"
       shift 2
-    elif [[ $1 = --lamports-internal-nodes ]]; then
-      maybeFundNodesInGenesisBlock="$1 $2"
+    elif [[ $1 = --internal-nodes-lamports ]]; then
+      maybeInternalNodesLamports="$1 $2"
       shift 2
     elif [[ $1 = --external-accounts-file ]]; then
       maybeExternalPrimordialAccountsFile="$1 $2"
@@ -405,13 +405,13 @@ if ! $skipStart; then
       # shellcheck disable=SC2206
       args+=($maybeDisableAirdrops)
     fi
-    if [[ -n $maybeStakeNodesInGenesisBlock ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeStakeNodesInGenesisBlock
-      args+=($maybeStakeNodesInGenesisBlock)
+    if [[ -n $maybeInternalNodesStakeLamports ]]; then
+      # shellcheck disable=SC2206 # Do not want to quote $maybeInternalNodesStakeLamports
+      args+=($maybeInternalNodesStakeLamports)
     fi
-    if [[ -n $maybeFundNodesInGenesisBlock ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeFundNodesInGenesisBlock
-      args+=($maybeFundNodesInGenesisBlock)
+    if [[ -n $maybeInternalNodesLamports ]]; then
+      # shellcheck disable=SC2206 # Do not want to quote $maybeInternalNodesLamports
+      args+=($maybeInternalNodesLamports)
     fi
     if [[ -n $maybeExternalPrimordialAccountsFile ]]; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeExternalPrimordialAccountsFile
