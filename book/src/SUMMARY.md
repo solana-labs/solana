@@ -30,8 +30,12 @@
     - [Blocktree](blocktree.md)
   - [Gossip Service](gossip.md)
   - [The Runtime](runtime.md)
+  
+- [Anatomy of a Transaction](transaction.md)
 
 - [API Reference](api-reference.md)
+  - [Transaction](transaction-api.md)
+  - [Instruction](instruction-api.md)
   - [Blockstreamer](blockstreamer.md)
   - [JSON RPC API](jsonrpc-api.md)
   - [JavaScript API](javascript-api.md)
