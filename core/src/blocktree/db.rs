@@ -420,9 +420,8 @@ where
                     break;
                 }
             }
-            match self.delete(index) {
-                Ok(_) => (),
-                Err(e) => error!("Error: {:?} while deleting {:?}", e, C::NAME),
+            if let Err(e) = self.delete(index) {
+                error!("Error: {:?} while deleting {:?}", e, C::NAME)
             }
         }
         Ok(())

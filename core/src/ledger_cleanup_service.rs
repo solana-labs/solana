@@ -20,7 +20,6 @@ pub struct LedgerCleanupService {
 }
 
 impl LedgerCleanupService {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         slot_full_receiver: Receiver<(u64, Pubkey)>,
         blocktree: Arc<Blocktree>,
@@ -56,7 +55,7 @@ impl LedgerCleanupService {
         let (slot, _) = slot_full_receiver.recv_timeout(Duration::from_secs(1))?;
         if slot > max_ledger_slots {
             //cleanup
-            blocktree.delete_all_columns(0, Some(slot - max_ledger_slots));
+            blocktree.purge_slots(0, Some(slot - max_ledger_slots));
         }
         Ok(())
     }
