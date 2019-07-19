@@ -59,7 +59,7 @@ if [[ -n $CI ]]; then
     fi
     if [[ $CI_LINUX = True ]]; then
       export CI_OS_NAME=linux
-    elif [[ $CI_WINDOWS = True ]]; then
+    else
       export CI_OS_NAME=windows
     fi
     export CI_REPO_SLUG=$APPVEYOR_REPO_NAME
