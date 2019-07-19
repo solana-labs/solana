@@ -3469,13 +3469,13 @@ pub mod tests {
     }
 
     #[test]
-    fn test_delete_all_columns() {
+    fn test_purge_slots() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         let (blobs, _) = make_many_slot_entries(0, 50, 5);
         blocktree.write_blobs(blobs).unwrap();
 
-        blocktree.delete_all_columns(0, Some(5));
+        blocktree.purge_slots(0, Some(5));
 
         blocktree
             .slot_meta_iterator(0)
@@ -3484,7 +3484,7 @@ pub mod tests {
                 assert!(slot > 5);
             });
 
-        blocktree.delete_all_columns(0, None);
+        blocktree.purge_slots(0, None);
 
         blocktree.slot_meta_iterator(0).unwrap().for_each(|(_, _)| {
             assert!(false);
