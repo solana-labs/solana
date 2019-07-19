@@ -2,13 +2,15 @@
 #![allow(dead_code)]
 
 use failure::prelude::*;
+use log::*;
 use state_view::StateView;
 use std::collections::HashMap;
-use types::access_path::AccessPath;
-use types::language_storage::ModuleId;
-use types::write_set::{WriteOp, WriteSet};
-use vm::errors::VMInvariantViolation;
-use vm::CompiledModule;
+use types::{
+    access_path::AccessPath,
+    language_storage::ModuleId,
+    write_set::{WriteOp, WriteSet},
+};
+use vm::{errors::VMInvariantViolation, CompiledModule};
 use vm_runtime::data_cache::RemoteCache;
 
 /// An in-memory implementation of [`StateView`] and [`RemoteCache`] for the VM.
@@ -61,6 +63,12 @@ impl DataStore {
             .serialize(&mut blob)
             .expect("serializing this module should work");
         self.set(access_path, blob);
+    }
+
+    pub fn dump(&self) {
+        for (access_path, blob) in &self.data {
+            trace!("{:?}: \"{:?}\"", access_path, blob);
+        }
     }
 }
 

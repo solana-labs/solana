@@ -19,7 +19,10 @@ solana-logger = { path = "../../logger", version = "0.17.0" }
 solana-sdk = { path = "../../sdk", version = "0.17.0" }
 
 bytecode_verifier = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
-failure = {git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0", package = "failure_ext" }
+failure = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0", package = "failure_ext" }
+lazy_static = "1.3.0"
+protobuf = "2.7"
+proto_conv = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
 state_view = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
 types = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
 vm = { git = "https://github.com/solana-labs/libra", branch = "solana-0.0.0" }
