@@ -27,6 +27,7 @@ Start a validator or a replicator
   --label LABEL             - Append the given label to the configuration files, useful when running
                               multiple fullnodes in the same workspace
   --stake LAMPORTS          - Number of lamports to stake
+  --node-lamports LAMPORTS  - Number of lamports this node has been funded from the genesis block
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
   --no-restart              - do not restart the node if it exits
@@ -216,6 +217,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --stake ]]; then
       stake_lamports="$2"
+      shift 2
+    elif [[ $1 = --node-lamports ]]; then
+      node_lamports="$2"
       shift 2
     elif [[ $1 = --no-voting ]]; then
       args+=("$1")

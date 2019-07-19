@@ -12,14 +12,16 @@ RUST_LOG="$5"
 skipSetup="$6"
 failOnValidatorBootupFailure="$7"
 externalPrimordialAccountsFile="$8"
-stakeNodesInGenesisBlock="$9"
-nodeIndex="${10}"
-numBenchTpsClients="${11}"
-benchTpsExtraArgs="${12}"
-numBenchExchangeClients="${13}"
-benchExchangeExtraArgs="${14}"
-genesisOptions="${15}"
-extraNodeArgs="${16}"
+maybeDisableAirdrops="$9"
+stakeNodesInGenesisBlock="${10}"
+fundNodesInGenesisBlock="${11}"
+nodeIndex="${12}"
+numBenchTpsClients="${13}"
+benchTpsExtraArgs="${14}"
+numBenchExchangeClients="${15}"
+benchExchangeExtraArgs="${16}"
+genesisOptions="${17}"
+extraNodeArgs="${18}"
 set +x
 export RUST_LOG
 
@@ -29,7 +31,11 @@ export RUST_LOG
 # trouble
 #
 # Ref: https://github.com/solana-labs/solana/issues/3798
-stake=424243
+stake=${stakeNodesInGenesisBlock:=424243}
+
+# TODO: There is a default stake set here, but the existing static/default for node_lamports/fundNodes is in fullnode.sh.
+# TODO: Should there be a default value this deep if we are no longer assuming airdrops one way or the other?
+#fundNodesInGenesisBlock=${fundNodesInGenesisBlock:=0}
 
 missing() {
   echo "Error: $1 not specified"
@@ -44,7 +50,7 @@ missing() {
 [[ -n $failOnValidatorBootupFailure ]] || missing failOnValidatorBootupFailure
 
 airdropsEnabled=true
-if [[ -n $stakeNodesInGenesisBlock ]]; then
+if [[ -n $maybeDisableAirdrops ]]; then
   airdropsEnabled=false
 fi
 cat > deployConfig <<EOF
@@ -154,12 +160,13 @@ local|tar)
     if [[ $skipSetup != true ]]; then
       args=(
         --bootstrap-leader-stake-lamports "$stake"
+        --bootstrap-leader-lamports "$fundNodesInGenesisBlock"
       )
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
       ./multinode-demo/setup.sh "${args[@]}"
     fi
-    if [[ -z $stakeNodesInGenesisBlock ]]; then
+    if [[ $airdropsEnabled = true ]]; then
       ./multinode-demo/drone.sh > drone.log 2>&1 &
     fi
     args=(
@@ -167,7 +174,7 @@ local|tar)
       --gossip-port "$entrypointIp":8001
     )
 
-    if [[ -n $stakeNodesInGenesisBlock ]]; then
+    if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
     fi
     args+=(--init-complete-file "$initCompleteFile")
@@ -202,13 +209,16 @@ local|tar)
     else
       args+=(--stake "$stake")
       args+=(--enable-rpc-exit)
+      if [[ -n $fundNodesInGenesisBlock ]] ; then
+        args+=(--node-lamports "$fundNodesInGenesisBlock")
+      fi
     fi
 
     if [[ -f ~/solana/fullnode-identity.json ]]; then
       args+=(--identity ~/solana/fullnode-identity.json)
     fi
 
-    if [[ -n $stakeNodesInGenesisBlock ]]; then
+    if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
     fi
 
@@ -223,7 +233,7 @@ local|tar)
       # a static IP/DNS name for hosting the blockexplorer web app, and is
       # a location that somebody would expect to be able to airdrop from
       scp "$entrypointIp":~/solana/config-local/mint-keypair.json config-local/
-      if [[ -z $stakeNodesInGenesisBlock ]]; then
+      if [[ $airdropsEnabled = true ]]; then
         ./multinode-demo/drone.sh > drone.log 2>&1 &
       fi
 
@@ -262,8 +272,12 @@ local|tar)
       "$entrypointIp":~/solana "$entrypointIp:8001"
     )
 
-    if [[ -n $stakeNodesInGenesisBlock ]]; then
+    if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
+    fi
+
+    if [[ -n $fundNodesInGenesisBlock ]] ; then
+      args+=(--node-lamports "$fundNodesInGenesisBlock")
     fi
 
     if [[ $skipSetup != true ]]; then

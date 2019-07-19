@@ -56,10 +56,14 @@ Operate a configured testnet
 
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
+   --no-airdrop
+                                      - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
    --lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 100000000000000 lamports minted in genesis
-   --stake-internal-nodes NUM_LAMPORTS_PER_NODE
-                                      - Amount to stake internal nodes in genesis block.  If set, airdrops are disabled.
+   --stake-lamports-internal-nodes NUM_LAMPORTS_PER_NODE
+                                      - Amount to stake internal nodes in genesis block.
+   --lamports-internal-nodes NUM_LAMPORTS_PER_NODE
+                                      - Amount to fund internal nodes in genesis block.
    --external-accounts-file FILE_PATH
                                       - A YML file with a list of account pubkeys and corresponding stakes for external nodes
    --no-snapshot
@@ -109,8 +113,10 @@ numFullnodesRequested=
 externalPrimordialAccountsFile=
 remoteExternalPrimordialAccountsFile=
 stakeNodesInGenesisBlock=
+fundNodesInGenesisBlock=
 maybeNoSnapshot=""
 maybeSkipLedgerVerify=""
+maybeDisableAirdrops=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -137,13 +143,19 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
       shift 2
-    elif [[ $1 = --stake-internal-nodes ]]; then
+    elif [[ $1 = --stake-lamports-internal-nodes ]]; then
       stakeNodesInGenesisBlock="$2"
+      shift 2
+    elif [[ $1 = --lamports-internal-nodes ]]; then
+      fundNodesInGenesisBlock="$2"
       shift 2
     elif [[ $1 = --external-accounts-file ]]; then
       externalPrimordialAccountsFile="$2"
       remoteExternalPrimordialAccountsFile=/tmp/external-primordial-accounts.yml
       shift 2
+    elif [[ $1 = --no-airdrop ]]; then
+      maybeDisableAirdrops="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -369,7 +381,9 @@ startBootstrapLeader() {
          $skipSetup \
          $failOnValidatorBootupFailure \
          \"$remoteExternalPrimordialAccountsFile\" \
+         \"$maybeDisableAirdrops\" \
          \"$stakeNodesInGenesisBlock\" \
+         \"$fundNodesInGenesisBlock\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
@@ -431,7 +445,9 @@ startNode() {
          $skipSetup \
          $failOnValidatorBootupFailure \
          \"$remoteExternalPrimordialAccountsFile\" \
+         \"$maybeDisableAirdrops\" \
          \"$stakeNodesInGenesisBlock\" \
+         \"$fundNodesInGenesisBlock\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
