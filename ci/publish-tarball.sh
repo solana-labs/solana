@@ -49,7 +49,8 @@ windows)
   TARGET=x86_64-pc-windows-msvc
   ;;
 *)
-  TARGET=unknown-unknown-unknown
+  echo CI_OS_NAME unset
+  exit 1
   ;;
 esac
 
