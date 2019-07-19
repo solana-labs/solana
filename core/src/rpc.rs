@@ -226,11 +226,11 @@ pub struct RpcEpochInfo {
     /// The current epoch
     pub epoch: u64,
 
-    /// The number of slots in this epoch
-    pub slots_in_epoch: u64,
-
     /// The current slot, relative to the start of the current epoch
     pub slot_index: u64,
+
+    /// The number of slots in this epoch
+    pub slots_in_epoch: u64,
 }
 
 #[rpc(server)]
@@ -394,8 +394,8 @@ impl RpcSol for RpcSolImpl {
         let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
         Ok(RpcEpochInfo {
             epoch,
-            slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
             slot_index,
+            slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
         })
     }
 
