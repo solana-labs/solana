@@ -184,8 +184,7 @@ local|tar)
   validator|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
     rm -f ~/solana/fullnode-identity.json
-    # TODO: Is this supposed to be Lamports or StakeLamports?
-    [[ -z $internalNodesStakeLamports ]] || net/scripts/rsync-retry.sh -vPrc \
+    [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/solana-node-keys/"$nodeIndex" ~/solana/fullnode-identity.json
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
