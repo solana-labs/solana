@@ -56,12 +56,16 @@ Operate a configured testnet
 
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
+   --no-airdrop
+                                      - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
    --lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 100000000000000 lamports minted in genesis
-   --stake-internal-nodes NUM_LAMPORTS_PER_NODE
-                                      - Amount to stake internal nodes in genesis block.  If set, airdrops are disabled.
+   --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
+                                      - Amount to stake internal nodes.
+   --internal-nodes-lamports NUM_LAMPORTS_PER_NODE
+                                      - Amount to fund internal nodes in genesis block.
    --external-accounts-file FILE_PATH
-                                      - A YML file with a list of account pubkeys and corresponding stakes for external nodes
+                                      - A YML file with a list of account pubkeys and corresponding lamport balances in genesis block for external nodes
    --no-snapshot
                                       - If set, disables booting validators from a snapshot
    --skip-ledger-verify
@@ -108,9 +112,11 @@ genesisOptions=
 numFullnodesRequested=
 externalPrimordialAccountsFile=
 remoteExternalPrimordialAccountsFile=
-stakeNodesInGenesisBlock=
+internalNodesStakeLamports=
+internalNodesLamports=
 maybeNoSnapshot=""
 maybeSkipLedgerVerify=""
+maybeDisableAirdrops=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -137,13 +143,19 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
       shift 2
-    elif [[ $1 = --stake-internal-nodes ]]; then
-      stakeNodesInGenesisBlock="$2"
+    elif [[ $1 = --internal-nodes-stake-lamports ]]; then
+      internalNodesStakeLamports="$2"
+      shift 2
+    elif [[ $1 = --internal-nodes-lamports ]]; then
+      internalNodesLamports="$2"
       shift 2
     elif [[ $1 = --external-accounts-file ]]; then
       externalPrimordialAccountsFile="$2"
       remoteExternalPrimordialAccountsFile=/tmp/external-primordial-accounts.yml
       shift 2
+    elif [[ $1 = --no-airdrop ]]; then
+      maybeDisableAirdrops="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -369,7 +381,9 @@ startBootstrapLeader() {
          $skipSetup \
          $failOnValidatorBootupFailure \
          \"$remoteExternalPrimordialAccountsFile\" \
-         \"$stakeNodesInGenesisBlock\" \
+         \"$maybeDisableAirdrops\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
@@ -431,7 +445,9 @@ startNode() {
          $skipSetup \
          $failOnValidatorBootupFailure \
          \"$remoteExternalPrimordialAccountsFile\" \
-         \"$stakeNodesInGenesisBlock\" \
+         \"$maybeDisableAirdrops\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \

@@ -24,7 +24,9 @@ blockstreamer=false
 deployUpdateManifest=true
 fetchLogs=true
 maybeHashesPerTick=
-maybeStakeNodesInGenesisBlock=
+maybeDisableAirdrops=
+maybeInternalNodesStakeLamports=
+maybeInternalNodesLamports=
 maybeExternalPrimordialAccountsFile=
 maybeLamports=
 maybeLetsEncrypt=
@@ -68,8 +70,12 @@ Deploys a CD testnet
    -s                   - Skip start.  Nodes will still be created or configured, but network software will not be started.
    -S                   - Stop network software without tearing down nodes.
    -f                   - Discard validator nodes that didn't bootup successfully
-   --stake-internal-nodes NUM_LAMPORTS
-                        - Amount to stake internal nodes.  If set, airdrops are disabled.
+   --no-airdrop
+                        - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
+   --internal-nodes-stake-lamports NUM_LAMPORTS
+                        - Amount to stake internal nodes.
+   --internal-nodes-lamports NUM_LAMPORTS
+                        - Amount to fund internal nodes in genesis block
    --external-accounts-file FILE_PATH
                         - Path to external Primordial Accounts file, if it exists.
    --hashes-per-tick NUM_HASHES|sleep|auto
@@ -104,8 +110,14 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --lamports ]]; then
       maybeLamports="$1 $2"
       shift 2
-    elif [[ $1 = --stake-internal-nodes ]]; then
-      maybeStakeNodesInGenesisBlock="$1 $2"
+    elif [[ $1 = --no-airdrop ]]; then
+      maybeDisableAirdrops="$1"
+      shift 1
+    elif [[ $1 = --internal-nodes-stake-lamports ]]; then
+      maybeInternalNodesStakeLamports="$1 $2"
+      shift 2
+    elif [[ $1 = --internal-nodes-lamports ]]; then
+      maybeInternalNodesLamports="$1 $2"
       shift 2
     elif [[ $1 = --external-accounts-file ]]; then
       maybeExternalPrimordialAccountsFile="$1 $2"
@@ -389,9 +401,17 @@ if ! $skipStart; then
       args+=(--deploy-update windows)
     fi
 
-    if [[ -n $maybeStakeNodesInGenesisBlock ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeStakeNodesInGenesisBlock
-      args+=($maybeStakeNodesInGenesisBlock)
+    if [[ -n $maybeDisableAirdrops ]]; then
+      # shellcheck disable=SC2206
+      args+=($maybeDisableAirdrops)
+    fi
+    if [[ -n $maybeInternalNodesStakeLamports ]]; then
+      # shellcheck disable=SC2206 # Do not want to quote $maybeInternalNodesStakeLamports
+      args+=($maybeInternalNodesStakeLamports)
+    fi
+    if [[ -n $maybeInternalNodesLamports ]]; then
+      # shellcheck disable=SC2206 # Do not want to quote $maybeInternalNodesLamports
+      args+=($maybeInternalNodesLamports)
     fi
     if [[ -n $maybeExternalPrimordialAccountsFile ]]; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeExternalPrimordialAccountsFile
