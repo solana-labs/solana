@@ -690,6 +690,15 @@ impl Accounts {
     }
 }
 
+pub fn create_test_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {
+    for t in 0..num {
+        let pubkey = Pubkey::new_rand();
+        let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
+        accounts.store_slow(0, &pubkey, &account);
+        pubkeys.push(pubkey);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
@@ -1194,15 +1203,6 @@ mod tests {
         assert_eq!(accounts.hash_internal_state(0), None);
     }
 
-    fn create_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {
-        for t in 0..num {
-            let pubkey = Pubkey::new_rand();
-            let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
-            accounts.store_slow(0, &pubkey, &account);
-            pubkeys.push(pubkey.clone());
-        }
-    }
-
     fn check_accounts(accounts: &Accounts, pubkeys: &Vec<Pubkey>, num: usize) {
         for _ in 1..num {
             let idx = thread_rng().gen_range(0, num - 1);
@@ -1219,7 +1219,7 @@ mod tests {
         let accounts = Accounts::new(Some("serialize_accounts".to_string()));
 
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_accounts(&accounts, &mut pubkeys, 100);
+        create_test_accounts(&accounts, &mut pubkeys, 100);
         check_accounts(&accounts, &pubkeys, 100);
         accounts.add_root(0);
 
