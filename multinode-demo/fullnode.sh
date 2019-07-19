@@ -371,13 +371,14 @@ PS4="$(basename "$0"): "
 
 pid=
 kill_fullnode() {
+  # Note: do not echo anything from this function to ensure $pid is actually
+  # killed when stdout/stderr are redirected
+  set +ex
   if [[ -n $pid ]]; then
     declare _pid=$pid
     pid=
-    echo "killing pid $_pid"
     kill "$_pid" || true
     wait "$_pid" || true
-    echo "$_pid killed"
   fi
 }
 trap 'kill_fullnode' INT TERM ERR
