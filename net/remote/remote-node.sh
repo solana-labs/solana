@@ -12,14 +12,16 @@ RUST_LOG="$5"
 skipSetup="$6"
 failOnValidatorBootupFailure="$7"
 externalPrimordialAccountsFile="$8"
-stakeNodesInGenesisBlock="$9"
-nodeIndex="${10}"
-numBenchTpsClients="${11}"
-benchTpsExtraArgs="${12}"
-numBenchExchangeClients="${13}"
-benchExchangeExtraArgs="${14}"
-genesisOptions="${15}"
-extraNodeArgs="${16}"
+maybeDisableAirdrops="$9"
+internalNodesStakeLamports="${10}"
+internalNodesLamports="${11}"
+nodeIndex="${12}"
+numBenchTpsClients="${13}"
+benchTpsExtraArgs="${14}"
+numBenchExchangeClients="${15}"
+benchExchangeExtraArgs="${16}"
+genesisOptions="${17}"
+extraNodeArgs="${18}"
 set +x
 export RUST_LOG
 
@@ -29,7 +31,7 @@ export RUST_LOG
 # trouble
 #
 # Ref: https://github.com/solana-labs/solana/issues/3798
-stake=424243
+stake=${internalNodesStakeLamports:=424243}
 
 missing() {
   echo "Error: $1 not specified"
@@ -44,7 +46,7 @@ missing() {
 [[ -n $failOnValidatorBootupFailure ]] || missing failOnValidatorBootupFailure
 
 airdropsEnabled=true
-if [[ -n $stakeNodesInGenesisBlock ]]; then
+if [[ -n $maybeDisableAirdrops ]]; then
   airdropsEnabled=false
 fi
 cat > deployConfig <<EOF
@@ -107,13 +109,13 @@ local|tar)
     fi
     set -x
     rm -rf ./solana-node-keys
-    rm -rf ./solana-node-stakes
-    mkdir ./solana-node-stakes
-    if [[ -n $stakeNodesInGenesisBlock ]]; then
+    rm -rf ./solana-node-balances
+    mkdir ./solana-node-balances
+    if [[ -n $internalNodesLamports ]]; then
       for i in $(seq 0 "$numNodes"); do
         solana-keygen new -o ./solana-node-keys/"$i"
         pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
-        echo "${pubkey}: $stakeNodesInGenesisBlock" >> ./solana-node-stakes/fullnode-stakes.yml
+        echo "${pubkey}: $internalNodesLamports" >> ./solana-node-balances/fullnode-balances.yml
       done
     fi
 
@@ -144,9 +146,9 @@ local|tar)
       tail -n +2 -q ./solana-client-accounts/bench-exchange"$i".yml >> ./solana-client-accounts/client-accounts.yml
       echo "" >> ./solana-client-accounts/client-accounts.yml
     done
-    [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-stakes/fullnode-stakes.yml
-    if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then
-      genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml"
+    [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-balances/fullnode-balances.yml
+    if [ -f ./solana-node-balances/fullnode-balances.yml ]; then
+      genesisOptions+=" --primordial-accounts-file ./solana-node-balances/fullnode-balances.yml"
     fi
     if [ -f ./solana-client-accounts/client-accounts.yml ]; then
       genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
@@ -154,12 +156,15 @@ local|tar)
     if [[ $skipSetup != true ]]; then
       args=(
         --bootstrap-leader-stake-lamports "$stake"
-      )
+        )
+        if [[ -n $internalNodesLamports ]]; then
+          args+=(--bootstrap-leader-lamports "$internalNodesLamports")
+        fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
       ./multinode-demo/setup.sh "${args[@]}"
     fi
-    if [[ -z $stakeNodesInGenesisBlock ]]; then
+    if [[ $airdropsEnabled = true ]]; then
       ./multinode-demo/drone.sh > drone.log 2>&1 &
     fi
     args=(
@@ -167,7 +172,7 @@ local|tar)
       --gossip-port "$entrypointIp":8001
     )
 
-    if [[ -n $stakeNodesInGenesisBlock ]]; then
+    if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
     fi
     args+=(--init-complete-file "$initCompleteFile")
@@ -179,7 +184,7 @@ local|tar)
   validator|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
     rm -f ~/solana/fullnode-identity.json
-    [[ -z $stakeNodesInGenesisBlock ]] || net/scripts/rsync-retry.sh -vPrc \
+    [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/solana-node-keys/"$nodeIndex" ~/solana/fullnode-identity.json
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
@@ -202,13 +207,16 @@ local|tar)
     else
       args+=(--stake "$stake")
       args+=(--enable-rpc-exit)
+      if [[ -n $internalNodesLamports ]]; then
+        args+=(--node-lamports "$internalNodesLamports")
+      fi
     fi
 
     if [[ -f ~/solana/fullnode-identity.json ]]; then
       args+=(--identity ~/solana/fullnode-identity.json)
     fi
 
-    if [[ -n $stakeNodesInGenesisBlock ]]; then
+    if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
     fi
 
@@ -223,7 +231,7 @@ local|tar)
       # a static IP/DNS name for hosting the blockexplorer web app, and is
       # a location that somebody would expect to be able to airdrop from
       scp "$entrypointIp":~/solana/config-local/mint-keypair.json config-local/
-      if [[ -z $stakeNodesInGenesisBlock ]]; then
+      if [[ $airdropsEnabled = true ]]; then
         ./multinode-demo/drone.sh > drone.log 2>&1 &
       fi
 
@@ -262,8 +270,12 @@ local|tar)
       "$entrypointIp":~/solana "$entrypointIp:8001"
     )
 
-    if [[ -n $stakeNodesInGenesisBlock ]]; then
+    if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
+    fi
+
+    if [[ -n $internalNodesLamports ]] ; then
+      args+=(--node-lamports "$internalNodesLamports")
     fi
 
     if [[ $skipSetup != true ]]; then

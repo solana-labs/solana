@@ -500,12 +500,30 @@ deploy() {
         maybeHashesPerTick="--hashes-per-tick ${HASHES_PER_TICK}"
       fi
 
-      if [[ -z $STAKE_INTERNAL_NODES ]]; then
-        maybeStakeInternalNodes="--stake-internal-nodes 1000000000000"
-      elif [[ $STAKE_INTERNAL_NODES == skip ]]; then
-        maybeStakeInternalNodes=""
+      if [[ -z $DISABLE_AIRDROPS ]]; then
+        DISABLE_AIRDROPS="true"
+      fi
+
+      if [[ $DISABLE_AIRDROPS == true ]] ; then
+        maybeDisableAirdrops="--no-airdrop"
       else
-        maybeStakeInternalNodes="--stake-internal-nodes ${STAKE_INTERNAL_NODES}"
+        maybeDisableAirdrops=""
+      fi
+
+      if [[ -z $INTERNAL_NODES_STAKE_LAMPORTS ]]; then
+        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports 1000000000000"
+      elif [[ $INTERNAL_NODES_STAKE_LAMPORTS == skip ]]; then
+        maybeInternalNodesStakeLamports=""
+      else
+        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports ${INTERNAL_NODES_STAKE_LAMPORTS}"
+      fi
+
+      if [[ -z $INTERNAL_NODES_LAMPORTS ]]; then
+        maybeInternalNodesLamports="--internal-nodes-lamports 2000000000000"
+      elif [[ $INTERNAL_NODES_LAMPORTS == skip ]]; then
+        maybeInternalNodesLamports=""
+      else
+        maybeInternalNodesLamports="--internal-nodes-lamports ${INTERNAL_NODES_LAMPORTS}"
       fi
 
       EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
@@ -557,7 +575,9 @@ deploy() {
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
-          ${maybeStakeInternalNodes} \
+          ${maybeDisableAirdrops} \
+          ${maybeInternalNodesStakeLamports} \
+          ${maybeInternalNodesLamports} \
           ${maybeExternalAccountsFile} \
           ${maybeLamports} \
           ${maybeAdditionalDisk} \
