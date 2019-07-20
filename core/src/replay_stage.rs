@@ -88,12 +88,12 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<Vec<Arc<Bank>>>)
+        slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
+    ) -> (Self, Receiver<Vec<Arc<Bank>>>)
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
         let (root_bank_sender, root_bank_receiver) = channel();
-        let (slot_full_sender, slot_full_receiver) = channel();
         trace!("replay stage");
         let exit_ = exit.clone();
         let subscriptions = subscriptions.clone();
@@ -132,7 +132,7 @@ impl ReplayStage {
                         &bank_forks,
                         &my_pubkey,
                         &mut progress,
-                        &slot_full_sender,
+                        &slot_full_senders,
                     );
 
                     let votable = Self::generate_votable_banks(&bank_forks, &tower, &mut progress);
@@ -191,7 +191,7 @@ impl ReplayStage {
                 Ok(())
             })
             .unwrap();
-        (Self { t_replay }, slot_full_receiver, root_bank_receiver)
+        (Self { t_replay }, root_bank_receiver)
     }
 
     fn maybe_start_leader(
@@ -409,7 +409,7 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         my_pubkey: &Pubkey,
         progress: &mut HashMap<u64, ForkProgress>,
-        slot_full_sender: &Sender<(u64, Pubkey)>,
+        slot_full_senders: &[Sender<(u64, Pubkey)>],
     ) -> bool {
         let mut did_complete_bank = false;
         let active_banks = bank_forks.read().unwrap().active_banks();
@@ -435,7 +435,7 @@ impl ReplayStage {
             assert_eq!(*bank_slot, bank.slot());
             if bank.tick_height() == bank.max_tick_height() {
                 did_complete_bank = true;
-                Self::process_completed_bank(my_pubkey, bank, slot_full_sender);
+                Self::process_completed_bank(my_pubkey, bank, slot_full_senders);
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
@@ -618,13 +618,15 @@ impl ReplayStage {
     fn process_completed_bank(
         my_pubkey: &Pubkey,
         bank: Arc<Bank>,
-        slot_full_sender: &Sender<(u64, Pubkey)>,
+        slot_full_senders: &[Sender<(u64, Pubkey)>],
     ) {
         bank.freeze();
         info!("bank frozen {}", bank.slot());
-        if let Err(e) = slot_full_sender.send((bank.slot(), *bank.collector_id())) {
-            trace!("{} slot_full alert failed: {:?}", my_pubkey, e);
-        }
+        slot_full_senders.iter().for_each(|sender| {
+            if let Err(e) = sender.send((bank.slot(), *bank.collector_id())) {
+                trace!("{} slot_full alert failed: {:?}", my_pubkey, e);
+            }
+        });
     }
 
     fn generate_new_bank_forks(

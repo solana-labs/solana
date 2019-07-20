@@ -409,13 +409,21 @@ where
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
-    //TODO add a delete_until that goes the other way
-    pub fn force_delete_all(&self, start_from: Option<C::Index>) -> Result<()> {
-        let iter = self.iter(start_from)?;
-        iter.for_each(|(index, _)| match self.delete(index) {
-            Ok(_) => (),
-            Err(e) => error!("Error: {:?} while deleting {:?}", e, C::NAME),
-        });
+    pub fn force_delete(&self, from: Option<C::Index>, to: Option<C::Index>) -> Result<()>
+    where
+        C::Index: PartialOrd,
+    {
+        let iter = self.iter(from)?;
+        for (index, _) in iter {
+            if let Some(ref to) = to {
+                if &index > to {
+                    break;
+                }
+            }
+            if let Err(e) = self.delete(index) {
+                error!("Error: {:?} while deleting {:?}", e, C::NAME)
+            }
+        }
         Ok(())
     }
 

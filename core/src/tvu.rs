@@ -18,6 +18,7 @@ use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
+use crate::ledger_cleanup_service::LedgerCleanupService;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
@@ -37,6 +38,7 @@ pub struct Tvu {
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
     blockstream_service: Option<BlockstreamService>,
+    ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
 }
 
@@ -64,6 +66,7 @@ impl Tvu {
         blocktree: Arc<Blocktree>,
         storage_state: &StorageState,
         blockstream: Option<&String>,
+        max_ledger_slots: Option<u64>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -110,7 +113,10 @@ impl Tvu {
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
         );
 
-        let (replay_stage, slot_full_receiver, root_bank_receiver) = ReplayStage::new(
+        let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
+        let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
+
+        let (replay_stage, root_bank_receiver) = ReplayStage::new(
             &keypair.pubkey(),
             vote_account,
             voting_keypair,
@@ -122,11 +128,12 @@ impl Tvu {
             subscriptions,
             poh_recorder,
             leader_schedule_cache,
+            vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
         );
 
         let blockstream_service = if blockstream.is_some() {
             let blockstream_service = BlockstreamService::new(
-                slot_full_receiver,
+                blockstream_slot_receiver,
                 blocktree.clone(),
                 blockstream.unwrap().to_string(),
                 &exit,
@@ -135,6 +142,15 @@ impl Tvu {
         } else {
             None
         };
+
+        let ledger_cleanup_service = max_ledger_slots.map(|max_ledger_slots| {
+            LedgerCleanupService::new(
+                ledger_cleanup_slot_receiver,
+                blocktree.clone(),
+                max_ledger_slots,
+                &exit,
+            )
+        });
 
         let storage_stage = StorageStage::new(
             storage_state,
@@ -152,6 +168,7 @@ impl Tvu {
             retransmit_stage,
             replay_stage,
             blockstream_service,
+            ledger_cleanup_service,
             storage_stage,
         }
     }
@@ -166,6 +183,9 @@ impl Service for Tvu {
         self.storage_stage.join()?;
         if self.blockstream_service.is_some() {
             self.blockstream_service.unwrap().join()?;
+        }
+        if self.ledger_cleanup_service.is_some() {
+            self.ledger_cleanup_service.unwrap().join()?;
         }
         self.replay_stage.join()?;
         Ok(())
@@ -225,6 +245,7 @@ pub mod tests {
             },
             blocktree,
             &StorageState::default(),
+            None,
             None,
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),

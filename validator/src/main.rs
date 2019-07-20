@@ -2,6 +2,7 @@ use clap::{crate_description, crate_name, crate_version, App, Arg};
 use log::*;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
+use solana::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
 use solana::socketaddr;
@@ -164,6 +165,13 @@ fn main() {
                 .help("Snapshot path"),
         )
         .arg(
+            clap::Arg::with_name("limit_ledger_size")
+                .long("limit-ledger-size")
+                .takes_value(false)
+                .requires("snapshot_path")
+                .help("drop older slots in the ledger"),
+        )
+        .arg(
             clap::Arg::with_name("skip_ledger_verify")
                 .long("skip-ledger-verify")
                 .takes_value(false)
@@ -230,13 +238,12 @@ fn main() {
 
     if let Some(paths) = matches.value_of("accounts") {
         validator_config.account_paths = Some(paths.to_string());
-    } else {
-        validator_config.account_paths = None;
     }
     if let Some(paths) = matches.value_of("snapshot_path") {
         validator_config.snapshot_path = Some(paths.to_string());
-    } else {
-        validator_config.snapshot_path = None;
+    }
+    if matches.is_present("limit_ledger_size") {
+        validator_config.max_ledger_slots = Some(DEFAULT_MAX_LEDGER_SLOTS);
     }
     let cluster_entrypoint = matches.value_of("entrypoint").map(|entrypoint| {
         let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)

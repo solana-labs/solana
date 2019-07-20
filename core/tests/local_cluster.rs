@@ -3,6 +3,7 @@ extern crate solana;
 use hashbrown::HashSet;
 use log::*;
 use serial_test_derive::serial;
+use solana::blocktree::Blocktree;
 use solana::broadcast_stage::BroadcastStageType;
 use solana::cluster::Cluster;
 use solana::cluster_tests;
@@ -15,6 +16,44 @@ use solana_sdk::poh_config::PohConfig;
 use solana_sdk::timing;
 use std::thread::sleep;
 use std::time::Duration;
+
+#[test]
+#[serial]
+fn test_ledger_cleanup_service() {
+    solana_logger::setup();
+    let num_nodes = 3;
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.max_ledger_slots = Some(100);
+    let config = ClusterConfig {
+        cluster_lamports: 10_000,
+        poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
+        node_stakes: vec![100; num_nodes],
+        validator_configs: vec![validator_config.clone(); num_nodes],
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+    // 200ms/per * 100 = 20 seconds, so sleep a little longer than that.
+    sleep(Duration::from_secs(60));
+
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+    );
+    cluster.close_preserve_ledgers();
+    //check everyone's ledgers and make sure only ~100 slots are stored
+    for (_, info) in &cluster.fullnode_infos {
+        let mut slots = 0;
+        let blocktree = Blocktree::open(&info.info.ledger_path).unwrap();
+        blocktree
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|_| slots += 1);
+        // with 3 nodes upto 3 slots can be in progress and not complete so max slots in blocktree should be upto 103
+        assert!(slots <= 103, "got {}", slots);
+    }
+}
 
 #[test]
 #[serial]
