@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 source ci/_
 source ci/rust-version.sh stable
+source ci/rust-version.sh nightly
 
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
