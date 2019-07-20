@@ -604,7 +604,7 @@ impl AccountsDB {
         let mut inserts = vec![];
         let index = self.accounts_index.read().unwrap();
         let mut update_index_work = Measure::start("update_index_work");
-        for (_i, (info, account)) in infos.into_iter().zip(accounts.iter()).enumerate() {
+        for (info, account) in infos.into_iter().zip(accounts.iter()) {
             let key = &account.0;
             if let Some(info) = index.update(fork_id, key, info, &mut reclaims) {
                 inserts.push((account, info));

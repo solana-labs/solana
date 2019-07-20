@@ -31,6 +31,7 @@ impl<T: Clone> AccountsIndex<T> {
     }
 
     // find the latest fork and T in a list for a given ancestor
+    // returns index into 'list' if found, None if not.
     fn latest_fork(&self, ancestors: &HashMap<Fork, usize>, list: &[(Fork, T)]) -> Option<usize> {
         let mut max = 0;
         let mut rv = None;
@@ -85,6 +86,10 @@ impl<T: Clone> AccountsIndex<T> {
         self.update(fork, pubkey, account_info, reclaims);
     }
 
+    // Try to update an item in account_maps. If the account is not
+    // already present, then the function will return back Some(account_info) which
+    // the caller can then take the write lock and do an 'insert' with the item.
+    // It returns None if the item is already present and thus successfully updated.
     pub fn update(
         &self,
         fork: Fork,
