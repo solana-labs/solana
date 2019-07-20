@@ -85,30 +85,46 @@ setup_validator_accounts() {
     echo "Vote and stake accounts have already been configured"
   else
     if ((airdrops_enabled)); then
-      # Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts
-      declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((node_lamports+stake_lamports+fees)) || return $?
+      echo "Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts"
+      (
+        declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
+        set -x
+        $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+          airdrop $((node_lamports+stake_lamports+fees))
+      ) || return $?
     else
       echo "current account balance is "
       $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance || return $?
     fi
 
-    # Fund the vote account from the node, with the node as the identity_pubkey
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127 || return $?
+    echo "Fund the vote account from the node's identity pubkey"
+    (
+      set -x
+      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127
+    ) || return $?
 
-    # Fund the stake account from the node, with the node as the identity_pubkey
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-stake-account "$stake_pubkey" "$stake_lamports" || return $?
+    echo "Fund the stake account from the node's identity pubkey"
+    (
+      set -x
+      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+        create-stake-account "$stake_pubkey" "$stake_lamports"
+    ) || return $?
 
-    # Delegate the stake.  The transaction fee is paid by the node but the
+    echo "Delegate the stake account to the node's vote account"
     #  transaction must be signed by the stake_keypair
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-      delegate-stake "$stake_keypair_path" "$vote_pubkey" "$stake_lamports" || return $?
+    (
+      set -x
+      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+        delegate-stake "$stake_keypair_path" "$vote_pubkey" "$stake_lamports"
+    ) || return $?
 
-    # Setup validator storage account
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-validator-storage-account "$identity_pubkey" "$storage_pubkey" || return $?
+    echo "Create validator storage account"
+    (
+      set -x
+      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+        create-validator-storage-account "$identity_pubkey" "$storage_pubkey"
+    ) || return $?
 
     touch "$configured_flag"
   fi
@@ -135,21 +151,31 @@ setup_replicator_account() {
     echo "Replicator account has already been configured"
   else
     if ((airdrops_enabled)); then
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$node_lamports" || return $?
+      (
+        set -x
+        $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899"
+          airdrop "$node_lamports"
+      ) || return $?
     else
       echo "current account balance is "
       $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance || return $?
     fi
 
-    # Setup replicator storage account
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-replicator-storage-account "$identity_pubkey" "$storage_pubkey" || return $?
+    echo "Create replicator storage account"
+    (
+      set -x
+      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+        create-replicator-storage-account "$identity_pubkey" "$storage_pubkey"
+    ) || return $?
 
     touch "$configured_flag"
   fi
 
-  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-    show-storage-account "$storage_pubkey"
+  (
+    set -x
+    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      show-storage-account "$storage_pubkey"
+  )
 
   return 0
 }
