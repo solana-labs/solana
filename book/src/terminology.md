@@ -213,6 +213,10 @@ The public key of a [keypair](#keypair).
 Storage mining client, stores some part of the ledger enumerated in blocks and
 submits storage proofs to the chain. Not a full-node.
 
+#### root
+
+A [block](#block) or [slot](#slot) that has reached maximum [lockout](#lockout) on a validator.  The root is the highest block that is an ancestor of all active forks on a validator.  All ancestor blocks of a root are also transitively a root.  Any block that is not an ancestor or a descendant of the root is considered dead.  Once 2/3rds stake of validators on the network has set a particular block to root, the block is considered finalized.
+
 #### runtime
 
 The component of a [fullnode](#fullnode) responsible for [program](#program)
