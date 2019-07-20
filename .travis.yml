@@ -4,7 +4,7 @@ os:
 language: rust
 cache: cargo
 rust:
-  - 1.35.0
+  - 1.36.0
 
 install:
   - source ci/rust-version.sh
