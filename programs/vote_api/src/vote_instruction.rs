@@ -35,6 +35,12 @@ fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u8
     )
 }
 
+pub fn minimum_balance() -> u64 {
+    let rent = solana_sdk::rent::Rent::default();
+
+    rent.minimum_balance(VoteState::size_of())
+}
+
 pub fn create_account(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
@@ -220,6 +226,14 @@ mod tests {
             )),
             Err(InstructionError::InvalidAccountData),
         );
+    }
+
+    #[test]
+    fn test_minimum_balance() {
+        let rent = solana_sdk::rent::Rent::default();
+        let minimum_balance = rent.minimum_balance(VoteState::size_of());
+        // vote state cheaper than "my $0.02" ;)
+        assert!(minimum_balance as f64 / 2f64.powf(34.0) < 0.02)
     }
 
 }

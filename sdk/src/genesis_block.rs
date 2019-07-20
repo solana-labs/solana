@@ -6,6 +6,7 @@ use crate::hash::{hash, Hash};
 use crate::inflation::Inflation;
 use crate::poh_config::PohConfig;
 use crate::pubkey::Pubkey;
+use crate::rent::Rent;
 use crate::signature::{Keypair, KeypairUtil};
 use crate::system_program;
 use crate::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT};
@@ -28,6 +29,7 @@ pub struct GenesisBlock {
     pub poh_config: PohConfig,
     pub fee_calculator: FeeCalculator,
     pub inflation: Inflation,
+    pub rent: Rent,
 }
 
 // useful for basic tests
@@ -59,6 +61,7 @@ impl Default for GenesisBlock {
             poh_config: PohConfig::default(),
             inflation: Inflation::default(),
             fee_calculator: FeeCalculator::default(),
+            rent: Rent::default(),
         }
     }
 }
