@@ -14,7 +14,7 @@
 #
 
 stable_version=1.36.0
-nightly_version=2019-06-20
+nightly_version=2019-07-19
 
 export rust_stable="$stable_version"
 export rust_stable_docker_image=solanalabs/rust:"$stable_version"
