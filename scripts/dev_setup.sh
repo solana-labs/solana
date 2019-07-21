@@ -44,41 +44,13 @@ else
 fi
 
 cat <<EOF
-Welcome to Libra!
+Welcome to Libra via Solana!
 
 This script will download and install the necessary dependencies needed to
-build Libra Core. This includes:
-	* Rust (and the necessary components, e.g. rust-fmt, clippy)
+build Libra Core targeting Solana. This includes:
 	* CMake, protobuf, go (for building protobuf)
 
-If you'd prefer to install these dependencies yourself, please exit this script
-now with Ctrl-C.
-
 EOF
-
-printf "Proceed with installing necessary dependencies? (y/N) > "
-read -e input
-if [[ "$input" != "y"* ]]; then
-	echo "Exiting..."
-	exit 0
-fi
-
-# Install Rust
-echo "Installing Rust......"
-if rustup --version &>/dev/null; then
-	echo "Rust is already installed"
-else
-	curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
-	CARGO_ENV="$HOME/.cargo/env"
-	source "$CARGO_ENV"
-fi
-
-# Run update in order to download and install the checked in toolchain
-rustup update
-
-# Add all the components that we need
-rustup component add rustfmt
-rustup component add clippy
 
 if [[ $"$PACKAGE_MANAGER" == "apt-get" ]]; then
 	echo "Updating apt-get......"
@@ -147,6 +119,5 @@ cat <<EOF
 Finished installing all dependencies.
 
 You should now be able to build the project by running:
-	source $HOME/.cargo/env
-	cargo build
+       cargo test --manifest-path=programs/move_loader_program/Cargo.toml
 EOF

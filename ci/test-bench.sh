@@ -67,7 +67,7 @@ _ cargo +$rust_nightly bench --manifest-path programs/bpf/Cargo.toml ${V:+--verb
   -- -Z unstable-options --format=json --nocapture | tee -a "$BENCH_FILE"
 
 # Run Move tests
-source <(curl -s https://raw.githubusercontent.com/solana-labs/libra/v0.0.0.0/scripts/dev_setup.sh)
+scripts/dev_setup.sh
 _ cargo +"$rust_nightly" test --manifest-path=programs/move_loader_program/Cargo.toml ${V:+--verbose}
 
 # TODO: debug why solana-upload-perf takes over 30 minutes to complete.
