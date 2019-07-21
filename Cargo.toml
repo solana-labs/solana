@@ -3,7 +3,7 @@ members = [
     "bench-exchange",
     "bench-streamer",
     "bench-tps",
-   #"sdk-c",
+    "sdk-c",
     "chacha-sys",
     "client",
     "core",
@@ -30,8 +30,6 @@ members = [
     "programs/exchange_api",
     "programs/exchange_program",
     "programs/failure_program",
-    "programs/move_loader_api",
-    "programs/move_loader_program",
     "programs/noop_program",
     "programs/stake_api",
     "programs/stake_program",
@@ -50,4 +48,9 @@ members = [
     "vote-signer",
     "wallet",
 ]
-exclude = ["programs/bpf/rust/noop"]
+
+exclude = [
+    "programs/bpf/rust/noop",
+    "programs/move_loader_api",
+    "programs/move_loader_program",
+]
