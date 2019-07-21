@@ -31,7 +31,6 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_sdk::account::{Account, LamportCredit};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs::{create_dir_all, remove_dir_all};
@@ -39,7 +38,6 @@ use std::io::{BufReader, Cursor, Error, ErrorKind, Read};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
 use sys_info;
 
 const ACCOUNT_DATA_FILE_SIZE: u64 = 4 * 1024 * 1024;
@@ -125,16 +123,17 @@ impl Serialize for AccountStorage {
         }
         let mut map = serializer.serialize_map(Some(len))?;
         let mut count = 0;
-        let start = Instant::now();
+        let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
         for fork_storage in self.0.values() {
             for (storage_id, account_storage_entry) in fork_storage {
                 map.serialize_entry(storage_id, &**account_storage_entry)?;
                 count += 1;
             }
         }
+        serialize_account_storage_timer.stop();
         datapoint_info!(
-            "snapshot_duration",
-            ("duration", timing::duration_as_ms(&start.elapsed()), i64),
+            "serialize_account_storage_ms",
+            ("duration", serialize_account_storage_timer.as_ms(), i64),
             ("num_entries", count, i64),
         );
         map.end()

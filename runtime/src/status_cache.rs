@@ -6,7 +6,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
 
-const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
+pub const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
 const CACHED_SIGNATURE_SIZE: usize = 20;
 
 // Store forks in a single chunk of memory to avoid another lookup.

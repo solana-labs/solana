@@ -1,8 +1,10 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
 use bincode::{deserialize_from, serialize_into};
+use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::{Bank, BankRc, StatusCacheRc};
+use solana_runtime::status_cache::MAX_CACHE_ENTRIES;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
@@ -119,7 +121,6 @@ impl BankForks {
     }
 
     pub fn set_root(&mut self, root: u64) {
-        let old_root = self.root;
         self.root = root;
         let set_root_start = Instant::now();
         let root_bank = self
@@ -133,7 +134,7 @@ impl BankForks {
             .unwrap_or(0);
         root_bank.squash();
         let new_tx_count = root_bank.transaction_count();
-        self.prune_non_root(root, old_root);
+        self.prune_non_root(root);
 
         inc_new_counter_info!(
             "bank-forks_set_root_ms",
@@ -149,14 +150,48 @@ impl BankForks {
         self.root
     }
 
-    fn prune_non_root(&mut self, root: u64, old_root: u64) {
+    fn prune_non_root(&mut self, root: u64) {
         let descendants = self.descendants();
         self.banks
             .retain(|slot, _| descendants[&root].contains(slot));
         if self.snapshot_path.is_some() {
-            let _ = self.add_snapshot(root, root);
-            BankForks::remove_snapshot(old_root, &self.snapshot_path);
+            let mut snapshot_time = Measure::start("total-snapshot-ms");
+            let e = self.add_snapshot(root, root);
+            if e.is_err() {
+                panic!("add snapshot error: {:?}", e);
+            }
+
+            let names = BankForks::get_snapshot_names(self.snapshot_path.as_ref().unwrap());
+
+            // We only care about the last MAX_CACHE_ENTRIES snapshots of roots because
+            // the status cache of anything older is thrown away by the bank in
+            // status_cache.prune_roots()
+            let num_to_remove = names.len().saturating_sub(MAX_CACHE_ENTRIES);
+
+            // Remove outdated snapshots
+            for old_root in &names[..num_to_remove] {
+                BankForks::remove_snapshot(*old_root, self.snapshot_path.as_ref().unwrap());
+            }
+            snapshot_time.stop();
+            inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
         }
+    }
+
+    fn get_snapshot_names(snapshot_path: &str) -> Vec<u64> {
+        let path = BankForks::get_snapshot_path(snapshot_path);
+        let paths = fs::read_dir(path).expect("Invalid snapshot path");
+        let mut names = paths
+            .filter_map(|entry| {
+                entry.ok().and_then(|e| {
+                    e.path()
+                        .file_name()
+                        .and_then(|n| n.to_str().map(|s| s.parse::<u64>().unwrap()))
+                })
+            })
+            .collect::<Vec<u64>>();
+
+        names.sort();
+        names
     }
 
     fn get_io_error(error: &str) -> Error {
@@ -164,12 +199,12 @@ impl BankForks {
         Error::new(ErrorKind::Other, error)
     }
 
-    fn get_snapshot_path(path: &Option<String>) -> PathBuf {
-        Path::new(&path.clone().unwrap()).to_path_buf()
+    fn get_snapshot_path(path: &str) -> PathBuf {
+        Path::new(path).to_path_buf()
     }
 
     pub fn add_snapshot(&self, slot: u64, root: u64) -> Result<(), Error> {
-        let path = BankForks::get_snapshot_path(&self.snapshot_path);
+        let path = BankForks::get_snapshot_path(self.snapshot_path.as_ref().unwrap());
         fs::create_dir_all(path.clone())?;
         let bank_file = format!("{}", slot);
         let bank_file_path = path.join(bank_file);
@@ -198,7 +233,7 @@ impl BankForks {
         Ok(())
     }
 
-    pub fn remove_snapshot(slot: u64, path: &Option<String>) {
+    pub fn remove_snapshot(slot: u64, path: &str) {
         let path = BankForks::get_snapshot_path(path);
         let bank_file = format!("{}", slot);
         let bank_file_path = path.join(bank_file);
@@ -214,7 +249,7 @@ impl BankForks {
         bank0: &mut Bank,
         bank_maps: &mut Vec<(u64, u64, Bank)>,
         status_cache_rc: &StatusCacheRc,
-        snapshot_path: &Option<String>,
+        snapshot_path: &str,
     ) -> Option<u64> {
         let path = BankForks::get_snapshot_path(snapshot_path);
         let mut bank_root: Option<u64> = None;
@@ -294,21 +329,9 @@ impl BankForks {
     pub fn load_from_snapshot(
         genesis_block: &GenesisBlock,
         account_paths: Option<String>,
-        snapshot_path: &Option<String>,
+        snapshot_path: &str,
     ) -> Result<Self, Error> {
-        let path = BankForks::get_snapshot_path(snapshot_path);
-        let paths = fs::read_dir(path)?;
-        let mut names = paths
-            .filter_map(|entry| {
-                entry.ok().and_then(|e| {
-                    e.path()
-                        .file_name()
-                        .and_then(|n| n.to_str().map(|s| s.parse::<u64>().unwrap()))
-                })
-            })
-            .collect::<Vec<u64>>();
-
-        names.sort();
+        let names = BankForks::get_snapshot_names(snapshot_path);
         let mut bank_maps = vec![];
         let status_cache_rc = StatusCacheRc::default();
         let id = (names[names.len() - 1] + 1) as usize;
@@ -335,7 +358,7 @@ impl BankForks {
             banks,
             working_bank,
             root,
-            snapshot_path: snapshot_path.clone(),
+            snapshot_path: Some(snapshot_path.to_owned()),
         })
     }
 }
@@ -482,9 +505,12 @@ mod tests {
         account_paths: Option<String>,
         last_slot: u64,
     ) {
-        let new =
-            BankForks::load_from_snapshot(&genesis_block, account_paths, &bank_forks.snapshot_path)
-                .unwrap();
+        let new = BankForks::load_from_snapshot(
+            &genesis_block,
+            account_paths,
+            bank_forks.snapshot_path.as_ref().unwrap(),
+        )
+        .unwrap();
         for (slot, _) in new.banks.iter() {
             if *slot > 0 {
                 let bank = bank_forks.banks.get(slot).unwrap().clone();
@@ -494,7 +520,7 @@ mod tests {
         }
         assert_eq!(new.working_bank().slot(), last_slot);
         for (slot, _) in new.banks.iter() {
-            BankForks::remove_snapshot(*slot, &bank_forks.snapshot_path);
+            BankForks::remove_snapshot(*slot, bank_forks.snapshot_path.as_ref().unwrap());
         }
     }
 
