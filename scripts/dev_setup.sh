@@ -21,18 +21,18 @@ fi
 
 PACKAGE_MANAGER=
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
-	if which yum &>/dev/null; then
+	if command -v yum &>/dev/null; then
 		PACKAGE_MANAGER="yum"
-	elif which apt-get &>/dev/null; then
+	elif command -v apt-get &>/dev/null; then
 		PACKAGE_MANAGER="apt-get"
-	elif which pacman &>/dev/null; then
+	elif command -v pacman &>/dev/null; then
 		PACKAGE_MANAGER="pacman"
 	else
 		echo "Unable to find supported package manager (yum, apt-get, or pacman). Abort"
 		exit 1
 	fi
 elif [[ "$OSTYPE" == "darwin"* ]]; then
-	if which brew &>/dev/null; then
+	if command -v brew &>/dev/null; then
 		PACKAGE_MANAGER="brew"
 	else
 		echo "Missing package manager Homebrew (https://brew.sh/). Abort"
@@ -58,7 +58,7 @@ if [[ $"$PACKAGE_MANAGER" == "apt-get" ]]; then
 fi
 
 echo "Installing CMake......"
-if which cmake &>/dev/null; then
+if command -v cmake &>/dev/null; then
 	echo "CMake is already installed"
 else
 	if [[ "$PACKAGE_MANAGER" == "yum" ]]; then
@@ -73,7 +73,7 @@ else
 fi
 
 echo "Installing Go......"
-if which go &>/dev/null; then
+if command -v go &>/dev/null; then
 	echo "Go is already installed"
 else
 	if [[ "$PACKAGE_MANAGER" == "yum" ]]; then
@@ -88,11 +88,11 @@ else
 fi
 
 echo "Installing Protobuf......"
-if which protoc &>/dev/null; then
+if command -v protoc &>/dev/null; then
   echo "Protobuf is already installed"
 else
 	if [[ "$OSTYPE" == "linux-gnu" ]]; then
-		if ! which unzip &>/dev/null; then
+		if ! command -v unzip &>/dev/null; then
 			echo "Installing unzip......"
 			if [[ "$PACKAGE_MANAGER" == "yum" ]]; then
 				sudo yum install unzip -y
