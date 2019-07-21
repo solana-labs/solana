@@ -71,6 +71,12 @@ echo --- Creating tarball
   source ci/rust-version.sh stable
   scripts/cargo-install-all.sh +"$rust_stable" solana-release
 
+  # Reduce the archive size until
+  # https://github.com/appveyor/ci/issues/2997 is fixed
+  if [[ -n $APPVEYOR ]]; then
+    rm -f solana-release/bin/solana-validator.exe solana-release/bin/solana-bench-exchange.exe
+  fi
+
   if $PERF_LIBS; then
     rm -rf target/perf-libs
     ./fetch-perf-libs.sh
@@ -110,7 +116,8 @@ exec multinode-demo/clear-config.sh "$@"
 EOF
   chmod +x solana-release/bin/clear-config.sh
 
-  tar jvcf solana-release-$TARGET.tar.bz2 solana-release/
+  tar cvf solana-release-$TARGET.tar solana-release
+  bzip2 solana-release-$TARGET.tar
   cp solana-release/bin/solana-install-init solana-install-init-$TARGET
 )
 
