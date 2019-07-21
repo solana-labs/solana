@@ -16,7 +16,7 @@ build_script:
 notifications:
   - provider: Slack
     incoming_webhook:
-      secure: 6HTXVh+FBz29LGJb+taFOo9dqoADfo9xyAszeyXZF5Ub9t5NERytKAR35B2wb+uIOOCBF8+JhmH4437Cgf/ti4IqvURzW1QReXK7eQhn1EI=
+      secure: 6HnLbeS6/Iv7JSMrrHQ7V9OSIjH/3KFzvZiinNWgQqEN0e9A6zaE4MwEXUYDWbcvVJiQneWit6dswY8Scoms2rS1PWEN5N6sjgLgyzroptc=
     channel: ci-status
     on_build_success: false
     on_build_failure: true
