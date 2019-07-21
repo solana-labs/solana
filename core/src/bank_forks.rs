@@ -254,7 +254,7 @@ impl BankForks {
         let path = BankForks::get_snapshot_path(snapshot_path);
         let mut bank_root: Option<u64> = None;
 
-        for bank_slot in names.iter().rev() {
+        for (i, bank_slot) in names.iter().rev().enumerate() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
             info!("Load from {:?}", bank_file_path);
@@ -281,8 +281,15 @@ impl BankForks {
                 match bank {
                     Ok(v) => {
                         if status_cache.is_ok() {
-                            status_cache_rc.append(&status_cache.unwrap());
+                            let status_cache = status_cache.unwrap();
+                            status_cache_rc.append(&status_cache);
+                            // On the last snapshot, purge all outdated status cache
+                            // entries
+                            if i == names.len() - 1 {
+                                status_cache_rc.purge_roots();
+                            }
                         }
+
                         bank_maps.push((*bank_slot, parent_slot, v));
                     }
                     Err(_) => warn!("Load snapshot failed for {}", bank_slot),

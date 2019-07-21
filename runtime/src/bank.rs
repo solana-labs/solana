@@ -173,6 +173,10 @@ impl StatusCacheRc {
         let sc = status_cache_rc.status_cache.write().unwrap();
         self.status_cache.write().unwrap().append(&sc);
     }
+
+    pub fn purge_roots(&self) {
+        self.status_cache.write().unwrap().purge_roots();
+    }
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
