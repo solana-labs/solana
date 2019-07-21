@@ -60,7 +60,7 @@ impl DataStore {
                 }
             }
         }
-        // freeze'em
+        // Freeze each WriteSet
         let mut write_sets: HashMap<AccountAddress, WriteSet> = HashMap::new();
         for (address, write_set_mut) in write_set_muts.drain() {
             write_sets.insert(address, write_set_mut.freeze().unwrap());
