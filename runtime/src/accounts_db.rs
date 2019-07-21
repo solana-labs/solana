@@ -461,9 +461,11 @@ impl AccountsDB {
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
     ) -> Option<(Account, Fork)> {
-        let (info, fork) = accounts_index.get(pubkey, ancestors)?;
+        let (lock, index) = accounts_index.get(pubkey, ancestors)?;
+        let fork = lock[index].0;
         //TODO: thread this as a ref
         if let Some(fork_storage) = storage.0.get(&fork) {
+            let info = &lock[index].1;
             fork_storage
                 .get(&info.id)
                 .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
@@ -599,14 +601,25 @@ impl AccountsDB {
         accounts: &HashMap<&Pubkey, &Account>,
     ) -> (Vec<(Fork, AccountInfo)>, u64) {
         let mut reclaims: Vec<(Fork, AccountInfo)> = Vec::with_capacity(infos.len() * 2);
-        let mut index = self.accounts_index.write().unwrap();
+        let mut inserts = vec![];
+        let index = self.accounts_index.read().unwrap();
         let mut update_index_work = Measure::start("update_index_work");
         for (info, account) in infos.into_iter().zip(accounts.iter()) {
             let key = &account.0;
-            index.insert(fork_id, key, info, &mut reclaims);
+            if let Some(info) = index.update(fork_id, key, info, &mut reclaims) {
+                inserts.push((account, info));
+            }
+        }
+        let last_root = index.last_root;
+        drop(index);
+        if !inserts.is_empty() {
+            let mut index = self.accounts_index.write().unwrap();
+            for ((pubkey, _account), info) in inserts {
+                index.insert(fork_id, pubkey, info, &mut reclaims);
+            }
         }
         update_index_work.stop();
-        (reclaims, index.last_root)
+        (reclaims, last_root)
     }
 
     fn remove_dead_accounts(&self, reclaims: Vec<(Fork, AccountInfo)>) -> HashSet<Fork> {
@@ -1270,22 +1283,17 @@ mod tests {
         //store an account
         accounts.store(0, &hashmap!(&pubkey => &account));
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let info = accounts
-            .accounts_index
-            .read()
-            .unwrap()
-            .get(&pubkey, &ancestors)
-            .unwrap()
-            .0
-            .clone();
+        let id = {
+            let index = accounts.accounts_index.read().unwrap();
+            let (list, idx) = index.get(&pubkey, &ancestors).unwrap();
+            list[idx].1.id
+        };
         //fork 0 is behind root, but it is not root, therefore it is purged
         accounts.add_root(1);
         assert!(accounts.accounts_index.read().unwrap().is_purged(0));
 
         //fork is still there, since gc is lazy
-        assert!(accounts.storage.read().unwrap().0[&0]
-            .get(&info.id)
-            .is_some());
+        assert!(accounts.storage.read().unwrap().0[&0].get(&id).is_some());
 
         //store causes cleanup
         accounts.store(1, &hashmap!(&pubkey => &account));
