@@ -57,22 +57,7 @@ echo --- create book repo
   git commit -m "${CI_COMMIT:-local}"
 )
 
-eval "$(ci/channel-info.sh)"
-# Only publish the book from the edge and beta channels for now.
-case $CHANNEL in
-edge)
-  repo=git@github.com:solana-labs/book-edge.git
-  ;;
-beta)
-  repo=git@github.com:solana-labs/book.git
-  ;;
-*)
- echo "--- publish skipped"
- exit 0
- ;;
-esac
-
-echo "--- publish $CHANNEL"
+echo "--- publish $BOOK"
 cd book/html/
 git remote add origin $repo
 git fetch origin master
