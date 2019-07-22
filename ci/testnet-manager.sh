@@ -528,13 +528,12 @@ deploy() {
 
       EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
       if [[ -z $EXTERNAL_ACCOUNTS_FILE_URL ]]; then
-        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
+        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/validators/all.yml
         wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
         maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
       elif [[ $EXTERNAL_ACCOUNTS_FILE_URL == skip ]]; then
         maybeExternalAccountsFile=""
       else
-        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
         wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
         maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
       fi
