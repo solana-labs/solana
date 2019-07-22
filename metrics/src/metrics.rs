@@ -125,20 +125,11 @@ macro_rules! datapoint_debug {
 }
 
 lazy_static! {
-    static ref HOST_INFO: String = {
-        let v = env::var("SOLANA_METRICS_DISPLAY_HOSTNAME")
-            .map(|x| {
-                x.parse()
-                    .expect("Failed to parse SOLANA_METRICS_DISPLAY_HOSTNAME")
-            })
-            .unwrap_or(0);
-
-        let name: String = hostname().unwrap_or_else(|_| "".to_string());
-        if v == 0 {
-            hash(name.as_bytes()).to_string()
-        } else {
-            name
-        }
+    static ref HOST_ID: String = {
+        env::var("SOLANA_METRICS_HOST_ID").unwrap_or_else(|_| {
+            let hostname: String = hostname().unwrap_or_else(|_| "".to_string());
+            format!("host-{}", hash(hostname.as_bytes())).to_string()
+        })
     };
 }
 
@@ -254,7 +245,7 @@ impl MetricsAgent {
 
         let extra = influxdb::Point::new("metrics")
             .add_timestamp(timing::timestamp() as i64)
-            .add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()))
+            .add_field("host_id", influxdb::Value::String(HOST_ID.to_string()))
             .add_field(
                 "points_written",
                 influxdb::Value::Integer(points_written as i64),
@@ -351,7 +342,7 @@ impl MetricsAgent {
     }
 
     pub fn submit(&self, mut point: influxdb::Point, level: log::Level) {
-        point.add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()));
+        point.add_field("host_id", influxdb::Value::String(HOST_ID.to_string()));
         if point.timestamp.is_none() {
             point.timestamp = Some(timing::timestamp() as i64);
         }
@@ -461,7 +452,7 @@ pub fn set_panic_hook(program: &'static str) {
                             None => "?".to_string(),
                         }),
                     )
-                    .add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()))
+                    .add_field("host_id", influxdb::Value::String(HOST_ID.to_string()))
                     .to_owned(),
                 Level::Error,
             );
