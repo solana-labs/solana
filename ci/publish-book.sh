@@ -8,10 +8,10 @@ eval "$(ci/channel-info.sh)"
 
 if [[ -n $PUBLISH_BOOK_TAG ]]; then
   CURRENT_TAG="$(git describe --tags)"
-  COMMIT_TO_PUBLISH="$(git rev-list -n 1 ${PUBLISH_BOOK_TAG})"
+  COMMIT_TO_PUBLISH="$(git rev-list -n 1 "${PUBLISH_BOOK_TAG}")"
 
   # book is manually published at a specified release tag
-  if [[ $PUBLISH_BOOK_TAG != $CURRENT_TAG ]]; then
+  if [[ $PUBLISH_BOOK_TAG != "$CURRENT_TAG" ]]; then
     (
       cat <<EOF
 steps:
