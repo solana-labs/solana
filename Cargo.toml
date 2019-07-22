@@ -48,4 +48,9 @@ members = [
     "vote-signer",
     "wallet",
 ]
-exclude = ["programs/bpf/rust/noop"]
+
+exclude = [
+    "programs/bpf/rust/noop",
+    "programs/move_loader_api",
+    "programs/move_loader_program",
+]
