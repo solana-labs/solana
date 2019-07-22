@@ -244,6 +244,18 @@ A local InfluxDB and Grafana instance is now running on your machine.  Define
 
 Metrics should now be streaming and visible from your local Grafana dashboard.
 
+#### Timezone For Log Messages
+Log messages emitted by your validator include a timestamp.  When sharing logs
+with others to help triage issues, that timestamp can cause confusion as it does
+not contain timezone information.
+
+To make it easier to compare logs between different sources we request that
+everybody use Pacific Time on their validator nodes.  In Linux this can be
+accomplished by running:
+```bash
+$ sudo ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+```
+
 #### Publishing Validator Info
 
 You can publish your validator information to the chain to be publicly visible
