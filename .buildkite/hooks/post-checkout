@@ -19,8 +19,10 @@ source ci/env.sh
 )
 
 docker images
+docker run solanalabs/rust-nightly:2019-07-19 cargo +1.36.0 --version
 docker run solanalabs/rust-nightly:2019-07-19 cargo --version
 docker run solanalabs/rust-nightly:2019-07-19 cargo audit --version
+docker run solanalabs/rust-nightly:2019-07-19 cargo +1.36.0 audit --version
 
 # Processes from previously aborted CI jobs seem to loiter, unclear why as one
 # would expect the buildkite-agent to clean up all child processes of the
