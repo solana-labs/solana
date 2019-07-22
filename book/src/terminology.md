@@ -91,6 +91,10 @@ History](#proof-of-history).
 The time, i.e. number of [slots](#slot), for which a [leader
 schedule](#leader-schedule) is valid.
 
+#### finality
+
+When nodes representing 2/3rd of the stake have a common [root](#root).
+
 #### fork
 
 A [ledger](#ledger) derived from common entries but then diverged.
@@ -212,6 +216,15 @@ The public key of a [keypair](#keypair).
 
 Storage mining client, stores some part of the ledger enumerated in blocks and
 submits storage proofs to the chain. Not a full-node.
+
+#### root
+
+A [block](#block) or [slot](#slot) that has reached maximum [lockout](#lockout)
+on a validator.  The root is the highest block that is an ancestor of all active
+forks on a validator.  All ancestor blocks of a root are also transitively a
+root.  Blocks that are not an ancestor and not a descendant of the root are
+excluded from consideration for consensus and can be discarded.
+
 
 #### runtime
 
