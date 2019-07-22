@@ -361,6 +361,7 @@ else
 fi
 
 identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
+export SOLANA_METRICS_HOST_ID="$identity_pubkey"
 
 if [[ $node_type != replicator ]]; then
   accounts_config_dir="$state_dir"/accounts
