@@ -13,9 +13,9 @@ export RUSTFLAGS="-D warnings"
 do_bpf_check() {
         _ cargo +"$rust_stable" fmt --all -- --check
         _ cargo +"$rust_nightly" test --all
-        _ cargo +"$rust_nightly" clippy --all -- --version
+        _ cargo +"$rust_nightly" clippy --version
         _ cargo +"$rust_nightly" clippy --all -- --deny=warnings
-#        _ cargo +"$rust_stable" audit
+        _ cargo +"$rust_stable" audit
 }
 
 (
@@ -40,9 +40,10 @@ do_bpf_check() {
 )
 
 _ cargo +"$rust_stable" fmt --all -- --check
-_ cargo +"$rust_stable" clippy --all -- --version
+_ cargo +"$rust_stable" clippy --version
 _ cargo +"$rust_stable" clippy --all -- --deny=warnings
-#_ cargo +"$rust_stable" audit
+_ cargo +"$rust_stable" audit --version
+_ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0011 # https://github.com/solana-labs/solana/issues/5207
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
