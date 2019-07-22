@@ -24,7 +24,6 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::remove_dir_all;
 use std::io::{BufReader, Read};
-use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -65,10 +64,6 @@ impl Drop for Accounts {
             let paths = get_paths_vec(&self.paths);
             paths.iter().for_each(|p| {
                 let _ignored = remove_dir_all(p);
-
-                // it is safe to delete the parent
-                let path = Path::new(p);
-                let _ignored = remove_dir_all(path.parent().unwrap());
             });
         }
     }
