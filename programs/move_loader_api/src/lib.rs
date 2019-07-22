@@ -279,6 +279,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_mint() {
         solana_logger::setup();
 
