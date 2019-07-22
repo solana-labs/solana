@@ -250,6 +250,7 @@ impl ClusterInfoRepairListener {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn serve_repairs_to_repairee(
         my_pubkey: &Pubkey,
         repairee_pubkey: &Pubkey,
