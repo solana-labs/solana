@@ -536,12 +536,12 @@ impl ReplayStage {
                     .map(|s| s.is_frozen())
                     .unwrap_or(true)
             {
-                info!("validator fork confirmed {} {}", *slot, duration);
+                info!("validator fork confirmed {} {}ms", *slot, duration);
                 datapoint_warn!("validator-confirmation", ("duration_ms", duration, i64));
                 false
             } else {
                 debug!(
-                    "validator fork not confirmed {} {} {:?}",
+                    "validator fork not confirmed {} {}ms {:?}",
                     *slot,
                     duration,
                     stake_lockouts.get(slot)
