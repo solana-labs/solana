@@ -3,6 +3,7 @@
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
+setup_secondary_mount
 
 set -e
 "$here"/clear-config.sh

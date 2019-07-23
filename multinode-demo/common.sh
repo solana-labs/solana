@@ -81,7 +81,6 @@ setup_secondary_mount() {
     ln -sfT $SECONDARY_DISK_MOUNT_POINT/config-local "$SOLANA_CONFIG_DIR"
   fi
 }
-setup_secondary_mount
 
 default_arg() {
   declare name=$1
