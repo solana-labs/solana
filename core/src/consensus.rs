@@ -347,12 +347,11 @@ impl Tower {
     }
 
     pub fn aggregate_stake_lockouts(
-        &self,
+        root: Option<u64>,
         ancestors: &HashMap<u64, HashSet<u64>>,
-        stake_lockouts: &HashMap<u64, StakeLockout>,
+        stake_lockouts: HashMap<u64, StakeLockout>,
     ) -> HashMap<u64, u128> {
         let mut stake_weighted_lockouts: HashMap<u64, u128> = HashMap::new();
-        let root = self.root();
         for (fork, lockout) in stake_lockouts.iter() {
             if root.is_none() || *fork >= root.unwrap() {
                 let mut slot_with_ancestors = vec![*fork];
@@ -612,7 +611,8 @@ mod test {
         ]
         .into_iter()
         .collect();
-        let stake_weighted_lockouts = tower.aggregate_stake_lockouts(&ancestors, &stakes);
+        let stake_weighted_lockouts =
+            Tower::aggregate_stake_lockouts(tower.root(), &ancestors, stakes);
         assert!(stake_weighted_lockouts.get(&0).is_none());
         assert_eq!(*stake_weighted_lockouts.get(&1).unwrap(), 8 + 16 + 24);
         assert_eq!(*stake_weighted_lockouts.get(&2).unwrap(), 8 + 16);

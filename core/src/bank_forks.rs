@@ -32,7 +32,15 @@ pub struct Confidence {
 }
 
 impl Confidence {
-    pub fn new(
+    pub fn new(fork_stakes: u64, epoch_stakes: u64, lockouts: u64) -> Self {
+        Self {
+            fork_stakes,
+            epoch_stakes,
+            lockouts,
+            stake_weighted_lockouts: 0,
+        }
+    }
+    pub fn new_with_stake_weighted(
         fork_stakes: u64,
         epoch_stakes: u64,
         lockouts: u64,
@@ -188,7 +196,8 @@ impl BankForks {
         let descendants = self.descendants();
         self.banks
             .retain(|slot, _| descendants[&root].contains(slot));
-        self.confidence.retain(|slot, _| slot == &root || descendants[&root].contains(slot));
+        self.confidence
+            .retain(|slot, _| slot == &root || descendants[&root].contains(slot));
         if self.snapshot_path.is_some() {
             let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
             trace!("prune non root {} - {:?}", root, diff);
@@ -209,18 +218,28 @@ impl BankForks {
         fork_stakes: u64,
         epoch_stakes: u64,
         lockouts: u64,
-        stake_weighted_lockouts: u128,
     ) {
         self.confidence
             .entry(fork)
-            .and_modify(|e| {
-                e.fork_stakes = fork_stakes;
-                e.epoch_stakes = epoch_stakes;
-                e.lockouts = lockouts;
-                e.stake_weighted_lockouts = stake_weighted_lockouts;
+            .and_modify(|entry| {
+                entry.fork_stakes = fork_stakes;
+                entry.epoch_stakes = epoch_stakes;
+                entry.lockouts = lockouts;
             })
-            .or_insert_with(|| {
-                Confidence::new(fork_stakes, epoch_stakes, lockouts, stake_weighted_lockouts)
+            .or_insert_with(|| Confidence::new(fork_stakes, epoch_stakes, lockouts));
+    }
+
+    pub fn cache_stake_weighted_lockouts(&mut self, fork: u64, stake_weighted_lockouts: u128) {
+        self.confidence
+            .entry(fork)
+            .and_modify(|entry| {
+                entry.stake_weighted_lockouts = stake_weighted_lockouts;
+            })
+            .or_insert(Confidence {
+                fork_stakes: 0,
+                epoch_stakes: 0,
+                lockouts: 0,
+                stake_weighted_lockouts,
             });
     }
 
@@ -500,15 +519,36 @@ mod tests {
         let fork = bank.slot();
         let mut bank_forks = BankForks::new(0, bank);
         assert!(bank_forks.confidence.get(&fork).is_none());
-        bank_forks.cache_fork_confidence(fork, 11, 12, 13, 14);
+        bank_forks.cache_fork_confidence(fork, 11, 12, 13);
         assert_eq!(
             bank_forks.confidence.get(&fork).unwrap(),
             &Confidence {
                 fork_stakes: 11,
                 epoch_stakes: 12,
                 lockouts: 13,
-                stake_weighted_lockouts: 14,
+                stake_weighted_lockouts: 0,
             }
+        );
+        // Ensure that {fork_stakes, epoch_stakes, lockouts} and stake_weighted_lockouts
+        // can be updated separately
+        bank_forks.cache_stake_weighted_lockouts(fork, 20);
+        assert_eq!(
+            bank_forks.confidence.get(&fork).unwrap(),
+            &Confidence {
+                fork_stakes: 11,
+                epoch_stakes: 12,
+                lockouts: 13,
+                stake_weighted_lockouts: 20,
+            }
+        );
+        bank_forks.cache_fork_confidence(fork, 21, 22, 23);
+        assert_eq!(
+            bank_forks
+                .confidence
+                .get(&fork)
+                .unwrap()
+                .stake_weighted_lockouts,
+            20,
         );
     }
 

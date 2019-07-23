@@ -138,7 +138,7 @@ impl ReplayStage {
 
                     let votable = Self::generate_votable_banks(&bank_forks, &tower, &mut progress);
 
-                    if let Some((_, bank, lockouts)) = votable.last() {
+                    if let Some((_, bank, lockouts)) = votable.into_iter().last() {
                         subscriptions.notify_subscribers(bank.slot(), &bank_forks);
 
                         if let Some(new_leader) =
@@ -163,7 +163,7 @@ impl ReplayStage {
                             &blocktree,
                             &leader_schedule_cache,
                             &root_bank_sender,
-                            &lockouts,
+                            lockouts,
                         )?;
 
                         Self::reset_poh_recorder(
@@ -370,7 +370,7 @@ impl ReplayStage {
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
-        lockouts: &HashMap<u64, StakeLockout>,
+        lockouts: HashMap<u64, StakeLockout>,
     ) -> Result<()>
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -428,10 +428,8 @@ impl ReplayStage {
     fn update_confidence_cache(
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &Tower,
-        lockouts: &HashMap<u64, StakeLockout>,
-    ) {
-        let ancestors = bank_forks.read().unwrap().ancestors();
-        let stake_weighted_lockouts = tower.aggregate_stake_lockouts(&ancestors, &lockouts);
+        lockouts: HashMap<u64, StakeLockout>,
+    ) -> thread::JoinHandle<()> {
         let total_epoch_stakes = tower.total_epoch_stakes();
         let mut w_bank_forks = bank_forks.write().unwrap();
         for (fork, stake_lockout) in lockouts.iter() {
@@ -441,13 +439,24 @@ impl ReplayStage {
                     stake_lockout.stake(),
                     total_epoch_stakes,
                     stake_lockout.lockout(),
-                    *stake_weighted_lockouts
-                        .get(fork)
-                        .expect("every fork in lockouts should exist in stake_weighted_lockouts"),
                 );
             }
         }
         drop(w_bank_forks);
+        let bank_forks_clone = bank_forks.clone();
+        let root = tower.root();
+        thread::spawn(move || {
+            let ancestors = bank_forks_clone.read().unwrap().ancestors();
+            let stake_weighted_lockouts =
+                Tower::aggregate_stake_lockouts(root, &ancestors, lockouts);
+            let mut w_bank_forks = bank_forks_clone.write().unwrap();
+            for (fork, stake_weighted_lockout) in stake_weighted_lockouts.iter() {
+                if root.is_none() || *fork >= root.unwrap() {
+                    w_bank_forks.cache_stake_weighted_lockouts(*fork, *stake_weighted_lockout)
+                }
+            }
+            drop(w_bank_forks);
+        })
     }
 
     fn reset_poh_recorder(
@@ -985,13 +994,14 @@ mod test {
 
         leader_vote(&arc_bank0, &leader_voting_pubkey);
         let votable = ReplayStage::generate_votable_banks(&bank_forks, &tower, &mut progress);
-        if let Some((_, _, lockouts)) = votable.last() {
-            ReplayStage::update_confidence_cache(&bank_forks, &tower, &lockouts);
+        if let Some((_, _, lockouts)) = votable.into_iter().last() {
+            let thread_hdl = ReplayStage::update_confidence_cache(&bank_forks, &tower, lockouts);
+            thread_hdl.join().unwrap();
         }
 
         assert_eq!(
             bank_forks.read().unwrap().get_fork_confidence(0).unwrap(),
-            &Confidence::new(0, 1, 2, 0)
+            &Confidence::new(0, 1, 2)
         );
         assert!(bank_forks.read().unwrap().get_fork_confidence(1).is_none());
 
@@ -1007,8 +1017,9 @@ mod test {
         let arc_bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
         leader_vote(&arc_bank1, &leader_voting_pubkey);
         let votable = ReplayStage::generate_votable_banks(&bank_forks, &tower, &mut progress);
-        if let Some((_, _, lockouts)) = votable.last() {
-            ReplayStage::update_confidence_cache(&bank_forks, &tower, &lockouts);
+        if let Some((_, _, lockouts)) = votable.into_iter().last() {
+            let thread_hdl = ReplayStage::update_confidence_cache(&bank_forks, &tower, lockouts);
+            thread_hdl.join().unwrap();
         }
 
         tower.record_vote(arc_bank1.slot(), arc_bank1.hash());
@@ -1023,21 +1034,22 @@ mod test {
         let arc_bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
         leader_vote(&arc_bank2, &leader_voting_pubkey);
         let votable = ReplayStage::generate_votable_banks(&bank_forks, &tower, &mut progress);
-        if let Some((_, _, lockouts)) = votable.last() {
-            ReplayStage::update_confidence_cache(&bank_forks, &tower, &lockouts);
+        if let Some((_, _, lockouts)) = votable.into_iter().last() {
+            let thread_hdl = ReplayStage::update_confidence_cache(&bank_forks, &tower, lockouts);
+            thread_hdl.join().unwrap();
         }
 
         assert_eq!(
             bank_forks.read().unwrap().get_fork_confidence(0).unwrap(),
-            &Confidence::new(1, 1, 14, 20)
+            &Confidence::new_with_stake_weighted(1, 1, 14, 20)
         );
         assert_eq!(
             bank_forks.read().unwrap().get_fork_confidence(1).unwrap(),
-            &Confidence::new(1, 1, 6, 6)
+            &Confidence::new_with_stake_weighted(1, 1, 6, 6)
         );
         assert_eq!(
             bank_forks.read().unwrap().get_fork_confidence(2).unwrap(),
-            &Confidence::new(0, 1, 2, 0)
+            &Confidence::new_with_stake_weighted(0, 1, 2, 0)
         );
     }
 }
