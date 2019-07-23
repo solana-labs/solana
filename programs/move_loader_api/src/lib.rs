@@ -54,9 +54,13 @@ pub enum LibraAccountState {
     Genesis(WriteSet),
 }
 
+// TODO: Not quite right yet
+/// Invoke information passed via the Invoke Instruction
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct InvokeInfo {
+    /// Sender of the 'transaction", the "sender" who is calling this program
     sender_address: AccountAddress,
+    /// Arguments to pass to the program being invoked
     args: Vec<TransactionArgument>,
 }
 
