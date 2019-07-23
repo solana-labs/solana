@@ -67,7 +67,7 @@ source net/common.sh
 loadConfigFile
 
 case $deployMethod in
-local|tar)
+local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   if [[ -r target/perf-libs/env.sh ]]; then

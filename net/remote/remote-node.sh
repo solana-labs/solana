@@ -78,7 +78,7 @@ waitForNodeToInit() {
 }
 
 case $deployMethod in
-local|tar)
+local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
@@ -107,52 +107,53 @@ local|tar)
       export SOLANA_CUDA=1
     fi
     set -x
-    rm -rf ./solana-node-keys
-    rm -rf ./solana-node-balances
-    mkdir ./solana-node-balances
-    if [[ -n $internalNodesLamports ]]; then
-      for i in $(seq 0 "$numNodes"); do
-        solana-keygen new -o ./solana-node-keys/"$i"
-        pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
-        echo "${pubkey}: $internalNodesLamports" >> ./solana-node-balances/fullnode-balances.yml
-      done
-    fi
-
-    lamports_per_signature="42"
-    # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
-    genesis_args=($genesisOptions)
-    for i in "${!genesis_args[@]}"; do
-      if [[ "${genesis_args[$i]}" = --target-lamports-per-signature ]]; then
-        lamports_per_signature="${genesis_args[$((i+1))]}"
-        break
-      fi
-    done
-
-    rm -rf ./solana-client-accounts
-    mkdir ./solana-client-accounts
-    for i in $(seq 0 $((numBenchTpsClients-1))); do
-      # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
-      solana-bench-tps --write-client-keys ./solana-client-accounts/bench-tps"$i".yml \
-        --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
-      # Skip first line, as it contains header
-      tail -n +2 -q ./solana-client-accounts/bench-tps"$i".yml >> ./solana-client-accounts/client-accounts.yml
-      echo "" >> ./solana-client-accounts/client-accounts.yml
-    done
-    for i in $(seq 0 $((numBenchExchangeClients-1))); do
-      # shellcheck disable=SC2086 # Do not want to quote $benchExchangeExtraArgs
-      solana-bench-exchange --batch-size 1000 --fund-amount 20000 \
-        --write-client-keys ./solana-client-accounts/bench-exchange"$i".yml $benchExchangeExtraArgs
-      tail -n +2 -q ./solana-client-accounts/bench-exchange"$i".yml >> ./solana-client-accounts/client-accounts.yml
-      echo "" >> ./solana-client-accounts/client-accounts.yml
-    done
-    [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-balances/fullnode-balances.yml
-    if [ -f ./solana-node-balances/fullnode-balances.yml ]; then
-      genesisOptions+=" --primordial-accounts-file ./solana-node-balances/fullnode-balances.yml"
-    fi
-    if [ -f ./solana-client-accounts/client-accounts.yml ]; then
-      genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
-    fi
     if [[ $skipSetup != true ]]; then
+      rm -rf ./solana-node-keys
+      rm -rf ./solana-node-balances
+      mkdir ./solana-node-balances
+      if [[ -n $internalNodesLamports ]]; then
+        for i in $(seq 0 "$numNodes"); do
+          solana-keygen new -o ./solana-node-keys/"$i"
+          pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
+          echo "${pubkey}: $internalNodesLamports" >> ./solana-node-balances/fullnode-balances.yml
+        done
+      fi
+
+      lamports_per_signature="42"
+      # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
+      genesis_args=($genesisOptions)
+      for i in "${!genesis_args[@]}"; do
+        if [[ "${genesis_args[$i]}" = --target-lamports-per-signature ]]; then
+          lamports_per_signature="${genesis_args[$((i+1))]}"
+          break
+        fi
+      done
+
+      rm -rf ./solana-client-accounts
+      mkdir ./solana-client-accounts
+      for i in $(seq 0 $((numBenchTpsClients-1))); do
+        # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
+        solana-bench-tps --write-client-keys ./solana-client-accounts/bench-tps"$i".yml \
+          --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
+        # Skip first line, as it contains header
+        tail -n +2 -q ./solana-client-accounts/bench-tps"$i".yml >> ./solana-client-accounts/client-accounts.yml
+        echo "" >> ./solana-client-accounts/client-accounts.yml
+      done
+      for i in $(seq 0 $((numBenchExchangeClients-1))); do
+        # shellcheck disable=SC2086 # Do not want to quote $benchExchangeExtraArgs
+        solana-bench-exchange --batch-size 1000 --fund-amount 20000 \
+          --write-client-keys ./solana-client-accounts/bench-exchange"$i".yml $benchExchangeExtraArgs
+        tail -n +2 -q ./solana-client-accounts/bench-exchange"$i".yml >> ./solana-client-accounts/client-accounts.yml
+        echo "" >> ./solana-client-accounts/client-accounts.yml
+      done
+      [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-balances/fullnode-balances.yml
+      if [ -f ./solana-node-balances/fullnode-balances.yml ]; then
+        genesisOptions+=" --primordial-accounts-file ./solana-node-balances/fullnode-balances.yml"
+      fi
+      if [ -f ./solana-client-accounts/client-accounts.yml ]; then
+        genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
+      fi
+
       args=(
         --bootstrap-leader-stake-lamports "$stake"
         )
@@ -181,10 +182,14 @@ local|tar)
     waitForNodeToInit
     ;;
   validator|blockstreamer)
-    net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
-    rm -f ~/solana/fullnode-identity.json
-    [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/solana-node-keys/"$nodeIndex" ~/solana/fullnode-identity.json
+    if [[ $deployMethod != skip ]]; then
+      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
+    fi
+    if [[ $skipSetup != true ]]; then
+      rm -f ~/solana/fullnode-identity.json
+      [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
+      "$entrypointIp":~/solana/solana-node-keys/"$nodeIndex" ~/solana/fullnode-identity.json
+    fi
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
       echo Selecting solana-validator-cuda
@@ -263,7 +268,9 @@ local|tar)
     waitForNodeToInit
     ;;
   replicator)
-    net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
+    if [[ $deployMethod != skip ]]; then
+      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
+    fi
 
     args=(
       "$entrypointIp":~/solana "$entrypointIp:8001"

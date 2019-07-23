@@ -41,6 +41,8 @@ local|tar)
 
   net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
   ;;
+skip)
+  ;;
 *)
   echo "Unknown deployment method: $deployMethod"
   exit 1
