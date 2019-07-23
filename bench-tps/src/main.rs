@@ -6,7 +6,7 @@ use crate::bench::{
 };
 use solana::gossip_service::{discover_cluster, get_multi_client};
 use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -91,6 +91,7 @@ fn main() {
             keypairs.push(Keypair::from_bytes(&bytes).unwrap());
             last_balance = balance;
         });
+        keypairs.sort_by(|x, y| x.pubkey().to_string().cmp(&y.pubkey().to_string()));
         (keypairs, last_balance)
     } else {
         generate_and_fund_keypairs(
