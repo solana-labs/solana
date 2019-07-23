@@ -139,6 +139,8 @@ impl ReplayStage {
                     let votable = Self::generate_votable_banks(&bank_forks, &tower, &mut progress);
 
                     if let Some((_, bank)) = votable.last() {
+                        subscriptions.notify_subscribers(bank.slot(), &bank_forks);
+                        
                         if let Some(new_leader) =
                             leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
                         {
