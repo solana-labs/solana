@@ -198,6 +198,7 @@ no_restart=0
 airdrops_enabled=1
 generate_snapshots=0
 boot_from_snapshot=1
+reset_ledger=0
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -267,6 +268,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --no-airdrop ]]; then
       airdrops_enabled=0
+      shift
+    elif [[ $1 = --reset-ledger ]]; then
+      reset_ledger=1
       shift
     elif [[ $1 = -h ]]; then
       fullnode_usage "$@"
@@ -414,6 +418,18 @@ kill_fullnode() {
   exit
 }
 trap 'kill_fullnode' INT TERM ERR
+
+if ((reset_ledger)); then
+  echo "Resetting ledger..."
+  (
+    set -x
+    rm -rf "$state_dir"
+    rm -rf "$ledger_config_dir"
+  )
+  if [[ -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ ]]; then
+    cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
+  fi
+fi
 
 while true; do
   if [[ $node_type != bootstrap_leader ]] && new_genesis_block; then
