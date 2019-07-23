@@ -4,6 +4,7 @@ set -e
 cd "$(dirname "$0")/.."
 BOOK="book"
 
+source ci/rust-version.sh stable
 eval "$(ci/channel-info.sh)"
 
 if [[ -n $PUBLISH_BOOK_TAG ]]; then
@@ -44,7 +45,7 @@ else
   BOOK=$CHANNEL
 fi
 
-book/build.sh
+ci/docker-run.sh "$rust_stable_docker_image" bash -exc "book/build.sh"
 
 echo --- create book repo
 (
