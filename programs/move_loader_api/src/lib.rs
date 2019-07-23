@@ -19,8 +19,10 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::convert::TryInto;
+use stdlib::stdlib_modules;
 use types::{
     account_address::AccountAddress,
+    byte_array::ByteArray,
     transaction::{Program, TransactionArgument, TransactionOutput, TransactionStatus},
     write_set::WriteSet,
 };
@@ -30,11 +32,13 @@ use vm::{
 use vm_cache_map::Arena;
 use vm_runtime::{
     code_cache::{
+        module_adapter::FakeFetcher,
         module_adapter::ModuleFetcherImpl,
         module_cache::{BlockModuleCache, ModuleCache, VMModuleCache},
     },
+    data_cache::BlockDataCache,
     static_verify_program,
-    txn_executor::TransactionExecutor,
+    txn_executor::{TransactionExecutor, ACCOUNT_MODULE, COIN_MODULE},
     value::Local,
 };
 
@@ -58,10 +62,81 @@ pub enum LibraAccountState {
 /// Invoke information passed via the Invoke Instruction
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct InvokeInfo {
-    /// Sender of the 'transaction", the "sender" who is calling this program
+    /// Sender of the "transaction", the "sender" who is calling this program
     sender_address: AccountAddress,
+    /// Name of the function to call
+    function_name: String,
     /// Arguments to pass to the program being invoked
     args: Vec<TransactionArgument>,
+}
+
+pub fn pubkey_to_address(key: &Pubkey) -> AccountAddress {
+    AccountAddress::new(*to_array_32(key.as_ref()))
+}
+fn to_array_32(array: &[u8]) -> &[u8; 32] {
+    array.try_into().expect("slice with incorrect length")
+}
+
+pub fn create_genesis_write_set(mint_address: &AccountAddress, mint_balance: u64) -> WriteSet {
+    let modules = stdlib_modules();
+    let arena = Arena::new();
+    let state_view = DataStore::default();
+    let vm_cache = VMModuleCache::new(&arena);
+    // TODO: Need this?
+    let genesis_auth_key = ByteArray::new(mint_address.clone().to_vec());
+
+    {
+        let fake_fetcher = FakeFetcher::new(modules.iter().map(|m| m.as_inner().clone()).collect());
+        let data_cache = BlockDataCache::new(&state_view);
+        let block_cache = BlockModuleCache::new(&vm_cache, fake_fetcher);
+        {
+            let mut txn_data = TransactionMetadata::default();
+            txn_data.sender = *mint_address;
+
+            let mut txn_executor = TransactionExecutor::new(&block_cache, &data_cache, txn_data);
+            txn_executor.create_account(*mint_address).unwrap().unwrap();
+            txn_executor
+                .execute_function(&COIN_MODULE, "initialize", vec![])
+                .unwrap()
+                .unwrap();
+
+            txn_executor
+                .execute_function(
+                    &ACCOUNT_MODULE,
+                    "mint_to_address",
+                    vec![Local::address(*mint_address), Local::u64(mint_balance)],
+                )
+                .unwrap()
+                .unwrap();
+
+            txn_executor
+                .execute_function(
+                    &ACCOUNT_MODULE,
+                    "rotate_authentication_key",
+                    vec![Local::bytearray(genesis_auth_key)],
+                )
+                .unwrap()
+                .unwrap();
+
+            let stdlib_modules = modules
+                .iter()
+                .map(|m| {
+                    let mut module_vec = vec![];
+                    m.serialize(&mut module_vec).unwrap();
+                    (m.self_id(), module_vec)
+                })
+                .collect();
+
+            txn_executor
+                .make_write_set(stdlib_modules, Ok(Ok(())))
+                .unwrap()
+                .write_set()
+                .clone()
+                .into_mut()
+        }
+    }
+    .freeze()
+    .unwrap()
 }
 
 fn arguments_to_locals(args: Vec<TransactionArgument>) -> Vec<Local> {
@@ -77,14 +152,7 @@ fn arguments_to_locals(args: Vec<TransactionArgument>) -> Vec<Local> {
     locals
 }
 
-fn pubkey_to_address(key: &Pubkey) -> AccountAddress {
-    AccountAddress::new(*to_array_32(key.as_ref()))
-}
-fn to_array_32(array: &[u8]) -> &[u8; 32] {
-    array.try_into().expect("slice with incorrect length")
-}
-
-pub fn execute(
+fn execute(
     invoke_info: InvokeInfo,
     script: VerifiedScript,
     modules: Vec<VerifiedModule>,
@@ -105,7 +173,7 @@ pub fn execute(
     let mut vm = TransactionExecutor::new(&module_cache, data_store, txn_metadata);
     let result = vm.execute_function(
         &module_id,
-        &"main".to_string(),
+        &invoke_info.function_name,
         arguments_to_locals(invoke_info.args),
     );
     vm.make_write_set(vec![], result).unwrap()
@@ -165,7 +233,7 @@ pub fn process_instruction(
             }
             LoaderInstruction::InvokeMain { data } => {
                 if keyed_accounts.len() < 2 {
-                    error!("Need at least program and genesis accounts");
+                    error!("Requires at least aprogram and genesis accounts");
                     return Err(InstructionError::InvalidArgument);
                 }
                 if keyed_accounts[PROGRAM_INDEX].account.owner
@@ -214,7 +282,7 @@ pub fn process_instruction(
                 // Break data store into a list of address keyed WriteSets
                 let mut write_sets = data_store.into_write_sets();
 
-                // Genesis account holds both mint and stdliib under address 0x0
+                // Genesis account holds both mint and stdlib under address 0x0
                 let write_set = write_sets.remove(&AccountAddress::default()).unwrap();
                 keyed_accounts[GENESIS_INDEX].account.data.clear();
                 let writer =
@@ -249,16 +317,16 @@ mod tests {
     use compiler::Compiler;
     use language_e2e_tests::account::AccountResource;
     use solana_sdk::account::Account;
-    use stdlib::stdlib_modules;
-    use types::byte_array::ByteArray;
-    use vm_runtime::{
-        code_cache::{
-            module_adapter::FakeFetcher,
-            module_cache::{BlockModuleCache, VMModuleCache},
-        },
-        data_cache::BlockDataCache,
-        txn_executor::{TransactionExecutor, ACCOUNT_MODULE, COIN_MODULE},
-    };
+    // use stdlib::stdlib_modules;
+    // use types::byte_array::ByteArray;
+    // use vm_runtime::{
+    //     code_cache::{
+    //         module_adapter::FakeFetcher,
+    //         module_cache::{BlockModuleCache, VMModuleCache},
+    //     },
+    //     data_cache::BlockDataCache,
+    //     txn_executor::{TransactionExecutor, ACCOUNT_MODULE, COIN_MODULE},
+    // };
 
     #[test]
     fn test_invoke_main() {
@@ -272,7 +340,12 @@ mod tests {
             KeyedAccount::new(&program.key, false, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
         ];
-        call_process_instruction(&mut keyed_accounts, InvokeInfo::default());
+        let invoke_info = InvokeInfo {
+            sender_address: AccountAddress::default(),
+            function_name: "main".to_string(),
+            args: vec![],
+        };
+        call_process_instruction(&mut keyed_accounts, invoke_info);
     }
 
     #[test]
@@ -324,6 +397,7 @@ mod tests {
         let amount = 2;
         let invoke_info = InvokeInfo {
             sender_address: sender.address.clone(),
+            function_name: "main".to_string(),
             args: vec![
                 TransactionArgument::Address(payee.address.clone()),
                 TransactionArgument::U64(amount),
@@ -367,6 +441,7 @@ mod tests {
         ];
         let invoke_info = InvokeInfo {
             sender_address: genesis.address.clone(),
+            function_name: "main".to_string(),
             args: vec![
                 TransactionArgument::Address(pubkey_to_address(&payee.key)),
                 TransactionArgument::U64(amount),
@@ -426,71 +501,7 @@ mod tests {
                 executable: false,
             };
             let mut genesis = Self::new(Pubkey::default(), account);
-
-            const INIT_BALANCE: u64 = 1_000_000_000;
-
-            let modules = stdlib_modules();
-            let arena = Arena::new();
-            let state_view = DataStore::default();
-            let vm_cache = VMModuleCache::new(&arena);
-            let genesis_addr = genesis.address;
-            let genesis_auth_key = ByteArray::new(genesis.address.clone().to_vec());
-
-            let write_set = {
-                let fake_fetcher =
-                    FakeFetcher::new(modules.iter().map(|m| m.as_inner().clone()).collect());
-                let data_cache = BlockDataCache::new(&state_view);
-                let block_cache = BlockModuleCache::new(&vm_cache, fake_fetcher);
-                {
-                    let mut txn_data = TransactionMetadata::default();
-                    txn_data.sender = genesis_addr;
-
-                    let mut txn_executor =
-                        TransactionExecutor::new(&block_cache, &data_cache, txn_data);
-                    txn_executor.create_account(genesis_addr).unwrap().unwrap();
-                    txn_executor
-                        .execute_function(&COIN_MODULE, "initialize", vec![])
-                        .unwrap()
-                        .unwrap();
-
-                    txn_executor
-                        .execute_function(
-                            &ACCOUNT_MODULE,
-                            "mint_to_address",
-                            vec![Local::address(genesis_addr), Local::u64(INIT_BALANCE)],
-                        )
-                        .unwrap()
-                        .unwrap();
-
-                    txn_executor
-                        .execute_function(
-                            &ACCOUNT_MODULE,
-                            "rotate_authentication_key",
-                            vec![Local::bytearray(genesis_auth_key)],
-                        )
-                        .unwrap()
-                        .unwrap();
-
-                    let stdlib_modules = modules
-                        .iter()
-                        .map(|m| {
-                            let mut module_vec = vec![];
-                            m.serialize(&mut module_vec).unwrap();
-                            (m.self_id(), module_vec)
-                        })
-                        .collect();
-
-                    txn_executor
-                        .make_write_set(stdlib_modules, Ok(Ok(())))
-                        .unwrap()
-                        .write_set()
-                        .clone()
-                        .into_mut()
-                }
-            }
-            .freeze()
-            .unwrap();
-
+            let write_set = create_genesis_write_set(&genesis.address, 1_000_000_000);
             genesis.account.data = bincode::serialize(&LibraAccountState::Genesis(write_set))
                 .expect("Failed to serialize genesis WriteSet");
             genesis
