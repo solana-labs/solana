@@ -22,7 +22,7 @@ use std::convert::TryInto;
 use types::{
     account_address::AccountAddress,
     transaction::{Program, TransactionArgument, TransactionOutput, TransactionStatus},
-    write_set::{WriteSet, WriteSetMut},
+    write_set::WriteSet,
 };
 use vm::{
     access::ModuleAccess, file_format::CompiledScript, transaction_metadata::TransactionMetadata,
@@ -40,11 +40,10 @@ use vm_runtime::{
 
 const PROGRAM_INDEX: usize = 0;
 const GENESIS_INDEX: usize = 1;
-const SENDER_INDEX: usize = 2;
 
 /// Type of Libra account held by a Solana account
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-enum LibraAccountState {
+pub enum LibraAccountState {
     /// No data for this account yet
     Unallocated,
     /// Program bits
@@ -53,6 +52,12 @@ enum LibraAccountState {
     User(WriteSet),
     /// Write sets containing the mint and stdlib modules
     Genesis(WriteSet),
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct InvokeInfo {
+    sender_address: AccountAddress,
+    args: Vec<TransactionArgument>,
 }
 
 fn arguments_to_locals(args: Vec<TransactionArgument>) -> Vec<Local> {
@@ -76,9 +81,8 @@ fn to_array_32(array: &[u8]) -> &[u8; 32] {
 }
 
 pub fn execute(
-    sender_addr: &AccountAddress,
+    invoke_info: InvokeInfo,
     script: VerifiedScript,
-    args: Vec<TransactionArgument>,
     modules: Vec<VerifiedModule>,
     data_store: &DataStore,
 ) -> TransactionOutput {
@@ -92,10 +96,14 @@ pub fn execute(
     let module_id = main_module.self_id();
     module_cache.cache_module(main_module);
     let mut txn_metadata = TransactionMetadata::default();
-    txn_metadata.sender = *sender_addr;
+    txn_metadata.sender = invoke_info.sender_address;
 
     let mut vm = TransactionExecutor::new(&module_cache, data_store, txn_metadata);
-    let result = vm.execute_function(&module_id, &"main".to_string(), arguments_to_locals(args));
+    let result = vm.execute_function(
+        &module_id,
+        &"main".to_string(),
+        arguments_to_locals(invoke_info.args),
+    );
     vm.make_write_set(vec![], result).unwrap()
 }
 
@@ -169,7 +177,7 @@ pub fn process_instruction(
 
                 // TODO: Return errors instead of panicking
 
-                let args: Vec<TransactionArgument> = bincode::deserialize(&data).unwrap();
+                let invoke_info: InvokeInfo = bincode::deserialize(&data).unwrap();
 
                 let program = match bincode::deserialize(&keyed_accounts[0].account.data).unwrap() {
                     LibraAccountState::Program(program) => program,
@@ -184,22 +192,12 @@ pub fn process_instruction(
 
                 let mut data_store = keyed_accounts_to_data_store(&keyed_accounts[GENESIS_INDEX..]);
 
-                // TODO: How to know if sender is the Mint...
-                let sender_address = if keyed_accounts[GENESIS_INDEX..].len() < 3 {
-                    AccountAddress::new(*to_array_32(
-                        keyed_accounts[GENESIS_INDEX].unsigned_key().as_ref(),
-                    ))
-                } else {
-                    AccountAddress::new(*to_array_32(
-                        keyed_accounts[SENDER_INDEX].unsigned_key().as_ref(),
-                    ))
-                };
                 let (verified_script, modules) =
                     // TODO: This function calls `.expect()` internally, need an error friendly version
-                    static_verify_program(&sender_address, compiled_script, modules)
+                    static_verify_program(&invoke_info.sender_address, compiled_script, modules)
                         .expect("verification failure");
 
-                let output = execute(&sender_address, verified_script, args, modules, &data_store);
+                let output = execute(invoke_info, verified_script, modules, &data_store);
                 for event in output.events() {
                     debug!("Event: {:?}", event);
                 }
@@ -212,28 +210,12 @@ pub fn process_instruction(
                 // Break data store into a list of address keyed WriteSets
                 let mut write_sets = data_store.into_write_sets();
 
-                // Genesis account holds both mint and stdliib
-                let mut write_set_mut = WriteSetMut::default();
-                let mint_write_set = write_sets
-                    .remove(&pubkey_to_address(
-                        keyed_accounts[GENESIS_INDEX].unsigned_key(),
-                    ))
-                    .unwrap();
-                for op in mint_write_set {
-                    write_set_mut.push(op);
-                }
-                let stdlib_write_set = write_sets.remove(&AccountAddress::default()).unwrap();
-                for op in stdlib_write_set {
-                    write_set_mut.push(op);
-                }
+                // Genesis account holds both mint and stdliib under address 0x0
+                let write_set = write_sets.remove(&AccountAddress::default()).unwrap();
                 keyed_accounts[GENESIS_INDEX].account.data.clear();
                 let writer =
                     std::io::BufWriter::new(&mut keyed_accounts[GENESIS_INDEX].account.data);
-                bincode::serialize_into(
-                    writer,
-                    &LibraAccountState::Genesis(write_set_mut.freeze().unwrap()),
-                )
-                .unwrap();
+                bincode::serialize_into(writer, &LibraAccountState::Genesis(write_set)).unwrap();
 
                 // Now do the rest of the accounts
                 for keyed_account in keyed_accounts[GENESIS_INDEX + 1..].iter_mut() {
@@ -286,7 +268,7 @@ mod tests {
             KeyedAccount::new(&program.key, false, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
         ];
-        call_process_instruction(&mut keyed_accounts, vec![]);
+        call_process_instruction(&mut keyed_accounts, InvokeInfo::default());
     }
 
     #[test]
@@ -297,12 +279,12 @@ mod tests {
         let accounts = mint_coins(amount).unwrap();
 
         let mut data_store = DataStore::default();
-        match bincode::deserialize(&accounts[SENDER_INDEX].account.data).unwrap() {
+        match bincode::deserialize(&accounts[GENESIS_INDEX + 1].account.data).unwrap() {
             LibraAccountState::User(write_set) => data_store.apply_write_set(&write_set),
             _ => panic!("Invalid account state"),
         }
         let payee_resource = data_store
-            .read_account_resource(&accounts[SENDER_INDEX].address)
+            .read_account_resource(&accounts[GENESIS_INDEX + 1].address)
             .unwrap();
 
         assert_eq!(amount, AccountResource::read_balance(&payee_resource));
@@ -322,7 +304,7 @@ mod tests {
                 return;
             }
         ";
-        let mut program = LibraAccount::create_program(&accounts[SENDER_INDEX].address, code);
+        let mut program = LibraAccount::create_program(&accounts[GENESIS_INDEX + 1].address, code);
         let mut payee = LibraAccount::create_unallocated();
 
         let (genesis, sender) = accounts.split_at_mut(GENESIS_INDEX + 1);
@@ -336,12 +318,15 @@ mod tests {
         ];
 
         let amount = 2;
-        let args = vec![
-            TransactionArgument::Address(payee.address.clone()),
-            TransactionArgument::U64(amount),
-        ];
+        let invoke_info = InvokeInfo {
+            sender_address: sender.address.clone(),
+            args: vec![
+                TransactionArgument::Address(payee.address.clone()),
+                TransactionArgument::U64(amount),
+            ],
+        };
 
-        call_process_instruction(&mut keyed_accounts, args);
+        call_process_instruction(&mut keyed_accounts, invoke_info);
 
         let data_store = keyed_accounts_to_data_store(&keyed_accounts[1..]);
         let sender_resource = data_store.read_account_resource(&sender.address).unwrap();
@@ -376,12 +361,15 @@ mod tests {
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
-        let args = vec![
-            TransactionArgument::Address(pubkey_to_address(&payee.key)),
-            TransactionArgument::U64(amount),
-        ];
+        let invoke_info = InvokeInfo {
+            sender_address: genesis.address.clone(),
+            args: vec![
+                TransactionArgument::Address(pubkey_to_address(&payee.key)),
+                TransactionArgument::U64(amount),
+            ],
+        };
 
-        call_process_instruction(&mut keyed_accounts, args);
+        call_process_instruction(&mut keyed_accounts, invoke_info);
 
         Ok(vec![
             LibraAccount::new(program.key, program.account),
@@ -390,13 +378,10 @@ mod tests {
         ])
     }
 
-    fn call_process_instruction(
-        keyed_accounts: &mut [KeyedAccount],
-        args: Vec<TransactionArgument>,
-    ) {
+    fn call_process_instruction(keyed_accounts: &mut [KeyedAccount], invoke_info: InvokeInfo) {
         let program_id = Pubkey::new(&MOVE_LOADER_PROGRAM_ID);
 
-        let data = bincode::serialize(&args).unwrap();
+        let data = bincode::serialize(&invoke_info).unwrap();
         let ix = LoaderInstruction::InvokeMain { data };
         let ix_data = bincode::serialize(&ix).unwrap();
 
@@ -430,7 +415,13 @@ mod tests {
         }
 
         pub fn create_genesis() -> Self {
-            let mut genesis = Self::create_unallocated();
+            let account = Account {
+                lamports: 1,
+                data: vec![],
+                owner: Pubkey::new(&MOVE_LOADER_PROGRAM_ID),
+                executable: false,
+            };
+            let mut genesis = Self::new(Pubkey::default(), account);
 
             const INIT_BALANCE: u64 = 1_000_000_000;
 
@@ -438,7 +429,7 @@ mod tests {
             let arena = Arena::new();
             let state_view = DataStore::default();
             let vm_cache = VMModuleCache::new(&arena);
-            let genesis_addr = genesis.address.clone();
+            let genesis_addr = genesis.address;
             let genesis_auth_key = ByteArray::new(genesis.address.clone().to_vec());
 
             let write_set = {
@@ -454,7 +445,7 @@ mod tests {
                         TransactionExecutor::new(&block_cache, &data_cache, txn_data);
                     txn_executor.create_account(genesis_addr).unwrap().unwrap();
                     txn_executor
-                        .execute_function(&COIN_MODULE, "grant_mint_capability", vec![])
+                        .execute_function(&COIN_MODULE, "initialize", vec![])
                         .unwrap()
                         .unwrap();
 
