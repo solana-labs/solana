@@ -38,11 +38,8 @@ else
     repo=git@github.com:solana-labs/book-beta.git
     ;;
   *)
-#   echo "--- publish skipped"
-#   exit 0
-    echo "channel is ${CHANNEL}"
-    echo "writing to book-edge for debugging"
-    repo=git@github.com:solana-labs/book-edge.git
+   echo "--- publish skipped"
+   exit 0
    ;;
   esac
   BOOK=$CHANNEL
