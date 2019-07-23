@@ -2751,7 +2751,7 @@ mod tests {
         let mut dbank: Bank = deserialize_from(&mut rdr).unwrap();
         let mut reader = BufReader::new(&buf[rdr.position() as usize..]);
         dbank.set_bank_rc(
-            &BankRc::new(Some(bank0.accounts().paths.clone()), 0),
+            &BankRc::new(Some(bank0.accounts().accounts_db.paths()), 0),
             &StatusCacheRc::default(),
         );
         assert!(dbank.rc.update_from_stream(&mut reader).is_ok());
