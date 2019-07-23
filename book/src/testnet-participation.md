@@ -155,20 +155,17 @@ choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
-$ clear-config.sh
-$ validator.sh --identity ~/validator-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ validator.sh --identity ~/validator-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ clear-config.sh
-$ solana-install run validator.sh -- --identity ~/validator-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ solana-install run validator.sh -- --identity ~/validator-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 If you built from source:
 ```bash
-$ USE_INSTALL=1 ./multinode-demo/clear-config.sh
 $ USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
