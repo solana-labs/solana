@@ -4,7 +4,7 @@ use crate::update_manifest::{SignedUpdateManifest, UpdateManifest};
 use chrono::{Local, TimeZone};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
-use ring::digest::{Context, Digest, SHA256};
+use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
 use solana_config_api::config_instruction::{self, ConfigKeys};
 use solana_sdk::message::Message;
@@ -52,25 +52,20 @@ fn download_to_temp_archive(
     url: &str,
     expected_sha256: Option<&str>,
 ) -> Result<(TempDir, PathBuf, String), Box<dyn std::error::Error>> {
-    fn sha256_digest<R: Read>(mut reader: R) -> Result<Digest, Box<dyn std::error::Error>> {
-        let mut context = Context::new(&SHA256);
-        let mut buffer = [0; 1024];
+    fn sha256_file_digest<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn std::error::Error>> {
+        let input = File::open(path)?;
+        let mut reader = BufReader::new(input);
+        let mut hasher = Sha256::new();
 
+        let mut buffer = [0; 1024];
         loop {
             let count = reader.read(&mut buffer)?;
             if count == 0 {
                 break;
             }
-            context.update(&buffer[..count]);
+            hasher.input(&buffer[..count]);
         }
-
-        Ok(context.finish())
-    }
-
-    fn sha256_file_digest<P: AsRef<Path>>(path: P) -> Result<Digest, Box<dyn std::error::Error>> {
-        let input = File::open(path)?;
-        let reader = BufReader::new(input);
-        sha256_digest(reader)
+        Ok(bs58::encode(hasher.result()).into_string())
     }
 
     let url = Url::parse(url).map_err(|err| format!("Unable to parse {}: {}", url, err))?;
@@ -129,7 +124,6 @@ fn download_to_temp_archive(
 
     let temp_file_sha256 = sha256_file_digest(&temp_file)
         .map_err(|err| format!("Unable to hash {:?}: {}", temp_file, err))?;
-    let temp_file_sha256 = bs58::encode(temp_file_sha256).into_string();
 
     if expected_sha256.is_some() && expected_sha256 != Some(&temp_file_sha256) {
         Err(io::Error::new(io::ErrorKind::Other, "Incorrect hash"))?;
