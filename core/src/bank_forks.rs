@@ -188,6 +188,7 @@ impl BankForks {
         let descendants = self.descendants();
         self.banks
             .retain(|slot, _| descendants[&root].contains(slot));
+        self.confidence.retain(|slot, _| slot == &root || descendants[&root].contains(slot));
         if self.snapshot_path.is_some() {
             let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
             trace!("prune non root {} - {:?}", root, diff);
