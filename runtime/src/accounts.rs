@@ -1,6 +1,6 @@
 use crate::accounts_db::{
-    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters,
-    InstructionAccounts, InstructionCredits, InstructionLoaders,
+    AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters, InstructionAccounts,
+    InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
@@ -15,21 +15,14 @@ use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_program;
 use solana_sdk::sysvar;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
-use std::env;
-use std::fs::remove_dir_all;
 use std::io::{BufReader, Read};
-use std::path::Path;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
-
-const ACCOUNTSDB_DIR: &str = "accountsdb";
-const NUM_ACCOUNT_DIRS: usize = 4;
 
 #[derive(Default, Debug)]
 struct CreditOnlyLock {
@@ -50,73 +43,20 @@ pub struct Accounts {
     /// and number of locks. On commit_credits(), we do a take() on the option so that the hashmap
     /// is no longer available to be written to.
     credit_only_account_locks: Arc<RwLock<Option<HashMap<Pubkey, CreditOnlyLock>>>>,
-
-    /// List of persistent stores
-    pub paths: String,
-
-    /// set to true if object created the directories in paths
-    /// when true, delete parents of 'paths' on drop
-    own_paths: bool,
-}
-
-impl Drop for Accounts {
-    fn drop(&mut self) {
-        if self.own_paths {
-            let paths = get_paths_vec(&self.paths);
-            paths.iter().for_each(|p| {
-                let _ignored = remove_dir_all(p);
-
-                // it is safe to delete the parent
-                let path = Path::new(p);
-                let _ignored = remove_dir_all(path.parent().unwrap());
-            });
-        }
-    }
 }
 
 impl Accounts {
-    fn make_new_dir() -> String {
-        static ACCOUNT_DIR: AtomicUsize = AtomicUsize::new(0);
-        let dir = ACCOUNT_DIR.fetch_add(1, Ordering::Relaxed);
-        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
-        format!(
-            "{}/{}/{}/{}",
-            out_dir,
-            ACCOUNTSDB_DIR,
-            keypair.pubkey(),
-            dir.to_string()
-        )
-    }
-
-    fn make_default_paths() -> String {
-        let mut paths = "".to_string();
-        for index in 0..NUM_ACCOUNT_DIRS {
-            if index > 0 {
-                paths.push_str(",");
-            }
-            paths.push_str(&Self::make_new_dir());
-        }
-        paths
-    }
-
     pub fn new(in_paths: Option<String>) -> Self {
         Self::new_with_num_stores(in_paths, 0)
     }
 
-    pub fn new_with_num_stores(in_paths: Option<String>, min_num_stores: usize) -> Self {
-        let (paths, own_paths) = if in_paths.is_none() {
-            (Self::make_default_paths(), true)
-        } else {
-            (in_paths.unwrap(), false)
-        };
-        let accounts_db = Arc::new(AccountsDB::new_with_num_stores(&paths, min_num_stores));
+    pub fn new_with_num_stores(paths: Option<String>, min_num_stores: usize) -> Self {
+        let accounts_db = Arc::new(AccountsDB::new_with_num_stores(paths, min_num_stores));
+
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             credit_only_account_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-            paths,
-            own_paths,
         }
     }
     pub fn new_from_parent(parent: &Accounts) -> Self {
@@ -125,8 +65,6 @@ impl Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             credit_only_account_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-            paths: parent.paths.clone(),
-            own_paths: parent.own_paths,
         }
     }
 
@@ -1207,16 +1145,19 @@ mod tests {
         for _ in 1..num {
             let idx = thread_rng().gen_range(0, num - 1);
             let ancestors = vec![(0, 0)].into_iter().collect();
-            let account = accounts.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let account1 = Account::new((idx + 1) as u64, 0, &Account::default().owner);
-            assert_eq!(account, (account1, 0));
+            let account = accounts.load_slow(&ancestors, &pubkeys[idx]);
+            let account1 = Some((
+                Account::new((idx + 1) as u64, 0, &Account::default().owner),
+                0,
+            ));
+            assert_eq!(account, account1);
         }
     }
 
     #[test]
     fn test_accounts_serialize() {
         solana_logger::setup();
-        let accounts = Accounts::new(Some("serialize_accounts".to_string()));
+        let accounts = Accounts::new(None);
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_test_accounts(&accounts, &mut pubkeys, 100);
@@ -1229,7 +1170,7 @@ mod tests {
         serialize_into(&mut writer, &*accounts.accounts_db).unwrap();
 
         let mut reader = BufReader::new(&buf[..]);
-        let daccounts = Accounts::new(Some("serialize_accounts".to_string()));
+        let daccounts = Accounts::new(Some(accounts.accounts_db.paths()));
         assert!(daccounts.update_from_stream(&mut reader).is_ok());
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(
