@@ -140,7 +140,7 @@ impl ReplayStage {
 
                     if let Some((_, bank)) = votable.last() {
                         subscriptions.notify_subscribers(bank.slot(), &bank_forks);
-                        
+
                         if let Some(new_leader) =
                             leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
                         {
