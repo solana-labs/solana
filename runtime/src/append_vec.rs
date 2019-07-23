@@ -1,5 +1,4 @@
 use bincode::{deserialize_from, serialize_into, serialized_size};
-use log::warn;
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::account::Account;
@@ -382,15 +381,10 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
             .read(true)
             .write(true)
             .create(false)
-            .open(&path);
+            .open(&path)
+            .map_err(|e| Error::custom(e.to_string()))?;
 
-        if data.is_err() {
-            warn!("account open {:?} failed", &path);
-            std::fs::create_dir_all(&path.parent().unwrap()).expect("Create directory failed");
-            return Ok(AppendVec::new(&path, true, file_size as usize));
-        }
-
-        let map = unsafe { MmapMut::map_mut(&data.unwrap()).expect("failed to map the data file") };
+        let map = unsafe { MmapMut::map_mut(&data).map_err(|e| Error::custom(e.to_string()))? };
         Ok(AppendVec {
             path,
             map,
@@ -505,11 +499,10 @@ pub mod tests {
         assert_eq!(dav.get_account_test(index1).unwrap(), account1);
         drop(dav);
 
-        // dropping dav will blow away underlying file's directory entry,
+        // dropping dav above blows away underlying file's directory entry,
         //   which is what we're testing next.
-        // question: why does deserialize succeed if the file can't be found?
         let mut reader = Cursor::new(&mut buf[..]);
-        let dav: AppendVec = deserialize_from(&mut reader).unwrap();
-        assert!(dav.get_account_test(index2).is_none());
+        let dav: Result<AppendVec, Box<bincode::ErrorKind>> = deserialize_from(&mut reader);
+        assert!(dav.is_err());
     }
 }

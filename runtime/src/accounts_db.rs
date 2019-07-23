@@ -300,7 +300,7 @@ pub struct AccountsDB {
     write_version: AtomicUsize,
 
     /// Set of storage paths to pick from
-    paths: Vec<String>,
+    paths: RwLock<Vec<String>>,
 
     /// Set of paths this accounts_db needs to hold/remove
     temp_paths: Option<TempPaths>,
@@ -321,7 +321,7 @@ impl Default for AccountsDB {
             storage: RwLock::new(AccountStorage(HashMap::new())),
             next_id: AtomicUsize::new(0),
             write_version: AtomicUsize::new(0),
-            paths: Vec::default(),
+            paths: RwLock::new(Vec::default()),
             temp_paths: None,
             file_size: u64::default(),
             thread_pool: rayon::ThreadPoolBuilder::new()
@@ -348,7 +348,7 @@ impl AccountsDB {
             storage: RwLock::new(AccountStorage(HashMap::new())),
             next_id: AtomicUsize::new(0),
             write_version: AtomicUsize::new(0),
-            paths,
+            paths: RwLock::new(paths),
             temp_paths,
             file_size,
             thread_pool: rayon::ThreadPoolBuilder::new()
@@ -370,7 +370,7 @@ impl AccountsDB {
     }
 
     pub fn paths(&self) -> String {
-        self.paths.join(",")
+        self.paths.read().unwrap().join(",")
     }
 
     pub fn update_from_stream<R: Read>(
@@ -379,6 +379,8 @@ impl AccountsDB {
     ) -> Result<(), std::io::Error> {
         let _len: usize = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("len deserialize error"))?;
+        *self.paths.write().unwrap() = deserialize_from(&mut stream)
+            .map_err(|_| AccountsDB::get_io_error("paths deserialize error"))?;
         let mut storage: AccountStorage = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("storage deserialize error"))?;
         let version: u64 = deserialize_from(&mut stream)
@@ -567,8 +569,9 @@ impl AccountsDB {
         fork_storage: &mut ForkStores,
         size: u64,
     ) -> Arc<AccountStorageEntry> {
-        let path_index = thread_rng().gen_range(0, self.paths.len());
-        let store = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_index], size));
+        let paths = self.paths.read().unwrap();
+        let path_index = thread_rng().gen_range(0, paths.len());
+        let store = Arc::new(self.new_storage_entry(fork_id, &paths[path_index], size));
         fork_storage.insert(store.id, store.clone());
         store
     }
@@ -801,10 +804,13 @@ impl Serialize for AccountsDB {
     {
         use serde::ser::Error;
         let storage = self.storage.read().unwrap();
-        let len = serialized_size(&*storage).unwrap() + std::mem::size_of::<u64>() as u64;
+        let len = serialized_size(&self.paths).unwrap()
+            + serialized_size(&*storage).unwrap()
+            + std::mem::size_of::<u64>() as u64;
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         let version: u64 = self.write_version.load(Ordering::Relaxed) as u64;
+        serialize_into(&mut wr, &self.paths).map_err(Error::custom)?;
         serialize_into(&mut wr, &*storage).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
         let len = wr.position() as usize;
@@ -1315,12 +1321,14 @@ mod tests {
         assert!(check_storage(&accounts, 1, 10));
 
         let mut reader = BufReader::new(&buf[..]);
-        let daccounts = AccountsDB::new(Some(accounts.paths()));
+        let daccounts = AccountsDB::new(None);
         assert!(daccounts.update_from_stream(&mut reader).is_ok());
         assert_eq!(
             daccounts.write_version.load(Ordering::Relaxed),
             accounts.write_version.load(Ordering::Relaxed)
         );
+        assert_eq!(daccounts.paths(), accounts.paths());
+
         check_accounts(&daccounts, &pubkeys, 0, 100, 2);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
         assert!(check_storage(&daccounts, 0, 100));
