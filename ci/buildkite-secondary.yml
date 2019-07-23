@@ -1,6 +1,6 @@
 steps:
   - command: "sdk/docker-solana/build.sh"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 40
     name: "publish docker"
   - command: "ci/publish-crate.sh"
     timeout_in_minutes: 60
