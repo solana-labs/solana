@@ -33,6 +33,13 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
+fn is_semver(string: String) -> Result<(), String> {
+    match semver::Version::parse(&string) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
+}
+
 pub fn main() -> Result<(), String> {
     solana_logger::setup();
 
@@ -98,7 +105,15 @@ pub fn main() -> Result<(), String> {
                         Some(default_value) => arg.default_value(default_value),
                         None => arg,
                     }
-                }),
+                })
+                .arg(
+                    Arg::with_name("release_semver")
+                        .value_name("release-semver")
+                        .index(1)
+                        .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
+                        .validator(is_semver)
+                        .help("The exact version to install.  Updates will not be available if this argument is used"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("info")
@@ -191,6 +206,7 @@ pub fn main() -> Result<(), String> {
                 .unwrap();
             let data_dir = matches.value_of("data_dir").unwrap();
             let no_modify_path = matches.is_present("no_modify_path");
+            let release_semver = matches.value_of("release_semver");
 
             command::init(
                 config_file,
@@ -198,6 +214,7 @@ pub fn main() -> Result<(), String> {
                 json_rpc_url,
                 &update_manifest_pubkey,
                 no_modify_path,
+                release_semver,
             )
         }
         ("info", Some(matches)) => {
@@ -292,6 +309,14 @@ pub fn main_init() -> Result<(), String> {
                 None => arg,
             }
         })
+        .arg(
+            Arg::with_name("release_semver")
+                .value_name("release-semver")
+                .index(1)
+                .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
+                .validator(is_semver)
+                .help("The exact version to install.  Updates will not be available if this argument is used"),
+        )
         .get_matches();
 
     let config_file = matches.value_of("config_file").unwrap();
@@ -304,6 +329,7 @@ pub fn main_init() -> Result<(), String> {
         .unwrap();
     let data_dir = matches.value_of("data_dir").unwrap();
     let no_modify_path = matches.is_present("no_modify_path");
+    let release_semver = matches.value_of("release_semver");
 
     command::init(
         config_file,
@@ -311,5 +337,6 @@ pub fn main_init() -> Result<(), String> {
         json_rpc_url,
         &update_manifest_pubkey,
         no_modify_path,
+        release_semver,
     )
 }

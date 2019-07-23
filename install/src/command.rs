@@ -492,13 +492,19 @@ pub fn init(
     json_rpc_url: &str,
     update_manifest_pubkey: &Pubkey,
     no_modify_path: bool,
+    release_semver: Option<&str>,
 ) -> Result<(), String> {
     let config = {
         // Write new config file only if different, so that running |solana-install init|
         // repeatedly doesn't unnecessarily re-download
         let mut current_config = Config::load(config_file).unwrap_or_default();
         current_config.current_update_manifest = None;
-        let config = Config::new(data_dir, json_rpc_url, update_manifest_pubkey);
+        let config = Config::new(
+            data_dir,
+            json_rpc_url,
+            update_manifest_pubkey,
+            release_semver,
+        );
         if current_config != config {
             config.save(config_file)?;
         }
@@ -519,24 +525,42 @@ pub fn init(
     Ok(())
 }
 
+fn github_download_url(release_semver: &str) -> String {
+    format!(
+        "https://github.com/solana-labs/solana/releases/download/v{}/solana-release-{}.tar.bz2",
+        release_semver,
+        crate::build_env::TARGET
+    )
+}
+
 pub fn info(config_file: &str, local_info_only: bool) -> Result<Option<UpdateManifest>, String> {
     let config = Config::load(config_file)?;
-    println_name_value("JSON RPC URL:", &config.json_rpc_url);
-    println_name_value(
-        "Update manifest pubkey:",
-        &config.update_manifest_pubkey.to_string(),
-    );
+
     println_name_value("Configuration:", &config_file);
     println_name_value(
         "Active release directory:",
         &config.active_release_dir().to_str().unwrap_or("?"),
     );
+    if let Some(release_semver) = &config.release_semver {
+        println_name_value(&format!("{}Release version:", BULLET), &release_semver);
+        println_name_value(
+            &format!("{}Release URL:", BULLET),
+            &github_download_url(release_semver),
+        );
+        return Ok(None);
+    }
+
+    println_name_value("JSON RPC URL:", &config.json_rpc_url);
+    println_name_value(
+        "Update manifest pubkey:",
+        &config.update_manifest_pubkey.to_string(),
+    );
 
     fn print_update_manifest(update_manifest: &UpdateManifest) {
         let when = Local.timestamp(update_manifest.timestamp_secs as i64, 0);
-        println_name_value(&format!("{}release date", BULLET), &when.to_string());
+        println_name_value(&format!("{}release date:", BULLET), &when.to_string());
         println_name_value(
-            &format!("{}download URL", BULLET),
+            &format!("{}download URL:", BULLET),
             &update_manifest.download_url,
         );
     }
@@ -669,44 +693,66 @@ fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> std::io::Resul
 }
 
 pub fn update(config_file: &str) -> Result<bool, String> {
-    let update_manifest = info(config_file, false)?;
-    if update_manifest.is_none() {
-        return Ok(false);
-    }
-    let update_manifest = update_manifest.unwrap();
-
-    if timestamp_secs()
-        < u64::from_str_radix(crate::build_env::BUILD_SECONDS_SINCE_UNIX_EPOCH, 10).unwrap()
-    {
-        Err("Unable to update as system time seems unreliable".to_string())?
-    }
-
     let mut config = Config::load(config_file)?;
-    if let Some(ref current_update_manifest) = config.current_update_manifest {
-        if update_manifest.timestamp_secs < current_update_manifest.timestamp_secs {
-            Err("Unable to update to an older version".to_string())?
+    let update_manifest = info(config_file, false)?;
+
+    let release_dir = if let Some(release_semver) = &config.release_semver {
+        let download_url = github_download_url(release_semver);
+        let release_dir = config.release_dir(&release_semver);
+        let ok_dir = release_dir.join(".ok");
+        if ok_dir.exists() {
+            return Ok(false);
         }
-    }
+        let (_temp_dir, temp_archive, _temp_archive_sha256) =
+            download_to_temp_archive(&download_url, None)
+                .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
+        extract_release_archive(&temp_archive, &release_dir).map_err(|err| {
+            format!(
+                "Unable to extract {:?} to {:?}: {}",
+                temp_archive, release_dir, err
+            )
+        })?;
+        let _ = fs::create_dir_all(ok_dir);
 
-    let (_temp_dir, temp_archive, _temp_archive_sha256) = download_to_temp_archive(
-        &update_manifest.download_url,
-        Some(&update_manifest.download_sha256),
-    )
-    .map_err(|err| {
-        format!(
-            "Unable to download {}: {}",
-            update_manifest.download_url, err
+        release_dir
+    } else {
+        if update_manifest.is_none() {
+            return Ok(false);
+        }
+        let update_manifest = update_manifest.unwrap();
+
+        if timestamp_secs()
+            < u64::from_str_radix(crate::build_env::BUILD_SECONDS_SINCE_UNIX_EPOCH, 10).unwrap()
+        {
+            Err("Unable to update as system time seems unreliable".to_string())?
+        }
+
+        if let Some(ref current_update_manifest) = config.current_update_manifest {
+            if update_manifest.timestamp_secs < current_update_manifest.timestamp_secs {
+                Err("Unable to update to an older version".to_string())?
+            }
+        }
+        let release_dir = config.release_dir(&update_manifest.download_sha256);
+        let (_temp_dir, temp_archive, _temp_archive_sha256) = download_to_temp_archive(
+            &update_manifest.download_url,
+            Some(&update_manifest.download_sha256),
         )
-    })?;
+        .map_err(|err| {
+            format!(
+                "Unable to download {}: {}",
+                update_manifest.download_url, err
+            )
+        })?;
+        extract_release_archive(&temp_archive, &release_dir).map_err(|err| {
+            format!(
+                "Unable to extract {:?} to {:?}: {}",
+                temp_archive, release_dir, err
+            )
+        })?;
 
-    let release_dir = config.release_dir(&update_manifest.download_sha256);
-
-    extract_release_archive(&temp_archive, &release_dir).map_err(|err| {
-        format!(
-            "Unable to extract {:?} to {:?}: {}",
-            temp_archive, release_dir, err
-        )
-    })?;
+        config.current_update_manifest = Some(update_manifest);
+        release_dir
+    };
 
     let release_target = load_release_target(&release_dir).map_err(|err| {
         format!(
@@ -733,7 +779,6 @@ pub fn update(config_file: &str) -> Result<bool, String> {
         )
     })?;
 
-    config.current_update_manifest = Some(update_manifest);
     config.save(config_file)?;
 
     println!("  {}{}", SPARKLE, style("Update successful").bold());
