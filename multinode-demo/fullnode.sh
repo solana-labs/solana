@@ -18,10 +18,11 @@ fullnode_usage() {
   cat <<EOF
 
 Fullnode Usage:
-usage: $0 [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [cluster entry point]
+usage: $0 [--config-dir PATH] [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [cluster entry point]
 
 Start a validator or a replicator
 
+  --config-dir PATH         - store configuration and data files under this PATH
   --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --label LABEL             - Append the given label to the configuration files, useful when running
@@ -199,6 +200,7 @@ airdrops_enabled=1
 generate_snapshots=0
 boot_from_snapshot=1
 reset_ledger=0
+config_dir=
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -272,6 +274,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --reset-ledger ]]; then
       reset_ledger=1
       shift
+    elif [[ $1 = --config-dir ]]; then
+      config_dir=$2
+      shift 2
     elif [[ $1 = -h ]]; then
       fullnode_usage "$@"
     else
@@ -284,6 +289,16 @@ while [[ -n $1 ]]; do
   fi
 done
 
+if [[ -n $REQUIRE_CONFIG_DIR ]]; then
+  if [[ -z $config_dir ]]; then
+    fullnode_usage "Error: --config-dir not specified"
+  fi
+
+  SOLANA_RSYNC_CONFIG_DIR="$config_dir"/config
+  SOLANA_CONFIG_DIR="$config_dir"/config-local
+fi
+
+setup_secondary_mount
 
 if [[ $node_type = replicator ]]; then
   if [[ ${#positional_args[@]} -gt 2 ]]; then
