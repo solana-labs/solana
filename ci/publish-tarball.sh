@@ -101,20 +101,10 @@ echo --- Creating tarball
 set -e
 cd "$(dirname "$0")"/..
 export USE_INSTALL=1
+export REQUIRE_CONFIG_DIR=1
 exec multinode-demo/validator.sh "$@"
 EOF
   chmod +x solana-release/bin/validator.sh
-
-  # Add a wrapper script for clear-config.sh
-  # TODO: Remove multinode/... from tarball
-  cat > solana-release/bin/clear-config.sh <<'EOF'
-#!/usr/bin/env bash
-set -e
-cd "$(dirname "$0")"/..
-export USE_INSTALL=1
-exec multinode-demo/clear-config.sh "$@"
-EOF
-  chmod +x solana-release/bin/clear-config.sh
 
   tar cvf solana-release-$TARGET.tar solana-release
   bzip2 solana-release-$TARGET.tar
