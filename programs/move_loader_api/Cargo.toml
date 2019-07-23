@@ -22,10 +22,8 @@ solana-sdk = { path = "../../sdk", version = "0.17.0" }
 bytecode_verifier = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1" }
 failure = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1", package = "failure_ext" }
 language_e2e_tests = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1" }
-lazy_static = "1.3.0"
-protobuf = "2.7"
-proto_conv = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1" }
 state_view = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1" }
+stdlib = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1" }
 types = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1" }
 vm = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1" }
 vm_cache_map = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0.1" }
