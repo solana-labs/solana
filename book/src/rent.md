@@ -17,7 +17,7 @@ The first bank in each new epoch scans all accounts for any that would owe rent 
 
 Rent is deducted from subject accounts according to the rate specified in genesis.
 
-The rent collected is then distributed to validator accounts by stake weight, a la transaction fees.  Any fractional lamports are destroyed.
+A percentage of the rent collected is destroyed, the rest is distributed to validator accounts by stake weight, a la transaction fees.  Any fractional lamports are destroyed.
 
 ## Deliquency
 
