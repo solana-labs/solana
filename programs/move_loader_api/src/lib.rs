@@ -11,6 +11,7 @@ solana_sdk::solana_name_id!(
 mod data_store;
 
 use bytecode_verifier::{VerifiedModule, VerifiedScript};
+use compiler::Compiler;
 use data_store::DataStore;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
@@ -57,44 +58,57 @@ pub enum LibraAccountState {
     /// Write sets containing the mint and stdlib modules
     Genesis(WriteSet),
 }
+impl LibraAccountState {
+    pub fn create_unallocated() -> Self {
+        LibraAccountState::Unallocated
+    }
 
-// TODO: Not quite right yet
-/// Invoke information passed via the Invoke Instruction
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct InvokeInfo {
-    /// Sender of the "transaction", the "sender" who is calling this program
-    sender_address: AccountAddress,
-    /// Name of the function to call
-    function_name: String,
-    /// Arguments to pass to the program being invoked
-    args: Vec<TransactionArgument>,
-}
+    pub fn create_program(sender_address: &AccountAddress, code: &str) -> Self {
+        let compiler = Compiler {
+            address: *sender_address,
+            code,
+            ..Compiler::default()
+        };
+        let compiled_program = compiler.into_compiled_program().expect("Failed to compile");
 
-pub fn pubkey_to_address(key: &Pubkey) -> AccountAddress {
-    AccountAddress::new(*to_array_32(key.as_ref()))
-}
-fn to_array_32(array: &[u8]) -> &[u8; 32] {
-    array.try_into().expect("slice with incorrect length")
-}
+        let mut script = vec![];
+        compiled_program
+            .script
+            .serialize(&mut script)
+            .expect("Unable to serialize script");
+        let mut modules = vec![];
+        for m in compiled_program.modules.iter() {
+            let mut buf = vec![];
+            m.serialize(&mut buf).expect("Unable to serialize module");
+            modules.push(buf);
+        }
+        LibraAccountState::Program(Program::new(script, modules, vec![]))
+    }
 
-pub fn create_genesis_write_set(mint_address: &AccountAddress, mint_balance: u64) -> WriteSet {
-    let modules = stdlib_modules();
-    let arena = Arena::new();
-    let state_view = DataStore::default();
-    let vm_cache = VMModuleCache::new(&arena);
-    // TODO: Need this?
-    let genesis_auth_key = ByteArray::new(mint_address.clone().to_vec());
+    pub fn create_user(write_set: WriteSet) -> Self {
+        LibraAccountState::User(write_set)
+    }
 
-    {
-        let fake_fetcher = FakeFetcher::new(modules.iter().map(|m| m.as_inner().clone()).collect());
-        let data_cache = BlockDataCache::new(&state_view);
-        let block_cache = BlockModuleCache::new(&vm_cache, fake_fetcher);
-        {
+    pub fn create_genesis(mint_balance: u64) -> Self {
+        let modules = stdlib_modules();
+        let arena = Arena::new();
+        let state_view = DataStore::default();
+        let vm_cache = VMModuleCache::new(&arena);
+        let mint_address = AccountAddress::default();
+        // TODO: Need this?
+        let genesis_auth_key = ByteArray::new(mint_address.to_vec());
+
+        let write_set = {
+            let fake_fetcher =
+                FakeFetcher::new(modules.iter().map(|m| m.as_inner().clone()).collect());
+            let data_cache = BlockDataCache::new(&state_view);
+            let block_cache = BlockModuleCache::new(&vm_cache, fake_fetcher);
+
             let mut txn_data = TransactionMetadata::default();
-            txn_data.sender = *mint_address;
+            txn_data.sender = mint_address;
 
             let mut txn_executor = TransactionExecutor::new(&block_cache, &data_cache, txn_data);
-            txn_executor.create_account(*mint_address).unwrap().unwrap();
+            txn_executor.create_account(mint_address).unwrap().unwrap();
             txn_executor
                 .execute_function(&COIN_MODULE, "initialize", vec![])
                 .unwrap()
@@ -104,7 +118,7 @@ pub fn create_genesis_write_set(mint_address: &AccountAddress, mint_balance: u64
                 .execute_function(
                     &ACCOUNT_MODULE,
                     "mint_to_address",
-                    vec![Local::address(*mint_address), Local::u64(mint_balance)],
+                    vec![Local::address(mint_address), Local::u64(mint_balance)],
                 )
                 .unwrap()
                 .unwrap();
@@ -134,9 +148,30 @@ pub fn create_genesis_write_set(mint_address: &AccountAddress, mint_balance: u64
                 .clone()
                 .into_mut()
         }
+        .freeze()
+        .unwrap();
+
+        LibraAccountState::Genesis(write_set)
     }
-    .freeze()
-    .unwrap()
+}
+
+// TODO: Not quite right yet
+/// Invoke information passed via the Invoke Instruction
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct InvokeInfo {
+    /// Sender of the "transaction", the "sender" who is calling this program
+    sender_address: AccountAddress,
+    /// Name of the function to call
+    function_name: String,
+    /// Arguments to pass to the program being invoked
+    args: Vec<TransactionArgument>,
+}
+
+pub fn pubkey_to_address(key: &Pubkey) -> AccountAddress {
+    AccountAddress::new(*to_array_32(key.as_ref()))
+}
+fn to_array_32(array: &[u8]) -> &[u8; 32] {
+    array.try_into().expect("slice with incorrect length")
 }
 
 fn arguments_to_locals(args: Vec<TransactionArgument>) -> Vec<Local> {
@@ -314,7 +349,6 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compiler::Compiler;
     use language_e2e_tests::account::AccountResource;
     use solana_sdk::account::Account;
     // use stdlib::stdlib_modules;
@@ -486,7 +520,7 @@ mod tests {
             let key = Pubkey::new_rand();
             let account = Account {
                 lamports: 1,
-                data: bincode::serialize(&LibraAccountState::Unallocated).unwrap(),
+                data: bincode::serialize(&LibraAccountState::create_unallocated()).unwrap(),
                 owner: Pubkey::new(&MOVE_LOADER_PROGRAM_ID),
                 executable: false,
             };
@@ -501,35 +535,17 @@ mod tests {
                 executable: false,
             };
             let mut genesis = Self::new(Pubkey::default(), account);
-            let write_set = create_genesis_write_set(&genesis.address, 1_000_000_000);
-            genesis.account.data = bincode::serialize(&LibraAccountState::Genesis(write_set))
-                .expect("Failed to serialize genesis WriteSet");
+            genesis.account.data =
+                bincode::serialize(&LibraAccountState::create_genesis(1_000_000_000))
+                    .expect("Failed to serialize genesis WriteSet");
             genesis
         }
 
         pub fn create_program(sender_address: &AccountAddress, code: &str) -> Self {
-            let compiler = Compiler {
-                address: sender_address.clone(),
-                code,
-                ..Compiler::default()
-            };
-            let compiled_program = compiler.into_compiled_program().expect("Failed to compile");
-
-            let mut script = vec![];
-            compiled_program
-                .script
-                .serialize(&mut script)
-                .expect("Unable to serialize script");
-            let mut modules = vec![];
-            for m in compiled_program.modules.iter() {
-                let mut buf = vec![];
-                m.serialize(&mut buf).expect("Unable to serialize module");
-                modules.push(buf);
-            }
-            let data = Program::new(script, modules, vec![]);
-
             let mut program = Self::create_unallocated();
-            program.account.data = bincode::serialize(&LibraAccountState::Program(data)).unwrap();
+            program.account.data =
+                bincode::serialize(&LibraAccountState::create_program(sender_address, code))
+                    .unwrap();
             program.account.executable = true;
             program
         }
