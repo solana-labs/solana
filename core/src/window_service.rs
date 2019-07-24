@@ -214,6 +214,7 @@ impl WindowService {
                     .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
                     .build()
                     .unwrap();
+                let mut now = Instant::now();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -237,12 +238,19 @@ impl WindowService {
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => {
+                                if now.elapsed() > Duration::from_secs(30) {
+                                    warn!("Window does not seem to be receiving data. Ensure port configuration is correct...");
+                                    now = Instant::now();
+                                }
+                            }
                             _ => {
                                 inc_new_counter_error!("streamer-window-error", 1, 1);
                                 error!("window error: {:?}", e);
                             }
                         }
+                    } else {
+                        now = Instant::now();
                     }
                 }
             })
