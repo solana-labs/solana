@@ -75,7 +75,11 @@ impl SpvProcessor {
         if *keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
+        const OWNER_INDEX   : usize = 0;
+        const REQUEST_INDEX : usize = 1;
 
+        Self.check_account_unallocated(&keyed_accounts[REQUEST_INDEX].account.data)?;
+        Self.
     }
 
     pub fn do_cancel_request(
@@ -123,4 +127,15 @@ pub fn process_instruction(
             SpvProcessor::submit_request(keyed_accounts, &proof_info)
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{spv_instruction, id};
+
+    fn try_submit_request(
+        txHash: BitcoinTxHash,
+
+    )
 }
