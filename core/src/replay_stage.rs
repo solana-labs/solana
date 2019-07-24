@@ -111,6 +111,7 @@ impl ReplayStage {
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
                 let mut progress = HashMap::new();
+                let mut current_leader = None;
 
                 loop {
                     let now = Instant::now();
@@ -139,6 +140,17 @@ impl ReplayStage {
 
                     if let Some((_, bank)) = votable.last() {
                         subscriptions.notify_subscribers(bank.slot(), &bank_forks);
+
+                        if let Some(new_leader) =
+                            leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
+                        {
+                            Self::log_leader_change(
+                                &my_pubkey,
+                                bank.slot(),
+                                &mut current_leader,
+                                &new_leader,
+                            );
+                        }
 
                         Self::handle_votable_bank(
                             &bank,
@@ -170,6 +182,15 @@ impl ReplayStage {
                             &poh_recorder,
                             &leader_schedule_cache,
                         );
+
+                        if let Some(bank) = poh_recorder.lock().unwrap().bank() {
+                            Self::log_leader_change(
+                                &my_pubkey,
+                                bank.slot(),
+                                &mut current_leader,
+                                &my_pubkey,
+                            );
+                        }
                     }
 
                     inc_new_counter_info!(
@@ -192,6 +213,30 @@ impl ReplayStage {
             })
             .unwrap();
         (Self { t_replay }, root_bank_receiver)
+    }
+
+    fn log_leader_change(
+        my_pubkey: &Pubkey,
+        bank_slot: u64,
+        current_leader: &mut Option<Pubkey>,
+        new_leader: &Pubkey,
+    ) {
+        if let Some(ref current_leader) = current_leader {
+            if current_leader != new_leader {
+                let msg = if current_leader == my_pubkey {
+                    "I am no longer the leader"
+                } else if new_leader == my_pubkey {
+                    "I am the new leader"
+                } else {
+                    ""
+                };
+                info!(
+                    "LEADER CHANGE at slot: {} leader: {}. {}",
+                    bank_slot, new_leader, msg
+                );
+            }
+        }
+        current_leader.replace(new_leader.to_owned());
     }
 
     fn maybe_start_leader(
@@ -258,12 +303,6 @@ impl ReplayStage {
                 .unwrap()
                 .insert(Bank::new_from_parent(&parent, my_pubkey, poh_slot));
 
-            info!(
-                "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
-                my_pubkey,
-                tpu_bank.slot(),
-                next_leader
-            );
             poh_recorder.lock().unwrap().set_bank(&tpu_bank);
         } else {
             error!("{} No next leader found", my_pubkey);
@@ -396,11 +435,18 @@ impl ReplayStage {
             .lock()
             .unwrap()
             .reset(bank.last_blockhash(), bank.slot(), next_leader_slot);
-        debug!(
-            "{:?} voted and reset poh at {}. next leader slot {:?}",
+
+        let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
+            format!("My next leader slot is #{}", next_leader_slot)
+        } else {
+            "I am not in the upcoming leader schedule yet".to_owned()
+        };
+
+        info!(
+            "{} voted and reset poh at {}. {}",
             my_pubkey,
             bank.tick_height(),
-            next_leader_slot
+            next_leader_msg,
         );
     }
 
