@@ -357,63 +357,63 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let mut to_trade = Self::deserialize_order(&keyed_accounts[TO_ORDER_INDEX].account.data)?;
-        let mut from_trade =
+        let mut to_order = Self::deserialize_order(&keyed_accounts[TO_ORDER_INDEX].account.data)?;
+        let mut from_order =
             Self::deserialize_order(&keyed_accounts[FROM_ORDER_INDEX].account.data)?;
         let mut profit_account =
             Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].account.data)?;
 
-        if to_trade.direction != Direction::To {
+        if to_order.direction != Direction::To {
             error!("To trade is not a To");
             Err(InstructionError::InvalidArgument)?
         }
-        if from_trade.direction != Direction::From {
+        if from_order.direction != Direction::From {
             error!("From trade is not a From");
             Err(InstructionError::InvalidArgument)?
         }
-        if to_trade.pair != from_trade.pair {
+        if to_order.pair != from_order.pair {
             error!("Mismatched token pairs");
             Err(InstructionError::InvalidArgument)?
         }
-        if to_trade.direction == from_trade.direction {
+        if to_order.direction == from_order.direction {
             error!("Matching trade directions");
             Err(InstructionError::InvalidArgument)?
         }
 
         if let Err(e) =
-            Self::calculate_swap(SCALER, &mut to_trade, &mut from_trade, &mut profit_account)
+            Self::calculate_swap(SCALER, &mut to_order, &mut from_order, &mut profit_account)
         {
             error!(
                 "Swap calculation failed from {} for {} to {} for {}",
-                from_trade.tokens, from_trade.price, to_trade.tokens, to_trade.price,
+                from_order.tokens, from_order.price, to_order.tokens, to_order.price,
             );
             Err(e)?
         }
 
         inc_new_counter_info!("exchange_processor-swaps", 1, 1000, 1000);
 
-        if to_trade.tokens == 0 {
+        if to_order.tokens == 0 {
             // Turn into token account
             Self::serialize(
-                &ExchangeState::Account(Self::trade_to_token_account(&from_trade)),
+                &ExchangeState::Account(Self::trade_to_token_account(&from_order)),
                 &mut keyed_accounts[TO_ORDER_INDEX].account.data,
             )?;
         } else {
             Self::serialize(
-                &ExchangeState::Trade(to_trade),
+                &ExchangeState::Trade(to_order),
                 &mut keyed_accounts[TO_ORDER_INDEX].account.data,
             )?;
         }
 
-        if from_trade.tokens == 0 {
+        if from_order.tokens == 0 {
             // Turn into token account
             Self::serialize(
-                &ExchangeState::Account(Self::trade_to_token_account(&from_trade)),
+                &ExchangeState::Account(Self::trade_to_token_account(&from_order)),
                 &mut keyed_accounts[FROM_ORDER_INDEX].account.data,
             )?;
         } else {
             Self::serialize(
-                &ExchangeState::Trade(from_trade),
+                &ExchangeState::Trade(from_order),
                 &mut keyed_accounts[FROM_ORDER_INDEX].account.data,
             )?;
         }
