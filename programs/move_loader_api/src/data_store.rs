@@ -108,6 +108,7 @@ impl DataStore {
 
     /// Dumps the data store to stdout
     pub fn dump(&self) {
+        trace!("Data store:");
         for (access_path, value) in &self.data {
             trace!("{:?}: {:?}", access_path, value.len());
         }

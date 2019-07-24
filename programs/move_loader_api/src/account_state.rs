@@ -1,5 +1,3 @@
-//! Helpers to create Libra accounts for testing
-
 use crate::data_store::DataStore;
 use compiler::Compiler;
 use serde_derive::{Deserialize, Serialize};
@@ -47,9 +45,8 @@ impl LibraAccountState {
         LibraAccountState::Unallocated
     }
 
-    pub fn create_program(sender_address: &AccountAddress, code: &str) -> Self {
+    pub fn create_program(code: &str) -> Self {
         let compiler = Compiler {
-            address: *sender_address,
             code,
             ..Compiler::default()
         };
@@ -61,9 +58,11 @@ impl LibraAccountState {
             .serialize(&mut script)
             .expect("Unable to serialize script");
         let mut modules = vec![];
-        for m in compiled_program.modules.iter() {
+        for module in compiled_program.modules.iter() {
             let mut buf = vec![];
-            m.serialize(&mut buf).expect("Unable to serialize module");
+            module
+                .serialize(&mut buf)
+                .expect("Unable to serialize module");
             modules.push(buf);
         }
         LibraAccountState::Program(Program::new(script, modules, vec![]))
