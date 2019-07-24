@@ -44,7 +44,7 @@ impl DataStore {
     }
 
     /// Returns a `WriteSet` for each account in the `DataStore`
-    pub fn into_write_sets(mut self) -> HashMap<AccountAddress, WriteSet> {
+    pub fn into_write_sets(mut self) -> Result<HashMap<AccountAddress, WriteSet>> {
         let mut write_set_muts: HashMap<AccountAddress, WriteSetMut> = HashMap::new();
         for (access_path, value) in self.data.drain() {
             match write_set_muts.get_mut(&access_path.address) {
@@ -60,9 +60,9 @@ impl DataStore {
         // Freeze each WriteSet
         let mut write_sets: HashMap<AccountAddress, WriteSet> = HashMap::new();
         for (address, write_set_mut) in write_set_muts.drain() {
-            write_sets.insert(address, write_set_mut.freeze().unwrap());
+            write_sets.insert(address, write_set_mut.freeze()?);
         }
-        write_sets
+        Ok(write_sets)
     }
 
     /// Read an account's resource

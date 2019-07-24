@@ -86,7 +86,13 @@ impl MoveProcessor {
     }
     fn map_vm_binary_error(err: vm::errors::BinaryError) -> InstructionError {
         debug!("Error: Script deserialize failed: {:?}", err);
-        InstructionError::GenericError
+        InstructionError::InvalidInstructionData
+    }
+    fn map_vm_verification_error(
+        err: std::vec::Vec<vm::errors::VerificationStatus>,
+    ) -> InstructionError {
+        debug!("Error: Script verification failed: {:?}", err);
+        InstructionError::InvalidInstructionData
     }
     #[allow(clippy::needless_pass_by_value)]
     fn map_data_error(err: std::boxed::Box<bincode::ErrorKind>) -> InstructionError {
@@ -238,9 +244,8 @@ impl MoveProcessor {
         let mut data_store = Self::keyed_accounts_to_data_store(&keyed_accounts[GENESIS_INDEX..])?;
 
         let (verified_script, modules) =
-                    // TODO: This function calls `.expect()`, switch to verify_program
-                    static_verify_program(&invoke_info.sender_address, compiled_script, modules)
-                        .expect("verification failure");
+            static_verify_program(&invoke_info.sender_address, compiled_script, modules)
+                .map_err(Self::map_vm_verification_error)?;
         let output = Self::execute(invoke_info, verified_script, modules, &data_store)?;
         for event in output.events() {
             trace!("Event: {:?}", event);
@@ -248,7 +253,9 @@ impl MoveProcessor {
         data_store.apply_write_set(&output.write_set());
 
         // Break data store into a list of address keyed WriteSets
-        let mut write_sets = data_store.into_write_sets();
+        let mut write_sets = data_store
+            .into_write_sets()
+            .map_err(|_| InstructionError::GenericError)?;
 
         // Genesis account holds both mint and stdlib under address 0x0
         let write_set = write_sets

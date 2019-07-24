@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+//! Helpers to create Libra accounts for testing
 
 use crate::data_store::DataStore;
 use compiler::Compiler;
@@ -78,6 +78,7 @@ impl LibraAccountState {
         let arena = Arena::new();
         let state_view = DataStore::default();
         let vm_cache = VMModuleCache::new(&arena);
+        // Libra enforces the mint address to be 0x0 (see Libra's `mint_to_address` function)
         let mint_address = AccountAddress::default();
         // TODO: Need this?
         let genesis_auth_key = ByteArray::new(mint_address.to_vec());
