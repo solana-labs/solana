@@ -10,10 +10,13 @@ use solana_sdk::{
 };
 use types::{
     account_address::AccountAddress,
-    transaction::{TransactionArgument, TransactionOutput, TransactionStatus},
+    transaction::{TransactionArgument, TransactionOutput},
 };
 use vm::{
-    access::ModuleAccess, file_format::CompiledScript, transaction_metadata::TransactionMetadata,
+    access::ModuleAccess,
+    file_format::CompiledScript,
+    gas_schedule::{MAXIMUM_NUMBER_OF_GAS_UNITS, MAX_PRICE_PER_GAS_UNIT},
+    transaction_metadata::TransactionMetadata,
 };
 use vm_cache_map::Arena;
 use vm_runtime::{
@@ -71,11 +74,18 @@ pub struct MoveProcessor {}
 impl MoveProcessor {
     #[allow(clippy::needless_pass_by_value)]
     fn map_vm_runtime_error(err: vm::errors::VMRuntimeError) -> InstructionError {
-        error!("Move VM Error: {:?}", err);
+        error!("Execution failed: {:?}", err);
+        match err.err {
+            vm::errors::VMErrorKind::OutOfGasError => InstructionError::InsufficientFunds,
+            _ => InstructionError::GenericError,
+        }
+    }
+    fn map_vm_invariant_violation_error(err: vm::errors::VMInvariantViolation) -> InstructionError {
+        error!("Execution failed: {:?}", err);
         InstructionError::GenericError
     }
     fn map_vm_binary_error(err: vm::errors::BinaryError) -> InstructionError {
-        error!("Move VM Error: {:?}", err);
+        error!("Script deserialize failed: {:?}", err);
         InstructionError::GenericError
     }
     #[allow(clippy::needless_pass_by_value)]
@@ -120,15 +130,21 @@ impl MoveProcessor {
         let mut txn_metadata = TransactionMetadata::default();
         txn_metadata.sender = invoke_info.sender_address;
 
+        // Caps execution to the Libra prescribed 10 milliseconds
+        txn_metadata.max_gas_amount = *MAXIMUM_NUMBER_OF_GAS_UNITS;
+        txn_metadata.gas_unit_price = *MAX_PRICE_PER_GAS_UNIT;
+
         let mut vm = TransactionExecutor::new(&module_cache, data_store, txn_metadata);
-        let result = vm.execute_function(
+        vm.execute_function(
             &module_id,
             &invoke_info.function_name,
             Self::arguments_to_locals(invoke_info.args),
-        );
+        )
+        .map_err(Self::map_vm_invariant_violation_error)?
+        .map_err(Self::map_vm_runtime_error)?;
 
         Ok(vm
-            .make_write_set(vec![], result)
+            .make_write_set(vec![], Ok(Ok(())))
             .map_err(Self::map_vm_runtime_error)?)
     }
 
@@ -229,10 +245,6 @@ impl MoveProcessor {
         for event in output.events() {
             debug!("Event: {:?}", event);
         }
-        if let TransactionStatus::Discard(status) = output.status() {
-            error!("Execution failed: {:?}", status);
-            return Err(InstructionError::GenericError);
-        }
         data_store.apply_write_set(&output.write_set());
 
         // Break data store into a list of address keyed WriteSets
@@ -293,6 +305,37 @@ mod tests {
             bincode::serialize(&invoke_info).unwrap(),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_invoke_endless_loop() {
+        solana_logger::setup();
+
+        let code = "
+            main() {
+                loop {}
+                return;
+            }
+        ";
+        let mut program = LibraAccount::create_program(&AccountAddress::default(), code);
+        let mut genesis = LibraAccount::create_genesis();
+
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, false, &mut program.account),
+            KeyedAccount::new(&genesis.key, false, &mut genesis.account),
+        ];
+        let invoke_info = InvokeInfo {
+            sender_address: AccountAddress::default(),
+            function_name: "main".to_string(),
+            args: vec![],
+        };
+        assert_eq!(
+            MoveProcessor::do_invoke_main(
+                &mut keyed_accounts,
+                bincode::serialize(&invoke_info).unwrap(),
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
     }
 
     #[test]
