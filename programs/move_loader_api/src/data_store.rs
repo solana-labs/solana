@@ -1,7 +1,7 @@
 use failure::prelude::*;
+use indexmap::IndexMap;
 use log::*;
 use state_view::StateView;
-use std::collections::HashMap;
 use types::{
     access_path::AccessPath,
     account_address::AccountAddress,
@@ -20,12 +20,12 @@ use vm_runtime::{
 /// An in-memory implementation of [`StateView`] and [`RemoteCache`] for the VM.
 #[derive(Debug, Default)]
 pub struct DataStore {
-    data: HashMap<AccessPath, Vec<u8>>,
+    data: IndexMap<AccessPath, Vec<u8>>,
 }
 
 impl DataStore {
     /// Creates a new `DataStore` with the provided initial data.
-    pub fn new(data: HashMap<AccessPath, Vec<u8>>) -> Self {
+    pub fn new(data: IndexMap<AccessPath, Vec<u8>>) -> Self {
         DataStore { data }
     }
 
@@ -44,9 +44,9 @@ impl DataStore {
     }
 
     /// Returns a `WriteSet` for each account in the `DataStore`
-    pub fn into_write_sets(mut self) -> Result<HashMap<AccountAddress, WriteSet>> {
-        let mut write_set_muts: HashMap<AccountAddress, WriteSetMut> = HashMap::new();
-        for (access_path, value) in self.data.drain() {
+    pub fn into_write_sets(mut self) -> Result<IndexMap<AccountAddress, WriteSet>> {
+        let mut write_set_muts: IndexMap<AccountAddress, WriteSetMut> = IndexMap::new();
+        for (access_path, value) in self.data.drain(..) {
             match write_set_muts.get_mut(&access_path.address) {
                 Some(write_set_mut) => write_set_mut.push((access_path, WriteOp::Value(value))),
                 None => {
@@ -58,8 +58,8 @@ impl DataStore {
             }
         }
         // Freeze each WriteSet
-        let mut write_sets: HashMap<AccountAddress, WriteSet> = HashMap::new();
-        for (address, write_set_mut) in write_set_muts.drain() {
+        let mut write_sets: IndexMap<AccountAddress, WriteSet> = IndexMap::new();
+        for (address, write_set_mut) in write_set_muts.drain(..) {
             write_sets.insert(address, write_set_mut.freeze()?);
         }
         Ok(write_sets)
@@ -109,7 +109,7 @@ impl DataStore {
     /// Dumps the data store to stdout
     pub fn dump(&self) {
         for (access_path, value) in &self.data {
-            trace!("{:?}: \"{:?}\"", access_path, value.len());
+            trace!("{:?}: {:?}", access_path, value.len());
         }
     }
 }
@@ -157,4 +157,53 @@ fn get_account_struct_def() -> StructDef {
         int_type.clone(),
         int_type.clone(),
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use types::account_address::ADDRESS_LENGTH;
+
+    #[test]
+    fn test_write_set_order() {
+        solana_logger::setup();
+
+        let mut data_store = DataStore::default();
+        let address1 = AccountAddress::new([0; ADDRESS_LENGTH]);
+        let address2 = AccountAddress::new([1; ADDRESS_LENGTH]);
+        let address3 = AccountAddress::new([2; ADDRESS_LENGTH]);
+
+        let mut before1 = WriteSetMut::default();
+        let mut before2 = WriteSetMut::default();
+        let mut before3 = WriteSetMut::default();
+        for i in 1..10 {
+            before1.push((
+                AccessPath::new(address1, AccountAddress::random().to_vec()),
+                WriteOp::Value(vec![i]),
+            ));
+            before2.push((
+                AccessPath::new(address2, AccountAddress::random().to_vec()),
+                WriteOp::Value(vec![i]),
+            ));
+            before3.push((
+                AccessPath::new(address3, AccountAddress::random().to_vec()),
+                WriteOp::Value(vec![i]),
+            ));
+        }
+        let before1 = before1.freeze().unwrap();
+        let before2 = before2.freeze().unwrap();
+        let before3 = before3.freeze().unwrap();
+        data_store.apply_write_set(&before1);
+        data_store.apply_write_set(&before2);
+        data_store.apply_write_set(&before3);
+
+        let write_sets = data_store.into_write_sets().unwrap();
+        let after1 = write_sets.get(&address1).unwrap();
+        let after2 = write_sets.get(&address2).unwrap();
+        let after3 = write_sets.get(&address3).unwrap();
+
+        assert_eq!(&before1, after1);
+        assert_eq!(&before2, after2);
+        assert_eq!(&before3, after3);
+    }
 }
