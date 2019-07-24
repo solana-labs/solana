@@ -143,6 +143,7 @@ declare module '@solana/web3.js' {
   }
 
   // === src/validator-info.js ===
+  declare export var VALIDATOR_INFO_KEY;
   declare export type Info = {|
     name: string,
     website?: string,
@@ -159,6 +160,7 @@ declare module '@solana/web3.js' {
   }
 
   // === src/vote-account.js ===
+  declare export var VOTE_ACCOUNT_KEY;
   declare export type Lockout = {|
     slot: number,
     confirmationCount: number,
