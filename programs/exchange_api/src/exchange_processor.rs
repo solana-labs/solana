@@ -39,7 +39,7 @@ impl ExchangeProcessor {
         }
     }
 
-    fn deserialize_trade(data: &[u8]) -> Result<OrderInfo, InstructionError> {
+    fn deserialize_order(data: &[u8]) -> Result<OrderInfo, InstructionError> {
         let state: ExchangeState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let ExchangeState::Trade(info) = state {
             Ok(info)
@@ -324,7 +324,7 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let trade = Self::deserialize_trade(&keyed_accounts[ORDER_INDEX].account.data)?;
+        let trade = Self::deserialize_order(&keyed_accounts[ORDER_INDEX].account.data)?;
 
         if &trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own trade");
@@ -357,9 +357,9 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let mut to_trade = Self::deserialize_trade(&keyed_accounts[TO_ORDER_INDEX].account.data)?;
+        let mut to_trade = Self::deserialize_order(&keyed_accounts[TO_ORDER_INDEX].account.data)?;
         let mut from_trade =
-            Self::deserialize_trade(&keyed_accounts[FROM_ORDER_INDEX].account.data)?;
+            Self::deserialize_order(&keyed_accounts[FROM_ORDER_INDEX].account.data)?;
         let mut profit_account =
             Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].account.data)?;
 
@@ -722,7 +722,7 @@ mod test {
                 price: 1000,
                 tokens_settled: 0
             },
-            ExchangeProcessor::deserialize_trade(&trade_account_data).unwrap()
+            ExchangeProcessor::deserialize_order(&trade_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
@@ -781,7 +781,7 @@ mod test {
                 price: 2000,
                 tokens_settled: 2,
             },
-            ExchangeProcessor::deserialize_trade(&to_trade_account_data).unwrap()
+            ExchangeProcessor::deserialize_order(&to_trade_account_data).unwrap()
         );
 
         assert_eq!(
