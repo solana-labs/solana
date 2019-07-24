@@ -3,7 +3,7 @@ steps:
     timeout_in_minutes: 40
     name: "publish docker"
   - command: "ci/publish-crate.sh"
-    timeout_in_minutes: 60
+    timeout_in_minutes: 90
     name: "publish crate"
     branches: "!master"
   - command: "ci/publish-bpf-sdk.sh"
