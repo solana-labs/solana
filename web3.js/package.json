@@ -66,7 +66,7 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.3.1",
-    "bn.js": "^4.11.8",
+    "bn.js": "^5.0.0",
     "bs58": "^4.0.1",
     "buffer-layout": "^1.2.0",
     "esdoc-inject-style-plugin": "^1.0.0",
