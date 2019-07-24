@@ -10,7 +10,7 @@ steps:
     timeout_in_minutes: 5
     name: "publish bpf sdk"
   - command: "ci/publish-tarball.sh"
-    timeout_in_minutes: 35
+    timeout_in_minutes: 45
     name: "publish tarball"
   - command: "ci/publish-book.sh"
     timeout_in_minutes: 15
