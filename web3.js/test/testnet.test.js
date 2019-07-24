@@ -9,7 +9,7 @@ test('invalid', () => {
 
 test('edge', () => {
   expect(testnetChannelEndpoint('edge')).toEqual(
-    'https://api.edge.testnet.solana.com',
+    'https://edge.testnet.solana.com:8443',
   );
 });
 

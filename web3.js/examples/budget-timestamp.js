@@ -13,8 +13,6 @@ const contractState = new solanaWeb3.Account();
 
 let url;
 url = 'http://localhost:8899';
-//url = 'https://api.testnet.solana.com/master';
-//url = 'https://api.testnet.solana.com';
 const connection = new solanaWeb3.Connection(url);
 
 function showBalance() {

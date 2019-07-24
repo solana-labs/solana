@@ -9,7 +9,7 @@ const solanaWeb3 = require('..');
 const account = new solanaWeb3.Account();
 
 let url;
-url = 'https://api.testnet.solana.com';
+url = 'https://testnet.solana.com:8443';
 //url = 'http://localhost:8899';
 const connection = new solanaWeb3.Connection(url);
 
