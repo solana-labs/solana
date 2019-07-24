@@ -24,7 +24,6 @@
 
     // Fetch account balance
     let url = 'http://localhost:8899';
-    //url = 'https://api.testnet.solana.com';
     const connection = new solanaWeb3.Connection(url);
 
     connection.getBalance(account.publicKey)
