@@ -158,6 +158,31 @@ declare module '@solana/web3.js' {
     static fromConfigData(buffer: Buffer): ?ValidatorInfo;
   }
 
+  // === src/vote-account.js ===
+  declare export type Lockout = {|
+    slot: number,
+    confirmationCount: number,
+  |};
+
+  declare export type EpochCredits = {|
+    epoch: number,
+    credits: number,
+    prevCredits: number,
+  |};
+
+  declare export class VoteAccount {
+    votes: Array<Lockout>;
+    nodePubkey: PublicKey;
+    authorizedVoterPubkey: PublicKey;
+    commission: number;
+    rootSlot: number | null;
+    epoch: number;
+    credits: number;
+    lastEpochCredits: number;
+    epochCredits: Array<EpochCredits>;
+    static fromAccountData(buffer: Buffer): VoteAccount;
+  }
+
   // === src/transaction.js ===
   declare export type TransactionSignature = string;
 
