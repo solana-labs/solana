@@ -8,8 +8,8 @@ export {PublicKey} from './publickey';
 export {SystemProgram} from './system-program';
 export {Token, TokenAmount} from './token-program';
 export {Transaction, TransactionInstruction} from './transaction';
-export {ValidatorInfo} from './validator-info';
-export {VoteAccount} from './vote-account';
+export {VALIDATOR_INFO_KEY, ValidatorInfo} from './validator-info';
+export {VOTE_ACCOUNT_KEY, VoteAccount} from './vote-account';
 export {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 export {
   sendAndConfirmRawTransaction,
