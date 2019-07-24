@@ -9,6 +9,7 @@ export {SystemProgram} from './system-program';
 export {Token, TokenAmount} from './token-program';
 export {Transaction, TransactionInstruction} from './transaction';
 export {ValidatorInfo} from './validator-info';
+export {VoteAccount} from './vote-account';
 export {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 export {
   sendAndConfirmRawTransaction,
