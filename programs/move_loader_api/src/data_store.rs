@@ -1,6 +1,3 @@
-// TODO
-#![allow(dead_code)]
-
 use failure::prelude::*;
 use log::*;
 use state_view::StateView;
