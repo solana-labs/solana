@@ -21,12 +21,15 @@ use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 pub use solana_sdk::timing::Slot;
+use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 use solana_sdk::transaction::Transaction;
+use std::cmp;
 use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 const GRACE_TICKS_FACTOR: u64 = 2;
+const MAX_GRACE_TICKS: u64 = 12;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PohRecorderError {
@@ -139,7 +142,7 @@ impl PohRecorder {
 
         if let Some(target_tick) = self.start_leader_at_tick {
             // we've reached target_tick OR poh was reset to run immediately
-            if next_tick >= target_tick || self.start_tick + self.grace_ticks == target_tick {
+            if next_tick >= target_tick || self.start_tick + self.grace_ticks >= target_tick {
                 assert!(next_tick >= self.start_tick);
                 let ideal_target_tick = target_tick.saturating_sub(self.grace_ticks);
 
@@ -165,7 +168,7 @@ impl PohRecorder {
             .map(|slot| {
                 (
                     Some(slot * ticks_per_slot + grace_ticks),
-                    (slot + 1) * ticks_per_slot - 1,
+                    (slot + NUM_CONSECUTIVE_LEADER_SLOTS + 1) * ticks_per_slot - 1,
                 )
             })
             .unwrap_or((None, 0))
@@ -382,7 +385,10 @@ impl PohRecorder {
             poh_config.hashes_per_tick,
         )));
         let (sender, receiver) = channel();
-        let grace_ticks = ticks_per_slot / GRACE_TICKS_FACTOR;
+        let grace_ticks = cmp::min(
+            MAX_GRACE_TICKS,
+            ticks_per_slot * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR,
+        );
         let (start_leader_at_tick, last_leader_tick) =
             Self::compute_leader_slot_ticks(next_leader_slot, ticks_per_slot, grace_ticks);
         (
@@ -1121,7 +1127,7 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
             // Send 1 less tick than the grace ticks
-            for _ in 0..bank.ticks_per_slot() / GRACE_TICKS_FACTOR {
+            for _ in 0..bank.ticks_per_slot() * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR {
                 poh_recorder.tick();
             }
 
@@ -1129,7 +1135,7 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().0, true);
             assert_eq!(
                 poh_recorder.reached_leader_tick().1,
-                bank.ticks_per_slot() / GRACE_TICKS_FACTOR
+                bank.ticks_per_slot() * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR
             );
 
             // Let's test that correct grace ticks are reported
