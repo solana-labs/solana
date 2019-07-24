@@ -216,8 +216,6 @@ impl Blocktree {
                         .unwrap_or(batch_end + PURGE_BATCH_SIZE)
                         .min(batch_end + PURGE_BATCH_SIZE);
                 }
-            } else {
-                continue;
             }
         }
     }

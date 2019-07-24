@@ -422,10 +422,10 @@ where
         C::Index: PartialOrd + Copy,
     {
         let mut end = true;
-        let iter = self.iter(from.map(|from| C::as_index(from)))?;
+        let iter = self.iter(from.map(C::as_index))?;
         for (index, _) in iter {
-            if let Some(ref to) = to {
-                if &C::slot(index) > to {
+            if let Some(to) = to {
+                if C::slot(index) > to {
                     end = false;
                     break;
                 }
