@@ -2126,14 +2126,6 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "semver-parser 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
@@ -2638,7 +2630,7 @@ dependencies = [
  "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.9.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "semver 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_yaml 0.8.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3901,7 +3893,6 @@ dependencies = [
 "checksum scopeguard 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b42e15e59b18a828bbf5c58ea01debb36b9b096346de35d941dcb89009f24a0d"
 "checksum security-framework 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "bfab8dda0e7a327c696d893df9ffa19cadc4bd195797997f5223cf5831beaf05"
 "checksum security-framework-sys 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "3d6696852716b589dff9e886ff83778bb635150168e83afa8ac6b8a78cb82abc"
-"checksum semver 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3fdd61b85a0fa777f7fb7c454b9189b2941b110d1385ce84d7f76efdf1606a85"
 "checksum semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 "checksum semver-parser 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 "checksum serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)" = "076a696fdea89c19d3baed462576b8f6d663064414b5c793642da8dfeb99475b"
