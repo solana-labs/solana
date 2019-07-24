@@ -61,6 +61,8 @@ pub struct ClientRequestInfo {
     pub fee:           u64;
     // required minimum difficulty for submitted blocks
     pub difficulty:    Option<u32>;
+    // expiration slot height
+    pub expiration:    u64;
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -74,6 +76,8 @@ pub struct ProofRequest {
     pub fee:           u64;
     // minimum allowable difficulty
     pub difficulty:    u64;
+    // expiration slot height
+    pub expiration:    u64;
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
