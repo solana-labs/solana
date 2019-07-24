@@ -324,21 +324,21 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let trade = Self::deserialize_order(&keyed_accounts[ORDER_INDEX].account.data)?;
+        let order = Self::deserialize_order(&keyed_accounts[ORDER_INDEX].account.data)?;
 
-        if &trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
+        if &order.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own trade");
             Err(InstructionError::GenericError)?
         }
 
-        let token = match trade.direction {
-            Direction::To => trade.pair.primary(),
-            Direction::From => trade.pair.secondary(),
+        let token = match order.direction {
+            Direction::To => order.pair.primary(),
+            Direction::From => order.pair.secondary(),
         };
 
-        let mut account = TokenAccountInfo::default().owner(&trade.owner);
-        account.tokens[token] = trade.tokens;
-        account.tokens[token] += trade.tokens_settled;
+        let mut account = TokenAccountInfo::default().owner(&order.owner);
+        account.tokens[token] = order.tokens;
+        account.tokens[token] += order.tokens_settled;
 
         // Turn trade order into a token account
         Self::serialize(
