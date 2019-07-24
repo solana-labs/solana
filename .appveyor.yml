@@ -34,7 +34,7 @@ deploy:
 
   - provider: GitHub
     auth_token:
-      secure: vQ3jMl5LQrit6+TQONA3ZgQjZ/Ej62BN2ReVb2NSOwjITHMu1131hjc3dOrMEZL6
+      secure: JdggY+mrznklWDcV0yvetHhD9eRcNdc627q6NcZdZAJsDidYcGgZ/tgYJiXb9D1A
     draft: false
     prerelease: false
     on:
