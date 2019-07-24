@@ -259,12 +259,12 @@ impl ExchangeProcessor {
         )
     }
 
-    fn do_trade_request(
+    fn do_order_request(
         keyed_accounts: &mut [KeyedAccount],
         info: &OrderRequestInfo,
     ) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
-        const TRADE_INDEX: usize = 1;
+        const ORDER_INDEX: usize = 1;
         const ACCOUNT_INDEX: usize = 2;
 
         if keyed_accounts.len() < 3 {
@@ -272,7 +272,7 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        Self::is_account_unallocated(&keyed_accounts[TRADE_INDEX].account.data)?;
+        Self::is_account_unallocated(&keyed_accounts[ORDER_INDEX].account.data)?;
 
         let mut account = Self::deserialize_account(&keyed_accounts[ACCOUNT_INDEX].account.data)?;
 
@@ -307,7 +307,7 @@ impl ExchangeProcessor {
                 price: info.price,
                 tokens_settled: 0,
             }),
-            &mut keyed_accounts[TRADE_INDEX].account.data,
+            &mut keyed_accounts[ORDER_INDEX].account.data,
         )?;
         Self::serialize(
             &ExchangeState::Account(account),
@@ -317,14 +317,14 @@ impl ExchangeProcessor {
 
     fn do_order_cancellation(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
-        const TRADE_INDEX: usize = 1;
+        const ORDER_INDEX: usize = 1;
 
         if keyed_accounts.len() < 2 {
             error!("Not enough accounts");
             Err(InstructionError::InvalidArgument)?
         }
 
-        let trade = Self::deserialize_trade(&keyed_accounts[TRADE_INDEX].account.data)?;
+        let trade = Self::deserialize_trade(&keyed_accounts[ORDER_INDEX].account.data)?;
 
         if &trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own trade");
@@ -343,13 +343,13 @@ impl ExchangeProcessor {
         // Turn trade order into a token account
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut keyed_accounts[TRADE_INDEX].account.data,
+            &mut keyed_accounts[ORDER_INDEX].account.data,
         )
     }
 
     fn do_swap_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        const TO_TRADE_INDEX: usize = 1;
-        const FROM_TRADE_INDEX: usize = 2;
+        const TO_ORDER_INDEX: usize = 1;
+        const FROM_ORDER_INDEX: usize = 2;
         const PROFIT_ACCOUNT_INDEX: usize = 3;
 
         if keyed_accounts.len() < 4 {
@@ -357,9 +357,9 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let mut to_trade = Self::deserialize_trade(&keyed_accounts[TO_TRADE_INDEX].account.data)?;
+        let mut to_trade = Self::deserialize_trade(&keyed_accounts[TO_ORDER_INDEX].account.data)?;
         let mut from_trade =
-            Self::deserialize_trade(&keyed_accounts[FROM_TRADE_INDEX].account.data)?;
+            Self::deserialize_trade(&keyed_accounts[FROM_ORDER_INDEX].account.data)?;
         let mut profit_account =
             Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].account.data)?;
 
@@ -396,12 +396,12 @@ impl ExchangeProcessor {
             // Turn into token account
             Self::serialize(
                 &ExchangeState::Account(Self::trade_to_token_account(&from_trade)),
-                &mut keyed_accounts[TO_TRADE_INDEX].account.data,
+                &mut keyed_accounts[TO_ORDER_INDEX].account.data,
             )?;
         } else {
             Self::serialize(
                 &ExchangeState::Trade(to_trade),
-                &mut keyed_accounts[TO_TRADE_INDEX].account.data,
+                &mut keyed_accounts[TO_ORDER_INDEX].account.data,
             )?;
         }
 
@@ -409,12 +409,12 @@ impl ExchangeProcessor {
             // Turn into token account
             Self::serialize(
                 &ExchangeState::Account(Self::trade_to_token_account(&from_trade)),
-                &mut keyed_accounts[FROM_TRADE_INDEX].account.data,
+                &mut keyed_accounts[FROM_ORDER_INDEX].account.data,
             )?;
         } else {
             Self::serialize(
                 &ExchangeState::Trade(from_trade),
-                &mut keyed_accounts[FROM_TRADE_INDEX].account.data,
+                &mut keyed_accounts[FROM_ORDER_INDEX].account.data,
             )?;
         }
 
@@ -447,7 +447,7 @@ pub fn process_instruction(
             ExchangeProcessor::do_transfer_request(keyed_accounts, token, tokens)
         }
         ExchangeInstruction::OrderRequest(info) => {
-            ExchangeProcessor::do_trade_request(keyed_accounts, &info)
+            ExchangeProcessor::do_order_request(keyed_accounts, &info)
         }
         ExchangeInstruction::OrderCancellation => {
             ExchangeProcessor::do_order_cancellation(keyed_accounts)
