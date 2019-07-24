@@ -165,7 +165,7 @@ $ solana-install run validator.sh -- --identity ~/validator-keypair.json --confi
 
 If you built from source:
 ```bash
-$ USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 #### Enabling CUDA
