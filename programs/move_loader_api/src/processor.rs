@@ -74,28 +74,28 @@ pub struct MoveProcessor {}
 impl MoveProcessor {
     #[allow(clippy::needless_pass_by_value)]
     fn map_vm_runtime_error(err: vm::errors::VMRuntimeError) -> InstructionError {
-        error!("Execution failed: {:?}", err);
+        debug!("Execution failed: {:?}", err);
         match err.err {
             vm::errors::VMErrorKind::OutOfGasError => InstructionError::InsufficientFunds,
             _ => InstructionError::GenericError,
         }
     }
     fn map_vm_invariant_violation_error(err: vm::errors::VMInvariantViolation) -> InstructionError {
-        error!("Execution failed: {:?}", err);
+        debug!("Error: Execution failed: {:?}", err);
         InstructionError::GenericError
     }
     fn map_vm_binary_error(err: vm::errors::BinaryError) -> InstructionError {
-        error!("Script deserialize failed: {:?}", err);
+        debug!("Error: Script deserialize failed: {:?}", err);
         InstructionError::GenericError
     }
     #[allow(clippy::needless_pass_by_value)]
     fn map_data_error(err: std::boxed::Box<bincode::ErrorKind>) -> InstructionError {
-        error!("Account data error: {:?}", err);
+        debug!("Error: Account data: {:?}", err);
         InstructionError::InvalidAccountData
     }
     #[allow(clippy::needless_pass_by_value)]
     fn missing_account() -> InstructionError {
-        error!("Missing account");
+        debug!("Error: Missing account");
         InstructionError::InvalidAccountData
     }
 
@@ -169,15 +169,15 @@ impl MoveProcessor {
         bytes: Vec<u8>,
     ) -> Result<(), InstructionError> {
         if keyed_accounts[PROGRAM_INDEX].signer_key().is_none() {
-            warn!("key[0] did not sign the transaction");
+            debug!("Error: key[0] did not sign the transaction");
             return Err(InstructionError::GenericError);
         }
         let offset = offset as usize;
         let len = bytes.len();
-        debug!("Write: offset={} length={}", offset, len);
+        trace!("Write: offset={} length={}", offset, len);
         if keyed_accounts[PROGRAM_INDEX].account.data.len() < offset + len {
-            warn!(
-                "Write overflow: {} < {}",
+            debug!(
+                "Error: Write overflow: {} < {}",
                 keyed_accounts[PROGRAM_INDEX].account.data.len(),
                 offset + len
             );
@@ -189,7 +189,7 @@ impl MoveProcessor {
 
     pub fn do_finalize(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
         if keyed_accounts[PROGRAM_INDEX].signer_key().is_none() {
-            warn!("key[0] did not sign the transaction");
+            debug!("Error: key[0] did not sign the transaction");
             return Err(InstructionError::GenericError);
         }
         keyed_accounts[PROGRAM_INDEX].account.executable = true;
@@ -207,15 +207,15 @@ impl MoveProcessor {
         data: Vec<u8>,
     ) -> Result<(), InstructionError> {
         if keyed_accounts.len() < 2 {
-            error!("Requires at least aprogram and genesis accounts");
+            debug!("Error: Requires at least a program and a genesis accounts");
             return Err(InstructionError::InvalidArgument);
         }
         if keyed_accounts[PROGRAM_INDEX].account.owner != id() {
-            error!("Move program account not owned by Move loader");
+            debug!("Error: Move program account not owned by Move loader");
             return Err(InstructionError::InvalidArgument);
         }
         if !keyed_accounts[PROGRAM_INDEX].account.executable {
-            error!("Move program account not executable");
+            debug!("Error: Move program account not executable");
             return Err(InstructionError::InvalidArgument);
         }
 
@@ -226,7 +226,7 @@ impl MoveProcessor {
         {
             LibraAccountState::Program(program) => program,
             _ => {
-                error!("First account must contain the program bits");
+                debug!("Error: First account must contain the program bits");
                 return Err(InstructionError::InvalidArgument);
             }
         };
@@ -243,7 +243,7 @@ impl MoveProcessor {
                         .expect("verification failure");
         let output = Self::execute(invoke_info, verified_script, modules, &data_store)?;
         for event in output.events() {
-            debug!("Event: {:?}", event);
+            trace!("Event: {:?}", event);
         }
         data_store.apply_write_set(&output.write_set());
 
@@ -270,7 +270,7 @@ impl MoveProcessor {
                 .map_err(Self::map_data_error)?;
         }
         if !write_sets.is_empty() {
-            error!("Missing keyed accounts");
+            debug!("Error: Missing keyed accounts");
             return Err(InstructionError::GenericError);
         }
         Ok(())
