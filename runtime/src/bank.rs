@@ -876,6 +876,13 @@ impl Bank {
             .collect()
     }
 
+    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> bool {
+        self.blockhash_queue
+            .read()
+            .unwrap()
+            .check_hash_age(hash, max_age)
+    }
+
     pub fn check_transactions(
         &self,
         txs: &[Transaction],
