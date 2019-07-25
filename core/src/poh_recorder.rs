@@ -1219,6 +1219,8 @@ mod tests {
                 false
             );
 
+            // Move the bank up a slot (so that max_tick_height > slot 0's tick_height)
+            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
             // If we set the working bank, the node should be leader within next 2 slots
             poh_recorder.set_bank(&bank);
             assert_eq!(
