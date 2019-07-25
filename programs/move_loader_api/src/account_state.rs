@@ -1,16 +1,19 @@
-//! Helpers to create Libra accounts for testing
-
 use crate::data_store::DataStore;
+use bytecode_verifier::VerifiedModule;
 use compiler::Compiler;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use std::convert::TryInto;
 use stdlib::stdlib_modules;
 use types::{
-    account_address::AccountAddress, byte_array::ByteArray, transaction::Program,
-    write_set::WriteSet,
+    account_address::AccountAddress,
+    byte_array::ByteArray,
+    transaction::Program,
+    write_set::{WriteOp, WriteSet},
 };
-use vm::{access::ModuleAccess, transaction_metadata::TransactionMetadata};
+use vm::{
+    access::ModuleAccess, file_format::CompiledModule, transaction_metadata::TransactionMetadata,
+};
 use vm_cache_map::Arena;
 use vm_runtime::{
     code_cache::{
@@ -47,10 +50,32 @@ impl LibraAccountState {
         LibraAccountState::Unallocated
     }
 
-    pub fn create_program(sender_address: &AccountAddress, code: &str) -> Self {
+    pub fn create_program(
+        sender_address: &AccountAddress,
+        code: &str,
+        deps: Vec<&Vec<u8>>,
+    ) -> Self {
+        // Compiler needs all the dependencies all the dependency module's account's
+        // data into `VerifiedModules`
+        let mut extra_deps: Vec<VerifiedModule> = vec![];
+        for dep in deps {
+            let state: LibraAccountState = bincode::deserialize(&dep).unwrap();
+            if let LibraAccountState::User(write_set) = state {
+                for (_, write_op) in write_set.iter() {
+                    if let WriteOp::Value(raw_bytes) = write_op {
+                        extra_deps.push(
+                            VerifiedModule::new(CompiledModule::deserialize(&raw_bytes).unwrap())
+                                .unwrap(),
+                        );
+                    }
+                }
+            }
+        }
+
         let compiler = Compiler {
             address: *sender_address,
             code,
+            extra_deps,
             ..Compiler::default()
         };
         let compiled_program = compiler.into_compiled_program().expect("Failed to compile");
@@ -61,9 +86,11 @@ impl LibraAccountState {
             .serialize(&mut script)
             .expect("Unable to serialize script");
         let mut modules = vec![];
-        for m in compiled_program.modules.iter() {
+        for module in compiled_program.modules.iter() {
             let mut buf = vec![];
-            m.serialize(&mut buf).expect("Unable to serialize module");
+            module
+                .serialize(&mut buf)
+                .expect("Unable to serialize module");
             modules.push(buf);
         }
         LibraAccountState::Program(Program::new(script, modules, vec![]))
