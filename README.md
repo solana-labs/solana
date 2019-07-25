@@ -127,12 +127,9 @@ Remote Testnets
 
 We maintain several testnets:
 
-* `testnet` - public stable testnet accessible via testnet.solana.com, with an https proxy for web apps at api.testnet.solana.com. Runs 24/7
+* `testnet` - public stable testnet accessible via testnet.solana.com. Runs 24/7
 * `testnet-beta` - public beta channel testnet accessible via beta.testnet.solana.com. Runs 24/7
 * `testnet-edge` - public edge channel testnet accessible via edge.testnet.solana.com. Runs 24/7
-* `testnet-perf` - permissioned stable testnet running a 24/7 soak test
-* `testnet-beta-perf` - permissioned beta channel testnet running a multi-hour soak test weekday mornings
-* `testnet-edge-perf` - permissioned edge channel testnet running a multi-hour soak test weekday mornings
 
 ## Deploy process
 
