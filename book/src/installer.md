@@ -153,7 +153,7 @@ FLAGS:
 
 OPTIONS:
     -d, --data_dir <PATH>    Directory to store install data [default: /Users/mvines/Library/Application Support/solana]
-    -u, --url <URL>          JSON RPC URL for the solana cluster [default: https://api.testnet.solana.com/]
+    -u, --url <URL>          JSON RPC URL for the solana cluster [default: http://testnet.solana.com:8899]
     -p, --pubkey <PUBKEY>    Public key of the update manifest [default: 9XX329sPuskWhH4DQh6k16c87dHKhXLBZTL3Gxmve8Gp]
 ```
 
