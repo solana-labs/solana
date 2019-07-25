@@ -5,6 +5,7 @@ use bincode::{deserialize, serialize};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use solana_sdk::timing::Slot;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -86,6 +87,8 @@ where
 
     fn key(index: Self::Index) -> B::OwnedKey;
     fn index(key: &B::Key) -> Self::Index;
+    fn slot(index: Self::Index) -> Slot;
+    fn as_index(slot: Slot) -> Self::Index;
 }
 
 pub trait DbCursor<B>
@@ -409,22 +412,29 @@ where
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
-    pub fn force_delete(&self, from: Option<C::Index>, to: Option<C::Index>) -> Result<()>
+    pub fn delete_slot(
+        &self,
+        batch: &mut WriteBatch<B>,
+        from: Option<Slot>,
+        to: Option<Slot>,
+    ) -> Result<bool>
     where
-        C::Index: PartialOrd,
+        C::Index: PartialOrd + Copy,
     {
-        let iter = self.iter(from)?;
+        let mut end = true;
+        let iter = self.iter(from.map(C::as_index))?;
         for (index, _) in iter {
-            if let Some(ref to) = to {
-                if &index > to {
+            if let Some(to) = to {
+                if C::slot(index) > to {
+                    end = false;
                     break;
                 }
-            }
-            if let Err(e) = self.delete(index) {
-                error!("Error: {:?} while deleting {:?}", e, C::NAME)
+            };
+            if let Err(e) = batch.delete::<C>(index) {
+                error!("Error: {:?} while adding delete to batch {:?}", e, C::NAME)
             }
         }
-        Ok(())
+        Ok(end)
     }
 
     #[inline]

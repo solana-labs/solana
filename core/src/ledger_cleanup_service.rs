@@ -13,7 +13,7 @@ use std::thread;
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
-pub const DEFAULT_MAX_LEDGER_SLOTS: u64 = DEFAULT_SLOTS_PER_EPOCH * 5;
+pub const DEFAULT_MAX_LEDGER_SLOTS: u64 = 3 * DEFAULT_SLOTS_PER_EPOCH;
 
 pub struct LedgerCleanupService {
     t_cleanup: JoinHandle<()>,
@@ -26,6 +26,10 @@ impl LedgerCleanupService {
         max_ledger_slots: u64,
         exit: &Arc<AtomicBool>,
     ) -> Self {
+        info!(
+            "LedgerCleanupService active. Max Ledger Slots {}",
+            max_ledger_slots
+        );
         let exit = exit.clone();
         let t_cleanup = Builder::new()
             .name("solana-ledger-cleanup".to_string())

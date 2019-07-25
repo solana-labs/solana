@@ -2,6 +2,7 @@ use crate::blocktree::db::columns as cf;
 use crate::blocktree::db::{Backend, Column, DbCursor, IWriteBatch, TypedColumn};
 use crate::blocktree::BlocktreeError;
 use crate::result::{Error, Result};
+use solana_sdk::timing::Slot;
 
 use byteorder::{BigEndian, ByteOrder};
 
@@ -15,7 +16,8 @@ use std::path::Path;
 
 // A good value for this is the number of cores on the machine
 const TOTAL_THREADS: i32 = 8;
-const MAX_WRITE_BUFFER_SIZE: usize = 512 * 1024 * 1024;
+const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
+const MIN_WRITE_BUFFER_SIZE: u64 = 64 * 1024; // 64KB
 
 #[derive(Debug)]
 pub struct Rocks(rocksdb::DB);
@@ -40,16 +42,22 @@ impl Backend for Rocks {
         let db_options = get_db_options();
 
         // Column family names
-        let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
-        let data_cf_descriptor = ColumnFamilyDescriptor::new(Data::NAME, get_cf_options());
+        let meta_cf_descriptor =
+            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(SlotMeta::NAME));
+        let data_cf_descriptor =
+            ColumnFamilyDescriptor::new(Data::NAME, get_cf_options(Data::NAME));
         let dead_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options());
-        let erasure_cf_descriptor = ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options(DeadSlots::NAME));
+        let erasure_cf_descriptor =
+            ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options(Coding::NAME));
         let erasure_meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
-        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
-        let root_cf_descriptor = ColumnFamilyDescriptor::new(Root::NAME, get_cf_options());
-        let index_cf_descriptor = ColumnFamilyDescriptor::new(Index::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options(ErasureMeta::NAME));
+        let orphans_cf_descriptor =
+            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options(Orphans::NAME));
+        let root_cf_descriptor =
+            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options(Root::NAME));
+        let index_cf_descriptor =
+            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options(Index::NAME));
 
         let cfs = vec![
             meta_cf_descriptor,
@@ -152,6 +160,14 @@ impl Column<Rocks> for cf::Coding {
     fn index(key: &[u8]) -> (u64, u64) {
         cf::Data::index(key)
     }
+
+    fn slot(index: Self::Index) -> Slot {
+        index.0
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        (slot, 0)
+    }
 }
 
 impl Column<Rocks> for cf::Data {
@@ -170,6 +186,14 @@ impl Column<Rocks> for cf::Data {
         let index = BigEndian::read_u64(&key[8..16]);
         (slot, index)
     }
+
+    fn slot(index: Self::Index) -> Slot {
+        index.0
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        (slot, 0)
+    }
 }
 
 impl Column<Rocks> for cf::Index {
@@ -184,6 +208,14 @@ impl Column<Rocks> for cf::Index {
 
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        slot
     }
 }
 
@@ -204,6 +236,14 @@ impl Column<Rocks> for cf::DeadSlots {
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
     }
+
+    fn slot(index: Self::Index) -> Slot {
+        index
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        slot
+    }
 }
 
 impl TypedColumn<Rocks> for cf::DeadSlots {
@@ -222,6 +262,14 @@ impl Column<Rocks> for cf::Orphans {
 
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        slot
     }
 }
 
@@ -242,6 +290,14 @@ impl Column<Rocks> for cf::Root {
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
     }
+
+    fn slot(index: Self::Index) -> Slot {
+        index
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        slot
+    }
 }
 
 impl TypedColumn<Rocks> for cf::Root {
@@ -260,6 +316,14 @@ impl Column<Rocks> for cf::SlotMeta {
 
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        slot
     }
 }
 
@@ -283,6 +347,14 @@ impl Column<Rocks> for cf::ErasureMeta {
         BigEndian::write_u64(&mut key[..8], slot);
         BigEndian::write_u64(&mut key[8..], set_index);
         key
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index.0
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        (slot, 0)
     }
 }
 
@@ -334,11 +406,27 @@ impl std::convert::From<rocksdb::Error> for Error {
     }
 }
 
-fn get_cf_options() -> Options {
+fn get_cf_options(name: &'static str) -> Options {
+    use crate::blocktree::db::columns::{Coding, Data};
+
     let mut options = Options::default();
-    options.set_max_write_buffer_number(32);
-    options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE);
-    options.set_max_bytes_for_level_base(MAX_WRITE_BUFFER_SIZE as u64);
+    match name {
+        Coding::NAME | Data::NAME => {
+            // 512MB * 8 = 4GB. 2 of these columns should take no more than 8GB of RAM
+            options.set_max_write_buffer_number(8);
+            options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
+            options.set_target_file_size_base(MAX_WRITE_BUFFER_SIZE / 10);
+            options.set_max_bytes_for_level_base(MAX_WRITE_BUFFER_SIZE);
+        }
+        _ => {
+            // We want smaller CFs to flush faster. This results in more WAL files but lowers
+            // overall WAL space utilization and increases flush frequency
+            options.set_write_buffer_size(MIN_WRITE_BUFFER_SIZE as usize);
+            options.set_target_file_size_base(MIN_WRITE_BUFFER_SIZE);
+            options.set_max_bytes_for_level_base(MIN_WRITE_BUFFER_SIZE);
+            options.set_level_zero_file_num_compaction_trigger(1);
+        }
+    }
     options
 }
 
@@ -349,8 +437,5 @@ fn get_db_options() -> Options {
     options.increase_parallelism(TOTAL_THREADS);
     options.set_max_background_flushes(4);
     options.set_max_background_compactions(4);
-    options.set_max_write_buffer_number(32);
-    options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE);
-    options.set_max_bytes_for_level_base(MAX_WRITE_BUFFER_SIZE as u64);
     options
 }
