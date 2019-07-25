@@ -203,6 +203,7 @@ impl PohRecorder {
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
         self.working_bank = Some(working_bank);
+        let _ = self.flush_cache(false);
     }
     pub fn set_bank(&mut self, bank: &Arc<Bank>) {
         let working_bank = WorkingBank {
@@ -1224,6 +1225,39 @@ mod tests {
                 poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
                 true
             );
+        }
+    }
+
+    #[test]
+    fn test_flush_virtual_ticks() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            // test that virtual ticks are flushed into a newly set bank asap
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let genesis_blockhash = bank.last_blockhash();
+
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                bank.last_blockhash(),
+                0,
+                Some(2),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+            //create a new bank
+            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 2));
+            //put 2 slots worth of virtual ticks into poh
+            for _ in 0..(bank.ticks_per_slot() * 2) {
+                poh_recorder.tick();
+            }
+            poh_recorder.set_bank(&bank.clone());
+            assert!(!bank.check_hash_age(&genesis_blockhash, 1));
         }
     }
 }
