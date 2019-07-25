@@ -50,7 +50,6 @@ pub enum WalletCommand {
     AuthorizeVoter(Pubkey, Keypair, Pubkey),
     CreateVoteAccount(Pubkey, Pubkey, u8, u64),
     ShowVoteAccount(Pubkey),
-    CreateStakeAccount(Pubkey, u64),
     DelegateStake(Keypair, Pubkey, u64),
     WithdrawStake(Keypair, Pubkey, u64),
     DeactivateStake(Keypair),
@@ -230,23 +229,15 @@ pub fn parse_command(
             let voting_account_pubkey = value_of(matches, "voting_account_pubkey").unwrap();
             Ok(WalletCommand::ShowVoteAccount(voting_account_pubkey))
         }
-        ("create-stake-account", Some(matches)) => {
-            let staking_account_pubkey = value_of(matches, "staking_account_pubkey").unwrap();
-            let lamports = matches.value_of("lamports").unwrap().parse()?;
-            Ok(WalletCommand::CreateStakeAccount(
-                staking_account_pubkey,
-                lamports,
-            ))
-        }
         ("delegate-stake", Some(matches)) => {
             let staking_account_keypair =
                 keypair_of(matches, "staking_account_keypair_file").unwrap();
             let voting_account_pubkey = value_of(matches, "voting_account_pubkey").unwrap();
-            let stake = matches.value_of("stake").unwrap().parse()?;
+            let lamports_to_stake = matches.value_of("lamports_to_stake").unwrap().parse()?;
             Ok(WalletCommand::DelegateStake(
                 staking_account_keypair,
                 voting_account_pubkey,
-                stake,
+                lamports_to_stake,
             ))
         }
         ("withdraw-stake", Some(matches)) => {
@@ -569,28 +560,6 @@ fn process_show_vote_account(
     Ok("".to_string())
 }
 
-fn process_create_stake_account(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    staking_account_pubkey: &Pubkey,
-    lamports: u64,
-) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = stake_instruction::create_stake_account(
-        &config.keypair.pubkey(),
-        staking_account_pubkey,
-        lamports,
-    );
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair],
-        recent_blockhash,
-    );
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
-    Ok(signature_str.to_string())
-}
-
 fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
@@ -614,14 +583,16 @@ fn process_delegate_stake(
     config: &WalletConfig,
     staking_account_keypair: &Keypair,
     voting_account_pubkey: &Pubkey,
-    stake: u64,
+    lamports: u64,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![stake_instruction::delegate_stake(
+
+    let ixs = stake_instruction::create_stake_account_and_delegate_stake(
+        &config.keypair.pubkey(),
         &staking_account_keypair.pubkey(),
         voting_account_pubkey,
-        stake,
-    )];
+        lamports,
+    );
 
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
@@ -691,12 +662,19 @@ fn process_show_stake_account(
     let stake_account = rpc_client.get_account(staking_account_pubkey)?;
     match stake_account.state() {
         Ok(StakeState::Stake(stake)) => {
-            println!("account lamports: {}", stake_account.lamports);
-            println!("voter pubkey: {}", stake.voter_pubkey);
+            println!("total stake: {}", stake_account.lamports);
             println!("credits observed: {}", stake.credits_observed);
-            println!("stake: {}", stake.stake);
+            println!("delegated stake: {}", stake.stake);
+            if stake.voter_pubkey != Pubkey::default() {
+                println!("delegated voter pubkey: {}", stake.voter_pubkey);
+            }
+            println!("stake activates at epoch: {}", stake.activated);
+            if stake.deactivated < std::u64::MAX {
+                println!("stake deactivates at epoch: {}", stake.deactivated);
+            }
             Ok("".to_string())
         }
+        Ok(StakeState::Uninitialized) => Ok("Stake account is uninitialized".to_string()),
         _ => Err(WalletError::RpcRequestError(
             "Account data could not be deserialized to stake state".to_string(),
         ))?,
@@ -1063,11 +1041,6 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_show_vote_account(&rpc_client, config, &voting_account_pubkey)
         }
 
-        // Create stake account
-        WalletCommand::CreateStakeAccount(staking_account_pubkey, lamports) => {
-            process_create_stake_account(&rpc_client, config, &staking_account_pubkey, *lamports)
-        }
-
         WalletCommand::DelegateStake(staking_account_keypair, voting_account_pubkey, lamports) => {
             process_delegate_stake(
                 &rpc_client,
@@ -1412,37 +1385,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Vote account pubkey"),
                 )
         )
-       .subcommand(
-            SubCommand::with_name("create-stake-account")
-                .about("Create staking account")
-                .arg(
-                    Arg::with_name("staking_account_pubkey")
-                        .index(1)
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("Staking account address to fund"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .index(2)
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The number of lamports to send to staking account"),
-                ),
-        )
         .subcommand(
             SubCommand::with_name("delegate-stake")
-                .about("Delegate the stake to some vote account")
+                .about("Delegate stake to a vote account")
                 .arg(
                     Arg::with_name("staking_account_keypair_file")
                         .index(1)
                         .value_name("KEYPAIR_FILE")
                         .takes_value(true)
                         .required(true)
-                        .help("Keypair file for the staking account, for signing the delegate transaction."),
+                        .help("Keypair file for the new stake account"),
                 )
                 .arg(
                     Arg::with_name("voting_account_pubkey")
@@ -1454,12 +1406,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The voting account to which the stake will be delegated"),
                 )
                 .arg(
-                    Arg::with_name("stake")
+                    Arg::with_name("lamports_to_stake")
                         .index(3)
                         .value_name("NUM")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to stake, must be less than the stake account's balance."),
+                        .help("The number of lamports to stake"),
                 ),
         )
         .subcommand(
@@ -1888,18 +1840,7 @@ mod tests {
             WalletCommand::CreateVoteAccount(pubkey, node_pubkey, 0, 50)
         );
 
-        // Test Create Stake Account
-        let test_create_stake_account = test_commands.clone().get_matches_from(vec![
-            "test",
-            "create-stake-account",
-            &pubkey_string,
-            "50",
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_create_stake_account).unwrap(),
-            WalletCommand::CreateStakeAccount(pubkey, 50)
-        );
-
+        // Test DelegateStake Subcommand
         fn make_tmp_path(name: &str) -> String {
             let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
             let keypair = Keypair::new();
@@ -1917,7 +1858,7 @@ mod tests {
         let keypair_file = make_tmp_path("keypair_file");
         gen_keypair_file(&keypair_file).unwrap();
         let keypair = read_keypair(&keypair_file).unwrap();
-        // Test Delegate Stake Subcommand
+
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -1930,10 +1871,7 @@ mod tests {
             WalletCommand::DelegateStake(keypair, pubkey, 42)
         );
 
-        let keypair_file = make_tmp_path("keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let keypair = read_keypair(&keypair_file).unwrap();
-        // Test Withdraw from Stake Account
+        // Test WithdrawStake Subcommand
         let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "withdraw-stake",
@@ -1941,12 +1879,13 @@ mod tests {
             &pubkey_string,
             "42",
         ]);
+        let keypair = read_keypair(&keypair_file).unwrap();
         assert_eq!(
             parse_command(&pubkey, &test_withdraw_stake).unwrap(),
             WalletCommand::WithdrawStake(keypair, pubkey, 42)
         );
 
-        // Test Deactivate Stake Subcommand
+        // Test DeactivateStake Subcommand
         let keypair_file = make_tmp_path("keypair_file");
         gen_keypair_file(&keypair_file).unwrap();
         let keypair = read_keypair(&keypair_file).unwrap();
@@ -2115,10 +2054,6 @@ mod tests {
 
         let bob_keypair = Keypair::new();
         config.command = WalletCommand::AuthorizeVoter(bob_pubkey, bob_keypair, bob_pubkey);
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
-
-        config.command = WalletCommand::CreateStakeAccount(bob_pubkey, 10);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 

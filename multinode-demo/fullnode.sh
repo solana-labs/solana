@@ -105,15 +105,7 @@ setup_validator_accounts() {
       create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127
     ) || return $?
 
-    echo "Fund the stake account from the node's identity pubkey"
-    (
-      set -x
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-        create-stake-account "$stake_pubkey" "$stake_lamports"
-    ) || return $?
-
     echo "Delegate the stake account to the node's vote account"
-    #  transaction must be signed by the stake_keypair
     (
       set -x
       $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
