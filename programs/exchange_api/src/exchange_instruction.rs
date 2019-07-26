@@ -12,7 +12,7 @@ pub struct OrderRequestInfo {
     pub direction: Direction,
 
     /// Token pair to trade
-    pub pair: TokenPair,
+    pub pair: AssetPair,
 
     /// Number of tokens to exchange; refers to the primary or the secondary depending on the direction
     pub tokens: u64,
@@ -85,7 +85,7 @@ pub fn trade_request(
     owner: &Pubkey,
     trade: &Pubkey,
     direction: Direction,
-    pair: TokenPair,
+    pair: AssetPair,
     tokens: u64,
     price: u64,
     src_account: &Pubkey,

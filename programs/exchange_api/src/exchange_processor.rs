@@ -64,8 +64,8 @@ impl ExchangeProcessor {
         // Turn trade order into token account
 
         let token = match trade.direction {
-            Direction::To => trade.pair.secondary(),
-            Direction::From => trade.pair.primary(),
+            Direction::To => trade.pair.Quote,
+            Direction::From => trade.pair.Base,
         };
 
         let mut account = TokenAccountInfo::default().owner(&trade.owner);
@@ -131,8 +131,8 @@ impl ExchangeProcessor {
 
         trace!("pp {} sp {}", primary_profit, secondary_profit);
 
-        let primary_token = to_trade.pair.primary();
-        let secondary_token = from_trade.pair.secondary();
+        let primary_token = to_trade.pair.Base;
+        let secondary_token = from_trade.pair.Quote;
 
         // Update tokens
 
@@ -225,8 +225,8 @@ impl ExchangeProcessor {
                     }
 
                     let from_token = match from_trade.direction {
-                        Direction::To => from_trade.pair.secondary(),
-                        Direction::From => from_trade.pair.primary(),
+                        Direction::To => from_trade.pair.Quote,
+                        Direction::From => from_trade.pair.Base,
                     };
                     if token != from_token {
                         error!("Trade to transfer from does not hold correct token");
@@ -281,8 +281,8 @@ impl ExchangeProcessor {
             Err(InstructionError::GenericError)?
         }
         let from_token = match info.direction {
-            Direction::To => info.pair.primary(),
-            Direction::From => info.pair.secondary(),
+            Direction::To => info.pair.Base,
+            Direction::From => info.pair.Quote,
         };
         if account.tokens[from_token] < info.tokens {
             error!("From token balance is too low");
@@ -332,8 +332,8 @@ impl ExchangeProcessor {
         }
 
         let token = match order.direction {
-            Direction::To => order.pair.primary(),
-            Direction::From => order.pair.secondary(),
+            Direction::To => order.pair.Base,
+            Direction::From => order.pair.Quote,
         };
 
         let mut account = TokenAccountInfo::default().owner(&order.owner);
@@ -603,7 +603,7 @@ mod test {
         client: &BankClient,
         owner: &Keypair,
         direction: Direction,
-        pair: TokenPair,
+        pair: AssetPair,
         from_token: Token,
         src_tokens: u64,
         trade_tokens: u64,
@@ -701,7 +701,7 @@ mod test {
             &client,
             &owner,
             Direction::To,
-            TokenPair::AB,
+            AssetPair::default(),
             Token::A,
             42,
             2,
@@ -717,7 +717,7 @@ mod test {
             OrderInfo {
                 owner: owner.pubkey(),
                 direction: Direction::To,
-                pair: TokenPair::AB,
+                pair: AssetPair::default(),
                 tokens: 2,
                 price: 1000,
                 tokens_settled: 0
@@ -743,7 +743,7 @@ mod test {
             &client,
             &owner,
             Direction::To,
-            TokenPair::AB,
+            AssetPair::default(),
             Token::A,
             2,
             2,
@@ -753,7 +753,7 @@ mod test {
             &client,
             &owner,
             Direction::From,
-            TokenPair::AB,
+            AssetPair::default(),
             Token::B,
             3,
             3,
@@ -776,7 +776,7 @@ mod test {
             OrderInfo {
                 owner: owner.pubkey(),
                 direction: Direction::To,
-                pair: TokenPair::AB,
+                pair: AssetPair::default(),
                 tokens: 1,
                 price: 2000,
                 tokens_settled: 2,
@@ -810,7 +810,7 @@ mod test {
             &client,
             &owner,
             Direction::To,
-            TokenPair::AB,
+            AssetPair::default(),
             Token::A,
             3,
             3,
@@ -820,7 +820,7 @@ mod test {
             &client,
             &owner,
             Direction::From,
-            TokenPair::AB,
+            AssetPair::default(),
             Token::B,
             3,
             3,
