@@ -230,6 +230,14 @@ while [[ -n $1 ]]; do
       identity_keypair_path=$2
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --voting-keypair ]]; then
+      voting_keypair_path=$2
+      args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --storage-keypair ]]; then
+      storage_keypair_path=$2
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = --enable-rpc-exit ]]; then
       args+=("$1")
       shift
@@ -303,11 +311,14 @@ if [[ $node_type = replicator ]]; then
   read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
   shift "$shift"
 
-  : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/replicator-keypair$label.json}"
   mkdir -p "$SOLANA_CONFIG_DIR"
+
+  : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/replicator-keypair$label.json}"
   [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
 
-  storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-storage-keypair$label.json
+  : "${storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-storage-keypair$label.json}"
+  [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
+
   ledger_config_dir=$SOLANA_CONFIG_DIR/replicator-ledger$label
   configured_flag=$SOLANA_CONFIG_DIR/replicator$label.configured
 
@@ -329,13 +340,15 @@ elif [[ $node_type = bootstrap_leader ]]; then
 
   $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
 
-  : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/bootstrap-leader-keypair.json}"
-
-  vote_keypair_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
-  ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
-  state_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-state
+  # These four keypairs are created by ./setup.sh and encoded into the genesis
+  # block
+  identity_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-keypair.json
+  voting_keypair_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
   stake_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-stake-keypair.json
   storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
+
+  ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
+  state_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-state
   configured_flag=$SOLANA_CONFIG_DIR/bootstrap-leader.configured
 
   default_arg --rpc-port 8899
@@ -352,15 +365,22 @@ elif [[ $node_type = validator ]]; then
   read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
   shift "$shift"
 
-  : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/validator-keypair$label.json}"
   mkdir -p "$SOLANA_CONFIG_DIR"
+
+  : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/validator-keypair$label.json}"
   [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
 
-  vote_keypair_path=$SOLANA_CONFIG_DIR/validator-vote-keypair$label.json
+  : "${voting_keypair_path:=$SOLANA_CONFIG_DIR/validator-vote-keypair$label.json}"
+  [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
+
+  : "${storage_keypair_path:=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json}"
+  [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
+
+  stake_keypair_path=$SOLANA_CONFIG_DIR/validator-stake-keypair$label.json
+  [[ -r "$stake_keypair_path" ]] || $solana_keygen new -o "$stake_keypair_path"
+
   ledger_config_dir=$SOLANA_CONFIG_DIR/validator-ledger$label
   state_dir="$SOLANA_CONFIG_DIR"/validator-state$label
-  stake_keypair_path=$SOLANA_CONFIG_DIR/validator-stake-keypair$label.json
-  storage_keypair_path=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json
   configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
 
   default_arg --entrypoint "$entrypoint_address"
@@ -382,7 +402,7 @@ if [[ $node_type != replicator ]]; then
   snapshot_config_dir="$state_dir"/snapshots
 
   default_arg --identity "$identity_keypair_path"
-  default_arg --voting-keypair "$vote_keypair_path"
+  default_arg --voting-keypair "$voting_keypair_path"
   default_arg --storage-keypair "$storage_keypair_path"
   default_arg --ledger "$ledger_config_dir"
   default_arg --accounts "$accounts_config_dir"
@@ -443,20 +463,12 @@ fi
 
 while true; do
   if [[ $node_type != bootstrap_leader ]] && new_genesis_block; then
-    # If the genesis block has changed remove the now stale ledger and
-    # vote/stake/storage keypairs for the node and start all over again
+    # If the genesis block has changed remove the now stale ledger and start all
+    # over again
     (
       set -x
       rm -rf "$ledger_config_dir" "$state_dir" "$configured_flag"
     )
-    if [[ $node_type = validator ]]; then
-      $solana_keygen new -f -o "$vote_keypair_path"
-      $solana_keygen new -f -o "$stake_keypair_path"
-      $solana_keygen new -f -o "$storage_keypair_path"
-    fi
-    if [[ $node_type = replicator ]]; then
-      $solana_keygen new -f -o "$storage_keypair_path"
-    fi
   fi
 
   if [[ $node_type = replicator ]]; then
@@ -517,7 +529,7 @@ EOF
       )
     fi
 
-    vote_pubkey=$($solana_keygen pubkey "$vote_keypair_path")
+    vote_pubkey=$($solana_keygen pubkey "$voting_keypair_path")
     stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
     storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
