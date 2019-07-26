@@ -47,13 +47,6 @@ fn main() {
                 .help("File containing an identity (keypair)"),
         )
         .arg(
-            Arg::with_name("vote_account")
-                .long("vote-account")
-                .value_name("PUBKEY_BASE58_STR")
-                .takes_value(true)
-                .help("Public key of the vote account, where to send votes"),
-        )
-        .arg(
             Arg::with_name("voting_keypair")
                 .long("voting-keypair")
                 .value_name("PATH")

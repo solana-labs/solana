@@ -520,7 +520,6 @@ EOF
     vote_pubkey=$($solana_keygen pubkey "$vote_keypair_path")
     stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
     storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
-    replace_arg --vote-account "$vote_pubkey"
 
     if [[ $node_type = validator ]] && ((stake_lamports)); then
       setup_validator_accounts "${entrypoint_address%:*}" \
