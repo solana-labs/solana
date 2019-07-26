@@ -104,10 +104,8 @@ impl LeaderScheduleCache {
                         first_slot = Some(current_slot);
                     }
                     last_slot = current_slot;
-                } else {
-                    if first_slot.is_some() {
-                        return Some((first_slot.unwrap(), last_slot));
-                    }
+                } else if first_slot.is_some() {
+                    return Some((first_slot.unwrap(), last_slot));
                 }
             }
 
