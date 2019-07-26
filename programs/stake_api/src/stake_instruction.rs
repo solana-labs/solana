@@ -89,7 +89,7 @@ pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instr
 pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
-        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_credit_only(*vote_pubkey, false),
         AccountMeta::new_credit_only(sysvar::clock::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
@@ -98,7 +98,7 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -
 pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
-        AccountMeta::new(*to_pubkey, false),
+        AccountMeta::new_credit_only(*to_pubkey, false),
         AccountMeta::new_credit_only(sysvar::clock::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
