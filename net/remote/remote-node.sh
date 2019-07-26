@@ -273,22 +273,16 @@ local|tar|skip)
     fi
 
     args=(
-      "$entrypointIp":~/solana "$entrypointIp:8001"
+      --entrypoint "$entrypointIp:8001"
     )
 
     if [[ $airdropsEnabled != true ]]; then
-      args+=(--no-airdrop)
+      echo "TODO: replicators not supported without airdrops"
+      # TODO: need to provide the `--identity` argument to an existing system
+      #       account with lamports in it
+      exit 1
     fi
 
-    if [[ -n $internalNodesLamports ]] ; then
-      args+=(--node-lamports "$internalNodesLamports")
-    fi
-
-    if [[ $skipSetup != true ]]; then
-      ./multinode-demo/clear-config.sh
-    fi
-    # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
-    args+=($extraNodeArgs)
     nohup ./multinode-demo/replicator.sh "${args[@]}" > fullnode.log 2>&1 &
     sleep 1
     ;;
