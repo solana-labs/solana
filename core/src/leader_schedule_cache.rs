@@ -112,7 +112,7 @@ impl LeaderScheduleCache {
             epoch += 1;
             start_index = 0;
         }
-        first_slot.map_or(None, |slot| Some((slot, last_slot)))
+        first_slot.and_then(|slot| Some((slot, last_slot)))
     }
 
     fn slot_leader_at_no_compute(&self, slot: u64) -> Option<Pubkey> {

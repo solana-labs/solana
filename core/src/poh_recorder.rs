@@ -1258,7 +1258,7 @@ mod tests {
                 0,
                 bank.last_blockhash(),
                 0,
-                Some(2),
+                Some((2, 2)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
