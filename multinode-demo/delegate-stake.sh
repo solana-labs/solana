@@ -28,6 +28,7 @@ OPTIONS:
                               multiple validators in the same workspace
   --no-airdrop              - Do not attempt to airdrop the stake
   --keypair FILE            - Keypair to fund the stake from
+  --force                   - Override delegate-stake sanity checks
 
 EOF
   exit 1
@@ -36,6 +37,7 @@ EOF
 common_args=()
 label=
 airdrops_enabled=1
+maybe_force=
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -45,6 +47,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --keypair || $1 = -k ]]; then
       common_args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --force ]]; then
+      maybe_force=--force
       shift 2
     elif [[ $1 = --url || $1 = -u ]]; then
       url=$2
@@ -100,6 +105,6 @@ stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
 
 set -x
 $solana_wallet "${common_args[@]}" \
-  delegate-stake "$stake_keypair_path" "$vote_pubkey" "$stake_lamports"
+  delegate-stake $maybe_force "$stake_keypair_path" "$vote_pubkey" "$stake_lamports"
 $solana_wallet "${common_args[@]}" show-stake-account "$stake_pubkey"
 

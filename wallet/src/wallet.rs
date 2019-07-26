@@ -29,6 +29,7 @@ use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_stake_api::stake_instruction;
 use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_instruction;
+use solana_vote_api::vote_state::VoteState;
 use std::fs::File;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
@@ -50,7 +51,7 @@ pub enum WalletCommand {
     AuthorizeVoter(Pubkey, Keypair, Pubkey),
     CreateVoteAccount(Pubkey, Pubkey, u8, u64),
     ShowVoteAccount(Pubkey),
-    DelegateStake(Keypair, Pubkey, u64),
+    DelegateStake(Keypair, Pubkey, u64, bool),
     WithdrawStake(Keypair, Pubkey, u64),
     DeactivateStake(Keypair),
     RedeemVoteCredits(Pubkey, Pubkey),
@@ -233,10 +234,12 @@ pub fn parse_command(
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
             let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
             let lamports_to_stake = matches.value_of("lamports_to_stake").unwrap().parse()?;
+            let force = matches.is_present("force");
             Ok(WalletCommand::DelegateStake(
                 stake_account_keypair,
                 vote_account_pubkey,
                 lamports_to_stake,
+                force,
             ))
         }
         ("withdraw-stake", Some(matches)) => {
@@ -502,7 +505,6 @@ fn process_show_vote_account(
 ) -> ProcessResult {
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
-    use solana_vote_api::vote_state::VoteState;
     if vote_account.owner != solana_vote_api::id() {
         Err(WalletError::RpcRequestError(
             format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
@@ -587,6 +589,7 @@ fn process_delegate_stake(
     stake_account_keypair: &Keypair,
     vote_account_pubkey: &Pubkey,
     lamports: u64,
+    force: bool,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
@@ -596,6 +599,39 @@ fn process_delegate_stake(
         vote_account_pubkey,
         lamports,
     );
+
+    // Sanity check the vote account to ensure it is attached to a validator that has recently
+    // voted at the tip of the ledger
+    let vote_account_data = rpc_client.get_account_data(vote_account_pubkey)?;
+    let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
+        WalletError::RpcRequestError(
+            "Account data could not be deserialized to vote state".to_string(),
+        )
+    })?;
+
+    let sanity_check_result = match vote_state.root_slot {
+        None => Err(WalletError::DynamicProgramError(
+            "Vote account has no root slot".to_string(),
+        )),
+        Some(root_slot) => {
+            let slot = rpc_client.get_slot()?;
+            if root_slot + solana_sdk::timing::DEFAULT_SLOTS_PER_TURN < slot {
+                Err(WalletError::DynamicProgramError(
+                    "Vote account root slot is too old".to_string(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+    };
+
+    if sanity_check_result.is_err() {
+        if !force {
+            sanity_check_result?;
+        } else {
+            println!("--force supplied, ignoring: {:?}", sanity_check_result);
+        }
+    }
 
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
@@ -1056,15 +1092,19 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_show_vote_account(&rpc_client, config, &vote_account_pubkey)
         }
 
-        WalletCommand::DelegateStake(stake_account_keypair, vote_account_pubkey, lamports) => {
-            process_delegate_stake(
-                &rpc_client,
-                config,
-                &stake_account_keypair,
-                &vote_account_pubkey,
-                *lamports,
-            )
-        }
+        WalletCommand::DelegateStake(
+            stake_account_keypair,
+            vote_account_pubkey,
+            lamports,
+            force,
+        ) => process_delegate_stake(
+            &rpc_client,
+            config,
+            &stake_account_keypair,
+            &vote_account_pubkey,
+            *lamports,
+            *force,
+        ),
 
         WalletCommand::WithdrawStake(
             stake_account_keypair,
@@ -1403,6 +1443,13 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .subcommand(
             SubCommand::with_name("delegate-stake")
                 .about("Delegate stake to a vote account")
+                .arg(
+                    Arg::with_name("force")
+                        .long("force")
+                        .takes_value(false)
+                        .hidden(true) // Don't document this argument to discourage its use
+                        .help("Override vote account sanity checks (use carefully!)"),
+                )
                 .arg(
                     Arg::with_name("stake_account_keypair_file")
                         .index(1)
@@ -1883,7 +1930,21 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
-            WalletCommand::DelegateStake(keypair, pubkey, 42)
+            WalletCommand::DelegateStake(keypair, pubkey, 42, false)
+        );
+
+        let keypair = read_keypair(&keypair_file).unwrap();
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            "--force",
+            &keypair_file,
+            &pubkey_string,
+            "42",
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_delegate_stake).unwrap(),
+            WalletCommand::DelegateStake(keypair, pubkey, 42, true)
         );
 
         // Test WithdrawStake Subcommand
@@ -2072,11 +2133,15 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
+        // TODO: Need to add mock GetAccountInfo to mock_rpc_client_request.rs to re-enable the
+        // DeactivateStake test.
+        /*
         let bob_keypair = Keypair::new();
         let node_pubkey = Pubkey::new_rand();
-        config.command = WalletCommand::DelegateStake(bob_keypair.into(), node_pubkey, 100);
+        config.command = WalletCommand::DelegateStake(bob_keypair.into(), node_pubkey, 100, true);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        */
 
         let bob_keypair = Keypair::new();
         let to_pubkey = Pubkey::new_rand();
