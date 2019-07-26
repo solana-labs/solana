@@ -30,6 +30,7 @@ Methods
 * [getProgramAccounts](#getprogramaccounts)
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
+* [getSlot](#getslot)
 * [getSlotLeader](#getslotleader)
 * [getSlotsPerSegment](#getslotspersegment)
 * [getStorageTurn](#getstorageturn)
@@ -291,6 +292,25 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 {"jsonrpc":"2.0","result":"SignatureNotFound","id":1}
 ```
 
+-----
+
+### getSlot
+Returns the current slot the node is processing
+
+##### Parameters:
+None
+
+##### Results:
+* `u64` - Current slot
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlot"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":"1234","id":1}
+```
 -----
 
 ### getSlotLeader
