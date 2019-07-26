@@ -113,7 +113,7 @@ mod tests {
                 bank.tick_height(),
                 prev_hash,
                 bank.slot(),
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
