@@ -41,6 +41,21 @@ validator submits votes, and increase after serving as the leader:
 $ solana-wallet --keypair ~/validator-keypair.json
 ```
 
+## Get Cluster Info
+There are several useful JSON-RPC endpoints for monitoring your validator on the
+cluster, as well as the health of the cluster:
+
+```bash
+# Similar to solana-gossip, you should see your validator in the list of cluster nodes
+$ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getClusterNodes"}' http://testnet.solana.com:8899
+# If your validator is properly staked and voting, it should appear in the list of epoch vote accounts
+$ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://testnet.solana.com:8899
+# Returns the current leader schedule
+$ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://testnet.solana.com:8899
+# Returns info about the current epoch. slotIndex should progress on subsequent calls.
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://testnet.solana.com:8899
+```
+
 ## Validator Metrics
 Metrics are available for local monitoring of your validator.
 
