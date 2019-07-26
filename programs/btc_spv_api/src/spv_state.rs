@@ -8,26 +8,26 @@ pub type BitcoinTxHash = [u8;32];
 
 pub struct ProofEntry    = {
     // 32 byte merkle hashes
-    pub hash: [u8;32];
+    pub hash: [u8;32],
     // side of the merkle tree
     // T - Left, F - Right
-    pub side: bool;
+    pub side: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct BlockHeader {
     // Block hash
-    pub digest      : BitcoinTxHash;
+    pub digest      : BitcoinTxHash,
     // Previous block's hash/digest
-    pub parent      : BitcoinTxHash;
+    pub parent      : BitcoinTxHash,
     //
-    pub merkle_root : ProofEntry;
+    pub merkle_root : ProofEntry,
     // Bitcoin network version
-    pub version     : u32;
+    pub version     : u32,
     // the blocktime associate with the block
-    pub time        : u32;
+    pub time        : u32,
     // An encoded version of the target threshold this block’s header hash must be less than or equal to.
-    pub difficulty  : u32;
+    pub difficulty  : u32,
 }
 
 pub type HeaderChain = Vec<BlockHeader>;
@@ -39,9 +39,9 @@ pub type HeaderChain = Vec<BlockHeader>;
 
 pub struct ProofEntry    = {
     // 32 byte merkle hashes
-    pub hash: [u8;32];
+    pub hash: [u8;32],
     // side of the merkle tree (None for root)
-    pub side: Option<bool>;
+    pub side: Option<bool>,
 }
 
 pub type MerkleProof = Vec<ProofEntry>;
@@ -54,44 +54,44 @@ pub type MerkleProof = Vec<ProofEntry>;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct ClientRequestInfo {
     // bitcoin transaction hash
-    pub txHash:        BitcoinTxHash;
+    pub txHash:        BitcoinTxHash,
     // confirmation count
-    pub confirmations: u8;
+    pub confirmations: u8,
     // fee paid for tx verification
-    pub fee:           u64;
+    pub fee:           u64,
     // required minimum difficulty for submitted blocks
-    pub difficulty:    Option<u32>;
+    pub difficulty:    Option<u32>,
     // expiration slot height
-    pub expiration:    u64;
+    pub expiration:    u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct ProofRequest {
-    pub owner:         Pubkey;
+    pub owner:         Pubkey,
     // bitcoin transaction hash
-    pub txHash:        BitcoinTxHash;
+    pub txHash:        BitcoinTxHash,
     // confirmation count
-    pub confirmations: u8;
+    pub confirmations: u8,
     // fee paid for tx verification
-    pub fee:           u64;
+    pub fee:           u64,
     // minimum allowable difficulty
-    pub difficulty:    u64;
+    pub difficulty:    u64,
     // expiration slot height
-    pub expiration:    u64;
+    pub expiration:    u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct ProofInfo {
     // the pubkey who submitted the proof in question, entitled to fees from any corresponding proof requests
-    pub submitter:  Pubkey;
+    pub submitter:  Pubkey,
     // merkle branch connecting txhash to block header merkle root
-    pub proof:      MerkleProof;
+    pub proof:      MerkleProof,
     // chain of bitcoin headers provifing context for the proof
-    pub headers:    HeaderChain;
+    pub headers:    HeaderChain,
     // computed validity of the proof in question
-    pub validity:   Option<bool>;
+    pub validity:   Option<bool>,
     // txhash associated with the Proof
-    pub txhash:     BitcoinTxHash;
+    pub txhash:     BitcoinTxHash,
 }
 
 pub enum AccountState {
