@@ -40,8 +40,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use sys_info;
 
-const ACCOUNT_DATA_FILE_SIZE: u64 = 4 * 1024 * 1024;
-pub const NUM_THREADS: u32 = 10;
+pub const DEFAULT_FILE_SIZE: u64 = 4 * 1024 * 1024;
+pub const DEFAULT_NUM_THREADS: u32 = 8;
+pub const DEFAULT_DIRS: &str = "0,1,2,3";
 
 #[derive(Debug, Default)]
 pub struct ErrorCounters {
@@ -316,57 +317,53 @@ pub struct AccountsDB {
 
 impl Default for AccountsDB {
     fn default() -> Self {
+        let num_threads = sys_info::cpu_num().unwrap_or(DEFAULT_NUM_THREADS) as usize;
+
+        let temp_paths = get_temp_accounts_path(DEFAULT_DIRS); // make 4 directories by default
+
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
             storage: RwLock::new(AccountStorage(HashMap::new())),
             next_id: AtomicUsize::new(0),
             write_version: AtomicUsize::new(0),
-            paths: RwLock::new(Vec::default()),
-            temp_paths: None,
-            file_size: u64::default(),
+            paths: RwLock::new(get_paths_vec(&temp_paths.paths)),
+            temp_paths: Some(temp_paths),
+            file_size: DEFAULT_FILE_SIZE,
             thread_pool: rayon::ThreadPoolBuilder::new()
-                .num_threads(2)
+                .num_threads(num_threads)
                 .build()
                 .unwrap(),
-            min_num_stores: 0,
+            min_num_stores: num_threads,
         }
     }
 }
 
 impl AccountsDB {
-    pub fn new_with_file_size(paths: Option<String>, file_size: u64) -> Self {
-        let (paths, temp_paths) = match paths {
-            Some(paths) => (get_paths_vec(&paths), None),
-            None => {
-                let temp_paths = get_temp_accounts_path("0,1,2,3"); // make 4 directories by default
-                (get_paths_vec(&temp_paths.paths), Some(temp_paths))
+    pub fn new(paths: Option<String>) -> Self {
+        if let Some(paths) = paths {
+            AccountsDB {
+                paths: RwLock::new(get_paths_vec(&paths)),
+                temp_paths: None,
+                ..AccountsDB::default()
             }
-        };
-
-        AccountsDB {
-            accounts_index: RwLock::new(AccountsIndex::default()),
-            storage: RwLock::new(AccountStorage(HashMap::new())),
-            next_id: AtomicUsize::new(0),
-            write_version: AtomicUsize::new(0),
-            paths: RwLock::new(paths),
-            temp_paths,
-            file_size,
-            thread_pool: rayon::ThreadPoolBuilder::new()
-                .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
-                .build()
-                .unwrap(),
-            min_num_stores: 0,
+        } else {
+            AccountsDB::default()
         }
     }
 
-    pub fn new_with_num_stores(paths: Option<String>, min_num_stores: usize) -> Self {
-        let mut new = Self::new(paths);
-        new.min_num_stores = min_num_stores;
-        new
+    #[cfg(test)]
+    pub fn new_single() -> Self {
+        AccountsDB {
+            min_num_stores: 0,
+            ..AccountsDB::new(None)
+        }
     }
-
-    pub fn new(paths: Option<String>) -> Self {
-        Self::new_with_file_size(paths, ACCOUNT_DATA_FILE_SIZE)
+    #[cfg(test)]
+    pub fn new_sized(paths: Option<String>, file_size: u64) -> Self {
+        AccountsDB {
+            file_size,
+            ..AccountsDB::new(paths)
+        }
     }
 
     pub fn paths(&self) -> String {
@@ -556,7 +553,7 @@ impl AccountsDB {
         let fork_storage = stores.0.entry(fork_id).or_insert_with(HashMap::new);
 
         // Create more stores so that when scanning the storage all CPUs have work
-        while fork_storage.len() < self.min_num_stores {
+        while fork_storage.len() + 1 < self.min_num_stores {
             self.create_store(fork_id, fork_storage, self.file_size);
         }
 
@@ -963,21 +960,14 @@ mod tests {
     #[test]
     fn test_accountsdb_count_stores() {
         solana_logger::setup();
-        let db = AccountsDB::new(None);
+        let db = AccountsDB::new_single();
 
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_account(
-            &db,
-            &mut pubkeys,
-            0,
-            2,
-            ACCOUNT_DATA_FILE_SIZE as usize / 3,
-            0,
-        );
+        create_account(&db, &mut pubkeys, 0, 2, DEFAULT_FILE_SIZE as usize / 3, 0);
         assert!(check_storage(&db, 0, 2));
 
         let pubkey = Pubkey::new_rand();
-        let account = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 3, &pubkey);
+        let account = Account::new(1, DEFAULT_FILE_SIZE as usize / 3, &pubkey);
         db.store(1, &hashmap!(&pubkey => &account));
         db.store(1, &hashmap!(&pubkeys[0] => &account));
         {
@@ -1136,7 +1126,7 @@ mod tests {
 
     #[test]
     fn test_account_update() {
-        let accounts = AccountsDB::new(None);
+        let accounts = AccountsDB::new_single();
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
@@ -1147,7 +1137,7 @@ mod tests {
     fn test_account_grow_many() {
         let paths = get_temp_accounts_path("many2,many3");
         let size = 4096;
-        let accounts = AccountsDB::new_with_file_size(Some(paths.paths.clone()), size);
+        let accounts = AccountsDB::new_sized(Some(paths.paths.clone()), size);
         let mut keys = vec![];
         for i in 0..9 {
             let key = Pubkey::new_rand();
@@ -1181,11 +1171,12 @@ mod tests {
 
     #[test]
     fn test_account_grow() {
-        let accounts = AccountsDB::new(None);
+        let accounts = AccountsDB::new_single();
+
         let count = [0, 1];
         let status = [AccountStorageStatus::Available, AccountStorageStatus::Full];
         let pubkey1 = Pubkey::new_rand();
-        let account1 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey1);
+        let account1 = Account::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey1);
         accounts.store(0, &hashmap!(&pubkey1 => &account1));
         {
             let stores = accounts.storage.read().unwrap();
@@ -1195,7 +1186,7 @@ mod tests {
         }
 
         let pubkey2 = Pubkey::new_rand();
-        let account2 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey2);
+        let account2 = Account::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey2);
         accounts.store(0, &hashmap!(&pubkey2 => &account2));
         {
             let stores = accounts.storage.read().unwrap();
@@ -1302,7 +1293,7 @@ mod tests {
     #[test]
     fn test_accounts_db_serialize() {
         solana_logger::setup();
-        let accounts = AccountsDB::new(None);
+        let accounts = AccountsDB::new_single();
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         assert_eq!(check_storage(&accounts, 0, 100), true);
@@ -1344,7 +1335,7 @@ mod tests {
         let min_file_bytes = std::mem::size_of::<StorageMeta>()
             + std::mem::size_of::<crate::append_vec::AccountBalance>();
 
-        let db = Arc::new(AccountsDB::new_with_file_size(None, min_file_bytes as u64));
+        let db = Arc::new(AccountsDB::new_sized(None, min_file_bytes as u64));
 
         db.add_root(fork_id);
         let thread_hdls: Vec<_> = (0..num_threads)
@@ -1417,7 +1408,7 @@ mod tests {
         let db = AccountsDB::new(None);
 
         let key = Pubkey::default();
-        let data_len = ACCOUNT_DATA_FILE_SIZE as usize + 7;
+        let data_len = DEFAULT_FILE_SIZE as usize + 7;
         let account = Account::new(1, data_len, &key);
 
         db.store(0, &hashmap!(&key => &account));
