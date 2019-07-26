@@ -478,7 +478,7 @@ impl ReplayStage {
             .reset(bank.last_blockhash(), bank.slot(), next_leader_slot);
 
         let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
-            format!("My next leader slot is #{}", next_leader_slot)
+            format!("My next leader slot is #{}", next_leader_slot.0)
         } else {
             "I am not in the upcoming leader schedule yet".to_owned()
         };

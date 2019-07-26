@@ -67,15 +67,17 @@ impl LeaderScheduleCache {
         }
     }
 
-    /// Return the next slot after the given current_slot that the given node will be leader
+    /// Return the (next slot, last slot) after the given current_slot that the given node will be leader
     pub fn next_leader_slot(
         &self,
         pubkey: &Pubkey,
         mut current_slot: u64,
         bank: &Bank,
         blocktree: Option<&Blocktree>,
-    ) -> Option<u64> {
+    ) -> Option<(u64, u64)> {
         let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
+        let mut first_slot = None;
+        let mut last_slot = current_slot;
         while let Some(leader_schedule) = self.get_epoch_schedule_else_compute(epoch, bank) {
             // clippy thinks I should do this:
             //  for (i, <item>) in leader_schedule
@@ -98,14 +100,19 @@ impl LeaderScheduleCache {
                         }
                     }
 
-                    return Some(current_slot);
+                    if first_slot.is_none() {
+                        first_slot = Some(current_slot);
+                    }
+                    last_slot = current_slot;
+                } else if first_slot.is_some() {
+                    return Some((first_slot.unwrap(), last_slot));
                 }
             }
 
             epoch += 1;
             start_index = 0;
         }
-        None
+        first_slot.and_then(|slot| Some((slot, last_slot)))
     }
 
     fn slot_leader_at_no_compute(&self, slot: u64) -> Option<Pubkey> {
@@ -317,8 +324,14 @@ mod tests {
             cache.slot_leader_at(bank.slot(), Some(&bank)).unwrap(),
             pubkey
         );
-        assert_eq!(cache.next_leader_slot(&pubkey, 0, &bank, None), Some(1));
-        assert_eq!(cache.next_leader_slot(&pubkey, 1, &bank, None), Some(2));
+        assert_eq!(
+            cache.next_leader_slot(&pubkey, 0, &bank, None),
+            Some((1, 16383))
+        );
+        assert_eq!(
+            cache.next_leader_slot(&pubkey, 1, &bank, None),
+            Some((2, 16383))
+        );
         assert_eq!(
             cache.next_leader_slot(
                 &pubkey,
@@ -365,8 +378,11 @@ mod tests {
             );
             // Check that the next leader slot after 0 is slot 1
             assert_eq!(
-                cache.next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
-                Some(1)
+                cache
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blocktree))
+                    .unwrap()
+                    .0,
+                1
             );
 
             // Write a blob into slot 2 that chains to slot 1,
@@ -374,8 +390,11 @@ mod tests {
             let (blobs, _) = make_slot_entries(2, 1, 1);
             blocktree.write_blobs(&blobs[..]).unwrap();
             assert_eq!(
-                cache.next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
-                Some(1)
+                cache
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blocktree))
+                    .unwrap()
+                    .0,
+                1
             );
 
             // Write a blob into slot 1
@@ -384,8 +403,11 @@ mod tests {
             // Check that slot 1 and 2 are skipped
             blocktree.write_blobs(&blobs[..]).unwrap();
             assert_eq!(
-                cache.next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
-                Some(3)
+                cache
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blocktree))
+                    .unwrap()
+                    .0,
+                3
             );
 
             // Integrity checks
@@ -459,8 +481,11 @@ mod tests {
         expected_slot += index;
 
         assert_eq!(
-            cache.next_leader_slot(&node_pubkey, 0, &bank, None),
-            Some(expected_slot),
+            cache
+                .next_leader_slot(&node_pubkey, 0, &bank, None)
+                .unwrap()
+                .0,
+            expected_slot
         );
     }
 

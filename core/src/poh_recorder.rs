@@ -21,12 +21,15 @@ use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 pub use solana_sdk::timing::Slot;
+use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 use solana_sdk::transaction::Transaction;
+use std::cmp;
 use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 const GRACE_TICKS_FACTOR: u64 = 2;
+const MAX_GRACE_TICKS: u64 = 12;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PohRecorderError {
@@ -74,11 +77,9 @@ impl PohRecorder {
                 Some(&self.blocktree),
             );
             assert_eq!(self.ticks_per_slot, bank.ticks_per_slot());
-            let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
-                next_leader_slot,
-                self.ticks_per_slot,
-                self.grace_ticks,
-            );
+            let (start_leader_at_tick, last_leader_tick, grace_ticks) =
+                Self::compute_leader_slot_ticks(next_leader_slot, self.ticks_per_slot);
+            self.grace_ticks = grace_ticks;
             self.start_leader_at_tick = start_leader_at_tick;
             self.last_leader_tick = last_leader_tick;
         }
@@ -154,25 +155,39 @@ impl PohRecorder {
         (false, 0, next_tick / self.ticks_per_slot, self.start_slot)
     }
 
-    // returns (start_leader_at_tick, last_leader_tick) given the next slot this
+    // returns (start_leader_at_tick, last_leader_tick, grace_ticks) given the next slot this
     //  recorder will lead
     fn compute_leader_slot_ticks(
-        next_leader_slot: Option<Slot>,
+        next_leader_slot: Option<(Slot, Slot)>,
         ticks_per_slot: u64,
-        grace_ticks: u64,
-    ) -> (Option<u64>, u64) {
+    ) -> (Option<u64>, u64, u64) {
         next_leader_slot
-            .map(|slot| {
-                (
-                    Some(slot * ticks_per_slot + grace_ticks),
-                    (slot + 1) * ticks_per_slot - 1,
-                )
+            .map(|(first, last)| {
+                let first_tick = first * ticks_per_slot;
+                let last_tick = (last + 1) * ticks_per_slot - 1;
+                let grace_ticks = cmp::min(
+                    MAX_GRACE_TICKS,
+                    (last_tick - first_tick + 1) / GRACE_TICKS_FACTOR,
+                );
+                (Some(first_tick + grace_ticks), last_tick, grace_ticks)
             })
-            .unwrap_or((None, 0))
+            .unwrap_or((
+                None,
+                0,
+                cmp::min(
+                    MAX_GRACE_TICKS,
+                    ticks_per_slot * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR,
+                ),
+            ))
     }
 
     // synchronize PoH with a bank
-    pub fn reset(&mut self, blockhash: Hash, start_slot: Slot, next_leader_slot: Option<Slot>) {
+    pub fn reset(
+        &mut self,
+        blockhash: Hash,
+        start_slot: Slot,
+        next_leader_slot: Option<(Slot, Slot)>,
+    ) {
         self.clear_bank();
         let mut cache = vec![];
         {
@@ -190,11 +205,9 @@ impl PohRecorder {
         self.start_tick = (start_slot + 1) * self.ticks_per_slot;
         self.tick_height = self.start_tick - 1;
 
-        let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
-            next_leader_slot,
-            self.ticks_per_slot,
-            self.grace_ticks,
-        );
+        let (start_leader_at_tick, last_leader_tick, grace_ticks) =
+            Self::compute_leader_slot_ticks(next_leader_slot, self.ticks_per_slot);
+        self.grace_ticks = grace_ticks;
         self.start_leader_at_tick = start_leader_at_tick;
         self.last_leader_tick = last_leader_tick;
     }
@@ -369,7 +382,7 @@ impl PohRecorder {
         tick_height: u64,
         last_entry_hash: Hash,
         start_slot: Slot,
-        next_leader_slot: Option<Slot>,
+        next_leader_slot: Option<(Slot, Slot)>,
         ticks_per_slot: u64,
         id: &Pubkey,
         blocktree: &Arc<Blocktree>,
@@ -382,9 +395,8 @@ impl PohRecorder {
             poh_config.hashes_per_tick,
         )));
         let (sender, receiver) = channel();
-        let grace_ticks = ticks_per_slot / GRACE_TICKS_FACTOR;
-        let (start_leader_at_tick, last_leader_tick) =
-            Self::compute_leader_slot_ticks(next_leader_slot, ticks_per_slot, grace_ticks);
+        let (start_leader_at_tick, last_leader_tick, grace_ticks) =
+            Self::compute_leader_slot_ticks(next_leader_slot, ticks_per_slot);
         (
             Self {
                 poh,
@@ -415,7 +427,7 @@ impl PohRecorder {
         tick_height: u64,
         last_entry_hash: Hash,
         start_slot: Slot,
-        next_leader_slot: Option<Slot>,
+        next_leader_slot: Option<(Slot, Slot)>,
         ticks_per_slot: u64,
         id: &Pubkey,
         blocktree: &Arc<Blocktree>,
@@ -459,7 +471,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -486,7 +498,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -512,7 +524,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -521,7 +533,7 @@ mod tests {
             );
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 1);
-            poh_recorder.reset(Hash::default(), 0, Some(4));
+            poh_recorder.reset(Hash::default(), 0, Some((4, 4)));
             assert_eq!(poh_recorder.tick_cache.len(), 0);
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -540,7 +552,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -574,7 +586,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -620,7 +632,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -664,7 +676,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -702,7 +714,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -742,7 +754,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -789,7 +801,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -833,7 +845,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -868,7 +880,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -879,7 +891,7 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 2);
             let hash = poh_recorder.poh.lock().unwrap().hash;
-            poh_recorder.reset(hash, 0, Some(4));
+            poh_recorder.reset(hash, 0, Some((4, 4)));
             assert_eq!(poh_recorder.tick_cache.len(), 0);
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -895,7 +907,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -905,7 +917,7 @@ mod tests {
             poh_recorder.tick();
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 2);
-            poh_recorder.reset(poh_recorder.tick_cache[0].0.hash, 0, Some(4));
+            poh_recorder.reset(poh_recorder.tick_cache[0].0.hash, 0, Some((4, 4)));
             assert_eq!(poh_recorder.tick_cache.len(), 0);
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -923,7 +935,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -935,7 +947,7 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 3);
             assert_eq!(poh_recorder.tick_height, 3);
-            poh_recorder.reset(hash(b"hello"), 0, Some(4)); // parent slot 0 implies tick_height of 3
+            poh_recorder.reset(hash(b"hello"), 0, Some((4, 4))); // parent slot 0 implies tick_height of 3
             assert_eq!(poh_recorder.tick_cache.len(), 0);
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_height, 4);
@@ -955,7 +967,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -968,7 +980,7 @@ mod tests {
                 max_tick_height: 3,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.reset(hash(b"hello"), 0, Some(4));
+            poh_recorder.reset(hash(b"hello"), 0, Some((4, 4)));
             assert!(poh_recorder.working_bank.is_none());
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -1020,7 +1032,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -1085,7 +1097,7 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
             // Provide a leader slot 1 slot down
-            poh_recorder.reset(bank.last_blockhash(), 0, Some(2));
+            poh_recorder.reset(bank.last_blockhash(), 0, Some((2, 2)));
 
             let init_ticks = poh_recorder.tick_height();
 
@@ -1104,13 +1116,13 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
             // reset poh now. we should immediately be leader
-            poh_recorder.reset(bank.last_blockhash(), 1, Some(2));
+            poh_recorder.reset(bank.last_blockhash(), 1, Some((2, 2)));
             assert_eq!(poh_recorder.reached_leader_tick().0, true);
             assert_eq!(poh_recorder.reached_leader_tick().1, 0);
 
             // Now test that with grace ticks we can reach leader ticks
             // Set the leader slot 1 slot down
-            poh_recorder.reset(bank.last_blockhash(), 1, Some(3));
+            poh_recorder.reset(bank.last_blockhash(), 1, Some((3, 3)));
 
             // Send one slot worth of ticks ("skips" slot 2)
             for _ in 0..bank.ticks_per_slot() {
@@ -1121,7 +1133,7 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
             // Send 1 less tick than the grace ticks
-            for _ in 0..bank.ticks_per_slot() / GRACE_TICKS_FACTOR {
+            for _ in 0..bank.ticks_per_slot() * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR {
                 poh_recorder.tick();
             }
 
@@ -1129,12 +1141,12 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().0, true);
             assert_eq!(
                 poh_recorder.reached_leader_tick().1,
-                bank.ticks_per_slot() / GRACE_TICKS_FACTOR
+                bank.ticks_per_slot() * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR
             );
 
             // Let's test that correct grace ticks are reported
             // Set the leader slot 1 slot down
-            poh_recorder.reset(bank.last_blockhash(), 2, Some(4));
+            poh_recorder.reset(bank.last_blockhash(), 2, Some((4, 4)));
 
             // send ticks for a slot
             for _ in 0..bank.ticks_per_slot() {
@@ -1143,7 +1155,7 @@ mod tests {
 
             // We are not the leader yet, as expected
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
-            poh_recorder.reset(bank.last_blockhash(), 3, Some(4));
+            poh_recorder.reset(bank.last_blockhash(), 3, Some((4, 4)));
 
             // without sending more ticks, we should be leader now
             assert_eq!(poh_recorder.reached_leader_tick().0, true);
@@ -1152,7 +1164,7 @@ mod tests {
             // Let's test that if a node overshoots the ticks for its target
             // leader slot, reached_leader_tick() will return true, because it's overdue
             // Set the leader slot 1 slot down
-            poh_recorder.reset(bank.last_blockhash(), 4, Some(5));
+            poh_recorder.reset(bank.last_blockhash(), 4, Some((5, 5)));
 
             // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
             for _ in 0..4 * bank.ticks_per_slot() {
@@ -1200,7 +1212,8 @@ mod tests {
             );
 
             // We reset with leader slot after 3 slots
-            poh_recorder.reset(bank.last_blockhash(), 0, Some(bank.slot() + 3));
+            let bank_slot = bank.slot() + 3;
+            poh_recorder.reset(bank.last_blockhash(), 0, Some((bank_slot, bank_slot)));
 
             // Test that the node won't be leader in next 2 slots
             assert_eq!(
@@ -1245,7 +1258,7 @@ mod tests {
                 0,
                 bank.last_blockhash(),
                 0,
-                Some(2),
+                Some((2, 2)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -1261,5 +1274,33 @@ mod tests {
             poh_recorder.set_bank(&bank.clone());
             assert!(!bank.check_hash_age(&genesis_blockhash, 1));
         }
+    }
+
+    #[test]
+    fn test_compute_leader_slots() {
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(None, 0),
+            (None, 0, 0)
+        );
+
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(Some((4, 4)), 8),
+            (Some(36), 39, 4)
+        );
+
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(Some((4, 7)), 8),
+            (Some(44), 63, MAX_GRACE_TICKS)
+        );
+
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(Some((6, 7)), 8),
+            (Some(56), 63, 8)
+        );
+
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(Some((6, 7)), 4),
+            (Some(28), 31, 4)
+        );
     }
 }
