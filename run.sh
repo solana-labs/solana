@@ -62,12 +62,6 @@ fi
 solana-keygen new -f -o "$dataDir"/drone-keypair.json
 solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
 
-leaderVoteAccountPubkey=$(\
-  solana-wallet \
-    --keypair "$dataDir"/leader-vote-account-keypair.json  \
-    address \
-)
-
 solana-genesis \
   --lamports 1000000000 \
   --bootstrap-leader-lamports 10000000 \
@@ -94,7 +88,6 @@ args=(
   --identity "$dataDir"/leader-keypair.json
   --storage-keypair "$dataDir"/leader-storage-account-keypair.json
   --voting-keypair "$dataDir"/leader-vote-account-keypair.json
-  --vote-account "$leaderVoteAccountPubkey"
   --ledger "$ledgerDir"
   --gossip-port 8001
   --rpc-port 8899
