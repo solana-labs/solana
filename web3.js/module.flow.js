@@ -198,6 +198,10 @@ declare module '@solana/web3.js' {
     keys: Array<{pubkey: PublicKey, isSigner: boolean, isDebitable: boolean}>;
     programId: PublicKey;
     data: Buffer;
+
+    constructor(
+      opts?: TransactionInstructionCtorFields,
+    ): TransactionInstruction;
   }
 
   declare type SignaturePubkeyPair = {|
