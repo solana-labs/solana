@@ -76,32 +76,19 @@ impl std::ops::IndexMut<Token> for Tokens {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[allow(non_snake_case)]
-pub enum TokenPair {
-    AB,
-    AC,
-    AD,
-    BC,
-    BD,
-    CD,
+pub struct AssetPair {
+    // represents a pair of two token enums that defines a market
+    pub Base: Token,
+    // "primary" token and numerator for pricing purposes
+    pub Quote: Token,
+    // "secondary" token and denominator for pricing purposes
 }
-impl Default for TokenPair {
-    fn default() -> Self {
-        TokenPair::AB
-    }
-}
-impl TokenPair {
-    pub fn primary(self) -> Token {
-        match self {
-            TokenPair::AB | TokenPair::AC | TokenPair::AD => Token::A,
-            TokenPair::BC | TokenPair::BD => Token::B,
-            TokenPair::CD => Token::C,
-        }
-    }
-    pub fn secondary(self) -> Token {
-        match self {
-            TokenPair::AB => Token::B,
-            TokenPair::AC | TokenPair::BC => Token::C,
-            TokenPair::AD | TokenPair::BD | TokenPair::CD => Token::D,
+
+impl Default for AssetPair {
+    fn default() -> AssetPair {
+        AssetPair {
+            Base: Token::A,
+            Quote: Token::B,
         }
     }
 }
@@ -114,6 +101,7 @@ pub struct TokenAccountInfo {
     /// Current number of tokens this account holds
     pub tokens: Tokens,
 }
+
 impl TokenAccountInfo {
     pub fn owner(mut self, owner: &Pubkey) -> Self {
         self.owner = *owner;
@@ -156,7 +144,7 @@ pub struct OrderInfo {
     /// Direction of the exchange
     pub direction: Direction,
     /// Token pair indicating two tokens to exchange, first is primary
-    pub pair: TokenPair,
+    pub pair: AssetPair,
     /// Number of tokens to exchange; primary or secondary depending on direction.  Once
     /// this number goes to zero this trade order will be converted into a regular token account
     pub tokens: u64,
@@ -171,7 +159,7 @@ impl Default for OrderInfo {
     fn default() -> Self {
         Self {
             owner: Pubkey::default(),
-            pair: TokenPair::AB,
+            pair: AssetPair::default(),
             direction: Direction::To,
             tokens: 0,
             price: 0,
@@ -180,7 +168,7 @@ impl Default for OrderInfo {
     }
 }
 impl OrderInfo {
-    pub fn pair(mut self, pair: TokenPair) -> Self {
+    pub fn pair(mut self, pair: AssetPair) -> Self {
         self.pair = pair;
         self
     }

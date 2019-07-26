@@ -509,7 +509,7 @@ fn trader<T>(
     T: Client,
 {
     // TODO Hard coded for now
-    let pair = TokenPair::AB;
+    let pair = AssetPair::default();
     let tokens = 1;
     let price = 1000;
     let mut account_group: usize = 0;
