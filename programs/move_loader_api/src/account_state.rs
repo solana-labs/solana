@@ -8,7 +8,6 @@ use stdlib::stdlib_modules;
 use types::{
     account_address::AccountAddress,
     byte_array::ByteArray,
-    transaction::Program,
     write_set::{WriteOp, WriteSet},
 };
 use vm::{
@@ -38,8 +37,16 @@ fn to_array_32(array: &[u8]) -> &[u8; 32] {
 pub enum LibraAccountState {
     /// No data for this account yet
     Unallocated,
-    /// Program bits
-    Program(Program),
+    /// Serialized compiled program bytes
+    CompiledProgram {
+        script_bytes: Vec<u8>,
+        modules_bytes: Vec<Vec<u8>>,
+    },
+    /// Serialized verified program bytes
+    VerifiedProgram {
+        script_bytes: Vec<u8>,
+        modules_bytes: Vec<Vec<u8>>,
+    },
     /// Write set containing a Libra account's data
     User(WriteSet),
     /// Write sets containing the mint and stdlib modules
@@ -80,20 +87,23 @@ impl LibraAccountState {
         };
         let compiled_program = compiler.into_compiled_program().expect("Failed to compile");
 
-        let mut script = vec![];
+        let mut script_bytes = vec![];
         compiled_program
             .script
-            .serialize(&mut script)
+            .serialize(&mut script_bytes)
             .expect("Unable to serialize script");
-        let mut modules = vec![];
+        let mut modules_bytes = vec![];
         for module in compiled_program.modules.iter() {
             let mut buf = vec![];
             module
                 .serialize(&mut buf)
                 .expect("Unable to serialize module");
-            modules.push(buf);
+            modules_bytes.push(buf);
         }
-        LibraAccountState::Program(Program::new(script, modules, vec![]))
+        LibraAccountState::CompiledProgram {
+            script_bytes,
+            modules_bytes,
+        }
     }
 
     pub fn create_user(write_set: WriteSet) -> Self {
