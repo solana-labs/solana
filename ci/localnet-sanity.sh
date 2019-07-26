@@ -5,7 +5,6 @@ skipSetup=false
 iterations=1
 restartInterval=never
 rollingRestart=false
-maybeNoLeaderRotation=
 extraNodes=0
 walletRpcPort=:8899
 
@@ -54,9 +53,6 @@ while getopts "ch?i:k:brxR" opt; do
   k)
     restartInterval=$OPTARG
     ;;
-  b)
-    maybeNoLeaderRotation="--stake 0"
-    ;;
   x)
     extraNodes=$((extraNodes + 1))
     ;;
@@ -82,7 +78,6 @@ nodes=(
     --no-restart \
     --init-complete-file init-complete-node1.log"
   "multinode-demo/validator.sh \
-    $maybeNoLeaderRotation \
     --enable-rpc-exit \
     --no-restart \
     --init-complete-file init-complete-node2.log \
@@ -94,8 +89,7 @@ for i in $(seq 1 $extraNodes); do
     "multinode-demo/validator.sh \
       --no-restart \
       --label dyn$i \
-      --init-complete-file init-complete-node$((2 + i)).log \
-      $maybeNoLeaderRotation"
+      --init-complete-file init-complete-node$((2 + i)).log"
   )
 done
 numNodes=$((2 + extraNodes))
@@ -312,7 +306,6 @@ else
 fi
 startNodes
 lastTransactionCount=
-enforceTransactionCountAdvance=true
 while [[ $iteration -le $iterations ]]; do
   echo "--- Node count ($iteration)"
   (
@@ -348,36 +341,20 @@ while [[ $iteration -le $iterations ]]; do
   transactionCount=$(sed -e 's/{"jsonrpc":"2.0","result":\([0-9]*\),"id":1}/\1/' log-transactionCount.txt)
   if [[ -n $lastTransactionCount ]]; then
     echo "--- Transaction count check: $lastTransactionCount < $transactionCount"
-    if $enforceTransactionCountAdvance; then
-      if [[ $lastTransactionCount -ge $transactionCount ]]; then
-        echo "Error: Transaction count is not advancing"
-        echo "* lastTransactionCount: $lastTransactionCount"
-        echo "* transactionCount: $transactionCount"
-        flag_error
-      fi
-    else
-      echo "enforceTransactionCountAdvance=false"
+    if [[ $lastTransactionCount -ge $transactionCount ]]; then
+      echo "Error: Transaction count is not advancing"
+      echo "* lastTransactionCount: $lastTransactionCount"
+      echo "* transactionCount: $transactionCount"
+      flag_error
     fi
-    enforceTransactionCountAdvance=true
   fi
   lastTransactionCount=$transactionCount
 
   echo "--- Wallet sanity ($iteration)"
-  flag_error_if_no_leader_rotation() {
-    # TODO: Stop ignoring wallet sanity failures when leader rotation is enabled
-    #       once https://github.com/solana-labs/solana/issues/2474 is fixed
-    if [[ -n $maybeNoLeaderRotation ]]; then
-      flag_error
-    else
-      # Wallet error occurred (and was ignored) so transactionCount may not
-      # advance on the next iteration
-      enforceTransactionCountAdvance=false
-    fi
-  }
   (
     set -x
     timeout 60s scripts/wallet-sanity.sh --url http://127.0.0.1"$walletRpcPort"
-  ) || flag_error_if_no_leader_rotation
+  ) || flag_error
 
   iteration=$((iteration + 1))
 
