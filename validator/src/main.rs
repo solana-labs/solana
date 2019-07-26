@@ -65,7 +65,6 @@ fn main() {
                 .long("storage-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .required(true)
                 .help("File containing the storage account keypair.  Default is an ephemeral keypair"),
         )
         .arg(
