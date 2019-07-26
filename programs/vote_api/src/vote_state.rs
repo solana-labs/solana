@@ -300,6 +300,23 @@ pub fn authorize_voter(
     vote_account.set_state(&vote_state)
 }
 
+/// Withdraw funds from the vote account
+pub fn withdraw(
+    vote_account: &mut KeyedAccount,
+    lamports: u64,
+    to_account: &mut KeyedAccount,
+) -> Result<(), InstructionError> {
+    if vote_account.signer_key().is_none() {
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+    if vote_account.account.lamports < lamports {
+        return Err(InstructionError::InsufficientFunds);
+    }
+    vote_account.account.lamports -= lamports;
+    to_account.account.lamports += lamports;
+    Ok(())
+}
+
 /// Initialize the vote_state for a vote account
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
@@ -809,6 +826,39 @@ mod tests {
             (voter_portion.round(), staker_portion.round(), was_split),
             (5.0, 5.0, true)
         );
+    }
+
+    #[test]
+    fn test_vote_state_withdraw() {
+        let (vote_pubkey, mut vote_account) = create_test_account();
+
+        // unsigned
+        let res = withdraw(
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            0,
+            &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut Account::default()),
+        );
+        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+
+        // insufficient funds
+        let res = withdraw(
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+            101,
+            &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut Account::default()),
+        );
+        assert_eq!(res, Err(InstructionError::InsufficientFunds));
+
+        // all good
+        let mut to_account = Account::default();
+        let lamports = vote_account.lamports;
+        let res = withdraw(
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+            lamports,
+            &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut to_account),
+        );
+        assert_eq!(res, Ok(()));
+        assert_eq!(vote_account.lamports, 0);
+        assert_eq!(to_account.lamports, lamports);
     }
 
     #[test]

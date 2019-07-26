@@ -24,6 +24,9 @@ pub enum VoteInstruction {
 
     /// A Vote instruction with recent votes
     Vote(Vec<Vote>),
+
+    /// Withdraw some amount of funds
+    Withdraw(u64),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u8) -> Instruction {
@@ -71,7 +74,7 @@ fn metas_for_authorized_signer(
 
     // append signer at the end
     if !is_own_signer {
-        account_metas.push(AccountMeta::new(*authorized_voter_pubkey, true)) // signer
+        account_metas.push(AccountMeta::new_credit_only(*authorized_voter_pubkey, true)) // signer
     }
 
     account_metas
@@ -108,6 +111,15 @@ pub fn vote(
     );
 
     Instruction::new(id(), &VoteInstruction::Vote(recent_votes), account_metas)
+}
+
+pub fn withdraw(vote_pubkey: &Pubkey, lamports: u64, to_pubkey: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, true),
+        AccountMeta::new_credit_only(*to_pubkey, false),
+    ];
+
+    Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }
 
 pub fn process_instruction(
@@ -150,6 +162,12 @@ pub fn process_instruction(
                 other_signers,
                 &votes,
             )
+        }
+        VoteInstruction::Withdraw(lamports) => {
+            if rest.is_empty() {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            vote_state::withdraw(me, lamports, &mut rest[0])
         }
     }
 }
