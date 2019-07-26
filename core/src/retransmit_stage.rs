@@ -14,6 +14,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_metrics::{datapoint_info, inc_new_counter_error};
 use solana_runtime::epoch_schedule::EpochSchedule;
+use std::cmp;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
@@ -39,12 +40,13 @@ fn retransmit(
 
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
+    let mut peers_len = 0;
     for blob in &blobs {
         let (my_index, mut peers) = cluster_info.read().unwrap().shuffle_peers_and_index(
             staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch).as_ref(),
             ChaChaRng::from_seed(blob.read().unwrap().seed()),
         );
-
+        peers_len = cmp::max(peers_len, peers.len());
         peers.remove(my_index);
 
         let (neighbors, children) = compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, peers);
@@ -58,6 +60,7 @@ fn retransmit(
             ClusterInfo::retransmit_to(&cluster_info, &children, blob, leader, sock, true)?;
         }
     }
+    datapoint_info!("cluster_info-num_nodes", ("count", peers_len, i64));
     Ok(())
 }
 
