@@ -46,12 +46,8 @@ pub struct Accounts {
 }
 
 impl Accounts {
-    pub fn new(in_paths: Option<String>) -> Self {
-        Self::new_with_num_stores(in_paths, 0)
-    }
-
-    pub fn new_with_num_stores(paths: Option<String>, min_num_stores: usize) -> Self {
-        let accounts_db = Arc::new(AccountsDB::new_with_num_stores(paths, min_num_stores));
+    pub fn new(paths: Option<String>) -> Self {
+        let accounts_db = Arc::new(AccountsDB::new(paths));
 
         Accounts {
             accounts_db,
