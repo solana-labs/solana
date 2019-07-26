@@ -44,14 +44,21 @@ fn main() {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("File containing an identity (keypair)"),
+                .help("File containing the identity keypair for the validator"),
         )
         .arg(
             Arg::with_name("voting_keypair")
                 .long("voting-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("File containing the authorized voting keypair"),
+                .help("File containing the authorized voting keypair.  Default is an ephemeral keypair"),
+        )
+        .arg(
+            Arg::with_name("vote_account")
+                .long("vote-account")
+                .value_name("PUBKEY")
+                .takes_value(true)
+                .help("Public key of the vote account to vote with.  Default is the public key of the voting keypair"),
         )
         .arg(
             Arg::with_name("storage_keypair")
@@ -59,7 +66,7 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .required(true)
-                .help("File containing the storage account keypair"),
+                .help("File containing the storage account keypair.  Default is an ephemeral keypair"),
         )
         .arg(
             Arg::with_name("init_complete_file")
@@ -112,23 +119,21 @@ fn main() {
                 .help("Enable the JSON RPC 'fullnodeExit' API.  Only enable in a debug environment"),
         )
         .arg(
-            Arg::with_name("rpc_drone_address")
+            Arg::with_name("rpc_drone_addr")
                 .long("rpc-drone-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("Enable the JSON RPC 'requestAirdrop' API with this drone address."),
         )
         .arg(
-            Arg::with_name("signer")
-                .short("s")
-                .long("signer")
+            Arg::with_name("signer_addr")
+                .long("vote-signer-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("Rendezvous with the vote signer at this RPC end point"),
         )
         .arg(
             Arg::with_name("accounts")
-                .short("a")
                 .long("accounts")
                 .value_name("PATHS")
                 .takes_value(true)
@@ -198,10 +203,10 @@ fn main() {
         Keypair::new()
     };
 
-    let staking_account = matches
-        .value_of("staking_account")
+    let vote_account = matches
+        .value_of("vote_account")
         .map_or(voting_keypair.pubkey(), |pubkey| {
-            pubkey.parse().expect("failed to parse staking_account")
+            pubkey.parse().expect("failed to parse vote_account")
         });
 
     let ledger_path = matches.value_of("ledger").unwrap();
@@ -213,7 +218,7 @@ fn main() {
     if matches.is_present("enable_rpc_exit") {
         validator_config.rpc_config.enable_fullnode_exit = true;
     }
-    validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_address").map(|address| {
+    validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_addr").map(|address| {
         solana_netutil::parse_host_port(address).expect("failed to parse drone address")
     });
 
@@ -248,7 +253,8 @@ fn main() {
 
         ContactInfo::new_gossip_entry_point(&entrypoint_addr)
     });
-    let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
+    let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer_addr")
+    {
         (
             None,
             signer_addr.to_string().parse().expect("Signer IP Address"),
@@ -279,7 +285,7 @@ fn main() {
         node,
         &keypair,
         ledger_path,
-        &staking_account,
+        &vote_account,
         &Arc::new(voting_keypair),
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
