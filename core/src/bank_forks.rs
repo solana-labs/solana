@@ -20,6 +20,39 @@ pub struct BankForks {
     root: u64,
     slots: HashSet<u64>,
     snapshot_path: Option<String>,
+    confidence: HashMap<u64, Confidence>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct Confidence {
+    fork_stakes: u64,
+    epoch_stakes: u64,
+    lockouts: u64,
+    stake_weighted_lockouts: u128,
+}
+
+impl Confidence {
+    pub fn new(fork_stakes: u64, epoch_stakes: u64, lockouts: u64) -> Self {
+        Self {
+            fork_stakes,
+            epoch_stakes,
+            lockouts,
+            stake_weighted_lockouts: 0,
+        }
+    }
+    pub fn new_with_stake_weighted(
+        fork_stakes: u64,
+        epoch_stakes: u64,
+        lockouts: u64,
+        stake_weighted_lockouts: u128,
+    ) -> Self {
+        Self {
+            fork_stakes,
+            epoch_stakes,
+            lockouts,
+            stake_weighted_lockouts,
+        }
+    }
 }
 
 impl Index<u64> for BankForks {
@@ -40,6 +73,7 @@ impl BankForks {
             root: 0,
             slots: HashSet::new(),
             snapshot_path: None,
+            confidence: HashMap::new(),
         }
     }
 
@@ -104,6 +138,7 @@ impl BankForks {
             working_bank,
             slots: HashSet::new(),
             snapshot_path: None,
+            confidence: HashMap::new(),
         }
     }
 
@@ -161,6 +196,8 @@ impl BankForks {
         let descendants = self.descendants();
         self.banks
             .retain(|slot, _| descendants[&root].contains(slot));
+        self.confidence
+            .retain(|slot, _| slot == &root || descendants[&root].contains(slot));
         if self.snapshot_path.is_some() {
             let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
             trace!("prune non root {} - {:?}", root, diff);
@@ -173,6 +210,41 @@ impl BankForks {
             }
         }
         self.slots = slots.clone();
+    }
+
+    pub fn cache_fork_confidence(
+        &mut self,
+        fork: u64,
+        fork_stakes: u64,
+        epoch_stakes: u64,
+        lockouts: u64,
+    ) {
+        self.confidence
+            .entry(fork)
+            .and_modify(|entry| {
+                entry.fork_stakes = fork_stakes;
+                entry.epoch_stakes = epoch_stakes;
+                entry.lockouts = lockouts;
+            })
+            .or_insert_with(|| Confidence::new(fork_stakes, epoch_stakes, lockouts));
+    }
+
+    pub fn cache_stake_weighted_lockouts(&mut self, fork: u64, stake_weighted_lockouts: u128) {
+        self.confidence
+            .entry(fork)
+            .and_modify(|entry| {
+                entry.stake_weighted_lockouts = stake_weighted_lockouts;
+            })
+            .or_insert(Confidence {
+                fork_stakes: 0,
+                epoch_stakes: 0,
+                lockouts: 0,
+                stake_weighted_lockouts,
+            });
+    }
+
+    pub fn get_fork_confidence(&self, fork: u64) -> Option<&Confidence> {
+        self.confidence.get(&fork)
     }
 
     fn get_io_error(error: &str) -> Error {
@@ -356,6 +428,7 @@ impl BankForks {
             root,
             slots,
             snapshot_path: snapshot_path.clone(),
+            confidence: HashMap::new(),
         })
     }
 }
@@ -437,6 +510,46 @@ mod tests {
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks.active_banks(), vec![1]);
+    }
+
+    #[test]
+    fn test_bank_forks_confidence_cache() {
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
+        let bank = Bank::new(&genesis_block);
+        let fork = bank.slot();
+        let mut bank_forks = BankForks::new(0, bank);
+        assert!(bank_forks.confidence.get(&fork).is_none());
+        bank_forks.cache_fork_confidence(fork, 11, 12, 13);
+        assert_eq!(
+            bank_forks.confidence.get(&fork).unwrap(),
+            &Confidence {
+                fork_stakes: 11,
+                epoch_stakes: 12,
+                lockouts: 13,
+                stake_weighted_lockouts: 0,
+            }
+        );
+        // Ensure that {fork_stakes, epoch_stakes, lockouts} and stake_weighted_lockouts
+        // can be updated separately
+        bank_forks.cache_stake_weighted_lockouts(fork, 20);
+        assert_eq!(
+            bank_forks.confidence.get(&fork).unwrap(),
+            &Confidence {
+                fork_stakes: 11,
+                epoch_stakes: 12,
+                lockouts: 13,
+                stake_weighted_lockouts: 20,
+            }
+        );
+        bank_forks.cache_fork_confidence(fork, 21, 22, 23);
+        assert_eq!(
+            bank_forks
+                .confidence
+                .get(&fork)
+                .unwrap()
+                .stake_weighted_lockouts,
+            20,
+        );
     }
 
     struct TempPaths {

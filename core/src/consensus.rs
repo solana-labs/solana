@@ -28,6 +28,15 @@ pub struct StakeLockout {
     stake: u64,
 }
 
+impl StakeLockout {
+    pub fn lockout(&self) -> u64 {
+        self.lockout
+    }
+    pub fn stake(&self) -> u64 {
+        self.stake
+    }
+}
+
 #[derive(Default)]
 pub struct Tower {
     epoch_stakes: EpochStakes,
@@ -274,6 +283,10 @@ impl Tower {
         self.lockouts.root_slot
     }
 
+    pub fn total_epoch_stakes(&self) -> u64 {
+        self.epoch_stakes.total_staked
+    }
+
     pub fn calculate_weight(&self, stake_lockouts: &HashMap<u64, StakeLockout>) -> u128 {
         let mut sum = 0u128;
         let root_slot = self.lockouts.root_slot.unwrap_or(0);
@@ -331,6 +344,27 @@ impl Tower {
         } else {
             true
         }
+    }
+
+    pub fn aggregate_stake_lockouts(
+        root: Option<u64>,
+        ancestors: &HashMap<u64, HashSet<u64>>,
+        stake_lockouts: HashMap<u64, StakeLockout>,
+    ) -> HashMap<u64, u128> {
+        let mut stake_weighted_lockouts: HashMap<u64, u128> = HashMap::new();
+        for (fork, lockout) in stake_lockouts.iter() {
+            if root.is_none() || *fork >= root.unwrap() {
+                let mut slot_with_ancestors = vec![*fork];
+                slot_with_ancestors.extend(ancestors.get(&fork).unwrap_or(&HashSet::new()));
+                for slot in slot_with_ancestors {
+                    if root.is_none() || slot >= root.unwrap() {
+                        let entry = stake_weighted_lockouts.entry(slot).or_default();
+                        *entry += u128::from(lockout.lockout) * u128::from(lockout.stake);
+                    }
+                }
+            }
+        }
+        stake_weighted_lockouts
     }
 
     /// Update lockouts for all the ancestors
@@ -434,6 +468,7 @@ mod test {
             .collect();
         let staked_lockouts = tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
         assert!(staked_lockouts.is_empty());
+        assert_eq!(tower.epoch_stakes.total_staked, 2);
     }
 
     #[test]
@@ -448,6 +483,7 @@ mod test {
         let staked_lockouts = tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
         assert_eq!(staked_lockouts[&0].stake, 2);
         assert_eq!(staked_lockouts[&0].lockout, 2 + 2 + 4 + 4);
+        assert_eq!(tower.epoch_stakes.total_staked, 2);
     }
 
     #[test]
@@ -528,6 +564,59 @@ mod test {
         .into_iter()
         .collect();
         assert!(tower.check_vote_stake_threshold(0, &stakes));
+    }
+
+    #[test]
+    fn test_aggregate_stake_lockouts() {
+        let mut tower = Tower::new(EpochStakes::new_for_tests(2), 0, 0.67);
+        tower.lockouts.root_slot = Some(1);
+        let stakes = vec![
+            (
+                0,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 32,
+                },
+            ),
+            (
+                1,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 24,
+                },
+            ),
+            (
+                2,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 16,
+                },
+            ),
+            (
+                3,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 8,
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        let ancestors = vec![
+            (0, HashSet::new()),
+            (1, vec![0].into_iter().collect()),
+            (2, vec![0, 1].into_iter().collect()),
+            (3, vec![0, 1, 2].into_iter().collect()),
+        ]
+        .into_iter()
+        .collect();
+        let stake_weighted_lockouts =
+            Tower::aggregate_stake_lockouts(tower.root(), &ancestors, stakes);
+        assert!(stake_weighted_lockouts.get(&0).is_none());
+        assert_eq!(*stake_weighted_lockouts.get(&1).unwrap(), 8 + 16 + 24);
+        assert_eq!(*stake_weighted_lockouts.get(&2).unwrap(), 8 + 16);
+        assert_eq!(*stake_weighted_lockouts.get(&3).unwrap(), 8);
     }
 
     #[test]
@@ -800,17 +889,17 @@ mod test {
         for vote in &tower_votes {
             tower.record_vote(*vote, Hash::default());
         }
-        let stakes_lockouts =
+        let staked_lockouts =
             tower.collect_vote_lockouts(vote_to_evaluate, accounts.clone().into_iter(), &ancestors);
-        assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &stakes_lockouts));
+        assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts));
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
         // will expire the vote in one of the vote accounts, so we should have insufficient
         // stake to pass the threshold
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64 + 1;
-        let stakes_lockouts =
+        let staked_lockouts =
             tower.collect_vote_lockouts(vote_to_evaluate, accounts.into_iter(), &ancestors);
-        assert!(!tower.check_vote_stake_threshold(vote_to_evaluate, &stakes_lockouts));
+        assert!(!tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts));
     }
 
     fn vote_and_check_recent(num_votes: usize) {
