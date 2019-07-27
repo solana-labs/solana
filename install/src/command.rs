@@ -78,7 +78,7 @@ fn download_to_temp_archive(
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Downloading...", TRUCK));
 
-    let response = client.get(url).send()?;
+    let response = client.get(url.as_str()).send()?;
     let download_size = {
         response
             .headers()
