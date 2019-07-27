@@ -3098,10 +3098,13 @@ dependencies = [
  "solana-ed25519-dalek 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-exchange-program 0.18.0-pre0",
  "solana-kvstore 0.18.0-pre0",
+ "solana-librapay-api 0.18.0-pre0",
  "solana-logger 0.18.0-pre0",
  "solana-measure 0.18.0-pre0",
  "solana-merkle-tree 0.18.0-pre0",
  "solana-metrics 0.18.0-pre0",
+ "solana-move-loader-api 0.18.0-pre0",
+ "solana-move-loader-program 0.18.0-pre0",
  "solana-netutil 0.18.0-pre0",
  "solana-runtime 0.18.0-pre0",
  "solana-sdk 0.18.0-pre0",
@@ -3164,6 +3167,7 @@ dependencies = [
 name = "solana-bench-tps"
 version = "0.18.0-pre0"
 dependencies = [
+ "bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3174,7 +3178,9 @@ dependencies = [
  "solana 0.18.0-pre0",
  "solana-client 0.18.0-pre0",
  "solana-drone 0.18.0-pre0",
+ "solana-librapay-api 0.18.0-pre0",
  "solana-logger 0.18.0-pre0",
+ "solana-measure 0.18.0-pre0",
  "solana-metrics 0.18.0-pre0",
  "solana-netutil 0.18.0-pre0",
  "solana-runtime 0.18.0-pre0",

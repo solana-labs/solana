@@ -69,6 +69,9 @@ solana-storage-program = { path = "../programs/storage_program", version = "0.18
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre0" }
 solana-vote-program = { path = "../programs/vote_program", version = "0.18.0-pre0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.18.0-pre0" }
+solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.18.0-pre0" }
+solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.18.0-pre0" }
+solana-librapay-api = { path = "../programs/librapay_api", version = "0.18.0-pre0" }
 sys-info = "0.5.7"
 tokio = "0.1"
 tokio-codec = "0.1"
