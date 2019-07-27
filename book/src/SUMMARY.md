@@ -59,10 +59,8 @@
 	- [Economic Design MVP](ed_mvp.md)
     - [References](ed_references.md)
   - [Cluster Test Framework](cluster-test-framework.md)
-  - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Validator](validator-proposal.md)
   - [Simple Payment and State Verification](simple-payment-and-state-verification.md)
-  - [Embedding the Move Langauge](embedding-move.md)
   - [Cross-Program Invocation](cross-program-invocation.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
@@ -77,3 +75,5 @@
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Repair Service](repair-service.md) 
   - [Testing Programs](testing-programs.md)
+  - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
+  - [Embedding the Move Langauge](embedding-move.md)
