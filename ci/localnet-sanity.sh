@@ -74,8 +74,6 @@ source scripts/configure-metrics.sh
 nodes=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh \
-    --enable-rpc-exit \
-    --no-restart \
     --init-complete-file init-complete-node1.log"
   "multinode-demo/validator.sh \
     --enable-rpc-exit \
