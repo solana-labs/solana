@@ -92,6 +92,16 @@ impl MoveProcessor {
         debug!("Error: Account data: {:?}", err);
         InstructionError::InvalidAccountData
     }
+    fn map_vm_verification_error(
+        err: (CompiledModule, Vec<vm::errors::VerificationError>),
+    ) -> InstructionError {
+        debug!("Error: Script verification failed: {:?}", err.1);
+        InstructionError::InvalidInstructionData
+    }
+    fn map_failure_error(err: failure::Error) -> InstructionError {
+        debug!("Error: Script verification failed: {:?}", err);
+        InstructionError::InvalidInstructionData
+    }
     #[allow(clippy::needless_pass_by_value)]
     fn missing_account() -> InstructionError {
         debug!("Error: Missing account");
@@ -119,14 +129,14 @@ impl MoveProcessor {
         script
             .as_inner()
             .serialize(&mut script_bytes)
-            .expect("Unable to serialize script");
+            .map_err(Self::map_failure_error)?;
         let mut modules_bytes = vec![];
         for module in modules.iter() {
             let mut buf = vec![];
             module
                 .as_inner()
                 .serialize(&mut buf)
-                .expect("Unable to serialize module");
+                .map_err(Self::map_failure_error)?;
             modules_bytes.push(buf);
         }
         bincode::serialize(&LibraAccountState::VerifiedProgram {
@@ -153,12 +163,11 @@ impl MoveProcessor {
 
         let script =
             CompiledScript::deserialize(&script_bytes).map_err(Self::map_vm_binary_error)?;
-        let mut modules = vec![];
-        for module_bytes in modules_bytes {
-            let module =
-                CompiledModule::deserialize(&module_bytes).map_err(Self::map_vm_binary_error)?;
-            modules.push(module);
-        }
+        let modules = modules_bytes
+            .iter()
+            .map(|bytes| CompiledModule::deserialize(&bytes))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Self::map_vm_binary_error)?;
 
         Ok((script, modules))
     }
@@ -180,12 +189,11 @@ impl MoveProcessor {
 
         let script =
             VerifiedScript::deserialize(&script_bytes).map_err(Self::map_vm_binary_error)?;
-        let mut modules = vec![];
-        for module_bytes in modules_bytes {
-            let module =
-                VerifiedModule::deserialize(&module_bytes).map_err(Self::map_vm_binary_error)?;
-            modules.push(module);
-        }
+        let modules = modules_bytes
+            .iter()
+            .map(|bytes| VerifiedModule::deserialize(&bytes))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Self::map_vm_binary_error)?;
 
         Ok((script, modules))
     }
@@ -283,10 +291,11 @@ impl MoveProcessor {
             Self::deserialize_compiled_program(&keyed_accounts[PROGRAM_INDEX].account.data)?;
 
         let verified_script = VerifiedScript::new(compiled_script).unwrap();
-        let mut verified_modules = vec![];
-        for compiled_module in compiled_modules {
-            verified_modules.push(VerifiedModule::new(compiled_module).unwrap());
-        }
+        let verified_modules = compiled_modules
+            .into_iter()
+            .map(VerifiedModule::new)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Self::map_vm_verification_error)?;
 
         keyed_accounts[PROGRAM_INDEX].account.data =
             Self::serialize_verified_program(&verified_script, &verified_modules)?;
