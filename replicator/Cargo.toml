@@ -2,17 +2,17 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-replicator"
-version = "0.17.0"
+version = "0.18.0-pre0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-solana = { path = "../core", version = "0.17.0" }
-solana-logger = { path = "../logger", version = "0.17.0" }
-solana-netutil = { path = "../netutil", version = "0.17.0" }
-solana-sdk = { path = "../sdk", version = "0.17.0" }
+solana = { path = "../core", version = "0.18.0-pre0" }
+solana-logger = { path = "../logger", version = "0.18.0-pre0" }
+solana-netutil = { path = "../netutil", version = "0.18.0-pre0" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
 
 [features]
 cuda = ["solana/cuda"]

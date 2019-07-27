@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-bench-tps"
-version = "0.17.0"
+version = "0.18.0-pre0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -15,14 +15,14 @@ serde = "1.0.97"
 serde_derive = "1.0.97"
 serde_json = "1.0.40"
 serde_yaml = "0.8.9"
-solana = { path = "../core", version = "0.17.0" }
-solana-client = { path = "../client", version = "0.17.0" }
-solana-drone = { path = "../drone", version = "0.17.0" }
-solana-logger = { path = "../logger", version = "0.17.0" }
-solana-metrics = { path = "../metrics", version = "0.17.0" }
-solana-netutil = { path = "../netutil", version = "0.17.0" }
-solana-runtime = { path = "../runtime", version = "0.17.0" }
-solana-sdk = { path = "../sdk", version = "0.17.0" }
+solana = { path = "../core", version = "0.18.0-pre0" }
+solana-client = { path = "../client", version = "0.18.0-pre0" }
+solana-drone = { path = "../drone", version = "0.18.0-pre0" }
+solana-logger = { path = "../logger", version = "0.18.0-pre0" }
+solana-metrics = { path = "../metrics", version = "0.18.0-pre0" }
+solana-netutil = { path = "../netutil", version = "0.18.0-pre0" }
+solana-runtime = { path = "../runtime", version = "0.18.0-pre0" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
 
 [features]
 cuda = ["solana/cuda"]
