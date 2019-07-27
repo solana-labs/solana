@@ -60,6 +60,7 @@ solana_ledger_tool=$(solana_program ledger-tool)
 solana_wallet=$(solana_program wallet)
 solana_replicator=$(solana_program replicator)
 
+export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
 
 # shellcheck source=scripts/configure-metrics.sh
