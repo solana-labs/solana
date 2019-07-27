@@ -6,6 +6,7 @@ use crate::bench::{
 };
 use solana::gossip_service::{discover_cluster, get_multi_client};
 use solana_sdk::fee_calculator::FeeCalculator;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::HashMap;
 use std::fs::File;
@@ -103,6 +104,7 @@ fn main() {
             &id,
             tx_count,
             NUM_LAMPORTS_PER_ACCOUNT,
+            None,
         )
         .unwrap_or_else(|e| {
             eprintln!("Error could not fund keys: {:?}", e);
@@ -119,5 +121,12 @@ fn main() {
         sustained,
     };
 
-    do_bench_tps(vec![client], config, keypairs, keypair_balance);
+    do_bench_tps(
+        vec![client],
+        config,
+        keypairs,
+        keypair_balance,
+        &Pubkey::new_rand(),
+        &Pubkey::new_rand(),
+    );
 }

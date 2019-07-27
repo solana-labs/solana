@@ -29,6 +29,9 @@ use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
 use std::sync::Arc;
 
+use solana_librapay_api::librapay_transaction;
+use solana_move_loader_api;
+
 pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,
     pub voting_keypair: Arc<Keypair>,
@@ -115,6 +118,7 @@ pub struct LocalCluster {
     pub genesis_block: GenesisBlock,
     replicators: Vec<Replicator>,
     pub replicator_infos: HashMap<Pubkey, ReplicatorInfo>,
+    pub libra_mint_keypair: Arc<Keypair>,
 }
 
 impl LocalCluster {
@@ -161,13 +165,22 @@ impl LocalCluster {
             storage_keypair.pubkey(),
             storage_contract::create_validator_storage_account(leader_pubkey, 1),
         ));
+        let libra_mint_keypair = Keypair::new();
+        genesis_block.accounts.push((
+            libra_mint_keypair.pubkey(),
+            librapay_transaction::create_libra_genesis_account(10_000),
+        ));
         genesis_block
             .native_instruction_processors
             .push(solana_storage_program!());
+        genesis_block
+            .native_instruction_processors
+            .push(solana_move_loader_program!());
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_contact_info = leader_node.info.clone();
         let leader_storage_keypair = Arc::new(storage_keypair);
+        let libra_mint_keypair = Arc::new(libra_mint_keypair);
         let leader_voting_keypair = Arc::new(voting_keypair);
         let leader_server = Validator::new(
             leader_node,
@@ -206,6 +219,7 @@ impl LocalCluster {
             fullnode_infos,
             replicator_infos: HashMap::new(),
             listener_infos: HashMap::new(),
+            libra_mint_keypair,
         };
 
         for (stake, validator_config) in (&config.node_stakes[1..])
