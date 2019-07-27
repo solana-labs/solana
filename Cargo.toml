@@ -30,6 +30,8 @@ members = [
     "programs/exchange_api",
     "programs/exchange_program",
     "programs/failure_program",
+    "programs/move_loader_api",
+    "programs/move_loader_program",
     "programs/noop_program",
     "programs/stake_api",
     "programs/stake_program",
@@ -51,6 +53,4 @@ members = [
 
 exclude = [
     "programs/bpf/rust/noop",
-    "programs/move_loader_api",
-    "programs/move_loader_program",
 ]
