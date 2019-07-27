@@ -20,7 +20,7 @@ fullnode_usage() {
 Fullnode Usage:
 usage: $0 [--config-dir PATH] [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [cluster entry point]
 
-Start a validator or a replicator
+Start a validator
 
   --config-dir PATH         - store configuration and data files under this PATH
   --blockstream PATH        - open blockstream at this unix domain socket location
@@ -136,43 +136,6 @@ setup_validator_accounts() {
   return 0
 }
 
-setup_replicator_account() {
-  declare entrypoint_ip=$1
-  declare node_lamports=$2
-
-  if [[ -f $configured_flag ]]; then
-    echo "Replicator account has already been configured"
-  else
-    if ((airdrops_enabled)); then
-      (
-        set -x
-        $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899"
-          airdrop "$node_lamports"
-      ) || return $?
-    else
-      echo "current account balance is "
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance || return $?
-    fi
-
-    echo "Create replicator storage account"
-    (
-      set -x
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-        create-replicator-storage-account "$identity_pubkey" "$storage_pubkey"
-    ) || return $?
-
-    touch "$configured_flag"
-  fi
-
-  (
-    set -x
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
-      show-storage-account "$storage_pubkey"
-  )
-
-  return 0
-}
-
 ledger_not_setup() {
   echo "Error: $*"
   echo
@@ -212,9 +175,6 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --no-snapshot ]]; then
       boot_from_snapshot=0
-      shift
-    elif [[ $1 = --replicator ]]; then
-      node_type=replicator
       shift
     elif [[ $1 = --validator ]]; then
       node_type=validator
@@ -303,34 +263,7 @@ fi
 
 setup_secondary_mount
 
-if [[ $node_type = replicator ]]; then
-  if [[ ${#positional_args[@]} -gt 2 ]]; then
-    fullnode_usage "$@"
-  fi
-
-  read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
-  shift "$shift"
-
-  mkdir -p "$SOLANA_CONFIG_DIR"
-
-  : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/replicator-keypair$label.json}"
-  [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
-
-  : "${storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-storage-keypair$label.json}"
-  [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
-
-  ledger_config_dir=$SOLANA_CONFIG_DIR/replicator-ledger$label
-  configured_flag=$SOLANA_CONFIG_DIR/replicator$label.configured
-
-  program=$solana_replicator
-  default_arg --entrypoint "$entrypoint_address"
-  default_arg --identity "$identity_keypair_path"
-  default_arg --storage-keypair "$storage_keypair_path"
-  default_arg --ledger "$ledger_config_dir"
-
-  rsync_entrypoint_url=$(rsync_url "$entrypoint")
-
-elif [[ $node_type = bootstrap_leader ]]; then
+if [[ $node_type = bootstrap_leader ]]; then
   if [[ ${#positional_args[@]} -ne 0 ]]; then
     fullnode_usage "Unknown argument: ${positional_args[0]}"
   fi
@@ -397,22 +330,20 @@ fi
 identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
 export SOLANA_METRICS_HOST_ID="$identity_pubkey"
 
-if [[ $node_type != replicator ]]; then
-  accounts_config_dir="$state_dir"/accounts
-  snapshot_config_dir="$state_dir"/snapshots
+accounts_config_dir="$state_dir"/accounts
+snapshot_config_dir="$state_dir"/snapshots
 
-  default_arg --identity "$identity_keypair_path"
-  default_arg --voting-keypair "$voting_keypair_path"
-  default_arg --storage-keypair "$storage_keypair_path"
-  default_arg --ledger "$ledger_config_dir"
-  default_arg --accounts "$accounts_config_dir"
-  default_arg --snapshot-path "$snapshot_config_dir"
+default_arg --identity "$identity_keypair_path"
+default_arg --voting-keypair "$voting_keypair_path"
+default_arg --storage-keypair "$storage_keypair_path"
+default_arg --ledger "$ledger_config_dir"
+default_arg --accounts "$accounts_config_dir"
+default_arg --snapshot-path "$snapshot_config_dir"
 
-  if [[ -n $SOLANA_CUDA ]]; then
-    program=$solana_validator_cuda
-  else
-    program=$solana_validator
-  fi
+if [[ -n $SOLANA_CUDA ]]; then
+  program=$solana_validator_cuda
+else
+  program=$solana_validator
 fi
 
 if [[ -z $CI ]]; then # Skip in CI
@@ -471,75 +402,61 @@ while true; do
     )
   fi
 
-  if [[ $node_type = replicator ]]; then
-    storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
-    setup_replicator_account "${entrypoint_address%:*}" \
-      "$node_lamports"
+  if [[ $node_type = bootstrap_leader && ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
+    ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
+  fi
 
-    cat <<EOF
-======================[ $node_type configuration ]======================
-replicator pubkey: $identity_pubkey
-storage pubkey: $storage_pubkey
-ledger: $ledger_config_dir
-======================================================================
-EOF
-
-  else
-    if [[ $node_type = bootstrap_leader && ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
-      ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
-    fi
-
-    if [[ ! -d "$ledger_config_dir" ]]; then
-      if [[ $node_type = validator ]]; then
-        (
-          cd "$SOLANA_RSYNC_CONFIG_DIR"
-
-          echo "Rsyncing genesis ledger from ${rsync_entrypoint_url:?}..."
-          SECONDS=
-          while ! $rsync -Pr "${rsync_entrypoint_url:?}"/config/ledger .; do
-            echo "Genesis ledger rsync failed"
-            sleep 5
-          done
-          echo "Fetched genesis ledger in $SECONDS seconds"
-
-          if ((boot_from_snapshot)); then
-            SECONDS=
-            echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
-            if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
-              echo "State snapshot rsync failed"
-              rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-              exit
-            fi
-            echo "Fetched snapshot in $SECONDS seconds"
-
-            SECONDS=
-            mkdir -p "$state_dir"
-            (
-              set -x
-              tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-            )
-            echo "Extracted snapshot in $SECONDS seconds"
-          fi
-        )
-      fi
-
+  if [[ ! -d "$ledger_config_dir" ]]; then
+    if [[ $node_type = validator ]]; then
       (
-        set -x
-        cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
+        cd "$SOLANA_RSYNC_CONFIG_DIR"
+
+        echo "Rsyncing genesis ledger from ${rsync_entrypoint_url:?}..."
+        SECONDS=
+        while ! $rsync -Pr "${rsync_entrypoint_url:?}"/config/ledger .; do
+          echo "Genesis ledger rsync failed"
+          sleep 5
+        done
+        echo "Fetched genesis ledger in $SECONDS seconds"
+
+        if ((boot_from_snapshot)); then
+          SECONDS=
+          echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
+          if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
+            echo "State snapshot rsync failed"
+            rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+            exit
+          fi
+          echo "Fetched snapshot in $SECONDS seconds"
+
+          SECONDS=
+          mkdir -p "$state_dir"
+          (
+            set -x
+            tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+          )
+          echo "Extracted snapshot in $SECONDS seconds"
+        fi
       )
     fi
 
-    vote_pubkey=$($solana_keygen pubkey "$voting_keypair_path")
-    stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
-    storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
+    (
+      set -x
+      cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
+    )
+  fi
 
-    if [[ $node_type = validator ]] && ((stake_lamports)); then
-      setup_validator_accounts "${entrypoint_address%:*}" \
-        "$node_lamports" \
-        "$stake_lamports"
-    fi
+  vote_pubkey=$($solana_keygen pubkey "$voting_keypair_path")
+  stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
+  storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
-    cat <<EOF
+  if [[ $node_type = validator ]] && ((stake_lamports)); then
+    setup_validator_accounts "${entrypoint_address%:*}" \
+      "$node_lamports" \
+      "$stake_lamports"
+  fi
+
+  cat <<EOF
 ======================[ $node_type configuration ]======================
 identity pubkey: $identity_pubkey
 vote pubkey: $vote_pubkey
@@ -550,7 +467,6 @@ accounts: $accounts_config_dir
 snapshots: $snapshot_config_dir
 ========================================================================
 EOF
-  fi
 
   echo "$PS4$program ${args[*]}"
 
