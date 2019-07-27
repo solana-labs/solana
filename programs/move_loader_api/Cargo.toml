@@ -20,16 +20,16 @@ serde_json = "1.0.40"
 solana-logger = { path = "../../logger", version = "0.18.0-pre0" }
 solana-sdk = { path = "../../sdk", version = "0.18.0-pre0" }
 
-bytecode_verifier = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_bytecode_verifier" }
-compiler = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_compiler" }
-failure = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_failure_ext" }
-language_e2e_tests = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_language_e2e_tests" }
-state_view = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_state_view" }
-stdlib = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_stdlib" }
-types = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_types" }
-vm = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_vm" }
-vm_cache_map = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_vm_cache_map" }
-vm_runtime = { git = "https://github.com/solana-labs/libra", tag = "v0.0.0-sol13.2", package = "solana_libra_vm_runtime" }
+bytecode_verifier = { version = "0.0.0-sol15", package = "solana_libra_bytecode_verifier" }
+compiler = { version = "0.0.0-sol15", package = "solana_libra_compiler" }
+failure = { version = "0.0.0-sol15", package = "solana_libra_failure_ext" }
+language_e2e_tests = { version = "0.0.0-sol15", package = "solana_libra_language_e2e_tests" }
+state_view = { version = "0.0.0-sol15", package = "solana_libra_state_view" }
+stdlib = { version = "0.0.0-sol15", package = "solana_libra_stdlib" }
+types = { version = "0.0.0-sol15", package = "solana_libra_types" }
+vm = { version = "0.0.0-sol15", package = "solana_libra_vm" }
+vm_cache_map = { version = "0.0.0-sol15", package = "solana_libra_vm_cache_map" }
+vm_runtime = { version = "0.0.0-sol15", package = "solana_libra_vm_runtime" }
 
 [lib]
 crate-type = ["lib"]
