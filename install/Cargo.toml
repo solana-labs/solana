@@ -38,7 +38,7 @@ solana-logger = { path = "../logger", version = "0.17.0" }
 solana-sdk = { path = "../sdk", version = "0.17.0" }
 tar = "0.4.26"
 tempdir = "0.3.7"
-url = "1.7.2"
+url = "2.0.0"
 
 [target."cfg(windows)".dependencies]
 winapi = "0.3.7"
