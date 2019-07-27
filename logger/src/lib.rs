@@ -9,7 +9,7 @@ static INIT: Once = Once::new();
 /// Setup function that is only run once, even if called multiple times.
 pub fn setup() {
     INIT.call_once(|| {
-        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
+        env_logger::Builder::from_default_env()
             .default_format_timestamp_nanos(true)
             .init();
     });
