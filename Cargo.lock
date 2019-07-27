@@ -3543,6 +3543,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-librapay-api"
+version = "0.18.0-pre0"
+dependencies = [
+ "bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger 0.18.0-pre0",
+ "solana-move-loader-api 0.18.0-pre0",
+ "solana-runtime 0.18.0-pre0",
+ "solana-sdk 0.18.0-pre0",
+ "solana_libra_language_e2e_tests 0.0.0-sol13 (git+https://github.com/solana-labs/libra?tag=v0.0.0-sol13.2)",
+ "solana_libra_types 0.0.0-sol13 (git+https://github.com/solana-labs/libra?tag=v0.0.0-sol13.2)",
+]
+
+[[package]]
 name = "solana-logger"
 version = "0.18.0-pre0"
 dependencies = [
