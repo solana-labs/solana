@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-validator"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.17.0"
+version = "0.18.0-pre0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -12,15 +12,15 @@ homepage = "https://solana.com/"
 clap = "2.33.0"
 log = "0.4.7"
 serde_json = "1.0.40"
-solana = { path = "../core", version = "0.17.0" }
-solana-drone = { path = "../drone", version = "0.17.0" }
-solana-logger = { path = "../logger", version = "0.17.0" }
-solana-metrics = { path = "../metrics", version = "0.17.0" }
-solana-netutil = { path = "../netutil", version = "0.17.0" }
-solana-runtime = { path = "../runtime", version = "0.17.0" }
-solana-sdk = { path = "../sdk", version = "0.17.0" }
-solana-vote-api = { path = "../programs/vote_api", version = "0.17.0" }
-solana-vote-signer = { path = "../vote-signer", version = "0.17.0" }
+solana = { path = "../core", version = "0.18.0-pre0" }
+solana-drone = { path = "../drone", version = "0.18.0-pre0" }
+solana-logger = { path = "../logger", version = "0.18.0-pre0" }
+solana-metrics = { path = "../metrics", version = "0.18.0-pre0" }
+solana-netutil = { path = "../netutil", version = "0.18.0-pre0" }
+solana-runtime = { path = "../runtime", version = "0.18.0-pre0" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre0" }
+solana-vote-signer = { path = "../vote-signer", version = "0.18.0-pre0" }
 
 [features]
 cuda = ["solana/cuda"]
