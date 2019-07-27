@@ -38,10 +38,11 @@ fn main() {
         write_to_client_file,
         read_from_client_file,
         target_lamports_per_signature,
+        use_move,
     } = cli_config;
 
     if write_to_client_file {
-        let (keypairs, _) = generate_keypairs(&id, tx_count as u64 * 2);
+        let (keypairs, _) = generate_keypairs(&id, tx_count as u64 * 2, use_move);
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeCalculator::new(target_lamports_per_signature).max_lamports_per_signature;
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
@@ -119,6 +120,7 @@ fn main() {
         duration,
         tx_count,
         sustained,
+        use_move,
     };
 
     do_bench_tps(
