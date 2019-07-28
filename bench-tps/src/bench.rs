@@ -37,8 +37,6 @@ pub enum BenchTpsError {
     AirdropFailure,
 }
 
-const USE_MOVE: bool = false;
-
 pub type Result<T> = std::result::Result<T, BenchTpsError>;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
@@ -50,6 +48,7 @@ pub struct Config {
     pub duration: Duration,
     pub tx_count: usize,
     pub sustained: bool,
+    pub use_move: bool,
 }
 
 impl Default for Config {
@@ -61,6 +60,7 @@ impl Default for Config {
             duration: Duration::new(std::u64::MAX, 0),
             tx_count: 500_000,
             sustained: false,
+            use_move: false,
         }
     }
 }
@@ -82,6 +82,7 @@ where
         thread_batch_sleep_ms,
         duration,
         tx_count,
+        use_move,
         sustained,
     } = config;
 
@@ -174,6 +175,7 @@ where
             &keypairs[len..],
             threads,
             reclaim_lamports_back_to_source_account,
+            use_move,
             &program_id,
             &libra_mint_id,
         );
@@ -239,7 +241,8 @@ fn generate_txs(
     dest: &[Keypair],
     threads: usize,
     reclaim: bool,
-    program_id: &Pubkey,
+    use_move: bool,
+    libra_pay_program_id: &Pubkey,
     libra_mint_id: &Pubkey,
 ) {
     let tx_count = source.len();
@@ -254,10 +257,10 @@ fn generate_txs(
     let transactions: Vec<_> = pairs
         .par_iter()
         .map(|(id, keypair)| {
-            if USE_MOVE {
+            if use_move {
                 (
                     librapay_transaction::transfer(
-                        program_id,
+                        libra_pay_program_id,
                         libra_mint_id,
                         &id,
                         &id,
@@ -611,7 +614,11 @@ fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
     i % (num_lamports_per_account / 4) == 0 && (i >= (3 * num_lamports_per_account) / 4)
 }
 
-pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
+pub fn generate_keypairs(
+    seed_keypair: &Keypair,
+    count: u64,
+    use_move: bool,
+) -> (Vec<Keypair>, u64) {
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
@@ -624,7 +631,7 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u
         delta *= MAX_SPENDS_PER_TX;
         total_keys += delta;
     }
-    if USE_MOVE {
+    if use_move {
         // Move funding is a naive loop that doesn't
         // need aligned number of keys.
         (rnd.gen_n_keypairs(count), extra)
@@ -762,10 +769,11 @@ pub fn generate_and_fund_keypairs<T: Client>(
     funding_key: &Keypair,
     tx_count: usize,
     lamports_per_account: u64,
-    libra_keys: Option<(&Pubkey, &Pubkey, &Keypair)>,
+    libra_keys: Option<(&Pubkey, &Pubkey, &Arc<Keypair>)>,
 ) -> Result<(Vec<Keypair>, u64)> {
     info!("Creating {} keypairs...", tx_count * 2);
-    let (mut keypairs, extra) = generate_keypairs(funding_key, tx_count as u64 * 2);
+    let (mut keypairs, extra) =
+        generate_keypairs(funding_key, tx_count as u64 * 2, libra_keys.is_some());
     info!("Get lamports...");
 
     // Sample the first keypair, see if it has lamports, if so then resume.
@@ -783,8 +791,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
         if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
             airdrop_lamports(client, &drone_addr.unwrap(), funding_key, total)?;
         }
-        if USE_MOVE {
-            let (libra_pay_program_id, libra_mint_program_id, libra_mint_key) = libra_keys.unwrap();
+        if let Some((libra_pay_program_id, libra_mint_program_id, libra_mint_key)) = libra_keys {
             fund_move_keys(
                 client,
                 funding_key,
@@ -843,8 +850,7 @@ mod tests {
         assert_eq!(should_switch_directions(20, 101), false);
     }
 
-    #[test]
-    fn test_bench_tps_local_cluster() {
+    fn test_bench_tps_local_cluster(config: Config) {
         solana_logger::setup();
         const NUM_NODES: usize = 1;
         let cluster = LocalCluster::new(&ClusterConfig {
@@ -866,7 +872,7 @@ mod tests {
             FULLNODE_PORT_RANGE,
         );
 
-        let (libra_mint_id, libra_pay_program_id) = if USE_MOVE {
+        let (libra_mint_id, libra_pay_program_id) = if config.use_move {
             let libra_mint_id = upload_mint_program(&drone_keypair, &client);
             let libra_pay_program_id = upload_payment_program(&drone_keypair, &client);
             (libra_mint_id, libra_pay_program_id)
@@ -878,11 +884,17 @@ mod tests {
         run_local_drone(drone_keypair, addr_sender, None);
         let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
-        let mut config = Config::default();
-        config.tx_count = 100;
-        config.duration = Duration::from_secs(10);
-
         let lamports_per_account = 100;
+
+        let libra_keys = if config.use_move {
+            Some((
+                &libra_pay_program_id,
+                &libra_mint_id,
+                &cluster.libra_mint_keypair,
+            ))
+        } else {
+            None
+        };
 
         let (keypairs, _keypair_balance) = generate_and_fund_keypairs(
             &client,
@@ -890,11 +902,7 @@ mod tests {
             &config.id,
             config.tx_count,
             lamports_per_account,
-            Some((
-                &libra_pay_program_id,
-                &libra_mint_id,
-                &cluster.libra_mint_keypair,
-            )),
+            libra_keys,
         )
         .unwrap();
 
@@ -907,6 +915,26 @@ mod tests {
             &cluster.libra_mint_keypair.pubkey(),
         );
         assert!(total > 100);
+    }
+
+    #[test]
+    fn test_bench_tps_local_cluster_solana() {
+        let mut config = Config::default();
+        config.tx_count = 100;
+        config.duration = Duration::from_secs(10);
+
+        test_bench_tps_local_cluster(config);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_bench_tps_local_cluster_move() {
+        let mut config = Config::default();
+        config.tx_count = 100;
+        config.duration = Duration::from_secs(10);
+        config.use_move = true;
+
+        test_bench_tps_local_cluster(config);
     }
 
     #[test]
