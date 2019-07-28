@@ -15,7 +15,7 @@ cuda = []
 [dependencies]
 bincode = "1.1.4"
 clap = "2.33"
-dirs = "2.0.1"
+dirs = "2.0.2"
 reqwest = "0.9.19"
 serde = "1.0.97"
 serde_derive = "1.0.97"
