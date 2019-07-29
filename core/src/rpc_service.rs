@@ -6,18 +6,82 @@ use crate::rpc::*;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use jsonrpc_core::MetaIoHandler;
-use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
+use jsonrpc_http_server::{
+    hyper, AccessControlAllowOrigin, DomainsValidation, RequestMiddleware, RequestMiddlewareAction,
+    ServerBuilder,
+};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
+use tokio::prelude::Future;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
 
     #[cfg(test)]
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by test_rpc_new()...
+}
+
+#[derive(Default)]
+struct RpcRequestMiddleware {
+    snapshot_package: Option<PathBuf>,
+}
+impl RpcRequestMiddleware {
+    pub fn new(snapshot_package_output_path: Option<PathBuf>) -> Self {
+        let snapshot_package = snapshot_package_output_path.map(|path| path.join("state.tgz"));
+        Self { snapshot_package }
+    }
+
+    fn not_found() -> hyper::Response<hyper::Body> {
+        hyper::Response::builder()
+            .status(hyper::StatusCode::NOT_FOUND)
+            .body(hyper::Body::empty())
+            .unwrap()
+    }
+
+    fn internal_server_error() -> hyper::Response<hyper::Body> {
+        hyper::Response::builder()
+            .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+            .body(hyper::Body::empty())
+            .unwrap()
+    }
+}
+
+impl RequestMiddleware for RpcRequestMiddleware {
+    fn on_request(&self, request: hyper::Request<hyper::Body>) -> RequestMiddlewareAction {
+        trace!("request uri: {}", request.uri());
+        if request.uri() == "/snapshot" {
+            match &self.snapshot_package {
+                None => RequestMiddlewareAction::Respond {
+                    should_validate_hosts: true,
+                    response: Box::new(jsonrpc_core::futures::future::ok(
+                        RpcRequestMiddleware::not_found(),
+                    )),
+                },
+                Some(snapshot_package) => RequestMiddlewareAction::Respond {
+                    should_validate_hosts: true,
+                    response: Box::new(
+                        tokio_fs::file::File::open(snapshot_package.clone())
+                            .and_then(|file| {
+                                let buf: Vec<u8> = Vec::new();
+                                tokio_io::io::read_to_end(file, buf)
+                                    .and_then(|item| Ok(hyper::Response::new(item.1.into())))
+                                    .or_else(|_| Ok(RpcRequestMiddleware::internal_server_error()))
+                            })
+                            .or_else(|_| Ok(RpcRequestMiddleware::not_found())),
+                    ),
+                },
+            }
+        } else {
+            RequestMiddlewareAction::Proceed {
+                should_continue_on_invalid_cors: false,
+                request,
+            }
+        }
+    }
 }
 
 impl JsonRpcService {
@@ -27,6 +91,7 @@ impl JsonRpcService {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
+        snapshot_package_output_path: Option<PathBuf>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
@@ -57,11 +122,13 @@ impl JsonRpcService {
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
                         ]))
+                        .request_middleware(RpcRequestMiddleware::new(snapshot_package_output_path))
                         .start_http(&rpc_addr);
                 if let Err(e) = server {
                     warn!("JSON RPC service unavailable error: {:?}. \nAlso, check that port {} is not already in use by another application", e, rpc_addr.port());
                     return;
                 }
+
                 while !exit_.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100));
                 }

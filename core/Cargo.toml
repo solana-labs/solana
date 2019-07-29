@@ -75,6 +75,8 @@ solana-librapay-api = { path = "../programs/librapay_api", version = "0.18.0-pre
 sys-info = "0.5.7"
 tokio = "0.1"
 tokio-codec = "0.1"
+tokio-fs = "0.1"
+tokio-io = "0.1"
 untrusted = "0.7.0"
 
 # reed-solomon-erasure's simd_c feature fails to build for x86_64-pc-windows-msvc, use pure-rust
