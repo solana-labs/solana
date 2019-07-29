@@ -57,7 +57,7 @@ pub struct BankForks {
     working_bank: Arc<Bank>,
     root: u64,
     snapshot_config: Option<SnapshotConfig>,
-    last_snapshot: u64,
+    slots_since_snapshot: Vec<u64>,
     confidence: HashMap<u64, Confidence>,
 }
 
@@ -110,7 +110,7 @@ impl BankForks {
             working_bank,
             root: 0,
             snapshot_config: None,
-            last_snapshot: 0,
+            slots_since_snapshot: vec![],
             confidence: HashMap::new(),
         }
     }
@@ -175,7 +175,7 @@ impl BankForks {
             banks,
             working_bank,
             snapshot_config: None,
-            last_snapshot: 0,
+            slots_since_snapshot: vec![],
             confidence: HashMap::new(),
         }
     }
@@ -208,7 +208,7 @@ impl BankForks {
             .unwrap_or(0);
         root_bank.squash();
         let new_tx_count = root_bank.transaction_count();
-        self.prune_non_root(root);
+        self.slots_since_snapshot.push(root);
 
         // Generate a snapshot if snapshots are configured and it's been an appropriate number
         // of banks since the last snapshot
@@ -217,17 +217,18 @@ impl BankForks {
                 .snapshot_config
                 .as_ref()
                 .expect("Called package_snapshot without a snapshot configuration");
-            if root - self.last_snapshot >= config.snapshot_interval_slots as u64 {
+            if root - self.slots_since_snapshot[0] >= config.snapshot_interval_slots as u64 {
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
                 let r = self.generate_snapshot(
                     root,
+                    &self.slots_since_snapshot[1..],
                     snapshot_package_sender.as_ref().unwrap(),
                     snapshot_utils::get_snapshot_tar_path(&config.snapshot_package_output_path),
                 );
                 if r.is_err() {
                     warn!("Error generating snapshot for bank: {}, err: {:?}", root, r);
                 } else {
-                    self.last_snapshot = root;
+                    self.slots_since_snapshot = vec![root];
                 }
 
                 // Cleanup outdated snapshots
@@ -236,6 +237,8 @@ impl BankForks {
                 inc_new_counter_info!("total-snapshot-setup-ms", snapshot_time.as_ms() as usize);
             }
         }
+
+        self.prune_non_root(root);
 
         inc_new_counter_info!(
             "bank-forks_set_root_ms",
@@ -254,10 +257,10 @@ impl BankForks {
     fn purge_old_snapshots(&self) {
         // Remove outdated snapshots
         let config = self.snapshot_config.as_ref().unwrap();
-        let names = snapshot_utils::get_snapshot_names(&config.snapshot_path);
-        let num_to_remove = names.len().saturating_sub(MAX_CACHE_ENTRIES);
-        for old_root in &names[..num_to_remove] {
-            let r = snapshot_utils::remove_snapshot(*old_root, &config.snapshot_path);
+        let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&config.snapshot_path);
+        let num_to_remove = slot_snapshot_paths.len().saturating_sub(MAX_CACHE_ENTRIES);
+        for slot_files in &slot_snapshot_paths[..num_to_remove] {
+            let r = snapshot_utils::remove_snapshot(slot_files.slot, &config.snapshot_path);
             if r.is_err() {
                 warn!("Couldn't remove snapshot at: {:?}", config.snapshot_path);
             }
@@ -267,6 +270,7 @@ impl BankForks {
     fn generate_snapshot<P: AsRef<Path>>(
         &self,
         root: u64,
+        slots_since_snapshot: &[u64],
         snapshot_package_sender: &SnapshotPackageSender,
         tar_output_file: P,
     ) -> Result<()> {
@@ -277,19 +281,17 @@ impl BankForks {
             .get(root)
             .cloned()
             .expect("root must exist in BankForks");
-        snapshot_utils::add_snapshot(&config.snapshot_path, &bank)?;
-
+        snapshot_utils::add_snapshot(&config.snapshot_path, &bank, slots_since_snapshot)?;
         // Package the relevant snapshots
-        let names = snapshot_utils::get_snapshot_names(&config.snapshot_path);
+        let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&config.snapshot_path);
 
         // We only care about the last MAX_CACHE_ENTRIES snapshots of roots because
         // the status cache of anything older is thrown away by the bank in
         // status_cache.prune_roots()
-        let start = names.len().saturating_sub(MAX_CACHE_ENTRIES);
+        let start = slot_snapshot_paths.len().saturating_sub(MAX_CACHE_ENTRIES);
         let package = snapshot_utils::package_snapshot(
             &bank,
-            &names[start..],
-            &config.snapshot_path,
+            &slot_snapshot_paths[start..],
             tar_output_file,
         )?;
 
@@ -362,9 +364,10 @@ impl BankForks {
 
         let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
         let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
+        let snapshot_paths = snapshot_utils::get_snapshot_paths(&unpacked_snapshots_dir);
         let bank = snapshot_utils::bank_from_snapshots(
             account_paths,
-            &unpacked_snapshots_dir,
+            &snapshot_paths,
             unpacked_accounts_dir,
         )?;
 
@@ -378,34 +381,11 @@ impl BankForks {
         copy_options.overwrite = true;
         fs_extra::move_items(&paths, snapshot_config.snapshot_path(), &copy_options)?;
 
-        /*let mut bank_maps = vec![];
-        let status_cache_rc = StatusCacheRc::default();
-        let id = (names[names.len() - 1] + 1) as usize;
-        let mut bank0 =
-            Bank::create_with_genesis(&genesis_block, account_paths.clone(), &status_cache_rc, id);
-        bank0.freeze();
-        let bank_root = snapshot_utils::load_snapshots(
-            &names,
-            &mut bank0,
-            &mut bank_maps,
-            &status_cache_rc,
-            &snapshot_config.snapshot_path,
-        );
-        if bank_maps.is_empty() || bank_root.is_none() {
-            return Err(Error::IO(IOError::new(
-                ErrorKind::Other,
-                "no snapshots loaded",
-            )));
-        }
-
-        let (banks, last_slot) = BankForks::setup_banks(&mut bank_maps, &bank.rc, &status_cache_rc);
-        let working_bank = banks[&last_slot].clone();*/
-
         let mut banks = HashMap::new();
         banks.insert(bank.slot(), bank.clone());
         let root = bank.slot();
-        let names = snapshot_utils::get_snapshot_names(&snapshot_config.snapshot_path);
-        if names.is_empty() {
+        let snapshot_paths = snapshot_utils::get_snapshot_paths(&snapshot_config.snapshot_path);
+        if snapshot_paths.is_empty() {
             return Err(Error::IO(IOError::new(
                 ErrorKind::Other,
                 "no snapshots found",
@@ -416,9 +396,7 @@ impl BankForks {
             working_bank: bank,
             root,
             snapshot_config: None,
-            last_snapshot: *names
-                .last()
-                .expect("untarred snapshot should have at least one snapshot"),
+            slots_since_snapshot: vec![snapshot_paths.last().unwrap().slot],
             confidence: HashMap::new(),
         })
     }
@@ -601,7 +579,7 @@ mod tests {
             );
             bank_forks.set_snapshot_config(snapshot_config.clone());
             let bank0 = bank_forks.get(0).unwrap();
-            snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0).unwrap();
+            snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &vec![]).unwrap();
             for forks in 0..index {
                 let bank = Bank::new_from_parent(&bank_forks[forks], &Pubkey::default(), forks + 1);
                 let key1 = Keypair::new().pubkey();
@@ -613,16 +591,21 @@ mod tests {
                 );
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
                 bank.freeze();
-                snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, &bank).unwrap();
+                snapshot_utils::add_snapshot(
+                    &snapshot_config.snapshot_path,
+                    &bank,
+                    &(0..=bank.slot()).collect::<Vec<_>>(),
+                )
+                .unwrap();
                 bank_forks.insert(bank);
             }
             // Generate a snapshot package for last bank
             let last_bank = bank_forks.get(index.saturating_sub(1)).unwrap();
-            let names: Vec<_> = (0..=index).collect();
+            let slot_snapshot_paths =
+                snapshot_utils::get_snapshot_paths(&snapshot_config.snapshot_path);
             let snapshot_package = snapshot_utils::package_snapshot(
                 last_bank,
-                &names,
-                &snapshot_config.snapshot_path,
+                &slot_snapshot_paths,
                 snapshot_utils::get_snapshot_tar_path(
                     &snapshot_config.snapshot_package_output_path,
                 ),
@@ -668,7 +651,7 @@ mod tests {
 
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
-        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0).unwrap();
+        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &vec![]).unwrap();
 
         // Create next MAX_CACHE_ENTRIES + 2 banks and snapshots. Every bank will get snapshotted
         // and the snapshot purging logic will run on every snapshot taken. This means the three
@@ -715,6 +698,7 @@ mod tests {
             bank_forks
                 .generate_snapshot(
                     slot,
+                    &vec![],
                     &package_sender,
                     snapshot_config
                         .snapshot_package_output_path
@@ -732,10 +716,10 @@ mod tests {
         // Purge all the outdated snapshots, including the ones needed to generate the package
         // currently sitting in the channel
         bank_forks.purge_old_snapshots();
-        let mut snapshot_names = snapshot_utils::get_snapshot_names(&snapshots_dir);
-        snapshot_names.sort();
+        let mut snapshot_paths = snapshot_utils::get_snapshot_paths(&snapshots_dir);
+        snapshot_paths.sort();
         assert_eq!(
-            snapshot_names,
+            snapshot_paths.iter().map(|path| path.slot).collect_vec(),
             (3..=MAX_CACHE_ENTRIES as u64 + 2).collect_vec()
         );
 

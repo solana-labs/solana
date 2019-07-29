@@ -23,7 +23,7 @@ maplit = "1.0.1"
 memmap = "0.6.2"
 rand = "0.6.5"
 rayon = "1.1.0"
-serde = "1.0.98"
+serde = { version = "1.0.98", features = ["rc"] }
 serde_derive = "1.0.98"
 serde_json = "1.0.40"
 solana-logger = { path = "../logger", version = "0.18.0-pre1" }

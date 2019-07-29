@@ -16,10 +16,10 @@ use crate::serde_utils::{
     deserialize_atomicbool, deserialize_atomicusize, serialize_atomicbool, serialize_atomicusize,
 };
 use crate::stakes::Stakes;
-use crate::status_cache::StatusCache;
+use crate::status_cache::{SlotDelta, StatusCache};
 use crate::storage_utils;
 use crate::storage_utils::StorageAccounts;
-use bincode::{deserialize_from, serialize_into, serialized_size};
+use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -40,11 +40,10 @@ use solana_sdk::sysvar::{
     clock, fees, rewards,
     slot_hashes::{self, SlotHashes},
 };
-use solana_sdk::timing::{duration_as_ns, get_segment_from_slot, MAX_RECENT_BLOCKHASHES};
+use solana_sdk::timing::{duration_as_ns, get_segment_from_slot, Slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
 use std::collections::HashMap;
-use std::fmt;
 use std::io::{BufReader, Cursor, Error as IOError, Read};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -120,61 +119,15 @@ pub struct StatusCacheRc {
     status_cache: Arc<RwLock<BankStatusCache>>,
 }
 
-impl Serialize for StatusCacheRc {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        use serde::ser::Error;
-        let len = serialized_size(&*self.status_cache).unwrap();
-        let mut buf = vec![0u8; len as usize];
-        let mut wr = Cursor::new(&mut buf[..]);
-        {
-            let mut status_cache = self.status_cache.write().unwrap();
-            serialize_into(&mut wr, &*status_cache).map_err(Error::custom)?;
-            status_cache.merge_caches();
-        }
-        let len = wr.position() as usize;
-        serializer.serialize_bytes(&wr.into_inner()[..len])
-    }
-}
-
-struct StatusCacheRcVisitor;
-
-impl<'a> serde::de::Visitor<'a> for StatusCacheRcVisitor {
-    type Value = StatusCacheRc;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Expecting StatusCacheRc")
-    }
-
-    #[allow(clippy::mutex_atomic)]
-    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        use serde::de::Error;
-        let mut rd = Cursor::new(&data[..]);
-        let status_cache: BankStatusCache = deserialize_from(&mut rd).map_err(Error::custom)?;
-        Ok(StatusCacheRc {
-            status_cache: Arc::new(RwLock::new(status_cache)),
-        })
-    }
-}
-
-impl<'de> Deserialize<'de> for StatusCacheRc {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_bytes(StatusCacheRcVisitor)
-    }
-}
-
 impl StatusCacheRc {
-    pub fn append(&self, status_cache_rc: &StatusCacheRc) {
-        let sc = status_cache_rc.status_cache.write().unwrap();
-        self.status_cache.write().unwrap().append(&sc);
+    pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<Result<()>>> {
+        let sc = self.status_cache.read().unwrap();
+        sc.slot_deltas(slots)
+    }
+
+    pub fn append(&self, slot_deltas: &[SlotDelta<Result<()>>]) {
+        let mut sc = self.status_cache.write().unwrap();
+        sc.append(slot_deltas);
     }
 
     pub fn purge_roots(&self) {
