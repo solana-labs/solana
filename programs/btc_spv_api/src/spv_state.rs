@@ -78,7 +78,7 @@ pub struct ProofRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct ProofSubmitInfo {
+pub struct SubmitProofInfo {
     // merkle branch connecting txhash to block header merkle root
     pub proof:   MerkleProof;
     // chain of bitcoin headers provifing context for the proof

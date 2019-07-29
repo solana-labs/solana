@@ -49,17 +49,21 @@ pub fn process_instruction(
     solana_logger::setup();
 
     let command = bincode::deserialize::<SpvInstruction>(data).map_err(|err| {
-        info!("invalid transaction data: {:?} {:?}", data, err);
+        info!("invalid instruction data: {:?} {:?}", data, err);
         InstructionError::InvalidInstructionData
     })?;
 
     trace!("{:?}", command);
 
     match command{
-        SpvInstruction::VerificationRequest() => {
-            SpvProcessor::do_verification_request()
+        SpvInstruction::ClientRequest(client_request_info) => {
+            SpvProcessor::client_request(keyed_accounts, &client_request_info)
+        }
+        SpvInstruction::CancelRequest => {
+            SpvProcessor::cancel_request(keyed_accounts)
+        }
+        SpvInstruction::SubmitProof(proof_info) => {
+            SpvProcessor::submit_request(keyed_accounts, &proof_info)
         }
     }
-
-
 }
