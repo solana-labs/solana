@@ -106,7 +106,7 @@ impl ContactInfo {
             gossip,
             tvu,
             tpu,
-            tpu_forwards: tpu_forwards,
+            tpu_forwards,
             storage_addr,
             rpc,
             rpc_pubsub,
