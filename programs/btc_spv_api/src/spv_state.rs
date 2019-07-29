@@ -6,21 +6,13 @@ use solana_sdk::instruction::{AccountMeta, Instruction};
 
 pub type BitcoinTxHash = [u8;32];
 
-pub struct ProofEntry    = {
-    // 32 byte merkle hashes
-    pub hash: [u8;32],
-    // side of the merkle tree
-    // T - Left, F - Right
-    pub side: bool,
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct BlockHeader {
     // Block hash
     pub digest      : BitcoinTxHash,
     // Previous block's hash/digest
     pub parent      : BitcoinTxHash,
-    //
+    // merkle Root of the block, proofEntry side should be None
     pub merkle_root : ProofEntry,
     // Bitcoin network version
     pub version     : u32,
@@ -29,6 +21,7 @@ pub struct BlockHeader {
     // An encoded version of the target threshold this block’s header hash must be less than or equal to.
     pub difficulty  : u32,
 }
+
 
 pub type HeaderChain = Vec<BlockHeader>;
 // a vector of BlockHeaders used as part of a Proof
@@ -40,8 +33,17 @@ pub type HeaderChain = Vec<BlockHeader>;
 pub struct ProofEntry    = {
     // 32 byte merkle hashes
     pub hash: [u8;32],
-    // side of the merkle tree (None for root)
-    pub side: Option<bool>,
+    // side of the merkle tree entry
+    pub side: EntrySide,
+}
+
+pub enum EntrySide {
+    // Left side of the hash combination
+    Left,
+    // Right side of hash combination
+    Right,
+    // Root hash (neither side)
+    Root,
 }
 
 pub type MerkleProof = Vec<ProofEntry>;
