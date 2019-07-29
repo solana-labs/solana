@@ -74,21 +74,10 @@ pub struct ProofRequest {
     pub fee:           u64;
     // minimum allowable difficulty
     pub difficulty:    u64;
-
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct SubmitProofInfo {
-    // merkle branch connecting txhash to block header merkle root
-    pub proof:   MerkleProof;
-    // chain of bitcoin headers provifing context for the proof
-    pub headers: HeaderChain;
-    //txhash to verify proof for (not technically necessary, see MerkleProof[0])
-    pub txhash:  BitcoinTxHash;
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Proof {
+pub struct ProofInfo {
     // the pubkey who submitted the proof in question, entitled to fees from any corresponding proof requests
     pub submitter:  Pubkey;
     // merkle branch connecting txhash to block header merkle root
