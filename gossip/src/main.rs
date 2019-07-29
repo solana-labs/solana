@@ -20,7 +20,7 @@ fn pubkey_validator(pubkey: String) -> Result<(), String> {
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info")).init();
+    solana_logger::setup_with_filter("solana=info");
 
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
     let entrypoint_string = entrypoint_addr.to_string();

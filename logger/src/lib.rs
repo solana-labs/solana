@@ -6,11 +6,14 @@ use std::sync::Once;
 
 static INIT: Once = Once::new();
 
-/// Setup function that is only run once, even if called multiple times.
-pub fn setup() {
+pub fn setup_with_filter(filter: &str) {
     INIT.call_once(|| {
-        env_logger::Builder::from_default_env()
+        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
             .default_format_timestamp_nanos(true)
             .init();
     });
+}
+
+pub fn setup() {
+    setup_with_filter("error");
 }

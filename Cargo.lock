@@ -3400,7 +3400,6 @@ name = "solana-gossip"
 version = "0.18.0-pre0"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana 0.18.0-pre0",
  "solana-client 0.18.0-pre0",
  "solana-netutil 0.18.0-pre0",
