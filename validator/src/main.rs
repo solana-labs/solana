@@ -23,7 +23,7 @@ fn port_range_validator(port_range: String) -> Result<(), String> {
 }
 
 fn main() {
-    solana_logger::setup();
+    solana_logger::setup_with_filter("solana=info");
     solana_metrics::set_panic_hook("validator");
 
     let default_dynamic_port_range =
