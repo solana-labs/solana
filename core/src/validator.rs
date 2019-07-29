@@ -1,6 +1,7 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
 use crate::bank_forks::BankForks;
+use crate::bank_forks::SnapshotConfig;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::broadcast_stage::BroadcastStageType;
@@ -39,10 +40,10 @@ pub struct ValidatorConfig {
     pub storage_slots_per_turn: u64,
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
-    pub snapshot_path: Option<String>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub erasure_config: ErasureConfig,
+    pub snapshot_config: Option<SnapshotConfig>,
 }
 
 impl Default for ValidatorConfig {
@@ -55,9 +56,9 @@ impl Default for ValidatorConfig {
             max_ledger_slots: None,
             account_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            snapshot_path: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             erasure_config: ErasureConfig::default(),
+            snapshot_config: None,
         }
     }
 }
@@ -104,7 +105,10 @@ impl Validator {
         ) = new_banks_from_blocktree(
             ledger_path,
             config.account_paths.clone(),
-            config.snapshot_path.clone(),
+            config
+                .snapshot_config
+                .as_ref()
+                .map(|s| s.snapshot_path().to_str().unwrap().to_owned()),
             verify_ledger,
         );
 
@@ -133,7 +137,7 @@ impl Validator {
             &leader_schedule_cache,
             &poh_config,
         );
-        if config.snapshot_path.is_some() {
+        if config.snapshot_config.is_some() {
             poh_recorder.set_bank(&bank);
         }
 

@@ -94,6 +94,8 @@ args=(
   --rpc-drone-address 127.0.0.1:9900
   --accounts "$dataDir"/accounts
   --snapshot-path "$dataDir"/snapshots
+  --snapshot-package-output-path "$dataDir"/snapshot_package_output
+  --snapshot-interval-banks 100
 )
 if [[ -n $blockstreamSocket ]]; then
   args+=(--blockstream "$blockstreamSocket")

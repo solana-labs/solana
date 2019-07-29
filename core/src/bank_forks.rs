@@ -14,6 +14,39 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotConfig {
+    snapshot_path: PathBuf,
+    snapshot_package_output_path: PathBuf,
+    snapshot_interval: usize,
+}
+
+impl SnapshotConfig {
+    pub fn new(
+        snapshot_path: PathBuf,
+        snapshot_package_output_path: PathBuf,
+        snapshot_interval: usize,
+    ) -> Self {
+        Self {
+            snapshot_path,
+            snapshot_package_output_path,
+            snapshot_interval,
+        }
+    }
+
+    pub fn snapshot_path(&self) -> &Path {
+        self.snapshot_path.as_path()
+    }
+
+    pub fn snapshot_package_output_path(&self) -> &Path {
+        &self.snapshot_package_output_path.as_path()
+    }
+
+    pub fn snapshot_interval(&self) -> usize {
+        self.snapshot_interval
+    }
+}
+
 pub struct BankForks {
     banks: HashMap<u64, Arc<Bank>>,
     working_bank: Arc<Bank>,
