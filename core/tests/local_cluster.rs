@@ -151,8 +151,10 @@ fn test_fullnode_exit_2() {
 }
 
 // Cluster needs a supermajority to remain, so the minimum size for this test is 4
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_leader_failure_4() {
     solana_logger::setup();
     error!("test_leader_failure_4");
@@ -283,14 +285,18 @@ fn test_listener_startup() {
     assert_eq!(cluster_nodes.len(), 4);
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_bad_blob_size_leader() {
     test_faulty_node(BroadcastStageType::BroadcastBadBlobSizes);
 }
@@ -354,8 +360,10 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     );
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_repairman_catchup() {
     solana_logger::setup();
     error!("test_repairman_catchup");
