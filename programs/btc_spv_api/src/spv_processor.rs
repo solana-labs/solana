@@ -9,7 +9,6 @@ pub struct SpvProcessor {}
 
 impl SpvProcessor {
 
-
     pub fn validateHeaderChain(headers: &HeaderChain, proof_req: &ProofRequest) -> Result<(), InstructionError> {
         let ln       = *headers.len();
         let confirms = *proof_req.confirmations;
@@ -36,6 +35,36 @@ impl SpvProcessor {
         }
         //not done yet, needs difficulty average/variance checking still
         Ok(())
+    }
+
+    fn deserialize_proof(data: &[u8]) -> Result<Proof, InstructionError> {
+        let proof_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg))
+        if let AccountState::Verification(Proof) = proof_state {
+            Ok(Proof)
+        } else {
+            error!("Not a valid proof");
+            Err(InstructionError::InvalidAccountData)?
+        }
+    }
+
+    fn deserialize_request(data: &[u8]) -> Result<ClientRequestInfo, InstructionError> {
+        let req_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg))
+        if let AccountState::Request(info) = req_state {
+            Ok(Proof)
+        } else {
+            error!("Not a valid proof request");
+            Err(InstructionError::InvalidAccountData)?
+        }
+    }
+
+    pub fn check_account_unallocated(data: &[u8]) -> Result<(), InstructionError> {
+        let acct_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)
+        if let AccountState::Unallocated = acct_state {
+            Ok(())
+        } else {
+            error!("Provided account is already occupied")
+            Err(InstructionError::InvalidAccountData)?
+        }
     }
 
 
