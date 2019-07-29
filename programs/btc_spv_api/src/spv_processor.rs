@@ -39,6 +39,34 @@ impl SpvProcessor {
     }
 
 
+    pub fn do_client_request(
+        keyed_accounts: &mut [KeyedAccount],
+        request_info  : &ClientRequestInfo,
+    ) -> Result<(), InstructionError> {
+        if *keyed_accounts.len() != 2 {
+            error!("Client Request invalid accounts argument length (should be 2)")
+        }
+
+    }
+
+    pub fn do_cancel_request(
+        keyed_accounts: &mut[KeyedAccount],
+        txHash        : BitcoinTxHash,
+    ) -> Result<(), InstructionError> {
+        if *keyed_accounts.len() != 2 {
+            error!("Client Request invalid accounts argument length (should be 2)")
+        }
+    }
+
+
+    pub fn do_submit_proof(
+        keyed_accounts: &mut[KeyedAccount],
+        proof_info    : &ProofInfo,
+    ) -> Result<(), InstructionError> {
+        if *keyed_accounts.len() != 2 {
+            error!("Client Request invalid accounts argument length (should be 2)")
+        }
+    }
 
 }
 pub fn process_instruction(
