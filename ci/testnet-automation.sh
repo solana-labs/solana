@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
   echo --- downloading tar from build artifacts
-  buildkite-agent artifact download "solana*.tar.bz2" .
+  buildkite-agent artifact download "solana-release*.tar.bz2" .
 fi
 
 # shellcheck disable=SC1091
