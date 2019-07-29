@@ -134,15 +134,13 @@ impl BankingStage {
 
     fn forward_buffered_packets(
         socket: &std::net::UdpSocket,
-        tpu_via_blobs: &std::net::SocketAddr,
+        tpu_forwards: &std::net::SocketAddr,
         unprocessed_packets: &[PacketsAndOffsets],
     ) -> std::io::Result<()> {
         let packets = Self::filter_valid_packets_for_forwarding(unprocessed_packets);
         inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
-        let blobs = packet::packets_to_blobs(&packets);
-
-        for blob in blobs {
-            socket.send_to(&blob.data[..blob.meta.size], tpu_via_blobs)?;
+        for p in packets {
+            socket.send_to(&p.data[..p.meta.size], &tpu_forwards)?;
         }
 
         Ok(())
@@ -316,7 +314,7 @@ impl BankingStage {
                                 .read()
                                 .unwrap()
                                 .lookup(&leader_pubkey)
-                                .map(|leader| leader.tpu_via_blobs)
+                                .map(|leader| leader.tpu_forwards)
                         };
 
                         leader_addr.map_or(Ok(()), |leader_addr| {

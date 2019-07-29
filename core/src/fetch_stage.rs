@@ -22,28 +22,28 @@ impl FetchStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         sockets: Vec<UdpSocket>,
-        tpu_via_blobs_sockets: Vec<UdpSocket>,
+        tpu_forwards_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
         (
-            Self::new_with_sender(sockets, tpu_via_blobs_sockets, exit, &sender, &poh_recorder),
+            Self::new_with_sender(sockets, tpu_forwards_sockets, exit, &sender, &poh_recorder),
             receiver,
         )
     }
     pub fn new_with_sender(
         sockets: Vec<UdpSocket>,
-        tpu_via_blobs_sockets: Vec<UdpSocket>,
+        tpu_forwards_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
-        let tpu_via_blobs_sockets = tpu_via_blobs_sockets.into_iter().map(Arc::new).collect();
+        let tpu_forwards_sockets = tpu_forwards_sockets.into_iter().map(Arc::new).collect();
         Self::new_multi_socket(
             tx_sockets,
-            tpu_via_blobs_sockets,
+            tpu_forwards_sockets,
             exit,
             &sender,
             &poh_recorder,
@@ -83,7 +83,7 @@ impl FetchStage {
 
     fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
-        tpu_via_blobs_sockets: Vec<Arc<UdpSocket>>,
+        tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -100,9 +100,15 @@ impl FetchStage {
         });
 
         let (forward_sender, forward_receiver) = channel();
-        let tpu_via_blobs_threads = tpu_via_blobs_sockets
-            .into_iter()
-            .map(|socket| streamer::blob_packet_receiver(socket, &exit, forward_sender.clone()));
+        let tpu_forwards_threads = tpu_forwards_sockets.into_iter().map(|socket| {
+            streamer::receiver(
+                socket,
+                &exit,
+                forward_sender.clone(),
+                recycler.clone(),
+                "fetch_forward_stage",
+            )
+        });
 
         let sender = sender.clone();
         let poh_recorder = poh_recorder.clone();
@@ -124,7 +130,7 @@ impl FetchStage {
             })
             .unwrap();
 
-        let mut thread_hdls: Vec<_> = tpu_threads.chain(tpu_via_blobs_threads).collect();
+        let mut thread_hdls: Vec<_> = tpu_threads.chain(tpu_forwards_threads).collect();
         thread_hdls.push(fwd_thread_hdl);
         Self { thread_hdls }
     }
