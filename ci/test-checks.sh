@@ -10,35 +10,6 @@ source ci/rust-version.sh nightly
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-do_bpf_check() {
-        _ cargo +"$rust_stable" fmt --all -- --check
-        _ cargo +"$rust_nightly" test --all
-        _ cargo +"$rust_nightly" clippy --version
-        _ cargo +"$rust_nightly" clippy --all -- --deny=warnings
-        _ cargo +"$rust_stable" audit
-}
-
-(
-    (
-        cd sdk/bpf/rust/rust-no-std
-        do_bpf_check
-    )
-    (
-        cd sdk/bpf/rust/rust-utils
-        do_bpf_check
-    )
-    (
-        cd sdk/bpf/rust/rust-test
-        do_bpf_check
-    )
-    for project in programs/bpf/rust/*/ ; do
-    (
-        cd "$project"
-        do_bpf_check
-    )
-    done
-)
-
 _ cargo +"$rust_stable" fmt --all -- --check
 _ cargo +"$rust_stable" clippy --version
 _ cargo +"$rust_stable" clippy --all -- --deny=warnings
@@ -47,5 +18,17 @@ _ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0011 # https://github.com/so
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
+
+for project in sdk/bpf/rust/{rust-no-std,rust-utils,rust-test} programs/bpf/rust/*/ ; do
+  echo "+++ do_bpf_check $project"
+  (
+    cd "$project"
+    _ cargo +"$rust_stable" fmt --all -- --check
+    _ cargo +"$rust_nightly" test --all
+    _ cargo +"$rust_nightly" clippy --version
+    _ cargo +"$rust_nightly" clippy --all -- --deny=warnings
+    _ cargo +"$rust_stable" audit
+  )
+done
 
 echo --- ok
