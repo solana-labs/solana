@@ -64,7 +64,7 @@ pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 
 /// Allow protocol messages to carry only 1KB of data a time
-const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = 1024;
+const TARGET_PROTOCOL_PAYLOAD_SIZE: u64 = 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -866,7 +866,7 @@ impl ClusterInfo {
                 let msg_size = msg.size();
                 size += msg_size;
                 payload.push(msg);
-                if size > MAX_PROTOCOL_PAYLOAD_SIZE {
+                if size > TARGET_PROTOCOL_PAYLOAD_SIZE {
                     break;
                 }
             }
@@ -2307,7 +2307,7 @@ mod tests {
     fn test_split_messages(value: CrdsValue) {
         const NUM_VALUES: usize = 30;
         let value_size = value.size();
-        let expected_len = NUM_VALUES / (MAX_PROTOCOL_PAYLOAD_SIZE / value_size).max(1) as usize;
+        let expected_len = NUM_VALUES / (TARGET_PROTOCOL_PAYLOAD_SIZE / value_size).max(1) as usize;
         let msgs = vec![value; NUM_VALUES];
 
         let split = ClusterInfo::split_gossip_messages(msgs);
