@@ -33,11 +33,11 @@ fn main() {
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(crate_version!())
         .arg(
-            Arg::with_name("blockstream")
+            Arg::with_name("blockstream_unix_socket")
                 .long("blockstream")
                 .takes_value(true)
                 .value_name("UNIX DOMAIN SOCKET")
-                .help("Open blockstream at this unix domain socket location")
+                .help("Open blockstream at this unix domain socket path")
         )
         .arg(
             Arg::with_name("identity")
@@ -215,9 +215,8 @@ fn main() {
 
     validator_config.voting_disabled = matches.is_present("no_voting");
 
-    if matches.is_present("enable_rpc_exit") {
-        validator_config.rpc_config.enable_fullnode_exit = true;
-    }
+    validator_config.rpc_config.enable_fullnode_exit = matches.is_present("enable_rpc_exit");
+
     validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_addr").map(|address| {
         solana_netutil::parse_host_port(address).expect("failed to parse drone address")
     });
@@ -234,12 +233,8 @@ fn main() {
         ),
     );
 
-    if let Some(paths) = matches.value_of("accounts") {
-        validator_config.account_paths = Some(paths.to_string());
-    }
-    if let Some(paths) = matches.value_of("snapshot_path") {
-        validator_config.snapshot_path = Some(paths.to_string());
-    }
+    validator_config.account_paths = matches.value_of("accounts").map(ToString::to_string);
+    validator_config.snapshot_path = matches.value_of("snapshot_path").map(PathBuf::from);
     if matches.is_present("limit_ledger_size") {
         validator_config.max_ledger_slots = Some(DEFAULT_MAX_LEDGER_SLOTS);
     }
@@ -265,7 +260,9 @@ fn main() {
         (Some(signer_service), signer_addr)
     };
     let init_complete_file = matches.value_of("init_complete_file");
-    validator_config.blockstream = matches.value_of("blockstream").map(ToString::to_string);
+    validator_config.blockstream_unix_socket = matches
+        .value_of("blockstream_unix_socket")
+        .map(PathBuf::from);
 
     let keypair = Arc::new(keypair);
     let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);

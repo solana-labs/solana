@@ -11,6 +11,7 @@ use crate::blocktree::Blocktree;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use solana_sdk::pubkey::Pubkey;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::Arc;
@@ -26,10 +27,10 @@ impl BlockstreamService {
     pub fn new(
         slot_full_receiver: Receiver<(u64, Pubkey)>,
         blocktree: Arc<Blocktree>,
-        blockstream_socket: String,
+        unix_socket: &Path,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let mut blockstream = Blockstream::new(blockstream_socket);
+        let mut blockstream = Blockstream::new(unix_socket);
         let exit = exit.clone();
         let t_blockstream = Builder::new()
             .name("solana-blockstream".to_string())
@@ -116,6 +117,7 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
+    use std::path::PathBuf;
     use std::sync::mpsc::channel;
 
     #[test]
@@ -133,7 +135,7 @@ mod test {
         let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         // Set up blockstream
-        let mut blockstream = Blockstream::new("test_stream".to_string());
+        let mut blockstream = Blockstream::new(&PathBuf::from("test_stream"));
 
         // Set up dummy channel to receive a full-slot notification
         let (slot_full_sender, slot_full_receiver) = channel();

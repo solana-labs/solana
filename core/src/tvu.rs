@@ -28,6 +28,7 @@ use crate::storage_stage::{StorageStage, StorageState};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
@@ -65,7 +66,7 @@ impl Tvu {
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
         storage_state: &StorageState,
-        blockstream: Option<&String>,
+        blockstream_unix_socket: Option<&PathBuf>,
         max_ledger_slots: Option<u64>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
@@ -131,11 +132,11 @@ impl Tvu {
             vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
         );
 
-        let blockstream_service = if blockstream.is_some() {
+        let blockstream_service = if blockstream_unix_socket.is_some() {
             let blockstream_service = BlockstreamService::new(
                 blockstream_slot_receiver,
                 blocktree.clone(),
-                blockstream.unwrap().to_string(),
+                blockstream_unix_socket.unwrap(),
                 &exit,
             );
             Some(blockstream_service)

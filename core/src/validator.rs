@@ -36,11 +36,11 @@ use std::thread::Result;
 pub struct ValidatorConfig {
     pub sigverify_disabled: bool,
     pub voting_disabled: bool,
-    pub blockstream: Option<String>,
+    pub blockstream_unix_socket: Option<PathBuf>,
     pub storage_slots_per_turn: u64,
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
-    pub snapshot_path: Option<String>,
+    pub snapshot_path: Option<PathBuf>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub erasure_config: ErasureConfig,
@@ -51,7 +51,7 @@ impl Default for ValidatorConfig {
         Self {
             sigverify_disabled: false,
             voting_disabled: false,
-            blockstream: None,
+            blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
             max_ledger_slots: None,
             account_paths: None,
@@ -105,7 +105,7 @@ impl Validator {
         ) = new_banks_from_blocktree(
             ledger_path,
             config.account_paths.clone(),
-            config.snapshot_path.clone(),
+            config.snapshot_path.as_ref(),
             verify_ledger,
         );
 
@@ -249,7 +249,7 @@ impl Validator {
             sockets,
             blocktree.clone(),
             &storage_state,
-            config.blockstream.as_ref(),
+            config.blockstream_unix_socket.as_ref(),
             config.max_ledger_slots,
             ledger_signal_receiver,
             &subscriptions,
@@ -307,12 +307,12 @@ fn get_bank_forks(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     account_paths: Option<String>,
-    snapshot_path: Option<String>,
+    snapshot_path: Option<&PathBuf>,
     verify_ledger: bool,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
-    if snapshot_path.is_some() {
+    if let Some(snapshot_path) = snapshot_path {
         let bank_forks =
-            BankForks::load_from_snapshot(&genesis_block, account_paths.clone(), &snapshot_path);
+            BankForks::load_from_snapshot(&genesis_block, account_paths.clone(), snapshot_path);
         match bank_forks {
             Ok(v) => {
                 let bank = &v.working_bank();
@@ -333,8 +333,8 @@ fn get_bank_forks(
             verify_ledger,
         )
         .expect("process_blocktree failed");
-    if snapshot_path.is_some() {
-        bank_forks.set_snapshot_config(snapshot_path);
+    if let Some(snapshot_path) = snapshot_path {
+        bank_forks.set_snapshot_path(snapshot_path);
         let _ = bank_forks.add_snapshot(0, 0);
     }
     (bank_forks, bank_forks_info, leader_schedule_cache)
@@ -343,7 +343,7 @@ fn get_bank_forks(
 pub fn new_banks_from_blocktree(
     blocktree_path: &Path,
     account_paths: Option<String>,
-    snapshot_path: Option<String>,
+    snapshot_path: Option<&PathBuf>,
     verify_ledger: bool,
 ) -> (
     BankForks,

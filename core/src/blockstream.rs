@@ -10,6 +10,7 @@ use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 
 pub trait EntryWriter: std::fmt::Debug {
     fn write(&self, payload: String) -> Result<()>;
@@ -41,7 +42,7 @@ impl EntryVec {
 
 #[derive(Debug)]
 pub struct EntrySocket {
-    socket: String,
+    unix_socket: PathBuf,
 }
 
 impl EntryWriter for EntrySocket {
@@ -50,11 +51,10 @@ impl EntryWriter for EntrySocket {
         use std::io::prelude::*;
         use std::net::Shutdown;
         use std::os::unix::net::UnixStream;
-        use std::path::Path;
 
         const MESSAGE_TERMINATOR: &str = "\n";
 
-        let mut socket = UnixStream::connect(Path::new(&self.socket))?;
+        let mut socket = UnixStream::connect(&self.unix_socket)?;
         socket.write_all(payload.as_bytes())?;
         socket.write_all(MESSAGE_TERMINATOR.as_bytes())?;
         socket.shutdown(Shutdown::Write)?;
@@ -144,9 +144,11 @@ where
 pub type SocketBlockstream = Blockstream<EntrySocket>;
 
 impl SocketBlockstream {
-    pub fn new(socket: String) -> Self {
+    pub fn new(unix_socket: &Path) -> Self {
         Blockstream {
-            output: EntrySocket { socket },
+            output: EntrySocket {
+                unix_socket: unix_socket.to_path_buf(),
+            },
         }
     }
 }
@@ -154,7 +156,7 @@ impl SocketBlockstream {
 pub type MockBlockstream = Blockstream<EntryVec>;
 
 impl MockBlockstream {
-    pub fn new(_: String) -> Self {
+    pub fn new(_: &Path) -> Self {
         Blockstream {
             output: EntryVec::new(),
         }
@@ -183,6 +185,7 @@ mod test {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use std::collections::HashSet;
+    use std::path::PathBuf;
 
     #[test]
     fn test_serialize_transactions() {
@@ -205,7 +208,7 @@ mod test {
 
     #[test]
     fn test_blockstream() -> () {
-        let blockstream = MockBlockstream::new("test_stream".to_string());
+        let blockstream = MockBlockstream::new(&PathBuf::from("test_stream"));
         let ticks_per_slot = 5;
 
         let mut blockhash = Hash::default();
