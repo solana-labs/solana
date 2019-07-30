@@ -276,7 +276,7 @@ impl Validator {
             &exit,
         );
 
-        datapoint_info!("validator-new");
+        datapoint_info!("validator-new", ("id", id.to_string(), String));
         Self {
             id,
             gossip_service,

@@ -32,9 +32,7 @@ use rand::SeedableRng;
 use rand::{thread_rng, Rng};
 use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
-use solana_metrics::{
-    datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_warn,
-};
+use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_netutil::{
     bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
 };
@@ -719,9 +717,10 @@ impl ClusterInfo {
         last_err?;
 
         inc_new_counter_debug!("cluster_info-broadcast-max_idx", blobs_len);
-        if broadcast_table_len != 0 {
-            inc_new_counter_warn!("broadcast_service-num_peers", broadcast_table_len + 1);
-        }
+        datapoint_info!(
+            "cluster_info-num_nodes",
+            ("count", broadcast_table_len + 1, i64)
+        );
         Ok(())
     }
 

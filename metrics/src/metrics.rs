@@ -56,11 +56,6 @@ macro_rules! datapoint {
     (@point $name:expr) => {
         $crate::influxdb::Point::new(&$name)
     };
-    ($name:expr) => {
-        if log_enabled!(log::Level::Debug) {
-            $crate::submit($crate::datapoint!(@point $name), log::Level::Debug);
-        }
-    };
     ($name:expr, $($fields:tt)+) => {
         if log_enabled!(log::Level::Debug) {
             $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
@@ -245,7 +240,7 @@ impl MetricsAgent {
 
         let extra = influxdb::Point::new("metrics")
             .add_timestamp(timing::timestamp() as i64)
-            .add_field("host_id", influxdb::Value::String(HOST_ID.to_string()))
+            .add_tag("host_id", influxdb::Value::String(HOST_ID.to_string()))
             .add_field(
                 "points_written",
                 influxdb::Value::Integer(points_written as i64),
@@ -342,7 +337,7 @@ impl MetricsAgent {
     }
 
     pub fn submit(&self, mut point: influxdb::Point, level: log::Level) {
-        point.add_field("host_id", influxdb::Value::String(HOST_ID.to_string()));
+        point.add_tag("host_id", influxdb::Value::String(HOST_ID.to_string()));
         if point.timestamp.is_none() {
             point.timestamp = Some(timing::timestamp() as i64);
         }
@@ -383,7 +378,8 @@ fn get_singleton_agent() -> Arc<Mutex<MetricsAgent>> {
 
 /// Submits a new point from any thread.  Note that points are internally queued
 /// and transmitted periodically in batches.
-pub fn submit(point: influxdb::Point, level: log::Level) {
+pub fn submit(mut point: influxdb::Point, level: log::Level) {
+    point.add_tag("host_id", influxdb::Value::String(HOST_ID.to_string()));
     let agent_mutex = get_singleton_agent();
     let agent = agent_mutex.lock().unwrap();
     agent.submit(point, level);
@@ -435,6 +431,7 @@ pub fn set_panic_hook(program: &'static str) {
                             thread::current().name().unwrap_or("?").to_string(),
                         ),
                     )
+                    .add_tag("host_id", influxdb::Value::String(HOST_ID.to_string()))
                     // The 'one' field exists to give Kapacitor Alerts a numerical value
                     // to filter on
                     .add_field("one", influxdb::Value::Integer(1))
@@ -452,7 +449,6 @@ pub fn set_panic_hook(program: &'static str) {
                             None => "?".to_string(),
                         }),
                     )
-                    .add_field("host_id", influxdb::Value::String(HOST_ID.to_string()))
                     .to_owned(),
                 Level::Error,
             );
@@ -610,7 +606,6 @@ mod test {
                 }
             };
         }
-        datapoint!("name");
         datapoint!("name", ("field name", "test".to_string(), String));
         datapoint!("name", ("field name", 12.34_f64, f64));
         datapoint!("name", ("field name", true, bool));

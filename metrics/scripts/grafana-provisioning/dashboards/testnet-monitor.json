@@ -103,7 +103,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "last",
+      "tableColumn": "mode",
       "targets": [
         {
           "groupBy": [
@@ -123,7 +123,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"host_id\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter \n",
+          "query": "SELECT MODE(last) FROM ( SELECT last(\"leader\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter GROUP BY host_id )\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
@@ -236,7 +236,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"count\") FROM \"$testnet\".\"autogen\".\"broadcast_service-num_peers\" WHERE $timeFilter GROUP BY time(1s) \n\n",
+          "query": "SELECT LAST(median) FROM ( SELECT median(count) FROM \"$testnet\".\"autogen\".\"cluster_info-num_nodes\" WHERE $timeFilter AND count > 0 GROUP BY time(5s) )\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -325,46 +325,9 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT count(\"count\") AS \"total\" FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT MEDIAN(\"host_count\") AS \"total\" FROM ( SELECT COUNT(\"count\") as host_count FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter GROUP BY time($__interval), host_id ) GROUP BY time($__interval) fill(0)",
           "rawQuery": true,
           "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT count(\"count\") AS \" \" FROM \"$testnet\".\"autogen\".\"validator-vote_sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "A",
           "resultFormat": "time_series",
           "select": [
             [
@@ -502,7 +465,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-record_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT MEDIAN(tx_count) AS sum FROM (SELECT SUM(\"count\")  AS tx_count FROM \"replay_stage-replay_transactions\" WHERE $timeFilter AND count > 0 GROUP BY time(1s), host_id) GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -614,7 +577,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MAX(\"sum\") FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-record_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT MAX(\"median_sum\") FROM ( SELECT MEDIAN(tx_count) AS median_sum FROM (SELECT SUM(\"count\") AS tx_count FROM \"bank-process_transactions\" WHERE $timeFilter AND count > 0 GROUP BY time(1s), host_id) GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -726,7 +689,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"banking_stage-record_transactions\" WHERE $timeFilter \n\n",
+          "query": "SELECT MEDIAN(tx_count) AS transactions FROM (SELECT SUM(\"count\")  AS tx_count FROM \"bank-process_transactions\" WHERE $timeFilter GROUP BY host_id) WHERE tx_count > 0\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -818,7 +781,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "sum",
+      "tableColumn": "median",
       "targets": [
         {
           "groupBy": [
@@ -838,7 +801,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter \n",
+          "query": "SELECT MEDIAN(\"vote_count\") FROM ( SELECT sum(\"count\") as vote_count FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter  GROUP BY host_id )\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
@@ -1556,9 +1519,85 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
+          "query": "select median(\"tx_count\") as \"transactions\" from (select sum(\"count\") / 2  as \"tx_count\" from \"bank-process_transactions\" where $timeFilter AND count > 0 GROUP BY time(2s), host_id) group by time(2s) fill(0)",
+          "rawQuery": true,
+          "refId": "E",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "orderByTime": "ASC",
+          "policy": "default",
           "query": "SELECT sum(\"count\") / 2 AS \"transactions\" FROM \"$testnet\".\"autogen\".\"banking_stage-record_transactions\" WHERE $timeFilter GROUP BY time(2s) FILL(0)\n",
           "rawQuery": true,
           "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "select median(\"tx_count\") as \"transactions\" from (select sum(\"count\") / 2  as \"tx_count\" from \"replay_stage-replay_transactions\" where $timeFilter AND count > 0 GROUP BY time(2s), host_id) group by time(2s) fill(0)",
+          "rawQuery": true,
+          "refId": "D",
           "resultFormat": "time_series",
           "select": [
             [
@@ -1670,86 +1709,10 @@
               "type": "fill"
             }
           ],
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT mean(\"total_peers\") as \"total peers\" FROM \"$testnet\".\"autogen\".\"vote_stage-peer_count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"valid_peers\") as \"valid peers\" FROM \"$testnet\".\"autogen\".\"vote_stage-peer_count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") AS \"peers\" FROM \"$testnet\".\"autogen\".\"broadcast_service-num_peers\" WHERE $timeFilter GROUP BY time(1s) FILL(0)",
+          "query": "SELECT median(\"count\") AS \"total\" FROM \"$testnet\".\"autogen\".\"cluster_info-num_nodes\" WHERE $timeFilter AND count > 0 GROUP BY time(5s)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -7408,7 +7371,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT last(\"count\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE   host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT median(\"slot\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -7432,7 +7395,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Leader Change ($hostid)",
+      "title": "Leader Change",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -8055,7 +8018,7 @@
         "multi": false,
         "name": "hostid",
         "options": [],
-        "query": "SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-fullnode-new\" ",
+        "query": "SELECT DISTINCT(\"id\") FROM \"$testnet\".\"autogen\".\"validator-new\" ",
         "refresh": 2,
         "regex": "",
         "sort": 1,

@@ -962,6 +962,7 @@ impl Bank {
         usize,
     ) {
         debug!("processing transactions: {}", txs.len());
+        inc_new_counter_info!("bank-process_transactions", txs.len());
         let mut error_counters = ErrorCounters::default();
         let mut load_time = Measure::start("accounts_load");
 
