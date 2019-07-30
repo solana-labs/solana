@@ -161,7 +161,7 @@ fn main() {
                 .long("snapshot-path")
                 .value_name("PATHS")
                 .takes_value(true)
-                .requires("snapshot_interval_banks")
+                .requires("snapshot_interval_slots")
                 .requires("snapshot_package_output_path")
                 .help("Snapshot path"),
         )
@@ -171,17 +171,17 @@ fn main() {
                 .value_name("OUTPUT_PATHS")
                 .takes_value(true)
                 .requires("snapshot_path")
-                .requires("snapshot_interval_banks")
+                .requires("snapshot_interval_slots")
                 .help("Snapshot package output path"),
         )
         .arg(
-            clap::Arg::with_name("snapshot_interval_banks")
-                .long("snapshot-interval-banks")
-                .value_name("OUTPUT_PATHS")
+            clap::Arg::with_name("snapshot_interval_slots")
+                .long("snapshot-interval-slots")
+                .value_name("SNAPSHOT_INTERVAL_SLOTS")
                 .takes_value(true)
                 .requires("snapshot_path")
                 .requires("snapshot_package_output_path")
-                .help("Snapshot package output path"),
+                .help("Number of slots between generating snapshots"),
         )
         .arg(
             clap::Arg::with_name("limit_ledger_size")

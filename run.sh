@@ -95,7 +95,7 @@ args=(
   --accounts "$dataDir"/accounts
   --snapshot-path "$dataDir"/snapshots
   --snapshot-package-output-path "$dataDir"/snapshot_package_output
-  --snapshot-interval-banks 100
+  --snapshot-interval-slots 100
 )
 if [[ -n $blockstreamSocket ]]; then
   args+=(--blockstream "$blockstreamSocket")

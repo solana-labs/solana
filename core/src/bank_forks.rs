@@ -18,19 +18,19 @@ use std::time::Instant;
 pub struct SnapshotConfig {
     snapshot_path: PathBuf,
     snapshot_package_output_path: PathBuf,
-    snapshot_interval: usize,
+    snapshot_interval_slots: usize,
 }
 
 impl SnapshotConfig {
     pub fn new(
         snapshot_path: PathBuf,
         snapshot_package_output_path: PathBuf,
-        snapshot_interval: usize,
+        snapshot_interval_slots: usize,
     ) -> Self {
         Self {
             snapshot_path,
             snapshot_package_output_path,
-            snapshot_interval,
+            snapshot_interval_slots,
         }
     }
 
@@ -42,8 +42,8 @@ impl SnapshotConfig {
         &self.snapshot_package_output_path.as_path()
     }
 
-    pub fn snapshot_interval(&self) -> usize {
-        self.snapshot_interval
+    pub fn snapshot_interval_slots(&self) -> usize {
+        self.snapshot_interval_slots
     }
 }
 
