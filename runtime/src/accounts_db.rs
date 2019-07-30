@@ -21,6 +21,8 @@
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::{AppendVec, StorageMeta, StoredAccount};
 use bincode::{deserialize_from, serialize_into, serialized_size};
+use failure::Error;
+use fs_extra::dir::CopyOptions;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
@@ -34,7 +36,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs::remove_dir_all;
-use std::io::{BufReader, Cursor, Error, ErrorKind, Read};
+use std::io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -177,7 +179,7 @@ pub struct AccountStorageEntry {
 
 impl AccountStorageEntry {
     pub fn new(path: &Path, fork_id: Fork, id: usize, file_size: u64) -> Self {
-        let tail = format!("{}.{}", fork_id, id);
+        let tail = AppendVec::new_relative_path(fork_id, id);
         let path = Path::new(path).join(&tail);
         let accounts = AppendVec::new(&path, true, file_size as usize);
 
@@ -271,13 +273,21 @@ impl AccountStorageEntry {
         count_and_status.0
     }
 
+    pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> IOResult<()> {
+        self.accounts.set_file(path)
+    }
+
+    pub fn get_relative_path(&self) -> Option<PathBuf> {
+        AppendVec::get_relative_path(self.accounts.get_path())
+    }
+
     pub fn get_path(&self) -> PathBuf {
         self.accounts.get_path()
     }
 }
 
-pub fn get_paths_vec(paths: &str) -> Vec<String> {
-    paths.split(',').map(ToString::to_string).collect()
+pub fn get_paths_vec(paths: &str) -> Vec<PathBuf> {
+    paths.split(',').map(PathBuf::from).collect()
 }
 
 #[derive(Debug)]
@@ -300,7 +310,7 @@ fn get_temp_accounts_path(paths: &str) -> TempPaths {
     let rand = Pubkey::new_rand();
     let paths: Vec<_> = paths
         .iter()
-        .map(|path| format!("{}/accounts_db/{}/{}", out_dir, rand, path))
+        .map(|path| format!("{}/accounts_db/{}/{:?}", out_dir, rand, path))
         .collect();
     TempPaths {
         paths: paths.join(","),
@@ -323,8 +333,7 @@ pub struct AccountsDB {
     write_version: AtomicUsize,
 
     /// Set of storage paths to pick from
-    paths: RwLock<Vec<String>>,
-
+    paths: RwLock<Vec<PathBuf>>,
     /// Set of paths this accounts_db needs to hold/remove
     temp_paths: Option<TempPaths>,
 
@@ -389,22 +398,68 @@ impl AccountsDB {
     }
 
     pub fn paths(&self) -> String {
-        self.paths.read().unwrap().join(",")
+        let paths: Vec<String> = self
+            .paths
+            .read()
+            .unwrap()
+            .iter()
+            .map(|p| p.to_str().unwrap().to_owned())
+            .collect();
+        paths.join(",")
     }
 
-    pub fn update_from_stream<R: Read>(
+    pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         mut stream: &mut BufReader<R>,
-    ) -> Result<(), std::io::Error> {
+        local_account_paths: String,
+        append_vecs_path: P,
+    ) -> Result<(), Error> {
         let _len: usize = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("len deserialize error"))?;
-        *self.paths.write().unwrap() = deserialize_from(&mut stream)
-            .map_err(|_| AccountsDB::get_io_error("paths deserialize error"))?;
-        let mut storage: AccountStorage = deserialize_from(&mut stream)
+        let storage: AccountStorage = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("storage deserialize error"))?;
+
+        // Remap the deserialized AppendVec paths to point to correct local paths
+        let local_account_paths = get_paths_vec(&local_account_paths);
+        let new_storage_map: Result<HashMap<Fork, ForkStores>, Error> = storage
+            .0
+            .into_iter()
+            .map(|(fork_id, mut fork_storage)| {
+                let mut new_fork_storage = HashMap::new();
+                for (id, storage_entry) in fork_storage.drain() {
+                    let file = storage_entry.get_relative_path().unwrap();
+                    let path_index = thread_rng().gen_range(0, local_account_paths.len());
+                    let local_dir = &local_account_paths[path_index];
+                    let local_path = local_dir.join(file);
+
+                    // Move the corresponding AppendVec from the snapshot into the directory pointed
+                    // at by `local_dir`
+                    let append_vec_relative_path =
+                        AppendVec::new_relative_path(fork_id, storage_entry.id);
+                    let append_vec_abs_path =
+                        append_vecs_path.as_ref().join(append_vec_relative_path);
+
+                    let copy_options = CopyOptions::new();
+                    fs_extra::move_items(&vec![append_vec_abs_path], &local_path, &copy_options)?;
+
+                    // Notify the AppendVec of the new file location
+                    let mut u_storage_entry = Arc::try_unwrap(storage_entry).unwrap();
+                    u_storage_entry.set_file(local_path).map_err(|_| {
+                        AccountsDB::get_io_error(
+                            "Failed to update AppendVec with path to local file",
+                        )
+                    })?;
+                    new_fork_storage.insert(id, Arc::new(u_storage_entry));
+                }
+                Ok((fork_id, new_fork_storage))
+            })
+            .collect();
+
+        let new_storage_map = new_storage_map?;
+        let storage = AccountStorage(new_storage_map);
+        *self.paths.write().unwrap() = local_account_paths;
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
-
         let mut ids: Vec<usize> = storage
             .0
             .values()
@@ -413,7 +468,7 @@ impl AccountsDB {
             .collect();
         ids.sort();
 
-        {
+        /*{
             let mut stores = self.storage.write().unwrap();
             if let Some((_, store0)) = storage.0.remove_entry(&0) {
                 let fork_storage0 = stores.0.entry(0).or_insert_with(HashMap::new);
@@ -422,7 +477,7 @@ impl AccountsDB {
                 }
             }
             stores.0.extend(storage.0);
-        }
+        }*/
         self.next_id
             .store(ids[ids.len() - 1] + 1, Ordering::Relaxed);
         self.write_version
@@ -771,9 +826,9 @@ impl AccountsDB {
         }
     }
 
-    fn get_io_error(error: &str) -> Error {
+    fn get_io_error(error: &str) -> IOError {
         warn!("AccountsDB error: {:?}", error);
-        Error::new(ErrorKind::Other, error)
+        IOError::new(ErrorKind::Other, error)
     }
 
     fn generate_index(&self) {
@@ -829,7 +884,6 @@ impl Serialize for AccountsDB {
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         let version: u64 = self.write_version.load(Ordering::Relaxed) as u64;
-        serialize_into(&mut wr, &self.paths).map_err(Error::custom)?;
         serialize_into(&mut wr, &*storage).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
         let len = wr.position() as usize;

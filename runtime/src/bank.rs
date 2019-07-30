@@ -10,6 +10,7 @@ use crate::accounts_db::{
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
+use crate::failure::Error;
 use crate::locked_accounts_results::LockedAccountsResults;
 use crate::message_processor::{MessageProcessor, ProcessInstruction};
 use crate::serde_utils::{
@@ -46,6 +47,7 @@ use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
 use std::io::{BufReader, Cursor, Read};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
@@ -75,13 +77,18 @@ impl BankRc {
         }
     }
 
-    pub fn update_from_stream<R: Read>(
+    pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         mut stream: &mut BufReader<R>,
-    ) -> std::result::Result<(), std::io::Error> {
+        local_paths: String,
+        append_vecs_path: P,
+    ) -> std::result::Result<(), Error> {
         let _len: usize = deserialize_from(&mut stream)
             .map_err(|_| BankRc::get_io_error("len deserialize error"))?;
-        self.accounts.update_from_stream(stream)
+        self.accounts
+            .accounts_from_stream(stream, local_paths, append_vecs_path)?;
+
+        Ok(())
     }
 
     pub fn get_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {

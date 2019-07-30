@@ -15,7 +15,7 @@ use std::time::Duration;
 pub type SnapshotPackageSender = Sender<SnapshotPackage>;
 pub type SnapshotPackageReceiver = Receiver<SnapshotPackage>;
 
-pub const TAR_SNAPSHOT_DIR: &str = "snapshots";
+pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 
 pub struct SnapshotPackage {
@@ -84,7 +84,7 @@ impl SnapshotPackagerService {
         let mut tar = tar::Builder::new(enc);
 
         // Create the list of paths to compress, starting with the snapshots
-        let tar_output_snapshots_dir = Path::new(&TAR_SNAPSHOT_DIR);
+        let tar_output_snapshots_dir = Path::new(&TAR_SNAPSHOTS_DIR);
 
         // Add the snapshots to the tarball and delete the directory of hardlinks to the snapshots
         // that was created to persist those snapshots while this package was being created

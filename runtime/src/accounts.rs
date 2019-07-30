@@ -7,6 +7,7 @@ use crate::append_vec::StoredAccount;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use bincode::serialize;
+use failure::Error;
 use log::*;
 use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
@@ -21,6 +22,7 @@ use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufReader, Read};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -64,11 +66,14 @@ impl Accounts {
         }
     }
 
-    pub fn update_from_stream<R: Read>(
+    pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         stream: &mut BufReader<R>,
-    ) -> std::result::Result<(), std::io::Error> {
-        self.accounts_db.update_from_stream(stream)
+        local_paths: String,
+        append_vecs_path: P,
+    ) -> std::result::Result<(), Error> {
+        self.accounts_db
+            .accounts_from_stream(stream, local_paths, append_vecs_path)
     }
 
     fn load_tx_accounts(

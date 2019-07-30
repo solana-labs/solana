@@ -2,12 +2,13 @@
 
 use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackageSender;
+use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use crate::snapshot_utils;
+use crate::snapshot_utils::untar_snapshot_in;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::{Bank, BankRc, StatusCacheRc};
 use solana_runtime::status_cache::MAX_CACHE_ENTRIES;
-use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -348,39 +349,9 @@ impl BankForks {
         &self.snapshot_config
     }
 
-    fn setup_banks(
-        bank_maps: &mut Vec<(u64, u64, Bank)>,
-        bank_rc: &BankRc,
-        status_cache_rc: &StatusCacheRc,
-    ) -> (HashMap<u64, Arc<Bank>>, u64) {
-        let mut banks = HashMap::new();
-        let (last_slot, last_parent_slot, mut last_bank) = bank_maps.remove(0);
-        last_bank.set_bank_rc(&bank_rc, &status_cache_rc);
-
-        while let Some((slot, parent_slot, mut bank)) = bank_maps.pop() {
-            bank.set_bank_rc(&bank_rc, &status_cache_rc);
-            if parent_slot != 0 {
-                if let Some(parent) = banks.get(&parent_slot) {
-                    bank.set_parent(parent);
-                }
-            }
-            if slot > 0 {
-                banks.insert(slot, Arc::new(bank));
-            }
-        }
-        if last_parent_slot != 0 {
-            if let Some(parent) = banks.get(&last_parent_slot) {
-                last_bank.set_parent(parent);
-            }
-        }
-        banks.insert(last_slot, Arc::new(last_bank));
-
-        (banks, last_slot)
-    }
-
     pub fn load_from_snapshot(
-        genesis_block: &GenesisBlock,
-        account_paths: Option<String>,
+        //genesis_block: &GenesisBlock,
+        account_paths: String,
         snapshot_config: &SnapshotConfig,
     ) -> Result<Self> {
         fs::create_dir_all(&snapshot_config.snapshot_path)?;
@@ -391,7 +362,27 @@ impl BankForks {
                 "no snapshots found",
             )));
         }
-        let mut bank_maps = vec![];
+        // Get the path to the tar
+        let tar =
+            snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path);
+
+        // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
+        let unpack_dir = tempfile::tempdir_in(snapshot_config.snapshot_path())?;
+        untar_snapshot_in(&tar, &unpack_dir)?;
+
+        let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
+        let snapshots_in_tar_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
+        let bank = snapshot_utils::bank_from_snapshots(
+            account_paths,
+            &snapshots_in_tar_dir,
+            unpacked_accounts_dir,
+        )?;
+
+        let bank = Arc::new(bank);
+        // Move the unpacked snapshots into `snapshot_config.snapshot_path()`
+        fs::rename(&snapshots_in_tar_dir, snapshot_config.snapshot_path())?;
+
+        /*let mut bank_maps = vec![];
         let status_cache_rc = StatusCacheRc::default();
         let id = (names[names.len() - 1] + 1) as usize;
         let mut bank0 =
@@ -411,14 +402,15 @@ impl BankForks {
             )));
         }
 
-        let root = bank_root.unwrap();
-        let (banks, last_slot) =
-            BankForks::setup_banks(&mut bank_maps, &bank0.rc, &status_cache_rc);
-        let working_bank = banks[&last_slot].clone();
+        let (banks, last_slot) = BankForks::setup_banks(&mut bank_maps, &bank.rc, &status_cache_rc);
+        let working_bank = banks[&last_slot].clone();*/
 
+        let mut banks = HashMap::new();
+        banks.insert(bank.slot(), bank.clone());
+        let root = bank.slot();
         Ok(BankForks {
             banks,
-            working_bank,
+            working_bank: bank,
             root,
             snapshot_config: None,
             last_snapshot: *names.last().unwrap(),
@@ -441,7 +433,6 @@ mod tests {
     use solana_sdk::system_transaction;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
-    use tempfile::TempDir;
 
     #[test]
     fn test_bank_forks() {
@@ -554,7 +545,7 @@ mod tests {
     fn restore_from_snapshot(
         genesis_block: &GenesisBlock,
         bank_forks: BankForks,
-        account_paths: Option<String>,
+        account_paths: String,
         last_slot: u64,
     ) {
         let snapshot_path = bank_forks
@@ -564,11 +555,10 @@ mod tests {
             .unwrap();
 
         let new = BankForks::load_from_snapshot(
-            &genesis_block,
+            //&genesis_block,
             account_paths,
             bank_forks.snapshot_config.as_ref().unwrap(),
-        )
-        .unwrap();
+        );
 
         for (slot, _) in new.banks.iter() {
             if *slot > 0 {
@@ -627,7 +617,7 @@ mod tests {
             restore_from_snapshot(
                 &genesis_block,
                 bank_forks,
-                Some(accounts_dir.path().to_str().unwrap().to_string()),
+                accounts_dir.path().to_str().unwrap().to_string(),
                 index,
             );
         }

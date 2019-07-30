@@ -314,22 +314,26 @@ fn get_bank_forks(
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) = {
         let mut result = None;
         if snapshot_config.is_some() {
+            // Fail hard here if snapshot fails to load, don't silently continue
             let bank_forks = BankForks::load_from_snapshot(
-                &genesis_block,
-                account_paths.clone(),
+                //&genesis_block,
+                account_paths
+                    .clone()
+                    .expect("Account paths not present when booting from snapshot"),
                 snapshot_config.as_ref().unwrap(),
-            );
-            match bank_forks {
-                Ok(v) => {
-                    let bank = &v.working_bank();
-                    let fork_info = BankForksInfo {
-                        bank_slot: bank.slot(),
-                        entry_height: bank.tick_height(),
-                    };
-                    result = Some((v, vec![fork_info], LeaderScheduleCache::new_from_bank(bank)));
-                }
-                Err(_) => warn!("Failed to load from snapshot, fallback to load from ledger"),
-            }
+            )
+            .unwrap();
+
+            let bank = &bank_forks.working_bank();
+            let fork_info = BankForksInfo {
+                bank_slot: bank.slot(),
+                entry_height: bank.tick_height(),
+            };
+            result = Some((
+                bank_forks,
+                vec![fork_info],
+                LeaderScheduleCache::new_from_bank(bank),
+            ));
         }
 
         // If loading from a snapshot failed/snapshot didn't exist

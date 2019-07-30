@@ -5,6 +5,7 @@ use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt;
 use std::fs::{create_dir_all, remove_file, OpenOptions};
+use std::io;
 use std::io::{Cursor, Seek, SeekFrom, Write};
 use std::mem;
 use std::path::{Path, PathBuf};
@@ -149,6 +150,31 @@ impl AppendVec {
 
     pub fn capacity(&self) -> u64 {
         self.file_size
+    }
+
+    // Get the file path relative to the top level accounts directory
+    pub fn get_relative_path<P: AsRef<Path>>(append_vec_path: P) -> Option<PathBuf> {
+        append_vec_path
+            .as_ref()
+            .file_name()
+            .map(|p| PathBuf::from(p))
+    }
+
+    pub fn new_relative_path(fork_id: u64, id: usize) -> PathBuf {
+        PathBuf::from(&format!("{}.{}", fork_id, id))
+    }
+
+    pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+        self.path = path.as_ref().to_path_buf();
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(&path)?;
+
+        let map = unsafe { MmapMut::map_mut(&data)? };
+        self.map = map;
+        Ok(())
     }
 
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
@@ -376,19 +402,13 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
     {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
+        // TODO: this path does not need to be serialized, can remove
         let path: PathBuf = deserialize_from(&mut rd).map_err(Error::custom)?;
         let current_len: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
 
-        let data = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(false)
-            .open(&path)
-            .map_err(|e| Error::custom(e.to_string()))?;
-
-        let map = unsafe { MmapMut::map_mut(&data).map_err(|e| Error::custom(e.to_string()))? };
+        let map = MmapMut::map_anon(0).map_err(|e| Error::custom(e.to_string()))?;
         Ok(AppendVec {
             path,
             map,
@@ -508,5 +528,15 @@ pub mod tests {
         let mut reader = Cursor::new(&mut buf[..]);
         let dav: Result<AppendVec, Box<bincode::ErrorKind>> = deserialize_from(&mut reader);
         assert!(dav.is_err());
+    }
+
+    #[test]
+    fn test_relative_path() {
+        let relative_path = AppendVec::new_relative_path(0, 2);
+        let full_path = Path::from("/tmp").join(relative_path);
+        assert_eq!(
+            relative_path,
+            AppendVec::get_relative_path(full_path).unwrap()
+        );
     }
 }
