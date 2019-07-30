@@ -2295,10 +2295,10 @@ mod tests {
             btree_slots.insert(i);
         }
         let value = CrdsValue::EpochSlots(EpochSlots {
-            from: Default::default(),
+            from: Pubkey::default(),
             root: 0,
             slots: btree_slots,
-            signature: Default::default(),
+            signature: Signature::default(),
             wallclock: 0,
         });
         test_split_messages(value);
