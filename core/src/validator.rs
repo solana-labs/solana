@@ -176,7 +176,7 @@ impl Validator {
                 storage_state.clone(),
                 config.rpc_config.clone(),
                 bank_forks.clone(),
-                None,
+                ledger_path,
                 &exit,
             ))
         };
