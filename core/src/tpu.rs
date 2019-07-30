@@ -33,7 +33,7 @@ impl Tpu {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntries>,
         transactions_sockets: Vec<UdpSocket>,
-        tpu_via_blobs_sockets: Vec<UdpSocket>,
+        tpu_forwards_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         blocktree: &Arc<Blocktree>,
@@ -44,7 +44,7 @@ impl Tpu {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
-            tpu_via_blobs_sockets,
+            tpu_forwards_sockets,
             &exit,
             &packet_sender,
             &poh_recorder,

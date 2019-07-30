@@ -267,7 +267,7 @@ impl Validator {
             &poh_recorder,
             entry_receiver,
             node.sockets.tpu,
-            node.sockets.tpu_via_blobs,
+            node.sockets.tpu_forwards,
             node.sockets.broadcast,
             config.sigverify_disabled,
             &blocktree,
