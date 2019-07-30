@@ -7,6 +7,8 @@ use std::mem;
 use std::path::Path;
 use std::str::FromStr;
 
+pub use bs58;
+
 #[repr(transparent)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey([u8; 32]);
@@ -122,7 +124,7 @@ macro_rules! solana_name_id(
         fn test_name_id() {
             // un-comment me to see what the id should look like, given a name
             //  if id().to_string() != $name {
-            //      panic!("id for `{}` should be `{:?}`", $name, bs58::decode($name).into_vec().unwrap());
+            //      panic!("id for `{}` should be `{:?}`", $name, $crate::pubkey::bs58::decode($name).into_vec().unwrap());
             //  }
             assert_eq!(id().to_string(), $name)
         }
