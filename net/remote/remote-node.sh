@@ -8,7 +8,9 @@ deployMethod="$1"
 nodeType="$2"
 entrypointIp="$3"
 numNodes="$4"
-RUST_LOG="$5"
+if [[ -n $5 ]]; then
+  export RUST_LOG="$5"
+fi
 skipSetup="$6"
 failOnValidatorBootupFailure="$7"
 externalPrimordialAccountsFile="$8"
@@ -23,7 +25,6 @@ benchExchangeExtraArgs="${16}"
 genesisOptions="${17}"
 extraNodeArgs="${18}"
 set +x
-export RUST_LOG
 
 # Use a very large stake (relative to the default multinode-demo/ stake of 42)
 # for the testnet validators setup by net/.  This make it less likely that
