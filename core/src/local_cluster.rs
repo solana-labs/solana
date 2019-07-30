@@ -27,6 +27,7 @@ use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
 use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use solana_librapay_api::librapay_transaction;
@@ -36,17 +37,17 @@ pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,
     pub voting_keypair: Arc<Keypair>,
     pub storage_keypair: Arc<Keypair>,
-    pub ledger_path: String,
+    pub ledger_path: PathBuf,
     pub contact_info: ContactInfo,
 }
 
 pub struct ReplicatorInfo {
     pub replicator_storage_pubkey: Pubkey,
-    pub ledger_path: String,
+    pub ledger_path: PathBuf,
 }
 
 impl ReplicatorInfo {
-    fn new(storage_pubkey: Pubkey, ledger_path: String) -> Self {
+    fn new(storage_pubkey: Pubkey, ledger_path: PathBuf) -> Self {
         Self {
             replicator_storage_pubkey: storage_pubkey,
             ledger_path,
@@ -395,7 +396,7 @@ impl LocalCluster {
             .chain(self.replicator_infos.values().map(|info| &info.ledger_path))
         {
             remove_dir_all(&ledger_path)
-                .unwrap_or_else(|_| panic!("Unable to remove {}", ledger_path));
+                .unwrap_or_else(|_| panic!("Unable to remove {:?}", ledger_path));
         }
     }
 

@@ -11,12 +11,13 @@ use rand::{thread_rng, Rng};
 use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::entry::{make_large_test_entries, make_tiny_test_entries, EntrySlice};
 use solana::packet::{Blob, BLOB_HEADER_SIZE};
+use std::path::Path;
 use test::Bencher;
 
 // Given some blobs and a ledger at ledger_path, benchmark writing the blobs to the ledger
-fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &str) {
+fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &Path) {
     let blocktree =
-        Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+        Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
 
     let num_blobs = blobs.len();
 
@@ -36,7 +37,7 @@ fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &s
         }
     });
 
-    Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(ledger_path).expect("Expected successful database destruction");
 }
 
 // Insert some blobs into the ledger in preparation for read benchmarks

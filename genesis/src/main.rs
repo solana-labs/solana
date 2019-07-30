@@ -34,6 +34,7 @@ use std::collections::HashMap;
 use std::error;
 use std::fs::File;
 use std::io;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -248,7 +249,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_keypair_file =
         matches.value_of("bootstrap_storage_keypair_file").unwrap();
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
-    let ledger_path = matches.value_of("ledger_path").unwrap();
+    let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let lamports = value_t_or_exit!(matches, "lamports", u64);
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
@@ -359,7 +360,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     builder = solana_storage_api::rewards_pools::genesis(builder);
     builder = solana_stake_api::rewards_pools::genesis(builder);
 
-    create_new_ledger(ledger_path, &builder.build())?;
+    create_new_ledger(&ledger_path, &builder.build())?;
     Ok(())
 }
 

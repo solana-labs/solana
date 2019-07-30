@@ -334,6 +334,7 @@ pub mod test {
     use solana_sdk::signature::Signable;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::borrow::Borrow;
+    use std::path::Path;
 
     /// Specifies the contents of a 16-data-blob and 4-coding-blob erasure set
     /// Exists to be passed to `generate_blocktree_with_coding`
@@ -748,7 +749,7 @@ pub mod test {
     /// Genarates a ledger according to the given specs.
     /// Blocktree should have correct SlotMeta and ErasureMeta and so on but will not have done any
     /// possible recovery.
-    pub fn generate_blocktree_with_coding(ledger_path: &str, specs: &[SlotSpec]) -> Blocktree {
+    pub fn generate_blocktree_with_coding(ledger_path: &Path, specs: &[SlotSpec]) -> Blocktree {
         let blocktree = Blocktree::open(ledger_path).unwrap();
 
         let model = generate_ledger_model(specs);

@@ -4,6 +4,7 @@ use solana::contact_info::ContactInfo;
 use solana::replicator::Replicator;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 
@@ -50,7 +51,7 @@ fn main() {
         )
         .get_matches();
 
-    let ledger_path = matches.value_of("ledger").unwrap();
+    let ledger_path = PathBuf::from(matches.value_of("ledger").unwrap());
 
     let keypair = if let Some(identity) = matches.value_of("identity") {
         read_keypair(identity).unwrap_or_else(|err| {
@@ -93,7 +94,7 @@ fn main() {
 
     let entrypoint_info = ContactInfo::new_gossip_entry_point(&entrypoint_addr);
     let replicator = Replicator::new(
-        ledger_path,
+        &ledger_path,
         node,
         entrypoint_info,
         Arc::new(keypair),

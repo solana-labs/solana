@@ -5,6 +5,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{stdout, Write};
+use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
 
@@ -119,20 +120,20 @@ fn main() {
         ))
         .get_matches();
 
-    let ledger_path = matches.value_of("ledger").unwrap();
+    let ledger_path = PathBuf::from(matches.value_of("ledger").unwrap());
 
-    let genesis_block = GenesisBlock::load(ledger_path).unwrap_or_else(|err| {
+    let genesis_block = GenesisBlock::load(&ledger_path).unwrap_or_else(|err| {
         eprintln!(
-            "Failed to open ledger genesis_block at {}: {}",
+            "Failed to open ledger genesis_block at {:?}: {}",
             ledger_path, err
         );
         exit(1);
     });
 
-    let blocktree = match Blocktree::open(ledger_path) {
+    let blocktree = match Blocktree::open(&ledger_path) {
         Ok(blocktree) => blocktree,
         Err(err) => {
-            eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
+            eprintln!("Failed to open ledger at {:?}: {}", ledger_path, err);
             exit(1);
         }
     };

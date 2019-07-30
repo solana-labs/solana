@@ -241,6 +241,7 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::path::Path;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -255,7 +256,7 @@ mod test {
 
     fn setup_dummy_broadcast_service(
         leader_pubkey: &Pubkey,
-        ledger_path: &str,
+        ledger_path: &Path,
         entry_receiver: Receiver<WorkingBankEntries>,
     ) -> MockBroadcastStage {
         // Make the database ledger
