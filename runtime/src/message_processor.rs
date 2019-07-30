@@ -157,7 +157,7 @@ impl Default for MessageProcessor {
 }
 
 impl MessageProcessor {
-    /// Add a static entrypoint to intercept intructions before the dynamic loader.
+    /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_instruction_processor(
         &mut self,
         program_id: Pubkey,

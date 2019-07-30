@@ -778,13 +778,10 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let GenesisBlockInfo {
-            mut genesis_block,
+            genesis_block,
             mint_keypair,
             ..
         } = create_genesis_block(1000);
-        genesis_block
-            .native_instruction_processors
-            .push(solana_storage_program::solana_storage_program!());
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());

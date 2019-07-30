@@ -9,6 +9,16 @@ use solana_sdk::{
 use solana_stake_api;
 use solana_vote_api::vote_state;
 
+use solana_bpf_loader_program;
+use solana_budget_program;
+use solana_config_program;
+use solana_exchange_program;
+use solana_move_loader_program;
+use solana_stake_program;
+use solana_storage_program;
+use solana_token_program;
+use solana_vote_program;
+
 // The default stake placed with the bootstrap leader
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
@@ -66,11 +76,7 @@ pub fn create_genesis_block_with_leader(
                 ),
             ),
         ])
-        .native_instruction_processors(&[
-            solana_bpf_loader_program!(),
-            solana_vote_program!(),
-            solana_stake_program!(),
-        ])
+        .native_instruction_processors(&get_default_native_instruction_processors())
         .fee_calculator(FeeCalculator::new(0)); // most tests don't want fees
 
     builder = solana_stake_api::rewards_pools::genesis(builder);
@@ -80,5 +86,43 @@ pub fn create_genesis_block_with_leader(
         genesis_block: builder.build(),
         mint_keypair,
         voting_keypair,
+    }
+}
+
+pub fn get_default_native_instruction_processors() -> Vec<(String, Pubkey)> {
+    vec![
+        solana_bpf_loader_program!(),
+        solana_budget_program!(),
+        solana_config_program!(),
+        solana_exchange_program!(),
+        solana_move_loader_program!(),
+        solana_stake_program!(),
+        solana_storage_program!(),
+        solana_token_program!(),
+        solana_vote_program!(),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hashbrown::HashSet;
+
+    #[test]
+    fn test_program_id_uniqueness() {
+        let mut unique = HashSet::new();
+        let ids = vec![
+            solana_sdk::system_program::id(),
+            solana_sdk::native_loader::id(),
+            solana_sdk::bpf_loader::id(),
+            solana_budget_api::id(),
+            solana_storage_api::id(),
+            solana_token_api::id(),
+            solana_vote_api::id(),
+            solana_stake_api::id(),
+            solana_config_api::id(),
+            solana_exchange_api::id(),
+        ];
+        assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
 }

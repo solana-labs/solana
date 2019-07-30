@@ -22,13 +22,23 @@ mod system_instruction_processor;
 extern crate solana_metrics;
 
 #[macro_use]
-extern crate solana_vote_program;
-
+extern crate solana_bpf_loader_program;
+#[macro_use]
+extern crate solana_budget_program;
+#[macro_use]
+extern crate solana_config_program;
+#[macro_use]
+extern crate solana_exchange_program;
+#[macro_use]
+extern crate solana_move_loader_program;
 #[macro_use]
 extern crate solana_stake_program;
-
 #[macro_use]
-extern crate solana_bpf_loader_program;
+extern crate solana_storage_program;
+#[macro_use]
+extern crate solana_token_program;
+#[macro_use]
+extern crate solana_vote_program;
 
 #[macro_use]
 extern crate serde_derive;
