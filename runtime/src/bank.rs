@@ -48,7 +48,7 @@ use std::io::{BufReader, Cursor, Read};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
-pub const SECONDS_PER_YEAR: f64 = (365.0 * 24.0 * 60.0 * 60.0);
+pub const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
 
 type BankStatusCache = StatusCache<Result<()>>;
 
