@@ -62,7 +62,7 @@ pub struct Replicator {
 struct ReplicatorMeta {
     slot: u64,
     slots_per_segment: u64,
-    ledger_path: String,
+    ledger_path: PathBuf,
     signature: Signature,
     ledger_data_file_encrypted: PathBuf,
     sampling_offsets: Vec<u64>,
@@ -200,7 +200,7 @@ impl Replicator {
     /// * `keypair` - Keypair for this replicator
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        ledger_path: &str,
+        ledger_path: &Path,
         node: Node,
         cluster_entrypoint: ContactInfo,
         keypair: Arc<Keypair>,
@@ -263,7 +263,7 @@ impl Replicator {
             let exit = exit.clone();
             let node_info = node.info.clone();
             let mut meta = ReplicatorMeta {
-                ledger_path: ledger_path.to_string(),
+                ledger_path: ledger_path.to_path_buf(),
                 ..ReplicatorMeta::default()
             };
             spawn(move || {
@@ -516,8 +516,7 @@ impl Replicator {
     }
 
     fn encrypt_ledger(meta: &mut ReplicatorMeta, blocktree: &Arc<Blocktree>) -> Result<()> {
-        let ledger_path = Path::new(&meta.ledger_path);
-        meta.ledger_data_file_encrypted = ledger_path.join(ENCRYPTED_FILENAME);
+        meta.ledger_data_file_encrypted = meta.ledger_path.join(ENCRYPTED_FILENAME);
 
         {
             let mut ivec = [0u8; 64];

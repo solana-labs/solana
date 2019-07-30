@@ -22,6 +22,7 @@ use solana_sdk::timing::{
     NUM_CONSECUTIVE_LEADER_SLOTS,
 };
 use solana_sdk::transport::TransportError;
+use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -94,7 +95,7 @@ pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
     }
 }
 
-pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) {
+pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
     let ledger = Blocktree::open(ledger_path).unwrap();
     let zeroth_slot = ledger.get_slot_entries(0, 0, None).unwrap();
     let last_id = zeroth_slot.last().unwrap().hash;

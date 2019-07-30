@@ -93,7 +93,7 @@ fn test_replicator_startup_leader_hang() {
     solana_logger::setup();
     info!("starting replicator test");
 
-    let leader_ledger_path = "replicator_test_leader_ledger";
+    let leader_ledger_path = std::path::PathBuf::from("replicator_test_leader_ledger");
     let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
     let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 

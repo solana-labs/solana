@@ -27,6 +27,7 @@ use std::cell::RefCell;
 use std::cmp;
 use std::fs;
 use std::io;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
@@ -113,14 +114,12 @@ pub const INDEX_CF: &str = "index";
 
 impl Blocktree {
     /// Opens a Ledger in directory, provides "infinite" window of blobs
-    pub fn open(ledger_path: &str) -> Result<Blocktree> {
-        use std::path::Path;
-
+    pub fn open(ledger_path: &Path) -> Result<Blocktree> {
         fs::create_dir_all(&ledger_path)?;
-        let ledger_path = Path::new(&ledger_path).join(BLOCKTREE_DIRECTORY);
+        let blocktree_path = ledger_path.join(BLOCKTREE_DIRECTORY);
 
         // Open the database
-        let db = Database::open(&ledger_path)?;
+        let db = Database::open(&blocktree_path)?;
 
         let batch_processor = unsafe { Arc::new(RwLock::new(db.batch_processor())) };
 
@@ -162,7 +161,7 @@ impl Blocktree {
     }
 
     pub fn open_with_signal(
-        ledger_path: &str,
+        ledger_path: &Path,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
         let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
@@ -174,11 +173,11 @@ impl Blocktree {
         Ok((blocktree, signal_receiver, completed_slots_receiver))
     }
 
-    pub fn destroy(ledger_path: &str) -> Result<()> {
-        // Database::destroy() fails is the path doesn't exist
+    pub fn destroy(ledger_path: &Path) -> Result<()> {
+        // Database::destroy() fails if the path doesn't exist
         fs::create_dir_all(ledger_path)?;
-        let path = std::path::Path::new(ledger_path).join(BLOCKTREE_DIRECTORY);
-        Database::destroy(&path)
+        let blocktree_path = ledger_path.join(BLOCKTREE_DIRECTORY);
+        Database::destroy(&blocktree_path)
     }
 
     pub fn meta(&self, slot: u64) -> Result<Option<SlotMeta>> {
@@ -1958,7 +1957,7 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
 //
 // Returns the blockhash that can be used to append entries with.
-pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<Hash> {
+pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Result<Hash> {
     let ticks_per_slot = genesis_block.ticks_per_slot;
     Blocktree::destroy(ledger_path)?;
     genesis_block.write(&ledger_path)?;
@@ -1971,7 +1970,7 @@ pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Res
     Ok(entries.last().unwrap().hash)
 }
 
-pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
+pub fn genesis<'a, I>(ledger_path: &Path, keypair: &Keypair, entries: I) -> Result<()>
 where
     I: IntoIterator<Item = &'a Entry>,
 {
@@ -2008,12 +2007,18 @@ macro_rules! get_tmp_ledger_path {
     };
 }
 
-pub fn get_tmp_ledger_path(name: &str) -> String {
+pub fn get_tmp_ledger_path(name: &str) -> PathBuf {
     use std::env;
     let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
     let keypair = Keypair::new();
 
-    let path = format!("{}/ledger/{}-{}", out_dir, name, keypair.pubkey());
+    let path = [
+        out_dir,
+        "ledger".to_string(),
+        format!("{}-{}", name, keypair.pubkey()),
+    ]
+    .iter()
+    .collect();
 
     // whack any possible collision
     let _ignored = fs::remove_dir_all(&path);
@@ -2032,7 +2037,7 @@ macro_rules! create_new_tmp_ledger {
 //
 // Note: like `create_new_ledger` the returned ledger will have slot 0 full of ticks (and only
 // ticks)
-pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (String, Hash) {
+pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (PathBuf, Hash) {
     let ledger_path = get_tmp_ledger_path(name);
     let blockhash = create_new_ledger(&ledger_path, genesis_block).unwrap();
     (ledger_path, blockhash)
@@ -2045,7 +2050,7 @@ macro_rules! tmp_copy_blocktree {
     };
 }
 
-pub fn tmp_copy_blocktree(from: &str, name: &str) -> String {
+pub fn tmp_copy_blocktree(from: &Path, name: &str) -> PathBuf {
     let path = get_tmp_ledger_path(name);
 
     let blocktree = Blocktree::open(from).unwrap();

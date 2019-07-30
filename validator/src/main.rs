@@ -11,6 +11,7 @@ use solana_netutil::parse_port_range;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 
@@ -75,7 +76,7 @@ fn main() {
                 .help("Create this file, if it doesn't already exist, once node initialization is complete"),
         )
         .arg(
-            Arg::with_name("ledger")
+            Arg::with_name("ledger_path")
                 .short("l")
                 .long("ledger")
                 .value_name("DIR")
@@ -208,7 +209,7 @@ fn main() {
             pubkey.parse().expect("failed to parse vote_account")
         });
 
-    let ledger_path = matches.value_of("ledger").unwrap();
+    let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
 
     validator_config.sigverify_disabled = matches.is_present("no_sigverify");
 
@@ -283,7 +284,7 @@ fn main() {
     let validator = Validator::new(
         node,
         &keypair,
-        ledger_path,
+        &ledger_path,
         &vote_account,
         &Arc::new(voting_keypair),
         &Arc::new(storage_keypair),

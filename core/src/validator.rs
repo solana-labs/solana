@@ -26,6 +26,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::{timestamp, DEFAULT_SLOTS_PER_TURN};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, RwLock};
@@ -79,7 +80,7 @@ impl Validator {
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
-        ledger_path: &str,
+        ledger_path: &Path,
         vote_account: &Pubkey,
         voting_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
@@ -340,7 +341,7 @@ fn get_bank_forks(
 }
 
 pub fn new_banks_from_blocktree(
-    blocktree_path: &str,
+    blocktree_path: &Path,
     account_paths: Option<String>,
     snapshot_path: Option<String>,
     verify_ledger: bool,
@@ -401,7 +402,7 @@ impl Service for Validator {
     }
 }
 
-pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, String) {
+pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 
