@@ -8,13 +8,13 @@ use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct OrderRequestInfo {
-    /// Direction of trade
-    pub direction: Direction,
+    /// Side of market of the order (bid/ask)
+    pub side: OrderSide,
 
     /// Token pair to trade
     pub pair: AssetPair,
 
-    /// Number of tokens to exchange; refers to the primary or the secondary depending on the direction
+    /// Number of tokens to exchange; refers to the primary or the secondary depending on the order side
     pub tokens: u64,
 
     /// The price ratio the primary price over the secondary price.  The primary price is fixed
@@ -84,7 +84,7 @@ pub fn transfer_request(
 pub fn trade_request(
     owner: &Pubkey,
     trade: &Pubkey,
-    direction: Direction,
+    side: OrderSide,
     pair: AssetPair,
     tokens: u64,
     price: u64,
@@ -98,7 +98,7 @@ pub fn trade_request(
     Instruction::new(
         id(),
         &ExchangeInstruction::OrderRequest(OrderRequestInfo {
-            direction,
+            side,
             pair,
             tokens,
             price,
