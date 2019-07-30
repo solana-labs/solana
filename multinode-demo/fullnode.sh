@@ -74,9 +74,8 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
 }
 
 setup_validator_accounts() {
-  declare entrypoint_ip=$1
-  declare node_lamports=$2
-  declare stake_lamports=$3
+  declare node_lamports=$1
+  declare stake_lamports=$2
 
   if [[ -f $configured_flag ]]; then
     echo "Vote and stake accounts have already been configured"
@@ -86,32 +85,32 @@ setup_validator_accounts() {
       (
         declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
         set -x
-        $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+        $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
           airdrop $((node_lamports+stake_lamports+fees))
       ) || return $?
     else
       echo "current account balance is "
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance || return $?
+      $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" balance || return $?
     fi
 
     echo "Fund the vote account from the node's identity pubkey"
     (
       set -x
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
       create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127
     ) || return $?
 
     echo "Delegate the stake account to the node's vote account"
     (
       set -x
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
         delegate-stake "$stake_keypair_path" "$vote_pubkey" "$stake_lamports"
     ) || return $?
 
     echo "Create validator storage account"
     (
       set -x
-      $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+      $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
         create-validator-storage-account "$identity_pubkey" "$storage_pubkey"
     ) || return $?
 
@@ -121,12 +120,12 @@ setup_validator_accounts() {
   echo "Identity account balance:"
   (
     set -x
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" balance
+    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
       show-vote-account "$vote_pubkey"
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
       show-stake-account "$stake_pubkey"
-    $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" \
+    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
       show-storage-account "$storage_pubkey"
   )
   return 0
@@ -249,6 +248,8 @@ if [[ ${#positional_args[@]} -gt 2 ]]; then
 fi
 
 read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
+rpc_url=$("$here"/rpc-url.sh "$entrypoint")
+
 shift "$shift"
 
 mkdir -p "$SOLANA_CONFIG_DIR"
@@ -393,9 +394,7 @@ while true; do
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
   if ((stake_lamports)); then
-    setup_validator_accounts "${entrypoint_address%:*}" \
-      "$node_lamports" \
-      "$stake_lamports"
+    setup_validator_accounts "$node_lamports" "$stake_lamports"
   fi
 
   cat <<EOF
