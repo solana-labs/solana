@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
 #
-# Start a fullnode
+# Start a validator
 #
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
-
-# shellcheck source=scripts/oom-score-adj.sh
-source "$here"/../scripts/oom-score-adj.sh
-
 
 fullnode_usage() {
   if [[ -n $1 ]]; then
@@ -136,15 +132,7 @@ setup_validator_accounts() {
   return 0
 }
 
-ledger_not_setup() {
-  echo "Error: $*"
-  echo
-  echo "Please run: ${here}/setup.sh"
-  exit 1
-}
-
 args=()
-node_type=validator
 node_lamports=424242  # number of lamports to assign the node for transaction fees
 stake_lamports=42     # number of lamports to assign as stake
 poll_for_new_genesis_block=0
@@ -166,18 +154,11 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-restart ]]; then
       no_restart=1
       shift
-    elif [[ $1 = --bootstrap-leader ]]; then
-      node_type=bootstrap_leader
-      generate_snapshots=1
-      shift
     elif [[ $1 = --generate-snapshots ]]; then
       generate_snapshots=1
       shift
     elif [[ $1 = --no-snapshot ]]; then
       boot_from_snapshot=0
-      shift
-    elif [[ $1 = --validator ]]; then
-      node_type=validator
       shift
     elif [[ $1 = --poll-for-new-genesis-block ]]; then
       poll_for_new_genesis_block=1
@@ -263,69 +244,37 @@ fi
 
 setup_secondary_mount
 
-if [[ $node_type = bootstrap_leader ]]; then
-  if [[ ${#positional_args[@]} -ne 0 ]]; then
-    fullnode_usage "Unknown argument: ${positional_args[0]}"
-  fi
-
-  [[ -f "$SOLANA_CONFIG_DIR"/bootstrap-leader-keypair.json ]] ||
-    ledger_not_setup "$SOLANA_CONFIG_DIR/bootstrap-leader-keypair.json not found"
-
-  $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
-
-  # These four keypairs are created by ./setup.sh and encoded into the genesis
-  # block
-  identity_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-keypair.json
-  voting_keypair_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
-  stake_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-stake-keypair.json
-  storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
-
-  ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
-  state_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-state
-  configured_flag=$SOLANA_CONFIG_DIR/bootstrap-leader.configured
-
-  default_arg --rpc-port 8899
-  if ((airdrops_enabled)); then
-    default_arg --rpc-drone-address 127.0.0.1:9900
-  fi
-  default_arg --gossip-port 8001
-
-elif [[ $node_type = validator ]]; then
-  if [[ ${#positional_args[@]} -gt 2 ]]; then
-    fullnode_usage "$@"
-  fi
-
-  read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
-  shift "$shift"
-
-  mkdir -p "$SOLANA_CONFIG_DIR"
-
-  : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/validator-keypair$label.json}"
-  [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
-
-  : "${voting_keypair_path:=$SOLANA_CONFIG_DIR/validator-vote-keypair$label.json}"
-  [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
-
-  : "${storage_keypair_path:=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json}"
-  [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
-
-  stake_keypair_path=$SOLANA_CONFIG_DIR/validator-stake-keypair$label.json
-  [[ -r "$stake_keypair_path" ]] || $solana_keygen new -o "$stake_keypair_path"
-
-  ledger_config_dir=$SOLANA_CONFIG_DIR/validator-ledger$label
-  state_dir="$SOLANA_CONFIG_DIR"/validator-state$label
-  configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
-
-  default_arg --entrypoint "$entrypoint_address"
-  if ((airdrops_enabled)); then
-    default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
-  fi
-
-  rsync_entrypoint_url=$(rsync_url "$entrypoint")
-else
-  echo "Error: Unknown node_type: $node_type"
-  exit 1
+if [[ ${#positional_args[@]} -gt 2 ]]; then
+  fullnode_usage "$@"
 fi
+
+read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
+shift "$shift"
+
+mkdir -p "$SOLANA_CONFIG_DIR"
+
+: "${identity_keypair_path:=$SOLANA_CONFIG_DIR/validator-keypair$label.json}"
+[[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
+
+: "${voting_keypair_path:=$SOLANA_CONFIG_DIR/validator-vote-keypair$label.json}"
+[[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
+
+: "${storage_keypair_path:=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json}"
+[[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
+
+stake_keypair_path=$SOLANA_CONFIG_DIR/validator-stake-keypair$label.json
+[[ -r "$stake_keypair_path" ]] || $solana_keygen new -o "$stake_keypair_path"
+
+ledger_config_dir=$SOLANA_CONFIG_DIR/validator-ledger$label
+state_dir="$SOLANA_CONFIG_DIR"/validator-state$label
+configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
+
+default_arg --entrypoint "$entrypoint_address"
+if ((airdrops_enabled)); then
+  default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
+fi
+
+rsync_entrypoint_url=$(rsync_url "$entrypoint")
 
 identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
 export SOLANA_METRICS_HOST_ID="$identity_pubkey"
@@ -393,7 +342,7 @@ if ((reset_ledger)); then
 fi
 
 while true; do
-  if [[ $node_type != bootstrap_leader ]] && new_genesis_block; then
+  if new_genesis_block; then
     # If the genesis block has changed remove the now stale ledger and start all
     # over again
     (
@@ -402,44 +351,37 @@ while true; do
     )
   fi
 
-  if [[ $node_type = bootstrap_leader && ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
-    ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
-  fi
-
   if [[ ! -d "$ledger_config_dir" ]]; then
-    if [[ $node_type = validator ]]; then
-      (
-        cd "$SOLANA_RSYNC_CONFIG_DIR"
+    (
+      cd "$SOLANA_RSYNC_CONFIG_DIR"
 
-        echo "Rsyncing genesis ledger from ${rsync_entrypoint_url:?}..."
+      echo "Rsyncing genesis ledger from ${rsync_entrypoint_url:?}..."
+      SECONDS=
+      while ! $rsync -Pr "${rsync_entrypoint_url:?}"/config/ledger .; do
+        echo "Genesis ledger rsync failed"
+        sleep 5
+      done
+      echo "Fetched genesis ledger in $SECONDS seconds"
+
+      if ((boot_from_snapshot)); then
         SECONDS=
-        while ! $rsync -Pr "${rsync_entrypoint_url:?}"/config/ledger .; do
-          echo "Genesis ledger rsync failed"
-          sleep 5
-        done
-        echo "Fetched genesis ledger in $SECONDS seconds"
-
-        if ((boot_from_snapshot)); then
-          SECONDS=
-          echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
-          if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
-            echo "State snapshot rsync failed"
-            rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-            exit
-          fi
-          echo "Fetched snapshot in $SECONDS seconds"
-
-          SECONDS=
-          mkdir -p "$state_dir"
-          (
-            set -x
-            tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-          )
-          echo "Extracted snapshot in $SECONDS seconds"
+        echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
+        if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
+          echo "State snapshot rsync failed"
+          rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+          exit
         fi
-      )
-    fi
+        echo "Fetched snapshot in $SECONDS seconds"
 
+        SECONDS=
+        mkdir -p "$state_dir"
+        (
+          set -x
+          tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
+        )
+        echo "Extracted snapshot in $SECONDS seconds"
+      fi
+    )
     (
       set -x
       cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
@@ -450,14 +392,14 @@ while true; do
   stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
-  if [[ $node_type = validator ]] && ((stake_lamports)); then
+  if ((stake_lamports)); then
     setup_validator_accounts "${entrypoint_address%:*}" \
       "$node_lamports" \
       "$stake_lamports"
   fi
 
   cat <<EOF
-======================[ $node_type configuration ]======================
+======================[ validator configuration ]======================
 identity pubkey: $identity_pubkey
 vote pubkey: $vote_pubkey
 stake pubkey: $stake_pubkey
@@ -473,7 +415,6 @@ EOF
   $program "${args[@]}" &
   pid=$!
   echo "pid: $pid"
-  oom_score_adj "$pid" 1000
 
   if ((no_restart)); then
     wait "$pid"
@@ -485,7 +426,7 @@ EOF
   while true; do
     if [[ -z $pid ]] || ! kill -0 "$pid"; then
       [[ -z $pid ]] || wait "$pid"
-      echo "############## $node_type exited, restarting ##############"
+      echo "############## validator exited, restarting ##############"
       break
     fi
 
@@ -521,7 +462,7 @@ EOF
     if ((poll_for_new_genesis_block && --secs_to_next_genesis_poll == 0)); then
       echo "Polling for new genesis block..."
       if new_genesis_block; then
-        echo "############## New genesis detected, restarting $node_type ##############"
+        echo "############## New genesis detected, restarting ##############"
         break
       fi
       secs_to_next_genesis_poll=60

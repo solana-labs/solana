@@ -58,6 +58,7 @@ genesisOptions="$genesisOptions"
 airdropsEnabled=$airdropsEnabled
 EOF
 
+source scripts/oom-score-adj.sh
 source net/common.sh
 loadConfigFile
 
@@ -156,29 +157,28 @@ local|tar|skip)
 
       args=(
         --bootstrap-leader-stake-lamports "$stake"
-        )
-        if [[ -n $internalNodesLamports ]]; then
-          args+=(--bootstrap-leader-lamports "$internalNodesLamports")
-        fi
+      )
+      if [[ -n $internalNodesLamports ]]; then
+        args+=(--bootstrap-leader-lamports "$internalNodesLamports")
+      fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
       ./multinode-demo/setup.sh "${args[@]}"
     fi
-    if [[ $airdropsEnabled = true ]]; then
-      ./multinode-demo/drone.sh > drone.log 2>&1 &
-    fi
     args=(
       --enable-rpc-exit
       --gossip-port "$entrypointIp":8001
+      --init-complete-file "$initCompleteFile"
     )
 
-    if [[ $airdropsEnabled != true ]]; then
-      args+=(--no-airdrop)
+    if [[ $airdropsEnabled = true ]]; then
+      ./multinode-demo/drone.sh > drone.log 2>&1 &
     fi
-    args+=(--init-complete-file "$initCompleteFile")
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
     nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
+    pid=$!
+    oom_score_adj "$pid" 1000
     waitForNodeToInit
     ;;
   validator|blockstreamer)
@@ -265,6 +265,8 @@ local|tar|skip)
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
     nohup ./multinode-demo/validator.sh "${args[@]}" > fullnode.log 2>&1 &
+    pid=$!
+    oom_score_adj "$pid" 1000
     waitForNodeToInit
     ;;
   replicator)
@@ -284,6 +286,8 @@ local|tar|skip)
     fi
 
     nohup ./multinode-demo/replicator.sh "${args[@]}" > fullnode.log 2>&1 &
+    pid=$!
+    oom_score_adj "$pid" 1000
     sleep 1
     ;;
   *)
