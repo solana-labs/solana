@@ -19,9 +19,33 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::Client;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 
 use types::account_address::AccountAddress;
+
+pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) -> Keypair {
+    let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+
+    let libra_genesis_key = Keypair::new();
+    let tx = librapay_transaction::create_account(
+        from_key,
+        &libra_genesis_key.pubkey(),
+        1,
+        blockhash,
+    );
+    let sig = client
+        .async_send_transaction(tx)
+        .unwrap();
+    client.poll_for_signature(&sig).unwrap();
+
+    let tx = librapay_transaction::create_genesis(&libra_genesis_key, amount, blockhash);
+    let sig = client
+        .async_send_transaction(tx)
+        .unwrap();
+    client.poll_for_signature(&sig).unwrap();
+
+    libra_genesis_key
+}
 
 pub fn upload_move_program<T: Client>(from: &Keypair, client: &T, code: &str) -> Pubkey {
     let address = AccountAddress::default();

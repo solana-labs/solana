@@ -63,18 +63,14 @@ pub enum InvokeCommand {
     /// Create a new genesis account
     CreateGenesis(u64),
     /// Run a Move program
-    RunProgram(ProgramInfo),
-}
-
-/// Information about how to call the program
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct ProgramInfo {
-    /// Sender of the "transaction", the "sender" who is running this program
-    pub sender_address: AccountAddress,
-    /// Name of the program's function to call
-    pub function_name: String,
-    /// Arguments to pass to the program being called
-    pub args: Vec<TransactionArgument>,
+    RunProgram {
+        /// Sender of the "transaction", the "sender" who is running this program
+        sender_address: AccountAddress,
+        /// Name of the program's function to call
+        function_name: String,
+        /// Arguments to pass to the program being called
+        args: Vec<TransactionArgument>,
+    },
 }
 
 pub struct MoveProcessor {}
@@ -175,7 +171,9 @@ impl MoveProcessor {
     }
 
     fn execute(
-        program_info: ProgramInfo,
+        sender_address: AccountAddress,
+        function_name: String,
+        args: Vec<TransactionArgument>,
         script: VerifiedScript,
         modules: Vec<VerifiedModule>,
         data_store: &DataStore,
@@ -199,20 +197,16 @@ impl MoveProcessor {
         }
 
         let mut txn_metadata = TransactionMetadata::default();
-        txn_metadata.sender = program_info.sender_address;
+        txn_metadata.sender = sender_address;
 
         // Caps execution to the Libra prescribed 10 milliseconds
         txn_metadata.max_gas_amount = *MAXIMUM_NUMBER_OF_GAS_UNITS;
         txn_metadata.gas_unit_price = *MAX_PRICE_PER_GAS_UNIT;
 
         let mut vm = TransactionExecutor::new(&module_cache, data_store, txn_metadata);
-        vm.execute_function(
-            &module_id,
-            &program_info.function_name,
-            Self::arguments_to_locals(program_info.args),
-        )
-        .map_err(map_vm_invariant_violation_error)?
-        .map_err(map_vm_runtime_error)?;
+        vm.execute_function(&module_id, &function_name, Self::arguments_to_locals(args))
+            .map_err(map_vm_invariant_violation_error)?
+            .map_err(map_vm_runtime_error)?;
 
         Ok(vm
             .make_write_set(modules_to_publish, Ok(Ok(())))
@@ -358,7 +352,11 @@ impl MoveProcessor {
                     }
                 }
             }
-            InvokeCommand::RunProgram(program_info) => {
+            InvokeCommand::RunProgram {
+                sender_address,
+                function_name,
+                args,
+            } => {
                 if keyed_accounts.len() < 2 {
                     debug!("Error: Requires at least a program and a genesis accounts");
                     return Err(InstructionError::InvalidArgument);
@@ -380,8 +378,14 @@ impl MoveProcessor {
                     &keyed_accounts[PROGRAM_INDEX].account.data,
                 )?;
 
-                let output =
-                    Self::execute(program_info, verified_script, verified_modules, &data_store)?;
+                let output = Self::execute(
+                    sender_address,
+                    function_name,
+                    args,
+                    verified_script,
+                    verified_modules,
+                    &data_store,
+                )?;
                 for event in output.events() {
                     trace!("Event: {:?}", event);
                 }
@@ -452,14 +456,14 @@ mod tests {
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-        let program_info = ProgramInfo {
-            sender_address,
-            function_name: "main".to_string(),
-            args: vec![],
-        };
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram(program_info)).unwrap(),
+            &bincode::serialize(&InvokeCommand::RunProgram {
+                sender_address,
+                function_name: "main".to_string(),
+                args: vec![],
+            })
+            .unwrap(),
         )
         .unwrap();
     }
@@ -483,16 +487,15 @@ mod tests {
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-
-        let program_info = ProgramInfo {
-            sender_address,
-            function_name: "main".to_string(),
-            args: vec![],
-        };
         assert_eq!(
             MoveProcessor::do_invoke_main(
                 &mut keyed_accounts,
-                &bincode::serialize(&InvokeCommand::RunProgram(program_info)).unwrap(),
+                &bincode::serialize(&InvokeCommand::RunProgram {
+                    sender_address,
+                    function_name: "main".to_string(),
+                    args: vec![],
+                })
+                .unwrap(),
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -551,20 +554,18 @@ mod tests {
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-
         let amount = 2;
-        let program_info = ProgramInfo {
-            sender_address: sender.address.clone(),
-            function_name: "main".to_string(),
-            args: vec![
-                TransactionArgument::Address(payee.address.clone()),
-                TransactionArgument::U64(amount),
-            ],
-        };
-
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram(program_info)).unwrap(),
+            &bincode::serialize(&InvokeCommand::RunProgram {
+                sender_address: sender.address.clone(),
+                function_name: "main".to_string(),
+                args: vec![
+                    TransactionArgument::Address(payee.address.clone()),
+                    TransactionArgument::U64(amount),
+                ],
+            })
+            .unwrap(),
         )
         .unwrap();
 
@@ -615,14 +616,14 @@ mod tests {
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-        let program_info = ProgramInfo {
-            sender_address: payee.address,
-            function_name: "main".to_string(),
-            args: vec![],
-        };
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram(program_info)).unwrap(),
+            &bincode::serialize(&InvokeCommand::RunProgram {
+                sender_address: payee.address,
+                function_name: "main".to_string(),
+                args: vec![],
+            })
+            .unwrap(),
         )
         .unwrap();
     }
@@ -650,14 +651,14 @@ mod tests {
             KeyedAccount::new(&module.key, false, &mut module.account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-        let program_info = ProgramInfo {
-            sender_address: module.address,
-            function_name: "main".to_string(),
-            args: vec![],
-        };
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram(program_info)).unwrap(),
+            &bincode::serialize(&InvokeCommand::RunProgram {
+                sender_address: module.address,
+                function_name: "main".to_string(),
+                args: vec![],
+            })
+            .unwrap(),
         )
         .unwrap();
 
@@ -683,14 +684,14 @@ mod tests {
             KeyedAccount::new(&module.key, false, &mut module.account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-        let program_info = ProgramInfo {
-            sender_address: program.address,
-            function_name: "main".to_string(),
-            args: vec![],
-        };
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram(program_info)).unwrap(),
+            &bincode::serialize(&InvokeCommand::RunProgram {
+                sender_address: program.address,
+                function_name: "main".to_string(),
+                args: vec![],
+            })
+            .unwrap(),
         )
         .unwrap();
     }
@@ -716,18 +717,17 @@ mod tests {
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-        let program_info = ProgramInfo {
-            sender_address: genesis.address.clone(),
-            function_name: "main".to_string(),
-            args: vec![
-                TransactionArgument::Address(pubkey_to_address(&payee.key)),
-                TransactionArgument::U64(amount),
-            ],
-        };
-
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram(program_info)).unwrap(),
+            &bincode::serialize(&InvokeCommand::RunProgram {
+                sender_address: genesis.address.clone(),
+                function_name: "main".to_string(),
+                args: vec![
+                    TransactionArgument::Address(pubkey_to_address(&payee.key)),
+                    TransactionArgument::U64(amount),
+                ],
+            })
+            .unwrap(),
         )
         .unwrap();
 

@@ -3,7 +3,6 @@ use language_e2e_tests::account::AccountResource;
 use log::*;
 use solana_move_loader_api::account_state::{pubkey_to_address, LibraAccountState};
 use solana_move_loader_api::data_store::DataStore;
-use solana_sdk::account::Account;
 use solana_sdk::client::Client;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -13,6 +12,11 @@ use solana_sdk::transaction::Transaction;
 use std::boxed::Box;
 use std::error;
 use std::fmt;
+
+pub fn create_genesis(mint: &Keypair, microlibras: u64, recent_blockhash: Hash) -> Transaction {
+    let ix = librapay_instruction::genesis(&mint.pubkey(), microlibras);
+    Transaction::new_signed_with_payer(vec![ix], Some(&mint.pubkey()), &[mint], recent_blockhash)
+}
 
 pub fn mint_tokens(
     program_id: &Pubkey,
@@ -100,7 +104,7 @@ pub fn get_libra_balance<T: Client>(
     if let Some(account) = account {
         let mut data_store = DataStore::default();
         match bincode::deserialize(&account)? {
-            LibraAccountState::User(write_set) => {
+            LibraAccountState::User(_, write_set) => {
                 data_store.apply_write_set(&write_set);
             }
             LibraAccountState::Unallocated => {
@@ -119,17 +123,6 @@ pub fn get_libra_balance<T: Client>(
         Ok(res)
     } else {
         Ok(0)
-    }
-}
-
-pub fn create_libra_genesis_account(microlibras: u64) -> Account {
-    let libra_genesis_data =
-        bincode::serialize(&LibraAccountState::create_genesis(microlibras)).unwrap();
-    Account {
-        lamports: 1,
-        data: libra_genesis_data,
-        owner: solana_move_loader_api::id(),
-        executable: false,
     }
 }
 
