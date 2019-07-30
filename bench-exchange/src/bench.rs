@@ -527,21 +527,21 @@ fn trader<T>(
         let mut trade_infos = vec![];
         let start = account_group * batch_size as usize;
         let end = account_group * batch_size as usize + batch_size as usize;
-        let mut direction = Direction::To;
+        let mut side = OrderSide::Ask;
         for (signer, trade, src) in izip!(
             signers[start..end].iter(),
             trade_keys,
             srcs[start..end].iter(),
         ) {
-            direction = if direction == Direction::To {
-                Direction::From
+            side = if side == OrderSide::Ask {
+                OrderSide::Bid
             } else {
-                Direction::To
+                OrderSide::Ask
             };
             let order_info = OrderInfo {
                 /// Owner of the trade order
                 owner: Pubkey::default(), // don't care
-                direction,
+                side,
                 pair,
                 tokens,
                 price,
@@ -551,7 +551,7 @@ fn trader<T>(
                 trade_account: trade.pubkey(),
                 order_info,
             });
-            trades.push((signer, trade.pubkey(), direction, src));
+            trades.push((signer, trade.pubkey(), side, src));
         }
         account_group = (account_group + 1) % account_groups as usize;
 
@@ -562,7 +562,7 @@ fn trader<T>(
         trades.chunks(chunk_size).for_each(|chunk| {
             let trades_txs: Vec<_> = chunk
                 .par_iter()
-                .map(|(signer, trade, direction, src)| {
+                .map(|(signer, trade, side, src)| {
                     let s: &Keypair = &signer;
                     let owner = &signer.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
@@ -571,7 +571,7 @@ fn trader<T>(
                         vec![
                             system_instruction::create_account(owner, trade, 1, space, &id()),
                             exchange_instruction::trade_request(
-                                owner, trade, *direction, pair, tokens, price, src,
+                                owner, trade, *side, pair, tokens, price, src,
                             ),
                         ],
                         blockhash,
