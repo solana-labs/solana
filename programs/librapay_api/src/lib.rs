@@ -18,23 +18,30 @@ use solana_runtime::loader_utils::load_program;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::Client;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_instruction;
 
 use types::account_address::AccountAddress;
 
 pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) -> Keypair {
-    let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
-
     let libra_genesis_key = Keypair::new();
-    let tx =
-        librapay_transaction::create_account(from_key, &libra_genesis_key.pubkey(), 1, blockhash);
-    let sig = client.async_send_transaction(tx).unwrap();
-    client.poll_for_signature(&sig).unwrap();
 
-    let tx = librapay_transaction::create_genesis(&libra_genesis_key, amount, blockhash);
-    let sig = client.async_send_transaction(tx).unwrap();
-    client.poll_for_signature(&sig).unwrap();
+    let instruction = system_instruction::create_account(
+        &from_key.pubkey(),
+        &libra_genesis_key.pubkey(),
+        1,
+        2048 as u64,
+        &solana_move_loader_api::id(),
+    );
+    client.send_instruction(&from_key, instruction).unwrap();
+
+    let instruction = librapay_instruction::genesis(&libra_genesis_key.pubkey(), amount);
+    let message = Message::new_with_payer(vec![instruction], Some(&from_key.pubkey()));
+    client
+        .send_message(&[from_key, &libra_genesis_key], message)
+        .unwrap();
 
     libra_genesis_key
 }

@@ -13,9 +13,18 @@ use std::boxed::Box;
 use std::error;
 use std::fmt;
 
-pub fn create_genesis(mint: &Keypair, microlibras: u64, recent_blockhash: Hash) -> Transaction {
-    let ix = librapay_instruction::genesis(&mint.pubkey(), microlibras);
-    Transaction::new_signed_with_payer(vec![ix], Some(&mint.pubkey()), &[mint], recent_blockhash)
+pub fn create_genesis(
+    genesis_keypair: &Keypair,
+    microlibras: u64,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let ix = librapay_instruction::genesis(&genesis_keypair.pubkey(), microlibras);
+    Transaction::new_signed_with_payer(
+        vec![ix],
+        Some(&genesis_keypair.pubkey()),
+        &[genesis_keypair],
+        recent_blockhash,
+    )
 }
 
 pub fn mint_tokens(
@@ -129,7 +138,7 @@ pub fn get_libra_balance<T: Client>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{upload_mint_program, upload_payment_program};
+    use crate::{create_genesis, upload_mint_program, upload_payment_program};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::account::Account;
@@ -139,18 +148,12 @@ mod tests {
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Arc<Bank>, Keypair, Keypair, Pubkey, Pubkey) {
-        let libra_genesis_account = create_libra_genesis_account(lamports);
-        //let (genesis_block, mint_keypair) = create_genesis_block(lamports);
         let mint_keypair = Keypair::new();
-        let libra_mint_keypair = Keypair::new();
         let genesis_block = GenesisBlock::new(
-            &[
-                (
-                    mint_keypair.pubkey(),
-                    Account::new(lamports, 0, &system_program::id()),
-                ),
-                (libra_mint_keypair.pubkey(), libra_genesis_account),
-            ],
+            &[(
+                mint_keypair.pubkey(),
+                Account::new(lamports, 0, &system_program::id()),
+            )],
             &[],
         );
 
@@ -161,12 +164,13 @@ mod tests {
         );
         let shared_bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&shared_bank);
+        let genesis_keypair = create_genesis(&mint_keypair, &bank_client, 1_000_000);
         let mint_program_pubkey = upload_mint_program(&mint_keypair, &bank_client);
         let program_pubkey = upload_payment_program(&mint_keypair, &bank_client);
         (
             shared_bank,
             mint_keypair,
-            libra_mint_keypair,
+            genesis_keypair,
             mint_program_pubkey,
             program_pubkey,
         )
@@ -174,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_transfer() {
-        let (bank, mint_keypair, libra_mint_keypair, mint_program_id, program_id) =
+        let (bank, mint_keypair, libra_genesis_keypair, mint_program_id, program_id) =
             create_bank(10_000);
         let from = Keypair::new();
         let to = Keypair::new();
@@ -190,14 +194,14 @@ mod tests {
         info!(
             "created accounts: mint: {} libra_mint: {}",
             mint_keypair.pubkey(),
-            libra_mint_keypair.pubkey()
+            libra_genesis_keypair.pubkey()
         );
         info!("    from: {} to: {}", from.pubkey(), to.pubkey());
 
         let tx = mint_tokens(
             &mint_program_id,
             &mint_keypair,
-            &libra_mint_keypair,
+            &libra_genesis_keypair,
             &from.pubkey(),
             1,
             bank.last_blockhash(),
@@ -210,7 +214,7 @@ mod tests {
 
         let tx = transfer(
             &program_id,
-            &libra_mint_keypair.pubkey(),
+            &libra_genesis_keypair.pubkey(),
             &mint_keypair,
             &from,
             &to.pubkey(),

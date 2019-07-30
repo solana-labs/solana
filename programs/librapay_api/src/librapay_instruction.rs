@@ -7,11 +7,11 @@ use solana_sdk::pubkey::Pubkey;
 use types::account_address::AccountAddress;
 use types::transaction::TransactionArgument;
 
-pub fn genesis(mint_pubkey: &Pubkey, microlibras: u64) -> Instruction {
+pub fn genesis(genesis_pubkey: &Pubkey, microlibras: u64) -> Instruction {
     let data = bincode::serialize(&InvokeCommand::CreateGenesis(microlibras)).unwrap();
     let ix_data = LoaderInstruction::InvokeMain { data };
 
-    let accounts = vec![AccountMeta::new(*mint_pubkey, true)];
+    let accounts = vec![AccountMeta::new(*genesis_pubkey, true)];
 
     Instruction::new(solana_move_loader_api::id(), &ix_data, accounts)
 }
