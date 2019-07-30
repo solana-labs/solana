@@ -83,12 +83,6 @@ local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-  # Setup `/var/snap/solana/current` symlink so rsyncing the genesis
-  # ledger works (reference: `net/scripts/install-rsync.sh`)
-  sudo rm -rf /var/snap/solana/current
-  sudo mkdir -p /var/snap/solana
-  sudo ln -sT /home/solana/solana /var/snap/solana/current
-
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
