@@ -62,7 +62,9 @@ impl Stakes {
     }
 
     pub fn is_stake(account: &Account) -> bool {
-        solana_vote_api::check_id(&account.owner) || solana_stake_api::check_id(&account.owner)
+        solana_vote_api::check_id(&account.owner)
+            || solana_stake_api::check_id(&account.owner)
+                && account.data.len() >= std::mem::size_of::<StakeState>()
     }
 
     pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
