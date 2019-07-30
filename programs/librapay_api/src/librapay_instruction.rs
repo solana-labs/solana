@@ -8,7 +8,7 @@ use types::account_address::AccountAddress;
 use types::transaction::TransactionArgument;
 
 pub fn genesis(mint_pubkey: &Pubkey, microlibras: u64) -> Instruction {
-    let data = bincode::serialize(&InvokeCommand::CreateGenesis (microlibras)).unwrap();
+    let data = bincode::serialize(&InvokeCommand::CreateGenesis(microlibras)).unwrap();
     let ix_data = LoaderInstruction::InvokeMain { data };
 
     let accounts = vec![AccountMeta::new(*mint_pubkey, true)];
