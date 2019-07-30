@@ -35,13 +35,6 @@ while [[ -n $1 ]]; do
   fi
 done
 
-if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
-  echo "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
-  echo
-  echo "Please run: $here/setup.sh"
-  exit 1
-fi
-
 if [[ -z $CI ]]; then # Skip in CI
   # shellcheck source=scripts/tune-system.sh
   source "$here"/../scripts/tune-system.sh
@@ -50,23 +43,25 @@ fi
 setup_secondary_mount
 
 # These keypairs are created by ./setup.sh and included in the genesis block
-identity_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader-keypair.json
-vote_keypair="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
-storage_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
+identity_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader/identity-keypair.json
+vote_keypair="$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
+storage_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader/storage-keypair.json
 
-ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
-[[ -d "$ledger_config_dir" ]] || (
-  set -x
-  cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
-)
+ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader/ledger
+[[ -d "$ledger_dir" ]] || {
+  echo "$ledger_dir does not exist"
+  echo
+  echo "Please run: $here/setup.sh"
+  exit 1
+}
 
 args+=(
-  --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
+  --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader/accounts
   --enable-rpc-exit
   --identity "$identity_keypair"
-  --ledger "$ledger_config_dir"
+  --ledger "$ledger_dir"
   --rpc-port 8899
-  --snapshot-path "$SOLANA_CONFIG_DIR"/bootstrap-leader-snapshots
+  --snapshot-path "$SOLANA_CONFIG_DIR"/bootstrap-leader/snapshots
   --storage-keypair "$storage_keypair"
   --voting-keypair "$vote_keypair"
   --rpc-drone-address 127.0.0.1:9900
