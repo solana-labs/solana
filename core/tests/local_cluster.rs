@@ -21,6 +21,7 @@ use std::time::Duration;
 #[serial]
 fn test_ledger_cleanup_service() {
     solana_logger::setup();
+    error!("test_ledger_cleanup_service");
     let num_nodes = 3;
     let mut validator_config = ValidatorConfig::default();
     validator_config.max_ledger_slots = Some(100);
@@ -59,6 +60,7 @@ fn test_ledger_cleanup_service() {
 #[serial]
 fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup();
+    error!("test_spend_and_verify_all_nodes_1");
     let num_nodes = 1;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
     cluster_tests::spend_and_verify_all_nodes(
@@ -73,6 +75,7 @@ fn test_spend_and_verify_all_nodes_1() {
 #[serial]
 fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
+    error!("test_spend_and_verify_all_nodes_2");
     let num_nodes = 2;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
     cluster_tests::spend_and_verify_all_nodes(
@@ -87,6 +90,7 @@ fn test_spend_and_verify_all_nodes_2() {
 #[serial]
 fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
+    error!("test_spend_and_verify_all_nodes_3");
     let num_nodes = 3;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
     cluster_tests::spend_and_verify_all_nodes(
@@ -122,6 +126,7 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
 #[should_panic]
 fn test_fullnode_exit_default_config_should_panic() {
     solana_logger::setup();
+    error!("test_fullnode_exit_default_config_should_panic");
     let num_nodes = 2;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
     cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
@@ -131,6 +136,7 @@ fn test_fullnode_exit_default_config_should_panic() {
 #[serial]
 fn test_fullnode_exit_2() {
     solana_logger::setup();
+    error!("test_fullnode_exit_2");
     let num_nodes = 2;
     let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_fullnode_exit = true;
@@ -145,10 +151,13 @@ fn test_fullnode_exit_2() {
 }
 
 // Cluster needs a supermajority to remain, so the minimum size for this test is 4
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_leader_failure_4() {
     solana_logger::setup();
+    error!("test_leader_failure_4");
     let num_nodes = 4;
     let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_fullnode_exit = true;
@@ -170,6 +179,7 @@ fn test_leader_failure_4() {
 #[serial]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
+    error!("test_two_unbalanced_stakes");
     let mut validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 10;
@@ -231,6 +241,8 @@ fn test_forwarding() {
 #[test]
 #[serial]
 fn test_restart_node() {
+    solana_logger::setup();
+    error!("test_restart_node");
     let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
     let ticks_per_slot = 16;
     let mut cluster = LocalCluster::new(&ClusterConfig {
@@ -273,14 +285,18 @@ fn test_listener_startup() {
     assert_eq!(cluster_nodes.len(), 4);
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_bad_blob_size_leader() {
     test_faulty_node(BroadcastStageType::BroadcastBadBlobSizes);
 }
@@ -344,10 +360,13 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     );
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_repairman_catchup() {
     solana_logger::setup();
+    error!("test_repairman_catchup");
     run_repairman_catchup(3);
 }
 
