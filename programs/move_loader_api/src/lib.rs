@@ -1,5 +1,6 @@
 pub mod account_state;
 pub mod data_store;
+pub mod error_mappers;
 pub mod processor;
 
 const MOVE_LOADER_PROGRAM_ID: [u8; 32] = [

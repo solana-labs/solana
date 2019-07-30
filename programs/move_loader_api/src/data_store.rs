@@ -26,7 +26,7 @@ pub struct DataStore {
 impl DataStore {
     /// Creates a new `DataStore` with the provided initial data.
     pub fn new(data: IndexMap<AccessPath, Vec<u8>>) -> Self {
-        DataStore { data }
+        Self { data }
     }
 
     /// Applies a [`WriteSet`] to this data store.
