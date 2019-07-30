@@ -78,6 +78,15 @@ impl LeaderScheduleCache {
         let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
         let mut first_slot = None;
         let mut last_slot = current_slot;
+        let max_epoch = *self.max_epoch.read().unwrap();
+        if epoch > max_epoch {
+            debug!(
+                "Requested next leader in slot: {} of unconfirmed epoch: {}",
+                current_slot + 1,
+                epoch
+            );
+            return None;
+        }
         while let Some(leader_schedule) = self.get_epoch_schedule_else_compute(epoch, bank) {
             // clippy thinks I should do this:
             //  for (i, <item>) in leader_schedule
@@ -110,6 +119,9 @@ impl LeaderScheduleCache {
             }
 
             epoch += 1;
+            if epoch > max_epoch {
+                break;
+            }
             start_index = 0;
         }
         first_slot.and_then(|slot| Some((slot, last_slot)))
@@ -480,6 +492,12 @@ mod tests {
         }
         expected_slot += index;
 
+        // If the max root isn't set, we'll get None
+        assert!(cache
+            .next_leader_slot(&node_pubkey, 0, &bank, None)
+            .is_none());
+
+        cache.set_root(&bank);
         assert_eq!(
             cache
                 .next_leader_slot(&node_pubkey, 0, &bank, None)
