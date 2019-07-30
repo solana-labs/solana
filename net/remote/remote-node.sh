@@ -166,7 +166,6 @@ local|tar|skip)
       ./multinode-demo/setup.sh "${args[@]}"
     fi
     args=(
-      --enable-rpc-exit
       --gossip-port "$entrypointIp":8001
       --init-complete-file "$initCompleteFile"
     )
@@ -176,7 +175,7 @@ local|tar|skip)
     fi
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
-    nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
+    nohup ./multinode-demo/bootstrap-leader.sh "${args[@]}" > fullnode.log 2>&1 &
     pid=$!
     oom_score_adj "$pid" 1000
     waitForNodeToInit

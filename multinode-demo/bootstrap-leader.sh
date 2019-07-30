@@ -20,6 +20,9 @@ while [[ -n $1 ]]; do
     if [[ $1 = --init-complete-file ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --gossip-port ]]; then
+      args+=("$1" "$2")
+      shift 2
     else
       echo "Unknown argument: $1"
       $program --help
@@ -60,7 +63,6 @@ ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
 args+=(
   --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
   --enable-rpc-exit
-  --gossip-port 8001
   --identity "$identity_keypair"
   --ledger "$ledger_config_dir"
   --rpc-port 8899
@@ -69,6 +71,7 @@ args+=(
   --voting-keypair "$vote_keypair"
   --rpc-drone-address 127.0.0.1:9900
 )
+default_arg --gossip-port 8001
 
 identity_pubkey=$($solana_keygen pubkey "$identity_keypair")
 export SOLANA_METRICS_HOST_ID="$identity_pubkey"
