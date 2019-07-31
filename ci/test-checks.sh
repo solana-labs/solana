@@ -14,7 +14,7 @@ _ cargo +"$rust_stable" fmt --all -- --check
 _ cargo +"$rust_stable" clippy --version
 _ cargo +"$rust_stable" clippy --all -- --deny=warnings
 _ cargo +"$rust_stable" audit --version
-_ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0011 # https://github.com/solana-labs/solana/issues/5207
+_ cargo +"$rust_stable" audit
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
