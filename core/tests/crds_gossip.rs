@@ -456,6 +456,7 @@ fn test_star_network_push_star_200() {
     let mut network = star_network_create(200);
     network_simulator(&mut network, 0.9);
 }
+#[ignore]
 #[test]
 fn test_star_network_push_rstar_200() {
     let mut network = rstar_network_create(200);
