@@ -10,6 +10,7 @@ members = [
     "drone",
     "validator",
     "genesis",
+    "genesis_programs",
     "gossip",
     "install",
     "keygen",

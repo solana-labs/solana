@@ -1,20 +1,4 @@
 //! A command-line executable for generating the chain's genesis block.
-#[macro_use]
-extern crate solana_bpf_loader_program;
-#[macro_use]
-extern crate solana_vote_program;
-#[macro_use]
-extern crate solana_stake_program;
-#[macro_use]
-extern crate solana_budget_program;
-#[macro_use]
-extern crate solana_token_program;
-#[macro_use]
-extern crate solana_config_program;
-#[macro_use]
-extern crate solana_exchange_program;
-#[macro_use]
-extern crate solana_storage_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
@@ -299,16 +283,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
             ),
         ])
-        .native_instruction_processors(&[
-            solana_bpf_loader_program!(),
-            solana_vote_program!(),
-            solana_stake_program!(),
-            solana_budget_program!(),
-            solana_token_program!(),
-            solana_config_program!(),
-            solana_exchange_program!(),
-            solana_storage_program!(),
-        ])
+        .native_instruction_processors(&solana_genesis_programs::get())
         .ticks_per_slot(value_t_or_exit!(matches, "ticks_per_slot", u64))
         .slots_per_epoch(value_t_or_exit!(matches, "slots_per_epoch", u64));
 
@@ -367,31 +342,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hashbrown::HashSet;
     use solana_sdk::genesis_block::Builder;
     use solana_sdk::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::fs::remove_file;
     use std::io::Write;
     use std::path::Path;
-
-    #[test]
-    fn test_program_id_uniqueness() {
-        let mut unique = HashSet::new();
-        let ids = vec![
-            solana_sdk::system_program::id(),
-            solana_sdk::native_loader::id(),
-            solana_sdk::bpf_loader::id(),
-            solana_budget_api::id(),
-            solana_storage_api::id(),
-            solana_token_api::id(),
-            solana_vote_api::id(),
-            solana_stake_api::id(),
-            solana_config_api::id(),
-            solana_exchange_api::id(),
-        ];
-        assert!(ids.into_iter().all(move |id| unique.insert(id)));
-    }
 
     #[test]
     fn test_append_primordial_accounts_to_genesis() {

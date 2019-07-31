@@ -30,8 +30,6 @@ use std::io::{Error, ErrorKind, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use solana_move_loader_api;
-
 pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,
     pub voting_keypair: Arc<Keypair>,
@@ -159,17 +157,15 @@ impl LocalCluster {
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
 
+        genesis_block
+            .native_instruction_processors
+            .extend_from_slice(&solana_genesis_programs::get());
+
         let storage_keypair = Keypair::new();
         genesis_block.accounts.push((
             storage_keypair.pubkey(),
             storage_contract::create_validator_storage_account(leader_pubkey, 1),
         ));
-        genesis_block
-            .native_instruction_processors
-            .push(solana_storage_program!());
-        genesis_block
-            .native_instruction_processors
-            .push(solana_move_loader_program!());
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_contact_info = leader_node.info.clone();

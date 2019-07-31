@@ -16,23 +16,11 @@ serde_derive = "1.0.98"
 serde_json = "1.0.40"
 serde_yaml = "0.8.9"
 solana = { path = "../core", version = "0.18.0-pre0" }
-solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.18.0-pre0" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.18.0-pre0" }
-solana-budget-api = { path = "../programs/budget_api", version = "0.18.0-pre0" }
-solana-budget-program = { path = "../programs/budget_program", version = "0.18.0-pre0" }
-solana-config-api = { path = "../programs/config_api", version = "0.18.0-pre0" }
-solana-config-program = { path = "../programs/config_program", version = "0.18.0-pre0" }
-solana-exchange-api = { path = "../programs/exchange_api", version = "0.18.0-pre0" }
-solana-exchange-program = { path = "../programs/exchange_program", version = "0.18.0-pre0" }
+solana-genesis-programs = { path = "../genesis_programs", version = "0.18.0-pre0" }
 solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre0" }
-solana-stake-program = { path = "../programs/stake_program", version = "0.18.0-pre0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre0" }
-solana-storage-program = { path = "../programs/storage_program", version = "0.18.0-pre0" }
-solana-token-api = { path = "../programs/token_api", version = "0.18.0-pre0" }
-solana-token-program = { path = "../programs/token_program", version = "0.18.0-pre0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre0" }
-solana-vote-program = { path = "../programs/vote_program", version = "0.18.0-pre0" }
 
 [dev-dependencies]
 hashbrown = "0.3.0"
