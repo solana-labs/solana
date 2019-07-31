@@ -70,8 +70,7 @@ pub fn do_bench_tps<T>(
     config: Config,
     gen_keypairs: Vec<Keypair>,
     keypair0_balance: u64,
-    program_id: &Pubkey,
-    libra_mint_id: &Pubkey,
+    libra_args: Option<(&Pubkey, &Pubkey, Vec<Keypair>)>,
 ) -> u64
 where
     T: 'static + Client + Send + Sync,
@@ -82,8 +81,8 @@ where
         thread_batch_sleep_ms,
         duration,
         tx_count,
-        use_move,
         sustained,
+        ..
     } = config;
 
     let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
@@ -175,9 +174,7 @@ where
             &keypairs[len..],
             threads,
             reclaim_lamports_back_to_source_account,
-            use_move,
-            &program_id,
-            &libra_mint_id,
+            &libra_args,
         );
         // In sustained mode overlap the transfers with generation
         // this has higher average performance but lower peak performance
@@ -234,6 +231,74 @@ fn metrics_submit_lamport_balance(lamport_balance: u64) {
     );
 }
 
+fn generate_move_txs(
+    source: &[Keypair],
+    dest: &[Keypair],
+    reclaim: bool,
+    move_keypairs: &[Keypair],
+    libra_pay_program_id: &Pubkey,
+    libra_mint_id: &Pubkey,
+    blockhash: &Hash,
+) -> Vec<(Transaction, u64)> {
+    let count = move_keypairs.len() / 2;
+    let source_move = &move_keypairs[..count];
+    let dest_move = &move_keypairs[count..];
+    let pairs: Vec<_> = if !reclaim {
+        source_move
+            .iter()
+            .zip(dest_move.iter())
+            .zip(source.iter())
+            .collect()
+    } else {
+        dest_move
+            .iter()
+            .zip(source_move.iter())
+            .zip(dest.iter())
+            .collect()
+    };
+
+    pairs
+        .par_iter()
+        .map(|((from, to), payer)| {
+            (
+                librapay_transaction::transfer(
+                    libra_pay_program_id,
+                    libra_mint_id,
+                    &payer,
+                    &from,
+                    &to.pubkey(),
+                    1,
+                    *blockhash,
+                ),
+                timestamp(),
+            )
+        })
+        .collect()
+}
+
+fn generate_solana_txs(
+    source: &[Keypair],
+    dest: &[Keypair],
+    reclaim: bool,
+    blockhash: &Hash,
+) -> Vec<(Transaction, u64)> {
+    let pairs: Vec<_> = if !reclaim {
+        source.iter().zip(dest.iter()).collect()
+    } else {
+        dest.iter().zip(source.iter()).collect()
+    };
+
+    pairs
+        .par_iter()
+        .map(|(from, to)| {
+            (
+                system_transaction::create_user_account(from, &to.pubkey(), 1, *blockhash),
+                timestamp(),
+            )
+        })
+        .collect()
+}
+
 fn generate_txs(
     shared_txs: &SharedTransactions,
     blockhash: &Hash,
@@ -241,43 +306,25 @@ fn generate_txs(
     dest: &[Keypair],
     threads: usize,
     reclaim: bool,
-    use_move: bool,
-    libra_pay_program_id: &Pubkey,
-    libra_mint_id: &Pubkey,
+    libra_args: &Option<(&Pubkey, &Pubkey, Vec<Keypair>)>,
 ) {
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
 
-    let pairs: Vec<_> = if !reclaim {
-        source.iter().zip(dest.iter()).collect()
+    let transactions = if let Some((libra_pay_program_id, libra_mint_id, libra_keys)) = libra_args {
+        generate_move_txs(
+            source,
+            dest,
+            reclaim,
+            &libra_keys,
+            libra_pay_program_id,
+            libra_mint_id,
+            blockhash,
+        )
     } else {
-        dest.iter().zip(source.iter()).collect()
+        generate_solana_txs(source, dest, reclaim, blockhash)
     };
-    let transactions: Vec<_> = pairs
-        .par_iter()
-        .map(|(id, keypair)| {
-            if use_move {
-                (
-                    librapay_transaction::transfer(
-                        libra_pay_program_id,
-                        libra_mint_id,
-                        &id,
-                        &id,
-                        &keypair.pubkey(),
-                        1,
-                        *blockhash,
-                    ),
-                    timestamp(),
-                )
-            } else {
-                (
-                    system_transaction::create_user_account(id, &keypair.pubkey(), 1, *blockhash),
-                    timestamp(),
-                )
-            }
-        })
-        .collect();
 
     let duration = signing_start.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -614,11 +661,7 @@ fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
     i % (num_lamports_per_account / 4) == 0 && (i >= (3 * num_lamports_per_account) / 4)
 }
 
-pub fn generate_keypairs(
-    seed_keypair: &Keypair,
-    count: u64,
-    use_move: bool,
-) -> (Vec<Keypair>, u64) {
+pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
@@ -631,13 +674,7 @@ pub fn generate_keypairs(
         delta *= MAX_SPENDS_PER_TX;
         total_keys += delta;
     }
-    if use_move {
-        // Move funding is a naive loop that doesn't
-        // need aligned number of keys.
-        (rnd.gen_n_keypairs(count), extra)
-    } else {
-        (rnd.gen_n_keypairs(total_keys), extra)
-    }
+    (rnd.gen_n_keypairs(total_keys), extra)
 }
 
 fn fund_move_keys<T: Client>(
@@ -770,10 +807,9 @@ pub fn generate_and_fund_keypairs<T: Client>(
     tx_count: usize,
     lamports_per_account: u64,
     libra_keys: Option<(&Pubkey, &Pubkey, &Arc<Keypair>)>,
-) -> Result<(Vec<Keypair>, u64)> {
+) -> Result<(Vec<Keypair>, Option<Vec<Keypair>>, u64)> {
     info!("Creating {} keypairs...", tx_count * 2);
-    let (mut keypairs, extra) =
-        generate_keypairs(funding_key, tx_count as u64 * 2, libra_keys.is_some());
+    let (mut keypairs, extra) = generate_keypairs(funding_key, tx_count as u64 * 2);
     info!("Get lamports...");
 
     // Sample the first keypair, see if it has lamports, if so then resume.
@@ -782,41 +818,56 @@ pub fn generate_and_fund_keypairs<T: Client>(
         .get_balance(&keypairs[tx_count * 2 - 1].pubkey())
         .unwrap_or(0);
 
+    let mut move_keypairs_ret = None;
+
     if lamports_per_account > last_keypair_balance {
         let (_blockhash, fee_calculator) = client.get_recent_blockhash().unwrap();
         let account_desired_balance =
             lamports_per_account - last_keypair_balance + fee_calculator.max_lamports_per_signature;
         let extra_fees = extra * fee_calculator.max_lamports_per_signature;
-        let total = account_desired_balance * (1 + keypairs.len() as u64) + extra_fees;
+        let mut total = account_desired_balance * (1 + keypairs.len() as u64) + extra_fees;
+        if libra_keys.is_some() {
+            total *= 2;
+        }
         if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
             airdrop_lamports(client, &drone_addr.unwrap(), funding_key, total)?;
         }
+
         if let Some((libra_pay_program_id, libra_mint_program_id, libra_mint_key)) = libra_keys {
+            // Generate another set of keypairs for move accounts.
+            // Still fund the solana ones which will be used for fees.
+            let seed = [0u8; 32];
+            let mut rnd = GenKeys::new(seed);
+            let move_keypairs = rnd.gen_n_keypairs(tx_count as u64 * 2);
             fund_move_keys(
                 client,
                 funding_key,
-                &keypairs,
-                total,
+                &move_keypairs,
+                total / 2,
                 libra_pay_program_id,
                 libra_mint_program_id,
                 libra_mint_key,
             );
-        } else {
-            fund_keys(
-                client,
-                funding_key,
-                &keypairs,
-                total,
-                fee_calculator.max_lamports_per_signature,
-                extra,
-            );
+            move_keypairs_ret = Some(move_keypairs);
+
+            // Give solana keys half and move keys half the lamports.
+            total /= 2;
         }
+
+        fund_keys(
+            client,
+            funding_key,
+            &keypairs,
+            total,
+            fee_calculator.max_lamports_per_signature,
+            extra,
+        );
     }
 
     // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
     keypairs.truncate(2 * tx_count);
 
-    Ok((keypairs, last_keypair_balance))
+    Ok((keypairs, move_keypairs_ret, last_keypair_balance))
 }
 
 #[cfg(test)]
@@ -905,7 +956,7 @@ mod tests {
             None
         };
 
-        let (keypairs, _keypair_balance) = generate_and_fund_keypairs(
+        let (keypairs, move_keypairs, _keypair_balance) = generate_and_fund_keypairs(
             &client,
             Some(drone_addr),
             &config.id,
@@ -915,14 +966,14 @@ mod tests {
         )
         .unwrap();
 
-        let total = do_bench_tps(
-            vec![client],
-            config,
-            keypairs,
-            0,
-            &libra_pay_program_id,
-            &libra_genesis_keypair.pubkey(),
-        );
+        let libra_mint_pubkey = libra_genesis_keypair.pubkey();
+        let move_args = if let Some(keypairs) = move_keypairs {
+            Some((&libra_pay_program_id, &libra_mint_pubkey, keypairs))
+        } else {
+            None
+        };
+
+        let total = do_bench_tps(vec![client], config, keypairs, 0, move_args);
         assert!(total > 100);
     }
 
@@ -936,11 +987,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_bench_tps_local_cluster_move() {
         let mut config = Config::default();
         config.tx_count = 100;
-        config.duration = Duration::from_secs(10);
+        config.duration = Duration::from_secs(20);
         config.use_move = true;
 
         test_bench_tps_local_cluster(config);
@@ -957,18 +1007,11 @@ mod tests {
         config.tx_count = 10;
         config.duration = Duration::from_secs(5);
 
-        let (keypairs, _keypair_balance) =
+        let (keypairs, _move_keypairs, _keypair_balance) =
             generate_and_fund_keypairs(&clients[0], None, &config.id, config.tx_count, 20, None)
                 .unwrap();
 
-        do_bench_tps(
-            clients,
-            config,
-            keypairs,
-            0,
-            &Pubkey::default(),
-            &Pubkey::default(),
-        );
+        do_bench_tps(clients, config, keypairs, 0, None);
     }
 
     #[test]
@@ -979,7 +1022,7 @@ mod tests {
         let tx_count = 10;
         let lamports = 20;
 
-        let (keypairs, _keypair_balance) =
+        let (keypairs, _move_keypairs, _keypair_balance) =
             generate_and_fund_keypairs(&client, None, &id, tx_count, lamports, None).unwrap();
 
         for kp in &keypairs {
@@ -997,7 +1040,7 @@ mod tests {
         let tx_count = 10;
         let lamports = 20;
 
-        let (keypairs, _keypair_balance) =
+        let (keypairs, _move_keypairs, _keypair_balance) =
             generate_and_fund_keypairs(&client, None, &id, tx_count, lamports, None).unwrap();
 
         let max_fee = client
