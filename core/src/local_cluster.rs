@@ -9,7 +9,7 @@ use crate::service::Service;
 use crate::validator::{Validator, ValidatorConfig};
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
-use solana_program_utilities::get_default_native_instruction_processors;
+use solana_programs::get_default_native_instruction_processors;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::message::Message;

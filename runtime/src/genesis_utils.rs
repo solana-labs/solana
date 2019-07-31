@@ -1,4 +1,4 @@
-use solana_program_utilities::get_default_native_instruction_processors;
+use solana_programs::get_default_native_instruction_processors;
 use solana_sdk::{
     account::Account,
     fee_calculator::FeeCalculator,

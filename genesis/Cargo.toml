@@ -16,7 +16,7 @@ serde_derive = "1.0.98"
 serde_json = "1.0.40"
 serde_yaml = "0.8.9"
 solana = { path = "../core", version = "0.18.0-pre0" }
-solana-program-utilities = { path = "../programs/utilities", version = "0.18.0-pre0" }
+solana-programs = { path = "../programs", version = "0.18.0-pre0" }
 solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre0" }
