@@ -287,6 +287,10 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
         match self.state()? {
             StakeState::Stake(mut stake) => {
+                // still activated, no can do
+                if stake.deactivated == std::u64::MAX {
+                    return Err(InstructionError::InsufficientFunds);
+                }
                 let staked = if stake.stake(clock.stakers_epoch) == 0 {
                     0
                 } else {
@@ -501,7 +505,7 @@ mod tests {
         let mut stake_account =
             Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
 
-        let clock = sysvar::clock::Clock::default();
+        let mut clock = sysvar::clock::Clock::default();
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
@@ -541,6 +545,11 @@ mod tests {
             Ok(())
         );
 
+        // deactivate the stake before withdrawal
+        assert_eq!(stake_keyed_account.deactivate_stake(&clock), Ok(()));
+        // simulate time passing
+        clock.stakers_epoch += STAKE_WARMUP_EPOCHS;
+
         // Try to withdraw more than what's available
         assert_eq!(
             stake_keyed_account.withdraw(
@@ -572,7 +581,7 @@ mod tests {
 
         let clock = sysvar::clock::Clock::default();
         let mut future = sysvar::clock::Clock::default();
-        future.epoch += 16;
+        future.stakers_epoch += 16;
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
@@ -591,14 +600,14 @@ mod tests {
             Ok(())
         );
 
-        // Try to withdraw including staked
+        // Try to withdraw stake
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports + 1,
                 &mut to_keyed_account,
                 &clock
             ),
-            Ok(())
+            Err(InstructionError::InsufficientFunds)
         );
     }
 
