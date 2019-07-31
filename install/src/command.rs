@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, ExplicitRelease};
 use crate::stop_process::stop_process;
 use crate::update_manifest::{SignedUpdateManifest, UpdateManifest};
 use chrono::{Local, TimeZone};
@@ -492,7 +492,7 @@ pub fn init(
     json_rpc_url: &str,
     update_manifest_pubkey: &Pubkey,
     no_modify_path: bool,
-    release_semver: Option<&str>,
+    explicit_release: Option<ExplicitRelease>,
 ) -> Result<(), String> {
     let config = {
         // Write new config file only if different, so that running |solana-install init|
@@ -503,7 +503,7 @@ pub fn init(
             data_dir,
             json_rpc_url,
             update_manifest_pubkey,
-            release_semver,
+            explicit_release,
         );
         if current_config != config {
             config.save(config_file)?;
@@ -525,10 +525,18 @@ pub fn init(
     Ok(())
 }
 
-fn github_download_url(release_semver: &str) -> String {
+fn github_release_download_url(release_semver: &str) -> String {
     format!(
         "https://github.com/solana-labs/solana/releases/download/v{}/solana-release-{}.tar.bz2",
         release_semver,
+        crate::build_env::TARGET
+    )
+}
+
+fn release_channel_download_url(release_channel: &str) -> String {
+    format!(
+        "http://release.solana.com/{}/solana-release-{}.tar.bz2",
+        release_channel,
         crate::build_env::TARGET
     )
 }
@@ -541,12 +549,24 @@ pub fn info(config_file: &str, local_info_only: bool) -> Result<Option<UpdateMan
         "Active release directory:",
         &config.active_release_dir().to_str().unwrap_or("?"),
     );
-    if let Some(release_semver) = &config.release_semver {
-        println_name_value(&format!("{}Release version:", BULLET), &release_semver);
-        println_name_value(
-            &format!("{}Release URL:", BULLET),
-            &github_download_url(release_semver),
-        );
+
+    if let Some(explicit_release) = &config.explicit_release {
+        match explicit_release {
+            ExplicitRelease::Semver(release_semver) => {
+                println_name_value(&format!("{}Release version:", BULLET), &release_semver);
+                println_name_value(
+                    &format!("{}Release URL:", BULLET),
+                    &github_release_download_url(release_semver),
+                );
+            }
+            ExplicitRelease::Channel(release_channel) => {
+                println_name_value(&format!("{}Release channel:", BULLET), &release_channel);
+                println_name_value(
+                    &format!("{}Release URL:", BULLET),
+                    &release_channel_download_url(release_channel),
+                );
+            }
+        }
         return Ok(None);
     }
 
@@ -696,13 +716,27 @@ pub fn update(config_file: &str) -> Result<bool, String> {
     let mut config = Config::load(config_file)?;
     let update_manifest = info(config_file, false)?;
 
-    let release_dir = if let Some(release_semver) = &config.release_semver {
-        let download_url = github_download_url(release_semver);
-        let release_dir = config.release_dir(&release_semver);
-        let ok_dir = release_dir.join(".ok");
-        if ok_dir.exists() {
-            return Ok(false);
-        }
+    let release_dir = if let Some(explicit_release) = &config.explicit_release {
+        let (download_url, release_dir) = match explicit_release {
+            ExplicitRelease::Semver(release_semver) => {
+                let download_url = github_release_download_url(release_semver);
+                let release_dir = config.release_dir(&release_semver);
+                if release_dir.join(".ok").exists() {
+                    // If this release_semver has already been successfully downloaded, no update
+                    // needed
+                    return Ok(false);
+                }
+                (download_url, release_dir)
+            }
+            ExplicitRelease::Channel(release_channel) => {
+                let download_url = release_channel_download_url(release_channel);
+                let release_dir = config.release_dir(&release_channel);
+                // Note: There's currently no mechanism to check for an updated binary for a release
+                // channel so a download always occurs.
+                (download_url, release_dir)
+            }
+        };
+
         let (_temp_dir, temp_archive, _temp_archive_sha256) =
             download_to_temp_archive(&download_url, None)
                 .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
@@ -712,7 +746,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
                 temp_archive, release_dir, err
             )
         })?;
-        let _ = fs::create_dir_all(ok_dir);
+        let _ = fs::create_dir_all(release_dir.join(".ok"));
 
         release_dir
     } else {
@@ -843,7 +877,7 @@ pub fn run(
             }
         };
 
-        if now.elapsed().as_secs() > config.update_poll_secs {
+        if config.explicit_release.is_none() && now.elapsed().as_secs() > config.update_poll_secs {
             match update(config_file) {
                 Ok(true) => {
                     // Update successful, kill current process so it will be restart
