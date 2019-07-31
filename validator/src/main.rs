@@ -162,17 +162,7 @@ fn main() {
                 .value_name("PATHS")
                 .takes_value(true)
                 .requires("snapshot_interval_banks")
-                .requires("snapshot_package_output_path")
                 .help("Snapshot path"),
-        )
-        .arg(
-            clap::Arg::with_name("snapshot_package_output_path")
-                .long("snapshot-package-output-path")
-                .value_name("OUTPUT_PATHS")
-                .takes_value(true)
-                .requires("snapshot_path")
-                .requires("snapshot_interval_banks")
-                .help("Snapshot package output path"),
         )
         .arg(
             clap::Arg::with_name("snapshot_interval_slots")
@@ -180,7 +170,6 @@ fn main() {
                 .value_name("SNAPSHOT_INTERVAL_SLOTS")
                 .takes_value(true)
                 .requires("snapshot_path")
-                .requires("snapshot_package_output_path")
                 .help("Number of slots between generating snapshots"),
         )
         .arg(
@@ -258,14 +247,10 @@ fn main() {
         validator_config.account_paths = Some(paths.to_string());
     }
     if let Some(snapshot_path) = matches.value_of("snapshot_path").map(PathBuf::from) {
-        let snapshot_package_output_path = matches
-            .value_of("snapshot_package_output_path")
-            .map(PathBuf::from)
-            .unwrap();
         let snapshot_interval = matches.value_of("snapshot_interval_banks").unwrap();
         validator_config.snapshot_config = Some(SnapshotConfig::new(
             snapshot_path,
-            snapshot_package_output_path,
+            ledger_path.clone(),
             snapshot_interval.parse::<usize>().unwrap(),
         ));
     } else {
