@@ -25,8 +25,9 @@ missing() {
 [[ -n $updatePlatform ]] || missing updatePlatform
 [[ -f update_manifest_keypair.json ]] || missing update_manifest_keypair.json
 
-RUST_LOG="$2"
-export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
+if [[ -n $2 ]]; then
+  export RUST_LOG="$2"
+fi
 
 source net/common.sh
 loadConfigFile

@@ -60,8 +60,9 @@ while [[ $1 = -o ]]; do
   esac
 done
 
-RUST_LOG="$1"
-export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
+if [[ -n $1 ]]; then
+  export RUST_LOG="$1"
+fi
 
 source net/common.sh
 loadConfigFile
