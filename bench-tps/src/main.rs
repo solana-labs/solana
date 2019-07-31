@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[macro_use]
+extern crate solana_move_loader_program;
+
 mod bench;
 mod cli;
 
@@ -79,7 +83,7 @@ fn main() {
         exit(1);
     }
 
-    let (keypairs, _move_keypairs, keypair_balance) = if read_from_client_file {
+    let (keypairs, move_keypairs, keypair_balance) = if read_from_client_file && !use_move {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
@@ -104,7 +108,7 @@ fn main() {
             &id,
             tx_count,
             NUM_LAMPORTS_PER_ACCOUNT,
-            None,
+            use_move,
         )
         .unwrap_or_else(|e| {
             eprintln!("Error could not fund keys: {:?}", e);
@@ -122,5 +126,11 @@ fn main() {
         use_move,
     };
 
-    do_bench_tps(vec![client], config, keypairs, keypair_balance, None);
+    do_bench_tps(
+        vec![client],
+        config,
+        keypairs,
+        keypair_balance,
+        move_keypairs,
+    );
 }
