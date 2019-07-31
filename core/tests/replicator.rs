@@ -79,8 +79,10 @@ fn test_replicator_startup_1_node() {
     run_replicator_startup_basic(1, 1);
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_replicator_startup_2_nodes() {
     run_replicator_startup_basic(2, 1);
 }
