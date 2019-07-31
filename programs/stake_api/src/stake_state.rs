@@ -53,7 +53,7 @@ pub struct Stake {
     pub activated: Epoch,   // epoch the stake was activated
     pub deactivated: Epoch, // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
 }
-pub const STAKE_WARMUP_EPOCHS: u64 = 3;
+pub const STAKE_WARMUP_EPOCHS: Epoch = 3;
 
 impl Default for Stake {
     fn default() -> Self {
@@ -68,7 +68,7 @@ impl Default for Stake {
 }
 
 impl Stake {
-    pub fn stake(&self, epoch: u64) -> u64 {
+    pub fn stake(&self, epoch: Epoch) -> u64 {
         // before "activated" or after deactivated?
         if epoch < self.activated || epoch >= self.deactivated {
             return 0;
@@ -217,7 +217,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 new_stake,
                 vote_account.unsigned_key(),
                 &vote_account.state()?,
-                clock.epoch,
+                clock.stakers_epoch,
             );
 
             self.set_state(&StakeState::Stake(stake))
@@ -231,7 +231,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         }
 
         if let StakeState::Stake(mut stake) = self.state()? {
-            stake.deactivate(clock.epoch);
+            stake.deactivate(clock.stakers_epoch);
 
             self.set_state(&StakeState::Stake(stake))
         } else {
@@ -287,7 +287,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
         match self.state()? {
             StakeState::Stake(mut stake) => {
-                let staked = if stake.stake(clock.epoch) == 0 {
+                // still activated, no can do
+                if stake.deactivated == std::u64::MAX {
+                    return Err(InstructionError::InsufficientFunds);
+                }
+                let staked = if stake.stake(clock.stakers_epoch) == 0 {
                     0
                 } else {
                     // Assume full stake if the stake is under warmup/cooldown
@@ -353,7 +357,10 @@ mod tests {
 
     #[test]
     fn test_stake_delegate_stake() {
-        let clock = sysvar::clock::Clock::default();
+        let clock = sysvar::clock::Clock {
+            stakers_epoch: 1,
+            ..sysvar::clock::Clock::default()
+        };
 
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
@@ -399,7 +406,7 @@ mod tests {
                 voter_pubkey: vote_keypair.pubkey(),
                 credits_observed: vote_state.credits(),
                 stake: stake_lamports,
-                activated: 0,
+                activated: clock.stakers_epoch,
                 deactivated: std::u64::MAX,
             })
         );
@@ -456,7 +463,10 @@ mod tests {
         let mut stake_account =
             Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
 
-        let clock = sysvar::clock::Clock::default();
+        let clock = sysvar::clock::Clock {
+            stakers_epoch: 1,
+            ..sysvar::clock::Clock::default()
+        };
 
         // unsigned keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
@@ -495,7 +505,7 @@ mod tests {
         let mut stake_account =
             Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
 
-        let clock = sysvar::clock::Clock::default();
+        let mut clock = sysvar::clock::Clock::default();
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
@@ -535,6 +545,11 @@ mod tests {
             Ok(())
         );
 
+        // deactivate the stake before withdrawal
+        assert_eq!(stake_keyed_account.deactivate_stake(&clock), Ok(()));
+        // simulate time passing
+        clock.stakers_epoch += STAKE_WARMUP_EPOCHS;
+
         // Try to withdraw more than what's available
         assert_eq!(
             stake_keyed_account.withdraw(
@@ -566,7 +581,7 @@ mod tests {
 
         let clock = sysvar::clock::Clock::default();
         let mut future = sysvar::clock::Clock::default();
-        future.epoch += 16;
+        future.stakers_epoch += 16;
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
@@ -585,14 +600,14 @@ mod tests {
             Ok(())
         );
 
-        // Try to withdraw including staked
+        // Try to withdraw stake
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports + 1,
                 &mut to_keyed_account,
                 &clock
             ),
-            Ok(())
+            Err(InstructionError::InsufficientFunds)
         );
     }
 

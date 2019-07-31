@@ -286,8 +286,9 @@ impl Bank {
         //  slot = 0 and genesis configuration
         {
             let stakes = bank.stakes.read().unwrap();
-            for i in 0..=bank.get_stakers_epoch(bank.slot) {
-                bank.epoch_stakes.insert(i, stakes.clone());
+            for epoch in 0..=bank.get_stakers_epoch(bank.slot) {
+                bank.epoch_stakes
+                    .insert(epoch, stakes.clone_with_epoch(epoch));
             }
         }
         bank.update_clock();
@@ -357,7 +358,7 @@ impl Bank {
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
             if epoch_stakes.get(&epoch).is_none() {
-                epoch_stakes.insert(epoch, self.stakes.read().unwrap().clone());
+                epoch_stakes.insert(epoch, self.stakes.read().unwrap().clone_with_epoch(epoch));
             }
             epoch_stakes
         };
@@ -1497,6 +1498,7 @@ mod tests {
     use solana_sdk::system_transaction;
     use solana_sdk::sysvar::{fees::Fees, rewards::Rewards};
     use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
+    use solana_stake_api::stake_state::Stake;
     use solana_vote_api::vote_instruction;
     use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
     use std::io::Cursor;
@@ -2436,33 +2438,48 @@ mod tests {
         genesis_block.epoch_warmup = false; // allows me to do the normal division stuff below
 
         let parent = Arc::new(Bank::new(&genesis_block));
-
-        let vote_accounts0: Option<HashMap<_, _>> = parent.epoch_vote_accounts(0).map(|accounts| {
-            accounts
-                .iter()
-                .filter_map(|(pubkey, (_, account))| {
-                    if let Ok(vote_state) = VoteState::deserialize(&account.data) {
-                        if vote_state.node_pubkey == leader_pubkey {
-                            Some((*pubkey, true))
+        let mut leader_vote_stake: Vec<_> = parent
+            .epoch_vote_accounts(0)
+            .map(|accounts| {
+                accounts
+                    .iter()
+                    .filter_map(|(pubkey, (stake, account))| {
+                        if let Ok(vote_state) = VoteState::deserialize(&account.data) {
+                            if vote_state.node_pubkey == leader_pubkey {
+                                Some((*pubkey, *stake))
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        });
-        assert!(vote_accounts0.is_some());
-        assert!(vote_accounts0.iter().len() != 0);
+                    })
+                    .collect()
+            })
+            .unwrap();
+        assert_eq!(leader_vote_stake.len(), 1);
+        let (leader_vote_account, leader_stake) = leader_vote_stake.pop().unwrap();
+        assert!(leader_stake > 0);
 
-        let mut i = 1;
+        let leader_stake = Stake {
+            stake: leader_lamports,
+            ..Stake::default()
+        };
+
+        let mut epoch = 1;
         loop {
-            if i > STAKERS_SLOT_OFFSET / SLOTS_PER_EPOCH {
+            if epoch > STAKERS_SLOT_OFFSET / SLOTS_PER_EPOCH {
                 break;
             }
-            assert!(parent.epoch_vote_accounts(i).is_some());
-            i += 1;
+            let vote_accounts = parent.epoch_vote_accounts(epoch);
+            assert!(vote_accounts.is_some());
+
+            assert_eq!(
+                leader_stake.stake(epoch),
+                vote_accounts.unwrap().get(&leader_vote_account).unwrap().0
+            );
+
+            epoch += 1;
         }
 
         // child crosses epoch boundary and is the first slot in the epoch
@@ -2472,15 +2489,25 @@ mod tests {
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH),
         );
 
-        assert!(child.epoch_vote_accounts(i).is_some());
+        assert!(child.epoch_vote_accounts(epoch).is_some());
+        assert_eq!(
+            leader_stake.stake(epoch),
+            child
+                .epoch_vote_accounts(epoch)
+                .unwrap()
+                .get(&leader_vote_account)
+                .unwrap()
+                .0
+        );
 
-        // child crosses epoch boundary but isn't the first slot in the epoch
+        // child crosses epoch boundary but isn't the first slot in the epoch, still
+        //  makes an epoch stakes
         let child = Bank::new_from_parent(
             &parent,
             &leader_pubkey,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
-        assert!(child.epoch_vote_accounts(i).is_some());
+        assert!(child.epoch_vote_accounts(epoch).is_some());
     }
 
     #[test]
