@@ -268,7 +268,7 @@ new_genesis_block() {
   rm -f "$ledger_config_dir"/new-genesis.tgz
   (
     set -x
-    curl -f "$rpc_url"/genesis -o "$ledger_config_dir"/new-genesis.tgz
+    curl -f "$rpc_url"/genesis.tgz -o "$ledger_config_dir"/new-genesis.tgz
   ) || {
     echo "Error: failed to fetch new genesis ledger"
   }
@@ -317,10 +317,10 @@ while true; do
   fi
 
   if [[ ! -f "$ledger_config_dir"/.ok ]]; then
-      echo "Fetching ledger from $rpc_url/genesis..."
+      echo "Fetching ledger from $rpc_url/genesis.tgz..."
       SECONDS=
       mkdir -p "$ledger_config_dir"
-      while ! curl -f "$rpc_url"/genesis -o "$ledger_config_dir"/genesis.tgz; do
+      while ! curl -f "$rpc_url"/genesis.tgz -o "$ledger_config_dir"/genesis.tgz; do
         echo "Genesis ledger fetch failed"
         sleep 5
       done
@@ -337,9 +337,9 @@ while true; do
         if ((boot_from_snapshot)); then
           SECONDS=
 
-          echo "Fetching state snapshot $rpc_url/snapshot..."
+          echo "Fetching state snapshot $rpc_url/snapshot.tgz..."
           mkdir -p "$state_dir"
-          if ! curl -f "$rpc_url"/snapshot -o "$state_dir"/snapshot.tgz; then
+          if ! curl -f "$rpc_url"/snapshot.tgz -o "$state_dir"/snapshot.tgz; then
             echo "State snapshot fetch failed"
             rm -f "$state_dir"/snapshot.tgz
             exit 0  # None fatal
