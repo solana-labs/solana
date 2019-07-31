@@ -150,13 +150,23 @@ pub(crate) mod tests {
 
         // First epoch has the bootstrap leader
         expected.insert(voting_keypair.pubkey(), leader_stake.stake(0));
-        let expected = Some(expected);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
+        assert_eq!(
+            vote_account_stakes_at_epoch(&bank, 0),
+            Some(expected.clone())
+        );
 
         // Second epoch carries same information
         let bank = new_from_parent(&Arc::new(bank), 1);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 1), expected);
+        assert_eq!(
+            vote_account_stakes_at_epoch(&bank, 0),
+            Some(expected.clone())
+        );
+
+        expected.insert(voting_keypair.pubkey(), leader_stake.stake(1));
+        assert_eq!(
+            vote_account_stakes_at_epoch(&bank, 1),
+            Some(expected.clone())
+        );
     }
 
     pub(crate) fn setup_vote_and_stake_accounts(
@@ -223,7 +233,7 @@ pub(crate) mod tests {
             ..
         } = create_genesis_block(10_000);
 
-        let bank = Bank::new(&genesis_block);
+        let mut bank = Bank::new(&genesis_block);
         let vote_pubkey = Pubkey::new_rand();
 
         // Give the validator some stake but don't setup a staking account
@@ -244,24 +254,21 @@ pub(crate) mod tests {
 
         let other_stake = Stake {
             stake,
+            activated: bank.get_stakers_epoch(bank.slot()),
             ..Stake::default()
         };
 
-        // soonest slot that could be a new epoch is 1
-        let mut slot = 1;
-        let mut epoch = bank.get_stakers_epoch(0);
-        // find the first slot in the next stakers_epoch
-        while bank.get_stakers_epoch(slot) == epoch {
-            slot += 1;
+        let epoch = bank.get_stakers_epoch(bank.slot());
+        // find the first slot in the next staker's epoch
+        while bank.epoch() <= epoch {
+            let slot = bank.slot() + 1;
+            bank = new_from_parent(&Arc::new(bank), slot);
         }
-        epoch = bank.get_stakers_epoch(slot);
-
-        let bank = new_from_parent(&Arc::new(bank), slot);
 
         let result: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
         assert_eq!(result, vec![(leader_stake.stake(0), None)]);
 
-        let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, epoch);
+        let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, bank.epoch());
         result.sort();
         let mut expected = vec![
             (leader_stake.stake(bank.epoch()), None),

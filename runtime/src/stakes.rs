@@ -2,6 +2,7 @@
 //! node stakes
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::Epoch;
 use solana_stake_api::stake_state::StakeState;
 use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
@@ -19,11 +20,11 @@ pub struct Stakes {
     points: u64,
 
     /// current epoch, used to calculate current stake
-    epoch: u64,
+    epoch: Epoch,
 }
 
 impl Stakes {
-    pub fn clone_with_epoch(&self, epoch: u64) -> Self {
+    pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {
         if self.epoch == epoch {
             self.clone()
         } else {
@@ -46,7 +47,7 @@ impl Stakes {
     }
 
     // sum the stakes that point to the given voter_pubkey
-    fn calculate_stake(&self, voter_pubkey: &Pubkey, epoch: u64) -> u64 {
+    fn calculate_stake(&self, voter_pubkey: &Pubkey, epoch: Epoch) -> u64 {
         self.stake_accounts
             .iter()
             .map(|(_, stake_account)| {
@@ -62,7 +63,9 @@ impl Stakes {
     }
 
     pub fn is_stake(account: &Account) -> bool {
-        solana_vote_api::check_id(&account.owner) || solana_stake_api::check_id(&account.owner)
+        solana_vote_api::check_id(&account.owner)
+            || solana_stake_api::check_id(&account.owner)
+                && account.data.len() >= std::mem::size_of::<StakeState>()
     }
 
     pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
