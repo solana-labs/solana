@@ -8,18 +8,50 @@ pub type BitcoinTxHash = [u8;32];
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct BlockHeader {
-    // Block hash
-    pub digest      : BitcoinTxHash,
+    // Bitcoin network version
+    pub version     : u32,
     // Previous block's hash/digest
     pub parent      : BitcoinTxHash,
     // merkle Root of the block, proofEntry side should be None
     pub merkle_root : ProofEntry,
-    // Bitcoin network version
-    pub version     : u32,
     // the blocktime associate with the block
     pub time        : u32,
     // An encoded version of the target threshold this block’s header hash must be less than or equal to.
-    pub difficulty  : u32,
+    pub nbits       : u32,
+
+    pub nonce       : u32,
+    // Block hash
+    pub digest      : BitcoinTxHash,
+}
+
+impl BlockHeader {
+    pub fn new(header: &[u8;80]) -> BlockHeader {
+        let version    = header[0 .. 4];
+        // extract digest from last block
+        let parentHash = header[4 .. 36]; // little endian
+        // extract merkle root in internal byte order
+        let merkleRoot = header[36 .. 68];
+        // timestamp associate with the block
+        let blockTime  = header[68 .. 72];
+        // nbits field is an encoded version of the
+        let nbits      = header[72 .. 76];
+
+        let nonce      = header[76 .. 80];
+
+        BlockHeader {
+            version: version,
+            parent: parentHash,
+            merkle_root: merkleRoot,
+            time: blockTime,
+            nbits: nbits,
+            nonce: nonce,
+        }
+    }
+
+    pub fn difficulty(mut self) -> u32 {
+        // calculates difficulty from nbits
+        
+    }
 }
 
 
