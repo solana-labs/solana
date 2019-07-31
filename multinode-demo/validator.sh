@@ -103,6 +103,7 @@ airdrops_enabled=1
 boot_from_snapshot=1
 reset_ledger=0
 config_dir=
+gossip_entrypoint=
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -121,6 +122,10 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --blockstream ]]; then
       stake_lamports=0
+      args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --entrypoint ]]; then
+      gossip_entrypoint=$2
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --identity ]]; then
@@ -207,13 +212,23 @@ mkdir -p "$config_dir"
 
 setup_secondary_mount
 
-entrypoint_hostname=${positional_args[0]}
-if [[ -z $entrypoint_hostname ]]; then
-  entrypoint_hostname=127.0.0.1
+if [[ -n $gossip_entrypoint ]]; then
+  # Prefer the --entrypoint argument if supplied...
+  if [[ ${#positional_args[@]} -gt 0 ]]; then
+    fullnode_usage "$@"
+  fi
+else
+  # ...but also support providing the entrypoint's hostname as the first
+  #    positional argument
+  entrypoint_hostname=${positional_args[0]}
+  if [[ -z $entrypoint_hostname ]]; then
+    gossip_entrypoint=127.0.0.1:8001
+  else
+    gossip_entrypoint="$entrypoint_hostname":8001
+  fi
 fi
-gossip_entrypoint="$entrypoint_hostname":8001
 rpc_url=$("$here"/rpc-url.sh "$gossip_entrypoint")
-drone_address="$entrypoint_hostname":9900
+drone_address="${gossip_entrypoint%:*}":9900
 
 : "${identity_keypair_path:=$config_dir/identity-keypair.json}"
 [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"

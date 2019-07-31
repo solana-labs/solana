@@ -190,7 +190,7 @@ local|tar|skip)
     fi
 
     args=(
-      "$entrypointIp:8001"
+      --entrypoint "$entrypointIp:8001"
       --gossip-port 8001
       --rpc-port 8899
     )
