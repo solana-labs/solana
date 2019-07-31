@@ -63,9 +63,9 @@ impl ExchangeProcessor {
     fn trade_to_token_account(trade: &OrderInfo) -> TokenAccountInfo {
         // Turn trade order into token account
 
-        let token = match trade.direction {
-            Direction::To => trade.pair.Quote,
-            Direction::From => trade.pair.Base,
+        let token = match trade.side {
+            OrderSide::Ask => trade.pair.Quote,
+            OrderSide::Bid => trade.pair.Base,
         };
 
         let mut account = TokenAccountInfo::default().owner(&trade.owner);
@@ -224,9 +224,9 @@ impl ExchangeProcessor {
                         Err(InstructionError::GenericError)?
                     }
 
-                    let from_token = match from_trade.direction {
-                        Direction::To => from_trade.pair.Quote,
-                        Direction::From => from_trade.pair.Base,
+                    let from_token = match from_trade.side {
+                        OrderSide::Ask => from_trade.pair.Quote,
+                        OrderSide::Bid => from_trade.pair.Base,
                     };
                     if token != from_token {
                         error!("Trade to transfer from does not hold correct token");
@@ -280,16 +280,16 @@ impl ExchangeProcessor {
             error!("Signer does not own account");
             Err(InstructionError::GenericError)?
         }
-        let from_token = match info.direction {
-            Direction::To => info.pair.Base,
-            Direction::From => info.pair.Quote,
+        let from_token = match info.side {
+            OrderSide::Ask => info.pair.Base,
+            OrderSide::Bid => info.pair.Quote,
         };
         if account.tokens[from_token] < info.tokens {
             error!("From token balance is too low");
             Err(InstructionError::GenericError)?
         }
 
-        if let Err(e) = check_trade(info.direction, info.tokens, info.price) {
+        if let Err(e) = check_trade(info.side, info.tokens, info.price) {
             bincode::serialize(&e).unwrap();
         }
 
@@ -301,7 +301,7 @@ impl ExchangeProcessor {
         Self::serialize(
             &ExchangeState::Trade(OrderInfo {
                 owner: *keyed_accounts[OWNER_INDEX].unsigned_key(),
-                direction: info.direction,
+                side: info.side,
                 pair: info.pair,
                 tokens: info.tokens,
                 price: info.price,
@@ -331,9 +331,9 @@ impl ExchangeProcessor {
             Err(InstructionError::GenericError)?
         }
 
-        let token = match order.direction {
-            Direction::To => order.pair.Base,
-            Direction::From => order.pair.Quote,
+        let token = match order.side {
+            OrderSide::Ask => order.pair.Base,
+            OrderSide::Bid => order.pair.Quote,
         };
 
         let mut account = TokenAccountInfo::default().owner(&order.owner);
@@ -363,11 +363,11 @@ impl ExchangeProcessor {
         let mut profit_account =
             Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].account.data)?;
 
-        if to_order.direction != Direction::To {
+        if to_order.side != OrderSide::Ask {
             error!("To trade is not a To");
             Err(InstructionError::InvalidArgument)?
         }
-        if from_order.direction != Direction::From {
+        if from_order.side != OrderSide::Bid {
             error!("From trade is not a From");
             Err(InstructionError::InvalidArgument)?
         }
@@ -375,8 +375,8 @@ impl ExchangeProcessor {
             error!("Mismatched token pairs");
             Err(InstructionError::InvalidArgument)?
         }
-        if to_order.direction == from_order.direction {
-            error!("Matching trade directions");
+        if to_order.side == from_order.side {
+            error!("Matching trade sides");
             Err(InstructionError::InvalidArgument)?
         }
 
@@ -488,7 +488,7 @@ mod test {
             secondary_price,
         );
         let mut to_trade = OrderInfo::default();
-        let mut from_trade = OrderInfo::default().direction(Direction::From);
+        let mut from_trade = OrderInfo::default().side(OrderSide::Bid);
         let mut profit_account = TokenAccountInfo::default();
 
         to_trade.tokens = primary_tokens;
@@ -602,7 +602,7 @@ mod test {
     fn trade(
         client: &BankClient,
         owner: &Keypair,
-        direction: Direction,
+        side: OrderSide,
         pair: AssetPair,
         from_token: Token,
         src_tokens: u64,
@@ -616,7 +616,7 @@ mod test {
         let instruction = exchange_instruction::trade_request(
             &owner.pubkey(),
             &trade,
-            direction,
+            side,
             pair,
             trade_tokens,
             price,
@@ -700,7 +700,7 @@ mod test {
         let (trade, src) = trade(
             &client,
             &owner,
-            Direction::To,
+            OrderSide::Ask,
             AssetPair::default(),
             Token::A,
             42,
@@ -716,7 +716,7 @@ mod test {
         assert_eq!(
             OrderInfo {
                 owner: owner.pubkey(),
-                direction: Direction::To,
+                side: OrderSide::Ask,
                 pair: AssetPair::default(),
                 tokens: 2,
                 price: 1000,
@@ -742,7 +742,7 @@ mod test {
         let (to_trade, _) = trade(
             &client,
             &owner,
-            Direction::To,
+            OrderSide::Ask,
             AssetPair::default(),
             Token::A,
             2,
@@ -752,7 +752,7 @@ mod test {
         let (from_trade, _) = trade(
             &client,
             &owner,
-            Direction::From,
+            OrderSide::Bid,
             AssetPair::default(),
             Token::B,
             3,
@@ -775,7 +775,7 @@ mod test {
         assert_eq!(
             OrderInfo {
                 owner: owner.pubkey(),
-                direction: Direction::To,
+                side: OrderSide::Ask,
                 pair: AssetPair::default(),
                 tokens: 1,
                 price: 2000,
@@ -809,7 +809,7 @@ mod test {
         let (to_trade, _) = trade(
             &client,
             &owner,
-            Direction::To,
+            OrderSide::Ask,
             AssetPair::default(),
             Token::A,
             3,
@@ -819,7 +819,7 @@ mod test {
         let (from_trade, _) = trade(
             &client,
             &owner,
-            Direction::From,
+            OrderSide::Bid,
             AssetPair::default(),
             Token::B,
             3,

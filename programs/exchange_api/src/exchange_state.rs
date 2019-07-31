@@ -118,19 +118,19 @@ impl TokenAccountInfo {
     }
 }
 
-/// Direction of the exchange between two tokens in a pair
+/// side of the exchange between two tokens in a pair
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum Direction {
-    /// Trade first token type (primary) in the pair 'To' the second
-    To,
-    /// Trade first token type in the pair 'From' the second (secondary)
-    From,
+pub enum OrderSide {
+    /// Offer the Base asset and Accept the Quote asset
+    Ask, // to
+    /// Offer the Quote asset and Accept the Base asset
+    Bid, // from
 }
-impl fmt::Display for Direction {
+impl fmt::Display for OrderSide {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Direction::To => write!(f, "T")?,
-            Direction::From => write!(f, "F")?,
+            OrderSide::Ask => write!(f, "A")?,
+            OrderSide::Bid => write!(f, "B")?,
         }
         Ok(())
     }
@@ -141,11 +141,11 @@ impl fmt::Display for Direction {
 pub struct OrderInfo {
     /// Owner of the trade order
     pub owner: Pubkey,
-    /// Direction of the exchange
-    pub direction: Direction,
+    /// side of the order in the market (bid/ask)
+    pub side: OrderSide,
     /// Token pair indicating two tokens to exchange, first is primary
     pub pair: AssetPair,
-    /// Number of tokens to exchange; primary or secondary depending on direction.  Once
+    /// Number of tokens to exchange; primary or secondary depending on side.  Once
     /// this number goes to zero this trade order will be converted into a regular token account
     pub tokens: u64,
     /// Scaled price of the secondary token given the primary is equal to the scale value
@@ -160,7 +160,7 @@ impl Default for OrderInfo {
         Self {
             owner: Pubkey::default(),
             pair: AssetPair::default(),
-            direction: Direction::To,
+            side: OrderSide::Ask,
             tokens: 0,
             price: 0,
             tokens_settled: 0,
@@ -172,8 +172,8 @@ impl OrderInfo {
         self.pair = pair;
         self
     }
-    pub fn direction(mut self, direction: Direction) -> Self {
-        self.direction = direction;
+    pub fn side(mut self, side: OrderSide) -> Self {
+        self.side = side;
         self
     }
     pub fn tokens(mut self, tokens: u64) -> Self {
@@ -186,9 +186,9 @@ impl OrderInfo {
     }
 }
 
-pub fn check_trade(direction: Direction, tokens: u64, price: u64) -> Result<(), ExchangeError> {
-    match direction {
-        Direction::To => {
+pub fn check_trade(side: OrderSide, tokens: u64, price: u64) -> Result<(), ExchangeError> {
+    match side {
+        OrderSide::Ask => {
             if tokens * price / SCALER == 0 {
                 Err(ExchangeError::InvalidTrade(format!(
                     "To trade of {} for {}/{} results in 0 tradeable tokens",
@@ -196,7 +196,7 @@ pub fn check_trade(direction: Direction, tokens: u64, price: u64) -> Result<(), 
                 )))?
             }
         }
-        Direction::From => {
+        OrderSide::Bid => {
             if tokens * SCALER / price == 0 {
                 Err(ExchangeError::InvalidTrade(format!(
                     "From trade of {} for {}?{} results in 0 tradeable tokens",
