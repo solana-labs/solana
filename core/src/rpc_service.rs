@@ -6,18 +6,78 @@ use crate::rpc::*;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use jsonrpc_core::MetaIoHandler;
-use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
+use jsonrpc_http_server::{
+    hyper, AccessControlAllowOrigin, DomainsValidation, RequestMiddleware, RequestMiddlewareAction,
+    ServerBuilder,
+};
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
+use tokio::prelude::Future;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
 
     #[cfg(test)]
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by test_rpc_new()...
+}
+
+#[derive(Default)]
+struct RpcRequestMiddleware {
+    ledger_path: PathBuf,
+}
+impl RpcRequestMiddleware {
+    pub fn new(ledger_path: PathBuf) -> Self {
+        Self { ledger_path }
+    }
+
+    fn not_found() -> hyper::Response<hyper::Body> {
+        hyper::Response::builder()
+            .status(hyper::StatusCode::NOT_FOUND)
+            .body(hyper::Body::empty())
+            .unwrap()
+    }
+
+    fn internal_server_error() -> hyper::Response<hyper::Body> {
+        hyper::Response::builder()
+            .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+            .body(hyper::Body::empty())
+            .unwrap()
+    }
+
+    fn get(&self, filename: &str) -> RequestMiddlewareAction {
+        let filename = self.ledger_path.join(filename);
+        RequestMiddlewareAction::Respond {
+            should_validate_hosts: true,
+            response: Box::new(
+                tokio_fs::file::File::open(filename)
+                    .and_then(|file| {
+                        let buf: Vec<u8> = Vec::new();
+                        tokio_io::io::read_to_end(file, buf)
+                            .and_then(|item| Ok(hyper::Response::new(item.1.into())))
+                            .or_else(|_| Ok(RpcRequestMiddleware::internal_server_error()))
+                    })
+                    .or_else(|_| Ok(RpcRequestMiddleware::not_found())),
+            ),
+        }
+    }
+}
+
+impl RequestMiddleware for RpcRequestMiddleware {
+    fn on_request(&self, request: hyper::Request<hyper::Body>) -> RequestMiddlewareAction {
+        trace!("request uri: {}", request.uri());
+        match request.uri().path() {
+            "/snapshot.tgz" => self.get("snapshot.tgz"),
+            "/genesis.tgz" => self.get("genesis.tgz"),
+            _ => RequestMiddlewareAction::Proceed {
+                should_continue_on_invalid_cors: false,
+                request,
+            },
+        }
+    }
 }
 
 impl JsonRpcService {
@@ -27,6 +87,7 @@ impl JsonRpcService {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
+        ledger_path: &Path,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
@@ -41,6 +102,7 @@ impl JsonRpcService {
 
         let cluster_info = cluster_info.clone();
         let exit_ = exit.clone();
+        let ledger_path = ledger_path.to_path_buf();
 
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
@@ -57,11 +119,13 @@ impl JsonRpcService {
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
                         ]))
+                        .request_middleware(RpcRequestMiddleware::new(ledger_path))
                         .start_http(&rpc_addr);
                 if let Err(e) = server {
                     warn!("JSON RPC service unavailable error: {:?}. \nAlso, check that port {} is not already in use by another application", e, rpc_addr.port());
                     return;
                 }
+
                 while !exit_.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100));
                 }
@@ -116,6 +180,7 @@ mod tests {
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
+            &PathBuf::from("farf"),
             &exit,
         );
         let thread = rpc_service.thread_hdl.thread();

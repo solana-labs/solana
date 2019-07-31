@@ -53,7 +53,7 @@ while [[ -n $1 ]]; do
 done
 
 : "${identity_keypair:="$SOLANA_ROOT"/farf/replicator-identity-keypair"$label".json}"
-: "${storage_keypair:="$SOLANA_ROOT"/farf/storage-keypair"$label".json}"
+: "${storage_keypair:="$SOLANA_ROOT"/farf/replicator-storage-keypair"$label".json}"
 ledger="$SOLANA_ROOT"/farf/replicator-ledger"$label"
 
 rpc_url=$("$here"/rpc-url.sh "$entrypoint")

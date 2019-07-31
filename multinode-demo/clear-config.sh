@@ -9,11 +9,11 @@ source "$here"/common.sh
 
 set -e
 
-for i in "$SOLANA_RSYNC_CONFIG_DIR" "$SOLANA_CONFIG_DIR"; do
-  echo "Cleaning $i"
-  rm -rvf "${i:?}/" # <-- $i might be a symlink, rm the other side of it first
-  rm -rvf "$i"
-  mkdir -p "$i"
-done
+(
+  set -x
+  rm -rf "${SOLANA_CONFIG_DIR:?}/" # <-- $i might be a symlink, rm the other side of it first
+  rm -rf "$SOLANA_CONFIG_DIR"
+  mkdir -p "$SOLANA_CONFIG_DIR"
+)
 
 setup_secondary_mount

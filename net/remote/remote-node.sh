@@ -83,12 +83,6 @@ local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-  # Setup `/var/snap/solana/current` symlink so rsyncing the genesis
-  # ledger works (reference: `net/scripts/install-rsync.sh`)
-  sudo rm -rf /var/snap/solana/current
-  sudo mkdir -p /var/snap/solana
-  sudo ln -sT /home/solana/solana /var/snap/solana/current
-
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
@@ -233,7 +227,7 @@ local|tar|skip)
       # with it on the blockstreamer node.  Typically the blockstreamer node has
       # a static IP/DNS name for hosting the blockexplorer web app, and is
       # a location that somebody would expect to be able to airdrop from
-      scp "$entrypointIp":~/solana/config-local/mint-keypair.json config-local/
+      scp "$entrypointIp":~/solana/config/mint-keypair.json config/
       if [[ $airdropsEnabled = true ]]; then
         ./multinode-demo/drone.sh > drone.log 2>&1 &
       fi

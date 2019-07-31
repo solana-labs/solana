@@ -59,25 +59,6 @@
         },
         {
             "PrefixListIds": [],
-            "FromPort": 873,
-            "IpRanges": [
-                {
-                    "Description": "rsync",
-                    "CidrIp": "0.0.0.0/0"
-                }
-            ],
-            "ToPort": 873,
-            "IpProtocol": "tcp",
-            "UserIdGroupPairs": [],
-            "Ipv6Ranges": [
-                {
-                    "CidrIpv6": "::/0",
-                    "Description": "rsync"
-                }
-            ]
-        },
-        {
-            "PrefixListIds": [],
             "FromPort": 3001,
             "IpRanges": [
                 {
