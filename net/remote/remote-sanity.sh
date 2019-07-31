@@ -76,8 +76,6 @@ local|tar|skip)
     source target/perf-libs/env.sh
   fi
 
-  entrypointRsyncUrl="$sanityTargetIp:~/solana"
-
   solana_gossip=solana-gossip
   solana_install=solana-install
   solana_keygen=solana-keygen
