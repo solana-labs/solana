@@ -1,3 +1,4 @@
+#[cfg(test)]
 #[macro_use]
 extern crate solana_move_loader_program;
 

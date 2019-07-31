@@ -3062,7 +3062,6 @@ dependencies = [
  "solana-client 0.18.0-pre0",
  "solana-drone 0.18.0-pre0",
  "solana-ed25519-dalek 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-genesis-programs 0.18.0-pre0",
  "solana-kvstore 0.18.0-pre0",
  "solana-logger 0.18.0-pre0",
  "solana-measure 0.18.0-pre0",

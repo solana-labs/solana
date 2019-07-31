@@ -1,4 +1,3 @@
-//use solana_programs::get_default_native_instruction_processors;
 use solana_sdk::{
     account::Account,
     fee_calculator::FeeCalculator,
@@ -67,7 +66,7 @@ pub fn create_genesis_block_with_leader(
                 ),
             ),
         ])
-        // Bare minimum
+        // Bare minimum program set
         .native_instruction_processors(&[
             solana_bpf_loader_program!(),
             solana_vote_program!(),

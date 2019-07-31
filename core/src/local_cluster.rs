@@ -156,10 +156,9 @@ impl LocalCluster {
         genesis_block
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
-
         genesis_block
             .native_instruction_processors
-            .extend_from_slice(&solana_genesis_programs::get());
+            .push(solana_storage_program!());
 
         let storage_keypair = Keypair::new();
         genesis_block.accounts.push((
