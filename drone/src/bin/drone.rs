@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 fn main() -> Result<(), Box<error::Error>> {
-    solana_logger::setup();
+    solana_logger::setup_with_filter("solana=info");
     solana_metrics::set_panic_hook("drone");
     let matches = App::new(crate_name!())
         .about(crate_description!())

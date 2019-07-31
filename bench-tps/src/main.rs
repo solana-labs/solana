@@ -21,7 +21,7 @@ use std::process::exit;
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
 
 fn main() {
-    solana_logger::setup();
+    solana_logger::setup_with_filter("solana=info");
     solana_metrics::set_panic_hook("bench-tps");
 
     let matches = cli::build_args().get_matches();
