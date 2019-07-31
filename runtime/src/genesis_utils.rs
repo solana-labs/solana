@@ -1,4 +1,4 @@
-use solana_programs::get_default_native_instruction_processors;
+//use solana_programs::get_default_native_instruction_processors;
 use solana_sdk::{
     account::Account,
     fee_calculator::FeeCalculator,
@@ -67,7 +67,12 @@ pub fn create_genesis_block_with_leader(
                 ),
             ),
         ])
-        .native_instruction_processors(&get_default_native_instruction_processors())
+        // Bare minimum
+        .native_instruction_processors(&[
+            solana_bpf_loader_program!(),
+            solana_vote_program!(),
+            solana_stake_program!(),
+        ])
         .fee_calculator(FeeCalculator::new(0)); // most tests don't want fees
 
     builder = solana_stake_api::rewards_pools::genesis(builder);

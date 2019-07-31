@@ -9,7 +9,6 @@ use crate::service::Service;
 use crate::validator::{Validator, ValidatorConfig};
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
-use solana_programs::get_default_native_instruction_processors;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::message::Message;
@@ -30,8 +29,6 @@ use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
-
-use solana_librapay_api::librapay_transaction;
 
 pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,
@@ -162,17 +159,12 @@ impl LocalCluster {
 
         genesis_block
             .native_instruction_processors
-            .extend_from_slice(&get_default_native_instruction_processors());
+            .extend_from_slice(&solana_genesis_programs::get());
 
         let storage_keypair = Keypair::new();
         genesis_block.accounts.push((
             storage_keypair.pubkey(),
             storage_contract::create_validator_storage_account(leader_pubkey, 1),
-        ));
-        let libra_mint_keypair = Keypair::new();
-        genesis_block.accounts.push((
-            libra_mint_keypair.pubkey(),
-            librapay_transaction::create_libra_genesis_account(10_000),
         ));
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
