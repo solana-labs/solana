@@ -151,21 +151,25 @@ fn do_bench_transactions(
 }
 
 #[bench]
+#[ignore]
 fn bench_bank_sync_process_builtin_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &sync_bencher, &create_builtin_transactions);
 }
 
 #[bench]
+#[ignore]
 fn bench_bank_sync_process_native_loader_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &sync_bencher, &create_native_loader_transactions);
 }
 
 #[bench]
+#[ignore]
 fn bench_bank_async_process_builtin_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &async_bencher, &create_builtin_transactions);
 }
 
 #[bench]
+#[ignore]
 fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &async_bencher, &create_native_loader_transactions);
 }
