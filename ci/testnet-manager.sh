@@ -580,8 +580,7 @@ deploy() {
           ${maybeExternalAccountsFile} \
           ${maybeLamports} \
           ${maybeAdditionalDisk} \
-          --skip-deploy-update \
-          --no-snapshot
+          --skip-deploy-update
     )
     ;;
   *)
