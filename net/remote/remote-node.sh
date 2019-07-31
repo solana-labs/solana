@@ -190,7 +190,7 @@ local|tar|skip)
     fi
 
     args=(
-      "$entrypointIp":~/solana "$entrypointIp:8001"
+      "$entrypointIp:8001"
       --gossip-port 8001
       --rpc-port 8899
     )
