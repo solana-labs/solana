@@ -26,6 +26,8 @@ solana-measure = { path = "../measure", version = "0.18.0-pre0" }
 solana-netutil = { path = "../netutil", version = "0.18.0-pre0" }
 solana-runtime = { path = "../runtime", version = "0.18.0-pre0" }
 solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
+solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.18.0-pre0" }
+solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.18.0-pre0" }
 
 [features]
 cuda = ["solana/cuda"]
