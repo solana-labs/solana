@@ -227,7 +227,7 @@ local|tar|skip)
       # with it on the blockstreamer node.  Typically the blockstreamer node has
       # a static IP/DNS name for hosting the blockexplorer web app, and is
       # a location that somebody would expect to be able to airdrop from
-      scp "$entrypointIp":~/solana/config-local/mint-keypair.json config-local/
+      scp "$entrypointIp":~/solana/config/mint-keypair.json config/
       if [[ $airdropsEnabled = true ]]; then
         ./multinode-demo/drone.sh > drone.log 2>&1 &
       fi

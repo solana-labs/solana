@@ -37,7 +37,7 @@ done
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
-dataDir=$PWD/config-local/"$(basename "$0" .sh)"
+dataDir=$PWD/config/"$(basename "$0" .sh)"
 ledgerDir=$PWD/config/ledger
 
 set -x

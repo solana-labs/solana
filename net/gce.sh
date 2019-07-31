@@ -128,8 +128,8 @@ Manage testnet instances
                               DNS name (useful only when the -a and -P options
                               are also provided)
    --fullnode-additional-disk-size-gb [number]
-                    - Add an additional [number] GB SSD to all fullnodes to store the config-local directory.
-                      If not set, config-local will be written to the boot disk by default.
+                    - Add an additional [number] GB SSD to all fullnodes to store the config directory.
+                      If not set, config will be written to the boot disk by default.
                       Only supported on GCE.
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)

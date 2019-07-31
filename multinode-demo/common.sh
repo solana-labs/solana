@@ -67,7 +67,7 @@ SOLANA_CONFIG_DIR=$SOLANA_ROOT/config
 
 SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
 setup_secondary_mount() {
-  # If there is a secondary disk, symlink the config-local dir there
+  # If there is a secondary disk, symlink the config/ dir there
   if [[ -d $SECONDARY_DISK_MOUNT_POINT ]]; then
     mkdir -p $SECONDARY_DISK_MOUNT_POINT/config
     rm -rf "$SOLANA_CONFIG_DIR"

@@ -217,9 +217,9 @@ $ solana-wallet show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 The vote pubkey for the validator can also be found by running:
 ```bash
 # If this is a `solana-install`-installation run:
-$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config-local/validator-vote-keypair.json
+$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config/validator-vote-keypair.json
 # Otherwise run:
-$ solana-keygen pubkey ./config-local/validator-vote-keypair.json
+$ solana-keygen pubkey ./config/validator-vote-keypair.json
 ```
 
 
