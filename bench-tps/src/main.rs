@@ -6,7 +6,6 @@ use crate::bench::{
 };
 use solana::gossip_service::{discover_cluster, get_multi_client};
 use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::HashMap;
 use std::fs::File;
@@ -42,7 +41,7 @@ fn main() {
     } = cli_config;
 
     if write_to_client_file {
-        let (keypairs, _) = generate_keypairs(&id, tx_count as u64 * 2, use_move);
+        let (keypairs, _) = generate_keypairs(&id, tx_count as u64 * 2);
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeCalculator::new(target_lamports_per_signature).max_lamports_per_signature;
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
@@ -80,7 +79,7 @@ fn main() {
         exit(1);
     }
 
-    let (keypairs, keypair_balance) = if read_from_client_file {
+    let (keypairs, _move_keypairs, keypair_balance) = if read_from_client_file {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
@@ -97,7 +96,7 @@ fn main() {
         // This prevents the amount of storage needed for bench-tps accounts from creeping up
         // across multiple runs.
         keypairs.sort_by(|x, y| x.pubkey().to_string().cmp(&y.pubkey().to_string()));
-        (keypairs, last_balance)
+        (keypairs, None, last_balance)
     } else {
         generate_and_fund_keypairs(
             &client,
@@ -123,12 +122,5 @@ fn main() {
         use_move,
     };
 
-    do_bench_tps(
-        vec![client],
-        config,
-        keypairs,
-        keypair_balance,
-        &Pubkey::new_rand(),
-        &Pubkey::new_rand(),
-    );
+    do_bench_tps(vec![client], config, keypairs, keypair_balance, None);
 }
