@@ -827,7 +827,7 @@ mod tests {
     use solana::validator::ValidatorConfig;
     use solana_client::thin_client::create_client;
     use solana_drone::drone::run_local_drone;
-    use solana_librapay_api::{upload_mint_program, upload_payment_program};
+    use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_program};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
@@ -872,12 +872,21 @@ mod tests {
             FULLNODE_PORT_RANGE,
         );
 
-        let (libra_mint_id, libra_pay_program_id) = if config.use_move {
+        let (libra_genesis_keypair, libra_mint_id, libra_pay_program_id) = if config.use_move {
+            let libra_genesis_keypair = create_genesis(&drone_keypair, &client, 1_000_000);
             let libra_mint_id = upload_mint_program(&drone_keypair, &client);
             let libra_pay_program_id = upload_payment_program(&drone_keypair, &client);
-            (libra_mint_id, libra_pay_program_id)
+            (
+                Arc::new(libra_genesis_keypair),
+                libra_mint_id,
+                libra_pay_program_id,
+            )
         } else {
-            (Pubkey::default(), Pubkey::default())
+            (
+                Arc::new(Keypair::new()),
+                Pubkey::default(),
+                Pubkey::default(),
+            )
         };
 
         let (addr_sender, addr_receiver) = channel();
@@ -890,7 +899,7 @@ mod tests {
             Some((
                 &libra_pay_program_id,
                 &libra_mint_id,
-                &cluster.libra_mint_keypair,
+                &libra_genesis_keypair,
             ))
         } else {
             None
@@ -912,7 +921,7 @@ mod tests {
             keypairs,
             0,
             &libra_pay_program_id,
-            &cluster.libra_mint_keypair.pubkey(),
+            &libra_genesis_keypair.pubkey(),
         );
         assert!(total > 100);
     }
