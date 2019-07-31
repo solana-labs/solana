@@ -28,11 +28,11 @@ pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
-pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
+pub const BLOB_SIZE: usize = (2 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
 pub const BLOB_DATA_ALIGN: usize = 16; // safe for erasure input pointers, gf.c needs 16byte-aligned buffers
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
-pub const PACKETS_PER_BLOB: usize = 256; // reasonable estimate for payment packets per blob based on ~200b transaction size
+pub const PACKETS_PER_BLOB: usize = 8; // reasonable estimate for payment packets per blob based on ~200b transaction size
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
@@ -291,7 +291,7 @@ impl Packets {
                     total_size += size;
                     // Try to batch into blob-sized buffers
                     // will cause less re-shuffling later on.
-                    if start.elapsed().as_millis() > 1 || total_size >= (BLOB_DATA_SIZE - 4096) {
+                    if start.elapsed().as_millis() > 1 || total_size >= (BLOB_DATA_SIZE - 512) {
                         break;
                     }
                 }
