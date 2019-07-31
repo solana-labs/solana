@@ -32,7 +32,9 @@ pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) ->
         &from_key.pubkey(),
         &libra_genesis_key.pubkey(),
         1,
-        2048 as u64,
+        bincode::serialize(&LibraAccountState::create_genesis(1))
+            .unwrap()
+            .len() as u64,
         &solana_move_loader_api::id(),
     );
     client.send_instruction(&from_key, instruction).unwrap();
