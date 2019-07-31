@@ -1,14 +1,23 @@
 use bincode;
 use solana_move_loader_api::account_state::pubkey_to_address;
-use solana_move_loader_api::processor::InvokeInfo;
+use solana_move_loader_api::processor::InvokeCommand;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use types::account_address::AccountAddress;
 use types::transaction::TransactionArgument;
 
+pub fn genesis(genesis_pubkey: &Pubkey, microlibras: u64) -> Instruction {
+    let data = bincode::serialize(&InvokeCommand::CreateGenesis(microlibras)).unwrap();
+    let ix_data = LoaderInstruction::InvokeMain { data };
+
+    let accounts = vec![AccountMeta::new(*genesis_pubkey, true)];
+
+    Instruction::new(solana_move_loader_api::id(), &ix_data, accounts)
+}
+
 pub fn mint(
-    program_id: &Pubkey,
+    program_pubkey: &Pubkey,
     from_pubkey: &Pubkey,
     to_pubkey: &Pubkey,
     microlibras: u64,
@@ -18,16 +27,16 @@ pub fn mint(
         TransactionArgument::U64(microlibras),
     ];
 
-    let invoke_info = InvokeInfo {
+    let data = bincode::serialize(&InvokeCommand::RunProgram {
         sender_address: AccountAddress::default(),
         function_name: "main".to_string(),
         args,
-    };
-    let data = bincode::serialize(&invoke_info).unwrap();
+    })
+    .unwrap();
     let ix_data = LoaderInstruction::InvokeMain { data };
 
     let accounts = vec![
-        AccountMeta::new_credit_only(*program_id, false),
+        AccountMeta::new_credit_only(*program_pubkey, false),
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
     ];
@@ -36,7 +45,7 @@ pub fn mint(
 }
 
 pub fn transfer(
-    program_id: &Pubkey,
+    program_pubkey: &Pubkey,
     mint_pubkey: &Pubkey,
     from_pubkey: &Pubkey,
     to_pubkey: &Pubkey,
@@ -47,16 +56,16 @@ pub fn transfer(
         TransactionArgument::U64(microlibras),
     ];
 
-    let invoke_info = InvokeInfo {
+    let data = bincode::serialize(&InvokeCommand::RunProgram {
         sender_address: pubkey_to_address(from_pubkey),
         function_name: "main".to_string(),
         args,
-    };
-    let data = bincode::serialize(&invoke_info).unwrap();
+    })
+    .unwrap();
     let ix_data = LoaderInstruction::InvokeMain { data };
 
     let accounts = vec![
-        AccountMeta::new_credit_only(*program_id, false),
+        AccountMeta::new_credit_only(*program_pubkey, false),
         AccountMeta::new_credit_only(*mint_pubkey, false),
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
