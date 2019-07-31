@@ -25,6 +25,7 @@ rayon = "1.1.0"
 serde = "1.0.97"
 serde_derive = "1.0.97"
 serde_json = "1.0.40"
+<<<<<<< HEAD
 solana-logger = { path = "../logger", version = "0.17.0" }
 solana-measure = { path = "../measure", version = "0.17.0" }
 solana-metrics = { path = "../metrics", version = "0.17.0" }
@@ -37,6 +38,19 @@ solana-stake-program = { path = "../programs/stake_program", version = "0.17.0" 
 solana-storage-api = { path = "../programs/storage_api", version = "0.17.0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.17.0" }
 solana-vote-program = { path = "../programs/vote_program", version = "0.17.0" }
+=======
+solana-logger = { path = "../logger", version = "0.18.0-pre0" }
+solana-measure = { path = "../measure", version = "0.18.0-pre0" }
+solana-metrics = { path = "../metrics", version = "0.18.0-pre0" }
+solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.18.0-pre0" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.18.0-pre0" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
+solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre0" }
+solana-stake-program = { path = "../programs/stake_program", version = "0.18.0-pre0" }
+solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre0" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre0" }
+solana-vote-program = { path = "../programs/vote_program", version = "0.18.0-pre0" }
+>>>>>>> d09afdbef... Synchronize and cleanup instruction processor lists (#5356)
 sys-info = "0.5.7"
 
 [lib]

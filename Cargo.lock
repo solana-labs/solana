@@ -3089,6 +3089,7 @@ dependencies = [
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test_derive 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+<<<<<<< HEAD
  "solana-budget-api 0.17.0",
  "solana-budget-program 0.17.0",
  "solana-chacha-sys 0.17.0",
@@ -3115,6 +3116,29 @@ dependencies = [
  "solana-vote-api 0.17.0",
  "solana-vote-program 0.17.0",
  "solana-vote-signer 0.17.0",
+=======
+ "solana-budget-api 0.18.0-pre0",
+ "solana-budget-program 0.18.0-pre0",
+ "solana-chacha-sys 0.18.0-pre0",
+ "solana-client 0.18.0-pre0",
+ "solana-drone 0.18.0-pre0",
+ "solana-ed25519-dalek 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-genesis-programs 0.18.0-pre0",
+ "solana-kvstore 0.18.0-pre0",
+ "solana-librapay-api 0.18.0-pre0",
+ "solana-logger 0.18.0-pre0",
+ "solana-measure 0.18.0-pre0",
+ "solana-merkle-tree 0.18.0-pre0",
+ "solana-metrics 0.18.0-pre0",
+ "solana-netutil 0.18.0-pre0",
+ "solana-runtime 0.18.0-pre0",
+ "solana-sdk 0.18.0-pre0",
+ "solana-stake-api 0.18.0-pre0",
+ "solana-storage-api 0.18.0-pre0",
+ "solana-storage-program 0.18.0-pre0",
+ "solana-vote-api 0.18.0-pre0",
+ "solana-vote-signer 0.18.0-pre0",
+>>>>>>> d09afdbef... Synchronize and cleanup instruction processor lists (#5356)
  "sys-info 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3375,6 +3399,7 @@ dependencies = [
  "serde_derive 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_yaml 0.8.9 (registry+https://github.com/rust-lang/crates.io-index)",
+<<<<<<< HEAD
  "solana 0.17.0",
  "solana-bpf-loader-api 0.17.0",
  "solana-bpf-loader-program 0.17.0",
@@ -3393,6 +3418,40 @@ dependencies = [
  "solana-token-program 0.17.0",
  "solana-vote-api 0.17.0",
  "solana-vote-program 0.17.0",
+=======
+ "solana 0.18.0-pre0",
+ "solana-genesis-programs 0.18.0-pre0",
+ "solana-sdk 0.18.0-pre0",
+ "solana-stake-api 0.18.0-pre0",
+ "solana-storage-api 0.18.0-pre0",
+ "solana-vote-api 0.18.0-pre0",
+]
+
+[[package]]
+name = "solana-genesis-programs"
+version = "0.18.0-pre0"
+dependencies = [
+ "hashbrown 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-bpf-loader-api 0.18.0-pre0",
+ "solana-bpf-loader-program 0.18.0-pre0",
+ "solana-budget-api 0.18.0-pre0",
+ "solana-budget-program 0.18.0-pre0",
+ "solana-config-api 0.18.0-pre0",
+ "solana-config-program 0.18.0-pre0",
+ "solana-exchange-api 0.18.0-pre0",
+ "solana-exchange-program 0.18.0-pre0",
+ "solana-move-loader-api 0.18.0-pre0",
+ "solana-move-loader-program 0.18.0-pre0",
+ "solana-sdk 0.18.0-pre0",
+ "solana-stake-api 0.18.0-pre0",
+ "solana-stake-program 0.18.0-pre0",
+ "solana-storage-api 0.18.0-pre0",
+ "solana-storage-program 0.18.0-pre0",
+ "solana-token-api 0.18.0-pre0",
+ "solana-token-program 0.18.0-pre0",
+ "solana-vote-api 0.18.0-pre0",
+ "solana-vote-program 0.18.0-pre0",
+>>>>>>> d09afdbef... Synchronize and cleanup instruction processor lists (#5356)
 ]
 
 [[package]]
@@ -3624,6 +3683,7 @@ dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
+<<<<<<< HEAD
  "solana-bpf-loader-api 0.17.0",
  "solana-bpf-loader-program 0.17.0",
  "solana-logger 0.17.0",
@@ -3636,6 +3696,19 @@ dependencies = [
  "solana-storage-api 0.17.0",
  "solana-vote-api 0.17.0",
  "solana-vote-program 0.17.0",
+=======
+ "solana-bpf-loader-api 0.18.0-pre0",
+ "solana-bpf-loader-program 0.18.0-pre0",
+ "solana-logger 0.18.0-pre0",
+ "solana-measure 0.18.0-pre0",
+ "solana-metrics 0.18.0-pre0",
+ "solana-sdk 0.18.0-pre0",
+ "solana-stake-api 0.18.0-pre0",
+ "solana-stake-program 0.18.0-pre0",
+ "solana-storage-api 0.18.0-pre0",
+ "solana-vote-api 0.18.0-pre0",
+ "solana-vote-program 0.18.0-pre0",
+>>>>>>> d09afdbef... Synchronize and cleanup instruction processor lists (#5356)
  "sys-info 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

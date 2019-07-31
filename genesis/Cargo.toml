@@ -15,6 +15,7 @@ serde = "1.0.97"
 serde_derive = "1.0.97"
 serde_json = "1.0.40"
 serde_yaml = "0.8.9"
+<<<<<<< HEAD
 solana = { path = "../core", version = "0.17.0" }
 solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.17.0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.17.0" }
@@ -33,6 +34,14 @@ solana-token-api = { path = "../programs/token_api", version = "0.17.0" }
 solana-token-program = { path = "../programs/token_program", version = "0.17.0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.17.0" }
 solana-vote-program = { path = "../programs/vote_program", version = "0.17.0" }
+=======
+solana = { path = "../core", version = "0.18.0-pre0" }
+solana-genesis-programs = { path = "../genesis_programs", version = "0.18.0-pre0" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
+solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre0" }
+solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre0" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre0" }
+>>>>>>> d09afdbef... Synchronize and cleanup instruction processor lists (#5356)
 
 [dev-dependencies]
 hashbrown = "0.3.0"

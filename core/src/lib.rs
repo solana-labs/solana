@@ -76,7 +76,6 @@ pub mod window_service;
 #[macro_use]
 extern crate solana_budget_program;
 
-#[macro_use]
 extern crate solana_storage_program;
 
 #[cfg(test)]
@@ -101,6 +100,3 @@ extern crate solana_metrics;
 extern crate matches;
 
 extern crate crossbeam_channel;
-
-#[macro_use]
-extern crate solana_move_loader_program;
