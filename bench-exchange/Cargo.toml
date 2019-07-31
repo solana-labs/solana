@@ -35,7 +35,7 @@ solana-netutil = { path = "../netutil", version = "0.18.0-pre0" }
 solana-runtime = { path = "../runtime", version = "0.18.0-pre0" }
 solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
 untrusted = "0.7.0"
-ws = "0.8.1"
+ws = "0.9.0"
 
 [features]
 cuda = ["solana/cuda"]
