@@ -10,6 +10,7 @@ use solana_runtime::status_cache::MAX_CACHE_ENTRIES;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::io::{Error as IOError, ErrorKind};
 use std::ops::Index;
 use std::path::{Path, PathBuf};
@@ -299,7 +300,7 @@ impl BankForks {
     fn prune_non_root(&mut self, root: u64) {
         let descendants = self.descendants();
         self.banks
-            .retain(|slot, _| descendants[&root].contains(slot));
+            .retain(|slot, _| slot == &root || descendants[&root].contains(slot));
         self.confidence
             .retain(|slot, _| slot == &root || descendants[&root].contains(slot));
     }
@@ -382,7 +383,14 @@ impl BankForks {
         account_paths: Option<String>,
         snapshot_config: &SnapshotConfig,
     ) -> Result<Self> {
+        fs::create_dir_all(&snapshot_config.snapshot_path)?;
         let names = snapshot_utils::get_snapshot_names(&snapshot_config.snapshot_path);
+        if names.is_empty() {
+            return Err(Error::IO(IOError::new(
+                ErrorKind::Other,
+                "no snapshots found",
+            )));
+        }
         let mut bank_maps = vec![];
         let status_cache_rc = StatusCacheRc::default();
         let id = (names[names.len() - 1] + 1) as usize;
