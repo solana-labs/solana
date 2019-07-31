@@ -1,6 +1,6 @@
 steps:
   - command: "sdk/docker-solana/build.sh"
-    timeout_in_minutes: 40
+    timeout_in_minutes: 60
     name: "publish docker"
   - command: "ci/publish-crate.sh"
     timeout_in_minutes: 90
@@ -10,7 +10,7 @@ steps:
     timeout_in_minutes: 5
     name: "publish bpf sdk"
   - command: "ci/publish-tarball.sh"
-    timeout_in_minutes: 45
+    timeout_in_minutes: 60
     name: "publish tarball"
   - command: "ci/publish-book.sh"
     timeout_in_minutes: 15
