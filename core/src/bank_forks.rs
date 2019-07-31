@@ -19,7 +19,7 @@ pub struct BankForks {
     working_bank: Arc<Bank>,
     root: u64,
     slots: HashSet<u64>,
-    snapshot_path: Option<String>,
+    snapshot_path: Option<PathBuf>,
     confidence: HashMap<u64, Confidence>,
 }
 
@@ -198,14 +198,14 @@ impl BankForks {
             .retain(|slot, _| descendants[&root].contains(slot));
         self.confidence
             .retain(|slot, _| slot == &root || descendants[&root].contains(slot));
-        if self.snapshot_path.is_some() {
+        if let Some(snapshot_path) = &self.snapshot_path {
             let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
             trace!("prune non root {} - {:?}", root, diff);
             for slot in diff.iter() {
                 if **slot > root {
                     let _ = self.add_snapshot(**slot, root);
                 } else {
-                    BankForks::remove_snapshot(**slot, &self.snapshot_path);
+                    BankForks::remove_snapshot(**slot, &snapshot_path);
                 }
             }
         }
@@ -252,12 +252,8 @@ impl BankForks {
         Error::new(ErrorKind::Other, error)
     }
 
-    fn get_snapshot_path(path: &Option<String>) -> PathBuf {
-        Path::new(&path.clone().unwrap()).to_path_buf()
-    }
-
     pub fn add_snapshot(&self, slot: u64, root: u64) -> Result<(), Error> {
-        let path = BankForks::get_snapshot_path(&self.snapshot_path);
+        let path = self.snapshot_path.as_ref().expect("no snapshot_path");
         fs::create_dir_all(path.clone())?;
         let bank_file = format!("{}", slot);
         let bank_file_path = path.join(bank_file);
@@ -286,15 +282,14 @@ impl BankForks {
         Ok(())
     }
 
-    pub fn remove_snapshot(slot: u64, path: &Option<String>) {
-        let path = BankForks::get_snapshot_path(path);
+    pub fn remove_snapshot(slot: u64, path: &Path) {
         let bank_file = format!("{}", slot);
         let bank_file_path = path.join(bank_file);
         let _ = fs::remove_file(bank_file_path);
     }
 
-    pub fn set_snapshot_config(&mut self, path: Option<String>) {
-        self.snapshot_path = path;
+    pub fn set_snapshot_path(&mut self, snapshot_path: &Path) {
+        self.snapshot_path = Some(snapshot_path.to_path_buf());
     }
 
     fn load_snapshots(
@@ -302,14 +297,13 @@ impl BankForks {
         bank0: &mut Bank,
         bank_maps: &mut Vec<(u64, u64, Bank)>,
         status_cache_rc: &StatusCacheRc,
-        snapshot_path: &Option<String>,
+        snapshot_path: &Path,
     ) -> Option<u64> {
-        let path = BankForks::get_snapshot_path(snapshot_path);
         let mut bank_root: Option<u64> = None;
 
         for bank_slot in names.iter().rev() {
             let bank_path = format!("{}", bank_slot);
-            let bank_file_path = path.join(bank_path.clone());
+            let bank_file_path = snapshot_path.join(bank_path.clone());
             info!("Load from {:?}", bank_file_path);
             let file = File::open(bank_file_path);
             if file.is_err() {
@@ -385,10 +379,9 @@ impl BankForks {
     pub fn load_from_snapshot(
         genesis_block: &GenesisBlock,
         account_paths: Option<String>,
-        snapshot_path: &Option<String>,
+        snapshot_path: &Path,
     ) -> Result<Self, Error> {
-        let path = BankForks::get_snapshot_path(snapshot_path);
-        let paths = fs::read_dir(path)?;
+        let paths = fs::read_dir(snapshot_path)?;
         let mut names = paths
             .filter_map(|entry| {
                 entry.ok().and_then(|e| {
@@ -427,7 +420,7 @@ impl BankForks {
             working_bank,
             root,
             slots,
-            snapshot_path: snapshot_path.clone(),
+            snapshot_path: Some(snapshot_path.to_path_buf()),
             confidence: HashMap::new(),
         })
     }
@@ -615,9 +608,10 @@ mod tests {
         account_paths: Option<String>,
         last_slot: u64,
     ) {
+        let snapshot_path = bank_forks.snapshot_path.as_ref().unwrap();
+
         let new =
-            BankForks::load_from_snapshot(&genesis_block, account_paths, &bank_forks.snapshot_path)
-                .unwrap();
+            BankForks::load_from_snapshot(&genesis_block, account_paths, snapshot_path).unwrap();
         for (slot, _) in new.banks.iter() {
             if *slot > 0 {
                 let bank = bank_forks.banks.get(slot).unwrap().clone();
@@ -627,7 +621,7 @@ mod tests {
         }
         assert_eq!(new.working_bank().slot(), last_slot);
         for (slot, _) in new.banks.iter() {
-            BankForks::remove_snapshot(*slot, &bank_forks.snapshot_path);
+            BankForks::remove_snapshot(*slot, snapshot_path);
         }
     }
 
@@ -648,7 +642,7 @@ mod tests {
             bank0.freeze();
             let slot = bank0.slot();
             let mut bank_forks = BankForks::new(0, bank0);
-            bank_forks.set_snapshot_config(Some(spath.paths.clone()));
+            bank_forks.set_snapshot_path(&PathBuf::from(&spath.paths));
             bank_forks.add_snapshot(slot, 0).unwrap();
             for forks in 0..index {
                 let bank = Bank::new_from_parent(&bank_forks[forks], &Pubkey::default(), forks + 1);
