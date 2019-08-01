@@ -24,7 +24,6 @@ use bincode::{deserialize_from, serialize_into, serialized_size};
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use rayon::ThreadPool;
 use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
@@ -331,9 +330,6 @@ pub struct AccountsDB {
     /// Starting file size of appendvecs
     file_size: u64,
 
-    /// Thread pool used for par_iter
-    pub thread_pool: ThreadPool,
-
     min_num_stores: usize,
 }
 
@@ -351,10 +347,6 @@ impl Default for AccountsDB {
             paths: RwLock::new(get_paths_vec(&temp_paths.paths)),
             temp_paths: Some(temp_paths),
             file_size: DEFAULT_FILE_SIZE,
-            thread_pool: rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap(),
             min_num_stores: num_threads,
         }
     }
@@ -499,19 +491,17 @@ impl AccountsDB {
             .values()
             .cloned()
             .collect();
-        self.thread_pool.install(|| {
-            storage_maps
-                .into_par_iter()
-                .map(|storage| {
-                    let accounts = storage.accounts.accounts(0);
-                    let mut retval = B::default();
-                    accounts.iter().for_each(|stored_account| {
-                        scan_func(stored_account, storage.id, &mut retval)
-                    });
-                    retval
-                })
-                .collect()
-        })
+        storage_maps
+            .into_par_iter()
+            .map(|storage| {
+                let accounts = storage.accounts.accounts(0);
+                let mut retval = B::default();
+                accounts
+                    .iter()
+                    .for_each(|stored_account| scan_func(stored_account, storage.id, &mut retval));
+                retval
+            })
+            .collect()
     }
 
     pub fn load(
