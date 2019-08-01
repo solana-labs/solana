@@ -74,18 +74,23 @@ source scripts/configure-metrics.sh
 nodes=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh \
-    --init-complete-file init-complete-node1.log"
+    --init-complete-file init-complete-node1.log \
+    --dynamic-port-range 8000-8019"
   "multinode-demo/validator.sh \
     --enable-rpc-exit \
     --no-restart \
+    --dynamic-port-range 8020-8039
     --init-complete-file init-complete-node2.log \
     --rpc-port 18899"
 )
 
 for i in $(seq 1 $extraNodes); do
+  portStart=$((8040 + i * 20))
+  portEnd=$((portStart + 19))
   nodes+=(
     "multinode-demo/validator.sh \
       --no-restart \
+      --dynamic-port-range $portStart-$portEnd
       --label dyn$i \
       --init-complete-file init-complete-node$((2 + i)).log"
   )
