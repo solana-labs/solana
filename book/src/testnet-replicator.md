@@ -53,7 +53,7 @@ software.
 
 ##### Linux and mac OS
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.17.0/install/solana-install-init.sh | sh -s
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.17.1/install/solana-install-init.sh | sh -s
 ```
 
 Alternatively build the `solana-install` program from source and run the
