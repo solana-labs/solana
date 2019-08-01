@@ -185,6 +185,11 @@ By default the validator will dynamically select available network ports in the
 example, `validator.sh --dynamic-port-range 11000-11010 ...` will restrict the
 validator to ports 11000-11011.
 
+#### Limiting ledger size to conserve disk space
+By default the validator will retain the full ledger.  To conserve disk space
+start the validator with the `--limit-ledger-size`, which will instruct the
+validator to only retain the last couple hours of ledger.
+
 ### Validator Monitoring
 When `validator.sh` starts, it will output a validator configuration that looks
 similar to:
