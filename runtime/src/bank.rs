@@ -10,7 +10,6 @@ use crate::accounts_db::{
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
-use crate::failure::Error;
 use crate::locked_accounts_results::LockedAccountsResults;
 use crate::message_processor::{MessageProcessor, ProcessInstruction};
 use crate::serde_utils::{
@@ -46,7 +45,7 @@ use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
-use std::io::{BufReader, Cursor, Read};
+use std::io::{BufReader, Cursor, Error as IOError, Read};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard};
@@ -82,7 +81,7 @@ impl BankRc {
         mut stream: &mut BufReader<R>,
         local_paths: String,
         append_vecs_path: P,
-    ) -> std::result::Result<(), Error> {
+    ) -> std::result::Result<(), IOError> {
         let _len: usize = deserialize_from(&mut stream)
             .map_err(|_| BankRc::get_io_error("len deserialize error"))?;
         self.accounts
@@ -100,7 +99,7 @@ impl BankRc {
             .collect()
     }
 
-    fn get_io_error(error: &str) -> std::io::Error {
+    fn get_io_error(error: &str) -> IOError {
         warn!("BankRc error: {:?}", error);
         std::io::Error::new(std::io::ErrorKind::Other, error)
     }

@@ -21,7 +21,6 @@
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::{AppendVec, StorageMeta, StoredAccount};
 use bincode::{deserialize_from, serialize_into, serialized_size};
-use failure::Error;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use rand::{thread_rng, Rng};
@@ -413,7 +412,7 @@ impl AccountsDB {
         mut stream: &mut BufReader<R>,
         local_account_paths: String,
         append_vecs_path: P,
-    ) -> Result<(), Error> {
+    ) -> Result<(), IOError> {
         let _len: usize = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("len deserialize error"))?;
         let storage: AccountStorage = deserialize_from(&mut stream)
@@ -421,7 +420,7 @@ impl AccountsDB {
 
         // Remap the deserialized AppendVec paths to point to correct local paths
         let local_account_paths = get_paths_vec(&local_account_paths);
-        let new_storage_map: Result<HashMap<Fork, ForkStores>, Error> = storage
+        let new_storage_map: Result<HashMap<Fork, ForkStores>, IOError> = storage
             .0
             .into_iter()
             .map(|(fork_id, mut fork_storage)| {
@@ -440,7 +439,12 @@ impl AccountsDB {
                         append_vecs_path.as_ref().join(append_vec_relative_path);
 
                     let copy_options = CopyOptions::new();
-                    fs_extra::move_items(&vec![append_vec_abs_path], &local_path, &copy_options)?;
+                    fs_extra::move_items(&vec![append_vec_abs_path], &local_path, &copy_options)
+                        .map_err(|_| {
+                            AccountsDB::get_io_error(
+                                "Failed to move AppendVec file into local path",
+                            )
+                        })?;
 
                     // Notify the AppendVec of the new file location
                     let mut u_storage_entry = Arc::try_unwrap(storage_entry).unwrap();
