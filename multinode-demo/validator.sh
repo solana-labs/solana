@@ -6,23 +6,23 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-fullnode_usage() {
+usage() {
   if [[ -n $1 ]]; then
     echo "$*"
     echo
   fi
   cat <<EOF
 
-Fullnode Usage:
-usage: $0 [--config-dir PATH] [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [cluster entry point hostname]
+usage: $0 [OPTIONS] [cluster entry point hostname]
 
-Start a validator
+Start a validator with no stake
 
+OPTIONS:
   --config-dir PATH         - store configuration and data files under this PATH
   --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --label LABEL             - Append the given label to the configuration files, useful when running
-                              multiple fullnodes in the same workspace
+                              multiple validators in the same workspace
   --stake LAMPORTS          - Number of lamports to stake
   --node-lamports LAMPORTS  - Number of lamports this node has been funded from the genesis block
   --no-voting               - start node without vote signer
@@ -36,7 +36,6 @@ EOF
 
 setup_validator_accounts() {
   declare node_lamports=$1
-  declare stake_lamports=$2
 
   if [[ -f $configured_flag ]]; then
     echo "Vote and stake accounts have already been configured"
@@ -47,7 +46,7 @@ setup_validator_accounts() {
         declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
         set -x
         $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
-          airdrop $((node_lamports+stake_lamports+fees))
+          airdrop $((node_lamports+fees))
       ) || return $?
     else
       echo "current account balance is "
@@ -59,13 +58,6 @@ setup_validator_accounts() {
       set -x
       $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
       create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127
-    ) || return $?
-
-    echo "Delegate the stake account to the node's vote account"
-    (
-      set -x
-      $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
-        delegate-stake "$stake_keypair_path" "$vote_pubkey" "$stake_lamports"
     ) || return $?
 
     echo "Create validator storage account"
@@ -85,8 +77,6 @@ setup_validator_accounts() {
     $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
       show-vote-account "$vote_pubkey"
     $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
-      show-stake-account "$stake_pubkey"
-    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
       show-storage-account "$storage_pubkey"
   )
   return 0
@@ -94,7 +84,6 @@ setup_validator_accounts() {
 
 args=()
 node_lamports=424242  # number of lamports to assign the node for transaction fees
-stake_lamports=42     # number of lamports to assign as stake
 poll_for_new_genesis_block=0
 label=
 identity_keypair_path=
@@ -121,7 +110,6 @@ while [[ -n $1 ]]; do
       poll_for_new_genesis_block=1
       shift
     elif [[ $1 = --blockstream ]]; then
-      stake_lamports=0
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --entrypoint ]]; then
@@ -145,9 +133,6 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --init-complete-file ]]; then
       args+=("$1" "$2")
-      shift 2
-    elif [[ $1 = --stake ]]; then
-      stake_lamports="$2"
       shift 2
     elif [[ $1 = --node-lamports ]]; then
       node_lamports="$2"
@@ -183,7 +168,7 @@ while [[ -n $1 ]]; do
       config_dir=$2
       shift 2
     elif [[ $1 = -h ]]; then
-      fullnode_usage "$@"
+      usage "$@"
     else
       echo "Unknown argument: $1"
       exit 1
@@ -195,12 +180,12 @@ while [[ -n $1 ]]; do
 done
 
 if [[ ${#positional_args[@]} -gt 1 ]]; then
-  fullnode_usage "$@"
+  usage "$@"
 fi
 
 if [[ -n $REQUIRE_CONFIG_DIR ]]; then
   if [[ -z $config_dir ]]; then
-    fullnode_usage "Error: --config-dir not specified"
+    usage "Error: --config-dir not specified"
   fi
   SOLANA_CONFIG_DIR="$config_dir"
 fi
@@ -215,7 +200,7 @@ setup_secondary_mount
 if [[ -n $gossip_entrypoint ]]; then
   # Prefer the --entrypoint argument if supplied...
   if [[ ${#positional_args[@]} -gt 0 ]]; then
-    fullnode_usage "$@"
+    usage "$@"
   fi
 else
   # ...but also support providing the entrypoint's hostname as the first
@@ -238,9 +223,6 @@ drone_address="${gossip_entrypoint%:*}":9900
 
 : "${storage_keypair_path:=$config_dir/storage-keypair.json}"
 [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
-
-stake_keypair_path=$config_dir/stake-keypair.json
-[[ -r "$stake_keypair_path" ]] || $solana_keygen new -o "$stake_keypair_path"
 
 ledger_config_dir=$config_dir/ledger
 state_dir="$config_dir"/state
@@ -375,18 +357,14 @@ while true; do
   fi
 
   vote_pubkey=$($solana_keygen pubkey "$voting_keypair_path")
-  stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
-  if ((stake_lamports)); then
-    setup_validator_accounts "$node_lamports" "$stake_lamports"
-  fi
+  setup_validator_accounts "$node_lamports"
 
   cat <<EOF
 ======================[ validator configuration ]======================
 identity pubkey: $identity_pubkey
 vote pubkey: $vote_pubkey
-stake pubkey: $stake_pubkey
 storage pubkey: $storage_pubkey
 ledger: $ledger_config_dir
 accounts: $accounts_config_dir
