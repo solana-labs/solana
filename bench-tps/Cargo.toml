@@ -16,7 +16,6 @@ serde = "1.0.97"
 serde_derive = "1.0.97"
 serde_json = "1.0.40"
 serde_yaml = "0.8.9"
-<<<<<<< HEAD
 solana = { path = "../core", version = "0.17.0" }
 solana-client = { path = "../client", version = "0.17.0" }
 solana-drone = { path = "../drone", version = "0.17.0" }
@@ -27,20 +26,8 @@ solana-measure = { path = "../measure", version = "0.17.0" }
 solana-netutil = { path = "../netutil", version = "0.17.0" }
 solana-runtime = { path = "../runtime", version = "0.17.0" }
 solana-sdk = { path = "../sdk", version = "0.17.0" }
-=======
-solana = { path = "../core", version = "0.18.0-pre0" }
-solana-client = { path = "../client", version = "0.18.0-pre0" }
-solana-drone = { path = "../drone", version = "0.18.0-pre0" }
-solana-librapay-api = { path = "../programs/librapay_api", version = "0.18.0-pre0" }
-solana-logger = { path = "../logger", version = "0.18.0-pre0" }
-solana-metrics = { path = "../metrics", version = "0.18.0-pre0" }
-solana-measure = { path = "../measure", version = "0.18.0-pre0" }
-solana-netutil = { path = "../netutil", version = "0.18.0-pre0" }
-solana-runtime = { path = "../runtime", version = "0.18.0-pre0" }
-solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
-solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.18.0-pre0" }
-solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.18.0-pre0" }
->>>>>>> c2fc0f241... Plumb libra accounts to genesis (#5333)
+solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.17.0" }
+solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.17.0" }
 
 [features]
 cuda = ["solana/cuda"]
