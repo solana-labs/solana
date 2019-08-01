@@ -301,8 +301,7 @@ impl Bank {
         {
             let stakes = bank.stakes.read().unwrap();
             for epoch in 0..=bank.get_stakers_epoch(bank.slot) {
-                bank.epoch_stakes
-                    .insert(epoch, stakes.clone_with_epoch(epoch));
+                bank.epoch_stakes.insert(epoch, stakes.clone());
             }
         }
         bank.update_clock();
@@ -372,7 +371,7 @@ impl Bank {
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
             if epoch_stakes.get(&epoch).is_none() {
-                epoch_stakes.insert(epoch, self.stakes.read().unwrap().clone_with_epoch(epoch));
+                epoch_stakes.insert(epoch, self.stakes.read().unwrap().clone());
             }
             epoch_stakes
         };
@@ -2488,8 +2487,10 @@ mod tests {
             let vote_accounts = parent.epoch_vote_accounts(epoch);
             assert!(vote_accounts.is_some());
 
+            // epoch_stakes are a snapshot at the stakers_slot_offset boundary
+            //   in the prior epoch (0 in this case)
             assert_eq!(
-                leader_stake.stake(epoch),
+                leader_stake.stake(0),
                 vote_accounts.unwrap().get(&leader_vote_account).unwrap().0
             );
 
@@ -2505,7 +2506,7 @@ mod tests {
 
         assert!(child.epoch_vote_accounts(epoch).is_some());
         assert_eq!(
-            leader_stake.stake(epoch),
+            leader_stake.stake(child.epoch()),
             child
                 .epoch_vote_accounts(epoch)
                 .unwrap()
@@ -2515,13 +2516,22 @@ mod tests {
         );
 
         // child crosses epoch boundary but isn't the first slot in the epoch, still
-        //  makes an epoch stakes
+        //  makes an epoch stakes snapshot at 1
         let child = Bank::new_from_parent(
             &parent,
             &leader_pubkey,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
         assert!(child.epoch_vote_accounts(epoch).is_some());
+        assert_eq!(
+            leader_stake.stake(child.epoch()),
+            child
+                .epoch_vote_accounts(epoch)
+                .unwrap()
+                .get(&leader_vote_account)
+                .unwrap()
+                .0
+        );
     }
 
     #[test]

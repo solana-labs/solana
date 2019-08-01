@@ -217,7 +217,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 new_stake,
                 vote_account.unsigned_key(),
                 &vote_account.state()?,
-                clock.stakers_epoch,
+                clock.epoch,
             );
 
             self.set_state(&StakeState::Stake(stake))
@@ -231,7 +231,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         }
 
         if let StakeState::Stake(mut stake) = self.state()? {
-            stake.deactivate(clock.stakers_epoch);
+            stake.deactivate(clock.epoch);
 
             self.set_state(&StakeState::Stake(stake))
         } else {
@@ -291,7 +291,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 if stake.deactivated == std::u64::MAX {
                     return Err(InstructionError::InsufficientFunds);
                 }
-                let staked = if stake.stake(clock.stakers_epoch) == 0 {
+                let staked = if stake.stake(clock.epoch) == 0 {
                     0
                 } else {
                     // Assume full stake if the stake is under warmup/cooldown
@@ -358,7 +358,7 @@ mod tests {
     #[test]
     fn test_stake_delegate_stake() {
         let clock = sysvar::clock::Clock {
-            stakers_epoch: 1,
+            epoch: 1,
             ..sysvar::clock::Clock::default()
         };
 
@@ -406,7 +406,7 @@ mod tests {
                 voter_pubkey: vote_keypair.pubkey(),
                 credits_observed: vote_state.credits(),
                 stake: stake_lamports,
-                activated: clock.stakers_epoch,
+                activated: clock.epoch,
                 deactivated: std::u64::MAX,
             })
         );
@@ -464,7 +464,7 @@ mod tests {
             Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
 
         let clock = sysvar::clock::Clock {
-            stakers_epoch: 1,
+            epoch: 1,
             ..sysvar::clock::Clock::default()
         };
 
@@ -548,7 +548,7 @@ mod tests {
         // deactivate the stake before withdrawal
         assert_eq!(stake_keyed_account.deactivate_stake(&clock), Ok(()));
         // simulate time passing
-        clock.stakers_epoch += STAKE_WARMUP_EPOCHS;
+        clock.epoch += STAKE_WARMUP_EPOCHS;
 
         // Try to withdraw more than what's available
         assert_eq!(
@@ -581,7 +581,7 @@ mod tests {
 
         let clock = sysvar::clock::Clock::default();
         let mut future = sysvar::clock::Clock::default();
-        future.stakers_epoch += 16;
+        future.epoch += 16;
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
