@@ -1,3 +1,6 @@
+# Build steps that run on pushes and pull requests.
+#
+# Release tags use buildkite-release.yml instead
 steps:
   - command: "ci/shellcheck.sh"
     name: "shellcheck"
