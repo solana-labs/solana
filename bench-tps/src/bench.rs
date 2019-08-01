@@ -440,7 +440,12 @@ pub fn fund_keys<T: Client>(
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
     let lamports_per_account = (total - (extra * max_fee)) / (notfunded.len() as u64 + 1);
 
-    println!("funding keys {}", dests.len());
+    println!(
+        "funding keys {} with lamports: {:?} total: {}",
+        dests.len(),
+        client.get_balance(&source.pubkey()),
+        total
+    );
     while !notfunded.is_empty() {
         let mut new_funded: Vec<(&Keypair, u64)> = vec![];
         let mut to_fund = vec![];
@@ -705,10 +710,7 @@ fn fund_move_keys<T: Client>(
         1,
         blockhash,
     );
-    let sig = client
-        .async_send_transaction(tx)
-        .expect("create_account in generate_and_fund_keypairs");
-    client.poll_for_signature(&sig).unwrap();
+    client.send_message(&[funding_key], tx.message).unwrap();
 
     info!("minting to funding keypair");
     let tx = librapay_transaction::mint_tokens(
@@ -719,12 +721,11 @@ fn fund_move_keys<T: Client>(
         total,
         blockhash,
     );
-    let sig = client
-        .async_send_transaction(tx)
-        .expect("create_account in generate_and_fund_keypairs");
-    client.poll_for_signature(&sig).unwrap();
+    client
+        .send_message(&[funding_key, libra_mint_key], tx.message)
+        .unwrap();
 
-    info!("creating move accounts.. {}", keypairs.len());
+    info!("creating {} move accounts...", keypairs.len());
     let create_len = 8;
     let mut funding_time = Measure::start("funding_time");
     for (i, keys) in keypairs.chunks(create_len).enumerate() {
@@ -733,97 +734,115 @@ fn fund_move_keys<T: Client>(
             break;
         }
 
-        let mut tx_send = Measure::start("poll");
-
         let pubkeys: Vec<_> = keys.iter().map(|k| k.pubkey()).collect();
         let tx = librapay_transaction::create_accounts(funding_key, &pubkeys, 1, blockhash);
+
         let ser_size = bincode::serialized_size(&tx).unwrap();
-        let sig = client
-            .async_send_transaction(tx)
-            .expect("create_account in generate_and_fund_keypairs");
-        tx_send.stop();
-        let mut poll = Measure::start("poll");
-        client.poll_for_signature(&sig).unwrap();
-        poll.stop();
+
+        client.send_message(&[funding_key], tx.message).unwrap();
+
         if i % 10 == 0 {
-            blockhash = client.get_recent_blockhash().unwrap().0;
             info!(
-                "size: {} created {} accounts of {} sig: {}us send: {}us",
+                "size: {} created {} accounts of {}",
                 ser_size,
                 i,
                 (keypairs.len() / create_len),
-                poll.as_us(),
-                tx_send.as_us()
             );
         }
     }
     funding_time.stop();
     info!("funding accounts {}ms", funding_time.as_ms());
-    let mut sigs = vec![];
-    let tx_count = keypairs.len();
-    let amount = total / (tx_count as u64);
-    for (i, key) in keypairs[..tx_count].iter().enumerate() {
+
+    const NUM_FUNDING_KEYS: usize = 4;
+    let funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
+    let pubkey_amounts: Vec<_> = funding_keys
+        .iter()
+        .map(|key| (key.pubkey(), total / NUM_FUNDING_KEYS as u64))
+        .collect();
+    let tx = Transaction::new_signed_instructions(
+        &[funding_key],
+        system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts),
+        blockhash,
+    );
+    client.send_message(&[funding_key], tx.message).unwrap();
+    let mut balance = 0;
+    for _ in 0..20 {
+        balance = client.get_balance(&funding_keys[0].pubkey()).unwrap();
+        if balance > 0 {
+            break;
+        } else {
+            sleep(Duration::from_millis(100));
+        }
+    }
+    assert!(balance > 0);
+    info!("funded multiple funding accounts.. {:?}", balance);
+
+    let libra_funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
+    for (i, key) in libra_funding_keys.iter().enumerate() {
+        let tx =
+            librapay_transaction::create_account(&funding_keys[i], &key.pubkey(), 1, blockhash);
+        client
+            .send_message(&[&funding_keys[i]], tx.message)
+            .unwrap();
+
         let tx = librapay_transaction::transfer(
             libra_pay_program_id,
             &libra_mint_key.pubkey(),
-            funding_key,
+            &funding_keys[i],
             &libra_funding_key,
             &key.pubkey(),
-            amount,
+            total / NUM_FUNDING_KEYS as u64,
             blockhash,
         );
+        client
+            .send_message(&[&funding_keys[i], &libra_funding_key], tx.message)
+            .unwrap();
 
-        let sig = client
-            .async_send_transaction(tx.clone())
-            .expect("create_account in generate_and_fund_keypairs");
-
-        let mut poll_time = Measure::start("poll_start");
-        let poll_status = client.poll_for_signature(&sig);
-        poll_time.stop();
-        info!(
-            "i: {} poll: {:?} time: {}ms",
-            i,
-            poll_status,
-            poll_time.as_ms()
-        );
-
-        sigs.push((sig, key));
-
-        if i % 50 == 0 {
-            blockhash = client.get_recent_blockhash().unwrap().0;
-        }
+        info!("funded libra funding key {}", i);
     }
 
-    for (i, (sig, key)) in sigs.iter().enumerate() {
-        let mut times = 0;
-        loop {
-            match client.poll_for_signature(&sig) {
-                Ok(_) => {
+    let tx_count = keypairs.len();
+    let amount = total / (tx_count as u64);
+    for (i, keys) in keypairs[..tx_count].chunks(NUM_FUNDING_KEYS).enumerate() {
+        for (j, key) in keys.iter().enumerate() {
+            let tx = librapay_transaction::transfer(
+                libra_pay_program_id,
+                &libra_mint_key.pubkey(),
+                &funding_keys[j],
+                &libra_funding_keys[j],
+                &key.pubkey(),
+                amount,
+                blockhash,
+            );
+
+            let _sig = client
+                .async_send_transaction(tx.clone())
+                .expect("create_account in generate_and_fund_keypairs");
+        }
+
+        info!("sent... checking balance {}", i);
+        for (j, key) in keys.iter().enumerate() {
+            let mut times = 0;
+            loop {
+                let balance =
+                    librapay_transaction::get_libra_balance(client, &key.pubkey()).unwrap();
+                if balance >= amount {
                     break;
-                }
-                Err(e) => {
-                    info!("e :{:?} waiting times: {} sig: {}", e, times, sig);
+                } else if times > 20 {
+                    info!("timed out.. {} key: {} balance: {}", i, j, balance);
+                    break;
+                } else {
                     times += 1;
-                    sleep(Duration::from_secs(1));
+                    sleep(Duration::from_millis(100));
                 }
             }
         }
-        times = 0;
-        loop {
-            let balance = librapay_transaction::get_libra_balance(client, &key.pubkey()).unwrap();
-            if balance < amount {
-                info!("i: {} balance: {} times: {}", i, balance, times);
-                times += 1;
-                sleep(Duration::from_secs(1));
-            } else {
-                break;
-            }
-        }
-        if i % 10 == 0 {
-            info!("funding {} of {}", i, tx_count);
-        }
+
+        info!("funded: {} of {}", i, keypairs.len() / NUM_FUNDING_KEYS);
+        blockhash = client.get_recent_blockhash().unwrap().0;
     }
-    info!("done..");
+
+    info!("done funding keys..");
 }
 
 pub fn generate_and_fund_keypairs<T: Client>(
@@ -853,7 +872,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
         let extra_fees = extra * fee_calculator.max_lamports_per_signature;
         let mut total = account_desired_balance * (1 + keypairs.len() as u64) + extra_fees;
         if use_move {
-            total *= 2;
+            total *= 3;
         }
 
         println!("Previous key balance: {} max_fee: {} lamports_per_account: {} extra: {} desired_balance: {} total: {}",
@@ -866,7 +885,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
         }
 
         if use_move {
-            let libra_genesis_keypair = create_genesis(&funding_key, client, 1_000_000);
+            let libra_genesis_keypair = create_genesis(&funding_key, client, 10_000_000);
             let libra_mint_program_id = upload_mint_program(&funding_key, client);
             let libra_pay_program_id = upload_payment_program(&funding_key, client);
 
@@ -879,7 +898,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
                 client,
                 funding_key,
                 &move_keypairs,
-                total / 2,
+                total / 3,
                 &libra_pay_program_id,
                 &libra_mint_program_id,
                 &libra_genesis_keypair,
@@ -891,8 +910,8 @@ pub fn generate_and_fund_keypairs<T: Client>(
                 move_keypairs,
             ));
 
-            // Give solana keys half and move keys half the lamports.
-            total /= 2;
+            // Give solana keys 1/3 and move keys 1/3 the lamports. Keep 1/3 for fees.
+            total /= 3;
         }
 
         fund_keys(
