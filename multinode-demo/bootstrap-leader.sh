@@ -62,6 +62,7 @@ args+=(
   --ledger "$ledger_dir"
   --rpc-port 8899
   --snapshot-path "$SOLANA_CONFIG_DIR"/bootstrap-leader/snapshots
+  --snapshot-interval-slots 100
   --storage-keypair "$storage_keypair"
   --voting-keypair "$vote_keypair"
   --rpc-drone-address 127.0.0.1:9900

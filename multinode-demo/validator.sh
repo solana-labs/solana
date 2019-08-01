@@ -263,6 +263,7 @@ default_arg --storage-keypair "$storage_keypair_path"
 default_arg --ledger "$ledger_config_dir"
 default_arg --accounts "$accounts_config_dir"
 default_arg --snapshot-path "$snapshot_config_dir"
+default_arg --snapshot-interval-slots 100
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda

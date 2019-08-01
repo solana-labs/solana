@@ -12,6 +12,7 @@ use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
+use crate::snapshot_package::SnapshotPackageSender;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
@@ -41,6 +42,7 @@ impl Finalizer {
         Finalizer { exit_sender }
     }
 }
+
 // Implement a destructor for Finalizer.
 impl Drop for Finalizer {
     fn drop(&mut self) {
@@ -90,6 +92,7 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
+        snapshot_package_sender: Option<SnapshotPackageSender>,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>)
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -179,6 +182,7 @@ impl ReplayStage {
                             &root_bank_sender,
                             lockouts,
                             &lockouts_sender,
+                            &snapshot_package_sender,
                         )?;
 
                         Self::reset_poh_recorder(
@@ -396,6 +400,7 @@ impl ReplayStage {
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         lockouts: HashMap<u64, StakeLockout>,
         lockouts_sender: &Sender<LockoutAggregationData>,
+        snapshot_package_sender: &Option<SnapshotPackageSender>,
     ) -> Result<()>
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -419,7 +424,10 @@ impl ReplayStage {
             // is consumed by repair_service to update gossip, so we don't want to get blobs for
             // repair on gossip before we update leader schedule, otherwise they may get dropped.
             leader_schedule_cache.set_root(rooted_banks.last().unwrap());
-            bank_forks.write().unwrap().set_root(new_root);
+            bank_forks
+                .write()
+                .unwrap()
+                .set_root(new_root, snapshot_package_sender);
             Self::handle_new_root(&bank_forks, progress);
             trace!("new root {}", new_root);
             if let Err(e) = root_bank_sender.send(rooted_banks) {

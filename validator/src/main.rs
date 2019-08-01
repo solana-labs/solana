@@ -1,5 +1,6 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
 use log::*;
+use solana::bank_forks::SnapshotConfig;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
@@ -158,9 +159,18 @@ fn main() {
         .arg(
             clap::Arg::with_name("snapshot_path")
                 .long("snapshot-path")
-                .value_name("PATHS")
+                .value_name("SNAPSHOT_PATHS")
                 .takes_value(true)
+                .requires("snapshot_interval_slots")
                 .help("Snapshot path"),
+        )
+        .arg(
+            clap::Arg::with_name("snapshot_interval_slots")
+                .long("snapshot-interval-slots")
+                .value_name("SNAPSHOT_INTERVAL_SLOTS")
+                .takes_value(true)
+                .requires("snapshot_path")
+                .help("Number of slots between generating snapshots"),
         )
         .arg(
             clap::Arg::with_name("limit_ledger_size")
@@ -233,8 +243,19 @@ fn main() {
         ),
     );
 
-    validator_config.account_paths = matches.value_of("accounts").map(ToString::to_string);
-    validator_config.snapshot_path = matches.value_of("snapshot_path").map(PathBuf::from);
+    if let Some(paths) = matches.value_of("accounts") {
+        validator_config.account_paths = Some(paths.to_string());
+    }
+    if let Some(snapshot_path) = matches.value_of("snapshot_path").map(PathBuf::from) {
+        let snapshot_interval = matches.value_of("snapshot_interval_slots").unwrap();
+        validator_config.snapshot_config = Some(SnapshotConfig::new(
+            snapshot_path,
+            ledger_path.clone(),
+            snapshot_interval.parse::<usize>().unwrap(),
+        ));
+    } else {
+        validator_config.snapshot_config = None;
+    }
     if matches.is_present("limit_ledger_size") {
         validator_config.max_ledger_slots = Some(DEFAULT_MAX_LEDGER_SLOTS);
     }

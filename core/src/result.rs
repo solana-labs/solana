@@ -30,6 +30,7 @@ pub enum Error {
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
     BlocktreeError(blocktree::BlocktreeError),
+    FsExtra(fs_extra::error::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -100,6 +101,11 @@ impl std::convert::From<Box<dyn Any + Send + 'static>> for Error {
 impl std::convert::From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Error {
         Error::IO(e)
+    }
+}
+impl std::convert::From<fs_extra::error::Error> for Error {
+    fn from(e: fs_extra::error::Error) -> Error {
+        Error::FsExtra(e)
     }
 }
 impl std::convert::From<serde_json::Error> for Error {

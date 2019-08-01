@@ -6,7 +6,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
 
-const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
+pub const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
 const CACHED_SIGNATURE_SIZE: usize = 20;
 
 // Store forks in a single chunk of memory to avoid another lookup.
@@ -104,14 +104,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     /// After MAX_CACHE_ENTRIES, roots are removed, and any old signatures are cleared.
     pub fn add_root(&mut self, fork: ForkId) {
         self.roots.insert(fork);
-        if self.roots.len() > MAX_CACHE_ENTRIES {
-            if let Some(min) = self.roots.iter().min().cloned() {
-                self.roots.remove(&min);
-                for cache in self.cache.iter_mut() {
-                    cache.retain(|_, (fork, _, _)| *fork > min);
-                }
-            }
-        }
+        self.purge_roots();
     }
 
     /// Insert a new signature for a specific fork.
@@ -134,6 +127,17 @@ impl<T: Serialize + Clone> StatusCache<T> {
         sig_slice.clone_from_slice(&sig.as_ref()[index..index + CACHED_SIGNATURE_SIZE]);
         let sig_forks = sig_map.2.entry(sig_slice).or_insert_with(|| vec![]);
         sig_forks.push((fork, res));
+    }
+
+    pub fn purge_roots(&mut self) {
+        if self.roots.len() > MAX_CACHE_ENTRIES {
+            if let Some(min) = self.roots.iter().min().cloned() {
+                self.roots.remove(&min);
+                for cache in self.cache.iter_mut() {
+                    cache.retain(|_, (fork, _, _)| *fork > min);
+                }
+            }
+        }
     }
 
     fn insert_entry(

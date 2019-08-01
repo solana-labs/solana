@@ -24,6 +24,7 @@ use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
+use crate::snapshot_package::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -41,6 +42,7 @@ pub struct Tvu {
     blockstream_service: Option<BlockstreamService>,
     ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
+    snapshot_packager_service: Option<SnapshotPackagerService>,
 }
 
 pub struct Sockets {
@@ -116,6 +118,17 @@ impl Tvu {
 
         let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
+        let (snapshot_packager_service, snapshot_package_sender) = {
+            let snapshot_config = { bank_forks.read().unwrap().snapshot_config().clone() };
+            if snapshot_config.is_some() {
+                // Start a snapshot packaging service
+                let (sender, receiver) = channel();
+                let snapshot_packager_service = SnapshotPackagerService::new(receiver, exit);
+                (Some(snapshot_packager_service), Some(sender))
+            } else {
+                (None, None)
+            }
+        };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
             &keypair.pubkey(),
@@ -130,6 +143,7 @@ impl Tvu {
             poh_recorder,
             leader_schedule_cache,
             vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
+            snapshot_package_sender,
         );
 
         let blockstream_service = if blockstream_unix_socket.is_some() {
@@ -171,6 +185,7 @@ impl Tvu {
             blockstream_service,
             ledger_cleanup_service,
             storage_stage,
+            snapshot_packager_service,
         }
     }
 }
@@ -189,6 +204,9 @@ impl Service for Tvu {
             self.ledger_cleanup_service.unwrap().join()?;
         }
         self.replay_stage.join()?;
+        if let Some(s) = self.snapshot_packager_service {
+            s.join()?;
+        }
         Ok(())
     }
 }
