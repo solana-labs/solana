@@ -76,6 +76,7 @@ pub mod window_service;
 #[macro_use]
 extern crate solana_budget_program;
 
+#[macro_use]
 extern crate solana_storage_program;
 
 #[cfg(test)]
