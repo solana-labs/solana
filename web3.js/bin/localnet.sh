@@ -92,7 +92,6 @@ up)
     ARGS=(
       --detach
       --name solana-localnet
-      --network "$network"
       --rm
       --publish 8899:8899
       --publish 8900:8900
@@ -100,6 +99,9 @@ up)
       --tty
       --env "RUST_LOG=$RUST_LOG"
     )
+    if [[ -n $network ]]; then
+      ARGS+=(--network "$network")
+    fi
 
     docker run "${ARGS[@]}" solanalabs/solana:"$channel"
 
