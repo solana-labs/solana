@@ -199,10 +199,8 @@ local|tar|skip)
       args+=(
         --blockstream /tmp/solana-blockstream.sock
         --no-voting
-        --stake 0
       )
     else
-      args+=(--stake "$stake")
       args+=(--enable-rpc-exit)
       if [[ -n $internalNodesLamports ]]; then
         args+=(--node-lamports "$internalNodesLamports")
@@ -261,6 +259,10 @@ local|tar|skip)
     pid=$!
     oom_score_adj "$pid" 1000
     waitForNodeToInit
+
+    if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
+      ./multinode-demo/delegate-stake.sh $stake
+    fi
     ;;
   replicator)
     if [[ $deployMethod != skip ]]; then
