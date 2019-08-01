@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 assert_matches = "1.3.0"
 bincode = "1.1.4"
-log = "0.4.7"
+log = "0.4.8"
 rand = "0.6.5"
 num-derive = "0.2"
 num-traits = "0.2"

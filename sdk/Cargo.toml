@@ -17,7 +17,7 @@ chrono = { version = "0.4.7", features = ["serde"] }
 generic-array = { version = "0.13.2", default-features = false, features = ["serde", "more_lengths"] }
 hex = "0.3.2"
 itertools = "0.8.0"
-log = "0.4.7"
+log = "0.4.8"
 memmap = "0.6.2"
 num-derive = "0.2"
 num-traits = "0.2"
