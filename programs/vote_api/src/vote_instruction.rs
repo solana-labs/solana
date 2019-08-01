@@ -127,7 +127,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    solana_logger::setup();
+    solana_logger::setup_with_filter("solana=warn");
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
