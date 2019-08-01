@@ -1595,7 +1595,7 @@
           "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "select median(\"tx_count\") as \"transactions\" from (select sum(\"count\") / 2  as \"tx_count\" from \"$testnet\".\"autogen\".\"replay_stage-replay_transactions\" where $timeFilter AND count > 0 GROUP BY time(2s), host_id) group by time(2s) fill(0)",
+          "query": "select median(\"tx_count\") as \"transactions\" from (select sum(\"count\") / 2  as \"tx_count\" from \"$testnet\".\"autogen\".\"bank-process_transactions\" where $timeFilter AND count > 0 GROUP BY time(2s), host_id) group by time(2s) fill(0)",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series",
