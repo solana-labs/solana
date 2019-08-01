@@ -1,3 +1,6 @@
+#
+# Build steps that run after the primary pipeline on pushes and tags.
+# Pull requests to not run these steps.
 steps:
   - command: "sdk/docker-solana/build.sh"
     timeout_in_minutes: 60
