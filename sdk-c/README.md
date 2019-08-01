@@ -5,7 +5,7 @@ to generate a header file during the build. To generate both:
 
 ```shell
 $ cd <path/to/solana/repo>/sdk-c
-$ cargo build
+$ SOLANA_H_OUT_DIR="$(pwd)/include" cargo build
 ```
 
 This will generate the static library in `<path/to/solana/repo>/target/deps` and the header file in
