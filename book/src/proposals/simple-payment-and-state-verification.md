@@ -20,39 +20,27 @@ Validators themselves may want to use light client APIs for performance reasons.
 
 A receipt is a minimal proof that; a transaction has been included in a block, that the block has been voted on by the client's preferred set of validators and that the votes have reached the desired confirmation depth.
 
-The receipts for both state and payments start with a Merkle Path from the value into a Bank-Merkle that has been voted on and included in the ledger. A chain of PoH Entries containing subsequent validator votes, deriving from the Bank-Merkle, is the confirmation proof.
+### Transaction Inclusion Proof
 
-Clients can examine this ledger data and compute the finality using Solana's fork selection rules.
+A transaction inclusion proof is a data structure that contains a Merkle Path from a transaction, through an Entry-Merkle to a Block-Merkle, which is included in a Bank-Hash with the required set of validator votes. A chain of PoH Entries containing subsequent validator votes, deriving from the Bank-Hash, is the proof of confirmation. Clients can examine this ledger data and compute finality using Solana's fork selection rules.
 
-### Payment Merkle Path
+An Entry-Merkle is a Merkle Root including all transactions in a given entry, sorted by signature.
 
-A payment receipt is a data structure that contains a Merkle Path from a transaction to the required set of validator votes.
-
-An Entry-Merkle is a Merkle Root including all transactions in the entry, sorted by signature.
+A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the block.
 
 ![Block Merkle Diagram](../.gitbook/assets/spv-block-merkle.svg)
 
-A Block-Merkle is a Merkle root of all the Entry-Merkles sequenced in the block. Transaction status is necessary for the receipt because the state receipt is constructed for the block. Two transactions over the same state can appear in the block, and therefore, there is no way to infer from just the state whether a transaction that is committed to the ledger has succeeded or failed in modifying the intended state. It may not be necessary to encode the full status code, but a single status bit to indicate the transaction's success.
+A Bank-Hash is the hash of the concatenation of the Block-Merkle and Accounts-Hash
 
-### State Merkle Path
+<img alt="Bank Merkle Diagram" src="img/spv-bank-merkle.svg" class="center"/>
 
-A state receipt provides a confirmation that a specific state is committed at the end of the block. Inter-block state transitions do not generate a receipt.
+An Accounts-Hash is the hash of the concatentation of the state hashes of each account modified during the current slot.
 
-For example:
+Transaction status is necessary for the receipt because the state receipt is constructed for the block. Two transactions over the same state can appear in the block, and therefore, there is no way to infer from just the state whether a transaction that is committed to the ledger has succeeded or failed in modifying the intended state. It may not be necessary to encode the full status code, but a single status bit to indicate the transaction's success.
 
-* A sends 5 Lamports to B
-* B spends 5 Lamports
-* C sends 5 Lamports to A
+### Account State Verification
 
-At the end of the block, A and B are in the exact same starting state, and any state receipt would point to the same value for A or B.
-
-The Bank-Merkle is computed from the Merkle Tree of the new state changes, along with the Previous Bank-Merkle, and the Block-Merkle.
-
-![Bank Merkle Diagram](../.gitbook/assets/spv-bank-merkle.svg)
-
-A state receipt contains only the state changes occurring in the block. A direct Merkle Path to the current Bank-Merkle guarantees the state value at that bank hash, but it cannot be used to generate a “current” receipt to the latest state if the state modification occurred in some previous block. There is no guarantee that the path provided by the validator is the latest one available out of all the previous Bank-Merkles.
-
-Clients that want to query the chain for a receipt of the "latest" state would need to create a transaction that would update the Merkle Path for that account, such as a credit of 0 Lamports.
+An account's state (balance or other data) can be verified by submitting a transaction with a ___TBD___ Instruction to the cluster. This instruction contains the slot boundary of interest and the expected state hash at that boundary. The client can then use a [Transaction Inclusion Proof](#transaction-inclusion-proof) to verify whether the cluster agrees with the query conditions.
 
 ### Validator Votes
 
@@ -64,11 +52,7 @@ A receipt has a PoH link from the payment or state Merkle Path root to a list of
 
 It contains the following:
 
-* State -&gt; Bank-Merkle
-
-  or
-
-* Transaction -&gt; Entry-Merkle -&gt; Block-Merkle -&gt; Bank-Merkle
+* Transaction -&gt; Entry-Merkle -&gt; Block-Merkle -&gt; Bank-Hash
 
 And a vector of PoH entries:
 
@@ -95,15 +79,15 @@ Clients do not need the starting vote state. The [fork selection](../implemented
 
 ### Verification
 
-A light client that is aware of the supermajority set validators can verify a receipt by following the Merkle Path to the PoH chain. The Bank-Merkle is the Merkle Root and will appear in votes included in an Entry. The light client can simulate [fork selection](../implemented-proposals/tower-bft.md) for the consecutive votes and verify that the receipt is confirmed at the desired lockout threshold.
+A light client that is aware of the supermajority set validators can verify a receipt by following the Merkle Path to the PoH chain. The Block-Merkle is the Merkle Root and will appear in votes included in an Entry. The light client can simulate [fork selection](../implemented-proposals/tower-bft.md) for the consecutive votes and verify that the receipt is confirmed at the desired lockout threshold.
 
 ### Synthetic State
 
-Synthetic state should be computed into the Bank-Merkle along with the bank generated state.
+Synthetic state should be computed into the Bank-Hash along with the bank generated state.
 
 For example:
 
 * Epoch validator accounts and their stakes and weights.
 * Computed fee rates
 
-These values should have an entry in the Bank-Merkle. They should live under known accounts, and therefore have an exact address in the Merkle Path.
+These values should have an entry in the Bank-Hash. They should live under known accounts, and therefore have an index into the hash concatenation.
