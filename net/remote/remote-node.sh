@@ -261,7 +261,11 @@ local|tar|skip)
     waitForNodeToInit
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
-      args=(--force "$stake")
+      args=(
+        --url http://"$entrypointIp":8899
+        --force
+        "$stake"
+      )
       if [[ $airdropsEnabled != true ]]; then
         args+=(--no-airdrop)
       fi
