@@ -477,6 +477,10 @@ impl ReplayStage {
                 let percentage_stake: f64 =
                     stake_lockout.stake() as f64 / total_epoch_stakes as f64;
                 let fork_metrics = *fork as i64;
+                let parent = w_bank_forks
+                    .get(*fork)
+                    .map(|bank| bank.parent().map(|parent| parent.slot()).unwrap_or(0))
+                    .unwrap_or(0) as i64;
                 solana_metrics::submit(
                     solana_metrics::influxdb::Point::new("stake-percentage")
                         .add_tag(
@@ -491,6 +495,7 @@ impl ReplayStage {
                             "fork",
                             solana_metrics::influxdb::Value::Integer(fork_metrics),
                         )
+                        .add_field("parent", solana_metrics::influxdb::Value::Integer(parent))
                         .add_field(
                             "root",
                             solana_metrics::influxdb::Value::Integer(

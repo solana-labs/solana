@@ -7979,6 +7979,19 @@
       "type": "row"
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 97
+      },
+      "id": 61,
+      "panels": [],
+      "title": "Fork Confidence",
+      "type": "row"
+    },
+    {
       "columns": [],
       "datasource": "$datasource",
       "fontSize": "100%",
@@ -8061,12 +8074,28 @@
             "rgba(50, 172, 45, 0.97)"
           ],
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "decimals": 2,
+          "decimals": 0,
           "mappingType": 1,
           "pattern": "percentage_stake",
           "thresholds": [],
           "type": "number",
-          "unit": "short"
+          "unit": "percentunit"
+        },
+        {
+          "alias": "Parent",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "decimals": 0,
+          "mappingType": 1,
+          "pattern": "parent",
+          "thresholds": [],
+          "type": "number",
+          "unit": "none"
         },
         {
           "alias": "",
@@ -8101,7 +8130,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(fork) as fork, mean(last) as percentage_stake, count(host_id) as nodes_reporting from (SELECT fork, last, host_id from (SELECT fork, root, last(percentage_stake) FROM  \"$testnet\".\"autogen\".\"stake-percentage\" WHERE $timeFilter GROUP BY fork_tag, host_id) WHERE fork > root) GROUP BY fork_tag",
+          "query": "SELECT mean(fork) as fork, mean(parent) as parent, mean(last) as percentage_stake, count(host_id) as nodes_reporting from (SELECT fork, parent, last, host_id from (SELECT fork, root, parent, last(percentage_stake) FROM  \"$testnet\".\"autogen\".\"stake-percentage\" WHERE $timeFilter GROUP BY fork_tag, host_id) WHERE fork > root AND root != 0) GROUP BY fork_tag",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
