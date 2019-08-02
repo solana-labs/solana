@@ -194,11 +194,10 @@ impl Write for Shredder {
                             // If parent slot is provided, assume it's first shred in slot
                             SignedShred::new(Shred::FirstInSlot(self.new_first_shred(parent)))
                         })
-                        .unwrap_or(
+                        .unwrap_or_else(||
                             // If parent slot is not provided, and since there's no existing shred,
                             // assume it's first shred in FEC block
-                            SignedShred::new(Shred::FirstInFECSet(self.new_data_shred())),
-                        ),
+                            SignedShred::new(Shred::FirstInFECSet(self.new_data_shred()))),
                 )
             })
             .unwrap();
