@@ -85,9 +85,7 @@ fn verify_instruction(
     }
 
     // Only system accounts can change the size of the data.
-    if !system_program::check_id(&program_id)
-        && pre_data.len() != account.data.len()
-    {
+    if !system_program::check_id(&program_id) && pre_data.len() != account.data.len() {
         return Err(InstructionError::AccountDataSizeChanged);
     }
     // For accounts unassigned to the program, the data may not change.
