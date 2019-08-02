@@ -94,6 +94,7 @@ declare module '@solana/web3.js' {
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getEpochVoteAccounts(): Promise<Array<VoteAccountInfo>>;
     confirmTransaction(signature: TransactionSignature): Promise<boolean>;
+    getSlot(): Promise<number>;
     getSlotLeader(): Promise<string>;
     getSignatureStatus(
       signature: TransactionSignature,

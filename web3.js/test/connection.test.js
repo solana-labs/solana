@@ -128,6 +128,31 @@ test('get balance', async () => {
   expect(balance).toBeGreaterThanOrEqual(0);
 });
 
+test('get slot', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSlot',
+    },
+    {
+      error: null,
+      result: 123,
+    },
+  ]);
+
+  const slotLeader = await connection.getSlot();
+  if (mockRpcEnabled) {
+    expect(slotLeader).toBe(123);
+  } else {
+    // No idea what the correct slot value should be on a live cluster, so
+    // just check the type
+    expect(typeof slotLeader).toBe('number');
+  }
+});
+
+
 test('get slot leader', async () => {
   const connection = new Connection(url);
 
