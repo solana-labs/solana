@@ -310,80 +310,81 @@ impl Bank {
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: u64) -> Self {
-        Self::default().init_from_parent(parent, collector_id, slot)
-    }
-
-    /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn init_from_parent(
-        mut self,
-        parent: &Arc<Bank>,
-        collector_id: &Pubkey,
-        slot: u64,
-    ) -> Self {
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
-        // TODO: clean this up, soo much special-case copying...
-        self.ticks_per_slot = parent.ticks_per_slot;
-        self.slots_per_segment = parent.slots_per_segment;
-        self.slots_per_year = parent.slots_per_year;
-        self.epoch_schedule = parent.epoch_schedule;
+        let rc = BankRc {
+            accounts: Arc::new(Accounts::new_from_parent(&parent.rc.accounts)),
+            parent: RwLock::new(Some(parent.clone())),
+        };
+        let src = StatusCacheRc {
+            status_cache: parent.src.status_cache.clone(),
+        };
+        let mut new = Bank {
+            rc,
+            src,
+            blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
 
-        self.slot = slot;
-        self.max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
+            // TODO: clean this up, soo much special-case copying...
+            ticks_per_slot: parent.ticks_per_slot,
+            slots_per_segment: parent.slots_per_segment,
+            slots_per_year: parent.slots_per_year,
+            epoch_schedule: parent.epoch_schedule,
+            slot,
+            max_tick_height: (slot + 1) * parent.ticks_per_slot - 1,
+            bank_height: parent.bank_height + 1,
+            fee_calculator: FeeCalculator::new_derived(
+                &parent.fee_calculator,
+                parent.signature_count(),
+            ),
+            capitalization: AtomicUsize::new(parent.capitalization() as usize),
+            inflation: parent.inflation.clone(),
+            transaction_count: AtomicUsize::new(parent.transaction_count() as usize),
+            stakes: RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(0)),
+            storage_accounts: RwLock::new(parent.storage_accounts.read().unwrap().clone()),
+            parent_hash: parent.hash(),
+            collector_id: *collector_id,
+            collector_fees: AtomicUsize::new(0),
+            ancestors: HashMap::new(),
+            epoch_stakes: HashMap::new(),
+            hash: RwLock::new(Hash::default()),
+            is_delta: AtomicBool::new(false),
+            tick_height: AtomicUsize::new(parent.tick_height.load(Ordering::Relaxed)),
+            signature_count: AtomicUsize::new(0),
+            message_processor: MessageProcessor::default(),
+        };
 
-        self.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
-        self.src.status_cache = parent.src.status_cache.clone();
-        self.bank_height = parent.bank_height + 1;
-        self.fee_calculator =
-            FeeCalculator::new_derived(&parent.fee_calculator, parent.signature_count());
-
-        self.capitalization
-            .store(parent.capitalization() as usize, Ordering::Relaxed);
-        self.inflation = parent.inflation.clone();
-
-        self.transaction_count
-            .store(parent.transaction_count() as usize, Ordering::Relaxed);
-        self.stakes = RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(self.epoch()));
-        self.storage_accounts = RwLock::new(parent.storage_accounts.read().unwrap().clone());
-
-        self.tick_height.store(
-            parent.tick_height.load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
+        {
+            *new.stakes.write().unwrap() =
+                parent.stakes.read().unwrap().clone_with_epoch(new.epoch());
+        }
 
         datapoint_info!(
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
-            ("bank_height", self.bank_height, i64)
+            ("bank_height", new.bank_height, i64)
         );
 
-        self.rc.parent = RwLock::new(Some(parent.clone()));
-        self.parent_hash = parent.hash();
-        self.collector_id = *collector_id;
-
-        self.rc.accounts = Arc::new(Accounts::new_from_parent(&parent.rc.accounts));
-
-        self.epoch_stakes = {
+        new.epoch_stakes = {
             let mut epoch_stakes = parent.epoch_stakes.clone();
-            let epoch = self.get_stakers_epoch(self.slot);
+            let epoch = new.get_stakers_epoch(new.slot);
             // update epoch_vote_states cache
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
             if epoch_stakes.get(&epoch).is_none() {
-                epoch_stakes.insert(epoch, self.stakes.read().unwrap().clone());
+                epoch_stakes.insert(epoch, new.stakes.read().unwrap().clone());
             }
             epoch_stakes
         };
-        self.ancestors.insert(self.slot(), 0);
-        self.parents().iter().enumerate().for_each(|(i, p)| {
-            self.ancestors.insert(p.slot(), i + 1);
+        new.ancestors.insert(new.slot(), 0);
+        new.parents().iter().enumerate().for_each(|(i, p)| {
+            new.ancestors.insert(p.slot(), i + 1);
         });
 
-        self.update_rewards(parent.epoch());
-        self.update_clock();
-        self.update_fees();
-        self
+        new.update_rewards(parent.epoch());
+        new.update_clock();
+        new.update_fees();
+        new
     }
 
     pub fn collector_id(&self) -> &Pubkey {
@@ -2335,9 +2336,9 @@ mod tests {
             Some(Ok(()))
         );
 
-        trace!("new form parent");
+        trace!("new from parent");
         let bank = new_from_parent(&parent);
-        trace!("done new form parent");
+        trace!("done new from parent");
         assert_eq!(
             bank.get_signature_status(&tx_transfer_mint_to_1.signatures[0]),
             Some(Ok(()))
