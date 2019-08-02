@@ -171,7 +171,7 @@ pub fn load_snapshots<P: AsRef<Path>>(
 }
 
 pub fn get_snapshot_tar_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
-    snapshot_output_dir.as_ref().join("state.tgz")
+    snapshot_output_dir.as_ref().join("snapshot.tgz")
 }
 
 pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
