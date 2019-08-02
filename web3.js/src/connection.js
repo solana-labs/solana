@@ -161,6 +161,11 @@ const GetProgramAccountsRpcResult = jsonRpcResult(
 const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
 
 /**
+ * Expected JSON RPC response for the "getSlot" message
+ */
+const GetSlot = jsonRpcResult('number');
+
+/**
  * Expected JSON RPC response for the "getSlotLeader" message
  */
 const GetSlotLeader = jsonRpcResult('string');
@@ -534,6 +539,20 @@ export class Connection {
     assert(typeof res.result !== 'undefined');
     return res.result;
   }
+
+ /**
+   * Fetch the current slot that the node is processing
+   */
+  async getSlot(): Promise<number> {
+    const unsafeRes = await this._rpcRequest('getSlot', []);
+    const res = GetSlot(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
 
   /**
    * Fetch the current slot leader of the cluster
