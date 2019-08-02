@@ -602,7 +602,12 @@ fn process_delegate_stake(
 
     // Sanity check the vote account to ensure it is attached to a validator that has recently
     // voted at the tip of the ledger
-    let vote_account_data = rpc_client.get_account_data(vote_account_pubkey)?;
+    let vote_account_data = rpc_client
+        .get_account_data(vote_account_pubkey)
+        .map_err(|_| {
+            WalletError::RpcRequestError(format!("Vote account not found: {}", vote_account_pubkey))
+        })?;
+
     let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
         WalletError::RpcRequestError(
             "Account data could not be deserialized to vote state".to_string(),
@@ -610,14 +615,16 @@ fn process_delegate_stake(
     })?;
 
     let sanity_check_result = match vote_state.root_slot {
-        None => Err(WalletError::DynamicProgramError(
-            "Vote account has no root slot".to_string(),
+        None => Err(WalletError::BadParameter(
+            "Unable to delegate. Vote account has no root slot".to_string(),
         )),
         Some(root_slot) => {
             let slot = rpc_client.get_slot()?;
             if root_slot + solana_sdk::timing::DEFAULT_SLOTS_PER_TURN < slot {
-                Err(WalletError::DynamicProgramError(
-                    "Vote account root slot is too old".to_string(),
+                Err(WalletError::BadParameter(
+                    format!(
+                    "Unable to delegate. Vote account root slot ({}) is too old, the current slot is {}", root_slot, slot
+                    )
                 ))
             } else {
                 Ok(())
