@@ -89,7 +89,9 @@ label=
 identity_keypair_path=
 no_restart=0
 airdrops_enabled=1
-boot_from_snapshot=1
+# TODO: Enable boot_from_snapshot when snapshots work
+#boot_from_snapshot=1
+boot_from_snapshot=0
 reset_ledger=0
 config_dir=
 gossip_entrypoint=
