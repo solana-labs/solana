@@ -261,11 +261,15 @@ local|tar|skip)
     waitForNodeToInit
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
-      maybe_no_airdrop=
+      args=(--force "$stake")
       if [[ $airdropsEnabled != true ]]; then
-        maybe_no_airdrop=--no-airdrop
+        args+=(--no-airdrop)
       fi
-      ./multinode-demo/delegate-stake.sh $maybe_no_airdrop --force $stake
+      if [[ -f ~/solana/fullnode-identity.json ]]; then
+        args+=(--keypair ~/solana/fullnode-identity.json)
+      fi
+
+      ./multinode-demo/delegate-stake.sh "${args[@]}"
     fi
     ;;
   replicator)
