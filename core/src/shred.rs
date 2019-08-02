@@ -170,6 +170,7 @@ impl WriteAtOffset for CodingShred {
     }
 }
 
+#[derive(Default)]
 pub struct Shredder {
     slot: u64,
     index: u32,
@@ -241,21 +242,25 @@ impl Write for Shredder {
 }
 
 impl Shredder {
-    pub fn new(slot: u64, parent: Option<u64>, fec_ratio: u64, signer: &Arc<Keypair>) -> Self {
+    pub fn new(
+        slot: u64,
+        parent: Option<u64>,
+        fec_ratio: u64,
+        signer: &Arc<Keypair>,
+        index: u32,
+    ) -> Self {
         Shredder {
             slot,
-            index: 0xff,
+            index,
             parent,
             _fec_ratio: fec_ratio,
             signer: signer.clone(),
-            shreds: vec![],
-            active_shred: None,
-            active_offset: 0,
+            ..Shredder::default()
         }
     }
 
     pub fn finalize_shred(&mut self, mut shred: SignedShred) {
-        shred.sign(&self.signer.clone());
+        shred.sign(&self.signer);
         self.shreds.push(shred);
         self.active_offset = 0;
         self.index += 1;
@@ -314,7 +319,7 @@ mod tests {
     #[test]
     fn test_data_shredder() {
         let keypair = Arc::new(Keypair::new());
-        let mut shredder = Shredder::new(0x123456789abcdef0, Some(5), 0, &keypair);
+        let mut shredder = Shredder::new(0x123456789abcdef0, Some(5), 0, &keypair, 0);
 
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_shred, None);
