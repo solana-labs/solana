@@ -74,26 +74,22 @@ pub struct CodingShredHeader {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct FirstDataShredInt<T: Serialize + ?Sized> {
+pub struct FirstDataShred {
     pub header: FirstDataShredHeader,
-    pub payload: T,
+    pub payload: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct DataShredInt<T: Serialize + ?Sized> {
+pub struct DataShred {
     pub header: DataShredHeader,
-    pub payload: T,
+    pub payload: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct CodingShredInt<T: Serialize + ?Sized> {
+pub struct CodingShred {
     pub header: CodingShredHeader,
-    pub payload: T,
+    pub payload: Vec<u8>,
 }
-
-pub type FirstDataShred = FirstDataShredInt<Vec<u8>>;
-pub type DataShred = DataShredInt<Vec<u8>>;
-pub type CodingShred = CodingShredInt<Vec<u8>>;
 
 impl Default for FirstDataShred {
     fn default() -> Self {
@@ -289,12 +285,12 @@ impl Shredder {
             })
     }
 
-    pub fn finish_fec_block(&mut self) {
+    pub fn finalize_fec_block(&mut self) {
         let final_shred = self.make_final_data_shred();
         self.finalize_shred(SignedShred::new(Shred::LastInFECSetData(final_shred)));
     }
 
-    pub fn finish_slot(&mut self) {
+    pub fn finalize_slot(&mut self) {
         let final_shred = self.make_final_data_shred();
         self.finalize_shred(SignedShred::new(Shred::LastInSlotData(final_shred)));
     }
