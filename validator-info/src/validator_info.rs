@@ -283,10 +283,27 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             };
             let validator_keypair = read_keypair(id_path)?;
 
-            // Create validator-info keypair to use if info_pubkey no provided or does not exist
+            // Check for existing validator-info account
+            let all_config = rpc_client.get_program_accounts(&solana_config_api::id())?;
+            let existing_account = all_config
+                .iter()
+                .filter(|(_, account)| {
+                    let key_list: ConfigKeys =
+                        deserialize(&account.data).map_err(|_| false).unwrap();
+                    key_list.keys.contains(&(id(), false))
+                })
+                .find(|(pubkey, account)| {
+                    let (validator_pubkey, _) =
+                        parse_validator_info(&pubkey, &account.data).unwrap();
+                    validator_pubkey == validator_keypair.pubkey()
+                });
+
+            // Create validator-info keypair to use if info_pubkey not provided or does not exist
             let info_keypair = Keypair::new();
             let mut info_pubkey = if let Some(pubkey) = matches.value_of("info_pubkey") {
                 pubkey.parse::<Pubkey>().unwrap()
+            } else if let Some(validator_info) = existing_account {
+                validator_info.0
             } else {
                 info_keypair.pubkey()
             };
