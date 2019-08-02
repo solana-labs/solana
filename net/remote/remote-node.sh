@@ -261,7 +261,11 @@ local|tar|skip)
     waitForNodeToInit
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
-      ./multinode-demo/delegate-stake.sh --force $stake
+      maybe_no_airdrop=
+      if [[ $airdropsEnabled != true ]]; then
+        maybe_no_airdrop=--no-airdrop
+      fi
+      ./multinode-demo/delegate-stake.sh $maybe_no_airdrop --force $stake
     fi
     ;;
   replicator)

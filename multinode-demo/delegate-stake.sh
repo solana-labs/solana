@@ -50,7 +50,7 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --force ]]; then
       maybe_force=--force
-      shift 2
+      shift 1
     elif [[ $1 = --url || $1 = -u ]]; then
       url=$2
       shift 2
