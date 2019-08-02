@@ -158,7 +158,7 @@ if $validatorSanity; then
   (
     set -x -o pipefail
     timeout 10s ./multinode-demo/validator-x.sh \
-      --no-restart --stake 0 --identity "$sanityTargetIp:8001" 2>&1 | tee validator-sanity.log
+      --no-restart --identity "$sanityTargetIp:8001" 2>&1 | tee validator-sanity.log
   ) || {
     exitcode=$?
     [[ $exitcode -eq 124 ]] || exit $exitcode
