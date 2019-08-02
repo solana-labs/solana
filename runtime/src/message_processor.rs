@@ -83,6 +83,13 @@ fn verify_instruction(
     if !is_debitable && pre_lamports > account.lamports {
         return Err(InstructionError::CreditOnlyLamportSpend);
     }
+
+    // Only system accounts can change the size of the data.
+    if !system_program::check_id(&program_id)
+        && pre_data.len() != account.data.len()
+    {
+        return Err(InstructionError::AccountDataSizeChanged);
+    }
     // For accounts unassigned to the program, the data may not change.
     if *program_id != account.owner
         && !system_program::check_id(&program_id)
@@ -476,7 +483,7 @@ mod tests {
 
         let change_data =
             |program_id: &Pubkey, is_debitable: bool| -> Result<(), InstructionError> {
-                let account = Account::new(0, 0, &alice_program_id);
+                let account = Account::new(0, 1, &alice_program_id);
                 verify_instruction(
                     is_debitable,
                     &program_id,
@@ -543,6 +550,38 @@ mod tests {
             ),
             Err(InstructionError::CreditOnlyLamportSpend),
             "debit should fail, even if owning program"
+        );
+    }
+
+    #[test]
+    fn test_verify_instruction_data_size_changed() {
+        let alice_program_id = Pubkey::new_rand();
+        let account = Account::new(0, 0, &alice_program_id);
+        assert_eq!(
+            verify_instruction(
+                true,
+                &system_program::id(),
+                &alice_program_id,
+                0,
+                &[42],
+                false,
+                &account
+            ),
+            Ok(()),
+            "system program should be able to change account data size"
+        );
+        assert_eq!(
+            verify_instruction(
+                true,
+                &alice_program_id,
+                &alice_program_id,
+                0,
+                &[42],
+                false,
+                &account
+            ),
+            Err(InstructionError::AccountDataSizeChanged),
+            "non-system programs cannot change their data size"
         );
     }
 

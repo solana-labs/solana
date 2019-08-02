@@ -64,6 +64,9 @@ pub enum InstructionError {
     /// Executable bit on account changed, but shouldn't have
     ExecutableModified,
 
+    /// A non-system program changed the size of the account data
+    AccountDataSizeChanged,
+
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is represented
     /// as or serialized to a u32 integer.
