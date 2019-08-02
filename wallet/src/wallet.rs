@@ -725,10 +725,12 @@ fn process_show_stake_account(
             }
             Ok("".to_string())
         }
+        Ok(StakeState::RewardsPool) => Ok("Stake account is a rewards pool".to_string()),
         Ok(StakeState::Uninitialized) => Ok("Stake account is uninitialized".to_string()),
-        _ => Err(WalletError::RpcRequestError(
-            "Account data could not be deserialized to stake state".to_string(),
-        ))?,
+        Err(err) => Err(WalletError::RpcRequestError(format!(
+            "Account data could not be deserialized to stake state: {:?}",
+            err
+        )))?,
     }
 }
 
