@@ -105,6 +105,8 @@ stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
 
 set -x
 $solana_wallet "${common_args[@]}" \
+  show-vote-account "$vote_pubkey"
+$solana_wallet "${common_args[@]}" \
   delegate-stake $maybe_force "$stake_keypair_path" "$vote_pubkey" "$stake_lamports"
 $solana_wallet "${common_args[@]}" show-stake-account "$stake_pubkey"
 
