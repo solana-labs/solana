@@ -250,14 +250,14 @@ impl ReplayStage {
         if let Some(ref current_leader) = current_leader {
             if current_leader != new_leader {
                 let msg = if current_leader == my_pubkey {
-                    "I am no longer the leader"
+                    ". I am no longer the leader"
                 } else if new_leader == my_pubkey {
-                    "I am the new leader"
+                    ". I am now the leader"
                 } else {
                     ""
                 };
                 info!(
-                    "LEADER CHANGE at slot: {} leader: {}. {}",
+                    "LEADER CHANGE at slot: {} leader: {}{}",
                     bank_slot, new_leader, msg
                 );
             }
@@ -500,13 +500,13 @@ impl ReplayStage {
             .reset(bank.last_blockhash(), bank.slot(), next_leader_slot);
 
         let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
-            format!("My next leader slot is #{}", next_leader_slot.0)
+            format!("My next leader slot is {}", next_leader_slot.0)
         } else {
-            "I am not in the upcoming leader schedule yet".to_owned()
+            "I am not in the leader schedule yet".to_owned()
         };
 
         info!(
-            "{} voted and reset poh at {}. {}",
+            "{} voted and reset PoH at tick height {}. {}",
             my_pubkey,
             bank.tick_height(),
             next_leader_msg,
