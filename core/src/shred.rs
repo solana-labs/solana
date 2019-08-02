@@ -308,28 +308,28 @@ mod tests {
 
     #[test]
     fn test_sizes_for_shreds() {
-        println!(
+        info!(
             "Sizeof ShredCommonHeader is {:?}",
             size_of::<ShredCommonHeader>()
         );
-        println!(
+        info!(
             "Sizeof DataShredHeader is {:?}",
             size_of::<DataShredHeader>()
         );
-        println!(
+        info!(
             "Sizeof FirstDataShredHeader is {:?}",
             size_of::<FirstDataShredHeader>()
         );
-        println!(
+        info!(
             "Sizeof CodingShredHeader is {:?}",
             size_of::<CodingShredHeader>()
         );
-        println!("Sizeof FirstDataShred is {:?}", size_of::<FirstDataShred>());
-        println!("Sizeof DataShred is {:?}", size_of::<DataShred>());
-        println!("Sizeof CodingShred is {:?}", size_of::<CodingShred>());
-        println!("Sizeof Shred is {:?}", size_of::<Shred>());
+        info!("Sizeof FirstDataShred is {:?}", size_of::<FirstDataShred>());
+        info!("Sizeof DataShred is {:?}", size_of::<DataShred>());
+        info!("Sizeof CodingShred is {:?}", size_of::<CodingShred>());
+        info!("Sizeof Shred is {:?}", size_of::<Shred>());
         let first_shred = FirstDataShred::default();
-        println!(
+        info!(
             "Sizeof DataShred_payload is {:?}",
             size_of_val(&first_shred.payload)
         );
@@ -367,8 +367,8 @@ mod tests {
         assert_matches!(shred.shred, Shred::FirstInSlot(_));
 
         let pdu = bincode::serialize(&shred).unwrap();
-        println!("Len: {}", pdu.len());
-        println!("{:?}", pdu);
+        info!("Len: {}", pdu.len());
+        info!("{:?}", pdu);
 
         let deserialized_shred: SignedShred =
             bincode::deserialize(&pdu).expect("Failed in deserializing the PDU");
