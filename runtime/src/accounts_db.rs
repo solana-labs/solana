@@ -333,6 +333,7 @@ pub struct AccountsDB {
 
     /// Set of storage paths to pick from
     paths: RwLock<Vec<PathBuf>>,
+
     /// Set of paths this accounts_db needs to hold/remove
     temp_paths: Option<TempPaths>,
 
@@ -1393,7 +1394,7 @@ mod tests {
 
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(None);
-        assert!(daccounts.update_from_stream(&mut reader).is_ok());
+        assert!(daccounts.accounts_from_stream(&mut reader).is_ok());
         assert_eq!(
             daccounts.write_version.load(Ordering::Relaxed),
             accounts.write_version.load(Ordering::Relaxed)

@@ -1171,7 +1171,7 @@ mod tests {
 
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = Accounts::new(Some(accounts.accounts_db.paths()));
-        assert!(daccounts.update_from_stream(&mut reader).is_ok());
+        assert!(daccounts.accounts_from_stream(&mut reader).is_ok());
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(
             accounts.hash_internal_state(0),

@@ -433,6 +433,7 @@ mod tests {
     use solana_sdk::system_transaction;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
+    use tempfile::TempDir;
 
     #[test]
     fn test_bank_forks() {
