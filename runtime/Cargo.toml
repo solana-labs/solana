@@ -39,6 +39,7 @@ solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre0"
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre0" }
 solana-vote-program = { path = "../programs/vote_program", version = "0.18.0-pre0" }
 sys-info = "0.5.7"
+tempfile = "3.1.0"
 
 [lib]
 crate-type = ["lib"]

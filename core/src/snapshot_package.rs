@@ -57,7 +57,7 @@ impl SnapshotPackagerService {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
-                if let Err(e) = Self::package_snapshots(&snapshot_package_receiver) {
+                if let Err(e) = Self::run(&snapshot_package_receiver) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -71,9 +71,7 @@ impl SnapshotPackagerService {
         }
     }
 
-    pub fn package_snapshots(snapshot_receiver: &SnapshotPackageReceiver) -> Result<()> {
-        let snapshot_package = snapshot_receiver.recv_timeout(Duration::from_secs(1))?;
-
+    pub fn package_snapshots(snapshot_package: &SnapshotPackage) -> Result<()> {
         // Create the tar builder
         let tar_gz = tempfile::Builder::new()
             .prefix("new_state")
@@ -107,6 +105,7 @@ impl SnapshotPackagerService {
 
             // `output_path` - The directory where the AppendVec will be placed in the tarball.
             // `storage_path` - The file path where the AppendVec itself is located
+            println!("appending path: {:?}", storage_path);
             tar.append_path_with_name(storage_path, output_path)?;
         }
 
@@ -114,7 +113,18 @@ impl SnapshotPackagerService {
         // can rsync this newly packaged snapshot
         tar.finish()?;
         let _ = fs::remove_file(&snapshot_package.tar_output_file);
+        println!(
+            "hard linking {:?} to output: {:?}",
+            temp_tar_path, &snapshot_package.tar_output_file
+        );
         fs::hard_link(&temp_tar_path, &snapshot_package.tar_output_file)?;
+        println!("done hard linking");
+        Ok(())
+    }
+
+    fn run(snapshot_receiver: &SnapshotPackageReceiver) -> Result<()> {
+        let snapshot_package = snapshot_receiver.recv_timeout(Duration::from_secs(1))?;
+        Self::package_snapshots(&snapshot_package)?;
         Ok(())
     }
 }
@@ -140,7 +150,6 @@ mod tests {
     fn test_package_snapshots() {
         // Create temprorary placeholder directory for all test files
         let temp_dir = TempDir::new().unwrap();
-        let (sender, receiver) = channel();
         let accounts_dir = temp_dir.path().join("accounts");
         let snapshots_dir = temp_dir.path().join("snapshots");
         let snapshot_package_output_path = temp_dir.path().join("snapshots_output");
@@ -184,10 +193,9 @@ mod tests {
             storage_entries.clone(),
             output_tar_path.clone(),
         );
-        sender.send(snapshot_package).unwrap();
 
         // Make tarball from packageable snapshot
-        SnapshotPackagerService::package_snapshots(&receiver).unwrap();
+        SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
 
         // Check tarball is correct
         snapshot_utils::tests::verify_snapshot_tar(output_tar_path, snapshots_dir, accounts_dir);

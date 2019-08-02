@@ -205,7 +205,7 @@ impl StorageStage {
                             ) {
                                 match e {
                                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
-                                        break
+                                        break;
                                     }
                                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                                     _ => info!("Error from process_entries: {:?}", e),

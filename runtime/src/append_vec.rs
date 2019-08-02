@@ -408,7 +408,7 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
 
-        let map = MmapMut::map_anon(0).map_err(|e| Error::custom(e.to_string()))?;
+        let map = MmapMut::map_anon(1).map_err(|e| Error::custom(e.to_string()))?;
         Ok(AppendVec {
             path,
             map,
@@ -533,7 +533,7 @@ pub mod tests {
     #[test]
     fn test_relative_path() {
         let relative_path = AppendVec::new_relative_path(0, 2);
-        let full_path = Path::from("/tmp").join(relative_path);
+        let full_path = Path::new("/tmp").join(&relative_path);
         assert_eq!(
             relative_path,
             AppendVec::get_relative_path(full_path).unwrap()

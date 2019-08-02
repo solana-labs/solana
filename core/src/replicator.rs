@@ -582,7 +582,7 @@ impl Replicator {
                     return Err(Error::IO(<io::Error>::new(
                         io::ErrorKind::Other,
                         "unable to get recent blockhash, can't submit proof",
-                    )))
+                    )));
                 }
             };
 

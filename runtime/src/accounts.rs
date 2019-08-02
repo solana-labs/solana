@@ -642,6 +642,8 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
+    use crate::accounts_db::get_temp_accounts_paths;
+    use crate::accounts_db::tests::copy_append_vecs;
     use bincode::{serialize_into, serialized_size};
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -654,6 +656,7 @@ mod tests {
     use std::io::Cursor;
     use std::sync::atomic::AtomicBool;
     use std::{thread, time};
+    use tempfile::TempDir;
 
     fn load_accounts_with_fee(
         tx: Transaction,
@@ -1157,7 +1160,8 @@ mod tests {
     #[test]
     fn test_accounts_serialize() {
         solana_logger::setup();
-        let accounts = Accounts::new(None);
+        let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
+        let accounts = Accounts::new(Some(paths));
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_test_accounts(&accounts, &mut pubkeys, 100);
@@ -1169,9 +1173,17 @@ mod tests {
         let mut writer = Cursor::new(&mut buf[..]);
         serialize_into(&mut writer, &*accounts.accounts_db).unwrap();
 
+        let copied_accounts = TempDir::new().unwrap();
+
+        // Simulate obtaining a copy of the AppendVecs from a tarball
+        copy_append_vecs(&accounts.accounts_db, copied_accounts.path()).unwrap();
+
         let mut reader = BufReader::new(&buf[..]);
-        let daccounts = Accounts::new(Some(accounts.accounts_db.paths()));
-        assert!(daccounts.accounts_from_stream(&mut reader).is_ok());
+        let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
+        let daccounts = Accounts::new(Some(daccounts_paths.clone()));
+        assert!(daccounts
+            .accounts_from_stream(&mut reader, daccounts_paths, copied_accounts.path())
+            .is_ok());
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(
             accounts.hash_internal_state(0),

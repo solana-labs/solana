@@ -5,6 +5,7 @@ use crate::snapshot_package::SnapshotPackageSender;
 use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use crate::snapshot_utils;
 use crate::snapshot_utils::untar_snapshot_in;
+use fs_extra::dir::CopyOptions;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::{Bank, BankRc, StatusCacheRc};
@@ -276,7 +277,7 @@ impl BankForks {
             .get(root)
             .cloned()
             .expect("root must exist in BankForks");
-        snapshot_utils::add_snapshot(&config.snapshot_path, &bank, root)?;
+        snapshot_utils::add_snapshot(&config.snapshot_path, &bank)?;
 
         // Package the relevant snapshots
         let names = snapshot_utils::get_snapshot_names(&config.snapshot_path);
@@ -368,6 +369,7 @@ impl BankForks {
 
         // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
         let unpack_dir = tempfile::tempdir_in(snapshot_config.snapshot_path())?;
+        println!("untarring snapshot from: {:?} into: {:?}", tar, unpack_dir);
         untar_snapshot_in(&tar, &unpack_dir)?;
 
         let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
@@ -380,7 +382,13 @@ impl BankForks {
 
         let bank = Arc::new(bank);
         // Move the unpacked snapshots into `snapshot_config.snapshot_path()`
-        fs::rename(&snapshots_in_tar_dir, snapshot_config.snapshot_path())?;
+        let dir_files = fs::read_dir(snapshots_in_tar_dir).expect("Invalid snapshot path");
+        let paths: Vec<PathBuf> = dir_files
+            .filter_map(|entry| entry.ok().map(|e| e.path()))
+            .collect();
+        let mut copy_options = CopyOptions::new();
+        copy_options.overwrite = true;
+        fs_extra::move_items(&paths, snapshot_config.snapshot_path(), &copy_options)?;
 
         /*let mut bank_maps = vec![];
         let status_cache_rc = StatusCacheRc::default();
@@ -543,12 +551,8 @@ mod tests {
         );
     }
 
-    fn restore_from_snapshot(
-        genesis_block: &GenesisBlock,
-        bank_forks: BankForks,
-        account_paths: String,
-        last_slot: u64,
-    ) {
+    fn restore_from_snapshot(bank_forks: BankForks, account_paths: String, last_slot: u64) {
+        println!("restore from snapshot");
         let snapshot_path = bank_forks
             .snapshot_config
             .as_ref()
@@ -559,7 +563,8 @@ mod tests {
             //&genesis_block,
             account_paths,
             bank_forks.snapshot_config.as_ref().unwrap(),
-        );
+        )
+        .unwrap();
 
         for (slot, _) in new.banks.iter() {
             if *slot > 0 {
@@ -586,7 +591,8 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_block(10_000);
-        for index in 0..10 {
+        for index in 0..4 {
+            println!("INDEX: {}", index);
             let bank0 = Bank::new_with_paths(
                 &genesis_block,
                 Some(accounts_dir.path().to_str().unwrap().to_string()),
@@ -600,8 +606,9 @@ mod tests {
             );
             bank_forks.set_snapshot_config(snapshot_config.clone());
             let bank0 = bank_forks.get(0).unwrap();
-            snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, 0).unwrap();
+            snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0).unwrap();
             for forks in 0..index {
+                println!("fork: {}", forks);
                 let bank = Bank::new_from_parent(&bank_forks[forks], &Pubkey::default(), forks + 1);
                 let key1 = Keypair::new().pubkey();
                 let tx = system_transaction::create_user_account(
@@ -612,11 +619,26 @@ mod tests {
                 );
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
                 bank.freeze();
-                snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, &bank, 0).unwrap();
+                snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, &bank).unwrap();
                 bank_forks.insert(bank);
             }
+            // Generate a snapshot package for last bank
+            let last_bank = bank_forks.get(index.saturating_sub(1)).unwrap();
+            let names: Vec<_> = (0..=index).collect();
+            println!("packaging snapshot");
+            let snapshot_package = snapshot_utils::package_snapshot(
+                last_bank,
+                &names,
+                &snapshot_config.snapshot_path,
+                snapshot_utils::get_snapshot_tar_path(
+                    &snapshot_config.snapshot_package_output_path,
+                ),
+            )
+            .unwrap();
+            println!("package snpshot tar");
+            SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
+
             restore_from_snapshot(
-                &genesis_block,
                 bank_forks,
                 accounts_dir.path().to_str().unwrap().to_string(),
                 index,
@@ -654,7 +676,7 @@ mod tests {
 
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
-        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, 0).unwrap();
+        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0).unwrap();
 
         // Create next MAX_CACHE_ENTRIES + 2 banks and snapshots. Every bank will get snapshotted
         // and the snapshot purging logic will run on every snapshot taken. This means the three

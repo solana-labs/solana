@@ -2,7 +2,6 @@ use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackage;
 use bincode::{deserialize_from, serialize_into};
 use flate2::read::GzDecoder;
-use solana_runtime::accounts::Accounts;
 use solana_runtime::bank::{Bank, StatusCacheRc};
 use std::fs;
 use std::fs::File;
@@ -34,7 +33,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     let account_storage_entries = bank.rc.get_storage_entries();
 
     // Create a snapshot package
-    trace!(
+    println!(
         "Snapshot for bank: {} has {} account storage entries",
         slot,
         account_storage_entries.len()
@@ -70,13 +69,14 @@ pub fn get_snapshot_names<P: AsRef<Path>>(snapshot_path: P) -> Vec<u64> {
     names
 }
 
-pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank, root: u64) -> Result<()> {
+pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
+    println!("adding snapshot for: {}", bank.slot());
     let slot = bank.slot();
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
     fs::create_dir_all(slot_snapshot_dir.clone()).map_err(Error::from)?;
 
     let snapshot_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
-    trace!(
+    println!(
         "creating snapshot {}, path: {:?}",
         bank.slot(),
         snapshot_file_path
@@ -85,13 +85,14 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank, root: u64) ->
     let mut stream = BufWriter::new(file);
 
     // Create the snapshot
-    serialize_into(&mut stream, &*bank).map_err(|_| get_io_error("serialize bank error"))?;
-    serialize_into(&mut stream, &bank.src)
-        .map_err(|_| get_io_error("serialize bank status cache error"))?;
-    serialize_into(&mut stream, &bank.rc)
-        .map_err(|_| get_io_error("serialize bank accounts error"))?;
+    println!("serializing bank");
+    serialize_into(&mut stream, &*bank).map_err(|e| get_io_error(&e.to_string()))?;
+    /*println!("serializing status cache");
+    serialize_into(&mut stream, &bank.src).map_err(|e| get_io_error(&e.to_string()))?;*/
+    println!("serializing bank accounts");
+    serialize_into(&mut stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
 
-    trace!(
+    println!(
         "successfully created snapshot {}, path: {:?}",
         bank.slot(),
         snapshot_file_path
@@ -115,6 +116,7 @@ where
     P: AsRef<Path>,
     Q: AsRef<Path>,
 {
+    println!("bank from snapshots");
     // Rebuild the last root bank
     let names = get_snapshot_names(&snapshot_path);
     let last_root = names
@@ -123,10 +125,10 @@ where
     let snapshot_file_name = get_snapshot_file_name(*last_root);
     let snapshot_dir = get_bank_snapshot_dir(&snapshot_path, *last_root);
     let snapshot_file_path = snapshot_dir.join(&snapshot_file_name);
+    println!("Load from {:?}", snapshot_file_path);
     let file = File::open(snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank =
-        deserialize_from(&mut stream).map_err(|_| get_io_error("deserialize bank error"))?;
+    let bank: Bank = deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()))?;
 
     // Rebuild accounts
     bank.rc
@@ -138,14 +140,13 @@ where
         let snapshot_file_name = get_snapshot_file_name(*bank_slot);
         let snapshot_dir = get_bank_snapshot_dir(&snapshot_path, *bank_slot);
         let snapshot_file_path = snapshot_dir.join(snapshot_file_name.clone());
-        trace!("Load from {:?}", snapshot_file_path);
         let file = File::open(snapshot_file_path)?;
         let mut stream = BufReader::new(file);
         let bank: Result<Bank> =
-            deserialize_from(&mut stream).map_err(|_| get_io_error("deserialize bank error"));
+            deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()));
 
         /*let status_cache: Result<StatusCacheRc> = deserialize_from(&mut stream)
-        .map_err(|_| get_io_error("deserialize bank status cache error"));
+        .map_err(|e| get_io_error(&e.to_string()));
         if bank_root.is_some() {
             match bank {
                 Ok(v) => {
