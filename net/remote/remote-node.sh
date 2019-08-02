@@ -261,7 +261,7 @@ local|tar|skip)
     waitForNodeToInit
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
-      ./multinode-demo/delegate-stake.sh $stake
+      ./multinode-demo/delegate-stake.sh --force $stake
     fi
     ;;
   replicator)
