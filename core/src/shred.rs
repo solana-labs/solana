@@ -24,7 +24,7 @@ pub struct SignedShred {
 impl SignedShred {
     fn new(shred: Shred) -> Self {
         SignedShred {
-            signature: Default::default(),
+            signature: Signature::default(),
             shred,
         }
     }
@@ -100,7 +100,7 @@ impl Default for FirstDataShred {
             + serialized_size(&data).unwrap();
         let size = MAX_DGRAM_SIZE - overhead as usize;
         FirstDataShred {
-            header: Default::default(),
+            header: FirstDataShredHeader::default(),
             payload: vec![0; size],
         }
     }
@@ -115,7 +115,7 @@ impl Default for DataShred {
             + serialized_size(&data).unwrap();
         let size = MAX_DGRAM_SIZE - overhead as usize;
         DataShred {
-            header: Default::default(),
+            header: DataShredHeader::default(),
             payload: vec![0; size],
         }
     }
@@ -130,7 +130,7 @@ impl Default for CodingShred {
             + serialized_size(&data).unwrap();
         let size = MAX_DGRAM_SIZE - overhead as usize;
         CodingShred {
-            header: Default::default(),
+            header: CodingShredHeader::default(),
             payload: vec![0; size],
         }
     }
