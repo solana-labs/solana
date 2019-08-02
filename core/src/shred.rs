@@ -93,12 +93,12 @@ pub struct CodingShred {
 
 impl Default for FirstDataShred {
     fn default() -> Self {
-        let data: Vec<u8> = vec![];
-        let overhead = serialized_size(&Signature::default()).unwrap()
-            + serialized_size(&FirstDataShredHeader::default()).unwrap()
-            + serialized_size(&0usize).unwrap()
-            + serialized_size(&data).unwrap();
-        let size = MAX_DGRAM_SIZE - overhead as usize;
+        let empty_shred = Shred::FirstInSlot(FirstDataShred {
+            header: FirstDataShredHeader::default(),
+            payload: vec![],
+        });
+        let size =
+            MAX_DGRAM_SIZE - serialized_size(&SignedShred::new(empty_shred)).unwrap() as usize;
         FirstDataShred {
             header: FirstDataShredHeader::default(),
             payload: vec![0; size],
@@ -108,12 +108,12 @@ impl Default for FirstDataShred {
 
 impl Default for DataShred {
     fn default() -> Self {
-        let data: Vec<u8> = vec![];
-        let overhead = serialized_size(&Signature::default()).unwrap()
-            + serialized_size(&DataShredHeader::default()).unwrap()
-            + serialized_size(&0usize).unwrap()
-            + serialized_size(&data).unwrap();
-        let size = MAX_DGRAM_SIZE - overhead as usize;
+        let empty_shred = Shred::Data(DataShred {
+            header: DataShredHeader::default(),
+            payload: vec![],
+        });
+        let size =
+            MAX_DGRAM_SIZE - serialized_size(&SignedShred::new(empty_shred)).unwrap() as usize;
         DataShred {
             header: DataShredHeader::default(),
             payload: vec![0; size],
@@ -123,12 +123,12 @@ impl Default for DataShred {
 
 impl Default for CodingShred {
     fn default() -> Self {
-        let data: Vec<u8> = vec![];
-        let overhead = serialized_size(&Signature::default()).unwrap()
-            + serialized_size(&CodingShredHeader::default()).unwrap()
-            + serialized_size(&0usize).unwrap()
-            + serialized_size(&data).unwrap();
-        let size = MAX_DGRAM_SIZE - overhead as usize;
+        let empty_shred = Shred::Coding(CodingShred {
+            header: CodingShredHeader::default(),
+            payload: vec![],
+        });
+        let size =
+            MAX_DGRAM_SIZE - serialized_size(&SignedShred::new(empty_shred)).unwrap() as usize;
         CodingShred {
             header: CodingShredHeader::default(),
             payload: vec![0; size],
@@ -187,10 +187,19 @@ impl Write for Shredder {
             .active_shred
             .take()
             .or_else(|| {
-                Some(self.parent.map_or(
-                    { SignedShred::new(Shred::Data(self.new_data_shred())) },
-                    |parent| SignedShred::new(Shred::FirstInSlot(self.new_first_shred(parent))),
-                ))
+                Some(
+                    self.parent
+                        .take()
+                        .map(|parent| {
+                            // If parent slot is provided, assume it's first shred in slot
+                            SignedShred::new(Shred::FirstInSlot(self.new_first_shred(parent)))
+                        })
+                        .unwrap_or(
+                            // If parent slot is not provided, and since there's no existing shred,
+                            // assume it's first shred in FEC block
+                            SignedShred::new(Shred::FirstInFECSet(self.new_data_shred())),
+                        ),
+                )
             })
             .unwrap();
 
@@ -208,6 +217,9 @@ impl Write for Shredder {
 
         let active_shred = if buf.len() > slice_len {
             self.finalize_shred(current_shred);
+            // Continue generating more data shreds.
+            // If the caller decides to finalize the FEC block or Slot, the data shred will
+            // morph into appropriate shred accordingly
             SignedShred::new(Shred::Data(DataShred::default()))
         } else {
             self.active_offset += slice_len;
@@ -299,40 +311,9 @@ impl Shredder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem::size_of;
-    use std::mem::size_of_val;
 
     #[test]
-    fn test_sizes_for_shreds() {
-        info!(
-            "Sizeof ShredCommonHeader is {:?}",
-            size_of::<ShredCommonHeader>()
-        );
-        info!(
-            "Sizeof DataShredHeader is {:?}",
-            size_of::<DataShredHeader>()
-        );
-        info!(
-            "Sizeof FirstDataShredHeader is {:?}",
-            size_of::<FirstDataShredHeader>()
-        );
-        info!(
-            "Sizeof CodingShredHeader is {:?}",
-            size_of::<CodingShredHeader>()
-        );
-        info!("Sizeof FirstDataShred is {:?}", size_of::<FirstDataShred>());
-        info!("Sizeof DataShred is {:?}", size_of::<DataShred>());
-        info!("Sizeof CodingShred is {:?}", size_of::<CodingShred>());
-        info!("Sizeof Shred is {:?}", size_of::<Shred>());
-        let first_shred = FirstDataShred::default();
-        info!(
-            "Sizeof DataShred_payload is {:?}",
-            size_of_val(&first_shred.payload)
-        );
-    }
-
-    #[test]
-    fn test_serialize_shreds() {
+    fn test_data_shredder() {
         let keypair = Arc::new(Keypair::new());
         let mut shredder = Shredder::new(0x123456789abcdef0, Some(5), 0, &keypair);
 
@@ -340,38 +321,107 @@ mod tests {
         assert_eq!(shredder.active_shred, None);
         assert_eq!(shredder.active_offset, 0);
 
-        // Write some data to shred. Not enough to create a signed shred
+        // Test0: Write some data to shred. Not enough to create a signed shred
         let data: Vec<u8> = (0..25).collect();
         assert_eq!(shredder.write(&data).unwrap(), data.len());
         assert!(shredder.shreds.is_empty());
         assert_ne!(shredder.active_shred, None);
         assert_eq!(shredder.active_offset, 25);
 
+        // Test1: Write some more data to shred. Not enough to create a signed shred
         assert_eq!(shredder.write(&data).unwrap(), data.len());
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_offset, 50);
 
-        let data: Vec<_> = (0..1500).collect();
+        // Test2: Write enough data to create a shred (> MAX_DGRAM_SIZE)
+        let data: Vec<_> = (0..MAX_DGRAM_SIZE).collect();
         let data: Vec<u8> = data.iter().map(|x| *x as u8).collect();
         let offset = shredder.write(&data).unwrap();
         assert_ne!(offset, data.len());
+        // Assert that we have atleast one signed shred
         assert!(!shredder.shreds.is_empty());
+        // Assert that a new active shred was also created
         assert_ne!(shredder.active_shred, None);
+        // Assert that the new active shred was not populated
         assert_eq!(shredder.active_offset, 0);
 
+        // Test3: Assert that the first shred in slot was created (since we gave a parent to shredder)
         let shred = shredder.shreds.pop().unwrap();
         assert_matches!(shred.shred, Shred::FirstInSlot(_));
 
         let pdu = bincode::serialize(&shred).unwrap();
+        assert_eq!(pdu.len(), MAX_DGRAM_SIZE);
         info!("Len: {}", pdu.len());
         info!("{:?}", pdu);
 
+        // Test4: Try deserialize the PDU and assert that it matches the original shred
         let deserialized_shred: SignedShred =
             bincode::deserialize(&pdu).expect("Failed in deserializing the PDU");
-
         assert_eq!(shred, deserialized_shred);
 
+        // Test5: Write left over data, and assert that a data shred is being created
         shredder.write(&data[offset..]).unwrap();
-        assert_matches!(shredder.active_shred.unwrap().shred, Shred::Data(_));
+        // assert_matches!(shredder.active_shred.unwrap().shred, Shred::Data(_));
+
+        // It shouldn't generate a signed shred
+        assert!(shredder.shreds.is_empty());
+
+        // Test6: Let's finalize the FEC block. That should result in the current shred to morph into
+        // a signed LastInFECSetData shred
+        shredder.finalize_fec_block();
+
+        // We should have a new signed shred
+        assert!(!shredder.shreds.is_empty());
+
+        // Must be Last in FEC Set
+        let shred = shredder.shreds.pop().unwrap();
+        assert_matches!(shred.shred, Shred::LastInFECSetData(_));
+        let pdu = bincode::serialize(&shred).unwrap();
+        assert_eq!(pdu.len(), MAX_DGRAM_SIZE);
+
+        // Test7: Let's write some more data to the shredder.
+        // Now we should get a new FEC block
+        let data: Vec<_> = (0..MAX_DGRAM_SIZE).collect();
+        let data: Vec<u8> = data.iter().map(|x| *x as u8).collect();
+        let offset = shredder.write(&data).unwrap();
+        assert_ne!(offset, data.len());
+
+        // We should have a new signed shred
+        assert!(!shredder.shreds.is_empty());
+
+        // Must be FirstInFECSet
+        let shred = shredder.shreds.pop().unwrap();
+        assert_matches!(shred.shred, Shred::FirstInFECSet(_));
+        let pdu = bincode::serialize(&shred).unwrap();
+        assert_eq!(pdu.len(), MAX_DGRAM_SIZE);
+
+        // Test8: Write more data to generate an intermediate data shred
+        let offset = shredder.write(&data).unwrap();
+        assert_ne!(offset, data.len());
+
+        // We should have a new signed shred
+        assert!(!shredder.shreds.is_empty());
+
+        // Must be a Data shred
+        let shred = shredder.shreds.pop().unwrap();
+        assert_matches!(shred.shred, Shred::Data(_));
+        let pdu = bincode::serialize(&shred).unwrap();
+        assert_eq!(pdu.len(), MAX_DGRAM_SIZE);
+
+        // Test9: Write some data to shredder
+        let data: Vec<u8> = (0..25).collect();
+        assert_eq!(shredder.write(&data).unwrap(), data.len());
+
+        // And, finish the slot
+        shredder.finalize_slot();
+
+        // We should have a new signed shred
+        assert!(!shredder.shreds.is_empty());
+
+        // Must be LastInSlot
+        let shred = shredder.shreds.pop().unwrap();
+        assert_matches!(shred.shred, Shred::LastInSlotData(_));
+        let pdu = bincode::serialize(&shred).unwrap();
+        assert_eq!(pdu.len(), MAX_DGRAM_SIZE);
     }
 }
