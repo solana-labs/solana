@@ -185,10 +185,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("validator_keypair")
                         .index(1)
-                        .value_name("PATH")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .help("/path/to/id.json"),
+                        .help("/path/to/validator-keypair.json"),
                 )
                 .arg(
                     Arg::with_name("info_pubkey")
@@ -202,7 +202,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("name")
                         .index(2)
-                        .value_name("STRING")
+                        .value_name("NAME")
                         .takes_value(true)
                         .required(true)
                         .validator(is_short_field)
@@ -221,7 +221,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::with_name("keybase_username")
                         .short("k")
                         .long("keybase")
-                        .value_name("STRING")
+                        .value_name("USERNAME")
                         .takes_value(true)
                         .validator(is_short_field)
                         .help("Validator Keybase username"),
@@ -230,7 +230,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::with_name("details")
                         .short("d")
                         .long("details")
-                        .value_name("STRING")
+                        .value_name("DETAILS")
                         .takes_value(true)
                         .validator(check_details_length)
                         .help(&format!(
