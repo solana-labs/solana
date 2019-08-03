@@ -227,7 +227,7 @@ Returns all accounts owned by the provided program Pubkey
 
 ##### Results:
 The result field will be an array of arrays. Each sub array will contain:
-* `string` - a the account Pubkey as base-58 encoded string
+* `string` - the account Pubkey as base-58 encoded string
 and a JSON object, with the following sub fields:
 
 * `lamports`, number of lamports assigned to this account, as a signed 64-bit integer
