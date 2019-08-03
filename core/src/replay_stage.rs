@@ -474,6 +474,37 @@ impl ReplayStage {
                     total_epoch_stakes,
                     stake_lockout.lockout(),
                 );
+                let percentage_stake: f64 =
+                    stake_lockout.stake() as f64 / total_epoch_stakes as f64;
+                let fork_metrics = *fork as i64;
+                let parent = w_bank_forks
+                    .get(*fork)
+                    .map(|bank| bank.parent().map(|parent| parent.slot()).unwrap_or(0))
+                    .unwrap_or(0) as i64;
+                solana_metrics::submit(
+                    solana_metrics::influxdb::Point::new("stake-percentage")
+                        .add_tag(
+                            "fork_tag",
+                            solana_metrics::influxdb::Value::Integer(fork_metrics),
+                        )
+                        .add_field(
+                            "percentage_stake",
+                            solana_metrics::influxdb::Value::Float(percentage_stake),
+                        )
+                        .add_field(
+                            "fork",
+                            solana_metrics::influxdb::Value::Integer(fork_metrics),
+                        )
+                        .add_field("parent", solana_metrics::influxdb::Value::Integer(parent))
+                        .add_field(
+                            "root",
+                            solana_metrics::influxdb::Value::Integer(
+                                tower.root().unwrap_or(0) as i64
+                            ),
+                        )
+                        .to_owned(),
+                    log::Level::Info,
+                );
             }
         }
         drop(w_bank_forks);
