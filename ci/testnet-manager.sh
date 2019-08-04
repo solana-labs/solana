@@ -142,7 +142,7 @@ testnet-beta|testnet-beta-perf)
 testnet)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
-  : "${EC2_NODE_COUNT:=10}"
+  : "${EC2_NODE_COUNT:=3}"
   : "${GCE_NODE_COUNT:=}"
   ;;
 testnet-perf)
@@ -335,7 +335,7 @@ deploy() {
     (
       set -x
       ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
-        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
+        -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
         -a eipalloc-0ccd4f2239886fa94 --letsencrypt edge.testnet.solana.com \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
@@ -362,7 +362,7 @@ deploy() {
       set -x
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 -z us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
+          -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
           -a eipalloc-0f286cf8a0771ce35 --letsencrypt beta.testnet.solana.com \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
