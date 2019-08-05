@@ -33,61 +33,51 @@ EOF
   exit 1
 }
 
+
+wallet() {
+  (
+    set -x
+    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" "$@"
+  )
+}
+
 setup_validator_accounts() {
   declare node_lamports=$1
 
-  if [[ -f $configured_flag ]]; then
-    echo "Vote and stake accounts have already been configured"
+  if ((airdrops_enabled)); then
+    echo "Adding $node_lamports to validator identity account:"
+    (
+      declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
+      wallet airdrop $((node_lamports+fees))
+    ) || return $?
   else
-    if ((airdrops_enabled)); then
-      echo "Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts"
-      (
-        declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
-        set -x
-        $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
-          airdrop $((node_lamports+fees))
-      ) || return $?
-    else
-      echo "current account balance is "
-      $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" balance || return $?
-    fi
-
-    echo "Fund the vote account from the node's identity pubkey"
-    (
-      set -x
-      $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
-      create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127
-    ) || return $?
-
-    echo "Create validator storage account"
-    (
-      set -x
-      $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
-        create-validator-storage-account "$identity_pubkey" "$storage_pubkey"
-    ) || return $?
-
-    touch "$configured_flag"
+    echo "Validator identity account balance:"
+    wallet balance || return $?
   fi
 
-  echo "Identity account balance:"
-  (
-    set -x
-    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" balance
-    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
-      show-vote-account "$vote_pubkey"
-    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" \
-      show-storage-account "$storage_pubkey"
-  )
+  if ! wallet show-vote-account "$vote_pubkey"; then
+    echo "Creating validator vote account"
+    wallet create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127 || return $?
+  fi
+  echo "Validator vote account configured"
+
+  if ! wallet show-storage-account "$storage_pubkey"; then
+    echo "Creating validator storage account"
+    wallet create-validator-storage-account "$identity_pubkey" "$storage_pubkey" || return $?
+  fi
+  echo "Validator storage account configured"
+
   return 0
 }
 
 args=()
-node_lamports=424242  # number of lamports to assign the node for transaction fees
+airdrops_enabled=1
+node_lamports=424242  # number of lamports to airdrop the node for transaction fees (ignored if airdrops_enabled=0)
 poll_for_new_genesis_block=0
 label=
 identity_keypair_path=
+voting_keypair_path=
 no_restart=0
-airdrops_enabled=1
 # TODO: Enable boot_from_snapshot when snapshots work
 #boot_from_snapshot=1
 boot_from_snapshot=0
@@ -191,6 +181,15 @@ if [[ -n $REQUIRE_CONFIG_DIR ]]; then
   SOLANA_CONFIG_DIR="$config_dir"
 fi
 
+if [[ -n $REQUIRE_KEYPAIRS ]]; then
+  if [[ -z $identity_keypair_path ]]; then
+    usage "Error: --identity not specified"
+  fi
+  if [[ -z $voting_keypair_path ]]; then
+    usage "Error: --voting-keypair not specified"
+  fi
+fi
+
 if [[ -z "$config_dir" ]]; then
   config_dir="$SOLANA_CONFIG_DIR/validator$label"
 fi
@@ -227,7 +226,6 @@ drone_address="${gossip_entrypoint%:*}":9900
 
 ledger_config_dir=$config_dir/ledger
 state_dir="$config_dir"/state
-configured_flag=$config_dir/.configured
 
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
@@ -311,7 +309,7 @@ while true; do
     # over again
     (
       set -x
-      rm -rf "$ledger_config_dir" "$state_dir" "$configured_flag"
+      rm -rf "$ledger_config_dir" "$state_dir"
     )
   fi
 
