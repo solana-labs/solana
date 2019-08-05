@@ -201,7 +201,6 @@ steps:
         TESTNET: "$TESTNET"
         TESTNET_OP: "$TESTNET_OP"
         TESTNET_DB_HOST: "$TESTNET_DB_HOST"
-        EC2_NODE_COUNT: "$EC2_NODE_COUNT"
         GCE_NODE_COUNT: "$GCE_NODE_COUNT"
         GCE_LOW_QUOTA_NODE_COUNT: "$GCE_LOW_QUOTA_NODE_COUNT"
 EOF
@@ -252,7 +251,7 @@ sanity() {
       set -x
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-sanity.sh testnet-solana-com gcp us-west1-b
+        ci/testnet-sanity.sh testnet-solana-com gce us-west1-b
     )
     ;;
   testnet-perf)
@@ -376,7 +375,7 @@ deploy() {
     (
       set -x
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p testnet-solana-com -C gcp -z us-west1-b \
+        ci/testnet-deploy.sh -p testnet-solana-com -C gce -z us-west1-b \
           -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
           -a testnet-solana-com --letsencrypt testnet.solana.com \
           ${skipCreate:+-e} \
