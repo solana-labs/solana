@@ -29,20 +29,6 @@ pub fn staked_nodes(bank: &Bank) -> HashMap<Pubkey, u64> {
     to_staked_nodes(to_vote_states(bank.vote_accounts().into_iter()))
 }
 
-/// At the specified epoch, collect the node account balance and vote states for nodes that
-/// have non-zero balance in their corresponding staking accounts
-pub fn vote_account_stakes_at_epoch(
-    bank: &Bank,
-    epoch_height: u64,
-) -> Option<HashMap<Pubkey, u64>> {
-    bank.epoch_vote_accounts(epoch_height).map(|accounts| {
-        accounts
-            .iter()
-            .map(|(id, (stake, _))| (*id, *stake))
-            .collect()
-    })
-}
-
 /// At the specified epoch, collect the delegate account balance and vote states for delegates
 /// that have non-zero balance in any of their managed staking accounts
 pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
@@ -112,10 +98,7 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::genesis_utils::{
-        create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
-        BOOTSTRAP_LEADER_LAMPORTS,
-    };
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
