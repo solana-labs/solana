@@ -105,7 +105,6 @@ impl SnapshotPackagerService {
 
             // `output_path` - The directory where the AppendVec will be placed in the tarball.
             // `storage_path` - The file path where the AppendVec itself is located
-            println!("appending path: {:?}", storage_path);
             tar.append_path_with_name(storage_path, output_path)?;
         }
 
@@ -113,12 +112,7 @@ impl SnapshotPackagerService {
         // can rsync this newly packaged snapshot
         tar.finish()?;
         let _ = fs::remove_file(&snapshot_package.tar_output_file);
-        println!(
-            "hard linking {:?} to output: {:?}",
-            temp_tar_path, &snapshot_package.tar_output_file
-        );
         fs::hard_link(&temp_tar_path, &snapshot_package.tar_output_file)?;
-        println!("done hard linking");
         Ok(())
     }
 

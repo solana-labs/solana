@@ -369,7 +369,6 @@ impl BankForks {
 
         // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
         let unpack_dir = tempfile::tempdir_in(snapshot_config.snapshot_path())?;
-        println!("untarring snapshot from: {:?} into: {:?}", tar, unpack_dir);
         untar_snapshot_in(&tar, &unpack_dir)?;
 
         let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
@@ -552,7 +551,6 @@ mod tests {
     }
 
     fn restore_from_snapshot(bank_forks: BankForks, account_paths: String, last_slot: u64) {
-        println!("restore from snapshot");
         let snapshot_path = bank_forks
             .snapshot_config
             .as_ref()
@@ -592,7 +590,6 @@ mod tests {
             ..
         } = create_genesis_block(10_000);
         for index in 0..4 {
-            println!("INDEX: {}", index);
             let bank0 = Bank::new_with_paths(
                 &genesis_block,
                 Some(accounts_dir.path().to_str().unwrap().to_string()),
@@ -608,7 +605,6 @@ mod tests {
             let bank0 = bank_forks.get(0).unwrap();
             snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0).unwrap();
             for forks in 0..index {
-                println!("fork: {}", forks);
                 let bank = Bank::new_from_parent(&bank_forks[forks], &Pubkey::default(), forks + 1);
                 let key1 = Keypair::new().pubkey();
                 let tx = system_transaction::create_user_account(
@@ -625,7 +621,6 @@ mod tests {
             // Generate a snapshot package for last bank
             let last_bank = bank_forks.get(index.saturating_sub(1)).unwrap();
             let names: Vec<_> = (0..=index).collect();
-            println!("packaging snapshot");
             let snapshot_package = snapshot_utils::package_snapshot(
                 last_bank,
                 &names,
@@ -635,7 +630,6 @@ mod tests {
                 ),
             )
             .unwrap();
-            println!("package snpshot tar");
             SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
 
             restore_from_snapshot(

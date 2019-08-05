@@ -107,7 +107,6 @@ impl Serialize for BankRc {
     {
         use serde::ser::Error;
         let mut wr = Cursor::new(Vec::new());
-        println!("serializing BankRc");
         serialize_into(&mut wr, &*self.accounts.accounts_db).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])

@@ -33,7 +33,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     let account_storage_entries = bank.rc.get_storage_entries();
 
     // Create a snapshot package
-    println!(
+    info!(
         "Snapshot for bank: {} has {} account storage entries",
         slot,
         account_storage_entries.len()
@@ -70,13 +70,12 @@ pub fn get_snapshot_names<P: AsRef<Path>>(snapshot_path: P) -> Vec<u64> {
 }
 
 pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
-    println!("adding snapshot for: {}", bank.slot());
     let slot = bank.slot();
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
     fs::create_dir_all(slot_snapshot_dir.clone()).map_err(Error::from)?;
 
     let snapshot_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
-    println!(
+    info!(
         "creating snapshot {}, path: {:?}",
         bank.slot(),
         snapshot_file_path
@@ -85,14 +84,12 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     let mut stream = BufWriter::new(file);
 
     // Create the snapshot
-    println!("serializing bank");
     serialize_into(&mut stream, &*bank).map_err(|e| get_io_error(&e.to_string()))?;
-    /*println!("serializing status cache");
-    serialize_into(&mut stream, &bank.src).map_err(|e| get_io_error(&e.to_string()))?;*/
-    println!("serializing bank accounts");
+    // TODO: Add status cache serialization code
+    /*serialize_into(&mut stream, &bank.src).map_err(|e| get_io_error(&e.to_string()))?;*/
     serialize_into(&mut stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
 
-    println!(
+    info!(
         "successfully created snapshot {}, path: {:?}",
         bank.slot(),
         snapshot_file_path
@@ -116,7 +113,6 @@ where
     P: AsRef<Path>,
     Q: AsRef<Path>,
 {
-    println!("bank from snapshots");
     // Rebuild the last root bank
     let names = get_snapshot_names(&snapshot_path);
     let last_root = names
@@ -125,7 +121,7 @@ where
     let snapshot_file_name = get_snapshot_file_name(*last_root);
     let snapshot_dir = get_bank_snapshot_dir(&snapshot_path, *last_root);
     let snapshot_file_path = snapshot_dir.join(&snapshot_file_name);
-    println!("Load from {:?}", snapshot_file_path);
+    info!("Load from {:?}", snapshot_file_path);
     let file = File::open(snapshot_file_path)?;
     let mut stream = BufReader::new(file);
     let bank: Bank = deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()))?;
@@ -134,8 +130,6 @@ where
     bank.rc
         .accounts_from_stream(&mut stream, local_account_paths, append_vecs_path)?;
 
-    // TODO: Make separate status cache file, deserialize only status cache file.
-    // TODO: Rebuild status cache from snapshots
     for bank_slot in names.iter().rev() {
         let snapshot_file_name = get_snapshot_file_name(*bank_slot);
         let snapshot_dir = get_bank_snapshot_dir(&snapshot_path, *bank_slot);
@@ -144,6 +138,8 @@ where
         let mut stream = BufReader::new(file);
         let bank: Result<Bank> =
             deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()));
+
+        // TODO: Uncomment and deserialize status cache here
 
         /*let status_cache: Result<StatusCacheRc> = deserialize_from(&mut stream)
         .map_err(|e| get_io_error(&e.to_string()));

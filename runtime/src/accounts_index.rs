@@ -36,7 +36,6 @@ impl<T: Clone> AccountsIndex<T> {
         let mut rv = None;
         for (i, (fork, _t)) in list.iter().rev().enumerate() {
             if *fork >= max && (ancestors.get(fork).is_some() || self.is_root(*fork)) {
-                println!("GET {} {:?} i: {}", fork, ancestors, i);
                 rv = Some((list.len() - 1) - i);
                 max = *fork;
             }
@@ -52,10 +51,8 @@ impl<T: Clone> AccountsIndex<T> {
         ancestors: &HashMap<Fork, usize>,
     ) -> Option<(RwLockReadGuard<ForkList<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
-            println!("Found key in index map");
             let lock = list.read().unwrap();
             if let Some(found_index) = self.latest_fork(ancestors, &lock) {
-                println!("Found index for key in a fork");
                 Some((lock, found_index))
             } else {
                 None

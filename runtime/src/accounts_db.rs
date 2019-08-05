@@ -101,10 +101,8 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
         M: MapAccess<'de>,
     {
         let mut map = HashMap::new();
-        println!("deserializing AccountStorage");
         while let Some((storage_id, storage_entry)) = access.next_entry()? {
             let storage_entry: AccountStorageEntry = storage_entry;
-            println!("fork id: {:?}", storage_entry.fork_id);
             let storage_fork_map = map
                 .entry(storage_entry.fork_id)
                 .or_insert_with(HashMap::new);
@@ -128,14 +126,11 @@ impl Serialize for AccountStorage {
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
         for (f, fork_storage) in &self.0 {
-            println!("serializing storage for fork: {}", f);
             for (storage_id, account_storage_entry) in fork_storage {
-                println!("serializing storage id: {}", storage_id);
                 map.serialize_entry(storage_id, &**account_storage_entry)?;
                 count += 1;
             }
         }
-        println!("total count: {}", count);
         serialize_account_storage_timer.stop();
         datapoint_info!(
             "serialize_account_storage_ms",
@@ -428,12 +423,6 @@ impl AccountsDB {
                         AppendVec::new_relative_path(fork_id, storage_entry.id);
                     let append_vec_abs_path =
                         append_vecs_path.as_ref().join(&append_vec_relative_path);
-
-                    println!(
-                        "relative: {:?}, abs: {:?}",
-                        append_vec_relative_path, append_vec_abs_path
-                    );
-                    println!("local dir: {:?}", local_dir);
                     let mut copy_options = CopyOptions::new();
                     copy_options.overwrite = true;
                     fs_extra::move_items(&vec![append_vec_abs_path], &local_dir, &copy_options)
@@ -458,7 +447,6 @@ impl AccountsDB {
 
         // Process deserialized data, set necessary fields in self
         *self.paths.write().unwrap() = local_account_paths;
-        println!("storate_len: {}", storage.0.len());
         let max_id: usize = *storage
             .0
             .values()
@@ -480,7 +468,6 @@ impl AccountsDB {
         self.next_id.store(max_id + 1, Ordering::Relaxed);
         self.write_version
             .fetch_add(version as usize, Ordering::Relaxed);
-        println!("generating index");
         self.generate_index();
         Ok(())
     }
@@ -574,19 +561,15 @@ impl AccountsDB {
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
     ) -> Option<(Account, Fork)> {
-        println!("loading account: {}", pubkey);
         let (lock, index) = accounts_index.get(pubkey, ancestors)?;
         let fork = lock[index].0;
-        println!("found account: {} in fork: {}", pubkey, fork);
         //TODO: thread this as a ref
         if let Some(fork_storage) = storage.0.get(&fork) {
             let info = &lock[index].1;
-            println!("looking for account: {:?} in id: {:?}", pubkey, info.id);
             let res = fork_storage
                 .get(&info.id)
                 .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
                 .map(|account| (account, fork));
-            println!("result: {:?}", res);
             res
         } else {
             None
@@ -701,7 +684,6 @@ impl AccountsDB {
             }
             for (offset, (meta, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
                 storage.add_account();
-                println!("storing account: {} in id: {}", meta.pubkey, storage.id);
                 infos.push(AccountInfo {
                     id: storage.id,
                     offset: *offset,
@@ -850,8 +832,6 @@ impl AccountsDB {
         let mut forks: Vec<Fork> = storage.0.keys().cloned().collect();
         forks.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
-        println!("roots before: {:?}", accounts_index.roots);
-        println!("forks: {:?}", forks);
         for fork_id in forks.iter() {
             let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
                 .scan_account_storage(
@@ -864,10 +844,6 @@ impl AccountsDB {
                             offset: stored_account.offset,
                             lamports: stored_account.balance.lamports,
                         };
-                        println!(
-                            "Generating index, found account: {}",
-                            stored_account.meta.pubkey
-                        );
                         accum.insert(
                             stored_account.meta.pubkey,
                             (stored_account.meta.write_version, account_info),
@@ -899,11 +875,9 @@ impl Serialize for AccountsDB {
         let storage = self.storage.read().unwrap();
         let mut wr = Cursor::new(vec![]);
         let version: u64 = self.write_version.load(Ordering::Relaxed) as u64;
-        println!("serializing AccountsDB");
         serialize_into(&mut wr, &*storage).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
         let len = wr.position() as usize;
-        println!("serializing bytes for AccountsDB");
         serializer.serialize_bytes(&wr.into_inner()[..len])
     }
 }
@@ -1175,7 +1149,6 @@ pub mod tests {
         let ancestors = vec![(fork, 0)].into_iter().collect();
         for _ in 0..num {
             let idx = thread_rng().gen_range(0, num);
-            println!("checking account: {:?}", &pubkeys[idx]);
             let account = accounts.load_slow(&ancestors, &pubkeys[idx]);
             let account1 = Some((
                 Account::new((idx + count) as u64, 0, &Account::default().owner),
@@ -1426,7 +1399,6 @@ pub mod tests {
             accounts.next_id.load(Ordering::Relaxed)
         );
 
-        println!("FINISHED RESTORE");
         check_accounts(&daccounts, &pubkeys, 0, 100, 2);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
         assert!(check_storage(&daccounts, 0, 100));
@@ -1538,7 +1510,6 @@ pub mod tests {
                     .expect("Invalid AppendVec file path"),
             );
 
-            println!("copying: {:?} to {:?}", storage_path, output_path);
             fs::copy(storage_path, output_path)?;
         }
 
