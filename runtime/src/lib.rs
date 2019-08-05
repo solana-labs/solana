@@ -33,6 +33,5 @@ extern crate solana_bpf_loader_program;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate failure;
 extern crate fs_extra;
 extern crate tempfile;
