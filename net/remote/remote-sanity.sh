@@ -81,7 +81,7 @@ local|tar|skip)
   solana_keygen=solana-keygen
   solana_ledger_tool=solana-ledger-tool
 
-  ledger=config/bootstrap-leader/ledger
+  ledger=config/bootstrap-leader
   client_id=config/client-id.json
   ;;
 *)

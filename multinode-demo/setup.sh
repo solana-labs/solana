@@ -22,7 +22,7 @@ default_arg --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/ide
 default_arg --bootstrap-vote-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
 default_arg --bootstrap-stake-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json
 default_arg --bootstrap-storage-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
-default_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader/ledger
+default_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader
 default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
 default_arg --lamports 100000000000000
 default_arg --bootstrap-leader-lamports 424242
@@ -31,9 +31,8 @@ default_arg --target-signatures-per-slot 42
 default_arg --hashes-per-tick auto
 $solana_genesis "${args[@]}"
 
-test -d "$SOLANA_CONFIG_DIR"/bootstrap-leader/ledger
 (
-  cd "$SOLANA_CONFIG_DIR"/bootstrap-leader/ledger
+  cd "$SOLANA_CONFIG_DIR"/bootstrap-leader
   set -x
-  tar zcvfS genesis.tgz genesis.bin  rocksdb
+  tar zcvfS genesis.tgz genesis.bin rocksdb
 )

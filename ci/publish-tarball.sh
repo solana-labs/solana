@@ -101,7 +101,7 @@ echo --- Creating tarball
 set -e
 cd "$(dirname "$0")"/..
 export USE_INSTALL=1
-export REQUIRE_CONFIG_DIR=1
+export REQUIRE_LEDGER_DIR=1
 export REQUIRE_KEYPAIRS=1
 exec multinode-demo/validator.sh "$@"
 EOF

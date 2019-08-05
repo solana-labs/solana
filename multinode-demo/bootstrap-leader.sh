@@ -50,7 +50,7 @@ identity_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader/identity-keypair.json
 vote_keypair="$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
 storage_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader/storage-keypair.json
 
-ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader/ledger
+ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader
 [[ -d "$ledger_dir" ]] || {
   echo "$ledger_dir does not exist"
   echo
