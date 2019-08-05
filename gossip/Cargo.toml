@@ -3,18 +3,18 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-gossip"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.18.0-pre0"
+version = "0.18.0-pre1"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-solana = { path = "../core", version = "0.18.0-pre0" }
-solana-client = { path = "../client", version = "0.18.0-pre0" }
-solana-logger = { path = "../logger", version = "0.18.0-pre0" }
-solana-netutil = { path = "../netutil", version = "0.18.0-pre0" }
-solana-sdk = { path = "../sdk", version = "0.18.0-pre0" }
+solana = { path = "../core", version = "0.18.0-pre1" }
+solana-client = { path = "../client", version = "0.18.0-pre1" }
+solana-logger = { path = "../logger", version = "0.18.0-pre1" }
+solana-netutil = { path = "../netutil", version = "0.18.0-pre1" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre1" }
 
 [features]
 cuda = []
