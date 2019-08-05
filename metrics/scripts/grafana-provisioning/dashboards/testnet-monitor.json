@@ -7973,19 +7973,6 @@
         "x": 0,
         "y": 97
       },
-      "id": 60,
-      "panels": [],
-      "title": "Fork Confidence",
-      "type": "row"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 97
-      },
       "id": 61,
       "panels": [],
       "title": "Fork Confidence",
