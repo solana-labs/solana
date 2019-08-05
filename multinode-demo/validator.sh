@@ -76,6 +76,7 @@ node_lamports=424242  # number of lamports to airdrop the node for transaction f
 poll_for_new_genesis_block=0
 label=
 identity_keypair_path=
+voting_keypair_path=
 no_restart=0
 # TODO: Enable boot_from_snapshot when snapshots work
 #boot_from_snapshot=1
@@ -180,6 +181,15 @@ if [[ -n $REQUIRE_CONFIG_DIR ]]; then
   SOLANA_CONFIG_DIR="$config_dir"
 fi
 
+if [[ -n $REQUIRE_KEYPAIRS ]]; then
+  if [[ -z $identity_keypair_path ]]; then
+    usage "Error: --identity not specified"
+  fi
+  if [[ -z $voting_keypair_path ]]; then
+    usage "Error: --voting-keypair not specified"
+  fi
+fi
+
 if [[ -z "$config_dir" ]]; then
   config_dir="$SOLANA_CONFIG_DIR/validator$label"
 fi
@@ -216,7 +226,6 @@ drone_address="${gossip_entrypoint%:*}":9900
 
 ledger_config_dir=$config_dir/ledger
 state_dir="$config_dir"/state
-configured_flag=$config_dir/.configured
 
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
@@ -300,7 +309,7 @@ while true; do
     # over again
     (
       set -x
-      rm -rf "$ledger_config_dir" "$state_dir" "$configured_flag"
+      rm -rf "$ledger_config_dir" "$state_dir"
     )
   fi
 

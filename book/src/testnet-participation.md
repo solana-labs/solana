@@ -144,28 +144,42 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 # Press ^C to exit
 ```
 
-Now configure a key pair for your validator by running:
+Now create an identity keypair for your validator by running:
 ```bash
 $ solana-keygen new -o ~/validator-keypair.json
 ```
+and airdrop yourself some lamports to get started:
+```bash
+$ solana-wallet --keypair ~/validator-keypair.json airdrop 1000
+```
+
+Your validator will need a vote account.  Create it now with the following
+commands:
+```bash
+$ solana-keygen new -o ~/validator-vote-keypair.json
+$ VOTE_PUBKEY=$(solana-keygen pubkey ~/validator-vote-keypair.json)
+$ IDENTITY_PUBKEY=$(solana-keygen pubkey ~/validator-keypair.json)
+$ solana-wallet create-vote-account "$VOTE_PUBKEY" "$IDENTITY_PUBKEY" 1
+```
+
 
 Then use one of the following commands, depending on your installation
 choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
-$ validator.sh --identity ~/validator-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run validator.sh -- --identity ~/validator-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ solana-install run validator.sh -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 If you built from source:
 ```bash
-$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 #### Enabling CUDA
@@ -221,10 +235,7 @@ $ solana-wallet show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 
 The vote pubkey for the validator can also be found by running:
 ```bash
-# If this is a `solana-install`-installation run:
-$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config/validator-vote-keypair.json
-# Otherwise run:
-$ solana-keygen pubkey ./config/validator-vote-keypair.json
+$ solana-keygen pubkey ~/validator-vote-keypair.json
 ```
 
 #### Validator Metrics
