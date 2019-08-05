@@ -12,7 +12,7 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuBootstrapLeaderMachineType="--machine-type n1-standard-16 --min-cpu-platform Intel%20Skylake"
+  cpuBootstrapLeaderMachineType="--custom-cpu 12 --custom-memory 32GB --min-cpu-platform Intel%20Skylake"
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
