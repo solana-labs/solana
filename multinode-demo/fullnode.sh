@@ -153,7 +153,6 @@ identity_keypair_path=
 no_restart=0
 airdrops_enabled=1
 generate_snapshots=0
-boot_from_snapshot=1
 reset_ledger=0
 config_dir=
 
@@ -174,7 +173,7 @@ while [[ -n $1 ]]; do
       generate_snapshots=1
       shift
     elif [[ $1 = --no-snapshot ]]; then
-      boot_from_snapshot=0
+      # Ignore
       shift
     elif [[ $1 = --validator ]]; then
       node_type=validator
@@ -418,25 +417,6 @@ while true; do
           sleep 5
         done
         echo "Fetched genesis ledger in $SECONDS seconds"
-
-        if ((boot_from_snapshot)); then
-          SECONDS=
-          echo "Rsyncing state snapshot ${rsync_entrypoint_url:?}..."
-          if ! $rsync -P "${rsync_entrypoint_url:?}"/config/state.tgz .; then
-            echo "State snapshot rsync failed"
-            rm -f "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-            exit
-          fi
-          echo "Fetched snapshot in $SECONDS seconds"
-
-          SECONDS=
-          mkdir -p "$state_dir"
-          (
-            set -x
-            tar -C "$state_dir" -zxf "$SOLANA_RSYNC_CONFIG_DIR"/state.tgz
-          )
-          echo "Extracted snapshot in $SECONDS seconds"
-        fi
       )
     fi
 
