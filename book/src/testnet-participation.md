@@ -239,7 +239,7 @@ $ solana-keygen pubkey ~/validator-vote-keypair.json
 ```
 
 #### Has my validator caught up?
-After your validator boots it make take some time to catch up with the cluster.
+After your validator boots, it may take some time to catch up with the cluster.
 Use the `get-slot` wallet command to view the current slot that the cluster is
 processing:
 ```bash
@@ -251,7 +251,7 @@ The current slot that your validator is processing can then been seen with:
 $ solana-wallet --url http://127.0.0.1:8899 get-slot
 ```
 
-Until your validator has caught up it will not be able to vote successfully and
+Until your validator has caught up, it will not be able to vote successfully and
 stake cannot be delegated to it.
 
 Also if you find the cluster's slot advancing faster than yours, you will likely
