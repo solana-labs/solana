@@ -61,6 +61,7 @@ pub enum WalletCommand {
     ClaimStorageReward(Pubkey, Pubkey),
     ShowStorageAccount(Pubkey),
     Deploy(String),
+    GetSlot,
     GetTransactionCount,
     // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
@@ -303,6 +304,7 @@ pub fn parse_command(
                 .unwrap()
                 .to_string(),
         )),
+        ("get-slot", Some(_matches)) => Ok(WalletCommand::GetSlot),
         ("get-transaction-count", Some(_matches)) => Ok(WalletCommand::GetTransactionCount),
         ("pay", Some(pay_matches)) => {
             let lamports = pay_matches.value_of("lamports").unwrap().parse()?;
@@ -982,6 +984,11 @@ fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey
     Ok(signature_str.to_string())
 }
 
+fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
+    let slot = rpc_client.get_slot()?;
+    Ok(slot.to_string())
+}
+
 fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
     let transaction_count = rpc_client.get_transaction_count()?;
     Ok(transaction_count.to_string())
@@ -1182,6 +1189,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_deploy(&rpc_client, config, program_location)
         }
 
+        WalletCommand::GetSlot => process_get_slot(&rpc_client),
         WalletCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
 
         // If client has positive balance, pay lamports to another address
@@ -1679,6 +1687,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ), // TODO: Add "loader" argument; current default is bpf_loader
         )
         .subcommand(
+            SubCommand::with_name("get-slot")
+                .about("Get current slot"),
+        )
+        .subcommand(
             SubCommand::with_name("get-transaction-count")
                 .about("Get current transaction count"),
         )
@@ -2163,6 +2175,9 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
+        config.command = WalletCommand::GetSlot;
+        assert_eq!(process_command(&config).unwrap(), "0");
+
         config.command = WalletCommand::GetTransactionCount;
         assert_eq!(process_command(&config).unwrap(), "1234");
 
@@ -2268,6 +2283,9 @@ mod tests {
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::AuthorizeVoter(bob_pubkey, Keypair::new(), bob_pubkey);
+        assert!(process_command(&config).is_err());
+
+        config.command = WalletCommand::GetSlot;
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::GetTransactionCount;
