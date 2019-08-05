@@ -220,7 +220,7 @@ sanity() {
       set -x
       NO_INSTALL_CHECK=1 \
       NO_LEDGER_VERIFY=1 \
-        ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
+        ci/testnet-sanity.sh edge-testnet-solana-com gce us-west1-b
     )
     ;;
   testnet-edge-perf)
@@ -237,7 +237,7 @@ sanity() {
       set -x
       NO_INSTALL_CHECK=1 \
       NO_LEDGER_VERIFY=1 \
-        ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
+        ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
     )
     ;;
   testnet-beta-perf)
@@ -334,9 +334,9 @@ deploy() {
   testnet-edge)
     (
       set -x
-      ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
+      ci/testnet-deploy.sh -p edge-testnet-solana-com -C gce -z us-west1-b \
         -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
-        -a eipalloc-0ccd4f2239886fa94 --letsencrypt edge.testnet.solana.com \
+        -a edge-testnet-solana-com --letsencrypt edge.testnet.solana.com \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
@@ -361,9 +361,9 @@ deploy() {
     (
       set -x
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 -z us-west-1a \
+        ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce -z us-west1-b \
           -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
-          -a eipalloc-0f286cf8a0771ce35 --letsencrypt beta.testnet.solana.com \
+          -a beta-testnet-solana-com --letsencrypt beta.testnet.solana.com \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
