@@ -18,7 +18,7 @@ usage: $0 [OPTIONS] [cluster entry point hostname]
 Start a validator with no stake
 
 OPTIONS:
-  --config-dir PATH         - store configuration and data files under this PATH
+  --ledger PATH             - store ledger under this PATH
   --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --label LABEL             - Append the given label to the configuration files, useful when running
@@ -33,43 +33,6 @@ EOF
   exit 1
 }
 
-
-wallet() {
-  (
-    set -x
-    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" "$@"
-  )
-}
-
-setup_validator_accounts() {
-  declare node_lamports=$1
-
-  if ((airdrops_enabled)); then
-    echo "Adding $node_lamports to validator identity account:"
-    (
-      declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
-      wallet airdrop $((node_lamports+fees))
-    ) || return $?
-  else
-    echo "Validator identity account balance:"
-    wallet balance || return $?
-  fi
-
-  if ! wallet show-vote-account "$vote_pubkey"; then
-    echo "Creating validator vote account"
-    wallet create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127 || return $?
-  fi
-  echo "Validator vote account configured"
-
-  if ! wallet show-storage-account "$storage_pubkey"; then
-    echo "Creating validator storage account"
-    wallet create-validator-storage-account "$identity_pubkey" "$storage_pubkey" || return $?
-  fi
-  echo "Validator storage account configured"
-
-  return 0
-}
-
 args=()
 airdrops_enabled=1
 node_lamports=424242  # number of lamports to airdrop the node for transaction fees (ignored if airdrops_enabled=0)
@@ -82,8 +45,8 @@ no_restart=0
 #boot_from_snapshot=1
 boot_from_snapshot=0
 reset_ledger=0
-config_dir=
 gossip_entrypoint=
+ledger_dir=
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -155,8 +118,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --reset-ledger ]]; then
       reset_ledger=1
       shift
-    elif [[ $1 = --config-dir ]]; then
-      config_dir=$2
+    elif [[ $1 = --ledger ]]; then
+      ledger_dir=$2
       shift 2
     elif [[ $1 = -h ]]; then
       usage "$@"
@@ -174,11 +137,11 @@ if [[ ${#positional_args[@]} -gt 1 ]]; then
   usage "$@"
 fi
 
-if [[ -n $REQUIRE_CONFIG_DIR ]]; then
-  if [[ -z $config_dir ]]; then
-    usage "Error: --config-dir not specified"
+if [[ -n $REQUIRE_LEDGER_DIR ]]; then
+  if [[ -z $ledger_dir ]]; then
+    usage "Error: --ledger not specified"
   fi
-  SOLANA_CONFIG_DIR="$config_dir"
+  SOLANA_CONFIG_DIR="$ledger_dir"
 fi
 
 if [[ -n $REQUIRE_KEYPAIRS ]]; then
@@ -190,10 +153,10 @@ if [[ -n $REQUIRE_KEYPAIRS ]]; then
   fi
 fi
 
-if [[ -z "$config_dir" ]]; then
-  config_dir="$SOLANA_CONFIG_DIR/validator$label"
+if [[ -z "$ledger_dir" ]]; then
+  ledger_dir="$SOLANA_CONFIG_DIR/validator$label"
 fi
-mkdir -p "$config_dir"
+mkdir -p "$ledger_dir"
 
 setup_secondary_mount
 
@@ -215,35 +178,24 @@ fi
 rpc_url=$("$here"/rpc-url.sh "$gossip_entrypoint")
 drone_address="${gossip_entrypoint%:*}":9900
 
-: "${identity_keypair_path:=$config_dir/identity-keypair.json}"
-[[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
-
-: "${voting_keypair_path:=$config_dir/vote-keypair.json}"
-[[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
-
-: "${storage_keypair_path:=$config_dir/storage-keypair.json}"
-[[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
-
-ledger_config_dir=$config_dir/ledger
-state_dir="$config_dir"/state
+: "${identity_keypair_path:=$ledger_dir/identity-keypair.json}"
+: "${voting_keypair_path:=$ledger_dir/vote-keypair.json}"
+: "${storage_keypair_path:=$ledger_dir/storage-keypair.json}"
 
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
   default_arg --rpc-drone-address "$drone_address"
 fi
 
-identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
-export SOLANA_METRICS_HOST_ID="$identity_pubkey"
-
-accounts_config_dir="$state_dir"/accounts
-snapshot_config_dir="$state_dir"/snapshots
+accounts_dir="$ledger_dir"/accounts
+snapshot_dir="$ledger_dir"/snapshots
 
 default_arg --identity "$identity_keypair_path"
 default_arg --voting-keypair "$voting_keypair_path"
 default_arg --storage-keypair "$storage_keypair_path"
-default_arg --ledger "$ledger_config_dir"
-default_arg --accounts "$accounts_config_dir"
-#default_arg --snapshot-path "$snapshot_config_dir"
+default_arg --ledger "$ledger_dir"
+default_arg --accounts "$accounts_dir"
+#default_arg --snapshot-path "$snapshot_dir"
 #default_arg --snapshot-interval-slots 100
 
 if [[ -n $SOLANA_CUDA ]]; then
@@ -258,18 +210,18 @@ if [[ -z $CI ]]; then # Skip in CI
 fi
 
 new_genesis_block() {
-  if [[ ! -d "$ledger_config_dir" ]]; then
+  if [[ ! -d "$ledger_dir" ]]; then
     return
   fi
 
-  rm -f "$ledger_config_dir"/new-genesis.tgz
+  rm -f "$ledger_dir"/new-genesis.tgz
   (
     set -x
-    curl -f "$rpc_url"/genesis.tgz -o "$ledger_config_dir"/new-genesis.tgz
+    curl -f "$rpc_url"/genesis.tgz -o "$ledger_dir"/new-genesis.tgz
   ) || {
     echo "Error: failed to fetch new genesis ledger"
   }
-  ! diff -q "$ledger_config_dir"/new-genesis.tgz "$ledger_config_dir"/genesis.tgz >/dev/null 2>&1
+  ! diff -q "$ledger_dir"/new-genesis.tgz "$ledger_dir"/genesis.tgz >/dev/null 2>&1
 }
 
 set -e
@@ -298,10 +250,46 @@ if ((reset_ledger)); then
   echo "Resetting ledger..."
   (
     set -x
-    rm -rf "$state_dir"
-    rm -rf "$ledger_config_dir"
+    rm -rf "$ledger_dir"
   )
 fi
+
+
+wallet() {
+  (
+    set -x
+    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" "$@"
+  )
+}
+
+setup_validator_accounts() {
+  declare node_lamports=$1
+
+  if ((airdrops_enabled)); then
+    echo "Adding $node_lamports to validator identity account:"
+    (
+      declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
+      wallet airdrop $((node_lamports+fees))
+    ) || return $?
+  else
+    echo "Validator identity account balance:"
+    wallet balance || return $?
+  fi
+
+  if ! wallet show-vote-account "$vote_pubkey"; then
+    echo "Creating validator vote account"
+    wallet create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127 || return $?
+  fi
+  echo "Validator vote account configured"
+
+  if ! wallet show-storage-account "$storage_pubkey"; then
+    echo "Creating validator storage account"
+    wallet create-validator-storage-account "$identity_pubkey" "$storage_pubkey" || return $?
+  fi
+  echo "Validator storage account configured"
+
+  return 0
+}
 
 while true; do
   if new_genesis_block; then
@@ -309,15 +297,15 @@ while true; do
     # over again
     (
       set -x
-      rm -rf "$ledger_config_dir" "$state_dir"
+      rm -rf "$ledger_dir"
     )
   fi
 
-  if [[ ! -f "$ledger_config_dir"/.ok ]]; then
+  if [[ ! -f "$ledger_dir"/.genesis ]]; then
       echo "Fetching ledger from $rpc_url/genesis.tgz..."
       SECONDS=
-      mkdir -p "$ledger_config_dir"
-      while ! curl -f "$rpc_url"/genesis.tgz -o "$ledger_config_dir"/genesis.tgz; do
+      mkdir -p "$ledger_dir"
+      while ! curl -f "$rpc_url"/genesis.tgz -o "$ledger_dir"/genesis.tgz; do
         echo "Genesis ledger fetch failed"
         sleep 5
       done
@@ -325,9 +313,9 @@ while true; do
 
       (
         set -x
-        cd "$ledger_config_dir"
+        cd "$ledger_dir"
         tar -zxf genesis.tgz
-        touch .ok
+        touch .genesis
       )
 
       (
@@ -335,10 +323,10 @@ while true; do
           SECONDS=
 
           echo "Fetching state snapshot $rpc_url/snapshot.tgz..."
-          mkdir -p "$state_dir"
-          if ! curl -f "$rpc_url"/snapshot.tgz -o "$state_dir"/snapshot.tgz; then
+          mkdir -p "$snapshot_dir"
+          if ! curl -f "$rpc_url"/snapshot.tgz -o "$snapshot_dir"/snapshot.tgz; then
             echo "State snapshot fetch failed"
-            rm -f "$state_dir"/snapshot.tgz
+            rm -f "$snapshot_dir"/snapshot.tgz
             exit 0  # None fatal
           fi
           echo "Fetched snapshot in $SECONDS seconds"
@@ -346,7 +334,7 @@ while true; do
           SECONDS=
           (
             set -x
-            cd "$state_dir"
+            cd "$snapshot_dir"
             tar -zxf snapshot.tgz
             rm snapshot.tgz
           )
@@ -355,8 +343,14 @@ while true; do
       )
   fi
 
+  [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
+  [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
+  [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
+
   vote_pubkey=$($solana_keygen pubkey "$voting_keypair_path")
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
+  identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
+  export SOLANA_METRICS_HOST_ID="$identity_pubkey"
 
   setup_validator_accounts "$node_lamports"
 
@@ -365,9 +359,9 @@ while true; do
 identity pubkey: $identity_pubkey
 vote pubkey: $vote_pubkey
 storage pubkey: $storage_pubkey
-ledger: $ledger_config_dir
-accounts: $accounts_config_dir
-snapshots: $snapshot_config_dir
+ledger: $ledger_dir
+accounts: $accounts_dir
+snapshots: $snapshot_dir
 ========================================================================
 EOF
 

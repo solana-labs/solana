@@ -168,13 +168,13 @@ choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
-$ validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run validator.sh -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ solana-install run validator.sh -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 If you built from source:
