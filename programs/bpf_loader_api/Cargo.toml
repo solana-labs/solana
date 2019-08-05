@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-loader-api"
-version = "0.18.0-pre0"
+version = "0.18.0-pre1"
 description = "Solana BPF Loader"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,8 +14,8 @@ byteorder = "1.3.2"
 libc = "0.2.58"
 log = "0.4.8"
 serde = "1.0.98"
-solana-logger = { path = "../../logger", version = "0.18.0-pre0" }
-solana-sdk = { path = "../../sdk", version = "0.18.0-pre0" }
+solana-logger = { path = "../../logger", version = "0.18.0-pre1" }
+solana-sdk = { path = "../../sdk", version = "0.18.0-pre1" }
 solana_rbpf = "=0.1.13"
 
 [lib]
