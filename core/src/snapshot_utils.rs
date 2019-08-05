@@ -2,7 +2,7 @@ use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackage;
 use bincode::{deserialize_from, serialize_into};
 use flate2::read::GzDecoder;
-use solana_runtime::bank::{Bank, StatusCacheRc};
+use solana_runtime::bank::Bank;
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Error as IOError, ErrorKind};
@@ -85,9 +85,9 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
 
     // Create the snapshot
     serialize_into(&mut stream, &*bank).map_err(|e| get_io_error(&e.to_string()))?;
+    serialize_into(&mut stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
     // TODO: Add status cache serialization code
     /*serialize_into(&mut stream, &bank.src).map_err(|e| get_io_error(&e.to_string()))?;*/
-    serialize_into(&mut stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
 
     info!(
         "successfully created snapshot {}, path: {:?}",
@@ -117,7 +117,7 @@ where
     let names = get_snapshot_names(&snapshot_path);
     let last_root = names
         .last()
-        .ok_or(get_io_error("No snapshots found in snapshots directory"))?;
+        .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
     let snapshot_file_name = get_snapshot_file_name(*last_root);
     let snapshot_dir = get_bank_snapshot_dir(&snapshot_path, *last_root);
     let snapshot_file_path = snapshot_dir.join(&snapshot_file_name);
@@ -136,7 +136,7 @@ where
         let snapshot_file_path = snapshot_dir.join(snapshot_file_name.clone());
         let file = File::open(snapshot_file_path)?;
         let mut stream = BufReader::new(file);
-        let bank: Result<Bank> =
+        let _bank: Result<Bank> =
             deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()));
 
         // TODO: Uncomment and deserialize status cache here

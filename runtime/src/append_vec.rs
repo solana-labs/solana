@@ -154,10 +154,7 @@ impl AppendVec {
 
     // Get the file path relative to the top level accounts directory
     pub fn get_relative_path<P: AsRef<Path>>(append_vec_path: P) -> Option<PathBuf> {
-        append_vec_path
-            .as_ref()
-            .file_name()
-            .map(|p| PathBuf::from(p))
+        append_vec_path.as_ref().file_name().map(PathBuf::from)
     }
 
     pub fn new_relative_path(fork_id: u64, id: usize) -> PathBuf {
@@ -396,6 +393,8 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
     }
 
     #[allow(clippy::mutex_atomic)]
+    // Note this does not initialize a valid Mmap in the AppendVec, needs to be done
+    // externally
     fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
     where
         E: serde::de::Error,
@@ -512,22 +511,28 @@ pub mod tests {
         assert_eq!(av.get_account_test(index2).unwrap(), account2);
         assert_eq!(av.get_account_test(index1).unwrap(), account1);
 
-        let mut buf = vec![0u8; serialized_size(&av).unwrap() as usize];
-        let mut writer = Cursor::new(&mut buf[..]);
+        let append_vec_path = &av.path;
+
+        // Serialize the AppendVec
+        let mut writer = Cursor::new(vec![]);
         serialize_into(&mut writer, &av).unwrap();
 
-        let mut reader = Cursor::new(&mut buf[..]);
-        let dav: AppendVec = deserialize_from(&mut reader).unwrap();
+        // Deserialize the AppendVec
+        let buf = writer.into_inner();
+        let mut reader = Cursor::new(&buf[..]);
+        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
 
+        // Set the AppendVec path
+        dav.set_file(append_vec_path).unwrap();
         assert_eq!(dav.get_account_test(index2).unwrap(), account2);
         assert_eq!(dav.get_account_test(index1).unwrap(), account1);
         drop(dav);
 
-        // dropping dav above blows away underlying file's directory entry,
-        //   which is what we're testing next.
-        let mut reader = Cursor::new(&mut buf[..]);
-        let dav: Result<AppendVec, Box<bincode::ErrorKind>> = deserialize_from(&mut reader);
-        assert!(dav.is_err());
+        // Dropping dav above blows away underlying file's directory entry, so
+        // trying to set the file will fail
+        let mut reader = Cursor::new(&buf[..]);
+        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
+        assert!(dav.set_file(append_vec_path).is_err());
     }
 
     #[test]

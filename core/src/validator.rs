@@ -322,7 +322,7 @@ fn get_bank_forks(
                     .expect("Account paths not present when booting from snapshot"),
                 snapshot_config.as_ref().unwrap(),
             )
-            .unwrap();
+            .expect("Load from snapshot failed");
 
             let bank = &bank_forks.working_bank();
             let fork_info = BankForksInfo {

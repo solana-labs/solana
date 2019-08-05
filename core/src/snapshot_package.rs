@@ -137,7 +137,6 @@ mod tests {
     use crate::snapshot_utils;
     use std::fs::OpenOptions;
     use std::io::Write;
-    use std::sync::mpsc::channel;
     use tempfile::TempDir;
 
     #[test]

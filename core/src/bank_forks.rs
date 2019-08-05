@@ -8,7 +8,7 @@ use crate::snapshot_utils::untar_snapshot_in;
 use fs_extra::dir::CopyOptions;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
-use solana_runtime::bank::{Bank, BankRc, StatusCacheRc};
+use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::MAX_CACHE_ENTRIES;
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
@@ -351,7 +351,6 @@ impl BankForks {
     }
 
     pub fn load_from_snapshot(
-        //genesis_block: &GenesisBlock,
         account_paths: String,
         snapshot_config: &SnapshotConfig,
     ) -> Result<Self> {
@@ -372,16 +371,16 @@ impl BankForks {
         untar_snapshot_in(&tar, &unpack_dir)?;
 
         let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
-        let snapshots_in_tar_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
+        let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
         let bank = snapshot_utils::bank_from_snapshots(
             account_paths,
-            &snapshots_in_tar_dir,
+            &unpacked_snapshots_dir,
             unpacked_accounts_dir,
         )?;
 
         let bank = Arc::new(bank);
         // Move the unpacked snapshots into `snapshot_config.snapshot_path()`
-        let dir_files = fs::read_dir(snapshots_in_tar_dir).expect("Invalid snapshot path");
+        let dir_files = fs::read_dir(unpacked_snapshots_dir).expect("Invalid snapshot path");
         let paths: Vec<PathBuf> = dir_files
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();

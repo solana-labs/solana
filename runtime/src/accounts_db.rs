@@ -125,7 +125,7 @@ impl Serialize for AccountStorage {
         let mut map = serializer.serialize_map(Some(len))?;
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        for (f, fork_storage) in &self.0 {
+        for fork_storage in self.0.values() {
             for (storage_id, account_storage_entry) in fork_storage {
                 map.serialize_entry(storage_id, &**account_storage_entry)?;
                 count += 1;
@@ -566,11 +566,10 @@ impl AccountsDB {
         //TODO: thread this as a ref
         if let Some(fork_storage) = storage.0.get(&fork) {
             let info = &lock[index].1;
-            let res = fork_storage
+            fork_storage
                 .get(&info.id)
                 .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
-                .map(|account| (account, fork));
-            res
+                .map(|account| (account, fork))
         } else {
             None
         }
@@ -682,7 +681,7 @@ impl AccountsDB {
                 }
                 continue;
             }
-            for (offset, (meta, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
+            for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
                 storage.add_account();
                 infos.push(AccountInfo {
                     id: storage.id,
