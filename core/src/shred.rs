@@ -3,16 +3,11 @@ use crate::erasure::Session;
 use bincode::serialized_size;
 use core::borrow::BorrowMut;
 use serde::{Deserialize, Serialize};
+use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::io::Write;
 use std::sync::Arc;
 use std::{cmp, io};
-
-pub type Shreds = Vec<Vec<u8>>;
-
-// Assume 1500 bytes MTU size
-// (subtract 8 bytes of UDP header + 20 bytes ipv4 OR 40 bytes ipv6 header)
-pub const MAX_DGRAM_SIZE: usize = (1500 - 48);
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum Shred {
@@ -24,6 +19,7 @@ pub enum Shred {
     Coding(CodingShred),
 }
 
+/// A common header that is present at start of every shred
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct ShredCommonHeader {
     pub signature: Signature,
@@ -31,6 +27,7 @@ pub struct ShredCommonHeader {
     pub index: u32,
 }
 
+/// A common header that is present at start of every data shred
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct DataShredHeader {
     _reserved: CodingShredHeader,
@@ -38,12 +35,14 @@ pub struct DataShredHeader {
     pub data_type: u8,
 }
 
+/// The first data shred also has parent slot value in it
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct FirstDataShredHeader {
     pub data_header: DataShredHeader,
     pub parent: u64,
 }
 
+/// The coding shred header has FEC information
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct CodingShredHeader {
     pub common_header: ShredCommonHeader,
@@ -70,9 +69,10 @@ pub struct CodingShred {
     pub header: CodingShredHeader,
 }
 
+/// Default shred is sized correctly to meet MTU/Packet size requirements
 impl Default for FirstDataShred {
     fn default() -> Self {
-        let size = MAX_DGRAM_SIZE
+        let size = PACKET_DATA_SIZE
             - serialized_size(&Shred::FirstInSlot(Self::empty_shred())).unwrap() as usize;
         FirstDataShred {
             header: FirstDataShredHeader::default(),
@@ -81,10 +81,11 @@ impl Default for FirstDataShred {
     }
 }
 
+/// Default shred is sized correctly to meet MTU/Packet size requirements
 impl Default for DataShred {
     fn default() -> Self {
         let size =
-            MAX_DGRAM_SIZE - serialized_size(&Shred::Data(Self::empty_shred())).unwrap() as usize;
+            PACKET_DATA_SIZE - serialized_size(&Shred::Data(Self::empty_shred())).unwrap() as usize;
         DataShred {
             header: DataShredHeader::default(),
             payload: vec![0; size],
@@ -92,9 +93,13 @@ impl Default for DataShred {
     }
 }
 
+/// Common trait implemented by all types of shreds
 pub trait ShredCommon {
+    /// Write at a particular offset in the shred
     fn write_at(&mut self, offset: usize, buf: &[u8]) -> usize;
+    /// Overhead of shred enum and headers
     fn overhead() -> usize;
+    /// Utility function to create an empty shred
     fn empty_shred() -> Self;
 }
 
@@ -169,7 +174,7 @@ pub struct Shredder {
     parent: Option<u64>,
     fec_rate: f32,
     signer: Arc<Keypair>,
-    pub shreds: Shreds,
+    pub shreds: Vec<Vec<u8>>,
     pub active_shred: Option<Shred>,
     pub active_offset: usize,
 }
@@ -249,7 +254,9 @@ impl Shredder {
         }
     }
 
-    pub fn finalize_shred(&mut self, mut shred: Vec<u8>, signature_offset: usize) {
+    /// Serialize the payload, sign it and store the signature in the shred
+    /// Store the signed shred in the vector of shreds
+    fn finalize_shred(&mut self, mut shred: Vec<u8>, signature_offset: usize) {
         let data_offset =
             signature_offset + bincode::serialized_size(&Signature::default()).unwrap() as usize;
         let signature = bincode::serialize(&self.signer.sign_message(&shred[data_offset..]))
@@ -258,7 +265,8 @@ impl Shredder {
         self.shreds.push(shred);
     }
 
-    pub fn finalize_data_shred(&mut self, shred: Shred) {
+    /// Finalize a data shred. Update the shred index for the next shred
+    fn finalize_data_shred(&mut self, shred: Shred) {
         let data = bincode::serialize(&shred).expect("Failed to serialize shred");
 
         self.finalize_shred(data, CodingShred::overhead());
@@ -266,14 +274,16 @@ impl Shredder {
         self.index += 1;
     }
 
-    pub fn new_data_shred(&self) -> DataShred {
+    /// Creates a new data shred
+    fn new_data_shred(&self) -> DataShred {
         let mut data_shred = DataShred::default();
         data_shred.header.common_header.slot = self.slot;
         data_shred.header.common_header.index = self.index;
         data_shred
     }
 
-    pub fn new_first_shred(&self, parent: u64) -> FirstDataShred {
+    /// Create a new data shred that's also first in the slot
+    fn new_first_shred(&self, parent: u64) -> FirstDataShred {
         let mut first_shred = FirstDataShred::default();
         first_shred.header.parent = parent;
         first_shred.header.data_header.common_header.slot = self.slot;
@@ -281,7 +291,8 @@ impl Shredder {
         first_shred
     }
 
-    pub fn generate_coding_shreds(&mut self) {
+    /// Generates coding shreds for the data shreds in the current FEC set
+    fn generate_coding_shreds(&mut self) {
         if self.fec_rate != 0.0 {
             let num_data = self.shreds.len();
             let num_coding = (self.fec_rate * num_data as f32) as usize;
@@ -313,7 +324,7 @@ impl Shredder {
                 };
 
                 let mut shred = bincode::serialize(&Shred::Coding(CodingShred { header })).unwrap();
-                shred.resize_with(MAX_DGRAM_SIZE, || 0);
+                shred.resize_with(PACKET_DATA_SIZE, || 0);
                 coding_shreds.push(shred);
             });
 
@@ -341,6 +352,9 @@ impl Shredder {
         }
     }
 
+    /// Create the final data shred for the current FEC set or slot
+    /// If there's an active data shred, morph it into the final shred
+    /// If the current active data shred is first in slot, finalize it and create a new shred
     fn make_final_data_shred(&mut self) -> DataShred {
         self.active_shred.take().map_or(
             self.new_data_shred(),
@@ -358,12 +372,14 @@ impl Shredder {
         )
     }
 
+    /// Finalize the current FEC block, and generate coding shreds
     pub fn finalize_fec_block(&mut self) {
         let final_shred = self.make_final_data_shred();
         self.finalize_data_shred(Shred::LastInFECSet(final_shred));
         self.generate_coding_shreds();
     }
 
+    /// Finalize the current slot (i.e. add last slot shred) and generate coding shreds
     pub fn finalize_slot(&mut self) {
         let final_shred = self.make_final_data_shred();
         self.finalize_data_shred(Shred::LastInSlot(final_shred));
@@ -396,8 +412,8 @@ mod tests {
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_offset, 50);
 
-        // Test2: Write enough data to create a shred (> MAX_DGRAM_SIZE)
-        let data: Vec<_> = (0..MAX_DGRAM_SIZE).collect();
+        // Test2: Write enough data to create a shred (> PACKET_DATA_SIZE)
+        let data: Vec<_> = (0..PACKET_DATA_SIZE).collect();
         let data: Vec<u8> = data.iter().map(|x| *x as u8).collect();
         let offset = shredder.write(&data).unwrap();
         assert_ne!(offset, data.len());
@@ -413,7 +429,7 @@ mod tests {
 
         // Test3: Assert that the first shred in slot was created (since we gave a parent to shredder)
         let shred = shredder.shreds.pop().unwrap();
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
         info!("Len: {}", shred.len());
         info!("{:?}", shred);
 
@@ -445,7 +461,7 @@ mod tests {
 
         // Must be Last in FEC Set
         let shred = shredder.shreds.pop().unwrap();
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
@@ -459,7 +475,7 @@ mod tests {
 
         // Test7: Let's write some more data to the shredder.
         // Now we should get a new FEC block
-        let data: Vec<_> = (0..MAX_DGRAM_SIZE).collect();
+        let data: Vec<_> = (0..PACKET_DATA_SIZE).collect();
         let data: Vec<u8> = data.iter().map(|x| *x as u8).collect();
         let offset = shredder.write(&data).unwrap();
         assert_ne!(offset, data.len());
@@ -469,7 +485,7 @@ mod tests {
 
         // Must be FirstInFECSet
         let shred = shredder.shreds.pop().unwrap();
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::FirstInFECSet(_));
@@ -490,7 +506,7 @@ mod tests {
 
         // Must be a Data shred
         let shred = shredder.shreds.pop().unwrap();
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Data(_));
@@ -514,7 +530,7 @@ mod tests {
 
         // Must be LastInSlot
         let shred = shredder.shreds.pop().unwrap();
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::LastInSlot(_));
@@ -536,8 +552,8 @@ mod tests {
         assert_eq!(shredder.active_shred, None);
         assert_eq!(shredder.active_offset, 0);
 
-        // Write enough data to create a shred (> MAX_DGRAM_SIZE)
-        let data: Vec<_> = (0..MAX_DGRAM_SIZE).collect();
+        // Write enough data to create a shred (> PACKET_DATA_SIZE)
+        let data: Vec<_> = (0..PACKET_DATA_SIZE).collect();
         let data: Vec<u8> = data.iter().map(|x| *x as u8).collect();
         let _ = shredder.write(&data).unwrap();
         let _ = shredder.write(&data).unwrap();
@@ -553,7 +569,7 @@ mod tests {
         // Finalize must have created 1 final data shred and 3 coding shreds
         // assert_eq!(shredder.shreds.len(), 6);
         let shred = shredder.shreds.remove(0);
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
         if let Shred::FirstInSlot(data) = deserialized_shred {
@@ -566,7 +582,7 @@ mod tests {
         }
 
         let shred = shredder.shreds.remove(0);
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Data(_));
         if let Shred::Data(data) = deserialized_shred {
@@ -578,7 +594,7 @@ mod tests {
         }
 
         let shred = shredder.shreds.remove(0);
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         if let Shred::LastInFECSet(data) = deserialized_shred {
@@ -595,7 +611,7 @@ mod tests {
                 + serialized_size(&Signature::default()).unwrap()) as usize as usize;
 
         let shred = shredder.shreds.pop().unwrap();
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Coding(_));
         if let Shred::Coding(code) = deserialized_shred {
@@ -607,7 +623,7 @@ mod tests {
         }
 
         let shred = shredder.shreds.pop().unwrap();
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Coding(_));
         if let Shred::Coding(code) = deserialized_shred {
@@ -619,7 +635,7 @@ mod tests {
         }
 
         let shred = shredder.shreds.pop().unwrap();
-        assert_eq!(shred.len(), MAX_DGRAM_SIZE);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Coding(_));
         if let Shred::Coding(code) = deserialized_shred {
