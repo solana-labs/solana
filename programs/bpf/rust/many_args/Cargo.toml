@@ -3,7 +3,7 @@
 
 [package]
 name = "solana-bpf-rust-many-args"
-version = "0.18.0-pre1"
+version = "0.18.0-pre0"
 description = "Solana BPF many-args program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,9 +12,9 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust/rust-utils", version = "0.18.0-pre1" }
-solana-sdk-bpf-no-std = { path = "../../../../sdk/bpf/rust/rust-no-std", version = "0.18.0-pre1" }
-solana-bpf-rust-many-args-dep = { path = "../many_args_dep", version = "0.18.0-pre1" }
+solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust/rust-utils", version = "0.18.0-pre0" }
+solana-sdk-bpf-no-std = { path = "../../../../sdk/bpf/rust/rust-no-std", version = "0.18.0-pre0" }
+solana-bpf-rust-many-args-dep = { path = "../many_args_dep", version = "0.18.0-pre0" }
 
 [workspace]
 members = []

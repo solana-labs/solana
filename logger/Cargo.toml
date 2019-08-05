@@ -1,6 +1,6 @@
 [package]
 name = "solana-logger"
-version = "0.18.0-pre1"
+version = "0.18.0-pre0"
 description = "Solana Logger"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
