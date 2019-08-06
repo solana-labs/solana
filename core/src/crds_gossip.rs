@@ -5,7 +5,7 @@
 
 use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::CrdsGossipPull;
+use crate::crds_gossip_pull::{CrdsGossipPull, CrdsFilter};
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use solana_runtime::bloom::Bloom;
@@ -133,7 +133,7 @@ impl CrdsGossip {
         &self,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
+    ) -> Result<(Pubkey, CrdsFilter, CrdsValue), CrdsGossipError> {
         self.pull
             .new_pull_request(&self.crds, &self.id, now, stakes)
     }
@@ -149,7 +149,7 @@ impl CrdsGossip {
     pub fn process_pull_request(
         &mut self,
         caller: CrdsValue,
-        filter: Bloom<Hash>,
+        filter: CrdsFilter,
         now: u64,
     ) -> Vec<CrdsValue> {
         self.pull

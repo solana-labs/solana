@@ -27,6 +27,45 @@ use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+pub struct CrdsFilter { 
+    filter: Bloom<Hash>,
+    mask: u64,
+}
+
+impl CrdsFilter {
+    pub fn new(num_items: usize, max_bytes: usize) {
+        let m = max_bytes * 8;
+        let k = 8;
+        let p = 0.01;
+        let max_items = (m / (-k / std::f64::consts::E.log(1 - (std::f64::consts::E.log(p) / k).exp()))).ceil();
+        let filter = Bloom::random(max_items, p, m);
+        let mask_bits = (num_items as f64 / max_items as f64).log2().ceil() as u64;
+        let mask = rand::thread_rng().gen() << (64 - mask_bits);
+        CrdsFilter{filter, mask}
+    }
+    fn to_u64(item: &Hash) {
+        let arr = item.as_ref();
+        let mut accum = 0;
+        for i in 0..8 {
+            accum |= (item[i] as u64)<<i;
+        }
+    }
+    pub fn add(&mut self, item: &Hash) {
+        let bits = Self::to_u64(item);
+        if bits & self.mask != 0 {
+            self.filter.add(item);
+        }
+    }
+    pub fn contains(&self, item: &Hash) -> bool {
+        let bits = Self::to_u64(item);
+        if bits & self.mask == 0 {
+            return true;
+        }
+        self.filter.contains(item)
+    }
+}
+
 #[derive(Clone)]
 pub struct CrdsGossipPull {
     /// timestamp of last request
@@ -56,7 +95,7 @@ impl CrdsGossipPull {
         self_id: &Pubkey,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
+    ) -> Result<(Pubkey, CrdsFilter, CrdsValue), CrdsGossipError> {
         let options = self.pull_options(crds, &self_id, now, stakes);
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
@@ -110,10 +149,10 @@ impl CrdsGossipPull {
         &mut self,
         crds: &mut Crds,
         caller: CrdsValue,
-        mut filter: Bloom<Hash>,
+        filter: CrdsFilter,
         now: u64,
     ) -> Vec<CrdsValue> {
-        let rv = self.filter_crds_values(crds, &mut filter);
+        let rv = self.filter_crds_values(crds, &filter);
         let key = caller.label().pubkey();
         let old = crds.insert(caller, now);
         if let Some(val) = old.ok().and_then(|opt| opt) {
@@ -163,7 +202,7 @@ impl CrdsGossipPull {
         bloom
     }
     /// filter values that fail the bloom filter up to max_bytes
-    fn filter_crds_values(&self, crds: &Crds, filter: &mut Bloom<Hash>) -> Vec<CrdsValue> {
+    fn filter_crds_values(&self, crds: &Crds, filter: &CrdsFilter) -> Vec<CrdsValue> {
         let mut max_bytes = self.max_bytes as isize;
         let mut ret = vec![];
         for v in crds.table.values() {
