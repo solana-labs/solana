@@ -491,6 +491,8 @@ startClient() {
 }
 
 sanity() {
+  declare skipBlockstreamerSanity=$1
+
   $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
 
   declare ok=true
@@ -508,7 +510,7 @@ sanity() {
   ) || ok=false
   $ok || exit 1
 
-  if [[ -n $blockstreamer ]]; then
+  if [[ -z $skipBlockstreamerSanity && -n $blockstreamer ]]; then
     # If there's a blockstreamer node run a reduced sanity check on it as well
     echo "--- Sanity: $blockstreamer"
     (
@@ -675,7 +677,8 @@ deploy() {
       stopNode "$ipAddress" true
     done
   fi
-  sanity
+  sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
+                                 # have caught up to the bootstrap leader yet
 
   SECONDS=0
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
