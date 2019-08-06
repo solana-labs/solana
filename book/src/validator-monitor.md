@@ -10,6 +10,7 @@ accounts: ...
 ======================================================================
 ```
 
+## Check Gossip
 The **identity pubkey** for your validator can also be found by running:
 ```bash
 $ solana-keygen pubkey ~/validator-keypair.json
@@ -21,25 +22,44 @@ validator is visible in the gossip network by running:
 $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
+## Check Vote Activity
+The vote pubkey for the validator can also be found by running:
+```bash
+$ solana-keygen pubkey ~/validator-vote-keypair.json
+```
+
 Provide the **vote pubkey** to the `solana-wallet show-vote-account` command to view
 the recent voting activity from your validator:
 ```bash
 $ solana-wallet show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ```
 
-The vote pubkey for the validator can also be found by running:
-```bash
-# If this is a `solana-install`-installation run:
-$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config-local/validator-vote-keypair.json
-# Otherwise run:
-$ solana-keygen pubkey ./config-local/validator-vote-keypair.json
-```
-
+## Check Your Balance
 Your lamport balance should decrease by the transaction fee amount as your
 validator submits votes, and increase after serving as the leader:
 ```bash
 $ solana-wallet --keypair ~/validator-keypair.json
 ```
+
+## Check Slot Number
+After your validator boots, it may take some time to catch up with the cluster.
+Use the `get-slot` wallet command to view the current slot that the cluster is
+processing:
+```bash
+$ solana-wallet get-slot
+```
+
+The current slot that your validator is processing can then been seen with:
+```bash
+$ solana-wallet --url http://127.0.0.1:8899 get-slot
+```
+
+Until your validator has caught up, it will not be able to vote successfully and
+stake cannot be delegated to it.
+
+Also if you find the cluster's slot advancing faster than yours, you will likely
+never catch up.  This typically implies some kind of networking issue between
+your validator and the rest of the cluster.
 
 ## Get Cluster Info
 There are several useful JSON-RPC endpoints for monitoring your validator on the

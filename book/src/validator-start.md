@@ -34,9 +34,22 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
 ## Start your Validator
-Now configure a key pair for your validator by running:
+Now create an identity keypair for your validator by running:
 ```bash
 $ solana-keygen new -o ~/validator-keypair.json
+```
+and airdrop yourself some lamports to get started:
+```bash
+$ solana-wallet --keypair ~/validator-keypair.json airdrop 1000
+```
+
+Your validator will need a vote account.  Create it now with the following
+commands:
+```bash
+$ solana-keygen new -o ~/validator-vote-keypair.json
+$ VOTE_PUBKEY=$(solana-keygen pubkey ~/validator-vote-keypair.json)
+$ IDENTITY_PUBKEY=$(solana-keygen pubkey ~/validator-keypair.json)
+$ solana-wallet create-vote-account "$VOTE_PUBKEY" "$IDENTITY_PUBKEY" 1
 ```
 
 Then use one of the following commands, depending on your installation
@@ -44,18 +57,18 @@ choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
-$ validator.sh --identity ~/validator-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run validator.sh -- --identity ~/validator-keypair.json --config-dir ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ solana-install run validator.sh -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 If you built from source:
 ```bash
-$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
 ```
 
 ### Enabling CUDA
@@ -74,3 +87,8 @@ By default the validator will dynamically select available network ports in the
 8000-10000 range, and may be overridden with `--dynamic-port-range`.  For
 example, `validator.sh --dynamic-port-range 11000-11010 ...` will restrict the
 validator to ports 11000-11011.
+
+### Limiting ledger size to conserve disk space
+By default the validator will retain the full ledger.  To conserve disk space
+start the validator with the `--limit-ledger-size`, which will instruct the
+validator to only retain the last couple hours of ledger.
