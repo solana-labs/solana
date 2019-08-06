@@ -392,8 +392,8 @@ fn network_run_pull(
                 let mut msgs: usize = 0;
                 let mut overhead: usize = 0;
                 let from = caller_info.label().pubkey();
-                bytes += request.keys.len();
-                bytes += (request.bits.len() / 8) as usize;
+                bytes += request.filter.keys.len();
+                bytes += (request.filter.bits.len() / 8) as usize;
                 bytes += serialized_size(&caller_info).unwrap() as usize;
                 let rsp = network
                     .get(&to)

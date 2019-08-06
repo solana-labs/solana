@@ -30,7 +30,7 @@ pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct CrdsFilter {
-    filter: Bloom<Hash>,
+    pub filter: Bloom<Hash>,
     mask: u64,
 }
 
