@@ -5,11 +5,9 @@
 
 use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::{CrdsGossipPull, CrdsFilter};
+use crate::crds_gossip_pull::{CrdsFilter, CrdsGossipPull};
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
-use solana_runtime::bloom::Bloom;
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signable;
 use std::collections::{HashMap, HashSet};

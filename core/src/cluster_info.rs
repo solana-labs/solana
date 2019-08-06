@@ -157,7 +157,7 @@ impl Signable for PruneData {
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
     /// Gossip protocol messages
-    PullRequest(Bloom<Hash>, CrdsValue),
+    PullRequest(CrdsFilter, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
     PruneMessage(Pubkey, PruneData),
@@ -832,7 +832,7 @@ impl ClusterInfo {
         }
     }
     // If the network entrypoint hasn't been discovered yet, add it to the crds table
-    fn add_entrypoint(&mut self, pulls: &mut Vec<(Pubkey, Bloom<Hash>, SocketAddr, CrdsValue)>) {
+    fn add_entrypoint(&mut self, pulls: &mut Vec<(Pubkey, CrdsFilter, SocketAddr, CrdsValue)>) {
         match &self.entrypoint {
             Some(entrypoint) => {
                 let self_info = self
@@ -1093,7 +1093,7 @@ impl ClusterInfo {
 
     fn handle_pull_request(
         me: &Arc<RwLock<Self>>,
-        filter: Bloom<Hash>,
+        filter: CrdsFilter,
         caller: CrdsValue,
         from_addr: &SocketAddr,
     ) -> Vec<SharedBlob> {

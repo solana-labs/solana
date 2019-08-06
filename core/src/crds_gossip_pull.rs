@@ -28,7 +28,7 @@ use std::collections::VecDeque;
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
-pub struct CrdsFilter { 
+pub struct CrdsFilter {
     filter: Bloom<Hash>,
     mask: u64,
 }
@@ -36,19 +36,20 @@ pub struct CrdsFilter {
 impl CrdsFilter {
     pub fn new(num_items: usize, max_bytes: usize) {
         let m = max_bytes * 8;
-        let k = 8;
+        let k = 8f64;
         let p = 0.01;
-        let max_items = (m / (-k / std::f64::consts::E.log(1 - (std::f64::consts::E.log(p) / k).exp()))).ceil();
+        let max_items =
+            (m / (-k / std::f64::consts::E.log(1f64 - (std::f64::consts::E.log(p) / k).exp()))).ceil();
         let filter = Bloom::random(max_items, p, m);
         let mask_bits = (num_items as f64 / max_items as f64).log2().ceil() as u64;
         let mask = rand::thread_rng().gen() << (64 - mask_bits);
-        CrdsFilter{filter, mask}
+        CrdsFilter { filter, mask }
     }
     fn to_u64(item: &Hash) {
         let arr = item.as_ref();
         let mut accum = 0;
         for i in 0..8 {
-            accum |= (item[i] as u64)<<i;
+            accum |= (item[i] as u64) << i;
         }
     }
     pub fn add(&mut self, item: &Hash) {
@@ -187,19 +188,19 @@ impl CrdsGossipPull {
         failed
     }
     /// build a filter of the current crds table
-    pub fn build_crds_filter(&self, crds: &Crds) -> Bloom<Hash> {
+    pub fn build_crds_filter(&self, crds: &Crds) -> CrdsFilter {
         let num = cmp::max(
             CRDS_GOSSIP_BLOOM_SIZE,
             crds.table.values().count() + self.purged_values.len(),
         );
-        let mut bloom = Bloom::random(num, 0.1, 4 * 1024 * 8 - 1);
+        let filter = CrdsFilter::new(num, self.max_bytes);
         for v in crds.table.values() {
-            bloom.add(&v.value_hash);
+            filter.add(&v.value_hash);
         }
         for (value_hash, _insert_timestamp) in &self.purged_values {
-            bloom.add(value_hash);
+            filter.add(value_hash);
         }
-        bloom
+        filter
     }
     /// filter values that fail the bloom filter up to max_bytes
     fn filter_crds_values(&self, crds: &Crds, filter: &CrdsFilter) -> Vec<CrdsValue> {
