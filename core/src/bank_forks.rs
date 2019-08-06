@@ -350,25 +350,15 @@ impl BankForks {
         &self.snapshot_config
     }
 
-    pub fn load_from_snapshot(
+    pub fn load_from_snapshot<P: AsRef<Path>>(
         account_paths: String,
         snapshot_config: &SnapshotConfig,
+        snapshot_tar: P,
     ) -> Result<Self> {
         fs::create_dir_all(&snapshot_config.snapshot_path)?;
-        let names = snapshot_utils::get_snapshot_names(&snapshot_config.snapshot_path);
-        if names.is_empty() {
-            return Err(Error::IO(IOError::new(
-                ErrorKind::Other,
-                "no snapshots found",
-            )));
-        }
-        // Get the path to the tar
-        let tar =
-            snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path);
-
         // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
         let unpack_dir = tempfile::tempdir_in(snapshot_config.snapshot_path())?;
-        untar_snapshot_in(&tar, &unpack_dir)?;
+        untar_snapshot_in(&snapshot_tar, &unpack_dir)?;
 
         let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
         let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
@@ -414,12 +404,21 @@ impl BankForks {
         let mut banks = HashMap::new();
         banks.insert(bank.slot(), bank.clone());
         let root = bank.slot();
+        let names = snapshot_utils::get_snapshot_names(&snapshot_config.snapshot_path);
+        if names.is_empty() {
+            return Err(Error::IO(IOError::new(
+                ErrorKind::Other,
+                "no snapshots found",
+            )));
+        }
         Ok(BankForks {
             banks,
             working_bank: bank,
             root,
             snapshot_config: None,
-            last_snapshot: *names.last().unwrap(),
+            last_snapshot: *names
+                .last()
+                .expect("untarred snapshot should have at least one snapshot"),
             confidence: HashMap::new(),
         })
     }
@@ -550,16 +549,16 @@ mod tests {
     }
 
     fn restore_from_snapshot(bank_forks: BankForks, account_paths: String, last_slot: u64) {
-        let snapshot_path = bank_forks
+        let (snapshot_path, snapshot_package_output_path) = bank_forks
             .snapshot_config
             .as_ref()
-            .map(|c| &c.snapshot_path)
+            .map(|c| (&c.snapshot_path, &c.snapshot_package_output_path))
             .unwrap();
 
         let new = BankForks::load_from_snapshot(
-            //&genesis_block,
             account_paths,
             bank_forks.snapshot_config.as_ref().unwrap(),
+            snapshot_utils::get_snapshot_tar_path(snapshot_package_output_path),
         )
         .unwrap();
 

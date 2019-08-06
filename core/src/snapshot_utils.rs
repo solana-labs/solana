@@ -60,7 +60,8 @@ pub fn get_snapshot_names<P: AsRef<Path>>(snapshot_path: P) -> Vec<u64> {
             entry.ok().and_then(|e| {
                 e.path()
                     .file_name()
-                    .and_then(|n| n.to_str().map(|s| s.parse::<u64>().unwrap()))
+                    .and_then(|n| n.to_str().map(|s| s.parse::<u64>().ok()))
+                    .unwrap_or(None)
             })
         })
         .collect::<Vec<u64>>();
