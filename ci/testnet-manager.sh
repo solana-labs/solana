@@ -154,8 +154,9 @@ testnet-demo)
   : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
   ;;
 tds)
-  CHANNEL_OR_TAG=edge
-  CHANNEL_BRANCH=$EDGE_CHANNEL
+  : "${TDS_CHANNEL_OR_TAG:=edge}"
+  CHANNEL_OR_TAG="$TDS_CHANNEL_OR_TAG"
+  CHANNEL_BRANCH="$CI_BRANCH"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
