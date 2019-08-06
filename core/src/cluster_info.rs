@@ -17,7 +17,7 @@ use crate::blocktree::Blocktree;
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
 use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::repair_service::RepairType;
@@ -36,8 +36,6 @@ use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_err
 use solana_netutil::{
     bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
 };
-use solana_runtime::bloom::Bloom;
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};

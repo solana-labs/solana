@@ -18,6 +18,7 @@ use crate::packet::BLOB_DATA_SIZE;
 use bincode::serialized_size;
 use rand;
 use rand::distributions::{Distribution, WeightedIndex};
+use rand::Rng;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -34,33 +35,36 @@ pub struct CrdsFilter {
 }
 
 impl CrdsFilter {
-    pub fn new(num_items: usize, max_bytes: usize) {
-        let m = max_bytes * 8;
+    pub fn new(num_items: usize, max_bytes: usize) -> Self {
+        let m = (max_bytes * 8) as f64;
         let k = 8f64;
         let p = 0.01;
-        let max_items =
-            (m / (-k / std::f64::consts::E.log(1f64 - (std::f64::consts::E.log(p) / k).exp()))).ceil();
-        let filter = Bloom::random(max_items, p, m);
+        let max_items = (m
+            / (-k / std::f64::consts::E.log(1f64 - (std::f64::consts::E.log(p) / k).exp())))
+        .ceil();
+        let filter = Bloom::random(max_items as usize, p, m as usize);
         let mask_bits = (num_items as f64 / max_items as f64).log2().ceil() as u64;
-        let mask = rand::thread_rng().gen() << (64 - mask_bits);
+        let seed: u64 = rand::thread_rng().gen();
+        let mask = seed << (64 - mask_bits);
         CrdsFilter { filter, mask }
     }
-    fn to_u64(item: &Hash) {
+    fn to_u64(item: &Hash) -> u64 {
         let arr = item.as_ref();
         let mut accum = 0;
         for i in 0..8 {
-            accum |= (item[i] as u64) << i;
+            accum |= (arr[i] as u64) << i;
         }
+        accum
     }
     pub fn add(&mut self, item: &Hash) {
         let bits = Self::to_u64(item);
-        if bits & self.mask != 0 {
+        if (bits & self.mask) != 0 {
             self.filter.add(item);
         }
     }
     pub fn contains(&self, item: &Hash) -> bool {
         let bits = Self::to_u64(item);
-        if bits & self.mask == 0 {
+        if (bits & self.mask) == 0 {
             return true;
         }
         self.filter.contains(item)
@@ -193,7 +197,7 @@ impl CrdsGossipPull {
             CRDS_GOSSIP_BLOOM_SIZE,
             crds.table.values().count() + self.purged_values.len(),
         );
-        let filter = CrdsFilter::new(num, self.max_bytes);
+        let mut filter = CrdsFilter::new(num, self.max_bytes);
         for v in crds.table.values() {
             filter.add(&v.value_hash);
         }
