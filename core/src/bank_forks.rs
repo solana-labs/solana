@@ -565,7 +565,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_block(10_000);
-        let last_slot = 256;
+        let last_slot = 4;
         let bank0 = Bank::new_with_paths(
             &genesis_block,
             Some(accounts_dir.path().to_str().unwrap().to_string()),
@@ -641,7 +641,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_block(10_000);
-        let last_slot = 64;
+        let last_slot = 256;
         let bank0 = Bank::new_with_paths(
             &genesis_block,
             Some(accounts_dir.path().to_str().unwrap().to_string()),
