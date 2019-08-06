@@ -717,36 +717,40 @@ pub fn update(config_file: &str) -> Result<bool, String> {
     let update_manifest = info(config_file, false)?;
 
     let release_dir = if let Some(explicit_release) = &config.explicit_release {
-        let (download_url, release_dir) = match explicit_release {
+        let (download, release_dir) = match explicit_release {
             ExplicitRelease::Semver(release_semver) => {
                 let download_url = github_release_download_url(release_semver);
                 let release_dir = config.release_dir(&release_semver);
-                if release_dir.join(".ok").exists() {
+                let download = if release_dir.join(".ok").exists() {
                     // If this release_semver has already been successfully downloaded, no update
                     // needed
-                    return Ok(false);
-                }
-                (download_url, release_dir)
+                    None
+                } else {
+                    Some(download_url)
+                };
+                (download, release_dir)
             }
             ExplicitRelease::Channel(release_channel) => {
                 let download_url = release_channel_download_url(release_channel);
                 let release_dir = config.release_dir(&release_channel);
                 // Note: There's currently no mechanism to check for an updated binary for a release
                 // channel so a download always occurs.
-                (download_url, release_dir)
+                (Some(download_url), release_dir)
             }
         };
 
-        let (_temp_dir, temp_archive, _temp_archive_sha256) =
-            download_to_temp_archive(&download_url, None)
-                .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
-        extract_release_archive(&temp_archive, &release_dir).map_err(|err| {
-            format!(
-                "Unable to extract {:?} to {:?}: {}",
-                temp_archive, release_dir, err
-            )
-        })?;
-        let _ = fs::create_dir_all(release_dir.join(".ok"));
+        if let Some(download_url) = download {
+            let (_temp_dir, temp_archive, _temp_archive_sha256) =
+                download_to_temp_archive(&download_url, None)
+                    .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
+            extract_release_archive(&temp_archive, &release_dir).map_err(|err| {
+                format!(
+                    "Unable to extract {:?} to {:?}: {}",
+                    temp_archive, release_dir, err
+                )
+            })?;
+            let _ = fs::create_dir_all(release_dir.join(".ok"));
+        }
 
         release_dir
     } else {
