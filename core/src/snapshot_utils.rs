@@ -192,7 +192,7 @@ where
         .accounts_from_stream(&mut stream, local_account_paths, append_vecs_path)?;
 
     // merge the status caches from all previous banks
-    for (i, slot_paths) in snapshot_paths.iter().rev().enumerate() {
+    for slot_paths in snapshot_paths.iter().rev() {
         let status_cache = File::open(&slot_paths.snapshot_status_cache_path)?;
         let mut stream = BufReader::new(status_cache);
         let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = deserialize_from(&mut stream)
@@ -200,10 +200,6 @@ where
             .unwrap_or_default();
 
         bank.src.append(&slot_deltas);
-        // On the last snapshot, purge all outdated status cache entries
-        if i == snapshot_paths.len() - 1 {
-            bank.src.purge_roots();
-        }
     }
 
     Ok(bank)

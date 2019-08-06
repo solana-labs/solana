@@ -129,10 +129,6 @@ impl StatusCacheRc {
         let mut sc = self.status_cache.write().unwrap();
         sc.append(slot_deltas);
     }
-
-    pub fn purge_roots(&self) {
-        self.status_cache.write().unwrap().purge_roots();
-    }
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
@@ -507,20 +503,22 @@ impl Bank {
     pub fn squash(&self) {
         self.freeze();
 
-        let parents = self.parents();
+        //this bank and all its parents are now on the rooted path
+        let mut roots = vec![self.slot()];
+        roots.append(&mut self.parents().iter().map(|p| p.slot()).collect());
         *self.rc.parent.write().unwrap() = None;
 
         let mut squash_accounts_time = Measure::start("squash_accounts_time");
-        for p in parents.iter().rev() {
+        for slot in roots.iter().rev() {
             // root forks cannot be purged
-            self.rc.accounts.add_root(p.slot());
+            self.rc.accounts.add_root(*slot);
         }
         squash_accounts_time.stop();
 
         let mut squash_cache_time = Measure::start("squash_cache_time");
-        parents
+        roots
             .iter()
-            .for_each(|p| self.src.status_cache.write().unwrap().add_root(p.slot()));
+            .for_each(|slot| self.src.status_cache.write().unwrap().add_root(*slot));
         squash_cache_time.stop();
 
         datapoint_info!(
@@ -1425,9 +1423,9 @@ impl Bank {
         assert_eq!(*bhq, *dbhq);
 
         // TODO: Uncomment once status cache serialization is done
-        /*let sc = self.src.status_cache.read().unwrap();
+        let sc = self.src.status_cache.read().unwrap();
         let dsc = dbank.src.status_cache.read().unwrap();
-        assert_eq!(*sc, *dsc);*/
+        assert_eq!(*sc, *dsc);
         assert_eq!(
             self.rc.accounts.hash_internal_state(self.slot),
             dbank.rc.accounts.hash_internal_state(dbank.slot)

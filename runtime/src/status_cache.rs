@@ -40,7 +40,8 @@ impl<T: Serialize + Clone> Default for StatusCache<T> {
     fn default() -> Self {
         Self {
             cache: HashMap::default(),
-            roots: HashSet::default(),
+            // 0 is always a root
+            roots: [0].iter().cloned().collect(),
             slot_deltas: HashMap::default(),
         }
     }
