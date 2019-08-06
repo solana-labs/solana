@@ -45,7 +45,8 @@ impl CrdsFilter {
         let filter = Bloom::random(max_items as usize, p, m as usize);
         let mask_bits = (num_items as f64 / max_items as f64).log2().ceil() as u32;
         let seed: u64 = rand::thread_rng().gen();
-        let mask = seed ^ ((!0u64).checked_shr(mask_bits).unwrap_or(0));
+        println!("{}", mask_bits);
+        let mask = seed & ((!0u64).checked_shl(mask_bits).unwrap_or(0));
         println!("{}", max_items);
         CrdsFilter { filter, mask }
     }
