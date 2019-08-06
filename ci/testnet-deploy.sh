@@ -397,7 +397,6 @@ if ! $skipStart; then
     if $deployUpdateManifest; then
       rm -f update_manifest_keypair.json
       args+=(--deploy-update linux)
-      args+=(--deploy-update osx)
       args+=(--deploy-update windows)
     fi
 
