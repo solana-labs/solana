@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-hashbrown = "0.2.0"
+hashbrown = "0.3.1"
 solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.18.0-pre1" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.18.0-pre1" }
 solana-budget-api= { path = "../programs/budget_api", version = "0.18.0-pre0" }

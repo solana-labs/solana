@@ -23,7 +23,7 @@ solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre1"
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre1" }
 
 [dev-dependencies]
-hashbrown = "0.3.0"
+hashbrown = "0.3.1"
 
 
 [features]
