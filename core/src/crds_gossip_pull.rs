@@ -38,14 +38,15 @@ impl CrdsFilter {
     pub fn new(num_items: usize, max_bytes: usize) -> Self {
         let m = (max_bytes * 8) as f64;
         let k = 8f64;
-        let p = 0.01;
+        let p = 0.01f64;
         let max_items = (m
-            / (-k / std::f64::consts::E.log(1f64 - (std::f64::consts::E.log(p) / k).exp())))
+            / (-k / (1f64 - (p.ln() / k).exp()).ln()))
         .ceil();
         let filter = Bloom::random(max_items as usize, p, m as usize);
-        let mask_bits = (num_items as f64 / max_items as f64).log2().ceil() as u64;
+        let mask_bits = (num_items as f64 / max_items as f64).log2().ceil() as u32;
         let seed: u64 = rand::thread_rng().gen();
-        let mask = seed << (64 - mask_bits);
+        let mask = seed ^ ((!0u64).checked_shr(mask_bits).unwrap_or(0));
+        println!("{}", max_items);
         CrdsFilter { filter, mask }
     }
     fn to_u64(item: &Hash) -> u64 {
@@ -457,5 +458,10 @@ mod test {
         // purge the value
         node.purge_purged(1);
         assert_eq!(node.purged_values.len(), 0);
+    }
+    #[test]
+    fn test_crds_filter() {
+        let filter = CrdsFilter::new(1, 128);
+        assert_eq!(filter.mask, !0x0);
     }
 }
