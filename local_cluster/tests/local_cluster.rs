@@ -154,7 +154,6 @@ fn test_fullnode_exit_2() {
 #[allow(unused_attributes)]
 #[test]
 #[serial]
-#[ignore]
 fn test_leader_failure_4() {
     solana_logger::setup();
     error!("test_leader_failure_4");
