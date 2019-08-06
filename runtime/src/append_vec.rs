@@ -5,6 +5,7 @@ use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt;
 use std::fs::{create_dir_all, remove_file, OpenOptions};
+use std::io;
 use std::io::{Cursor, Seek, SeekFrom, Write};
 use std::mem;
 use std::path::{Path, PathBuf};
@@ -149,6 +150,28 @@ impl AppendVec {
 
     pub fn capacity(&self) -> u64 {
         self.file_size
+    }
+
+    // Get the file path relative to the top level accounts directory
+    pub fn get_relative_path<P: AsRef<Path>>(append_vec_path: P) -> Option<PathBuf> {
+        append_vec_path.as_ref().file_name().map(PathBuf::from)
+    }
+
+    pub fn new_relative_path(fork_id: u64, id: usize) -> PathBuf {
+        PathBuf::from(&format!("{}.{}", fork_id, id))
+    }
+
+    pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+        self.path = path.as_ref().to_path_buf();
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(&path)?;
+
+        let map = unsafe { MmapMut::map_mut(&data)? };
+        self.map = map;
+        Ok(())
     }
 
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
@@ -370,25 +393,21 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
     }
 
     #[allow(clippy::mutex_atomic)]
+    // Note this does not initialize a valid Mmap in the AppendVec, needs to be done
+    // externally
     fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
+        // TODO: this path does not need to be serialized, can remove
         let path: PathBuf = deserialize_from(&mut rd).map_err(Error::custom)?;
         let current_len: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
 
-        let data = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(false)
-            .open(&path)
-            .map_err(|e| Error::custom(e.to_string()))?;
-
-        let map = unsafe { MmapMut::map_mut(&data).map_err(|e| Error::custom(e.to_string()))? };
+        let map = MmapMut::map_anon(1).map_err(|e| Error::custom(e.to_string()))?;
         Ok(AppendVec {
             path,
             map,
@@ -492,21 +511,37 @@ pub mod tests {
         assert_eq!(av.get_account_test(index2).unwrap(), account2);
         assert_eq!(av.get_account_test(index1).unwrap(), account1);
 
-        let mut buf = vec![0u8; serialized_size(&av).unwrap() as usize];
-        let mut writer = Cursor::new(&mut buf[..]);
+        let append_vec_path = &av.path;
+
+        // Serialize the AppendVec
+        let mut writer = Cursor::new(vec![]);
         serialize_into(&mut writer, &av).unwrap();
 
-        let mut reader = Cursor::new(&mut buf[..]);
-        let dav: AppendVec = deserialize_from(&mut reader).unwrap();
+        // Deserialize the AppendVec
+        let buf = writer.into_inner();
+        let mut reader = Cursor::new(&buf[..]);
+        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
 
+        // Set the AppendVec path
+        dav.set_file(append_vec_path).unwrap();
         assert_eq!(dav.get_account_test(index2).unwrap(), account2);
         assert_eq!(dav.get_account_test(index1).unwrap(), account1);
         drop(dav);
 
-        // dropping dav above blows away underlying file's directory entry,
-        //   which is what we're testing next.
-        let mut reader = Cursor::new(&mut buf[..]);
-        let dav: Result<AppendVec, Box<bincode::ErrorKind>> = deserialize_from(&mut reader);
-        assert!(dav.is_err());
+        // Dropping dav above blows away underlying file's directory entry, so
+        // trying to set the file will fail
+        let mut reader = Cursor::new(&buf[..]);
+        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
+        assert!(dav.set_file(append_vec_path).is_err());
+    }
+
+    #[test]
+    fn test_relative_path() {
+        let relative_path = AppendVec::new_relative_path(0, 2);
+        let full_path = Path::new("/tmp").join(&relative_path);
+        assert_eq!(
+            relative_path,
+            AppendVec::get_relative_path(full_path).unwrap()
+        );
     }
 }

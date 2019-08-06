@@ -1,4 +1,3 @@
-use log::*;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::sync::{RwLock, RwLockReadGuard};
@@ -37,7 +36,6 @@ impl<T: Clone> AccountsIndex<T> {
         let mut rv = None;
         for (i, (fork, _t)) in list.iter().rev().enumerate() {
             if *fork >= max && (ancestors.get(fork).is_some() || self.is_root(*fork)) {
-                trace!("GET {} {:?} i: {}", fork, ancestors, i);
                 rv = Some((list.len() - 1) - i);
                 max = *fork;
             }

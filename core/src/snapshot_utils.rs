@@ -2,7 +2,7 @@ use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackage;
 use bincode::{deserialize_from, serialize_into};
 use flate2::read::GzDecoder;
-use solana_runtime::bank::{Bank, StatusCacheRc};
+use solana_runtime::bank::Bank;
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Error as IOError, ErrorKind};
@@ -33,7 +33,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     let account_storage_entries = bank.rc.get_storage_entries();
 
     // Create a snapshot package
-    trace!(
+    info!(
         "Snapshot for bank: {} has {} account storage entries",
         slot,
         account_storage_entries.len()
@@ -60,7 +60,8 @@ pub fn get_snapshot_names<P: AsRef<Path>>(snapshot_path: P) -> Vec<u64> {
             entry.ok().and_then(|e| {
                 e.path()
                     .file_name()
-                    .and_then(|n| n.to_str().map(|s| s.parse::<u64>().unwrap()))
+                    .and_then(|n| n.to_str().map(|s| s.parse::<u64>().ok()))
+                    .unwrap_or(None)
             })
         })
         .collect::<Vec<u64>>();
@@ -69,13 +70,13 @@ pub fn get_snapshot_names<P: AsRef<Path>>(snapshot_path: P) -> Vec<u64> {
     names
 }
 
-pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank, root: u64) -> Result<()> {
+pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
     let slot = bank.slot();
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
     fs::create_dir_all(slot_snapshot_dir.clone()).map_err(Error::from)?;
 
     let snapshot_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
-    trace!(
+    info!(
         "creating snapshot {}, path: {:?}",
         bank.slot(),
         snapshot_file_path
@@ -84,20 +85,12 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank, root: u64) ->
     let mut stream = BufWriter::new(file);
 
     // Create the snapshot
-    serialize_into(&mut stream, &*bank).map_err(|_| get_io_error("serialize bank error"))?;
-    let mut parent_slot: u64 = 0;
-    if let Some(parent_bank) = bank.parent() {
-        parent_slot = parent_bank.slot();
-    }
-    serialize_into(&mut stream, &parent_slot)
-        .map_err(|_| get_io_error("serialize bank parent error"))?;
-    serialize_into(&mut stream, &root).map_err(|_| get_io_error("serialize root error"))?;
-    serialize_into(&mut stream, &bank.src)
-        .map_err(|_| get_io_error("serialize bank status cache error"))?;
-    serialize_into(&mut stream, &bank.rc)
-        .map_err(|_| get_io_error("serialize bank accounts error"))?;
+    serialize_into(&mut stream, &*bank).map_err(|e| get_io_error(&e.to_string()))?;
+    serialize_into(&mut stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
+    // TODO: Add status cache serialization code
+    /*serialize_into(&mut stream, &bank.src).map_err(|e| get_io_error(&e.to_string()))?;*/
 
-    trace!(
+    info!(
         "successfully created snapshot {}, path: {:?}",
         bank.slot(),
         snapshot_file_path
@@ -112,44 +105,50 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: u64, snapshot_path: P) -> Result<()
     Ok(())
 }
 
-pub fn load_snapshots<P: AsRef<Path>>(
-    names: &[u64],
-    bank0: &mut Bank,
-    bank_maps: &mut Vec<(u64, u64, Bank)>,
-    status_cache_rc: &StatusCacheRc,
+pub fn bank_from_snapshots<P, Q>(
+    local_account_paths: String,
     snapshot_path: P,
-) -> Option<u64> {
-    let mut bank_root: Option<u64> = None;
+    append_vecs_path: Q,
+) -> Result<Bank>
+where
+    P: AsRef<Path>,
+    Q: AsRef<Path>,
+{
+    // Rebuild the last root bank
+    let names = get_snapshot_names(&snapshot_path);
+    let last_root = names
+        .last()
+        .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
+    let snapshot_file_name = get_snapshot_file_name(*last_root);
+    let snapshot_dir = get_bank_snapshot_dir(&snapshot_path, *last_root);
+    let snapshot_file_path = snapshot_dir.join(&snapshot_file_name);
+    info!("Load from {:?}", snapshot_file_path);
+    let file = File::open(snapshot_file_path)?;
+    let mut stream = BufReader::new(file);
+    let bank: Bank = deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()))?;
 
-    for (i, bank_slot) in names.iter().rev().enumerate() {
+    // Rebuild accounts
+    bank.rc
+        .accounts_from_stream(&mut stream, local_account_paths, append_vecs_path)?;
+
+    for bank_slot in names.iter().rev() {
         let snapshot_file_name = get_snapshot_file_name(*bank_slot);
         let snapshot_dir = get_bank_snapshot_dir(&snapshot_path, *bank_slot);
         let snapshot_file_path = snapshot_dir.join(snapshot_file_name.clone());
-        trace!("Load from {:?}", snapshot_file_path);
-        let file = File::open(snapshot_file_path);
-        if file.is_err() {
-            warn!("Snapshot file open failed for {}", bank_slot);
-            continue;
-        }
-        let file = file.unwrap();
+        let file = File::open(snapshot_file_path)?;
         let mut stream = BufReader::new(file);
-        let bank: Result<Bank> =
-            deserialize_from(&mut stream).map_err(|_| get_io_error("deserialize bank error"));
-        let slot: Result<u64> = deserialize_from(&mut stream)
-            .map_err(|_| get_io_error("deserialize bank parent error"));
-        let parent_slot = if slot.is_ok() { slot.unwrap() } else { 0 };
-        let root: Result<u64> =
-            deserialize_from(&mut stream).map_err(|_| get_io_error("deserialize root error"));
-        let status_cache: Result<StatusCacheRc> = deserialize_from(&mut stream)
-            .map_err(|_| get_io_error("deserialize bank status cache error"));
-        if bank_root.is_none() && bank0.rc.update_from_stream(&mut stream).is_ok() {
-            bank_root = Some(root.unwrap());
-        }
+        let _bank: Result<Bank> =
+            deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()));
+
+        // TODO: Uncomment and deserialize status cache here
+
+        /*let status_cache: Result<StatusCacheRc> = deserialize_from(&mut stream)
+        .map_err(|e| get_io_error(&e.to_string()));
         if bank_root.is_some() {
             match bank {
                 Ok(v) => {
                     if status_cache.is_ok() {
-                        let status_cache = status_cache.unwrap();
+                        let status_cache = status_cache?;
                         status_cache_rc.append(&status_cache);
                         // On the last snapshot, purge all outdated status cache
                         // entries
@@ -164,10 +163,10 @@ pub fn load_snapshots<P: AsRef<Path>>(
             }
         } else {
             warn!("Load snapshot rc failed for {}", bank_slot);
-        }
+        }*/
     }
 
-    bank_root
+    Ok(bank)
 }
 
 pub fn get_snapshot_tar_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
@@ -228,7 +227,7 @@ fn get_io_error(error: &str) -> Error {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOT_DIR};
+    use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
     use tempfile::TempDir;
 
     pub fn verify_snapshot_tar<P, Q, R>(
@@ -245,7 +244,7 @@ pub mod tests {
         untar_snapshot_in(snapshot_tar, &unpack_dir).unwrap();
 
         // Check snapshots are the same
-        let unpacked_snapshots = unpack_dir.join(&TAR_SNAPSHOT_DIR);
+        let unpacked_snapshots = unpack_dir.join(&TAR_SNAPSHOTS_DIR);
         assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
         // Check the account entries are the same

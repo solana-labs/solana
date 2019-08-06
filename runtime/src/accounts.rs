@@ -20,7 +20,8 @@ use solana_sdk::sysvar;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Error as IOError, Read};
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -64,11 +65,14 @@ impl Accounts {
         }
     }
 
-    pub fn update_from_stream<R: Read>(
+    pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         stream: &mut BufReader<R>,
-    ) -> std::result::Result<(), std::io::Error> {
-        self.accounts_db.update_from_stream(stream)
+        local_paths: String,
+        append_vecs_path: P,
+    ) -> std::result::Result<(), IOError> {
+        self.accounts_db
+            .accounts_from_stream(stream, local_paths, append_vecs_path)
     }
 
     fn load_tx_accounts(
@@ -638,6 +642,8 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
+    use crate::accounts_db::get_temp_accounts_paths;
+    use crate::accounts_db::tests::copy_append_vecs;
     use bincode::{serialize_into, serialized_size};
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -650,6 +656,7 @@ mod tests {
     use std::io::Cursor;
     use std::sync::atomic::AtomicBool;
     use std::{thread, time};
+    use tempfile::TempDir;
 
     fn load_accounts_with_fee(
         tx: Transaction,
@@ -1153,7 +1160,8 @@ mod tests {
     #[test]
     fn test_accounts_serialize() {
         solana_logger::setup();
-        let accounts = Accounts::new(None);
+        let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
+        let accounts = Accounts::new(Some(paths));
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_test_accounts(&accounts, &mut pubkeys, 100);
@@ -1165,9 +1173,17 @@ mod tests {
         let mut writer = Cursor::new(&mut buf[..]);
         serialize_into(&mut writer, &*accounts.accounts_db).unwrap();
 
+        let copied_accounts = TempDir::new().unwrap();
+
+        // Simulate obtaining a copy of the AppendVecs from a tarball
+        copy_append_vecs(&accounts.accounts_db, copied_accounts.path()).unwrap();
+
         let mut reader = BufReader::new(&buf[..]);
-        let daccounts = Accounts::new(Some(accounts.accounts_db.paths()));
-        assert!(daccounts.update_from_stream(&mut reader).is_ok());
+        let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
+        let daccounts = Accounts::new(Some(daccounts_paths.clone()));
+        assert!(daccounts
+            .accounts_from_stream(&mut reader, daccounts_paths, copied_accounts.path())
+            .is_ok());
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(
             accounts.hash_internal_state(0),

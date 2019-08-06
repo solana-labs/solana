@@ -15,7 +15,7 @@ use std::time::Duration;
 pub type SnapshotPackageSender = Sender<SnapshotPackage>;
 pub type SnapshotPackageReceiver = Receiver<SnapshotPackage>;
 
-pub const TAR_SNAPSHOT_DIR: &str = "snapshots";
+pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 
 pub struct SnapshotPackage {
@@ -57,7 +57,7 @@ impl SnapshotPackagerService {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
-                if let Err(e) = Self::package_snapshots(&snapshot_package_receiver) {
+                if let Err(e) = Self::run(&snapshot_package_receiver) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -71,9 +71,7 @@ impl SnapshotPackagerService {
         }
     }
 
-    pub fn package_snapshots(snapshot_receiver: &SnapshotPackageReceiver) -> Result<()> {
-        let snapshot_package = snapshot_receiver.recv_timeout(Duration::from_secs(1))?;
-
+    pub fn package_snapshots(snapshot_package: &SnapshotPackage) -> Result<()> {
         // Create the tar builder
         let tar_gz = tempfile::Builder::new()
             .prefix("new_state")
@@ -84,7 +82,7 @@ impl SnapshotPackagerService {
         let mut tar = tar::Builder::new(enc);
 
         // Create the list of paths to compress, starting with the snapshots
-        let tar_output_snapshots_dir = Path::new(&TAR_SNAPSHOT_DIR);
+        let tar_output_snapshots_dir = Path::new(&TAR_SNAPSHOTS_DIR);
 
         // Add the snapshots to the tarball and delete the directory of hardlinks to the snapshots
         // that was created to persist those snapshots while this package was being created
@@ -117,6 +115,12 @@ impl SnapshotPackagerService {
         fs::hard_link(&temp_tar_path, &snapshot_package.tar_output_file)?;
         Ok(())
     }
+
+    fn run(snapshot_receiver: &SnapshotPackageReceiver) -> Result<()> {
+        let snapshot_package = snapshot_receiver.recv_timeout(Duration::from_secs(1))?;
+        Self::package_snapshots(&snapshot_package)?;
+        Ok(())
+    }
 }
 
 impl Service for SnapshotPackagerService {
@@ -133,14 +137,12 @@ mod tests {
     use crate::snapshot_utils;
     use std::fs::OpenOptions;
     use std::io::Write;
-    use std::sync::mpsc::channel;
     use tempfile::TempDir;
 
     #[test]
     fn test_package_snapshots() {
         // Create temprorary placeholder directory for all test files
         let temp_dir = TempDir::new().unwrap();
-        let (sender, receiver) = channel();
         let accounts_dir = temp_dir.path().join("accounts");
         let snapshots_dir = temp_dir.path().join("snapshots");
         let snapshot_package_output_path = temp_dir.path().join("snapshots_output");
@@ -184,10 +186,9 @@ mod tests {
             storage_entries.clone(),
             output_tar_path.clone(),
         );
-        sender.send(snapshot_package).unwrap();
 
         // Make tarball from packageable snapshot
-        SnapshotPackagerService::package_snapshots(&receiver).unwrap();
+        SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
 
         // Check tarball is correct
         snapshot_utils::tests::verify_snapshot_tar(output_tar_path, snapshots_dir, accounts_dir);
