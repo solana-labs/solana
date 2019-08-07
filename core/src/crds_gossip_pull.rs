@@ -65,13 +65,13 @@ impl CrdsFilter {
     }
     pub fn add(&mut self, item: &Hash) {
         let bits = Self::to_u64(item);
-        if (bits & self.mask) == self.mask {
+        if (bits & self.mask) == bits {
             self.filter.add(item);
         }
     }
     pub fn contains(&self, item: &Hash) -> bool {
         let bits = Self::to_u64(item);
-        if (bits & self.mask) != self.mask {
+        if (bits & self.mask) != bits {
             return true;
         }
         self.filter.contains(item)
@@ -478,9 +478,10 @@ mod test {
     }
 
     #[test]
-    fn test_crds_filter_add() {
+    fn test_crds_filter_add_no_mask() {
         let mut filter = CrdsFilter::new(1, 128);
         let h: Hash = hash(Hash::default().as_ref());
+        assert!(!filter.contains(&h));
         filter.add(&h);
         assert!(filter.contains(&h));
         let h: Hash = hash(h.as_ref());
@@ -488,13 +489,25 @@ mod test {
     }
     #[test]
     fn test_crds_filter_add_mask() {
-        let filter = CrdsFilter::new(1000, 10);
-        let mut h: Hash = hash(Hash::default().as_ref());
-        while (CrdsFilter::to_u64(&h) & filter.mask) != filter.mask {
+        let mut filter = CrdsFilter::new(1000, 10);
+        let mut h: Hash = Hash::default();
+        while (CrdsFilter::to_u64(&h) & filter.mask) != CrdsFilter::to_u64(&h) {
             h = hash(h.as_ref());
         }
+        //if the mask succeeds, we want the guaranteed negative
         assert!(!filter.contains(&h));
         filter.add(&h);
+        assert!(filter.contains(&h));
+    }
+    #[test]
+    fn test_crds_filter_contains_mask() {
+        let filter = CrdsFilter::new(1000, 10);
+        let mut h: Hash = Hash::default();
+        while (CrdsFilter::to_u64(&h) & filter.mask) == CrdsFilter::to_u64(&h) {
+            h = hash(h.as_ref());
+        }
+        //if the mask fails, the hash is contained in the set, and can be treated as a false
+        //positive
         assert!(filter.contains(&h));
     }
 }
