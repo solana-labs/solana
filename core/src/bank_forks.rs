@@ -554,8 +554,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_bank_forks_snapshot_n() {
+    fn run_bank_forks_snapshot_n<F>(last_slot: u64, f: F)
+    where
+        F: Fn(&mut Bank, &Keypair),
+    {
         solana_logger::setup();
         let accounts_dir = TempDir::new().unwrap();
         let snapshot_dir = TempDir::new().unwrap();
@@ -565,7 +567,6 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_block(10_000);
-        let last_slot = 4;
         let bank0 = Bank::new_with_paths(
             &genesis_block,
             Some(accounts_dir.path().to_str().unwrap().to_string()),
@@ -580,101 +581,9 @@ mod tests {
         bank_forks.set_snapshot_config(snapshot_config.clone());
         let bank0 = bank_forks.get(0).unwrap();
         snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &vec![]).unwrap();
-        for forks in 0..last_slot {
-            let bank = Bank::new_from_parent(&bank_forks[forks], &Pubkey::default(), forks + 1);
-            let key1 = Keypair::new().pubkey();
-            let tx = system_transaction::create_user_account(
-                &mint_keypair,
-                &key1,
-                1,
-                genesis_block.hash(),
-            );
-            assert_eq!(bank.process_transaction(&tx), Ok(()));
-            bank.freeze();
-            snapshot_utils::add_snapshot(
-                &snapshot_config.snapshot_path,
-                &bank,
-                &(vec![bank.slot()]),
-            )
-            .unwrap();
-            bank_forks.insert(bank);
-        }
-        // Generate a snapshot package for last bank
-        let last_bank = bank_forks.get(last_slot).unwrap();
-        let slot_snapshot_paths =
-            snapshot_utils::get_snapshot_paths(&snapshot_config.snapshot_path);
-        let snapshot_package = snapshot_utils::package_snapshot(
-            last_bank,
-            &slot_snapshot_paths,
-            snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path),
-        )
-        .unwrap();
-        SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
-
-        restore_from_snapshot(
-            bank_forks,
-            accounts_dir.path().to_str().unwrap().to_string(),
-            last_slot,
-        );
-    }
-
-    fn goto_end_of_slot(bank: &mut Bank) {
-        let mut tick_hash = bank.last_blockhash();
-        loop {
-            tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
-            bank.register_tick(&tick_hash);
-            if tick_hash == bank.last_blockhash() {
-                bank.freeze();
-                return;
-            }
-        }
-    }
-
-    #[test]
-    fn test_bank_forks_status_cache_snapshot_n() {
-        solana_logger::setup();
-        let accounts_dir = TempDir::new().unwrap();
-        let snapshot_dir = TempDir::new().unwrap();
-        let snapshot_output_path = TempDir::new().unwrap();
-        let GenesisBlockInfo {
-            genesis_block,
-            mint_keypair,
-            ..
-        } = create_genesis_block(10_000);
-        let last_slot = 256;
-        let bank0 = Bank::new_with_paths(
-            &genesis_block,
-            Some(accounts_dir.path().to_str().unwrap().to_string()),
-        );
-        bank0.freeze();
-        let mut bank_forks = BankForks::new(0, bank0);
-        let snapshot_config = SnapshotConfig::new(
-            PathBuf::from(snapshot_dir.path()),
-            PathBuf::from(snapshot_output_path.path()),
-            100,
-        );
-        bank_forks.set_snapshot_config(snapshot_config.clone());
-        let bank0 = bank_forks.get(0).unwrap();
-        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &vec![]).unwrap();
-        let key1 = Keypair::new().pubkey();
-        let key2 = Keypair::new().pubkey();
         for slot in 0..last_slot {
             let mut bank = Bank::new_from_parent(&bank_forks[slot], &Pubkey::default(), slot + 1);
-            let tx = system_transaction::transfer(
-                &mint_keypair,
-                &key1,
-                1,
-                bank_forks[slot].last_blockhash(),
-            );
-            assert_eq!(bank.process_transaction(&tx), Ok(()));
-            let tx = system_transaction::transfer(
-                &mint_keypair,
-                &key2,
-                1,
-                bank_forks[slot].last_blockhash(),
-            );
-            assert_eq!(bank.process_transaction(&tx), Ok(()));
-            goto_end_of_slot(&mut bank);
+            f(&mut bank, &mint_keypair);
             let bank = bank_forks.insert(bank);
             // set root to make sure we don't end up with too many account storage entries
             // and to allow purging logic on status_cache to kick in
@@ -703,6 +612,56 @@ mod tests {
             accounts_dir.path().to_str().unwrap().to_string(),
             last_slot,
         );
+    }
+
+    #[test]
+    fn test_bank_forks_snapshot_n() {
+        run_bank_forks_snapshot_n(4, |bank, mint_keypair| {
+            let key1 = Keypair::new().pubkey();
+            let tx = system_transaction::create_user_account(
+                &mint_keypair,
+                &key1,
+                1,
+                bank.last_blockhash(),
+            );
+            assert_eq!(bank.process_transaction(&tx), Ok(()));
+            bank.freeze();
+        });
+    }
+
+    fn goto_end_of_slot(bank: &mut Bank) {
+        let mut tick_hash = bank.last_blockhash();
+        loop {
+            tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
+            bank.register_tick(&tick_hash);
+            if tick_hash == bank.last_blockhash() {
+                bank.freeze();
+                return;
+            }
+        }
+    }
+
+    #[test]
+    fn test_bank_forks_status_cache_snapshot_n() {
+        let key1 = Keypair::new().pubkey();
+        let key2 = Keypair::new().pubkey();
+        run_bank_forks_snapshot_n(256, |bank, mint_keypair| {
+            let tx = system_transaction::transfer(
+                &mint_keypair,
+                &key1,
+                1,
+                bank.parent().unwrap().last_blockhash(),
+            );
+            assert_eq!(bank.process_transaction(&tx), Ok(()));
+            let tx = system_transaction::transfer(
+                &mint_keypair,
+                &key2,
+                1,
+                bank.parent().unwrap().last_blockhash(),
+            );
+            assert_eq!(bank.process_transaction(&tx), Ok(()));
+            goto_end_of_slot(bank);
+        });
     }
 
     #[test]
