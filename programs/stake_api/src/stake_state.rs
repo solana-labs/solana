@@ -287,14 +287,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
         match self.state()? {
             StakeState::Stake(mut stake) => {
-                // still activated, no can do
-                if stake.deactivated == std::u64::MAX {
-                    return Err(InstructionError::InsufficientFunds);
-                }
-                let staked = if stake.stake(clock.epoch) == 0 {
-                    0
+                // if deactivated and in cooldown
+                let staked = if clock.epoch >= stake.deactivated {
+                    stake.stake(clock.epoch)
                 } else {
-                    // Assume full stake if the stake is under warmup/cooldown
+                    // Assume full stake if the stake is under warmup, or
+                    //  hasn't been de-activated
                     stake.stake
                 };
                 if lamports > self.account.lamports.saturating_sub(staked) {
@@ -500,7 +498,7 @@ mod tests {
     #[test]
     fn test_withdraw_stake() {
         let stake_pubkey = Pubkey::new_rand();
-        let mut total_lamports = 100;
+        let total_lamports = 100;
         let stake_lamports = 42;
         let mut stake_account =
             Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
@@ -511,30 +509,32 @@ mod tests {
         let mut to_account = Account::new(1, 0, &system_program::id());
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
-        // unsigned keyed account
+        // unsigned keyed account should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
             Err(InstructionError::MissingRequiredSignature)
         );
 
-        // signed keyed account but uninitialized
-        // try withdrawing more than balance
+        // signed keyed account and uninitialized should work
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
+            Ok(())
+        );
+        assert_eq!(stake_account.lamports, 0);
+
+        // reset balance
+        stake_account.lamports = total_lamports;
+
+        // signed keyed account and uninitialized, more than available should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(total_lamports + 1, &mut to_keyed_account, &clock),
             Err(InstructionError::InsufficientFunds)
         );
 
-        // try withdrawing some (enough for rest of the test to carry forward)
-        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
-        assert_eq!(
-            stake_keyed_account.withdraw(5, &mut to_keyed_account, &clock),
-            Ok(())
-        );
-        total_lamports -= 5;
-
-        // Stake some lamports (available lampoorts for withdrawls will reduce)
+        // Stake some lamports (available lampoorts for withdrawals will reduce)
         let vote_pubkey = Pubkey::new_rand();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
@@ -545,12 +545,21 @@ mod tests {
             Ok(())
         );
 
-        // deactivate the stake before withdrawal
-        assert_eq!(stake_keyed_account.deactivate_stake(&clock), Ok(()));
-        // simulate time passing
-        clock.epoch += STAKE_WARMUP_EPOCHS;
+        // withdrawal before deactivate works for some portion
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports - stake_lamports,
+                &mut to_keyed_account,
+                &clock
+            ),
+            Ok(())
+        );
+        // reset
+        stake_account.lamports = total_lamports;
 
-        // Try to withdraw more than what's available
+        // withdrawal before deactivate fails if not in excess of stake
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports + 1,
@@ -560,15 +569,23 @@ mod tests {
             Err(InstructionError::InsufficientFunds)
         );
 
-        // Try to withdraw all unstaked lamports
+        // deactivate the stake before withdrawal
+        assert_eq!(stake_keyed_account.deactivate_stake(&clock), Ok(()));
+        // simulate time passing
+        clock.epoch += STAKE_WARMUP_EPOCHS * 2;
+
+        // Try to withdraw more than what's available
         assert_eq!(
-            stake_keyed_account.withdraw(
-                total_lamports - stake_lamports,
-                &mut to_keyed_account,
-                &clock
-            ),
+            stake_keyed_account.withdraw(total_lamports + 1, &mut to_keyed_account, &clock),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // Try to withdraw all lamports
+        assert_eq!(
+            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
             Ok(())
         );
+        assert_eq!(stake_account.lamports, 0);
     }
 
     #[test]
