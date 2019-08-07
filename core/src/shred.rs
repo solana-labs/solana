@@ -246,12 +246,7 @@ impl Write for Shredder {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if self.active_shred.is_none() {
-            return Ok(());
-        }
-        let current_shred = self.active_shred.take().unwrap();
-        self.finalize_data_shred(current_shred);
-        Ok(())
+        unimplemented!()
     }
 }
 
@@ -449,14 +444,7 @@ impl Shredder {
                 present[missing] = false;
                 // If index 0 shred is missing, then first shred in slot will also be recovered
                 first_shred_in_slot |= missing == 0;
-                Shredder::new_empty_missing_shred(
-                    num_data,
-                    num_coding,
-                    slot,
-                    first_index,
-                    index,
-                    missing,
-                )
+                Shredder::new_empty_missing_shred(num_data, num_coding, slot, first_index, missing)
             })
             .collect();
         let shred_buf = bincode::serialize(shred).unwrap();
@@ -469,7 +457,6 @@ impl Shredder {
         num_coding: usize,
         slot: u64,
         first_index: usize,
-        index: usize,
         missing: usize,
     ) -> Vec<u8> {
         let missing_shred = if missing == 0 {
@@ -481,7 +468,7 @@ impl Shredder {
             let mut data_shred = DataShred::default();
             data_shred.header.common_header.slot = slot;
             data_shred.header.common_header.index = missing as u32;
-            if index == first_index + num_data - 1 {
+            if missing == first_index + num_data - 1 {
                 Shred::LastInFECSet(data_shred)
             } else {
                 Shred::Data(data_shred)
@@ -549,14 +536,7 @@ impl Shredder {
                 ..first_index + fec_set_size)
                 .map(|missing| {
                     present[missing] = false;
-                    Self::new_empty_missing_shred(
-                        num_data,
-                        num_coding,
-                        slot,
-                        first_index,
-                        first_index + fec_set_size,
-                        missing,
-                    )
+                    Self::new_empty_missing_shred(num_data, num_coding, slot, first_index, missing)
                 })
                 .collect();
             shred_bufs.append(&mut pending_shreds);
@@ -576,9 +556,17 @@ impl Shredder {
                         // Check if the last recovered data shred is also last in Slot.
                         // If so, it needs to be morphed into the correct type
                         let shred = if let Shred::Data(s) = shred {
-                            Shred::LastInSlot(s)
+                            if s.header.last_in_slot == 1 {
+                                Shred::LastInSlot(s)
+                            } else {
+                                Shred::Data(s)
+                            }
                         } else if let Shred::LastInFECSet(s) = shred {
-                            Shred::LastInSlot(s)
+                            if s.header.last_in_slot == 1 {
+                                Shred::LastInSlot(s)
+                            } else {
+                                Shred::LastInFECSet(s)
+                            }
                         } else {
                             shred
                         };
@@ -665,6 +653,10 @@ mod tests {
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_shred, None);
         assert_eq!(shredder.active_offset, 0);
+
+        assert!(FirstDataShred::overhead() < PACKET_DATA_SIZE);
+        assert!(DataShred::overhead() < PACKET_DATA_SIZE);
+        assert!(CodingShred::overhead() < PACKET_DATA_SIZE);
 
         // Test0: Write some data to shred. Not enough to create a signed shred
         let data: Vec<u8> = (0..25).collect();
@@ -811,6 +803,89 @@ mod tests {
                 .signature
                 .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
             assert_eq!(data.header.common_header.index, 4);
+        }
+    }
+
+    #[test]
+    fn test_small_data_shredder() {
+        let keypair = Arc::new(Keypair::new());
+
+        let mut shredder = Shredder::new(0x123456789abcdef0, Some(5), 0.0, &keypair, 0)
+            .expect("Failed in creating shredder");
+
+        assert!(shredder.shreds.is_empty());
+        assert_eq!(shredder.active_shred, None);
+        assert_eq!(shredder.active_offset, 0);
+
+        let data: Vec<_> = (0..25).collect();
+        let data: Vec<u8> = data.iter().map(|x| *x as u8).collect();
+        let _ = shredder.write(&data).unwrap();
+
+        // We should have 0 shreds now
+        assert_eq!(shredder.shreds.len(), 0);
+
+        shredder.finalize_fec_block();
+
+        // We should have 2 shreds now (FirstInSlot, and LastInFECSet)
+        assert_eq!(shredder.shreds.len(), 2);
+
+        let data_offset = CodingShred::overhead()
+            + bincode::serialized_size(&Signature::default()).unwrap() as usize;
+
+        let shred = shredder.shreds.remove(0);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
+        let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
+        assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
+        if let Shred::FirstInSlot(data) = deserialized_shred {
+            assert!(data
+                .header
+                .data_header
+                .common_header
+                .signature
+                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        }
+
+        let shred = shredder.shreds.remove(0);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
+        let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
+        assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
+        if let Shred::LastInFECSet(data) = deserialized_shred {
+            assert!(data
+                .header
+                .common_header
+                .signature
+                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        }
+
+        // Try shredder when no parent is provided
+        let mut shredder = Shredder::new(0x123456789abcdef0, None, 0.0, &keypair, 2)
+            .expect("Failed in creating shredder");
+
+        assert!(shredder.shreds.is_empty());
+        assert_eq!(shredder.active_shred, None);
+        assert_eq!(shredder.active_offset, 0);
+
+        let data: Vec<_> = (0..25).collect();
+        let data: Vec<u8> = data.iter().map(|x| *x as u8).collect();
+        let _ = shredder.write(&data).unwrap();
+
+        // We should have 0 shreds now
+        assert_eq!(shredder.shreds.len(), 0);
+
+        shredder.finalize_fec_block();
+
+        // We should have 1 shred now (LastInFECSet)
+        assert_eq!(shredder.shreds.len(), 1);
+        let shred = shredder.shreds.remove(0);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
+        let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
+        assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
+        if let Shred::LastInFECSet(data) = deserialized_shred {
+            assert!(data
+                .header
+                .common_header
+                .signature
+                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         }
     }
 
@@ -1001,6 +1076,7 @@ mod tests {
         assert_eq!(result.recovered_data.len(), 2); // Data shreds 1 and 3 were missing
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
+        assert_matches!(recovered_shred, Shred::Data(_));
         if let Shred::Data(data) = recovered_shred {
             assert!(data
                 .header
@@ -1012,6 +1088,7 @@ mod tests {
         }
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
+        assert_matches!(recovered_shred, Shred::Data(_));
         if let Shred::Data(data) = recovered_shred {
             assert!(data
                 .header
@@ -1067,17 +1144,20 @@ mod tests {
         assert_eq!(result.recovered_data.len(), 3); // Data shreds 0, 2 and 4 were missing
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
-        if let Shred::Data(data) = recovered_shred {
+        assert_matches!(recovered_shred, Shred::FirstInSlot(_));
+        if let Shred::FirstInSlot(data) = recovered_shred {
             assert!(data
                 .header
+                .data_header
                 .common_header
                 .signature
                 .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.slot, slot);
-            assert_eq!(data.header.common_header.index, 0);
+            assert_eq!(data.header.data_header.common_header.slot, slot);
+            assert_eq!(data.header.data_header.common_header.index, 0);
         }
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
+        assert_matches!(recovered_shred, Shred::Data(_));
         if let Shred::Data(data) = recovered_shred {
             assert!(data
                 .header
@@ -1089,7 +1169,8 @@ mod tests {
         }
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
-        if let Shred::Data(data) = recovered_shred {
+        assert_matches!(recovered_shred, Shred::LastInFECSet(_));
+        if let Shred::LastInFECSet(data) = recovered_shred {
             assert!(data
                 .header
                 .common_header
@@ -1117,7 +1198,103 @@ mod tests {
         }
         assert_eq!(data[..], result.payload[..data.len()]);
 
-        // Test4: Try recovery/reassembly with 3 missing data shreds + 3 coding shreds. Hint: should fail
+        // Test4: Try recovery/reassembly full slot with 3 missing data shreds + 2 coding shreds. Hint: should work
+        let mut shredder =
+            Shredder::new(slot, Some(5), 1.0, &keypair, 0).expect("Failed in creating shredder");
+
+        let mut offset = shredder.write(&data).unwrap();
+        let approx_shred_payload_size = offset;
+        offset += shredder.write(&data[offset..]).unwrap();
+        offset += shredder.write(&data[offset..]).unwrap();
+        offset += shredder.write(&data[offset..]).unwrap();
+        offset += shredder.write(&data[offset..]).unwrap();
+
+        // We should have some shreds now
+        assert_eq!(
+            shredder.shreds.len(),
+            data.len() / approx_shred_payload_size
+        );
+        assert_eq!(offset, data.len());
+
+        shredder.finalize_slot();
+
+        // We should have 10 shreds now (one additional final shred, and equal number of coding shreds)
+        let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
+        assert_eq!(shredder.shreds.len(), expected_shred_count);
+
+        let shreds: Vec<Shred> = shredder
+            .shreds
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| {
+                if i % 2 != 0 {
+                    Some(bincode::deserialize(s).unwrap())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut result = Shredder::deshred(&shreds).unwrap();
+        assert!(result.payload.len() >= data.len());
+        assert_eq!(result.recovered_data.len(), 3); // Data shreds 0, 2 and 4 were missing
+        let recovered_shred = result.recovered_data.remove(0);
+        let shred = bincode::serialize(&recovered_shred).unwrap();
+        assert_matches!(recovered_shred, Shred::FirstInSlot(_));
+        if let Shred::FirstInSlot(data) = recovered_shred {
+            assert!(data
+                .header
+                .data_header
+                .common_header
+                .signature
+                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+            assert_eq!(data.header.data_header.common_header.slot, slot);
+            assert_eq!(data.header.data_header.common_header.index, 0);
+        }
+        let recovered_shred = result.recovered_data.remove(0);
+        let shred = bincode::serialize(&recovered_shred).unwrap();
+        assert_matches!(recovered_shred, Shred::Data(_));
+        if let Shred::Data(data) = recovered_shred {
+            assert!(data
+                .header
+                .common_header
+                .signature
+                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+            assert_eq!(data.header.common_header.slot, slot);
+            assert_eq!(data.header.common_header.index, 2);
+        }
+        let recovered_shred = result.recovered_data.remove(0);
+        let shred = bincode::serialize(&recovered_shred).unwrap();
+        assert_matches!(recovered_shred, Shred::LastInSlot(_));
+        if let Shred::LastInSlot(data) = recovered_shred {
+            assert!(data
+                .header
+                .common_header
+                .signature
+                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+            assert_eq!(data.header.common_header.slot, slot);
+            assert_eq!(data.header.common_header.index, 4);
+        }
+        assert_eq!(result.recovered_code.len(), 2); // Coding shreds 6, 8 were missing
+        let recovered_shred = result.recovered_code.remove(0);
+        if let Shred::Coding(code) = recovered_shred {
+            assert_eq!(code.header.num_data_shreds, 5);
+            assert_eq!(code.header.num_coding_shreds, 5);
+            assert_eq!(code.header.position, 1);
+            assert_eq!(code.header.common_header.slot, slot);
+            assert_eq!(code.header.common_header.index, 1);
+        }
+        let recovered_shred = result.recovered_code.remove(0);
+        if let Shred::Coding(code) = recovered_shred {
+            assert_eq!(code.header.num_data_shreds, 5);
+            assert_eq!(code.header.num_coding_shreds, 5);
+            assert_eq!(code.header.position, 3);
+            assert_eq!(code.header.common_header.slot, slot);
+            assert_eq!(code.header.common_header.index, 3);
+        }
+        assert_eq!(data[..], result.payload[..data.len()]);
+
+        // Test5: Try recovery/reassembly with 3 missing data shreds + 3 coding shreds. Hint: should fail
         let shreds: Vec<Shred> = shredder
             .shreds
             .iter()
