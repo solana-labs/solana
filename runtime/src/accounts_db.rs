@@ -586,16 +586,34 @@ impl AccountsDB {
     }
 
     fn find_storage_candidate(&self, fork_id: Fork) -> Arc<AccountStorageEntry> {
+        let mut create_extra = false;
         let stores = self.storage.read().unwrap();
 
         if let Some(fork_stores) = stores.0.get(&fork_id) {
             if !fork_stores.is_empty() {
+                if fork_stores.len() <= self.min_num_stores {
+                    let mut total_accounts = 0;
+                    for store in fork_stores.values() {
+                        total_accounts += store.count_and_status.read().unwrap().0;
+                    }
+
+                    // Create more stores so that when scanning the storage all CPUs have work
+                    if (total_accounts / 16) >= fork_stores.len() {
+                        create_extra = true;
+                    }
+                }
+
                 // pick an available store at random by iterating from a random point
                 let to_skip = thread_rng().gen_range(0, fork_stores.len());
 
                 for (i, store) in fork_stores.values().cycle().skip(to_skip).enumerate() {
                     if store.try_available() {
-                        return store.clone();
+                        let ret = store.clone();
+                        drop(stores);
+                        if create_extra {
+                            self.create_and_insert_store(fork_id, self.file_size);
+                        }
+                        return ret;
                     }
                     // looked at every store, bail...
                     if i == fork_stores.len() {
@@ -604,6 +622,7 @@ impl AccountsDB {
                 }
             }
         }
+
         drop(stores);
 
         let store = self.create_and_insert_store(fork_id, self.file_size);
@@ -614,11 +633,6 @@ impl AccountsDB {
     fn create_and_insert_store(&self, fork_id: Fork, size: u64) -> Arc<AccountStorageEntry> {
         let mut stores = self.storage.write().unwrap();
         let fork_storage = stores.0.entry(fork_id).or_insert_with(HashMap::new);
-
-        // Create more stores so that when scanning the storage all CPUs have work
-        while fork_storage.len() + 1 < self.min_num_stores {
-            self.create_store(fork_id, fork_storage, self.file_size);
-        }
 
         self.create_store(fork_id, fork_storage, size)
     }
