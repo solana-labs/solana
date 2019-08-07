@@ -33,6 +33,7 @@ Methods
 * [getSlot](#getslot)
 * [getSlotLeader](#getslotleader)
 * [getSlotsPerSegment](#getslotspersegment)
+* [getSoftwareVersion](#getsoftwareversion)
 * [getStorageTurn](#getstorageturn)
 * [getStorageTurnRate](#getstorageturnrate)
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
@@ -348,6 +349,23 @@ None
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlotsPerSegment"}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":"1024","id":1}
+```
+
+### getSoftwareVersion
+Returns the current solana software version running on the node
+
+##### Parameters:
+None
+
+##### Results:
+* `string` - software version
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSoftwareVersion"}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":"0.17.2","id":1}
 ```
 
 ----
