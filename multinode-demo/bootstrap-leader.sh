@@ -64,7 +64,6 @@ args+=(
   --identity "$identity_keypair"
   --ledger "$ledger_dir"
   --rpc-port 8899
-  --snapshot-path "$SOLANA_CONFIG_DIR"/bootstrap-leader/snapshots
   --snapshot-interval-slots 100
   --storage-keypair "$storage_keypair"
   --voting-keypair "$vote_keypair"
