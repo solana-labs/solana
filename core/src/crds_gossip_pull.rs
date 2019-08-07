@@ -27,7 +27,7 @@ use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 // determines how many pull request filters are generated per pull request.
-pub const CRDS_GOSSIP_PULL_SPLIT_COUNT: u64 = 8;
+pub const CRDS_GOSSIP_PULL_SPLIT_COUNT: u64 = 4;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct CrdsFilter {

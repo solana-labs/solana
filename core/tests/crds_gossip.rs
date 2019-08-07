@@ -387,20 +387,29 @@ fn network_run_pull(
         };
         let transfered: Vec<_> = requests
             .into_par_iter()
-            .map(|(to, request, caller_info)| {
+            .map(|(to, filters, caller_info)| {
                 let mut bytes: usize = 0;
                 let mut msgs: usize = 0;
                 let mut overhead: usize = 0;
                 let from = caller_info.label().pubkey();
-                bytes += request.filter.keys.len();
-                bytes += (request.filter.bits.len() / 8) as usize;
+                bytes += filters.iter().map(|f| f.filter.keys.len()).sum::<usize>();
+                bytes += filters
+                    .iter()
+                    .map(|f| f.filter.bits.len() as usize / 8)
+                    .sum::<usize>();
                 bytes += serialized_size(&caller_info).unwrap() as usize;
                 let rsp = network
                     .get(&to)
                     .map(|node| {
-                        node.lock()
-                            .unwrap()
-                            .process_pull_request(caller_info, request, now)
+                        let mut rsp = vec![];
+                        for filter in filters {
+                            rsp.append(&mut node.lock().unwrap().process_pull_request(
+                                caller_info.clone(),
+                                filter,
+                                now,
+                            ));
+                        }
+                        rsp
                     })
                     .unwrap();
                 bytes += serialized_size(&rsp).unwrap() as usize;

@@ -2254,7 +2254,7 @@ mod tests {
         let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
         cluster_info.set_entrypoint(entrypoint.clone());
         let pulls = cluster_info.new_pull_requests(&HashMap::new());
-        assert_eq!(1, pulls.len());
+        assert_eq!(CRDS_GOSSIP_PULL_SPLIT_COUNT, pulls.len() as u64);
         match pulls.get(0) {
             Some((addr, msg)) => {
                 assert_eq!(*addr, entrypoint.gossip);
@@ -2281,7 +2281,7 @@ mod tests {
             .write()
             .unwrap()
             .new_pull_requests(&HashMap::new());
-        assert_eq!(1, pulls.len());
+        assert_eq!(CRDS_GOSSIP_PULL_SPLIT_COUNT, pulls.len() as u64);
         assert_eq!(cluster_info.read().unwrap().entrypoint, Some(entrypoint));
     }
 
