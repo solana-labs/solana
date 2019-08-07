@@ -67,16 +67,18 @@ impl SnapshotPackagerService {
     }
 
     pub fn package_snapshots(snapshot_package: &SnapshotPackage) -> Result<()> {
+        let tar_dir = snapshot_package
+            .tar_output_file
+            .parent()
+            .expect("Tar output path is invalid");
+
+        fs::create_dir_all(tar_dir)?;
+
         // Create the tar builder
         let tar_gz = tempfile::Builder::new()
             .prefix("new_state")
             .suffix(".tgz")
-            .tempfile_in(
-                snapshot_package
-                    .tar_output_file
-                    .parent()
-                    .expect("Tar output path is invalid"),
-            )?;
+            .tempfile_in(tar_dir)?;
 
         let temp_tar_path = tar_gz.path();
         let enc = GzEncoder::new(&tar_gz, Compression::default());
