@@ -11,6 +11,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
+use tempfile::TempDir;
 
 pub type SnapshotPackageSender = Sender<SnapshotPackage>;
 pub type SnapshotPackageReceiver = Receiver<SnapshotPackage>;
@@ -19,28 +20,22 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 
 pub struct SnapshotPackage {
-    snapshot_path: PathBuf,
+    snapshot_links: TempDir,
     storage_entries: Vec<Arc<AccountStorageEntry>>,
     tar_output_file: PathBuf,
 }
 
 impl SnapshotPackage {
     pub fn new(
-        snapshot_path: PathBuf,
+        snapshot_links: TempDir,
         storage_entries: Vec<Arc<AccountStorageEntry>>,
         tar_output_file: PathBuf,
     ) -> Self {
         Self {
-            snapshot_path,
+            snapshot_links,
             storage_entries,
             tar_output_file,
         }
-    }
-}
-
-impl Drop for SnapshotPackage {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.snapshot_path);
     }
 }
 
@@ -72,11 +67,19 @@ impl SnapshotPackagerService {
     }
 
     pub fn package_snapshots(snapshot_package: &SnapshotPackage) -> Result<()> {
+        let tar_dir = snapshot_package
+            .tar_output_file
+            .parent()
+            .expect("Tar output path is invalid");
+
+        fs::create_dir_all(tar_dir)?;
+
         // Create the tar builder
         let tar_gz = tempfile::Builder::new()
             .prefix("new_state")
             .suffix(".tgz")
-            .tempfile()?;
+            .tempfile_in(tar_dir)?;
+
         let temp_tar_path = tar_gz.path();
         let enc = GzEncoder::new(&tar_gz, Compression::default());
         let mut tar = tar::Builder::new(enc);
@@ -88,9 +91,8 @@ impl SnapshotPackagerService {
         // that was created to persist those snapshots while this package was being created
         let res = tar.append_dir_all(
             tar_output_snapshots_dir,
-            snapshot_package.snapshot_path.as_path(),
+            snapshot_package.snapshot_links.path(),
         );
-        let _ = fs::remove_dir_all(snapshot_package.snapshot_path.as_path());
         res?;
 
         // Add the AppendVecs into the compressible list
@@ -171,11 +173,10 @@ mod tests {
             .collect();
 
         // Create directory of hard links for snapshots
-        let link_snapshots_dir = temp_dir.path().join("link_snapshots");
-        fs::create_dir_all(&link_snapshots_dir).unwrap();
+        let link_snapshots_dir = tempfile::tempdir_in(temp_dir.path()).unwrap();
         for snapshots_path in snapshots_paths {
             let snapshot_file_name = snapshots_path.file_name().unwrap();
-            let link_path = link_snapshots_dir.join(snapshot_file_name);
+            let link_path = link_snapshots_dir.path().join(snapshot_file_name);
             fs::hard_link(&snapshots_path, &link_path).unwrap();
         }
 

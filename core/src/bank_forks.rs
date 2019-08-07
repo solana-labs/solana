@@ -293,6 +293,7 @@ impl BankForks {
             &bank,
             &slot_snapshot_paths[start..],
             tar_output_file,
+            &config.snapshot_path,
         )?;
 
         // Send the package to the packaging thread
@@ -606,6 +607,7 @@ mod tests {
             last_bank,
             &slot_snapshot_paths,
             snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path),
+            &snapshot_config.snapshot_path,
         )
         .unwrap();
         SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
@@ -738,7 +740,7 @@ mod tests {
 
             let package_sender = {
                 if slot == saved_slot as u64 {
-                    // Only send one package on the real sende so that the packaging service
+                    // Only send one package on the real sender so that the packaging service
                     // doesn't take forever to run the packaging logic on all MAX_CACHE_ENTRIES
                     // later
                     &sender
@@ -761,7 +763,22 @@ mod tests {
             if slot == saved_slot as u64 {
                 let options = CopyOptions::new();
                 fs_extra::dir::copy(&accounts_dir, &saved_accounts_dir, &options).unwrap();
-                fs_extra::dir::copy(&snapshots_dir, &saved_snapshots_dir, &options).unwrap();
+                let snapshot_paths: Vec<_> = fs::read_dir(&snapshot_config.snapshot_path)
+                    .unwrap()
+                    .filter_map(|entry| {
+                        let e = entry.unwrap();
+                        let file_path = e.path();
+                        let file_name = file_path.file_name().unwrap();
+                        file_name
+                            .to_str()
+                            .map(|s| s.parse::<u64>().ok().map(|_| file_path.clone()))
+                            .unwrap_or(None)
+                    })
+                    .collect();
+
+                for snapshot_path in snapshot_paths {
+                    fs_extra::dir::copy(&snapshot_path, &saved_snapshots_dir, &options).unwrap();
+                }
             }
         }
 
@@ -796,9 +813,7 @@ mod tests {
         // Check the tar we cached the state for earlier was generated correctly
         snapshot_utils::tests::verify_snapshot_tar(
             saved_tar,
-            saved_snapshots_dir
-                .path()
-                .join(snapshots_dir.path().file_name().unwrap()),
+            saved_snapshots_dir.path(),
             saved_accounts_dir
                 .path()
                 .join(accounts_dir.path().file_name().unwrap()),
