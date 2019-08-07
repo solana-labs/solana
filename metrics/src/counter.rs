@@ -6,7 +6,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const DEFAULT_LOG_RATE: usize = 1000;
 const DEFAULT_METRICS_RATE: usize = 1;
-const DEFAULT_TX_METRICS_RATE: usize = 10;
+const DEFAULT_METRICS_HIGH_RATE: usize = 1000;
+
+/// Use default metrics high rate
+pub const HIGH_RATE: usize = 999_999;
 
 pub struct Counter {
     pub name: &'static str,
@@ -126,13 +129,65 @@ macro_rules! inc_new_counter_debug {
     }};
 }
 
+#[macro_export]
+macro_rules! inc_new_high_rate_counter_error {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!(
+            $name,
+            $count,
+            log::Level::Error,
+            0,
+            $crate::counter::HIGH_RATE
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_high_rate_counter_warn {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!(
+            $name,
+            $count,
+            log::Level::Warn,
+            0,
+            $crate::counter::HIGH_RATE
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_high_rate_counter_info {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!(
+            $name,
+            $count,
+            log::Level::Info,
+            0,
+            $crate::counter::HIGH_RATE
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_high_rate_counter_debug {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!(
+            $name,
+            $count,
+            log::Level::Debug,
+            0,
+            $crate::counter::HIGH_RATE
+        );
+    }};
+}
+
 impl Counter {
-    fn default_tx_metrics_rate() -> usize {
-        let v = env::var("SOLANA_TX_METRICS_RATE")
+    fn default_metrics_high_rate() -> usize {
+        let v = env::var("SOLANA_METRICS_HIGH_RATE")
             .map(|x| x.parse().unwrap_or(0))
             .unwrap_or(0);
         if v == 0 {
-            DEFAULT_TX_METRICS_RATE
+            DEFAULT_METRICS_HIGH_RATE
         } else {
             v
         }
@@ -155,13 +210,11 @@ impl Counter {
         );
         self.lograte
             .compare_and_swap(0, Self::default_log_rate(), Ordering::Relaxed);
-        if self.name.contains("transactions") {
-            self.metricsrate.compare_and_swap(
-                0,
-                Self::default_tx_metrics_rate(),
-                Ordering::Relaxed,
-            );
-        }
+        self.metricsrate.compare_and_swap(
+            HIGH_RATE,
+            Self::default_metrics_high_rate(),
+            Ordering::Relaxed,
+        );
         self.metricsrate
             .compare_and_swap(0, DEFAULT_METRICS_RATE, Ordering::Relaxed);
     }

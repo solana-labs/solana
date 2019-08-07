@@ -39,12 +39,7 @@ fn retransmit_blobs(blobs: &[SharedBlob], retransmit: &BlobSender, id: &Pubkey) 
     }
 
     if !retransmit_queue.is_empty() {
-        inc_new_counter_debug!(
-            "streamer-recv_window-retransmit",
-            retransmit_queue.len(),
-            0,
-            1000
-        );
+        inc_new_high_rate_counter_debug!("streamer-recv_window-retransmit", retransmit_queue.len());
         retransmit.send(retransmit_queue)?;
     }
     Ok(())
@@ -118,7 +113,7 @@ where
         blobs.append(&mut blob)
     }
     let now = Instant::now();
-    inc_new_counter_debug!("streamer-recv_window-recv", blobs.len(), 0, 1000);
+    inc_new_high_rate_counter_debug!("streamer-recv_window-recv", blobs.len());
 
     let blobs: Vec<_> = thread_pool.install(|| {
         blobs
