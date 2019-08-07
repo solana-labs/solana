@@ -2365,7 +2365,10 @@ mod tests {
         let bank3 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 3));
         bank1.squash();
 
-        assert_eq!(bank0.get_balance(&key1.pubkey()), 1);
+        // This picks up the values from 1 which is the highest root:
+        // TODO: if we need to access rooted banks older than this,
+        // need to fix the lookup.
+        assert_eq!(bank0.get_balance(&key1.pubkey()), 4);
         assert_eq!(bank3.get_balance(&key1.pubkey()), 4);
         assert_eq!(bank2.get_balance(&key1.pubkey()), 3);
         bank3.squash();

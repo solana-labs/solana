@@ -276,7 +276,7 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
-        status_cache.insert(&blockhash, &sig, 0, ());
+        status_cache.insert(&blockhash, &sig, 1, ());
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
             None
