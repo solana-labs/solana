@@ -51,7 +51,19 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
 }
 
 pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn error::Error>> {
-    let json_rpc_url = matches.value_of("json_rpc_url").unwrap().to_string();
+    let config = if let Some(config_file) = matches.value_of("config_file") {
+        Config::load(config_file).unwrap_or_default()
+    } else {
+        Config::default()
+    };
+    let json_rpc_url = if let Some(url) = matches.value_of("json_rpc_url") {
+        url.to_string()
+    } else if config.url != "" {
+        config.url
+    } else {
+        let default = WalletConfig::default();
+        default.json_rpc_url
+    };
 
     let drone_host = if let Some(drone_host) = matches.value_of("drone_host") {
         Some(solana_netutil::parse_host(drone_host).or_else(|err| {
@@ -78,6 +90,8 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
     let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {
         matches.value_of("keypair").unwrap()
+    } else if config.keypair != "" {
+        &config.keypair
     } else {
         path.extend(&[".config", "solana", "id.json"]);
         if !path.exists() {
@@ -156,7 +170,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("url")
                 .value_name("URL")
                 .takes_value(true)
-                .default_value(&default.json_rpc_url)
                 .validator(is_url)
                 .help("JSON RPC URL for the solana cluster"),
         )
