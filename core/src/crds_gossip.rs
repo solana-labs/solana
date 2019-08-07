@@ -131,7 +131,7 @@ impl CrdsGossip {
         &self,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Result<(Pubkey, CrdsFilter, CrdsValue), CrdsGossipError> {
+    ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
         self.pull
             .new_pull_request(&self.crds, &self.id, now, stakes)
     }

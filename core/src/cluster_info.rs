@@ -17,7 +17,9 @@ use crate::blocktree::Blocktree;
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
+use crate::crds_gossip_pull::{
+    CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS, CRDS_GOSSIP_PULL_SPLIT_COUNT,
+};
 use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::repair_service::RepairType;
@@ -839,12 +841,13 @@ impl ClusterInfo {
                     .lookup(&CrdsValueLabel::ContactInfo(self.id()))
                     .unwrap_or_else(|| panic!("self_id invalid {}", self.id()));
 
-                pulls.push((
-                    entrypoint.id,
-                    self.gossip.pull.build_crds_filter(&self.gossip.crds),
-                    entrypoint.gossip,
-                    self_info.clone(),
-                ))
+                self.gossip
+                    .pull
+                    .build_crds_filters(&self.gossip.crds, CRDS_GOSSIP_PULL_SPLIT_COUNT)
+                    .into_iter()
+                    .for_each(|filter| {
+                        pulls.push((entrypoint.id, filter, entrypoint.gossip, self_info.clone()))
+                    })
             }
             None => (),
         }
@@ -875,28 +878,30 @@ impl ClusterInfo {
 
     fn new_pull_requests(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
-        let pulls: Vec<_> = self
+        let mut pulls: Vec<_> = self
             .gossip
             .new_pull_request(now, stakes)
             .ok()
             .into_iter()
-            .collect();
-
-        let mut pr: Vec<_> = pulls
-            .into_iter()
-            .filter_map(|(peer, filter, self_info)| {
+            .filter_map(|(peer, filters, me)| {
                 let peer_label = CrdsValueLabel::ContactInfo(peer);
                 self.gossip
                     .crds
                     .lookup(&peer_label)
                     .and_then(CrdsValue::contact_info)
-                    .map(|peer_info| (peer, filter, peer_info.gossip, self_info))
+                    .map(move |peer_info| {
+                        filters
+                            .into_iter()
+                            .map(move |f| (peer, f, peer_info.gossip, me.clone()))
+                    })
             })
+            .flatten()
             .collect();
-        if pr.is_empty() {
-            self.add_entrypoint(&mut pr);
+        if pulls.is_empty() {
+            self.add_entrypoint(&mut pulls);
         }
-        pr.into_iter()
+        pulls
+            .into_iter()
             .map(|(peer, filter, gossip, self_info)| {
                 self.gossip.mark_pull_request_creation_time(&peer, now);
                 (gossip, Protocol::PullRequest(filter, self_info))
