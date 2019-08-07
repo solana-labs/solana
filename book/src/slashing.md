@@ -25,12 +25,11 @@ ever sent to the Stake program.
 
 ### Byzantine behavior (i.e. slashing proofs)
 
-#### Vote transaction as proof
+#### Voting proofs
 
-Some proofs of a conflicting vote can be as simple as a Vote transaction, because the Vote account keeps track
-of some number of previously submitted votes:
+The Vote program accepts these proofs for slashing:
 1. two votes at the same slot with differing bank hashes
-2. a lockout violation 
+2. a vote lockout violation 
 3. two votes with conflicting ancestors
 
 #### Other proofs
@@ -44,8 +43,8 @@ but differing signatures.  The proof comprises `S(slot, index, hash(data)) + slo
 
 #### Consensus
 
-The network removes slashed stakes from the consensus calculations.  A voting strategy of waiting for 2/3rds stake at a lockout 
-threshold does not consider stakes that are slashed at the current block height.
+Validators should remove slashed stakes from consensus calculations because a voting strategy of waiting for 2/3rds stake at a lockout 
+threshold that considers slashed stakes will converge faster.
 
 #### Gossip, Data plane, Rent
 
