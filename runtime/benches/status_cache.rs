@@ -28,6 +28,6 @@ fn test_statuscache_serialize(bencher: &mut Bencher) {
         }
     }
     bencher.iter(|| {
-        let _ = serialize(&status_cache).unwrap();
+        let _ = serialize(&status_cache.slot_deltas(&vec![0])).unwrap();
     });
 }

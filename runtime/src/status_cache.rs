@@ -1,47 +1,70 @@
 use log::*;
 use rand::{thread_rng, Rng};
-use serde::ser::SerializeSeq;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
+use solana_sdk::timing::Slot;
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
 pub const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
 const CACHED_SIGNATURE_SIZE: usize = 20;
 
 // Store forks in a single chunk of memory to avoid another lookup.
-pub type ForkId = u64;
-pub type ForkStatus<T> = Vec<(ForkId, T)>;
+pub type ForkStatus<T> = Vec<(Slot, T)>;
 type SignatureSlice = [u8; CACHED_SIGNATURE_SIZE];
 type SignatureMap<T> = HashMap<SignatureSlice, ForkStatus<T>>;
-type StatusMap<T> = HashMap<Hash, (ForkId, usize, SignatureMap<T>)>;
+// Map of Hash and signature status
+pub type SignatureStatus<T> = Arc<Mutex<HashMap<Hash, (usize, Vec<(SignatureSlice, T)>)>>>;
+// A Map of hash + the highest fork it's been observed on along with
+// the signature offset and a Map of the signature slice + Fork status for that signature
+type StatusMap<T> = HashMap<Hash, (Slot, usize, SignatureMap<T>)>;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+// A map of signatures recorded in each fork; used to serialize for snapshots easily.
+// Doesn't store a `SlotDelta` in it because the bool `root` is usually set much later
+type SlotDeltaMap<T> = HashMap<Slot, SignatureStatus<T>>;
+
+// The signature statuses added during a slot, can be used to build on top of a status cache or to
+// construct a new one. Usually derived from a status cache's `SlotDeltaMap`
+pub type SlotDelta<T> = (Slot, bool, SignatureStatus<T>);
+
+#[derive(Clone, Debug)]
 pub struct StatusCache<T: Serialize + Clone> {
-    /// all signatures seen during a hash period
-    #[serde(serialize_with = "serialize_statusmap")]
-    cache: Vec<StatusMap<T>>,
-    roots: HashSet<ForkId>,
-}
-
-fn serialize_statusmap<S, T: Serialize>(x: &[StatusMap<T>], s: S) -> Result<S::Ok, S::Error>
-where
-    T: serde::Serialize + Clone,
-    S: serde::Serializer,
-{
-    let cache0: StatusMap<T> = HashMap::new();
-    let mut seq = s.serialize_seq(Some(x.len()))?;
-    seq.serialize_element(&cache0)?;
-    seq.serialize_element(&x[1])?;
-    seq.end()
+    cache: StatusMap<T>,
+    roots: HashSet<Slot>,
+    /// all signatures seen during a fork/slot
+    slot_deltas: SlotDeltaMap<T>,
 }
 
 impl<T: Serialize + Clone> Default for StatusCache<T> {
     fn default() -> Self {
         Self {
-            cache: vec![HashMap::default(); 2],
-            roots: HashSet::default(),
+            cache: HashMap::default(),
+            // 0 is always a root
+            roots: [0].iter().cloned().collect(),
+            slot_deltas: HashMap::default(),
         }
+    }
+}
+
+impl<T: Serialize + Clone + PartialEq> PartialEq for StatusCache<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.roots == other.roots
+            && self.cache.iter().all(|(hash, (slot, sig_index, sig_map))| {
+                if let Some((other_slot, other_sig_index, other_sig_map)) = other.cache.get(hash) {
+                    if slot == other_slot && sig_index == other_sig_index {
+                        return sig_map.iter().all(|(slice, fork_map)| {
+                            if let Some(other_fork_map) = other_sig_map.get(slice) {
+                                // all this work just to compare the highest forks in the fork map
+                                // per signature
+                                return fork_map.last() == other_fork_map.last();
+                            }
+                            false
+                        });
+                    }
+                }
+                false
+            })
     }
 }
 
@@ -51,25 +74,20 @@ impl<T: Serialize + Clone> StatusCache<T> {
         &self,
         sig: &Signature,
         transaction_blockhash: &Hash,
-        ancestors: &HashMap<ForkId, usize>,
-    ) -> Option<(ForkId, T)> {
-        for cache in self.cache.iter() {
-            let map = cache.get(transaction_blockhash);
-            if map.is_none() {
-                continue;
-            }
-            let (_, index, sigmap) = map.unwrap();
-            let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
-            sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_SIGNATURE_SIZE]);
-            if let Some(stored_forks) = sigmap.get(&sig_slice) {
-                let res = stored_forks
-                    .iter()
-                    .filter(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
-                    .nth(0)
-                    .cloned();
-                if res.is_some() {
-                    return res;
-                }
+        ancestors: &HashMap<Slot, usize>,
+    ) -> Option<(Slot, T)> {
+        let map = self.cache.get(transaction_blockhash)?;
+        let (_, index, sigmap) = map;
+        let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
+        sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_SIGNATURE_SIZE]);
+        if let Some(stored_forks) = sigmap.get(&sig_slice) {
+            let res = stored_forks
+                .iter()
+                .filter(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
+                .nth(0)
+                .cloned();
+            if res.is_some() {
+                return res;
             }
         }
         None
@@ -79,14 +97,13 @@ impl<T: Serialize + Clone> StatusCache<T> {
     pub fn get_signature_status_slow(
         &self,
         sig: &Signature,
-        ancestors: &HashMap<ForkId, usize>,
+        ancestors: &HashMap<Slot, usize>,
     ) -> Option<(usize, T)> {
         trace!("get_signature_status_slow");
         let mut keys = vec![];
-        for cache in self.cache.iter() {
-            let mut val: Vec<_> = cache.iter().map(|(k, _)| *k).collect();
-            keys.append(&mut val);
-        }
+        let mut val: Vec<_> = self.cache.iter().map(|(k, _)| *k).collect();
+        keys.append(&mut val);
+
         for blockhash in keys.iter() {
             trace!("get_signature_status_slow: trying {}", blockhash);
             if let Some((forkid, res)) = self.get_signature_status(sig, blockhash, ancestors) {
@@ -102,99 +119,122 @@ impl<T: Serialize + Clone> StatusCache<T> {
 
     /// Add a known root fork.  Roots are always valid ancestors.
     /// After MAX_CACHE_ENTRIES, roots are removed, and any old signatures are cleared.
-    pub fn add_root(&mut self, fork: ForkId) {
+    pub fn add_root(&mut self, fork: Slot) {
         self.roots.insert(fork);
         self.purge_roots();
     }
 
-    /// Insert a new signature for a specific fork.
-    pub fn insert(&mut self, transaction_blockhash: &Hash, sig: &Signature, fork: ForkId, res: T) {
+    /// Insert a new signature for a specific slot.
+    pub fn insert(&mut self, transaction_blockhash: &Hash, sig: &Signature, slot: Slot, res: T) {
         let sig_index: usize;
-        if let Some(sig_map) = self.cache[0].get(transaction_blockhash) {
+        if let Some(sig_map) = self.cache.get(transaction_blockhash) {
             sig_index = sig_map.1;
         } else {
             sig_index =
                 thread_rng().gen_range(0, std::mem::size_of::<Hash>() - CACHED_SIGNATURE_SIZE);
         }
-        let sig_map = self.cache[1].entry(*transaction_blockhash).or_insert((
-            fork,
-            sig_index,
-            HashMap::new(),
-        ));
-        sig_map.0 = std::cmp::max(fork, sig_map.0);
+
+        let sig_map =
+            self.cache
+                .entry(*transaction_blockhash)
+                .or_insert((slot, sig_index, HashMap::new()));
+        sig_map.0 = std::cmp::max(slot, sig_map.0);
         let index = sig_map.1;
         let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
         sig_slice.clone_from_slice(&sig.as_ref()[index..index + CACHED_SIGNATURE_SIZE]);
-        let sig_forks = sig_map.2.entry(sig_slice).or_insert_with(|| vec![]);
-        sig_forks.push((fork, res));
+        self.insert_with_slice(transaction_blockhash, slot, sig_index, sig_slice, res);
     }
 
     pub fn purge_roots(&mut self) {
         if self.roots.len() > MAX_CACHE_ENTRIES {
             if let Some(min) = self.roots.iter().min().cloned() {
                 self.roots.remove(&min);
-                for cache in self.cache.iter_mut() {
-                    cache.retain(|_, (fork, _, _)| *fork > min);
-                }
+                self.cache.retain(|_, (fork, _, _)| *fork > min);
+                self.slot_deltas.retain(|slot, _| *slot > min);
             }
         }
-    }
-
-    fn insert_entry(
-        &mut self,
-        transaction_blockhash: &Hash,
-        sig_slice: &[u8; CACHED_SIGNATURE_SIZE],
-        status: Vec<(ForkId, T)>,
-        index: usize,
-    ) {
-        let fork = status
-            .iter()
-            .fold(0, |acc, (f, _)| if acc > *f { acc } else { *f });
-        let sig_map =
-            self.cache[0]
-                .entry(*transaction_blockhash)
-                .or_insert((fork, index, HashMap::new()));
-        sig_map.0 = std::cmp::max(fork, sig_map.0);
-        let sig_forks = sig_map.2.entry(*sig_slice).or_insert_with(|| vec![]);
-        sig_forks.extend(status);
     }
 
     /// Clear for testing
     pub fn clear_signatures(&mut self) {
-        for cache in self.cache.iter_mut() {
-            for v in cache.values_mut() {
-                v.2 = HashMap::new();
+        for v in self.cache.values_mut() {
+            v.2 = HashMap::new();
+        }
+
+        self.slot_deltas
+            .iter_mut()
+            .for_each(|(_, status)| status.lock().unwrap().clear());
+    }
+
+    // returns the signature statuses for each slot in the slots provided
+    pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<T>> {
+        let empty = Arc::new(Mutex::new(HashMap::new()));
+        slots
+            .iter()
+            .map(|slot| {
+                (
+                    *slot,
+                    self.roots.contains(slot),
+                    self.slot_deltas.get(slot).unwrap_or_else(|| &empty).clone(),
+                )
+            })
+            .collect()
+    }
+
+    // replay deltas into a status_cache allows "appending" data
+    pub fn append(&mut self, slot_deltas: &[SlotDelta<T>]) {
+        for (slot, is_root, statuses) in slot_deltas {
+            statuses
+                .lock()
+                .unwrap()
+                .iter()
+                .for_each(|(tx_hash, (sig_index, statuses))| {
+                    for (sig_slice, res) in statuses.iter() {
+                        self.insert_with_slice(&tx_hash, *slot, *sig_index, *sig_slice, res.clone())
+                    }
+                });
+            if *is_root {
+                self.add_root(*slot);
             }
         }
     }
 
-    pub fn append(&mut self, status_cache: &StatusCache<T>) {
-        for (hash, sigmap) in status_cache.cache[1].iter() {
-            for (signature, fork_status) in sigmap.2.iter() {
-                self.insert_entry(hash, signature, fork_status.clone(), sigmap.1);
-            }
-        }
-
-        self.roots = self.roots.union(&status_cache.roots).cloned().collect();
+    pub fn from_slot_deltas(slot_deltas: &[SlotDelta<T>]) -> Self {
+        // play all deltas back into the the status cache
+        let mut me = Self::default();
+        me.append(slot_deltas);
+        me
     }
 
-    pub fn merge_caches(&mut self) {
-        let mut cache = HashMap::new();
-        std::mem::swap(&mut cache, &mut self.cache[1]);
-        for (hash, sigmap) in cache.iter() {
-            for (signature, fork_status) in sigmap.2.iter() {
-                self.insert_entry(hash, signature, fork_status.clone(), sigmap.1);
-            }
-        }
+    fn insert_with_slice(
+        &mut self,
+        transaction_blockhash: &Hash,
+        slot: Slot,
+        sig_index: usize,
+        sig_slice: [u8; CACHED_SIGNATURE_SIZE],
+        res: T,
+    ) {
+        let sig_map =
+            self.cache
+                .entry(*transaction_blockhash)
+                .or_insert((slot, sig_index, HashMap::new()));
+        sig_map.0 = std::cmp::max(slot, sig_map.0);
+
+        let sig_forks = sig_map.2.entry(sig_slice).or_insert_with(|| vec![]);
+        sig_forks.push((slot, res.clone()));
+        let slot_deltas = self.slot_deltas.entry(slot).or_default();
+        let mut fork_entry = slot_deltas.lock().unwrap();
+        let (_, hash_entry) = fork_entry
+            .entry(*transaction_blockhash)
+            .or_insert((sig_index, vec![]));
+        hash_entry.push((sig_slice, res))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::{deserialize_from, serialize_into, serialized_size};
     use solana_sdk::hash::hash;
-    use std::io::Cursor;
 
     type BankStatusCache = StatusCache<()>;
 
@@ -236,7 +276,7 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
-        status_cache.insert(&blockhash, &sig, 0, ());
+        status_cache.insert(&blockhash, &sig, 1, ());
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
             None
@@ -347,91 +387,43 @@ mod tests {
         let blockhash = hash(Hash::default().as_ref());
         status_cache.clear_signatures();
         status_cache.insert(&blockhash, &sig, 0, ());
-        let (_, index, sig_map) = status_cache.cache[1].get(&blockhash).unwrap();
+        let (_, index, sig_map) = status_cache.cache.get(&blockhash).unwrap();
         let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
         sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_SIGNATURE_SIZE]);
         assert!(sig_map.get(&sig_slice).is_some());
     }
 
     #[test]
-    fn test_statuscache_append() {
+    fn test_slot_deltas() {
         let sig = Signature::default();
-        let mut status_cache0 = BankStatusCache::default();
-        let blockhash0 = hash(Hash::new(&vec![0; 32]).as_ref());
-        status_cache0.add_root(0);
-        status_cache0.insert(&blockhash0, &sig, 0, ());
-
-        let sig = Signature::default();
-        let mut status_cache1 = BankStatusCache::default();
-        let blockhash1 = hash(Hash::new(&vec![1; 32]).as_ref());
-        status_cache1.insert(&blockhash0, &sig, 1, ());
-        status_cache1.add_root(1);
-        status_cache1.insert(&blockhash1, &sig, 1, ());
-
-        status_cache0.append(&status_cache1);
-        let roots: HashSet<_> = [0, 1].iter().cloned().collect();
-        assert_eq!(status_cache0.roots, roots);
-        let ancestors = vec![(0, 1), (1, 1)].into_iter().collect();
-        assert!(status_cache0
-            .get_signature_status(&sig, &blockhash0, &ancestors)
-            .is_some());
-        assert!(status_cache0
-            .get_signature_status(&sig, &blockhash1, &ancestors)
-            .is_some());
-    }
-
-    fn test_serialize(sc: &mut BankStatusCache, blockhash: Vec<Hash>, sig: &Signature) {
-        let len = serialized_size(&sc).unwrap();
-        let mut buf = vec![0u8; len as usize];
-        let mut writer = Cursor::new(&mut buf[..]);
-        let cache0 = sc.cache[0].clone();
-        serialize_into(&mut writer, sc).unwrap();
-        for hash in blockhash.iter() {
-            if let Some(map0) = sc.cache[0].get(hash) {
-                if let Some(map1) = sc.cache[1].get(hash) {
-                    assert_eq!(map0.1, map1.1);
-                }
-            }
-        }
-        sc.merge_caches();
-        let len = writer.position() as usize;
-
-        let mut reader = Cursor::new(&mut buf[..len]);
-        let mut status_cache: BankStatusCache = deserialize_from(&mut reader).unwrap();
-        status_cache.cache[0] = cache0;
-        status_cache.merge_caches();
-        assert!(status_cache.cache[0].len() > 0);
-        assert!(status_cache.cache[1].is_empty());
-        let ancestors = vec![(0, 1), (1, 1)].into_iter().collect();
-        assert_eq!(*sc, status_cache);
-        for hash in blockhash.iter() {
-            assert!(status_cache
-                .get_signature_status(&sig, &hash, &ancestors)
-                .is_some());
-        }
+        let mut status_cache = BankStatusCache::default();
+        let blockhash = hash(Hash::default().as_ref());
+        status_cache.clear_signatures();
+        status_cache.insert(&blockhash, &sig, 0, ());
+        let slot_deltas = status_cache.slot_deltas(&[0]);
+        let cache = StatusCache::from_slot_deltas(&slot_deltas);
+        assert_eq!(cache, status_cache);
+        let slot_deltas = cache.slot_deltas(&[0]);
+        let cache = StatusCache::from_slot_deltas(&slot_deltas);
+        assert_eq!(cache, status_cache);
     }
 
     #[test]
-    fn test_statuscache_serialize() {
+    fn test_roots_deltas() {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
-        let blockhash0 = hash(Hash::new(&vec![0; 32]).as_ref());
-        status_cache.add_root(0);
-        status_cache.clear_signatures();
-        status_cache.insert(&blockhash0, &sig, 0, ());
-        test_serialize(&mut status_cache, vec![blockhash0], &sig);
-
-        status_cache.insert(&blockhash0, &sig, 1, ());
-        test_serialize(&mut status_cache, vec![blockhash0], &sig);
-
-        let blockhash1 = hash(Hash::new(&vec![1; 32]).as_ref());
-        status_cache.insert(&blockhash1, &sig, 1, ());
-        test_serialize(&mut status_cache, vec![blockhash0, blockhash1], &sig);
-
-        let blockhash2 = hash(Hash::new(&vec![2; 32]).as_ref());
-        let ancestors = vec![(0, 1), (1, 1)].into_iter().collect();
-        assert!(status_cache
-            .get_signature_status(&sig, &blockhash2, &ancestors)
-            .is_none());
+        let blockhash = hash(Hash::default().as_ref());
+        let blockhash2 = hash(blockhash.as_ref());
+        status_cache.insert(&blockhash, &sig, 0, ());
+        status_cache.insert(&blockhash, &sig, 1, ());
+        status_cache.insert(&blockhash2, &sig, 1, ());
+        for i in 0..(MAX_CACHE_ENTRIES + 1) {
+            status_cache.add_root(i as u64);
+        }
+        let slots: Vec<_> = (0_u64..MAX_CACHE_ENTRIES as u64 + 1).collect();
+        let slot_deltas = status_cache.slot_deltas(&slots);
+        let cache = StatusCache::from_slot_deltas(&slot_deltas);
+        assert_eq!(cache, status_cache);
     }
+
 }

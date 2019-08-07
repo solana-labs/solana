@@ -16,10 +16,10 @@ use crate::serde_utils::{
     deserialize_atomicbool, deserialize_atomicusize, serialize_atomicbool, serialize_atomicusize,
 };
 use crate::stakes::Stakes;
-use crate::status_cache::StatusCache;
+use crate::status_cache::{SlotDelta, StatusCache};
 use crate::storage_utils;
 use crate::storage_utils::StorageAccounts;
-use bincode::{deserialize_from, serialize_into, serialized_size};
+use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -40,11 +40,10 @@ use solana_sdk::sysvar::{
     clock, fees, rewards,
     slot_hashes::{self, SlotHashes},
 };
-use solana_sdk::timing::{duration_as_ns, get_segment_from_slot, MAX_RECENT_BLOCKHASHES};
+use solana_sdk::timing::{duration_as_ns, get_segment_from_slot, Slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
 use std::collections::HashMap;
-use std::fmt;
 use std::io::{BufReader, Cursor, Error as IOError, Read};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -120,65 +119,15 @@ pub struct StatusCacheRc {
     status_cache: Arc<RwLock<BankStatusCache>>,
 }
 
-impl Serialize for StatusCacheRc {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        use serde::ser::Error;
-        let len = serialized_size(&*self.status_cache).unwrap();
-        let mut buf = vec![0u8; len as usize];
-        let mut wr = Cursor::new(&mut buf[..]);
-        {
-            let mut status_cache = self.status_cache.write().unwrap();
-            serialize_into(&mut wr, &*status_cache).map_err(Error::custom)?;
-            status_cache.merge_caches();
-        }
-        let len = wr.position() as usize;
-        serializer.serialize_bytes(&wr.into_inner()[..len])
-    }
-}
-
-struct StatusCacheRcVisitor;
-
-impl<'a> serde::de::Visitor<'a> for StatusCacheRcVisitor {
-    type Value = StatusCacheRc;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Expecting StatusCacheRc")
-    }
-
-    #[allow(clippy::mutex_atomic)]
-    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        use serde::de::Error;
-        let mut rd = Cursor::new(&data[..]);
-        let status_cache: BankStatusCache = deserialize_from(&mut rd).map_err(Error::custom)?;
-        Ok(StatusCacheRc {
-            status_cache: Arc::new(RwLock::new(status_cache)),
-        })
-    }
-}
-
-impl<'de> Deserialize<'de> for StatusCacheRc {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_bytes(StatusCacheRcVisitor)
-    }
-}
-
 impl StatusCacheRc {
-    pub fn append(&self, status_cache_rc: &StatusCacheRc) {
-        let sc = status_cache_rc.status_cache.write().unwrap();
-        self.status_cache.write().unwrap().append(&sc);
+    pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<Result<()>>> {
+        let sc = self.status_cache.read().unwrap();
+        sc.slot_deltas(slots)
     }
 
-    pub fn purge_roots(&self) {
-        self.status_cache.write().unwrap().purge_roots();
+    pub fn append(&self, slot_deltas: &[SlotDelta<Result<()>>]) {
+        let mut sc = self.status_cache.write().unwrap();
+        sc.append(slot_deltas);
     }
 }
 
@@ -554,20 +503,22 @@ impl Bank {
     pub fn squash(&self) {
         self.freeze();
 
-        let parents = self.parents();
+        //this bank and all its parents are now on the rooted path
+        let mut roots = vec![self.slot()];
+        roots.append(&mut self.parents().iter().map(|p| p.slot()).collect());
         *self.rc.parent.write().unwrap() = None;
 
         let mut squash_accounts_time = Measure::start("squash_accounts_time");
-        for p in parents.iter().rev() {
+        for slot in roots.iter().rev() {
             // root forks cannot be purged
-            self.rc.accounts.add_root(p.slot());
+            self.rc.accounts.add_root(*slot);
         }
         squash_accounts_time.stop();
 
         let mut squash_cache_time = Measure::start("squash_cache_time");
-        parents
+        roots
             .iter()
-            .for_each(|p| self.src.status_cache.write().unwrap().add_root(p.slot()));
+            .for_each(|slot| self.src.status_cache.write().unwrap().add_root(*slot));
         squash_cache_time.stop();
 
         datapoint_info!(
@@ -1472,9 +1423,9 @@ impl Bank {
         assert_eq!(*bhq, *dbhq);
 
         // TODO: Uncomment once status cache serialization is done
-        /*let sc = self.src.status_cache.read().unwrap();
+        let sc = self.src.status_cache.read().unwrap();
         let dsc = dbank.src.status_cache.read().unwrap();
-        assert_eq!(*sc, *dsc);*/
+        assert_eq!(*sc, *dsc);
         assert_eq!(
             self.rc.accounts.hash_internal_state(self.slot),
             dbank.rc.accounts.hash_internal_state(dbank.slot)
@@ -2414,7 +2365,10 @@ mod tests {
         let bank3 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 3));
         bank1.squash();
 
-        assert_eq!(bank0.get_balance(&key1.pubkey()), 1);
+        // This picks up the values from 1 which is the highest root:
+        // TODO: if we need to access rooted banks older than this,
+        // need to fix the lookup.
+        assert_eq!(bank0.get_balance(&key1.pubkey()), 4);
         assert_eq!(bank3.get_balance(&key1.pubkey()), 4);
         assert_eq!(bank2.get_balance(&key1.pubkey()), 3);
         bank3.squash();
