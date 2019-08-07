@@ -38,7 +38,7 @@ impl<T: BloomHashIndex> Bloom<T> {
     pub fn random(num_items: usize, false_rate: f64, max_bits: usize) -> Self {
         let m = Self::num_bits(num_items as f64, false_rate);
         let num_bits = cmp::max(1, cmp::min(m as usize, max_bits));
-        let num_keys =  Self::num_keys(num_bits as f64, num_items as f64) as usize;
+        let num_keys = Self::num_keys(num_bits as f64, num_items as f64) as usize;
         let keys: Vec<u64> = (0..num_keys).map(|_| rand::thread_rng().gen()).collect();
         Self::new(num_bits, keys)
     }
@@ -51,7 +51,7 @@ impl<T: BloomHashIndex> Bloom<T> {
         let n = num_items;
         let m = num_bits;
         ((m / n) * 2f64.ln()).round()
-    } 
+    }
     fn pos(&self, key: &T, k: u64) -> u64 {
         key.hash_at_index(k) % self.bits.len()
     }
@@ -154,5 +154,5 @@ mod test {
         assert_eq!(Bloom::<Hash>::num_keys(1000f64, 50f64) as u64, 14u64);
         assert_eq!(Bloom::<Hash>::num_keys(2000f64, 50f64) as u64, 28u64);
         assert_eq!(Bloom::<Hash>::num_keys(2000f64, 25f64) as u64, 55u64);
-    } 
+    }
 }
