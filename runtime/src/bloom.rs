@@ -36,15 +36,22 @@ impl<T: BloomHashIndex> Bloom<T> {
     /// `keysize` bytes
     /// https://hur.st/bloomfilter/
     pub fn random(num_items: usize, false_rate: f64, max_bits: usize) -> Self {
-        let n = num_items as f64;
-        let p = false_rate as f64;
-        let m = ((n * p.ln()) / (1f64 / 2f64.powf(2f64.ln())).ln()).ceil();
+        let m = Self::num_bits(num_items as f64, false_rate);
         let num_bits = cmp::max(1, cmp::min(m as usize, max_bits));
-        let k =  ((m / n) * 2f64.ln()).round();
-        let num_keys = k as usize;
+        let num_keys =  Self::num_keys(num_bits as f64, num_items as f64) as usize;
         let keys: Vec<u64> = (0..num_keys).map(|_| rand::thread_rng().gen()).collect();
         Self::new(num_bits, keys)
     }
+    pub fn num_bits(num_items: f64, false_rate: f64) -> f64 {
+        let n = num_items;
+        let p = false_rate;
+        ((n * p.ln()) / (1f64 / 2f64.powf(2f64.ln())).ln()).ceil()
+    }
+    pub fn num_keys(num_bits: f64, num_items: f64) -> f64 {
+        let n = num_items;
+        let m = num_bits;
+        ((m / n) * 2f64.ln()).round()
+    } 
     fn pos(&self, key: &T, k: u64) -> u64 {
         key.hash_at_index(k) % self.bits.len()
     }
@@ -99,7 +106,7 @@ mod test {
         //normal
         let bloom: Bloom<Hash> = Bloom::random(10, 0.1, 100);
         assert_eq!(bloom.keys.len(), 3);
-        assert_eq!(bloom.bits.len(), 34);
+        assert_eq!(bloom.bits.len(), 48);
 
         //saturated
         let bloom: Bloom<Hash> = Bloom::random(100, 0.1, 100);
@@ -130,4 +137,22 @@ mod test {
         b2.keys.sort();
         assert_ne!(b1.keys, b2.keys);
     }
+    // Bloom filter math in python
+    // n number of items
+    // p false rate
+    // m number of bits
+    // k number of keys
+    //
+    // n = ceil(m / (-k / log(1 - exp(log(p) / k))))
+    // p = pow(1 - exp(-k / (m / n)), k)
+    // m = ceil((n * log(p)) / log(1 / pow(2, log(2))));
+    // k = round((m / n) * log(2));
+    #[test]
+    fn test_filter_math() {
+        assert_eq!(Bloom::<Hash>::num_bits(100f64, 0.1f64) as u64, 480u64);
+        assert_eq!(Bloom::<Hash>::num_bits(100f64, 0.01f64) as u64, 959u64);
+        assert_eq!(Bloom::<Hash>::num_keys(1000f64, 50f64) as u64, 14u64);
+        assert_eq!(Bloom::<Hash>::num_keys(2000f64, 50f64) as u64, 28u64);
+        assert_eq!(Bloom::<Hash>::num_keys(2000f64, 25f64) as u64, 55u64);
+    } 
 }
