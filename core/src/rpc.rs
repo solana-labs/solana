@@ -234,6 +234,13 @@ pub struct RpcEpochInfo {
     pub slots_in_epoch: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct RpcVersionInfo {
+    /// The current version of solana-core
+    pub solana_core: String,
+}
+
 #[rpc(server)]
 pub trait RpcSol {
     type Metadata;
@@ -319,8 +326,8 @@ pub trait RpcSol {
         _: String,
     ) -> Result<Option<(usize, transaction::Result<()>)>>;
 
-    #[rpc(meta, name = "getSoftwareVersion")]
-    fn get_software_version(&self, _: Self::Metadata) -> Result<String>;
+    #[rpc(meta, name = "getVersion")]
+    fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo>;
 }
 
 pub struct RpcSolImpl;
@@ -607,8 +614,10 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().fullnode_exit()
     }
 
-    fn get_software_version(&self, _: Self::Metadata) -> Result<String> {
-        Ok(VERSION.to_string())
+    fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
+        Ok(RpcVersionInfo {
+            solana_core: VERSION.to_string(),
+        })
     }
 }
 
@@ -1098,15 +1107,17 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_get_software_version() {
+    fn test_rpc_get_version() {
         let bob_pubkey = Pubkey::new_rand();
         let (io, meta, ..) = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getSoftwareVersion"}}"#);
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVersion"}}"#);
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
-            "result": VERSION,
+            "result": {
+                "solana-core": VERSION
+            },
             "id": 1
         });
         let expected: Response =

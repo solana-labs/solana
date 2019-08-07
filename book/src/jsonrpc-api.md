@@ -26,6 +26,7 @@ Methods
 * [getBalance](#getbalance)
 * [getClusterNodes](#getclusternodes)
 * [getEpochInfo](#getepochinfo)
+* [getEpochVoteAccounts](#getepochvoteaccounts)
 * [getLeaderSchedule](#getleaderschedule)
 * [getProgramAccounts](#getprogramaccounts)
 * [getRecentBlockhash](#getrecentblockhash)
@@ -33,13 +34,12 @@ Methods
 * [getSlot](#getslot)
 * [getSlotLeader](#getslotleader)
 * [getSlotsPerSegment](#getslotspersegment)
-* [getSoftwareVersion](#getsoftwareversion)
 * [getStorageTurn](#getstorageturn)
 * [getStorageTurnRate](#getstorageturnrate)
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [getTotalSupply](#gettotalsupply)
-* [getEpochVoteAccounts](#getepochvoteaccounts)
+* [getVersion](#getsoftwareversion)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
 * [startSubscriptionChannel](#startsubscriptionchannel)
@@ -199,6 +199,30 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ---
 
+### getEpochVoteAccounts
+Returns the account info and associated stake for all the voting accounts in the current epoch.
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be an array of JSON objects, each with the following sub fields:
+* `votePubkey` - Vote account public key, as base-58 encoded string
+* `nodePubkey` - Node public key, as base-58 encoded string
+* `stake` - the stake, in lamports, delegated to this vote account
+* `commission`, a 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[{"commission":0,"nodePubkey":"Et2RaZJdJRTzTkodUwiHr4H6sLkVmijBFv8tkd7oSSFY","stake":42,"votePubkey":"B4CdWq3NBSoH2wYsVE1CaZSWPo2ZtopE4SJipQhZ3srF"}],"id":1}
+```
+
+---
+
 ### getLeaderSchedule
 Returns the leader schedule for the current epoch
 
@@ -351,23 +375,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":"1024","id":1}
 ```
 
-### getSoftwareVersion
-Returns the current solana software version running on the node
-
-##### Parameters:
-None
-
-##### Results:
-* `string` - software version
-
-##### Example:
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSoftwareVersion"}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":"0.17.2","id":1}
-```
-
 ----
 
 ### getStorageTurn
@@ -471,30 +478,25 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ---
 
-### getEpochVoteAccounts
-Returns the account info and associated stake for all the voting accounts in the current epoch.
+### getVersion
+Returns the current solana versions running on the node
 
 ##### Parameters:
 None
 
 ##### Results:
-The result field will be an array of JSON objects, each with the following sub fields:
-* `votePubkey` - Vote account public key, as base-58 encoded string
-* `nodePubkey` - Node public key, as base-58 encoded string
-* `stake` - the stake, in lamports, delegated to this vote account
-* `commission`, a 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
+The result field will be a JSON object with the following sub fields:
+* `solana-core`, software version of solana-core
 
 ##### Example:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://localhost:8899
-
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":[{"commission":0,"nodePubkey":"Et2RaZJdJRTzTkodUwiHr4H6sLkVmijBFv8tkd7oSSFY","stake":42,"votePubkey":"B4CdWq3NBSoH2wYsVE1CaZSWPo2ZtopE4SJipQhZ3srF"}],"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "0.17.2"},"id":1}
 ```
 
 ---
-
 
 ### requestAirdrop
 Requests an airdrop of lamports to a Pubkey
