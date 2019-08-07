@@ -1,6 +1,6 @@
 # Slashing
 
-Proof of Stake consensus requires that byzantine behavior be punished by loss of stake and rewards, also known as slashing. 
+Proof of Stake consensus requires that Byzantine behavior be punished by loss of stake and rewards, also known as slashing. 
 Solana implements slashing in 2 regimes: the validator regime and the replicator regime, corresponding to the two rewards regimes.
 During slashing, the network destroys some "penalty percentage" of lamports staked/earned in the rewards-generating accounts.
 
@@ -10,7 +10,7 @@ Validators cast their votes to a Vote account to which stake has been [passively
 The Vote program keeps track of rewards for all of the stakes, which allows it to be a central point for slashing.
 The basic mechanism of slashing is:
 
-1. a proof of byzantine behavior is submitted to the Vote program
+1. a proof of Byzantine behavior is submitted to the Vote program
 2. the Vote program marks the Vote account as "slashed", which means:
     * no further votes may be submitted to this account
     * the slashing penalty percentage of the lamports in this account are forfeit
@@ -35,7 +35,7 @@ of some number of previously submitted votes:
 
 #### Other proofs
 
-Some proofs of byzantine behavior require more data.
+Some proofs of Byzantine behavior require more data.
 1. conflicting transmission: 2 blobs or 2 shreds that are signed by a validator as leader that have the same slot and index, 
 but differing signatures.  The proof comprises `S(slot, index, hash(data)) + slot, index, hash(data)` for each of the conflicting blobs.
 2. ..
