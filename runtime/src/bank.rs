@@ -1043,7 +1043,7 @@ impl Bank {
                 0,
                 1000
             );
-            inc_new_counter_error!("bank-process_transactions-error_count", err_count, 0, 1000);
+            inc_new_counter_error!("bank-process_transactions-error_count", err_count);
         }
 
         Self::update_error_counters(&error_counters);
@@ -1115,8 +1115,8 @@ impl Bank {
         self.increment_transaction_count(tx_count);
         self.increment_signature_count(signature_count);
 
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
-        inc_new_counter_info!("bank-process_transactions-sigs", signature_count, 0, 1000);
+        inc_new_counter_info!("bank-process_transactions-txs", tx_count);
+        inc_new_counter_info!("bank-process_transactions-sigs", signature_count);
 
         if executed.iter().any(|res| Self::can_commit(res)) {
             self.is_delta.store(true, Ordering::Relaxed);

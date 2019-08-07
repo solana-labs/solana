@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const DEFAULT_LOG_RATE: usize = 1000;
 const DEFAULT_METRICS_RATE: usize = 1;
+const DEFAULT_TX_METRICS_RATE: usize = 10;
 
 pub struct Counter {
     pub name: &'static str,
@@ -126,6 +127,16 @@ macro_rules! inc_new_counter_debug {
 }
 
 impl Counter {
+    fn default_tx_metrics_rate() -> usize {
+        let v = env::var("SOLANA_TX_METRICS_RATE")
+            .map(|x| x.parse().unwrap_or(0))
+            .unwrap_or(0);
+        if v == 0 {
+            DEFAULT_TX_METRICS_RATE
+        } else {
+            v
+        }
+    }
     fn default_log_rate() -> usize {
         let v = env::var("SOLANA_DEFAULT_LOG_RATE")
             .map(|x| x.parse().unwrap_or(DEFAULT_LOG_RATE))
@@ -142,20 +153,24 @@ impl Counter {
                 .add_field("count", influxdb::Value::Integer(0))
                 .to_owned(),
         );
+        self.lograte
+            .compare_and_swap(0, Self::default_log_rate(), Ordering::Relaxed);
+        if self.name.contains("transactions") {
+            self.metricsrate.compare_and_swap(
+                0,
+                Self::default_tx_metrics_rate(),
+                Ordering::Relaxed,
+            );
+        }
+        self.metricsrate
+            .compare_and_swap(0, DEFAULT_METRICS_RATE, Ordering::Relaxed);
     }
     pub fn inc(&mut self, level: log::Level, events: usize) {
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
-        let mut lograte = self.lograte.load(Ordering::Relaxed);
-        if lograte == 0 {
-            lograte = Self::default_log_rate();
-            self.lograte.store(lograte, Ordering::Relaxed);
-        }
-        let mut metricsrate = self.metricsrate.load(Ordering::Relaxed);
-        if metricsrate == 0 {
-            metricsrate = DEFAULT_METRICS_RATE;
-            self.metricsrate.store(metricsrate, Ordering::Relaxed);
-        }
+        let lograte = self.lograte.load(Ordering::Relaxed);
+        let metricsrate = self.metricsrate.load(Ordering::Relaxed);
+
         if times % lograte == 0 && times > 0 && log_enabled!(level) {
             log!(level,
                 "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
