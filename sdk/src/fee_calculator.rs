@@ -21,7 +21,7 @@ pub struct FeeCalculator {
     pub min_lamports_per_signature: u64,
     pub max_lamports_per_signature: u64,
 
-    // What portion of collected fees are to be destroyed, percentage-wise
+    // What portion of collected fees are to be destroyed, as a fraction of std::u8::MAX
     pub burn_percent: u8,
 }
 
@@ -29,7 +29,7 @@ pub struct FeeCalculator {
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 42;
 pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: usize =
     710_000 * DEFAULT_TICKS_PER_SLOT as usize / DEFAULT_NUM_TICKS_PER_SECOND as usize;
-pub const DEFAULT_BURN_PERCENT: u8 = 50;
+pub const DEFAULT_BURN_PERCENT: u8 = 127;
 
 impl Default for FeeCalculator {
     fn default() -> Self {
@@ -129,7 +129,7 @@ impl FeeCalculator {
 
     /// calculate unburned fee from a fee total
     pub fn burn(&self, fees: u64) -> u64 {
-        fees * u64::from(100 - self.burn_percent) / 100
+        fees * u64::from(std::u8::MAX - self.burn_percent) / u64::from(std::u8::MAX)
     }
 }
 
@@ -148,7 +148,7 @@ mod tests {
         fee_calculator.burn_percent = 0;
 
         assert_eq!(fee_calculator.burn(2), 2);
-        fee_calculator.burn_percent = 100;
+        fee_calculator.burn_percent = std::u8::MAX;
         assert_eq!(fee_calculator.burn(2), 0);
     }
 
