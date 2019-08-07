@@ -11,7 +11,7 @@ use solana_sdk::{
 };
 use types::{
     account_address::AccountAddress,
-    transaction::{TransactionArgument, TransactionOutput},
+    transaction::{Program, TransactionArgument, TransactionOutput},
 };
 use vm::{
     access::ModuleAccess,
@@ -123,51 +123,51 @@ impl MoveProcessor {
     fn deserialize_compiled_program(
         data: &[u8],
     ) -> Result<(CompiledScript, Vec<CompiledModule>), InstructionError> {
-        let (script_bytes, modules_bytes) =
-            match bincode::deserialize(data).map_err(map_data_error)? {
-                LibraAccountState::CompiledProgram {
-                    script_bytes,
-                    modules_bytes,
-                } => (script_bytes, modules_bytes),
-                _ => {
-                    debug!("Error: Program account does not contain a program");
-                    return Err(InstructionError::InvalidArgument);
-                }
-            };
+        match bincode::deserialize(data).map_err(map_data_error)? {
+            LibraAccountState::CompiledProgram(string) => {
+                let program: Program = serde_json::from_str(&string).map_err(map_json_error)?;
 
-        let script = CompiledScript::deserialize(&script_bytes).map_err(map_vm_binary_error)?;
-        let modules = modules_bytes
-            .iter()
-            .map(|bytes| CompiledModule::deserialize(&bytes))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(map_vm_binary_error)?;
+                let script =
+                    CompiledScript::deserialize(&program.code()).map_err(map_vm_binary_error)?;
+                let modules = program
+                    .modules()
+                    .iter()
+                    .map(|bytes| CompiledModule::deserialize(&bytes))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(map_vm_binary_error)?;
 
-        Ok((script, modules))
+                Ok((script, modules))
+            }
+            _ => {
+                debug!("Error: Program account does not contain a program");
+                Err(InstructionError::InvalidArgument)
+            }
+        }
     }
 
     fn deserialize_verified_program(
         data: &[u8],
     ) -> Result<(VerifiedScript, Vec<VerifiedModule>), InstructionError> {
-        let (script_bytes, modules_bytes) =
-            match bincode::deserialize(data).map_err(map_data_error)? {
-                LibraAccountState::VerifiedProgram {
-                    script_bytes,
-                    modules_bytes,
-                } => (script_bytes, modules_bytes),
-                _ => {
-                    debug!("Error: Program account does not contain a program");
-                    return Err(InstructionError::InvalidArgument);
-                }
-            };
+        match bincode::deserialize(data).map_err(map_data_error)? {
+            LibraAccountState::VerifiedProgram {
+                script_bytes,
+                modules_bytes,
+            } => {
+                let script =
+                    VerifiedScript::deserialize(&script_bytes).map_err(map_vm_binary_error)?;
+                let modules = modules_bytes
+                    .iter()
+                    .map(|bytes| VerifiedModule::deserialize(&bytes))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(map_vm_binary_error)?;
 
-        let script = VerifiedScript::deserialize(&script_bytes).map_err(map_vm_binary_error)?;
-        let modules = modules_bytes
-            .iter()
-            .map(|bytes| VerifiedModule::deserialize(&bytes))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(map_vm_binary_error)?;
-
-        Ok((script, modules))
+                Ok((script, modules))
+            }
+            _ => {
+                debug!("Error: Program account does not contain a program");
+                Err(InstructionError::InvalidArgument)
+            }
+        }
     }
 
     fn execute(

@@ -25,6 +25,11 @@ pub fn map_data_error(err: std::boxed::Box<bincode::ErrorKind>) -> InstructionEr
     debug!("Error: Account data: {:?}", err);
     InstructionError::InvalidAccountData
 }
+#[allow(clippy::needless_pass_by_value)]
+pub fn map_json_error(err: serde_json::error::Error) -> InstructionError {
+    debug!("Error: serde_json: {:?}", err);
+    InstructionError::InvalidAccountData
+}
 pub fn map_vm_verification_error(
     err: (CompiledModule, Vec<vm::errors::VerificationError>),
 ) -> InstructionError {
