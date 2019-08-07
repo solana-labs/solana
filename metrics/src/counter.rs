@@ -259,7 +259,7 @@ impl Counter {
 }
 #[cfg(test)]
 mod tests {
-    use crate::counter::{Counter, DEFAULT_LOG_RATE};
+    use crate::counter::{Counter, DEFAULT_LOG_RATE, DEFAULT_METRICS_HIGH_RATE, HIGH_RATE};
     use log::Level;
     use log::*;
     use serial_test_derive::serial;
@@ -287,6 +287,9 @@ mod tests {
             .ok();
         let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 1000, 1);
+        unsafe {
+            COUNTER.init();
+        }
         let count = 1;
         inc_counter!(COUNTER, Level::Info, count);
         unsafe {
@@ -307,6 +310,39 @@ mod tests {
             assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 399);
         }
     }
+
+    #[test]
+    #[serial]
+    fn test_high_rate_counter() {
+        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
+            .try_init()
+            .ok();
+        let _readlock = get_env_lock().read();
+        static mut COUNTER: Counter = create_counter!("test", 1000, HIGH_RATE);
+        unsafe {
+            COUNTER.init();
+            assert_eq!(
+                COUNTER.metricsrate.load(Ordering::Relaxed),
+                DEFAULT_METRICS_HIGH_RATE
+            );
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_high_rate_counter_env() {
+        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
+            .try_init()
+            .ok();
+        let _readlock = get_env_lock().read();
+        static mut COUNTER: Counter = create_counter!("test", 1000, HIGH_RATE);
+        env::set_var("SOLANA_METRICS_HIGH_RATE", "50");
+        unsafe {
+            COUNTER.init();
+            assert_eq!(COUNTER.metricsrate.load(Ordering::Relaxed), 50);
+        }
+    }
+
     #[test]
     #[serial]
     fn test_inc_new_counter() {
@@ -317,6 +353,7 @@ mod tests {
         inc_new_counter_info!("2", 1, 3);
         inc_new_counter_info!("3", 1, 2, 1);
     }
+
     #[test]
     #[serial]
     fn test_lograte() {
@@ -332,8 +369,8 @@ mod tests {
             DEFAULT_LOG_RATE,
         );
         static mut COUNTER: Counter = create_counter!("test_lograte", 0, 1);
-        inc_counter!(COUNTER, Level::Error, 2);
         unsafe {
+            COUNTER.init();
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
         }
     }
@@ -348,15 +385,15 @@ mod tests {
         let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0, 1);
         env::set_var("SOLANA_DEFAULT_LOG_RATE", "50");
-        inc_counter!(COUNTER, Level::Error, 2);
         unsafe {
+            COUNTER.init();
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 50);
         }
 
         static mut COUNTER2: Counter = create_counter!("test_lograte_env", 0, 1);
         env::set_var("SOLANA_DEFAULT_LOG_RATE", "0");
-        inc_counter!(COUNTER2, Level::Error, 2);
         unsafe {
+            COUNTER2.init();
             assert_eq!(COUNTER2.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
         }
     }
