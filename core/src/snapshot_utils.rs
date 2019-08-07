@@ -48,24 +48,16 @@ impl SlotSnapshotPaths {
     }
 }
 
-pub fn package_snapshot<Q: AsRef<Path>>(
+pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     bank: &Bank,
     snapshot_files: &[SlotSnapshotPaths],
-    snapshot_package_output_file: Q,
+    snapshot_package_output_file: P,
+    snapshot_path: Q,
 ) -> Result<SnapshotPackage> {
     let slot = bank.slot();
 
     // Hard link all the snapshots we need for this package
-    let snapshot_hard_links_dir = get_snapshots_hardlink_dir_for_package(
-        snapshot_package_output_file
-            .as_ref()
-            .parent()
-            .expect("Invalid output path for tar"),
-        slot,
-    );
-
-    let _ = fs::remove_dir_all(&snapshot_hard_links_dir);
-    fs::create_dir_all(&snapshot_hard_links_dir)?;
+    let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
 
     // Get a reference to all the relevant AccountStorageEntries
     let account_storage_entries = bank.rc.get_storage_entries();
@@ -76,17 +68,18 @@ pub fn package_snapshot<Q: AsRef<Path>>(
         slot,
         account_storage_entries.len()
     );
-    let package = SnapshotPackage::new(
-        snapshot_hard_links_dir.clone(),
-        account_storage_entries,
-        snapshot_package_output_file.as_ref().to_path_buf(),
-    );
 
     // Any errors from this point on will cause the above SnapshotPackage to drop, clearing
     // any temporary state created for the SnapshotPackage (like the snapshot_hard_links_dir)
     for files in snapshot_files {
-        files.hardlink_snapshot_directory(&snapshot_hard_links_dir)?;
+        files.hardlink_snapshot_directory(snapshot_hard_links_dir.path())?;
     }
+
+    let package = SnapshotPackage::new(
+        snapshot_hard_links_dir,
+        account_storage_entries,
+        snapshot_package_output_file.as_ref().to_path_buf(),
+    );
 
     Ok(package)
 }
@@ -226,11 +219,6 @@ fn get_snapshot_file_name(slot: u64) -> String {
 
 fn get_bank_snapshot_dir<P: AsRef<Path>>(path: P, slot: u64) -> PathBuf {
     path.as_ref().join(slot.to_string())
-}
-
-fn get_snapshots_hardlink_dir_for_package<P: AsRef<Path>>(parent_dir: P, slot: u64) -> PathBuf {
-    let file_name = format!("snapshot_{}_hard_links", slot);
-    parent_dir.as_ref().join(file_name)
 }
 
 fn get_io_error(error: &str) -> Error {
