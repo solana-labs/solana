@@ -59,7 +59,7 @@ impl CrdsFilter {
         let arr = item.as_ref();
         let mut accum = 0;
         for i in 0..8 {
-            accum |= (arr[i] as u64) << i;
+            accum |= (arr[i] as u64) << i * 8;
         }
         accum
     }
