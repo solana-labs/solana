@@ -93,7 +93,6 @@ args=(
   --rpc-port 8899
   --rpc-drone-address 127.0.0.1:9900
   --accounts "$dataDir"/accounts
-  --snapshot-path "$dataDir"/snapshots
   --snapshot-interval-slots 100
 )
 if [[ -n $blockstreamSocket ]]; then
