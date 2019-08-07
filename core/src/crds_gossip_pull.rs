@@ -39,14 +39,21 @@ impl CrdsFilter {
         let m = (max_bytes * 8) as f64;
         let k = 8f64;
         let p = 0.01f64;
-        let max_items = (m
-            / (-k / (1f64 - (p.ln() / k).exp()).ln()))
-        .ceil();
+        let max_items = Self::max_items(m, p, k);
         let filter = Bloom::random(max_items as usize, p, m as usize);
-        let mask_bits = (num_items as f64 / max_items as f64).log2().ceil() as u32;
+        let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
         let seed: u64 = rand::thread_rng().gen();
-        let mask = !(seed & ((!0u64).checked_shl(mask_bits).unwrap_or(0)));
+        let mask = !(seed & !((!0u64).checked_shr(mask_bits).unwrap_or(!0x0)));
         CrdsFilter { filter, mask }
+    }
+    fn max_items(max_bits: f64, false_rate: f64, num_keys: f64) -> f64 {
+        let m = max_bits;
+        let p = false_rate;
+        let k = num_keys;
+        (m / (-k / (1f64 - (p.ln() / k).exp()).ln())).ceil()
+    }
+    fn mask_bits(num_items: f64, max_items: f64) -> u32 {
+        (num_items / max_items).log2().ceil() as u32
     }
     fn to_u64(item: &Hash) -> u64 {
         let arr = item.as_ref();
@@ -58,13 +65,13 @@ impl CrdsFilter {
     }
     pub fn add(&mut self, item: &Hash) {
         let bits = Self::to_u64(item);
-        if (bits & self.mask) != 0 {
+        if (bits & self.mask) == self.mask {
             self.filter.add(item);
         }
     }
     pub fn contains(&self, item: &Hash) -> bool {
         let bits = Self::to_u64(item);
-        if (bits & self.mask) == 0 {
+        if (bits & self.mask) != self.mask {
             return true;
         }
         self.filter.contains(item)
@@ -253,6 +260,7 @@ impl CrdsGossipPull {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
+    use solana_sdk::hash::hash;
 
     #[test]
     fn test_new_pull_with_stakes() {
@@ -459,8 +467,34 @@ mod test {
         assert_eq!(node.purged_values.len(), 0);
     }
     #[test]
-    fn test_crds_filter() {
+    fn test_crds_filter_mask() {
         let filter = CrdsFilter::new(1, 128);
         assert_eq!(filter.mask, !0x0);
+        assert_eq!(CrdsFilter::max_items(80f64, 0.01, 8f64), 9f64);
+        //1000/9 = 111, so 7 bits are needed to mask it
+        assert_eq!(CrdsFilter::mask_bits(1000f64, 9f64), 7u32);
+        let filter = CrdsFilter::new(1000, 10);
+        assert_eq!(filter.mask & 0x00ffffffff, 0x00ffffffff);
+    }
+
+    #[test]
+    fn test_crds_filter_add() {
+        let mut filter = CrdsFilter::new(1, 128);
+        let h: Hash = hash(Hash::default().as_ref());
+        filter.add(&h);
+        assert!(filter.contains(&h));
+        let h: Hash = hash(h.as_ref());
+        assert!(!filter.contains(&h));
+    }
+    #[test]
+    fn test_crds_filter_add_mask() {
+        let filter = CrdsFilter::new(1000, 10);
+        let mut h: Hash = hash(Hash::default().as_ref());
+        while (CrdsFilter::to_u64(&h) & filter.mask) != filter.mask {
+            h = hash(h.as_ref());
+        }
+        assert!(!filter.contains(&h));
+        filter.add(&h);
+        assert!(filter.contains(&h));
     }
 }
