@@ -534,7 +534,6 @@ impl Shredder {
 
             let mut pending_shreds: Vec<Vec<u8>> = (next_expected_index
                 ..first_index + fec_set_size)
-                .into_iter()
                 .map(|missing| {
                     present[missing] = false;
                     Self::new_empty_missing_shred(
