@@ -255,7 +255,7 @@ impl Write for Shredder {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub struct DeshredResult {
     pub payload: Vec<u8>,
     pub recovered_data: Vec<Shred>,
@@ -940,19 +940,24 @@ mod tests {
         let data: Vec<_> = (0..5000).collect();
         let data: Vec<u8> = data.iter().map(|x| *x as u8).collect();
         let mut offset = shredder.write(&data).unwrap();
+        let approx_shred_payload_size = offset;
         offset += shredder.write(&data[offset..]).unwrap();
         offset += shredder.write(&data[offset..]).unwrap();
         offset += shredder.write(&data[offset..]).unwrap();
         offset += shredder.write(&data[offset..]).unwrap();
 
-        // We should have 4 shreds now
-        assert_eq!(shredder.shreds.len(), 4);
+        // We should have some shreds now
+        assert_eq!(
+            shredder.shreds.len(),
+            data.len() / approx_shred_payload_size
+        );
         assert_eq!(offset, data.len());
 
         shredder.finalize_fec_block();
 
-        // We should have 10 shreds now (one additional final shred, and 5 coding shreds)
-        assert_eq!(shredder.shreds.len(), 10);
+        // We should have 10 shreds now (one additional final shred, and equal number of coding shreds)
+        let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
+        assert_eq!(shredder.shreds.len(), expected_shred_count);
 
         let shreds: Vec<Shred> = shredder
             .shreds
@@ -968,6 +973,7 @@ mod tests {
 
         // Test1: Try recovery/reassembly with only data shreds. Hint: should work
         let result = Shredder::deshred(&shreds[..5]).unwrap();
+        assert_ne!(DeshredResult::default(), result);
         assert!(result.payload.len() >= data.len());
         assert!(result.recovered_data.is_empty());
         assert!(result.recovered_code.is_empty());
