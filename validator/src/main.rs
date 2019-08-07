@@ -10,6 +10,7 @@ use solana::socketaddr;
 use solana::validator::{Validator, ValidatorConfig};
 use solana_netutil::parse_port_range;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use std::fs;
 use std::fs::File;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -157,19 +158,10 @@ fn main() {
                 .help("Range to use for dynamically assigned ports"),
         )
         .arg(
-            clap::Arg::with_name("snapshot_path")
-                .long("snapshot-path")
-                .value_name("SNAPSHOT_PATHS")
-                .takes_value(true)
-                .requires("snapshot_interval_slots")
-                .help("Snapshot path"),
-        )
-        .arg(
             clap::Arg::with_name("snapshot_interval_slots")
                 .long("snapshot-interval-slots")
                 .value_name("SNAPSHOT_INTERVAL_SLOTS")
                 .takes_value(true)
-                .requires("snapshot_path")
                 .help("Number of slots between generating snapshots"),
         )
         .arg(
@@ -246,16 +238,22 @@ fn main() {
     if let Some(paths) = matches.value_of("accounts") {
         validator_config.account_paths = Some(paths.to_string());
     }
-    if let Some(snapshot_path) = matches.value_of("snapshot_path").map(PathBuf::from) {
-        let snapshot_interval = matches.value_of("snapshot_interval_slots").unwrap();
-        validator_config.snapshot_config = Some(SnapshotConfig::new(
-            snapshot_path,
-            ledger_path.clone(),
-            snapshot_interval.parse::<usize>().unwrap(),
-        ));
-    } else {
-        validator_config.snapshot_config = None;
-    }
+
+    validator_config.snapshot_config = matches.value_of("snapshot_interval_slots").map(|s| {
+        let snapshots_dir = ledger_path.clone().join("snapshot");
+        let snapshots_bank_state_dir = snapshots_dir.join("bank_states");
+        let snapshots_tar_dir = snapshots_dir.join("tar");
+        fs::create_dir_all(&snapshots_dir).expect("Failed to create snapshots directory");
+        fs::create_dir_all(&snapshots_bank_state_dir)
+            .expect("Failed to create snapshots bank state directory");
+        fs::create_dir_all(&snapshots_tar_dir).expect("Failed  to create snapshots tar directory");
+        SnapshotConfig::new(
+            snapshots_bank_state_dir,
+            snapshots_tar_dir,
+            s.parse::<usize>().unwrap(),
+        )
+    });
+
     if matches.is_present("limit_ledger_size") {
         validator_config.max_ledger_slots = Some(DEFAULT_MAX_LEDGER_SLOTS);
     }

@@ -26,6 +26,7 @@ use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::{timestamp, DEFAULT_SLOTS_PER_TURN};
+use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -316,6 +317,11 @@ fn get_bank_forks(
         let mut result = None;
         if snapshot_config.is_some() {
             let snapshot_config = snapshot_config.as_ref().unwrap();
+
+            // Blow away any remnants in the snapshots directory
+            let _ = fs::remove_dir_all(snapshot_config.snapshot_path());
+            fs::create_dir_all(&snapshot_config.snapshot_path())
+                .expect("Couldn't create snapshot directory");
 
             // Get the path to the tar
             let tar = snapshot_utils::get_snapshot_tar_path(
