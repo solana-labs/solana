@@ -554,6 +554,10 @@ mod tests {
         }
     }
 
+    // creates banks upto "last_slot" and runs the input function `f` on each bank created
+    // also marks each bank as root and generates snapshots
+    // finally tries to restore from the last bank's snapshot and compares the restored bank to the
+    // `last_slot` bank
     fn run_bank_forks_snapshot_n<F>(last_slot: u64, f: F)
     where
         F: Fn(&mut Bank, &Keypair),
@@ -616,6 +620,8 @@ mod tests {
 
     #[test]
     fn test_bank_forks_snapshot_n() {
+        // create banks upto slot 4 and create 1 new account in each bank. test that bank 4 snapshots
+        // and restores correctly
         run_bank_forks_snapshot_n(4, |bank, mint_keypair| {
             let key1 = Keypair::new().pubkey();
             let tx = system_transaction::create_user_account(
@@ -643,6 +649,10 @@ mod tests {
 
     #[test]
     fn test_bank_forks_status_cache_snapshot_n() {
+        // create banks upto slot 256 while transferring 1 lamport into 2 different accounts each time
+        // this is done to ensure the AccountStorageEntries keep getting cleaned up as the root moves
+        // ahead. Also tests the status_cache purge and status cache snapshotting.
+        // Makes sure that the last bank is restored correctly
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         run_bank_forks_snapshot_n(256, |bank, mint_keypair| {
