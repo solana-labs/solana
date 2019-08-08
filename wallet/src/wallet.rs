@@ -1345,6 +1345,15 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
+// Return an error if string cannot be parsed as pubkey string or keypair file location
+fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
+    is_pubkey(string.clone()).or_else(|_| {
+        read_keypair(&string)
+            .map(|_| ())
+            .map_err(|err| format!("{:?}", err))
+    })
+}
+
 pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
     App::new(name)
         .about(about)
@@ -1372,7 +1381,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The public key of the balance to check"),
                 ),
         )
@@ -1410,7 +1419,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account in which to set the authorized voter"),
                 )
                 .arg(
@@ -1427,7 +1436,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("NEW VOTER PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("New vote signer to authorize"),
                 ),
         )
@@ -1440,7 +1449,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account address to fund"),
                 )
                 .arg(
@@ -1449,7 +1458,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("VALIDATOR PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Validator that will vote with this account"),
                 )
                 .arg(
@@ -1477,7 +1486,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account pubkey"),
                 )
         )
@@ -1505,7 +1514,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The vote account to which the stake will be delegated"),
                 )
                 .arg(
@@ -1546,7 +1555,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("DESTINATION PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The account where the lamports should be transfered"),
                 )
                 .arg(
@@ -1567,7 +1576,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("MINING POOL PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Mining pool account to redeem credits from"),
                 )
                 .arg(
@@ -1576,7 +1585,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STAKING ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Staking account address to redeem credits for"),
                 )
                 .arg(
@@ -1585,7 +1594,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The vote account to which the stake was previously delegated."),
                 ),
         )
@@ -1598,7 +1607,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STAKE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Stake account pubkey"),
                 )
         )
@@ -1611,7 +1620,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage mining pool account address to fund"),
                 )
                 .arg(
@@ -1632,7 +1641,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT OWNER PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
                 .arg(
                     Arg::with_name("storage_account_pubkey")
@@ -1640,7 +1649,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
         )
         .subcommand(
@@ -1672,7 +1681,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("NODE PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The node account to credit the rewards to"),
                 )
                 .arg(
@@ -1681,7 +1690,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage account address to redeem credits for"),
                 ))
 
@@ -1694,7 +1703,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage account pubkey"),
                 )
         )
