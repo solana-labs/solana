@@ -60,6 +60,10 @@ solana_replicator=$(solana_program replicator)
 
 export RUST_BACKTRACE=1
 
+if [[ -z $SOLANA_METRICS_HIGH_RATE ]]; then
+  export SOLANA_METRICS_HIGH_RATE=1000
+fi
+
 # shellcheck source=scripts/configure-metrics.sh
 source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 

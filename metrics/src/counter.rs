@@ -6,6 +6,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const DEFAULT_LOG_RATE: usize = 1000;
 const DEFAULT_METRICS_RATE: usize = 1;
+const DEFAULT_METRICS_HIGH_RATE: usize = 10;
+
+/// Use default metrics high rate
+pub const HIGH_RATE: usize = 999_999;
 
 pub struct Counter {
     pub name: &'static str,
@@ -125,7 +129,69 @@ macro_rules! inc_new_counter_debug {
     }};
 }
 
+#[macro_export]
+macro_rules! inc_new_high_rate_counter_error {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!(
+            $name,
+            $count,
+            log::Level::Error,
+            0,
+            $crate::counter::HIGH_RATE
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_high_rate_counter_warn {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!(
+            $name,
+            $count,
+            log::Level::Warn,
+            0,
+            $crate::counter::HIGH_RATE
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_high_rate_counter_info {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!(
+            $name,
+            $count,
+            log::Level::Info,
+            0,
+            $crate::counter::HIGH_RATE
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_high_rate_counter_debug {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!(
+            $name,
+            $count,
+            log::Level::Debug,
+            0,
+            $crate::counter::HIGH_RATE
+        );
+    }};
+}
+
 impl Counter {
+    fn default_metrics_high_rate() -> usize {
+        let v = env::var("SOLANA_METRICS_HIGH_RATE")
+            .map(|x| x.parse().unwrap_or(0))
+            .unwrap_or(0);
+        if v == 0 {
+            DEFAULT_METRICS_HIGH_RATE
+        } else {
+            v
+        }
+    }
     fn default_log_rate() -> usize {
         let v = env::var("SOLANA_DEFAULT_LOG_RATE")
             .map(|x| x.parse().unwrap_or(DEFAULT_LOG_RATE))
@@ -142,20 +208,22 @@ impl Counter {
                 .add_field("count", influxdb::Value::Integer(0))
                 .to_owned(),
         );
+        self.lograte
+            .compare_and_swap(0, Self::default_log_rate(), Ordering::Relaxed);
+        self.metricsrate.compare_and_swap(
+            HIGH_RATE,
+            Self::default_metrics_high_rate(),
+            Ordering::Relaxed,
+        );
+        self.metricsrate
+            .compare_and_swap(0, DEFAULT_METRICS_RATE, Ordering::Relaxed);
     }
     pub fn inc(&mut self, level: log::Level, events: usize) {
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
-        let mut lograte = self.lograte.load(Ordering::Relaxed);
-        if lograte == 0 {
-            lograte = Self::default_log_rate();
-            self.lograte.store(lograte, Ordering::Relaxed);
-        }
-        let mut metricsrate = self.metricsrate.load(Ordering::Relaxed);
-        if metricsrate == 0 {
-            metricsrate = DEFAULT_METRICS_RATE;
-            self.metricsrate.store(metricsrate, Ordering::Relaxed);
-        }
+        let lograte = self.lograte.load(Ordering::Relaxed);
+        let metricsrate = self.metricsrate.load(Ordering::Relaxed);
+
         if times % lograte == 0 && times > 0 && log_enabled!(level) {
             log!(level,
                 "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
@@ -191,7 +259,7 @@ impl Counter {
 }
 #[cfg(test)]
 mod tests {
-    use crate::counter::{Counter, DEFAULT_LOG_RATE};
+    use crate::counter::{Counter, DEFAULT_LOG_RATE, DEFAULT_METRICS_HIGH_RATE, HIGH_RATE};
     use log::Level;
     use log::*;
     use serial_test_derive::serial;
@@ -219,6 +287,9 @@ mod tests {
             .ok();
         let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 1000, 1);
+        unsafe {
+            COUNTER.init();
+        }
         let count = 1;
         inc_counter!(COUNTER, Level::Info, count);
         unsafe {
@@ -239,6 +310,40 @@ mod tests {
             assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 399);
         }
     }
+
+    #[test]
+    #[serial]
+    fn test_high_rate_counter() {
+        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
+            .try_init()
+            .ok();
+        let _readlock = get_env_lock().read();
+        static mut COUNTER: Counter = create_counter!("test", 1000, HIGH_RATE);
+        env::remove_var("SOLANA_METRICS_HIGH_RATE");
+        unsafe {
+            COUNTER.init();
+            assert_eq!(
+                COUNTER.metricsrate.load(Ordering::Relaxed),
+                DEFAULT_METRICS_HIGH_RATE
+            );
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_high_rate_counter_env() {
+        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
+            .try_init()
+            .ok();
+        let _writelock = get_env_lock().write();
+        static mut COUNTER: Counter = create_counter!("test", 1000, HIGH_RATE);
+        env::set_var("SOLANA_METRICS_HIGH_RATE", "50");
+        unsafe {
+            COUNTER.init();
+            assert_eq!(COUNTER.metricsrate.load(Ordering::Relaxed), 50);
+        }
+    }
+
     #[test]
     #[serial]
     fn test_inc_new_counter() {
@@ -249,6 +354,7 @@ mod tests {
         inc_new_counter_info!("2", 1, 3);
         inc_new_counter_info!("3", 1, 2, 1);
     }
+
     #[test]
     #[serial]
     fn test_lograte() {
@@ -264,8 +370,8 @@ mod tests {
             DEFAULT_LOG_RATE,
         );
         static mut COUNTER: Counter = create_counter!("test_lograte", 0, 1);
-        inc_counter!(COUNTER, Level::Error, 2);
         unsafe {
+            COUNTER.init();
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
         }
     }
@@ -280,15 +386,15 @@ mod tests {
         let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0, 1);
         env::set_var("SOLANA_DEFAULT_LOG_RATE", "50");
-        inc_counter!(COUNTER, Level::Error, 2);
         unsafe {
+            COUNTER.init();
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 50);
         }
 
         static mut COUNTER2: Counter = create_counter!("test_lograte_env", 0, 1);
         env::set_var("SOLANA_DEFAULT_LOG_RATE", "0");
-        inc_counter!(COUNTER2, Level::Error, 2);
         unsafe {
+            COUNTER2.init();
             assert_eq!(COUNTER2.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
         }
     }

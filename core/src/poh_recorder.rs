@@ -296,11 +296,9 @@ impl PohRecorder {
     pub fn tick(&mut self) {
         let now = Instant::now();
         let poh_entry = self.poh.lock().unwrap().tick();
-        inc_new_counter_warn!(
+        inc_new_high_rate_counter_warn!(
             "poh_recorder-tick_lock_contention",
-            timing::duration_as_ms(&now.elapsed()) as usize,
-            0,
-            1000
+            timing::duration_as_ms(&now.elapsed()) as usize
         );
         let now = Instant::now();
         if let Some(poh_entry) = poh_entry {
@@ -308,11 +306,9 @@ impl PohRecorder {
             trace!("tick {}", self.tick_height);
 
             if self.start_leader_at_tick.is_none() {
-                inc_new_counter_warn!(
+                inc_new_high_rate_counter_warn!(
                     "poh_recorder-tick_overhead",
-                    timing::duration_as_ms(&now.elapsed()) as usize,
-                    0,
-                    1000
+                    timing::duration_as_ms(&now.elapsed()) as usize
                 );
                 return;
             }
@@ -326,11 +322,9 @@ impl PohRecorder {
             self.tick_cache.push((entry, self.tick_height));
             let _ = self.flush_cache(true);
         }
-        inc_new_counter_warn!(
+        inc_new_high_rate_counter_warn!(
             "poh_recorder-tick_overhead",
-            timing::duration_as_ms(&now.elapsed()) as usize,
-            0,
-            1000
+            timing::duration_as_ms(&now.elapsed()) as usize
         );
     }
 
@@ -356,11 +350,9 @@ impl PohRecorder {
 
             let now = Instant::now();
             if let Some(poh_entry) = self.poh.lock().unwrap().record(mixin) {
-                inc_new_counter_warn!(
+                inc_new_high_rate_counter_warn!(
                     "poh_recorder-record_lock_contention",
-                    timing::duration_as_ms(&now.elapsed()) as usize,
-                    0,
-                    1000
+                    timing::duration_as_ms(&now.elapsed()) as usize
                 );
                 let entry = Entry {
                     num_hashes: poh_entry.num_hashes,
