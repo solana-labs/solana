@@ -92,16 +92,29 @@ impl Validator {
         verify_ledger: bool,
         config: &ValidatorConfig,
     ) -> Self {
-        info!("node info: {:?}", node.info);
-        info!("node entrypoint_info: {:?}", entrypoint_info_option);
-        info!(
-            "node local gossip address: {}",
-            node.sockets.gossip.local_addr().unwrap()
-        );
-        warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
-
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
+
+        warn!("identity pubkey: {:?}", id);
+        warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
+        info!("entrypoint: {:?}", entrypoint_info_option);
+        info!("{:?}", node.info);
+        info!(
+            "local gossip address: {}",
+            node.sockets.gossip.local_addr().unwrap()
+        );
+        info!(
+            "local broadcast address: {}",
+            node.sockets.broadcast.local_addr().unwrap()
+        );
+        info!(
+            "local repair address: {}",
+            node.sockets.repair.local_addr().unwrap()
+        );
+        info!(
+            "local retransmit address: {}",
+            node.sockets.retransmit.local_addr().unwrap()
+        );
 
         info!("creating bank...");
         let (
