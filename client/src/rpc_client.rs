@@ -94,6 +94,25 @@ impl RpcClient {
         })
     }
 
+    pub fn get_version(&self) -> io::Result<String> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetVersion, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetVersion request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::to_string(&response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetVersion parse failure: {}", err),
+            )
+        })
+    }
+
     pub fn send_and_confirm_transaction<T: KeypairUtil>(
         &self,
         transaction: &mut Transaction,
