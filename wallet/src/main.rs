@@ -2,6 +2,7 @@ use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatch
 use console::style;
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use solana_wallet::config::{self, Config};
+use solana_wallet::display::println_name_value;
 use solana_wallet::wallet::{app, parse_command, process_command, WalletConfig, WalletError};
 use std::error;
 
@@ -118,16 +119,6 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         keypair,
         rpc_client: None,
     })
-}
-
-// Pretty print a "name value"
-fn println_name_value(name: &str, value: &str) {
-    let styled_value = if value == "" {
-        style("(not set)").italic()
-    } else {
-        style(value)
-    };
-    println!("{} {}", style(name).bold(), styled_value);
 }
 
 // Return an error if a url cannot be parsed.

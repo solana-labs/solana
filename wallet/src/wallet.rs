@@ -1,9 +1,11 @@
+use crate::display::println_name_value;
 use chrono::prelude::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
+use console::style;
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json;
-use serde_json::json;
+use serde_json::{json, Value};
 use solana_budget_api;
 use solana_budget_api::budget_instruction;
 use solana_budget_api::budget_state::BudgetError;
@@ -63,6 +65,7 @@ pub enum WalletCommand {
     Deploy(String),
     GetSlot,
     GetTransactionCount,
+    GetVersion,
     // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
         u64,
@@ -362,6 +365,7 @@ pub fn parse_command(
             };
             Ok(WalletCommand::TimeElapsed(to, process_id, dt))
         }
+        ("cluster-version", Some(_matches)) => Ok(WalletCommand::GetVersion),
         ("", None) => {
             eprintln!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
@@ -1040,6 +1044,23 @@ fn process_witness(
     Ok(signature_str.to_string())
 }
 
+fn process_get_version(rpc_client: &RpcClient, config: &WalletConfig) -> ProcessResult {
+    let remote_version: Value = serde_json::from_str(&rpc_client.get_version()?)?;
+    println!(
+        "{} {}",
+        style("Cluster versions from:").bold(),
+        config.json_rpc_url
+    );
+    if let Some(versions) = remote_version.as_object() {
+        for (key, value) in versions.iter() {
+            if let Some(value_string) = value.as_str() {
+                println_name_value(&format!("* {}:", key), &value_string);
+            }
+        }
+    }
+    Ok("".to_string())
+}
+
 pub fn process_command(config: &WalletConfig) -> ProcessResult {
     if let WalletCommand::Address = config.command {
         // Get address of this client
@@ -1220,6 +1241,9 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Witness(to, pubkey) => {
             process_witness(&rpc_client, config, drone_addr, &to, &pubkey)
         }
+
+        // Return software version of wallet and cluster entrypoint node
+        WalletCommand::GetVersion => process_get_version(&rpc_client, config),
     }
 }
 
@@ -1794,6 +1818,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .help("Optional arbitrary timestamp to apply"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("cluster-version")
+                .about("Get the version of the cluster entrypoint"),
         )
 }
 
