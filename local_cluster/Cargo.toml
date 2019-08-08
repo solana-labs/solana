@@ -10,6 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 log = "0.4.8"
+rand = "0.6.5"
 solana-core = { path = "../core", version = "0.18.0-pre2" }
 solana-client = { path = "../client", version = "0.18.0-pre2" }
 solana-logger = { path = "../logger", version = "0.18.0-pre2" }
@@ -20,6 +21,7 @@ solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre2"
 solana-storage-program = { path = "../programs/storage_program", version = "0.18.0-pre2" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre2" }
 symlink = "0.1.0"
+tempfile = "3.1.0"
 
 [dev-dependencies]
 serial_test = "0.2.0"

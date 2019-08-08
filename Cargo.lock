@@ -3535,6 +3535,7 @@ name = "solana-local-cluster"
 version = "0.18.0-pre2"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test_derive 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-client 0.18.0-pre2",
@@ -3547,6 +3548,7 @@ dependencies = [
  "solana-storage-program 0.18.0-pre2",
  "solana-vote-api 0.18.0-pre2",
  "symlink 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

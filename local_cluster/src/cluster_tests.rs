@@ -1,3 +1,4 @@
+use rand::{thread_rng, Rng};
 use solana_client::thin_client::create_client;
 /// Cluster independant integration tests
 ///
@@ -25,7 +26,12 @@ use solana_sdk::{
     },
     transport::TransportError,
 };
-use std::{collections::HashSet, path::Path, thread::sleep, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    thread::sleep,
+    time::Duration,
+};
 
 const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
 
@@ -65,8 +71,25 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
     }
 }
 
-pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num_txs: u64) {
+pub fn verify_balances<S: ::std::hash::BuildHasher>(
+    expected_balances: HashMap<Pubkey, u64, S>,
+    node: &ContactInfo,
+) {
     let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+    for (pk, b) in expected_balances {
+        let bal = client.poll_get_balance(&pk).expect("balance in source");
+        assert_eq!(bal, b);
+    }
+}
+
+pub fn send_many_transactions(
+    node: &ContactInfo,
+    funding_keypair: &Keypair,
+    max_tokens_per_transfer: u64,
+    num_txs: u64,
+) -> HashMap<Pubkey, u64> {
+    let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let mut expected_balances = HashMap::new();
     for _ in 0..num_txs {
         let random_keypair = Keypair::new();
         let bal = client
@@ -74,12 +97,23 @@ pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num
             .expect("balance in source");
         assert!(bal > 0);
         let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
-        let mut transaction =
-            system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
+        let transfer_amount = thread_rng().gen_range(1, max_tokens_per_transfer);
+
+        let mut transaction = system_transaction::transfer(
+            &funding_keypair,
+            &random_keypair.pubkey(),
+            transfer_amount,
+            blockhash,
+        );
+
         client
             .retry_transfer(&funding_keypair, &mut transaction, 5)
             .unwrap();
+
+        expected_balances.insert(random_keypair.pubkey(), transfer_amount);
     }
+
+    expected_balances
 }
 
 pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {

@@ -238,6 +238,7 @@ impl BankForks {
                 .snapshot_config
                 .as_ref()
                 .expect("Called package_snapshot without a snapshot configuration");
+            info!("setting snapshot root: {}", root);
             if root - self.slots_since_snapshot[0] >= config.snapshot_interval_slots as u64 {
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
                 let r = self.generate_snapshot(
