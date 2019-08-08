@@ -39,7 +39,7 @@ Methods
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [getTotalSupply](#gettotalsupply)
-* [getVersion](#getsoftwareversion)
+* [getVersion](#getversion)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
 * [startSubscriptionChannel](#startsubscriptionchannel)
