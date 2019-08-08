@@ -1358,7 +1358,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(1)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to request"),
@@ -1382,7 +1382,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(1)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1407,7 +1407,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1416,7 +1416,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("authorized_voter_keypair_file")
                         .index(2)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("CURRENT VOTER KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the currently authorized vote signer"),
@@ -1424,7 +1424,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("new_authorized_voter_pubkey")
                         .index(3)
-                        .value_name("PUBKEY")
+                        .value_name("NEW VOTER PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1437,7 +1437,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1446,7 +1446,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("node_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("VALIDATOR PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1455,7 +1455,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to send to the vote account"),
@@ -1474,7 +1474,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1494,7 +1494,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the new stake account"),
@@ -1502,7 +1502,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1511,7 +1511,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports_to_stake")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to stake"),
@@ -1523,7 +1523,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the stake account, for signing the delegate transaction."),
@@ -1535,7 +1535,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the stake account, for signing the withdraw transaction."),
@@ -1543,7 +1543,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("DESTINATION PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1552,7 +1552,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to to withdraw from the stake account."),
@@ -1582,7 +1582,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(3)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1595,7 +1595,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STAKE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1608,7 +1608,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1617,7 +1617,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(2)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to assign to the storage mining pool account"),
@@ -1629,7 +1629,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1637,7 +1637,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1649,7 +1649,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1657,7 +1657,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1691,7 +1691,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1704,7 +1704,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
-                        .value_name("PATH")
+                        .value_name("PATH TO PROGRAM")
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
@@ -1733,7 +1733,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(2)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to send"),
@@ -1785,7 +1785,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to authorize"),
@@ -1806,7 +1806,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to unlock"),
