@@ -29,7 +29,7 @@ pub struct FeeCalculator {
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 42;
 pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: usize =
     710_000 * DEFAULT_TICKS_PER_SLOT as usize / DEFAULT_NUM_TICKS_PER_SECOND as usize;
-pub const DEFAULT_BURN_PERCENT: u8 = 50;
+pub const DEFAULT_BURN_PERCENT: u8 = 0;
 
 impl Default for FeeCalculator {
     fn default() -> Self {
@@ -143,7 +143,7 @@ mod tests {
     fn test_fee_calculator_burn() {
         let mut fee_calculator = FeeCalculator::default();
 
-        assert_eq!(fee_calculator.burn(2), 1);
+        assert_eq!(fee_calculator.burn(2), 2);
 
         fee_calculator.burn_percent = 0;
 
