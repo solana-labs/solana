@@ -6,8 +6,7 @@
 
 - [Getting Started](getting-started.md)
   - [Testnet Participation](testnet-participation.md)
-  - [Testnet Replicator](testnet-replicator.md)
-  - [Example: Web Wallet](webwallet.md)
+  - [Example Client: Web Wallet](webwallet.md)
 
 - [Programming Model](programs.md)
   - [Example: Tic-Tac-Toe](tictactoe.md)
@@ -30,8 +29,21 @@
     - [Blocktree](blocktree.md)
   - [Gossip Service](gossip.md)
   - [The Runtime](runtime.md)
-  
+
 - [Anatomy of a Transaction](transaction.md)
+
+- [Running a Validator](running-validator.md)
+  - [Hardware Requirements](validator-hardware.md)
+  - [Choosing a Testnet](validator-testnet.md)
+  - [Installing the Validator Software](validator-software.md)
+  - [Starting a Validator](validator-start.md)
+  - [Staking](validator-stake.md)
+  - [Monitoring a Validator](validator-monitor.md)
+  - [Publishing Validator Info](validator-info.md)
+  - [Troubleshooting](validator-troubleshoot.md)
+  - [FAQ](validator-faq.md)
+
+- [Running a Replicator](running-replicator.md)
 
 - [API Reference](api-reference.md)
   - [Transaction](transaction-api.md)
@@ -73,7 +85,7 @@
   - [Passive Stake Delegation and Rewards](passive-stake-delegation-and-rewards.md)
   - [Persistent Account Storage](persistent-account-storage.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
-  - [Repair Service](repair-service.md) 
+  - [Repair Service](repair-service.md)
   - [Testing Programs](testing-programs.md)
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Embedding the Move Langauge](embedding-move.md)

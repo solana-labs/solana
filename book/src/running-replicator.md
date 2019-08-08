@@ -1,4 +1,4 @@
-## Testnet Replicator
+## Running a Replicator
 This document describes how to setup a replicator in the testnet
 
 Please note some of the information and instructions described here may change
