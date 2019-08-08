@@ -149,7 +149,7 @@ fn main() {
         }
         ("verify", _) => {
             println!("Verifying ledger...");
-            match process_blocktree(&genesis_block, &blocktree, None, true) {
+            match process_blocktree(&genesis_block, &blocktree, None, true, None) {
                 Ok((_bank_forks, bank_forks_info, _)) => {
                     println!("{:?}", bank_forks_info);
                 }

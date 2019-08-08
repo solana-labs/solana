@@ -25,7 +25,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::{timestamp, DEFAULT_SLOTS_PER_TURN};
+use solana_sdk::timing::{timestamp, Slot, DEFAULT_SLOTS_PER_TURN};
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -36,7 +36,8 @@ use std::thread::Result;
 
 #[derive(Clone, Debug)]
 pub struct ValidatorConfig {
-    pub sigverify_disabled: bool,
+    pub dev_sigverify_disabled: bool,
+    pub dev_halt_at_slot: Option<Slot>,
     pub voting_disabled: bool,
     pub blockstream_unix_socket: Option<PathBuf>,
     pub storage_slots_per_turn: u64,
@@ -51,7 +52,8 @@ pub struct ValidatorConfig {
 impl Default for ValidatorConfig {
     fn default() -> Self {
         Self {
-            sigverify_disabled: false,
+            dev_sigverify_disabled: false,
+            dev_halt_at_slot: None,
             voting_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
@@ -90,6 +92,12 @@ impl Validator {
         verify_ledger: bool,
         config: &ValidatorConfig,
     ) -> Self {
+        info!("node info: {:?}", node.info);
+        info!("node entrypoint_info: {:?}", entrypoint_info_option);
+        info!(
+            "node local gossip address: {}",
+            node.sockets.gossip.local_addr().unwrap()
+        );
         warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
 
         let id = keypair.pubkey();
@@ -109,12 +117,64 @@ impl Validator {
             config.account_paths.clone(),
             config.snapshot_config.clone(),
             verify_ledger,
+            config.dev_halt_at_slot,
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
+
+        node.info.wallclock = timestamp();
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
+            node.info.clone(),
+            keypair.clone(),
+        )));
+
+        let storage_state = StorageState::new(
+            &bank.last_blockhash(),
+            config.storage_slots_per_turn,
+            bank.slots_per_segment(),
+        );
+
+        let rpc_service = if node.info.rpc.port() == 0 {
+            None
+        } else {
+            Some(JsonRpcService::new(
+                &cluster_info,
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
+                storage_state.clone(),
+                config.rpc_config.clone(),
+                bank_forks.clone(),
+                ledger_path,
+                &exit,
+            ))
+        };
+
+        let subscriptions = Arc::new(RpcSubscriptions::default());
+        let rpc_pubsub_service = if node.info.rpc_pubsub.port() == 0 {
+            None
+        } else {
+            Some(PubSubService::new(
+                &subscriptions,
+                SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                    node.info.rpc_pubsub.port(),
+                ),
+                &exit,
+            ))
+        };
+
+        if config.dev_halt_at_slot.is_some() {
+            // Park with the RPC service running, ready for inspection!
+            warn!(
+                "Validator halted at slot {} (epoch {})",
+                bank.slot(),
+                bank.epoch()
+            );
+            std::thread::park();
+        }
 
         info!(
             "starting PoH... {} {}",
@@ -148,57 +208,8 @@ impl Validator {
             "New blob signal for the TVU should be the same as the clear bank signal."
         );
 
-        info!("node info: {:?}", node.info);
-        info!("node entrypoint_info: {:?}", entrypoint_info_option);
-        info!(
-            "node local gossip address: {}",
-            node.sockets.gossip.local_addr().unwrap()
-        );
-
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
-
-        node.info.wallclock = timestamp();
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
-            node.info.clone(),
-            keypair.clone(),
-        )));
-
-        let storage_state = StorageState::new(
-            &bank.last_blockhash(),
-            config.storage_slots_per_turn,
-            bank.slots_per_segment(),
-        );
-
-        let rpc_service = if node.info.rpc.port() == 0 {
-            None
-        } else {
-            Some(JsonRpcService::new(
-                &cluster_info,
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
-                storage_state.clone(),
-                config.rpc_config.clone(),
-                bank_forks.clone(),
-                ledger_path,
-                &exit,
-            ))
-        };
-
         let ip_echo_server =
             solana_netutil::ip_echo_server(node.sockets.gossip.local_addr().unwrap().port());
-
-        let subscriptions = Arc::new(RpcSubscriptions::default());
-        let rpc_pubsub_service = if node.info.rpc_pubsub.port() == 0 {
-            None
-        } else {
-            Some(PubSubService::new(
-                &subscriptions,
-                SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                    node.info.rpc_pubsub.port(),
-                ),
-                &exit,
-            ))
-        };
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -210,7 +221,6 @@ impl Validator {
 
         // Insert the entrypoint info, should only be None if this node
         // is the bootstrap leader
-
         if let Some(entrypoint_info) = entrypoint_info_option {
             cluster_info
                 .write()
@@ -262,7 +272,7 @@ impl Validator {
             completed_slots_receiver,
         );
 
-        if config.sigverify_disabled {
+        if config.dev_sigverify_disabled {
             warn!("signature verification disabled");
         }
 
@@ -273,7 +283,7 @@ impl Validator {
             node.sockets.tpu,
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
-            config.sigverify_disabled,
+            config.dev_sigverify_disabled,
             &blocktree,
             &config.broadcast_stage_type,
             &config.erasure_config,
@@ -312,6 +322,7 @@ fn get_bank_forks(
     account_paths: Option<String>,
     snapshot_config: Option<SnapshotConfig>,
     verify_ledger: bool,
+    dev_halt_at_slot: Option<Slot>,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) = {
         let mut result = None;
@@ -362,6 +373,7 @@ fn get_bank_forks(
                     &blocktree,
                     account_paths,
                     verify_ledger,
+                    dev_halt_at_slot,
                 )
                 .expect("process_blocktree failed"),
             );
@@ -382,6 +394,7 @@ pub fn new_banks_from_blocktree(
     account_paths: Option<String>,
     snapshot_config: Option<SnapshotConfig>,
     verify_ledger: bool,
+    dev_halt_at_slot: Option<Slot>,
 ) -> (
     BankForks,
     Vec<BankForksInfo>,
@@ -404,6 +417,7 @@ pub fn new_banks_from_blocktree(
         account_paths,
         snapshot_config,
         verify_ledger,
+        dev_halt_at_slot,
     );
 
     (

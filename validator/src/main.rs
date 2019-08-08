@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, App, Arg};
+use clap::{crate_description, crate_name, crate_version, value_t, App, Arg};
 use log::*;
 use solana::bank_forks::SnapshotConfig;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
@@ -10,6 +10,7 @@ use solana::socketaddr;
 use solana::validator::{Validator, ValidatorConfig};
 use solana_netutil::parse_port_range;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use solana_sdk::timing::Slot;
 use std::fs;
 use std::fs::File;
 use std::net::SocketAddr;
@@ -101,11 +102,17 @@ fn main() {
                 .help("Launch node without voting"),
         )
         .arg(
-            Arg::with_name("no_sigverify")
-                .short("v")
-                .long("no-sigverify")
+            Arg::with_name("dev_no_sigverify")
+                .long("dev-no-sigverify")
                 .takes_value(false)
                 .help("Run without signature verification"),
+        )
+        .arg(
+            Arg::with_name("dev_halt_at_slot")
+                .long("dev-halt-at-slot")
+                .value_name("SLOT")
+                .takes_value(true)
+                .help("Halt the validator when it reaches the given slot"),
         )
         .arg(
             Arg::with_name("rpc_port")
@@ -213,7 +220,8 @@ fn main() {
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
 
-    validator_config.sigverify_disabled = matches.is_present("no_sigverify");
+    validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
+    validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
 
     validator_config.voting_disabled = matches.is_present("no_voting");
 

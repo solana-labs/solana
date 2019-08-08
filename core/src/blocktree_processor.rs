@@ -8,8 +8,7 @@ use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::timing::duration_as_ms;
-use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
+use solana_sdk::timing::{duration_as_ms, Slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::Result;
 use std::result;
 use std::sync::Arc;
@@ -143,6 +142,7 @@ pub fn process_blocktree(
     blocktree: &Blocktree,
     account_paths: Option<String>,
     verify_ledger: bool,
+    dev_halt_at_slot: Option<Slot>,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
     let now = Instant::now();
     info!("processing ledger...");
@@ -173,6 +173,7 @@ pub fn process_blocktree(
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
     let mut root = 0;
+    let dev_halt_at_slot = dev_halt_at_slot.unwrap_or(std::u64::MAX);
     while !pending_slots.is_empty() {
         let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
@@ -231,6 +232,15 @@ pub fn process_blocktree(
             bank.squash();
             pending_slots.clear();
             fork_info.clear();
+        }
+
+        if slot >= dev_halt_at_slot {
+            let bfi = BankForksInfo {
+                bank_slot: slot,
+                entry_height,
+            };
+            fork_info.push((bank, bfi));
+            break;
         }
 
         if meta.next_slots.is_empty() {
@@ -376,7 +386,7 @@ pub mod tests {
         fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, blockhash);
 
         let (mut _bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, true).unwrap();
+            process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
@@ -435,7 +445,7 @@ pub mod tests {
         blocktree.set_roots(&[4, 1, 0]).unwrap();
 
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, true).unwrap();
+            process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // One fork, other one is ignored b/c not a descendant of the root
 
@@ -509,7 +519,7 @@ pub mod tests {
         blocktree.set_roots(&[0, 1]).unwrap();
 
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, true).unwrap();
+            process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
         assert_eq!(
@@ -590,7 +600,7 @@ pub mod tests {
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, true).unwrap();
+            process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // There is one fork
         assert_eq!(
@@ -726,7 +736,7 @@ pub mod tests {
             .unwrap();
         let entry_height = genesis_block.ticks_per_slot + entries.len() as u64;
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, true).unwrap();
+            process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks.root(), 0);
@@ -757,7 +767,7 @@ pub mod tests {
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, true).unwrap();
+            process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
