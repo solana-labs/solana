@@ -20,16 +20,16 @@ serde_json = "1.0.40"
 solana-logger = { path = "../../logger", version = "0.18.0-pre1" }
 solana-sdk = { path = "../../sdk", version = "0.18.0-pre1" }
 
-bytecode_verifier = { version = "0.0.0-sol15", package = "solana_libra_bytecode_verifier" }
-compiler = { version = "0.0.0-sol15", package = "solana_libra_compiler" }
-failure = { version = "0.0.0-sol15", package = "solana_libra_failure_ext" }
-language_e2e_tests = { version = "0.0.0-sol15", package = "solana_libra_language_e2e_tests" }
-state_view = { version = "0.0.0-sol15", package = "solana_libra_state_view" }
-stdlib = { version = "0.0.0-sol15", package = "solana_libra_stdlib" }
-types = { version = "0.0.0-sol15", package = "solana_libra_types" }
-vm = { version = "0.0.0-sol15", package = "solana_libra_vm" }
-vm_cache_map = { version = "0.0.0-sol15", package = "solana_libra_vm_cache_map" }
-vm_runtime = { version = "0.0.0-sol15", package = "solana_libra_vm_runtime" }
+bytecode_verifier = { version = "0.0.0", package = "solana_libra_bytecode_verifier" }
+compiler = { version = "0.0.0", package = "solana_libra_compiler" }
+failure = { version = "0.0.0", package = "solana_libra_failure_ext" }
+language_e2e_tests = { version = "0.0.0", package = "solana_libra_language_e2e_tests" }
+state_view = { version = "0.0.0", package = "solana_libra_state_view" }
+stdlib = { version = "0.0.0", package = "solana_libra_stdlib" }
+types = { version = "0.0.0", package = "solana_libra_types" }
+vm = { version = "0.0.0", package = "solana_libra_vm" }
+vm_cache_map = { version = "0.0.0", package = "solana_libra_vm_cache_map" }
+vm_runtime = { version = "0.0.0", package = "solana_libra_vm_runtime" }
 
 [lib]
 crate-type = ["lib"]
