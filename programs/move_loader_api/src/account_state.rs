@@ -9,6 +9,7 @@ use stdlib::stdlib_modules;
 use types::{
     account_address::AccountAddress,
     byte_array::ByteArray,
+    transaction::Program,
     write_set::{WriteOp, WriteSet},
 };
 use vm::{
@@ -38,11 +39,8 @@ fn to_array_32(array: &[u8]) -> &[u8; 32] {
 pub enum LibraAccountState {
     /// No data for this account yet
     Unallocated,
-    /// Serialized compiled program bytes
-    CompiledProgram {
-        script_bytes: Vec<u8>,
-        modules_bytes: Vec<Vec<u8>>,
-    },
+    /// Json string representation of types::transaction::Program
+    CompiledProgram(String),
     /// Serialized verified program bytes
     VerifiedProgram {
         script_bytes: Vec<u8>,
@@ -101,10 +99,9 @@ impl LibraAccountState {
                 .expect("Unable to serialize module");
             modules_bytes.push(buf);
         }
-        LibraAccountState::CompiledProgram {
-            script_bytes,
-            modules_bytes,
-        }
+        LibraAccountState::CompiledProgram(
+            serde_json::to_string(&Program::new(script_bytes, modules_bytes, vec![])).unwrap(),
+        )
     }
 
     pub fn create_user(owner: &Pubkey, write_set: WriteSet) -> Self {
