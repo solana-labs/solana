@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const DEFAULT_LOG_RATE: usize = 1000;
 const DEFAULT_METRICS_RATE: usize = 1;
-const DEFAULT_METRICS_HIGH_RATE: usize = 1000;
+const DEFAULT_METRICS_HIGH_RATE: usize = 10;
 
 /// Use default metrics high rate
 pub const HIGH_RATE: usize = 999_999;
@@ -319,6 +319,7 @@ mod tests {
             .ok();
         let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 1000, HIGH_RATE);
+        env::remove_var("SOLANA_METRICS_HIGH_RATE");
         unsafe {
             COUNTER.init();
             assert_eq!(
@@ -334,7 +335,7 @@ mod tests {
         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
             .try_init()
             .ok();
-        let _readlock = get_env_lock().read();
+        let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test", 1000, HIGH_RATE);
         env::set_var("SOLANA_METRICS_HIGH_RATE", "50");
         unsafe {

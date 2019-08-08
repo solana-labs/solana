@@ -59,7 +59,7 @@ solana_wallet=$(solana_program wallet)
 solana_replicator=$(solana_program replicator)
 
 export RUST_BACKTRACE=1
-export SOLANA_METRICS_HIGH_RATE=10
+export SOLANA_METRICS_HIGH_RATE=1000
 
 # shellcheck source=scripts/configure-metrics.sh
 source "$SOLANA_ROOT"/scripts/configure-metrics.sh
