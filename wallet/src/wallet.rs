@@ -1901,6 +1901,28 @@ mod tests {
             .get_matches_from(vec!["test", "airdrop", "notint"]);
         assert!(parse_command(&pubkey, &test_bad_airdrop).is_err());
 
+        // Test Balance Subcommand, incl pubkey and keypair-file inputs
+        let keypair_file = make_tmp_path("keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let keypair = read_keypair(&keypair_file).unwrap();
+        let test_balance = test_commands.clone().get_matches_from(vec![
+            "test",
+            "balance",
+            &keypair.pubkey().to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_balance).unwrap(),
+            WalletCommand::Balance(keypair.pubkey())
+        );
+        let test_balance =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "balance", &keypair_file]);
+        assert_eq!(
+            parse_command(&pubkey, &test_balance).unwrap(),
+            WalletCommand::Balance(keypair.pubkey())
+        );
+
         // Test Cancel Subcommand
         let test_cancel =
             test_commands
