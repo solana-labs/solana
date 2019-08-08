@@ -26,6 +26,7 @@ Methods
 * [getBalance](#getbalance)
 * [getClusterNodes](#getclusternodes)
 * [getEpochInfo](#getepochinfo)
+* [getEpochVoteAccounts](#getepochvoteaccounts)
 * [getLeaderSchedule](#getleaderschedule)
 * [getProgramAccounts](#getprogramaccounts)
 * [getRecentBlockhash](#getrecentblockhash)
@@ -38,7 +39,7 @@ Methods
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [getTotalSupply](#gettotalsupply)
-* [getEpochVoteAccounts](#getepochvoteaccounts)
+* [getVersion](#getversion)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
 * [startSubscriptionChannel](#startsubscriptionchannel)
@@ -194,6 +195,30 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
+```
+
+---
+
+### getEpochVoteAccounts
+Returns the account info and associated stake for all the voting accounts in the current epoch.
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be an array of JSON objects, each with the following sub fields:
+* `votePubkey` - Vote account public key, as base-58 encoded string
+* `nodePubkey` - Node public key, as base-58 encoded string
+* `stake` - the stake, in lamports, delegated to this vote account
+* `commission`, a 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[{"commission":0,"nodePubkey":"Et2RaZJdJRTzTkodUwiHr4H6sLkVmijBFv8tkd7oSSFY","stake":42,"votePubkey":"B4CdWq3NBSoH2wYsVE1CaZSWPo2ZtopE4SJipQhZ3srF"}],"id":1}
 ```
 
 ---
@@ -453,30 +478,25 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ---
 
-### getEpochVoteAccounts
-Returns the account info and associated stake for all the voting accounts in the current epoch.
+### getVersion
+Returns the current solana versions running on the node
 
 ##### Parameters:
 None
 
 ##### Results:
-The result field will be an array of JSON objects, each with the following sub fields:
-* `votePubkey` - Vote account public key, as base-58 encoded string
-* `nodePubkey` - Node public key, as base-58 encoded string
-* `stake` - the stake, in lamports, delegated to this vote account
-* `commission`, a 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
+The result field will be a JSON object with the following sub fields:
+* `solana-core`, software version of solana-core
 
 ##### Example:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://localhost:8899
-
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":[{"commission":0,"nodePubkey":"Et2RaZJdJRTzTkodUwiHr4H6sLkVmijBFv8tkd7oSSFY","stake":42,"votePubkey":"B4CdWq3NBSoH2wYsVE1CaZSWPo2ZtopE4SJipQhZ3srF"}],"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "0.17.2"},"id":1}
 ```
 
 ---
-
 
 ### requestAirdrop
 Requests an airdrop of lamports to a Pubkey

@@ -5,6 +5,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::storage_stage::StorageState;
+use crate::version::VERSION;
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
@@ -233,6 +234,13 @@ pub struct RpcEpochInfo {
     pub slots_in_epoch: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct RpcVersionInfo {
+    /// The current version of solana-core
+    pub solana_core: String,
+}
+
 #[rpc(server)]
 pub trait RpcSol {
     type Metadata;
@@ -317,6 +325,9 @@ pub trait RpcSol {
         _: Self::Metadata,
         _: String,
     ) -> Result<Option<(usize, transaction::Result<()>)>>;
+
+    #[rpc(meta, name = "getVersion")]
+    fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo>;
 }
 
 pub struct RpcSolImpl;
@@ -601,6 +612,12 @@ impl RpcSol for RpcSolImpl {
 
     fn fullnode_exit(&self, meta: Self::Metadata) -> Result<bool> {
         meta.request_processor.read().unwrap().fullnode_exit()
+    }
+
+    fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
+        Ok(RpcVersionInfo {
+            solana_core: VERSION.to_string(),
+        })
     }
 }
 
@@ -1087,5 +1104,26 @@ mod tests {
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
+    }
+
+    #[test]
+    fn test_rpc_get_version() {
+        let bob_pubkey = Pubkey::new_rand();
+        let (io, meta, ..) = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVersion"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "solana-core": VERSION
+            },
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
     }
 }
