@@ -15,6 +15,7 @@ members = [
     "keygen",
     "kvstore",
     "ledger-tool",
+    "local_cluster",
     "logger",
     "merkle-tree",
     "measure",

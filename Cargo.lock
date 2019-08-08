@@ -3114,6 +3114,7 @@ dependencies = [
  "solana-drone 0.18.0-pre1",
  "solana-exchange-api 0.18.0-pre1",
  "solana-exchange-program 0.18.0-pre1",
+ "solana-local-cluster 0.18.0-pre1",
  "solana-logger 0.18.0-pre1",
  "solana-metrics 0.18.0-pre1",
  "solana-netutil 0.18.0-pre1",
@@ -3149,6 +3150,7 @@ dependencies = [
  "solana-client 0.18.0-pre1",
  "solana-drone 0.18.0-pre1",
  "solana-librapay-api 0.18.0-pre1",
+ "solana-local-cluster 0.18.0-pre1",
  "solana-logger 0.18.0-pre1",
  "solana-measure 0.18.0-pre1",
  "solana-metrics 0.18.0-pre1",
@@ -3480,6 +3482,25 @@ dependencies = [
  "solana-sdk 0.18.0-pre1",
  "solana_libra_language_e2e_tests 0.0.0-sol15 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana_libra_types 0.0.0-sol15 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-local-cluster"
+version = "0.18.0-pre1"
+dependencies = [
+ "hashbrown 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial_test 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial_test_derive 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.18.0-pre1",
+ "solana-client 0.18.0-pre1",
+ "solana-logger 0.18.0-pre1",
+ "solana-runtime 0.18.0-pre1",
+ "solana-sdk 0.18.0-pre1",
+ "solana-stake-api 0.18.0-pre1",
+ "solana-storage-api 0.18.0-pre1",
+ "solana-storage-program 0.18.0-pre1",
+ "solana-vote-api 0.18.0-pre1",
 ]
 
 [[package]]

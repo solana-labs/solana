@@ -25,6 +25,7 @@ serde_json = "1.0.40"
 serde_yaml = "0.8.9"
 # solana-runtime = { path = "../solana/runtime"}
 solana = { path = "../core", version = "0.18.0-pre1" }
+solana-local-cluster = { path = "../local_cluster", version = "0.18.0-pre1" }
 solana-client = { path = "../client", version = "0.18.0-pre1" }
 solana-drone = { path = "../drone", version = "0.18.0-pre1" }
 solana-exchange-api = { path = "../programs/exchange_api", version = "0.18.0-pre1" }

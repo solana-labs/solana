@@ -964,10 +964,10 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
 mod tests {
     use super::*;
     use solana::gossip_service::{discover_cluster, get_multi_client};
-    use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana::validator::ValidatorConfig;
     use solana_drone::drone::run_local_drone;
     use solana_exchange_api::exchange_processor::process_instruction;
+    use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::create_genesis_block;

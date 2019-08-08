@@ -43,7 +43,6 @@ pub mod leader_schedule;
 pub mod leader_schedule_cache;
 pub mod leader_schedule_utils;
 pub mod ledger_cleanup_service;
-pub mod local_cluster;
 pub mod local_vote_signer_service;
 pub mod packet;
 pub mod poh;
@@ -80,7 +79,6 @@ pub mod window_service;
 #[macro_use]
 extern crate solana_budget_program;
 
-#[macro_use]
 extern crate solana_storage_program;
 
 #[cfg(test)]

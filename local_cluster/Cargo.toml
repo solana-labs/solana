@@ -1,0 +1,30 @@
+[package]
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+edition = "2018"
+name = "solana-local-cluster"
+description = "Blockchain, Rebuilt for Scale"
+version = "0.18.0-pre1"
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+
+[dependencies]
+log = "0.4.8"
+solana = { path = "../core", version = "0.18.0-pre1" }
+solana-client = { path = "../client", version = "0.18.0-pre1" }
+solana-logger = { path = "../logger", version = "0.18.0-pre1" }
+solana-runtime = { path = "../runtime", version = "0.18.0-pre1" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre1" }
+solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre1" }
+solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre1" }
+solana-storage-program = { path = "../programs/storage_program", version = "0.18.0-pre1" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre1" }
+
+[dev-dependencies]
+hashbrown = "0.5.0"
+serial_test = "0.2.0"
+serial_test_derive = "0.2.0"
+
+[features]
+cuda = ["solana/cuda"]
+
