@@ -56,16 +56,16 @@ impl CrdsFilter {
     fn mask_bits(num_items: f64, max_items: f64) -> u32 {
         (num_items / max_items).log2().ceil() as u32
     }
-    fn to_u64(item: &Hash) -> u64 {
+    fn hash_as_u64(item: &Hash) -> u64 {
         let arr = item.as_ref();
         let mut accum = 0;
-        for i in 0..8 {
-            accum |= (arr[i] as u64) << (i * 8) as u64;
+        for (i, val) in arr.iter().enumerate().take(8) {
+            accum |= (u64::from(*val)) << (i * 8) as u64;
         }
         accum
     }
     pub fn test_mask(&self, item: &Hash) -> bool {
-        let bits = Self::to_u64(item);
+        let bits = Self::hash_as_u64(item);
         (bits & self.mask) == bits
     }
     pub fn add(&mut self, item: &Hash) {
