@@ -1,12 +1,12 @@
-use crate::blocktree::create_new_tmp_ledger;
-use crate::cluster::Cluster;
-use crate::cluster_info::{Node, FULLNODE_PORT_RANGE};
-use crate::contact_info::ContactInfo;
-use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
-use crate::gossip_service::discover_cluster;
-use crate::replicator::Replicator;
-use crate::service::Service;
-use crate::validator::{Validator, ValidatorConfig};
+use solana::blocktree::create_new_tmp_ledger;
+use solana::cluster::Cluster;
+use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
+use solana::contact_info::ContactInfo;
+use solana::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
+use solana::gossip_service::discover_cluster;
+use solana::replicator::Replicator;
+use solana::service::Service;
+use solana::validator::{Validator, ValidatorConfig};
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_sdk::client::SyncClient;
@@ -581,7 +581,7 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::storage_stage::SLOTS_PER_TURN_TEST;
+    use solana::storage_stage::SLOTS_PER_TURN_TEST;
     use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 
     #[test]
