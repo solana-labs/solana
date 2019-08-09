@@ -328,6 +328,9 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getVersion")]
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo>;
+
+    #[rpc(meta, name = "setLogFilter")]
+    fn set_log_filter(&self, _: Self::Metadata, _: String) -> Result<()>;
 }
 
 pub struct RpcSolImpl;
@@ -618,6 +621,11 @@ impl RpcSol for RpcSolImpl {
         Ok(RpcVersionInfo {
             solana_core: VERSION.to_string(),
         })
+    }
+
+    fn set_log_filter(&self, _: Self::Metadata, filter: String) -> Result<()> {
+        solana_logger::setup_with_filter(&filter);
+        Ok(())
     }
 }
 
