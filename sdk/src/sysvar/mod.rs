@@ -6,6 +6,7 @@ pub mod clock;
 pub mod fees;
 pub mod rewards;
 pub mod slot_hashes;
+pub mod stake_history;
 
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     clock::check_id(id) || fees::check_id(id) || rewards::check_id(id) || slot_hashes::check_id(id)
