@@ -144,13 +144,13 @@ mod tests {
     fn test_fee_calculator_burn() {
         let mut fee_calculator = FeeCalculator::default();
 
-        assert_eq!(fee_calculator.burn(2), 1);
+        assert_eq!(fee_calculator.burn(2), (1, 1));
 
         fee_calculator.burn_percent = 0;
 
-        assert_eq!(fee_calculator.burn(2), 2);
+        assert_eq!(fee_calculator.burn(2), (2, 0));
         fee_calculator.burn_percent = std::u8::MAX;
-        assert_eq!(fee_calculator.burn(2), 0);
+        assert_eq!(fee_calculator.burn(2), (0, 2));
     }
 
     #[test]
