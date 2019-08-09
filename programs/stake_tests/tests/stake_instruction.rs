@@ -175,7 +175,10 @@ fn test_stake_account_delegate() {
 
     // Deactivate the stake
     let message = Message::new_with_payer(
-        vec![stake_instruction::deactivate_stake(&staker_pubkey)],
+        vec![stake_instruction::deactivate_stake(
+            &staker_pubkey,
+            &vote_pubkey,
+        )],
         Some(&mint_pubkey),
     );
     assert!(bank_client

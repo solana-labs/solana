@@ -23,7 +23,7 @@ or more for the change to take effect.
 
 Stake can be deactivate by running:
 ```bash
-$ solana-wallet deactivate-stake ~/validator-config/stake-keypair.json
+$ solana-wallet deactivate-stake ~/validator-config/stake-keypair.json [VOTE PUBKEY]
 ```
 Note that a stake account may only be used once, so after deactivation, use the
 wallet's `withdraw-stake` command to recover the previously staked lamports.
