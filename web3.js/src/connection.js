@@ -540,7 +540,7 @@ export class Connection {
     return res.result;
   }
 
- /**
+  /**
    * Fetch the current slot that the node is processing
    */
   async getSlot(): Promise<number> {
@@ -552,7 +552,6 @@ export class Connection {
     assert(typeof res.result !== 'undefined');
     return res.result;
   }
-
 
   /**
    * Fetch the current slot leader of the cluster
