@@ -47,7 +47,8 @@ pub enum StakeInstruction {
     ///
     /// Expects 2 Accounts:
     ///    0 - Delegate StakeAccount
-    ///    1 - Syscall Account that carries epoch
+    ///    1 - VoteAccount to which the Stake is delegated
+    ///    2 - Syscall Account that carries epoch
     Deactivate,
 }
 
@@ -79,7 +80,7 @@ pub fn create_stake_account_and_delegate_stake(
 pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
-        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_credit_only(*vote_pubkey, false),
         AccountMeta::new(crate::rewards_pools::random_id(), false),
         AccountMeta::new_credit_only(sysvar::rewards::id(), false),
     ];
@@ -104,9 +105,10 @@ pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Ins
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
 
-pub fn deactivate_stake(stake_pubkey: &Pubkey) -> Instruction {
+pub fn deactivate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
+        AccountMeta::new_credit_only(*vote_pubkey, false),
         AccountMeta::new_credit_only(sysvar::clock::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
@@ -168,12 +170,14 @@ pub fn process_instruction(
             )
         }
         StakeInstruction::Deactivate => {
-            if rest.len() != 1 {
+            if rest.len() != 2 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            let sysvar = &rest[0];
+            let (vote, rest) = rest.split_at_mut(1);
+            let vote = &mut vote[0];
+            let clock = &rest[0];
 
-            me.deactivate_stake(&sysvar::clock::from_keyed_account(&sysvar)?)
+            me.deactivate_stake(vote, &sysvar::clock::from_keyed_account(&clock)?)
         }
     }
 }
@@ -225,7 +229,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&deactivate_stake(&Pubkey::default())),
+            process_instruction(&deactivate_stake(&Pubkey::default(), &Pubkey::default())),
             Err(InstructionError::InvalidAccountData),
         );
     }
@@ -352,6 +356,7 @@ mod tests {
                 &Pubkey::default(),
                 &mut [
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
@@ -368,7 +373,6 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(
                         &sysvar::clock::id(),

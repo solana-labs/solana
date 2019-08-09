@@ -55,7 +55,7 @@ pub enum WalletCommand {
     ShowVoteAccount(Pubkey),
     DelegateStake(Keypair, Pubkey, u64, bool),
     WithdrawStake(Keypair, Pubkey, u64),
-    DeactivateStake(Keypair),
+    DeactivateStake(Keypair, Pubkey),
     RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
     CreateReplicatorStorageAccount(Pubkey, Pubkey),
@@ -259,7 +259,11 @@ pub fn parse_command(
         }
         ("deactivate-stake", Some(matches)) => {
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
-            Ok(WalletCommand::DeactivateStake(stake_account_keypair))
+            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
+            Ok(WalletCommand::DeactivateStake(
+                stake_account_keypair,
+                vote_account_pubkey,
+            ))
         }
         ("redeem-vote-credits", Some(matches)) => {
             let stake_account_pubkey = value_of(matches, "stake_account_pubkey").unwrap();
@@ -575,9 +579,11 @@ fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
     stake_account_keypair: &Keypair,
+    vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = stake_instruction::deactivate_stake(&stake_account_keypair.pubkey());
+    let ixs =
+        stake_instruction::deactivate_stake(&stake_account_keypair.pubkey(), vote_account_pubkey);
     let mut tx = Transaction::new_signed_with_payer(
         vec![ixs],
         Some(&config.keypair.pubkey()),
@@ -1156,8 +1162,13 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         ),
 
         // Deactivate stake account
-        WalletCommand::DeactivateStake(stake_account_keypair) => {
-            process_deactivate_stake_account(&rpc_client, config, &stake_account_keypair)
+        WalletCommand::DeactivateStake(stake_account_keypair, vote_account_pubkey) => {
+            process_deactivate_stake_account(
+                &rpc_client,
+                config,
+                &stake_account_keypair,
+                &vote_account_pubkey,
+            )
         }
 
         WalletCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey) => {
@@ -1527,6 +1538,15 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the stake account, for signing the delegate transaction."),
+                )
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The vote account to which the stake is currently delegated"),
                 )
         )
         .subcommand(
@@ -2014,13 +2034,15 @@ mod tests {
         let keypair_file = make_tmp_path("keypair_file");
         gen_keypair_file(&keypair_file).unwrap();
         let keypair = read_keypair(&keypair_file).unwrap();
-        let test_deactivate_stake =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "deactivate-stake", &keypair_file]);
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &keypair_file,
+            &pubkey_string,
+        ]);
         assert_eq!(
             parse_command(&pubkey, &test_deactivate_stake).unwrap(),
-            WalletCommand::DeactivateStake(keypair)
+            WalletCommand::DeactivateStake(keypair, pubkey)
         );
 
         // Test Deploy Subcommand
@@ -2186,8 +2208,8 @@ mod tests {
         // DeactivateStake test.
         /*
         let bob_keypair = Keypair::new();
-        let node_pubkey = Pubkey::new_rand();
-        config.command = WalletCommand::DelegateStake(bob_keypair.into(), node_pubkey, 100, true);
+        let vote_pubkey = Pubkey::new_rand();
+        config.command = WalletCommand::DelegateStake(bob_keypair.into(), vote_pubkey, 100, true);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
         */
@@ -2199,7 +2221,8 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let bob_keypair = Keypair::new();
-        config.command = WalletCommand::DeactivateStake(bob_keypair.into());
+        let vote_pubkey = Pubkey::new_rand();
+        config.command = WalletCommand::DeactivateStake(bob_keypair.into(), vote_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
