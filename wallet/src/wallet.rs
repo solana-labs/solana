@@ -1637,17 +1637,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("redeem-vote-credits")
                 .about("Redeem credits in the stake account")
                 .arg(
-                    Arg::with_name("mining_pool_account_pubkey")
-                        .index(1)
-                        .value_name("MINING POOL PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Mining pool account to redeem credits from"),
-                )
-                .arg(
                     Arg::with_name("stake_account_pubkey")
-                        .index(2)
+                        .index(1)
                         .value_name("STAKING ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
@@ -1656,7 +1647,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 )
                 .arg(
                     Arg::with_name("vote_account_pubkey")
-                        .index(3)
+                        .index(2)
                         .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
