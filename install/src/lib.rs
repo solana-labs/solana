@@ -60,6 +60,7 @@ pub fn main() -> Result<(), String> {
                 .long("config")
                 .value_name("PATH")
                 .takes_value(true)
+                .global(true)
                 .help("Configuration file to use");
             match *defaults::CONFIG_FILE {
                 Some(ref config_file) => arg.default_value(&config_file),

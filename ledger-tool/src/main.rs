@@ -1,7 +1,8 @@
-use clap::{crate_description, crate_name, crate_version, value_t, App, Arg, SubCommand};
+use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, SubCommand};
 use solana::blocktree::Blocktree;
 use solana::blocktree_processor::process_blocktree;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::timing::Slot;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{stdout, Write};
@@ -14,6 +15,26 @@ enum LedgerOutputMethod {
     Print,
     Json,
 }
+
+fn output_slot(blocktree: &Blocktree, slot: u64, method: &LedgerOutputMethod) {
+    let entries = blocktree
+        .get_slot_entries(slot, 0, None)
+        .unwrap_or_else(|err| {
+            eprintln!("Failed to load entries for slot {}: {:?}", slot, err);
+            exit(1);
+        });
+
+    for entry in entries {
+        match method {
+            LedgerOutputMethod::Print => println!("{:?}", entry),
+            LedgerOutputMethod::Json => {
+                serde_json::to_writer(stdout(), &entry).expect("serialize entry");
+                stdout().write_all(b",\n").expect("newline");
+            }
+        }
+    }
+}
+
 fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputMethod) {
     let rooted_slot_iterator = blocktree
         .rooted_slot_iterator(starting_slot)
@@ -38,22 +59,7 @@ fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputM
             }
         }
 
-        let entries = blocktree
-            .get_slot_entries(slot, 0, None)
-            .unwrap_or_else(|err| {
-                eprintln!("Failed to load entries for slot {}: {:?}", slot, err);
-                exit(1);
-            });
-
-        for entry in entries {
-            match method {
-                LedgerOutputMethod::Print => println!("{:?}", entry),
-                LedgerOutputMethod::Json => {
-                    serde_json::to_writer(stdout(), &entry).expect("serialize entry");
-                    stdout().write_all(b",\n").expect("newline");
-                }
-            }
-        }
+        output_slot(&blocktree, slot, &method);
     }
 
     if method == LedgerOutputMethod::Json {
@@ -64,6 +70,14 @@ fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputM
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
     solana_logger::setup();
+
+    let starting_slot_arg = Arg::with_name("starting_slot")
+        .long("starting-slot")
+        .value_name("NUM")
+        .takes_value(true)
+        .default_value("0")
+        .help("Start at this slot");
+
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -73,19 +87,19 @@ fn main() {
                 .long("ledger")
                 .value_name("DIR")
                 .takes_value(true)
-                .required(true)
+                .global(true)
                 .help("Use directory for ledger location"),
         )
-        .arg(
-            Arg::with_name("starting_slot")
-                .long("starting-slot")
-                .value_name("NUM")
+        .subcommand(SubCommand::with_name("print").about("Print the ledger").arg(&starting_slot_arg))
+        .subcommand(SubCommand::with_name("print-slot").about("Print the contents of one slot").arg(
+            Arg::with_name("slot")
+                .index(1)
+                .value_name("SLOT")
                 .takes_value(true)
-                .default_value("0")
-                .help("Start at this slot (only applies to print and json commands)"),
-        )
-        .subcommand(SubCommand::with_name("print").about("Print the ledger"))
-        .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
+                .required(true)
+                .help("The slot to print"),
+        ))
+        .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format").arg(&starting_slot_arg))
         .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
         .subcommand(SubCommand::with_name("prune").about("Prune the ledger at the block height").arg(
             Arg::with_name("slot_list")
@@ -95,21 +109,22 @@ fn main() {
                 .required(true)
                 .help("The location of the YAML file with a list of rollback slot heights and hashes"),
         ))
-        .subcommand(SubCommand::with_name("list-roots").about("Output upto last <num-roots> root hashes and their heights starting at the given block height").arg(
-            Arg::with_name("max_height")
-                .long("max-height")
-                .value_name("NUM")
-                .takes_value(true)
-                .required(true)
-                .help("Maximum block height"),
-        ).arg(
+        .subcommand(
+            SubCommand::with_name("list-roots")
+            .about("Output upto last <num-roots> root hashes and their heights starting at the given block height")
+            .arg(
+                Arg::with_name("max_height")
+                    .long("max-height")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .required(true)
+                    .help("Maximum block height")).arg(
             Arg::with_name("slot_list")
                 .long("slot-list")
                 .value_name("FILENAME")
                 .required(false)
                 .takes_value(true)
-                .help("The location of the output YAML file. A list of rollback slot heights and hashes will be written to the file."),
-        ).arg(
+                .help("The location of the output YAML file. A list of rollback slot heights and hashes will be written to the file.")).arg(
             Arg::with_name("num_roots")
                 .long("num-roots")
                 .value_name("NUM")
@@ -120,7 +135,7 @@ fn main() {
         ))
         .get_matches();
 
-    let ledger_path = PathBuf::from(matches.value_of("ledger").unwrap());
+    let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger", String));
 
     let genesis_block = GenesisBlock::load(&ledger_path).unwrap_or_else(|err| {
         eprintln!(
@@ -138,13 +153,17 @@ fn main() {
         }
     };
 
-    let starting_slot = value_t!(matches, "starting_slot", u64).unwrap_or_else(|e| e.exit());
-
     match matches.subcommand() {
-        ("print", _) => {
+        ("print", Some(args_matches)) => {
+            let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
             output_ledger(blocktree, starting_slot, LedgerOutputMethod::Print);
         }
-        ("json", _) => {
+        ("print-slot", Some(args_matches)) => {
+            let slot = value_t_or_exit!(args_matches, "slot", Slot);
+            output_slot(&blocktree, slot, &LedgerOutputMethod::Print);
+        }
+        ("json", Some(args_matches)) => {
+            let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
             output_ledger(blocktree, starting_slot, LedgerOutputMethod::Json);
         }
         ("verify", _) => {
