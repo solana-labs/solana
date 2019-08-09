@@ -39,7 +39,7 @@ test('get account info - error', () => {
     errorResponse,
   ]);
 
-  expect(connection.getAccountInfo(account.publicKey)).rejects.toThrow(
+  return expect(connection.getAccountInfo(account.publicKey)).rejects.toThrow(
     errorMessage,
   );
 });
@@ -152,7 +152,6 @@ test('get slot', async () => {
   }
 });
 
-
 test('get slot leader', async () => {
   const connection = new Connection(url);
 
@@ -222,7 +221,7 @@ test('getEpochVoteAccounts', async () => {
   expect(voteAccounts.length).toBeGreaterThan(0);
 });
 
-test('confirm transaction - error', () => {
+test('confirm transaction - error', async () => {
   const connection = new Connection(url);
 
   const badTransactionSignature = 'bad transaction signature';
@@ -236,7 +235,7 @@ test('confirm transaction - error', () => {
     errorResponse,
   ]);
 
-  expect(
+  await expect(
     connection.confirmTransaction(badTransactionSignature),
   ).rejects.toThrow(errorMessage);
 
@@ -249,7 +248,7 @@ test('confirm transaction - error', () => {
     errorResponse,
   ]);
 
-  expect(
+  await expect(
     connection.getSignatureStatus(badTransactionSignature),
   ).rejects.toThrow(errorMessage);
 });
