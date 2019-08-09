@@ -18,6 +18,7 @@ use solana_drone::drone::DRONE_PORT;
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::account_utils::State;
 use solana_sdk::bpf_loader;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils::DecodeError;
@@ -83,8 +84,9 @@ pub enum WalletCommand {
 
 #[derive(Debug, Clone)]
 pub enum WalletError {
-    CommandNotRecognized(String),
     BadParameter(String),
+    CommandNotRecognized(String),
+    InsufficientFundsForFee,
     DynamicProgramError(String),
     RpcRequestError(String),
 }
@@ -395,6 +397,35 @@ pub fn parse_command(
 
 type ProcessResult = Result<String, Box<dyn error::Error>>;
 
+fn check_account_for_fee(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    fee_calculator: &FeeCalculator,
+    message: &Message,
+) -> Result<(), Box<dyn error::Error>> {
+    check_account_for_multiple_fees(rpc_client, config, fee_calculator, &[message])
+}
+
+fn check_account_for_multiple_fees(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    fee_calculator: &FeeCalculator,
+    messages: &[&Message],
+) -> Result<(), Box<dyn error::Error>> {
+    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
+    if let Some(lamports) = balance {
+        if lamports
+            >= messages
+                .iter()
+                .map(|message| fee_calculator.calculate_fee(message))
+                .sum()
+        {
+            return Ok(());
+        }
+    }
+    Err(WalletError::InsufficientFundsForFee)?
+}
+
 fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
@@ -489,8 +520,9 @@ fn process_create_vote_account(
         commission,
         lamports,
     );
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
@@ -502,7 +534,7 @@ fn process_authorize_voter(
     authorized_voter_keypair: &Keypair,
     new_authorized_voter_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize_voter(
         vote_account_pubkey,                // vote account to update
         &authorized_voter_keypair.pubkey(), // current authorized voter (often the vote account itself)
@@ -515,6 +547,7 @@ fn process_authorize_voter(
         &[&config.keypair, &authorized_voter_keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_voter_keypair])?;
     Ok(signature_str.to_string())
@@ -593,7 +626,7 @@ fn process_deactivate_stake_account(
     stake_account_keypair: &Keypair,
     vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs =
         stake_instruction::deactivate_stake(&stake_account_keypair.pubkey(), vote_account_pubkey);
     let mut tx = Transaction::new_signed_with_payer(
@@ -602,6 +635,7 @@ fn process_deactivate_stake_account(
         &[&config.keypair, &stake_account_keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
     Ok(signature_str.to_string())
@@ -615,7 +649,7 @@ fn process_delegate_stake(
     lamports: u64,
     force: bool,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ixs = stake_instruction::create_stake_account_and_delegate_stake(
         &config.keypair.pubkey(),
@@ -670,6 +704,7 @@ fn process_delegate_stake(
         &[&config.keypair, &stake_account_keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
 
     let signature_str = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
@@ -683,7 +718,7 @@ fn process_withdraw_stake(
     destination_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::withdraw(
         &stake_account_keypair.pubkey(),
         destination_account_pubkey,
@@ -696,6 +731,7 @@ fn process_withdraw_stake(
         &[&config.keypair, &stake_account_keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
 
     let signature_str = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
@@ -708,7 +744,7 @@ fn process_redeem_vote_credits(
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::redeem_vote_credits(
         stake_account_pubkey,
         vote_account_pubkey,
@@ -719,6 +755,7 @@ fn process_redeem_vote_credits(
         &[&config.keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
@@ -764,7 +801,7 @@ fn process_create_replicator_storage_account(
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_replicator_storage_account(
         &config.keypair.pubkey(),
         &account_owner,
@@ -772,6 +809,7 @@ fn process_create_replicator_storage_account(
         1,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
@@ -782,7 +820,7 @@ fn process_create_validator_storage_account(
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_validator_storage_account(
         &config.keypair.pubkey(),
         account_owner,
@@ -790,6 +828,7 @@ fn process_create_validator_storage_account(
         1,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
@@ -800,15 +839,16 @@ fn process_claim_storage_reward(
     node_account_pubkey: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let instruction =
         storage_instruction::claim_reward(node_account_pubkey, storage_account_pubkey);
     let signers = [&config.keypair];
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
 
-    let mut transaction = Transaction::new(&signers, message, recent_blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut transaction, &signers)?;
+    let mut tx = Transaction::new(&signers, message, recent_blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &signers)?;
     Ok(signature_str.to_string())
 }
 
@@ -841,16 +881,6 @@ fn process_deploy(
     config: &WalletConfig,
     program_location: &str,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
-    if let Some(lamports) = balance {
-        if lamports < 1 {
-            Err(WalletError::DynamicProgramError(
-                "Insufficient funds".to_string(),
-            ))?
-        }
-    }
-
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let program_id = Keypair::new();
     let mut file = File::open(program_location).map_err(|err| {
         WalletError::DynamicProgramError(
@@ -864,7 +894,10 @@ fn process_deploy(
         )
     })?;
 
-    let mut tx = system_transaction::create_account(
+    // Build transactions to calculate fees
+    let mut messages: Vec<&Message> = Vec::new();
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let mut create_account_tx = system_transaction::create_account(
         &config.keypair,
         &program_id.pubkey(),
         blockhash,
@@ -872,13 +905,7 @@ fn process_deploy(
         program_data.len() as u64,
         &bpf_loader::id(),
     );
-    trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<SystemError>(result).map_err(|_| {
-        WalletError::DynamicProgramError("Program allocate space failed".to_string())
-    })?;
-
-    trace!("Writing program data");
+    messages.push(&create_account_tx.message);
     let signers = [&config.keypair, &program_id];
     let write_transactions: Vec<_> = program_data
         .chunks(USERDATA_CHUNK_SIZE)
@@ -894,14 +921,30 @@ fn process_deploy(
             Transaction::new(&signers, message, blockhash)
         })
         .collect();
+    for transaction in write_transactions.iter() {
+        messages.push(&transaction.message);
+    }
+
+    let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
+    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+    let mut finalize_tx = Transaction::new(&signers, message, blockhash);
+    messages.push(&finalize_tx.message);
+
+    check_account_for_multiple_fees(rpc_client, config, &fee_calculator, &messages)?;
+
+    trace!("Creating program account");
+    let result =
+        rpc_client.send_and_confirm_transaction(&mut create_account_tx, &[&config.keypair]);
+    log_instruction_custom_error::<SystemError>(result).map_err(|_| {
+        WalletError::DynamicProgramError("Program allocate space failed".to_string())
+    })?;
+
+    trace!("Writing program data");
     rpc_client.send_and_confirm_transactions(write_transactions, &signers)?;
 
     trace!("Finalizing program account");
-    let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
-    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
-    let mut tx = Transaction::new(&signers, message, blockhash);
     rpc_client
-        .send_and_confirm_transaction(&mut tx, &signers)
+        .send_and_confirm_transaction(&mut finalize_tx, &signers)
         .map_err(|_| {
             WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
         })?;
@@ -922,10 +965,11 @@ fn process_pay(
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: Option<Pubkey>,
 ) -> ProcessResult {
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     if timestamp == None && *witnesses == None {
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
+        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         let signature_str = log_instruction_custom_error::<SystemError>(result)?;
         Ok(signature_str.to_string())
@@ -949,6 +993,7 @@ fn process_pay(
             lamports,
         );
         let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
+        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
@@ -981,6 +1026,7 @@ fn process_pay(
         );
         let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
         let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
         Ok(json!({
@@ -994,13 +1040,14 @@ fn process_pay(
 }
 
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey) -> ProcessResult {
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ix = budget_instruction::apply_signature(
         &config.keypair.pubkey(),
         pubkey,
         &config.keypair.pubkey(),
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
     Ok(signature_str.to_string())
@@ -1019,21 +1066,15 @@ fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
 fn process_time_elapsed(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    drone_addr: SocketAddr,
     to: &Pubkey,
     pubkey: &Pubkey,
     dt: DateTime<Utc>,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
-
-    if let Some(0) = balance {
-        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.keypair.pubkey(), 1)?;
-    }
-
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
@@ -1043,19 +1084,14 @@ fn process_time_elapsed(
 fn process_witness(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    drone_addr: SocketAddr,
     to: &Pubkey,
     pubkey: &Pubkey,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    if let Some(0) = balance {
-        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.keypair.pubkey(), 1)?;
-    }
-
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
@@ -1257,13 +1293,11 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
-            process_time_elapsed(&rpc_client, config, drone_addr, &to, &pubkey, *dt)
+            process_time_elapsed(&rpc_client, config, &to, &pubkey, *dt)
         }
 
         // Apply witness signature to contract
-        WalletCommand::Witness(to, pubkey) => {
-            process_witness(&rpc_client, config, drone_addr, &to, &pubkey)
-        }
+        WalletCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
 
         // Return software version of wallet and cluster entrypoint node
         WalletCommand::GetVersion => process_get_version(&rpc_client, config),
@@ -2423,7 +2457,7 @@ mod tests {
 
         // Success case
         let mut config = WalletConfig::default();
-        config.rpc_client = Some(RpcClient::new_mock("succeeds".to_string()));
+        config.rpc_client = Some(RpcClient::new_mock("deploy_succeeds".to_string()));
 
         config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());
         let result = process_command(&config);
@@ -2438,10 +2472,7 @@ mod tests {
 
         assert!(program_id.parse::<Pubkey>().is_ok());
 
-        // Failure cases
-        config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
-        assert!(process_command(&config).is_err());
-
+        // Failure case
         config.command = WalletCommand::Deploy("bad/file/location.so".to_string());
         assert!(process_command(&config).is_err());
     }
