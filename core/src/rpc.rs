@@ -627,6 +627,7 @@ mod tests {
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
+    use solana_sdk::fee_calculator::DEFAULT_BURN_PERCENT;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -958,7 +959,7 @@ mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": [ blockhash.to_string(), {
-                "burnPercent": 50,
+                "burnPercent": DEFAULT_BURN_PERCENT,
                 "lamportsPerSignature": 0,
                 "maxLamportsPerSignature": 0,
                 "minLamportsPerSignature": 0,

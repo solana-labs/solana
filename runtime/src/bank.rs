@@ -467,8 +467,11 @@ impl Bank {
         let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
 
         if collector_fees != 0 {
+            let (unburned, burned) = self.fee_calculator.burn(collector_fees);
             // burn a portion of fees
-            self.deposit(&self.collector_id, self.fee_calculator.burn(collector_fees));
+            self.deposit(&self.collector_id, unburned);
+            self.capitalization
+                .fetch_sub(burned as usize, Ordering::Relaxed);
         }
     }
 
@@ -1791,9 +1794,12 @@ mod tests {
         genesis_block.fee_calculator.lamports_per_signature = 4; // something divisible by 2
 
         let expected_fee_paid = genesis_block.fee_calculator.lamports_per_signature;
-        let expected_fee_collected = genesis_block.fee_calculator.burn(expected_fee_paid);
+        let (expected_fee_collected, expected_fee_burned) =
+            genesis_block.fee_calculator.burn(expected_fee_paid);
 
         let mut bank = Bank::new(&genesis_block);
+
+        let capitalization = bank.capitalization();
 
         let key = Keypair::new();
         let tx = system_transaction::transfer(
@@ -1818,6 +1824,9 @@ mod tests {
             bank.get_balance(&leader),
             initial_balance + expected_fee_collected
         ); // Leader collects fee after the bank is frozen
+
+        // verify capitalization
+        assert_eq!(capitalization - expected_fee_burned, bank.capitalization());
 
         // Verify that an InstructionError collects fees, too
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
@@ -1929,6 +1938,7 @@ mod tests {
                 + bank
                     .fee_calculator
                     .burn(bank.fee_calculator.lamports_per_signature * 2)
+                    .0
         );
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Ok(()));
