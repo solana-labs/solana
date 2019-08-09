@@ -127,9 +127,10 @@ impl FeeCalculator {
         self.lamports_per_signature * u64::from(message.header.num_required_signatures)
     }
 
-    /// calculate unburned fee from a fee total
-    pub fn burn(&self, fees: u64) -> u64 {
-        fees * u64::from(std::u8::MAX - self.burn_percent) / u64::from(std::u8::MAX)
+    /// calculate unburned fee from a fee total, returns (unburned, burned)
+    pub fn burn(&self, fees: u64) -> (u64, u64) {
+        let unburned = fees * u64::from(std::u8::MAX - self.burn_percent) / u64::from(std::u8::MAX);
+        (unburned, fees - unburned)
     }
 }
 

@@ -467,8 +467,11 @@ impl Bank {
         let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
 
         if collector_fees != 0 {
+            let (unburned, burned) = self.fee_calculator.burn(collector_fees);
             // burn a portion of fees
-            self.deposit(&self.collector_id, self.fee_calculator.burn(collector_fees));
+            self.deposit(&self.collector_id, unburned);
+            self.capitalization
+                .fetch_sub(burned as usize, Ordering::Relaxed);
         }
     }
 
