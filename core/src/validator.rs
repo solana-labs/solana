@@ -368,7 +368,6 @@ fn get_bank_forks(
                 let bank = &bank_forks.working_bank();
                 let fork_info = BankForksInfo {
                     bank_slot: bank.slot(),
-                    entry_height: bank.tick_height(),
                 };
                 result = Some((
                     bank_forks,

@@ -129,7 +129,6 @@ pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
 #[derive(Debug, PartialEq)]
 pub struct BankForksInfo {
     pub bank_slot: u64,
-    pub entry_height: u64,
 }
 
 #[derive(Debug)]
@@ -150,7 +149,6 @@ pub fn process_blocktree(
     let mut pending_slots = {
         let slot = 0;
         let bank = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
-        let entry_height = 0;
         let last_entry_hash = bank.last_blockhash();
 
         // Load the metadata for this slot
@@ -162,7 +160,7 @@ pub fn process_blocktree(
             })?
             .unwrap();
 
-        vec![(slot, meta, bank, entry_height, last_entry_hash)]
+        vec![(slot, meta, bank, last_entry_hash)]
     };
 
     blocktree.set_roots(&[0]).expect("Couldn't set first root");
@@ -175,8 +173,7 @@ pub fn process_blocktree(
     let mut root = 0;
     let dev_halt_at_slot = dev_halt_at_slot.unwrap_or(std::u64::MAX);
     while !pending_slots.is_empty() {
-        let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
-            pending_slots.pop().unwrap();
+        let (slot, meta, bank, mut last_entry_hash) = pending_slots.pop().unwrap();
 
         if last_status_report.elapsed() > Duration::from_secs(2) {
             info!("processing ledger...block {}", slot);
@@ -203,15 +200,11 @@ pub fn process_blocktree(
                 return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
             last_entry_hash = entry0.hash;
-            entry_height += 1;
         }
 
         if !entries.is_empty() {
             if verify_ledger && !entries.verify(&last_entry_hash) {
-                warn!(
-                    "Ledger proof of history failed at slot: {}, entry: {}",
-                    slot, entry_height
-                );
+                warn!("Ledger proof of history failed at slot: {}", slot);
                 return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
 
@@ -221,7 +214,6 @@ pub fn process_blocktree(
             })?;
 
             last_entry_hash = entries.last().unwrap().hash;
-            entry_height += entries.len() as u64;
         }
 
         bank.freeze(); // all banks handled by this routine are created from complete slots
@@ -235,20 +227,14 @@ pub fn process_blocktree(
         }
 
         if slot >= dev_halt_at_slot {
-            let bfi = BankForksInfo {
-                bank_slot: slot,
-                entry_height,
-            };
+            let bfi = BankForksInfo { bank_slot: slot };
             fork_info.push((bank, bfi));
             break;
         }
 
         if meta.next_slots.is_empty() {
             // Reached the end of this fork.  Record the final entry height and last entry.hash
-            let bfi = BankForksInfo {
-                bank_slot: slot,
-                entry_height,
-            };
+            let bfi = BankForksInfo { bank_slot: slot };
             fork_info.push((bank, bfi));
             continue;
         }
@@ -275,23 +261,14 @@ pub fn process_blocktree(
                 ));
                 trace!("Add child bank for slot={}", next_slot);
                 // bank_forks.insert(*next_slot, child_bank);
-                pending_slots.push((
-                    next_slot,
-                    next_meta,
-                    next_bank,
-                    entry_height,
-                    last_entry_hash,
-                ));
+                pending_slots.push((next_slot, next_meta, next_bank, last_entry_hash));
             } else {
-                let bfi = BankForksInfo {
-                    bank_slot: slot,
-                    entry_height,
-                };
+                let bfi = BankForksInfo { bank_slot: slot };
                 fork_info.push((bank.clone(), bfi));
             }
         }
 
-        // reverse sort by slot, so the next slot to be processed can be pop()ed
+        // reverse sort by slot, so the next slot to be processed can be popped
         // TODO: remove me once leader_scheduler can hang with out-of-order slots?
         pending_slots.sort_by(|a, b| b.0.cmp(&a.0));
     }
@@ -393,7 +370,6 @@ pub mod tests {
             bank_forks_info[0],
             BankForksInfo {
                 bank_slot: 0, // slot 1 isn't "full", we stop at slot zero
-                entry_height: ticks_per_slot,
             }
         );
     }
@@ -453,7 +429,6 @@ pub mod tests {
             bank_forks_info[0],
             BankForksInfo {
                 bank_slot: 4, // Fork 2's head is slot 4
-                entry_height: ticks_per_slot * 3,
             }
         );
         assert!(&bank_forks[4]
@@ -526,7 +501,6 @@ pub mod tests {
             bank_forks_info[0],
             BankForksInfo {
                 bank_slot: 3, // Fork 1's head is slot 3
-                entry_height: ticks_per_slot * 4,
             }
         );
         assert_eq!(
@@ -541,7 +515,6 @@ pub mod tests {
             bank_forks_info[1],
             BankForksInfo {
                 bank_slot: 4, // Fork 2's head is slot 4
-                entry_height: ticks_per_slot * 3,
             }
         );
         assert_eq!(
@@ -607,7 +580,6 @@ pub mod tests {
             bank_forks_info[0],
             BankForksInfo {
                 bank_slot: last_slot + 1, // Head is last_slot + 1
-                entry_height: ticks_per_slot * (last_slot + 2),
             }
         );
 
@@ -734,19 +706,12 @@ pub mod tests {
         blocktree
             .write_entries(1, 0, 0, genesis_block.ticks_per_slot, &entries)
             .unwrap();
-        let entry_height = genesis_block.ticks_per_slot + entries.len() as u64;
         let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks.root(), 0);
-        assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
-                bank_slot: 1,
-                entry_height,
-            }
-        );
+        assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 1 });
 
         let bank = bank_forks[1].clone();
         assert_eq!(
@@ -770,13 +735,7 @@ pub mod tests {
             process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
-        assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
-                bank_slot: 0,
-                entry_height: 1,
-            }
-        );
+        assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 });
         let bank = bank_forks[0].clone();
         assert_eq!(bank.tick_height(), 0);
     }
