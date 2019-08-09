@@ -1120,6 +1120,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         // Get address of this client
         return Ok(format!("{}", config.keypair.pubkey()));
     }
+    println_name_value("Using RPC Endpoint:", &config.json_rpc_url);
 
     let drone_addr = config.drone_addr();
 
