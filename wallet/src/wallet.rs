@@ -163,14 +163,26 @@ where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Debug,
 {
-    matches
-        .value_of(name)
-        .map(|value| value.parse::<T>().unwrap())
+    if let Some(value) = matches.value_of(name) {
+        value.parse::<T>().ok()
+    } else {
+        None
+    }
 }
 
 // Return the keypair for an argument with filename `name` or None if not present.
 fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
-    matches.value_of(name).map(|x| read_keypair(x).unwrap())
+    if let Some(value) = matches.value_of(name) {
+        read_keypair(value).ok()
+    } else {
+        None
+    }
+}
+
+// Return a pubkey for an argument that can itself be parsed into a pubkey,
+// or is a filename that can be read as a keypair
+fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
+    value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
 
 pub fn parse_command(
@@ -185,7 +197,7 @@ pub fn parse_command(
             Ok(WalletCommand::Airdrop(lamports))
         }
         ("balance", Some(balance_matches)) => {
-            let pubkey = value_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
+            let pubkey = pubkey_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
             Ok(WalletCommand::Balance(pubkey))
         }
         ("cancel", Some(cancel_matches)) => {
@@ -202,8 +214,8 @@ pub fn parse_command(
             }
         }
         ("create-vote-account", Some(matches)) => {
-            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
-            let node_pubkey = value_of(matches, "node_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+            let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
             let commission = if let Some(commission) = matches.value_of("commission") {
                 commission.parse()?
             } else {
@@ -218,11 +230,11 @@ pub fn parse_command(
             ))
         }
         ("authorize-voter", Some(matches)) => {
-            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
             let authorized_voter_keypair =
                 keypair_of(matches, "authorized_voter_keypair_file").unwrap();
             let new_authorized_voter_pubkey =
-                value_of(matches, "new_authorized_voter_pubkey").unwrap();
+                pubkey_of(matches, "new_authorized_voter_pubkey").unwrap();
 
             Ok(WalletCommand::AuthorizeVoter(
                 vote_account_pubkey,
@@ -231,12 +243,12 @@ pub fn parse_command(
             ))
         }
         ("show-vote-account", Some(matches)) => {
-            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
             Ok(WalletCommand::ShowVoteAccount(vote_account_pubkey))
         }
         ("delegate-stake", Some(matches)) => {
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
-            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
             let lamports_to_stake = matches.value_of("lamports_to_stake").unwrap().parse()?;
             let force = matches.is_present("force");
             Ok(WalletCommand::DelegateStake(
@@ -249,7 +261,7 @@ pub fn parse_command(
         ("withdraw-stake", Some(matches)) => {
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
             let destination_account_pubkey =
-                value_of(matches, "destination_account_pubkey").unwrap();
+                pubkey_of(matches, "destination_account_pubkey").unwrap();
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::WithdrawStake(
                 stake_account_keypair,
@@ -262,43 +274,43 @@ pub fn parse_command(
             Ok(WalletCommand::DeactivateStake(stake_account_keypair))
         }
         ("redeem-vote-credits", Some(matches)) => {
-            let stake_account_pubkey = value_of(matches, "stake_account_pubkey").unwrap();
-            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
+            let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
             Ok(WalletCommand::RedeemVoteCredits(
                 stake_account_pubkey,
                 vote_account_pubkey,
             ))
         }
         ("show-stake-account", Some(matches)) => {
-            let stake_account_pubkey = value_of(matches, "stake_account_pubkey").unwrap();
+            let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
             Ok(WalletCommand::ShowStakeAccount(stake_account_pubkey))
         }
         ("create-replicator-storage-account", Some(matches)) => {
-            let account_owner = value_of(matches, "storage_account_owner").unwrap();
-            let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
+            let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::CreateReplicatorStorageAccount(
                 account_owner,
                 storage_account_pubkey,
             ))
         }
         ("create-validator-storage-account", Some(matches)) => {
-            let account_owner = value_of(matches, "storage_account_owner").unwrap();
-            let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
+            let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::CreateValidatorStorageAccount(
                 account_owner,
                 storage_account_pubkey,
             ))
         }
         ("claim-storage-reward", Some(matches)) => {
-            let node_account_pubkey = value_of(matches, "node_account_pubkey").unwrap();
-            let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
+            let node_account_pubkey = pubkey_of(matches, "node_account_pubkey").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::ClaimStorageReward(
                 node_account_pubkey,
                 storage_account_pubkey,
             ))
         }
         ("show-storage-account", Some(matches)) => {
-            let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::ShowStorageAccount(storage_account_pubkey))
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
@@ -1345,6 +1357,15 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
+// Return an error if string cannot be parsed as pubkey string or keypair file location
+fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
+    is_pubkey(string.clone()).or_else(|_| {
+        read_keypair(&string)
+            .map(|_| ())
+            .map_err(|err| format!("{:?}", err))
+    })
+}
+
 pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
     App::new(name)
         .about(about)
@@ -1358,7 +1379,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(1)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to request"),
@@ -1372,7 +1393,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The public key of the balance to check"),
                 ),
         )
@@ -1382,7 +1403,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(1)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1407,16 +1428,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account in which to set the authorized voter"),
                 )
                 .arg(
                     Arg::with_name("authorized_voter_keypair_file")
                         .index(2)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("CURRENT VOTER KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the currently authorized vote signer"),
@@ -1424,10 +1445,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("new_authorized_voter_pubkey")
                         .index(3)
-                        .value_name("PUBKEY")
+                        .value_name("NEW VOTER PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("New vote signer to authorize"),
                 ),
         )
@@ -1437,25 +1458,25 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account address to fund"),
                 )
                 .arg(
                     Arg::with_name("node_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("VALIDATOR PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Validator that will vote with this account"),
                 )
                 .arg(
                     Arg::with_name("lamports")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to send to the vote account"),
@@ -1474,10 +1495,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account pubkey"),
                 )
         )
@@ -1494,7 +1515,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the new stake account"),
@@ -1502,16 +1523,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The vote account to which the stake will be delegated"),
                 )
                 .arg(
                     Arg::with_name("lamports_to_stake")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to stake"),
@@ -1523,7 +1544,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the stake account, for signing the delegate transaction."),
@@ -1535,7 +1556,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the stake account, for signing the withdraw transaction."),
@@ -1543,16 +1564,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("DESTINATION PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The account where the lamports should be transfered"),
                 )
                 .arg(
                     Arg::with_name("lamports")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to to withdraw from the stake account."),
@@ -1567,7 +1588,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("MINING POOL PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Mining pool account to redeem credits from"),
                 )
                 .arg(
@@ -1576,16 +1597,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STAKING ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Staking account address to redeem credits for"),
                 )
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(3)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The vote account to which the stake was previously delegated."),
                 ),
         )
@@ -1595,10 +1616,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STAKE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Stake account pubkey"),
                 )
         )
@@ -1608,16 +1629,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage mining pool account address to fund"),
                 )
                 .arg(
                     Arg::with_name("lamports")
                         .index(2)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to assign to the storage mining pool account"),
@@ -1629,18 +1650,18 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
         )
         .subcommand(
@@ -1649,7 +1670,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1657,7 +1678,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1672,7 +1693,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("NODE PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The node account to credit the rewards to"),
                 )
                 .arg(
@@ -1681,7 +1702,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage account address to redeem credits for"),
                 ))
 
@@ -1691,10 +1712,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage account pubkey"),
                 )
         )
@@ -1704,7 +1725,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
-                        .value_name("PATH")
+                        .value_name("PATH TO PROGRAM")
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
@@ -1733,7 +1754,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(2)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to send"),
@@ -1785,7 +1806,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to authorize"),
@@ -1806,7 +1827,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to unlock"),
@@ -1879,6 +1900,28 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "airdrop", "notint"]);
         assert!(parse_command(&pubkey, &test_bad_airdrop).is_err());
+
+        // Test Balance Subcommand, incl pubkey and keypair-file inputs
+        let keypair_file = make_tmp_path("keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let keypair = read_keypair(&keypair_file).unwrap();
+        let test_balance = test_commands.clone().get_matches_from(vec![
+            "test",
+            "balance",
+            &keypair.pubkey().to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_balance).unwrap(),
+            WalletCommand::Balance(keypair.pubkey())
+        );
+        let test_balance =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "balance", &keypair_file]);
+        assert_eq!(
+            parse_command(&pubkey, &test_balance).unwrap(),
+            WalletCommand::Balance(keypair.pubkey())
+        );
 
         // Test Cancel Subcommand
         let test_cancel =

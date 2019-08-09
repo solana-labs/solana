@@ -47,9 +47,7 @@ Your validator will need a vote account.  Create it now with the following
 commands:
 ```bash
 $ solana-keygen new -o ~/validator-vote-keypair.json
-$ VOTE_PUBKEY=$(solana-keygen pubkey ~/validator-vote-keypair.json)
-$ IDENTITY_PUBKEY=$(solana-keygen pubkey ~/validator-keypair.json)
-$ solana-wallet create-vote-account "$VOTE_PUBKEY" "$IDENTITY_PUBKEY" 1
+$ solana-wallet --keypair ~/validator-keypair.json create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json 1
 ```
 
 Then use one of the following commands, depending on your installation
