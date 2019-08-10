@@ -1,7 +1,10 @@
+use crate::bank_forks::SnapshotConfig;
 use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackage;
+use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use bincode::{deserialize_from, serialize_into};
 use flate2::read::GzDecoder;
+use fs_extra::dir::CopyOptions;
 use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::SlotDelta;
 use solana_sdk::transaction;
@@ -168,7 +171,48 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: u64, snapshot_path: P) -> Result<()
     Ok(())
 }
 
-pub fn bank_from_snapshots<P>(
+pub fn bank_from_archive<P: AsRef<Path>>(
+    account_paths: String,
+    snapshot_config: &SnapshotConfig,
+    snapshot_tar: P,
+) -> Result<Bank> {
+    // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
+    let unpack_dir = tempfile::tempdir_in(snapshot_config.snapshot_path())?;
+    untar_snapshot_in(&snapshot_tar, &unpack_dir)?;
+
+    let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
+    let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
+    let snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
+    let bank = rebuild_bank_from_snapshots(account_paths, &snapshot_paths, unpacked_accounts_dir)?;
+
+    // Move the unpacked snapshots into `snapshot_config.snapshot_path()`
+    let dir_files = fs::read_dir(unpacked_snapshots_dir).expect("Invalid snapshot path");
+    let paths: Vec<PathBuf> = dir_files
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .collect();
+    let mut copy_options = CopyOptions::new();
+    copy_options.overwrite = true;
+    fs_extra::move_items(&paths, snapshot_config.snapshot_path(), &copy_options)?;
+
+    Ok(bank)
+}
+
+pub fn get_snapshot_tar_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
+    snapshot_output_dir.as_ref().join("snapshot.tgz")
+}
+
+pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
+    snapshot_tar: P,
+    unpack_dir: Q,
+) -> Result<()> {
+    let tar_gz = File::open(snapshot_tar)?;
+    let tar = GzDecoder::new(tar_gz);
+    let mut archive = Archive::new(tar);
+    archive.unpack(&unpack_dir)?;
+    Ok(())
+}
+
+fn rebuild_bank_from_snapshots<P>(
     local_account_paths: String,
     snapshot_paths: &[SlotSnapshotPaths],
     append_vecs_path: P,
@@ -201,21 +245,6 @@ where
     }
 
     Ok(bank)
-}
-
-pub fn get_snapshot_tar_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
-    snapshot_output_dir.as_ref().join("snapshot.tgz")
-}
-
-pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
-    snapshot_tar: P,
-    unpack_dir: Q,
-) -> Result<()> {
-    let tar_gz = File::open(snapshot_tar)?;
-    let tar = GzDecoder::new(tar_gz);
-    let mut archive = Archive::new(tar);
-    archive.unpack(&unpack_dir)?;
-    Ok(())
 }
 
 fn get_snapshot_file_name(slot: u64) -> String {
