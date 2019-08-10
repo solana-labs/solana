@@ -507,16 +507,6 @@ mod test {
         let filter = CrdsFilter::new_rand(1000, 10);
         assert_eq!(filter.mask & 0x00ffffffff, 0x00ffffffff);
     }
-
-    //    #[test]
-    //    fn test_something() {
-    //        assert_eq!(
-    //            CrdsFilter::max_items(((BLOB_SIZE / 2) * 8) as f64, FALSE_RATE, KEYS),
-    //            794.0
-    //        );
-    //        assert_eq!(CrdsFilter::mask_bits(54154f64, 794.0f64), 7u32);
-    //    }
-
     #[test]
     fn test_crds_filter_add_no_mask() {
         let mut filter = CrdsFilter::new_rand(1, 128);
