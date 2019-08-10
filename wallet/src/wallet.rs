@@ -34,7 +34,7 @@ use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::VoteState;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::thread::sleep;
 use std::time::Duration;
@@ -53,6 +53,7 @@ pub enum WalletCommand {
     Confirm(Signature),
     AuthorizeVoter(Pubkey, Keypair, Pubkey),
     CreateVoteAccount(Pubkey, Pubkey, u8, u64),
+    ShowAccount(Pubkey, Option<String>),
     ShowVoteAccount(Pubkey),
     DelegateStake(Keypair, Pubkey, u64, bool),
     WithdrawStake(Keypair, Pubkey, u64),
@@ -242,6 +243,14 @@ pub fn parse_command(
                 vote_account_pubkey,
                 authorized_voter_keypair,
                 new_authorized_voter_pubkey,
+            ))
+        }
+        ("show-account", Some(matches)) => {
+            let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
+            let output_file = matches.value_of("output_file");
+            Ok(WalletCommand::ShowAccount(
+                account_pubkey,
+                output_file.map(ToString::to_string),
             ))
         }
         ("show-vote-account", Some(matches)) => {
@@ -551,6 +560,33 @@ fn process_authorize_voter(
     let signature_str = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_voter_keypair])?;
     Ok(signature_str.to_string())
+}
+
+fn process_show_account(
+    rpc_client: &RpcClient,
+    _config: &WalletConfig,
+    account_pubkey: &Pubkey,
+    output_file: &Option<String>,
+) -> ProcessResult {
+    let account = rpc_client.get_account(account_pubkey)?;
+
+    println!();
+    println!("Public Key: {}", account_pubkey);
+    println!("Lamports: {}", account.lamports);
+    println!("Owner: {}", account.owner);
+    println!("Executable: {}", account.executable);
+
+    if let Some(output_file) = output_file {
+        let mut f = File::create(output_file)?;
+        f.write_all(&account.data)?;
+        println!();
+        println!("Wrote account data to {}", output_file);
+    } else {
+        use pretty_hex::*;
+        println!("{:?}", account.data.hex_dump());
+    }
+
+    Ok("".to_string())
 }
 
 fn process_show_vote_account(
@@ -1179,7 +1215,11 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             &authorized_voter_keypair,
             &new_authorized_voter_pubkey,
         ),
-        // Show a vote account
+
+        WalletCommand::ShowAccount(account_pubkey, output_file) => {
+            process_show_account(&rpc_client, config, &account_pubkey, &output_file)
+        }
+
         WalletCommand::ShowVoteAccount(vote_account_pubkey) => {
             process_show_vote_account(&rpc_client, config, &vote_account_pubkey)
         }
@@ -1534,6 +1574,27 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .help("The commission taken on reward redemption (0-255), default: 0"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("show-account")
+                .about("Show the contents of an account")
+                .arg(
+                    Arg::with_name("account_pubkey")
+                        .index(1)
+                        .value_name("ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("output_file")
+                        .long("output")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the account data to this file"),
+                )
         )
         .subcommand(
             SubCommand::with_name("show-vote-account")
