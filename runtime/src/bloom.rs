@@ -31,7 +31,7 @@ impl<T: BloomHashIndex> Bloom<T> {
             _phantom: PhantomData::default(),
         }
     }
-    /// create filter optimal for num size given the `false_rate`
+    /// create filter optimal for num size given the `FALSE_RATE`
     /// the keys are randomized for picking data out of a collision resistant hash of size
     /// `keysize` bytes
     /// https://hur.st/bloomfilter/

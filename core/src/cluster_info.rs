@@ -17,9 +17,7 @@ use crate::blocktree::Blocktree;
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::{
-    CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS, CRDS_GOSSIP_PULL_SPLIT_COUNT,
-};
+use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
 use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::repair_service::RepairType;
@@ -843,7 +841,7 @@ impl ClusterInfo {
 
                 self.gossip
                     .pull
-                    .build_crds_filters(&self.gossip.crds, CRDS_GOSSIP_PULL_SPLIT_COUNT)
+                    .build_crds_filters(&self.gossip.crds)
                     .into_iter()
                     .for_each(|filter| {
                         pulls.push((entrypoint.id, filter, entrypoint.gossip, self_info.clone()))
@@ -2254,7 +2252,7 @@ mod tests {
         let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
         cluster_info.set_entrypoint(entrypoint.clone());
         let pulls = cluster_info.new_pull_requests(&HashMap::new());
-        assert_eq!(CRDS_GOSSIP_PULL_SPLIT_COUNT, pulls.len() as u64);
+        assert_eq!(1, pulls.len() as u64);
         match pulls.get(0) {
             Some((addr, msg)) => {
                 assert_eq!(*addr, entrypoint.gossip);
@@ -2281,7 +2279,7 @@ mod tests {
             .write()
             .unwrap()
             .new_pull_requests(&HashMap::new());
-        assert_eq!(CRDS_GOSSIP_PULL_SPLIT_COUNT, pulls.len() as u64);
+        assert_eq!(1, pulls.len() as u64);
         assert_eq!(cluster_info.read().unwrap().entrypoint, Some(entrypoint));
     }
 

@@ -26,8 +26,9 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
-// determines how many pull request filters are generated per pull request.
-pub const CRDS_GOSSIP_PULL_SPLIT_COUNT: u64 = 4;
+pub const CRDS_GOSSIP_PULL_MAX_FILTERS: usize = 8;
+pub const KEYS: f64 = 8f64;
+pub const FALSE_RATE: f64 = 0.01f64;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct CrdsFilter {
@@ -37,24 +38,45 @@ pub struct CrdsFilter {
 
 impl CrdsFilter {
     pub fn new(num_items: usize, max_bytes: usize) -> Self {
-        let m = (max_bytes * 8) as f64;
-        let k = 8f64;
-        let p = 0.01f64;
-        let max_items = Self::max_items(m, p, k);
-        let filter = Bloom::random(max_items as usize, p, m as usize);
+        let max_bits = (max_bytes * 8) as f64;
+        let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
+        let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
         let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
-        let seed: u64 = rand::thread_rng().gen();
-        let mask = !(seed & !((!0u64).checked_shr(mask_bits).unwrap_or(!0x0)));
+        println!("mask bits {:?}", mask_bits);
+        let seed: u64 = rand::thread_rng().gen_range(0, 2u64.pow(mask_bits));
+        let mask = Self::compute_mask(seed, mask_bits);
         CrdsFilter { filter, mask }
     }
-    fn max_items(max_bits: f64, false_rate: f64, num_keys: f64) -> f64 {
+    // generates a vec of filters that together hold a complete set of Hashes
+    pub fn new_complete_set(num_items: usize, max_bytes: usize) -> Vec<Self> {
+        let max_bits = (max_bytes * 8) as f64;
+        let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
+        let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
+        // for each possible mask combination, generate a new filter.
+        let mut filters = vec![];
+        for seed in 0..2u64.pow(mask_bits) {
+            let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
+            let mask = Self::compute_mask(seed, mask_bits);
+            filters.push(CrdsFilter { filter, mask })
+        }
+        filters
+    }
+    fn compute_mask(seed: u64, mask_bits: u32) -> u64 {
+        assert!(seed <= 2u64.pow(mask_bits));
+        let seed: u64 = seed.checked_shl(64 - mask_bits).unwrap_or(0x0);
+        let mask = seed | (!0u64).checked_shr(mask_bits).unwrap_or(!0x0) as u64;
+
+        mask
+    }
+    pub fn max_items(max_bits: f64, false_rate: f64, num_keys: f64) -> f64 {
         let m = max_bits;
         let p = false_rate;
         let k = num_keys;
         (m / (-k / (1f64 - (p.ln() / k).exp()).ln())).ceil()
     }
     fn mask_bits(num_items: f64, max_items: f64) -> u32 {
-        (num_items / max_items).log2().ceil() as u32
+        // for small ratios this can result in a negative number, ensure it returns 0 instead
+        ((num_items / max_items).log2().ceil()).max(0.0) as u32
     }
     fn hash_as_u64(item: &Hash) -> u64 {
         let arr = item.as_ref();
@@ -115,7 +137,7 @@ impl CrdsGossipPull {
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
-        let filters = self.build_crds_filters(crds, CRDS_GOSSIP_PULL_SPLIT_COUNT);
+        let filters = self.build_crds_filters(crds);
         let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0)).unwrap();
         let random = index.sample(&mut rand::thread_rng());
         let self_info = crds
@@ -203,12 +225,12 @@ impl CrdsGossipPull {
     }
     // build a set of filters of the current crds table
     // num_filters - used to increase the likely hood of a value in crds being added to some filter
-    pub fn build_crds_filters(&self, crds: &Crds, num_filters: u64) -> Vec<CrdsFilter> {
+    pub fn build_crds_filters(&self, crds: &Crds) -> Vec<CrdsFilter> {
         let num = cmp::max(
             CRDS_GOSSIP_BLOOM_SIZE,
             crds.table.values().count() + self.purged_values.len(),
         );
-        let mut filters = vec![CrdsFilter::new(num, self.max_bytes); num_filters as usize];
+        let mut filters = CrdsFilter::new_complete_set(num, self.max_bytes);
         for v in crds.table.values() {
             filters
                 .iter_mut()
@@ -261,6 +283,7 @@ impl CrdsGossipPull {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
+    use itertools::Itertools;
     use solana_sdk::hash::hash;
 
     #[test]
@@ -467,7 +490,7 @@ mod test {
             // there is a chance of a false positive with bloom filters
             // assert that purged value is still in the set
             // chance of 30 consecutive false positives is 0.1^30
-            let filters = node.build_crds_filters(&node_crds, CRDS_GOSSIP_PULL_SPLIT_COUNT);
+            let filters = node.build_crds_filters(&node_crds);
             assert!(filters.iter().any(|filter| filter.contains(&value_hash)));
         }
 
@@ -520,5 +543,20 @@ mod test {
         //if the mask fails, the hash is contained in the set, and can be treated as a false
         //positive
         assert!(filter.contains(&h));
+    }
+    #[test]
+    fn test_mask() {
+        for i in 0..16 {
+            run_test_mask(i);
+        }
+    }
+
+    fn run_test_mask(mask_bits: u32) {
+        let masks: Vec<_> = (0..2u64.pow(mask_bits))
+            .into_iter()
+            .map(|seed| CrdsFilter::compute_mask(seed, mask_bits))
+            .dedup()
+            .collect();
+        assert_eq!(masks.len(), 2u64.pow(mask_bits) as usize)
     }
 }
