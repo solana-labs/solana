@@ -1,10 +1,10 @@
 ## Staking a Validator
-When your validator starts, it will have no stake, which means it will
+When your validator starts, it will have no stake, which means it will be
 ineligible to become leader.
 
 Adding stake can be accomplished by using the `solana-wallet` CLI
 
-Fire create a stake account keypair with `solana-keygen`:
+First create a stake account keypair with `solana-keygen`:
 ```bash
 $ solana-keygen new -o ~/validator-config/stake-keypair.json
 ```
