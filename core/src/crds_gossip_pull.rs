@@ -14,7 +14,7 @@ use crate::crds::Crds;
 use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_BLOOM_SIZE};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
-use crate::packet::BLOB_SIZE;
+use crate::packet::BLOB_DATA_SIZE;
 use rand;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::Rng;
@@ -37,12 +37,11 @@ pub struct CrdsFilter {
 }
 
 impl CrdsFilter {
-    pub fn new(num_items: usize, max_bytes: usize) -> Self {
+    pub fn new_rand(num_items: usize, max_bytes: usize) -> Self {
         let max_bits = (max_bytes * 8) as f64;
         let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
         let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
         let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
-        println!("mask bits {:?}", mask_bits);
         let seed: u64 = rand::thread_rng().gen_range(0, 2u64.pow(mask_bits));
         let mask = Self::compute_mask(seed, mask_bits);
         CrdsFilter { filter, mask }
@@ -119,7 +118,7 @@ impl Default for CrdsGossipPull {
         Self {
             purged_values: VecDeque::new(),
             pull_request_time: HashMap::new(),
-            max_bytes: BLOB_SIZE / 2,
+            max_bytes: BLOB_DATA_SIZE,
             crds_timeout: CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         }
     }
@@ -500,18 +499,27 @@ mod test {
     }
     #[test]
     fn test_crds_filter_mask() {
-        let filter = CrdsFilter::new(1, 128);
+        let filter = CrdsFilter::new_rand(1, 128);
         assert_eq!(filter.mask, !0x0);
         assert_eq!(CrdsFilter::max_items(80f64, 0.01, 8f64), 9f64);
         //1000/9 = 111, so 7 bits are needed to mask it
         assert_eq!(CrdsFilter::mask_bits(1000f64, 9f64), 7u32);
-        let filter = CrdsFilter::new(1000, 10);
+        let filter = CrdsFilter::new_rand(1000, 10);
         assert_eq!(filter.mask & 0x00ffffffff, 0x00ffffffff);
     }
 
+    //    #[test]
+    //    fn test_something() {
+    //        assert_eq!(
+    //            CrdsFilter::max_items(((BLOB_SIZE / 2) * 8) as f64, FALSE_RATE, KEYS),
+    //            794.0
+    //        );
+    //        assert_eq!(CrdsFilter::mask_bits(54154f64, 794.0f64), 7u32);
+    //    }
+
     #[test]
     fn test_crds_filter_add_no_mask() {
-        let mut filter = CrdsFilter::new(1, 128);
+        let mut filter = CrdsFilter::new_rand(1, 128);
         let h: Hash = hash(Hash::default().as_ref());
         assert!(!filter.contains(&h));
         filter.add(&h);
@@ -521,7 +529,7 @@ mod test {
     }
     #[test]
     fn test_crds_filter_add_mask() {
-        let mut filter = CrdsFilter::new(1000, 10);
+        let mut filter = CrdsFilter::new_rand(1000, 10);
         let mut h: Hash = Hash::default();
         while !filter.test_mask(&h) {
             h = hash(h.as_ref());
@@ -534,7 +542,7 @@ mod test {
     }
     #[test]
     fn test_crds_filter_contains_mask() {
-        let filter = CrdsFilter::new(1000, 10);
+        let filter = CrdsFilter::new_rand(1000, 10);
         let mut h: Hash = Hash::default();
         while filter.test_mask(&h) {
             h = hash(h.as_ref());
