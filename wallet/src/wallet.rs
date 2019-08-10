@@ -1780,7 +1780,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT OWNER PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
                 .arg(
                     Arg::with_name("storage_account_pubkey")
@@ -1788,7 +1788,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
         )
         .subcommand(
