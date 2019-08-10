@@ -275,15 +275,15 @@ setup_validator_accounts() {
     wallet balance || return $?
   fi
 
-  if ! wallet show-vote-account "$vote_pubkey"; then
+  if ! wallet show-vote-account "$voting_keypair_path"; then
     echo "Creating validator vote account"
-    wallet create-vote-account "$vote_pubkey" "$identity_pubkey" 1 --commission 127 || return $?
+    wallet create-vote-account "$voting_keypair_path" "$identity_keypair_path" 1 --commission 127 || return $?
   fi
   echo "Validator vote account configured"
 
-  if ! wallet show-storage-account "$storage_pubkey"; then
+  if ! wallet show-storage-account "$storage_keypair_path"; then
     echo "Creating validator storage account"
-    wallet create-validator-storage-account "$identity_pubkey" "$storage_pubkey" || return $?
+    wallet create-validator-storage-account "$identity_keypair_path" "$storage_keypair_path" || return $?
   fi
   echo "Validator storage account configured"
 
@@ -346,12 +346,12 @@ while true; do
   [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
   [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
 
+  setup_validator_accounts "$node_lamports"
+
   vote_pubkey=$($solana_keygen pubkey "$voting_keypair_path")
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
   identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
   export SOLANA_METRICS_HOST_ID="$identity_pubkey"
-
-  setup_validator_accounts "$node_lamports"
 
   cat <<EOF
 ======================[ validator configuration ]======================

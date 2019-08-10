@@ -80,7 +80,7 @@ fi
 
 config_dir="$SOLANA_CONFIG_DIR/validator$label"
 vote_keypair_path="$config_dir"/vote-keypair.json
-stake_keypair_path=$config_dir/stake-keypair.json
+stake_keypair_path="$config_dir"/stake-keypair.json
 
 if [[ ! -f $vote_keypair_path ]]; then
   echo "Error: $vote_keypair_path not found"
@@ -93,20 +93,17 @@ if [[ -f $stake_keypair_path ]]; then
   exit 1
 fi
 
-vote_pubkey=$($solana_keygen pubkey "$vote_keypair_path")
-
 if ((airdrops_enabled)); then
   declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
   $solana_wallet "${common_args[@]}" airdrop $((stake_lamports+fees))
 fi
 
 $solana_keygen new -o "$stake_keypair_path"
-stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
 
 set -x
 $solana_wallet "${common_args[@]}" \
-  show-vote-account "$vote_pubkey"
+  show-vote-account "$vote_keypair_path"
 $solana_wallet "${common_args[@]}" \
-  delegate-stake $maybe_force "$stake_keypair_path" "$vote_pubkey" "$stake_lamports"
-$solana_wallet "${common_args[@]}" show-stake-account "$stake_pubkey"
+  delegate-stake $maybe_force "$stake_keypair_path" "$vote_keypair_path" "$stake_lamports"
+$solana_wallet "${common_args[@]}" show-stake-account "$stake_keypair_path"
 
