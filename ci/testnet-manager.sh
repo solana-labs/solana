@@ -218,6 +218,7 @@ sanity() {
       set -x
       NO_INSTALL_CHECK=1 \
       NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh edge-testnet-solana-com gce us-west1-b
     )
     ;;
@@ -235,6 +236,7 @@ sanity() {
       set -x
       NO_INSTALL_CHECK=1 \
       NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
     )
     ;;
