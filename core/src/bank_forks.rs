@@ -159,11 +159,21 @@ impl BankForks {
         self.banks.get(&bank_slot)
     }
 
-    pub fn new_from_banks(initial_banks: &[Arc<Bank>], rooted_path: Vec<u64>) -> Self {
+    pub fn new_from_banks(initial_forks: &[Arc<Bank>], rooted_path: Vec<u64>) -> Self {
         let mut banks = HashMap::new();
-        let working_bank = initial_banks[0].clone();
-        for bank in initial_banks {
+        let working_bank = initial_forks[0].clone();
+
+        // Iterate through the heads of all the different forks
+        for bank in initial_forks {
             banks.insert(bank.slot(), bank.clone());
+            let parents = bank.parents();
+            for parent in parents {
+                if banks.contains_key(&parent.slot()) {
+                    // All ancestors have already been inserted by another fork
+                    break;
+                }
+                banks.insert(parent.slot(), parent.clone());
+            }
         }
 
         Self {
