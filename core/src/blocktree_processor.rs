@@ -266,6 +266,8 @@ fn process_bank_0(
 
     if !entries.is_empty() {
         verify_and_process_entries(bank0, &entries, verify_ledger, entry0.hash)?;
+    } else {
+        bank0.register_tick(&entry0.hash);
     }
 
     bank0.freeze();
@@ -1374,7 +1376,7 @@ pub mod tests {
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
         bank1.squash();
         let slot1_entries = blocktree.get_slot_entries(1, 0, None).unwrap();
-        verify_and_process_entries(&bank1, &slot1_entries, true, blockhash).unwrap();
+        verify_and_process_entries(&bank1, &slot1_entries, true, bank0.last_blockhash()).unwrap();
 
         // Test process_blocktree_from_root() from slot 1 onwards
         let (bank_forks, bank_forks_info, _) =
