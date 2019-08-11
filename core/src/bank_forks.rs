@@ -110,7 +110,7 @@ impl BankForks {
             working_bank,
             root: 0,
             snapshot_config: None,
-            slots_since_snapshot: vec![],
+            slots_since_snapshot: vec![bank_slot],
             confidence: HashMap::new(),
         }
     }
@@ -206,9 +206,20 @@ impl BankForks {
             .last()
             .map(|bank| bank.transaction_count())
             .unwrap_or(0);
+
+        if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
+            let new_rooted_path = root_bank
+                .parents()
+                .into_iter()
+                .map(|p| p.slot())
+                .rev()
+                .skip(1);
+            self.slots_since_snapshot.extend(new_rooted_path);
+            self.slots_since_snapshot.push(root);
+        }
+
         root_bank.squash();
         let new_tx_count = root_bank.transaction_count();
-        self.slots_since_snapshot.push(root);
 
         // Generate a snapshot if snapshots are configured and it's been an appropriate number
         // of banks since the last snapshot
@@ -252,6 +263,10 @@ impl BankForks {
 
     pub fn root(&self) -> u64 {
         self.root
+    }
+
+    pub fn slots_since_snapshot(&self) -> &[u64] {
+        &self.slots_since_snapshot
     }
 
     fn purge_old_snapshots(&self) {
@@ -558,7 +573,7 @@ mod tests {
     // also marks each bank as root and generates snapshots
     // finally tries to restore from the last bank's snapshot and compares the restored bank to the
     // `last_slot` bank
-    fn run_bank_forks_snapshot_n<F>(last_slot: u64, f: F)
+    fn run_bank_forks_snapshot_n<F>(last_slot: u64, f: F, set_root_interval: u64)
     where
         F: Fn(&mut Bank, &Keypair),
     {
@@ -580,24 +595,21 @@ mod tests {
         let snapshot_config = SnapshotConfig::new(
             PathBuf::from(snapshot_dir.path()),
             PathBuf::from(snapshot_output_path.path()),
-            100,
+            1,
         );
         bank_forks.set_snapshot_config(snapshot_config.clone());
-        let bank0 = bank_forks.get(0).unwrap();
-        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &vec![]).unwrap();
+        let (s, _r) = channel();
+        let sender = Some(s);
         for slot in 0..last_slot {
             let mut bank = Bank::new_from_parent(&bank_forks[slot], &Pubkey::default(), slot + 1);
             f(&mut bank, &mint_keypair);
             let bank = bank_forks.insert(bank);
-            // set root to make sure we don't end up with too many account storage entries
-            // and to allow purging logic on status_cache to kick in
-            bank_forks.set_root(bank.slot(), &None);
-            snapshot_utils::add_snapshot(
-                &snapshot_config.snapshot_path,
-                &bank,
-                &(vec![bank.slot()]),
-            )
-            .unwrap();
+            // Set root to make sure we don't end up with too many account storage entries
+            // and to allow snapshotting of bank and the purging logic on status_cache to
+            // kick in
+            if slot % set_root_interval == 0 || slot == last_slot - 1 {
+                bank_forks.set_root(bank.slot(), &sender);
+            }
         }
         // Generate a snapshot package for last bank
         let last_bank = bank_forks.get(last_slot).unwrap();
@@ -623,17 +635,21 @@ mod tests {
     fn test_bank_forks_snapshot_n() {
         // create banks upto slot 4 and create 1 new account in each bank. test that bank 4 snapshots
         // and restores correctly
-        run_bank_forks_snapshot_n(4, |bank, mint_keypair| {
-            let key1 = Keypair::new().pubkey();
-            let tx = system_transaction::create_user_account(
-                &mint_keypair,
-                &key1,
-                1,
-                bank.last_blockhash(),
-            );
-            assert_eq!(bank.process_transaction(&tx), Ok(()));
-            bank.freeze();
-        });
+        run_bank_forks_snapshot_n(
+            4,
+            |bank, mint_keypair| {
+                let key1 = Keypair::new().pubkey();
+                let tx = system_transaction::create_user_account(
+                    &mint_keypair,
+                    &key1,
+                    1,
+                    bank.last_blockhash(),
+                );
+                assert_eq!(bank.process_transaction(&tx), Ok(()));
+                bank.freeze();
+            },
+            1,
+        );
     }
 
     fn goto_end_of_slot(bank: &mut Bank) {
@@ -650,29 +666,35 @@ mod tests {
 
     #[test]
     fn test_bank_forks_status_cache_snapshot_n() {
-        // create banks upto slot 256 while transferring 1 lamport into 2 different accounts each time
+        // create banks upto slot (MAX_CACHE_ENTRIES * 2) + 1 while transferring 1 lamport into 2 different accounts each time
         // this is done to ensure the AccountStorageEntries keep getting cleaned up as the root moves
         // ahead. Also tests the status_cache purge and status cache snapshotting.
         // Makes sure that the last bank is restored correctly
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
-        run_bank_forks_snapshot_n(256, |bank, mint_keypair| {
-            let tx = system_transaction::transfer(
-                &mint_keypair,
-                &key1,
-                1,
-                bank.parent().unwrap().last_blockhash(),
+        for set_root_interval in &[1, 4] {
+            run_bank_forks_snapshot_n(
+                (MAX_CACHE_ENTRIES * 2 + 1) as u64,
+                |bank, mint_keypair| {
+                    let tx = system_transaction::transfer(
+                        &mint_keypair,
+                        &key1,
+                        1,
+                        bank.parent().unwrap().last_blockhash(),
+                    );
+                    assert_eq!(bank.process_transaction(&tx), Ok(()));
+                    let tx = system_transaction::transfer(
+                        &mint_keypair,
+                        &key2,
+                        1,
+                        bank.parent().unwrap().last_blockhash(),
+                    );
+                    assert_eq!(bank.process_transaction(&tx), Ok(()));
+                    goto_end_of_slot(bank);
+                },
+                *set_root_interval,
             );
-            assert_eq!(bank.process_transaction(&tx), Ok(()));
-            let tx = system_transaction::transfer(
-                &mint_keypair,
-                &key2,
-                1,
-                bank.parent().unwrap().last_blockhash(),
-            );
-            assert_eq!(bank.process_transaction(&tx), Ok(()));
-            goto_end_of_slot(bank);
-        });
+        }
     }
 
     #[test]
@@ -818,5 +840,51 @@ mod tests {
                 .path()
                 .join(accounts_dir.path().file_name().unwrap()),
         );
+    }
+
+    #[test]
+    fn test_slots_since_snapshot() {
+        solana_logger::setup();
+        for add_root_interval in 1..10 {
+            let (s, _r) = channel();
+            let accounts_dir = TempDir::new().unwrap();
+            let snapshot_dir = TempDir::new().unwrap();
+            let snapshot_output_path = TempDir::new().unwrap();
+            let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
+            let bank0 = Bank::new_with_paths(
+                &genesis_block,
+                Some(accounts_dir.path().to_str().unwrap().to_string()),
+            );
+            bank0.freeze();
+            let mut bank_forks = BankForks::new(0, bank0);
+
+            // We will call bank_forks.set_root() every `add_root_interval` banks,
+            // a `num_set_roots` number of times.
+            let num_set_roots = 10;
+
+            let snapshot_config = SnapshotConfig::new(
+                PathBuf::from(snapshot_dir.path()),
+                PathBuf::from(snapshot_output_path.path()),
+                add_root_interval * num_set_roots * 2,
+            );
+            bank_forks.set_snapshot_config(snapshot_config.clone());
+            let mut current_bank = bank_forks[0].clone();
+            let sender = Some(s);
+            for _ in 0..num_set_roots {
+                for _ in 0..add_root_interval {
+                    let new_slot = current_bank.slot() + 1;
+                    let new_bank =
+                        Bank::new_from_parent(&current_bank, &Pubkey::default(), new_slot);
+                    bank_forks.insert(new_bank);
+                    current_bank = bank_forks[new_slot].clone();
+                }
+                bank_forks.set_root(current_bank.slot(), &sender);
+            }
+
+            assert_eq!(
+                bank_forks.slots_since_snapshot(),
+                &((0..=num_set_roots as u64 * add_root_interval as u64).collect_vec()[..])
+            );
+        }
     }
 }
