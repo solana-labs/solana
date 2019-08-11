@@ -144,11 +144,12 @@ pub fn process_blocktree(
     verify_ledger: bool,
     dev_halt_at_slot: Option<Slot>,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
-    info!("processing ledger...");
+    info!("processing ledger from bank 0...");
 
     // Setup bank for slot 0
-    let bank = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
-    process_blocktree_from_root(blocktree, bank, verify_ledger, dev_halt_at_slot)
+    let bank0 = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
+    process_bank_0(&bank0, blocktree, verify_ledger)?;
+    process_blocktree_from_root(blocktree, bank0, verify_ledger, dev_halt_at_slot)
 }
 
 // Process blocktree from a known root bank
@@ -158,42 +159,46 @@ pub fn process_blocktree_from_root(
     verify_ledger: bool,
     dev_halt_at_slot: Option<Slot>,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
+    info!("processing ledger from root: {}...", bank.slot());
+    // Starting slot must be a root, and thus has no parents
+    assert!(bank.parent().is_none());
+    let start_slot = bank.slot();
     let now = Instant::now();
-    let mut root = bank.slot();
+    let mut rooted_path = vec![start_slot];
     let dev_halt_at_slot = dev_halt_at_slot.unwrap_or(std::u64::MAX);
-    let last_entry_hash = bank.last_blockhash();
 
     blocktree
-        .set_roots(&[root])
+        .set_roots(&[start_slot])
         .expect("Couldn't set root on startup");
 
-    // Load the metadata for this slot
-    let meta = blocktree.meta(root).unwrap();
+    let meta = blocktree.meta(start_slot).unwrap();
 
-    // Set up the pending queue
+    // Iterate and replay slots from blocktree starting from `start_slot`
     let (bank_forks, bank_forks_info, leader_schedule_cache) = {
         if let Some(meta) = meta {
             let epoch_schedule = bank.epoch_schedule();
             let mut leader_schedule_cache = LeaderScheduleCache::new(*epoch_schedule, &bank);
-            let mut pending_slots = vec![(root, meta, bank, last_entry_hash)];
             let fork_info = process_pending_slots(
+                &bank,
+                &meta,
                 blocktree,
-                &mut pending_slots,
                 &mut leader_schedule_cache,
-                &mut root,
+                &mut rooted_path,
                 verify_ledger,
                 dev_halt_at_slot,
             )?;
             let (banks, bank_forks_info): (Vec<_>, Vec<_>) = fork_info.into_iter().unzip();
-            let bank_forks = BankForks::new_from_banks(&banks, root);
+            let bank_forks = BankForks::new_from_banks(&banks, rooted_path);
             (bank_forks, bank_forks_info, leader_schedule_cache)
         } else {
-            // If there's no meta for the input `bank.slot()`, then we started from a snapshot
+            // If there's no meta for the input `start_slot`, then we started from a snapshot
             // and there's no point in processing the rest of blocktree and implies blocktree
             // should be empty past this point.
-            let bfi = BankForksInfo { bank_slot: root };
+            let bfi = BankForksInfo {
+                bank_slot: start_slot,
+            };
             let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-            let bank_forks = BankForks::new_from_banks(&[bank], root);
+            let bank_forks = BankForks::new_from_banks(&[bank], rooted_path);
             (bank_forks, vec![bfi], leader_schedule_cache)
         }
     };
@@ -207,18 +212,147 @@ pub fn process_blocktree_from_root(
     Ok((bank_forks, bank_forks_info, leader_schedule_cache))
 }
 
-fn process_pending_slots(
+fn verify_and_process_entries(
+    bank: &Bank,
+    entries: &[Entry],
+    verify_ledger: bool,
+    last_entry_hash: Hash,
+) -> result::Result<Hash, BlocktreeProcessorError> {
+    assert!(!entries.is_empty());
+
+    if verify_ledger && !entries.verify(&last_entry_hash) {
+        warn!("Ledger proof of history failed at slot: {}", bank.slot());
+        return Err(BlocktreeProcessorError::LedgerVerificationFailed);
+    }
+
+    process_entries(&bank, &entries).map_err(|err| {
+        warn!(
+            "Failed to process entries for slot {}: {:?}",
+            bank.slot(),
+            err
+        );
+        BlocktreeProcessorError::LedgerVerificationFailed
+    })?;
+
+    Ok(entries.last().unwrap().hash)
+}
+
+// Special handling required for processing the entries in slot 0
+fn process_bank_0(
+    bank0: &Bank,
     blocktree: &Blocktree,
+    verify_ledger: bool,
+) -> result::Result<(), BlocktreeProcessorError> {
+    assert_eq!(bank0.slot(), 0);
+
+    // Fetch all entries for this slot
+    let mut entries = blocktree.get_slot_entries(0, 0, None).map_err(|err| {
+        warn!("Failed to load entries for slot 0, err: {:?}", err);
+        BlocktreeProcessorError::LedgerVerificationFailed
+    })?;
+
+    // The first entry in the ledger is a pseudo-tick used only to ensure the number of ticks
+    // in slot 0 is the same as the number of ticks in all subsequent slots.  It is not
+    // processed by the bank, skip over it.
+    if entries.is_empty() {
+        warn!("entry0 not present");
+        return Err(BlocktreeProcessorError::LedgerVerificationFailed);
+    }
+    let entry0 = entries.remove(0);
+    if !(entry0.is_tick() && entry0.verify(&bank0.last_blockhash())) {
+        warn!("Ledger proof of history failed at entry0");
+        return Err(BlocktreeProcessorError::LedgerVerificationFailed);
+    }
+
+    if !entries.is_empty() {
+        verify_and_process_entries(bank0, &entries, verify_ledger, entry0.hash)?;
+    }
+
+    bank0.freeze();
+
+    Ok(())
+}
+
+// Given a slot, add its children to the pending slots queue if those children slots are
+// complete
+fn process_next_slots(
+    bank: &Arc<Bank>,
+    meta: &SlotMeta,
+    blocktree: &Blocktree,
+    leader_schedule_cache: &LeaderScheduleCache,
     pending_slots: &mut Vec<(u64, SlotMeta, Arc<Bank>, Hash)>,
+    fork_info: &mut Vec<(Arc<Bank>, BankForksInfo)>,
+) -> result::Result<(), BlocktreeProcessorError> {
+    if meta.next_slots.is_empty() {
+        // Reached the end of this fork.  Record the final entry height and last entry.hash
+        let bfi = BankForksInfo {
+            bank_slot: bank.slot(),
+        };
+        fork_info.push((bank.clone(), bfi));
+        return Ok(());
+    }
+
+    // This is a fork point if there are multiple children, create a new child bank for each fork
+    for next_slot in &meta.next_slots {
+        let next_meta = blocktree
+            .meta(*next_slot)
+            .map_err(|err| {
+                warn!("Failed to load meta for slot {}: {:?}", next_slot, err);
+                BlocktreeProcessorError::LedgerVerificationFailed
+            })?
+            .unwrap();
+
+        // Only process full slots in blocktree_processor, replay_stage
+        // handles any partials
+        if next_meta.is_full() {
+            let next_bank = Arc::new(Bank::new_from_parent(
+                &bank,
+                &leader_schedule_cache
+                    .slot_leader_at(*next_slot, Some(&bank))
+                    .unwrap(),
+                *next_slot,
+            ));
+            trace!("Add child bank {} of slot={}", next_slot, bank.slot());
+            pending_slots.push((*next_slot, next_meta, next_bank, bank.last_blockhash()));
+        } else {
+            let bfi = BankForksInfo {
+                bank_slot: bank.slot(),
+            };
+            fork_info.push((bank.clone(), bfi));
+        }
+    }
+
+    // Reverse sort by slot, so the next slot to be processed can be popped
+    // TODO: remove me once leader_scheduler can hang with out-of-order slots?
+    pending_slots.sort_by(|a, b| b.0.cmp(&a.0));
+    Ok(())
+}
+
+// Iterate through blocktree processing slots starting from the root slot pointed to by the
+// given `meta`
+fn process_pending_slots(
+    root_bank: &Arc<Bank>,
+    root_meta: &SlotMeta,
+    blocktree: &Blocktree,
     leader_schedule_cache: &mut LeaderScheduleCache,
-    root: &mut u64,
+    rooted_path: &mut Vec<u64>,
     verify_ledger: bool,
     dev_halt_at_slot: Slot,
 ) -> result::Result<Vec<(Arc<Bank>, BankForksInfo)>, BlocktreeProcessorError> {
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
+    let mut pending_slots = vec![];
+    process_next_slots(
+        root_bank,
+        root_meta,
+        blocktree,
+        leader_schedule_cache,
+        &mut pending_slots,
+        &mut fork_info,
+    )?;
+
     while !pending_slots.is_empty() {
-        let (slot, meta, bank, mut last_entry_hash) = pending_slots.pop().unwrap();
+        let (slot, meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
 
         if last_status_report.elapsed() > Duration::from_secs(2) {
             info!("processing ledger...block {}", slot);
@@ -226,45 +360,20 @@ fn process_pending_slots(
         }
 
         // Fetch all entries for this slot
-        let mut entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
+        let entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
             warn!("Failed to load entries for slot {}: {:?}", slot, err);
             BlocktreeProcessorError::LedgerVerificationFailed
         })?;
 
-        if slot == 0 {
-            // The first entry in the ledger is a pseudo-tick used only to ensure the number of ticks
-            // in slot 0 is the same as the number of ticks in all subsequent slots.  It is not
-            // processed by the bank, skip over it.
-            if entries.is_empty() {
-                warn!("entry0 not present");
-                return Err(BlocktreeProcessorError::LedgerVerificationFailed);
-            }
-            let entry0 = entries.remove(0);
-            if !(entry0.is_tick() && entry0.verify(&last_entry_hash)) {
-                warn!("Ledger proof of history failed at entry0");
-                return Err(BlocktreeProcessorError::LedgerVerificationFailed);
-            }
-            last_entry_hash = entry0.hash;
-        }
-
-        if !entries.is_empty() {
-            if verify_ledger && !entries.verify(&last_entry_hash) {
-                warn!("Ledger proof of history failed at slot: {}", slot);
-                return Err(BlocktreeProcessorError::LedgerVerificationFailed);
-            }
-
-            process_entries(&bank, &entries).map_err(|err| {
-                warn!("Failed to process entries for slot {}: {:?}", slot, err);
-                BlocktreeProcessorError::LedgerVerificationFailed
-            })?;
-
-            last_entry_hash = entries.last().unwrap().hash;
-        }
+        verify_and_process_entries(&bank, &entries, verify_ledger, last_entry_hash)?;
 
         bank.freeze(); // all banks handled by this routine are created from complete slots
 
         if blocktree.is_root(slot) {
-            *root = slot;
+            let parents = bank.parents().into_iter().map(|b| b.slot()).rev().skip(1);
+            let parents: Vec<_> = parents.collect();
+            rooted_path.extend(parents);
+            rooted_path.push(slot);
             leader_schedule_cache.set_root(&bank);
             bank.squash();
             pending_slots.clear();
@@ -277,45 +386,14 @@ fn process_pending_slots(
             break;
         }
 
-        if meta.next_slots.is_empty() {
-            // Reached the end of this fork.  Record the final entry height and last entry.hash
-            let bfi = BankForksInfo { bank_slot: slot };
-            fork_info.push((bank, bfi));
-            continue;
-        }
-
-        // This is a fork point, create a new child bank for each fork
-        for next_slot in meta.next_slots {
-            let next_meta = blocktree
-                .meta(next_slot)
-                .map_err(|err| {
-                    warn!("Failed to load meta for slot {}: {:?}", slot, err);
-                    BlocktreeProcessorError::LedgerVerificationFailed
-                })?
-                .unwrap();
-
-            // only process full slots in blocktree_processor, replay_stage
-            // handles any partials
-            if next_meta.is_full() {
-                let next_bank = Arc::new(Bank::new_from_parent(
-                    &bank,
-                    &leader_schedule_cache
-                        .slot_leader_at(next_slot, Some(&bank))
-                        .unwrap(),
-                    next_slot,
-                ));
-                trace!("Add child bank for slot={}", next_slot);
-                // bank_forks.insert(*next_slot, child_bank);
-                pending_slots.push((next_slot, next_meta, next_bank, last_entry_hash));
-            } else {
-                let bfi = BankForksInfo { bank_slot: slot };
-                fork_info.push((bank.clone(), bfi));
-            }
-        }
-
-        // reverse sort by slot, so the next slot to be processed can be popped
-        // TODO: remove me once leader_scheduler can hang with out-of-order slots?
-        pending_slots.sort_by(|a, b| b.0.cmp(&a.0));
+        process_next_slots(
+            &bank,
+            &meta,
+            blocktree,
+            leader_schedule_cache,
+            &mut pending_slots,
+            &mut fork_info,
+        )?;
     }
 
     Ok(fork_info)
@@ -1258,6 +1336,74 @@ pub mod tests {
 
         // Should not see duplicate signature error
         assert_eq!(bank.process_transaction(&fail_tx), Ok(()));
+    }
+
+    #[test]
+    fn test_process_blocktree_from_root() {
+        let GenesisBlockInfo {
+            mut genesis_block, ..
+        } = create_genesis_block(123);
+
+        let ticks_per_slot = 1;
+        genesis_block.ticks_per_slot = ticks_per_slot;
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+
+        /*
+          Build a blocktree in the ledger with the following fork structure:
+
+               slot 0 (all ticks)
+                 |
+               slot 1 (all ticks)
+                 |
+               slot 2 (all ticks)
+                 |
+               slot 3 (all ticks) -> root
+                 |
+               slot 4 (all ticks)
+                 |
+               slot 5 (all ticks) -> root
+                 |
+               slot 6 (all ticks)
+        */
+
+        let mut last_hash = blockhash;
+        for i in 0..6 {
+            last_hash =
+                fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, i + 1, i, last_hash);
+        }
+        blocktree.set_roots(&[3, 5]).unwrap();
+
+        // Set up bank1
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        process_bank_0(&bank0, &blocktree, true).unwrap();
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        bank1.squash();
+        let slot1_entries = blocktree.get_slot_entries(1, 0, None).unwrap();
+        verify_and_process_entries(&bank1, &slot1_entries, true, blockhash).unwrap();
+
+        // Test process_blocktree_from_root() from slot 1 onwards
+        let (bank_forks, bank_forks_info, _) =
+            process_blocktree_from_root(&blocktree, bank1, true, None).unwrap();
+
+        assert_eq!(bank_forks_info.len(), 1); // One fork
+        assert_eq!(
+            bank_forks_info[0],
+            BankForksInfo {
+                bank_slot: 6, // The head of the fork is slot 6
+            }
+        );
+
+        // Slots since snapshot is of everything on the rooted path
+        assert_eq!(
+            bank_forks.slots_since_snapshot().to_vec(),
+            vec![1, 2, 3, 4, 5]
+        );
+        assert_eq!(bank_forks.root(), 5);
+
+        // Check that bank forks has the correct banks
+        assert_eq!(bank_forks[6].slot(), 6);
+        assert!(bank_forks[6].is_frozen());
     }
 
     #[test]

@@ -159,18 +159,19 @@ impl BankForks {
         self.banks.get(&bank_slot)
     }
 
-    pub fn new_from_banks(initial_banks: &[Arc<Bank>], root: u64) -> Self {
+    pub fn new_from_banks(initial_banks: &[Arc<Bank>], rooted_path: Vec<u64>) -> Self {
         let mut banks = HashMap::new();
         let working_bank = initial_banks[0].clone();
         for bank in initial_banks {
             banks.insert(bank.slot(), bank.clone());
         }
+
         Self {
-            root,
+            root: *rooted_path.last().unwrap(),
             banks,
             working_bank,
             snapshot_config: None,
-            slots_since_snapshot: vec![root],
+            slots_since_snapshot: rooted_path,
             confidence: HashMap::new(),
         }
     }

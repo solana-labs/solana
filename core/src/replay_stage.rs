@@ -1059,7 +1059,7 @@ mod test {
         let arc_bank0 = Arc::new(bank0);
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
             &[arc_bank0.clone()],
-            0,
+            vec![0],
         )));
         let pubkey = Pubkey::new_rand();
         let mut tower = Tower::new_from_forks(&bank_forks.read().unwrap(), &pubkey);
