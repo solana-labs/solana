@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 582,
-  "iteration": 1558471455221,
+  "id": 834,
+  "iteration": 1565538180842,
   "links": [
     {
       "asDropdown": true,
@@ -1662,6 +1662,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "decimals": null,
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -1736,7 +1737,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Nodes in Network",
+      "title": "Node Count",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -1752,8 +1753,9 @@
       },
       "yaxes": [
         {
+          "decimals": 0,
           "format": "short",
-          "label": null,
+          "label": "",
           "logBase": 1,
           "max": null,
           "min": null,
@@ -4586,7 +4588,7 @@
         "x": 0,
         "y": 57
       },
-      "id": 44,
+      "id": 40,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5000,7 +5002,7 @@
         "x": 8,
         "y": 57
       },
-      "id": 46,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5329,9 +5331,9 @@
     {
       "aliasColors": {
         "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
         "tower-observed.squash_account": "#0a437c",
         "tower-observed.squash_cache": "#ea6460",
-        "replay_stage-new_leader.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -5346,7 +5348,7 @@
         "x": 16,
         "y": 57
       },
-      "id": 47,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5539,8 +5541,8 @@
         "cluster-info.repair": "#ba43a9",
         "fetch_stage-discard_forwards.sum": "#00ffbb",
         "fetch_stage-honor_forwards.sum": "#bf1b00",
-        "tower-vote.last": "#00ffbb",
         "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -5555,7 +5557,7 @@
         "x": 0,
         "y": 63
       },
-      "id": 50,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5855,10 +5857,10 @@
         "cluster-info.repair": "#ba43a9",
         "fetch_stage-discard_forwards.sum": "#00ffbb",
         "fetch_stage-honor_forwards.sum": "#bf1b00",
-        "tower-vote.last": "#00ffbb",
         "poh_recorder-record_lock_contention.sum": "#5195ce",
         "poh_recorder-tick_lock_contention.sum": "#962d82",
         "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -5873,7 +5875,7 @@
         "x": 8,
         "y": 63
       },
-      "id": 60,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6062,7 +6064,7 @@
         "x": 16,
         "y": 63
       },
-      "id": 41,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6256,7 +6258,7 @@
         "x": 0,
         "y": 69
       },
-      "id": 42,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6412,7 +6414,7 @@
         "x": 8,
         "y": 69
       },
-      "id": 43,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6531,7 +6533,7 @@
         "x": 16,
         "y": 69
       },
-      "id": 49,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6683,7 +6685,7 @@
         "x": 0,
         "y": 74
       },
-      "id": 40,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6836,7 +6838,7 @@
         "x": 12,
         "y": 74
       },
-      "id": 48,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7153,8 +7155,8 @@
     {
       "aliasColors": {
         "cluster-info.repair": "#ba43a9",
-        "tower-vote.last": "#00ffbb",
         "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -8011,6 +8013,10 @@
       },
       {
         "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "datasource": "$datasource",
         "hide": 0,
         "includeAll": true,
@@ -8031,7 +8037,7 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {
