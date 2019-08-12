@@ -1,7 +1,7 @@
 use crate::display::println_name_value;
 use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
-use console::style;
+use console::{style, Emoji};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json;
@@ -42,6 +42,9 @@ use std::time::{Duration, Instant};
 use std::{error, fmt};
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+
+static CHECK_MARK: Emoji = Emoji("✅ ", "");
+static CROSS_MARK: Emoji = Emoji("❌ ", "");
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -1243,15 +1246,15 @@ fn process_ping(
                                 let elapsed_time_millis = elapsed_time.as_millis() as u64;
                                 confirmation_time.push_back(elapsed_time_millis);
                                 println!(
-                                    "1 lamport transferred: seq={:<3} time={:>4}ms signature={}",
-                                    seq, elapsed_time_millis, signature
+                                    "{}1 lamport transferred: seq={:<3} time={:>4}ms signature={}",
+                                    CHECK_MARK, seq, elapsed_time_millis, signature
                                 );
                                 confirmed_count += 1;
                             }
                             Err(err) => {
                                 println!(
-                                    "Transaction failed:    seq={:<3} error={:?} signature={}",
-                                    seq, err, signature
+                                    "{}Transaction failed:    seq={:<3} error={:?} signature={}",
+                                    CROSS_MARK, seq, err, signature
                                 );
                             }
                         }
@@ -1260,8 +1263,8 @@ fn process_ping(
 
                     if elapsed_time >= *timeout {
                         println!(
-                            "Confirmation timeout:  seq={:<3} signature={}",
-                            seq, signature
+                            "{}Confirmation timeout:  seq={:<3}             signature={}",
+                            CROSS_MARK, seq, signature
                         );
                         break;
                     }
@@ -1279,7 +1282,10 @@ fn process_ping(
                 }
             }
             Err(err) => {
-                println!("Submit failed:         seq={:<3} error={:?}", seq, err);
+                println!(
+                    "{}Submit failed:         seq={:<3} error={:?}",
+                    CROSS_MARK, seq, err
+                );
             }
         }
         submit_count += 1;
