@@ -195,10 +195,10 @@ impl CrdsGossipPull {
         &mut self,
         crds: &mut Crds,
         caller: CrdsValue,
-        filter: CrdsFilter,
+        filters: &[CrdsFilter],
         now: u64,
     ) -> Vec<CrdsValue> {
-        let rv = self.filter_crds_values(crds, &filter);
+        let rv = self.filter_crds_values(crds, filters);
         let key = caller.label().pubkey();
         let old = crds.insert(caller, now);
         if let Some(val) = old.ok().and_then(|opt| opt) {
@@ -251,13 +251,12 @@ impl CrdsGossipPull {
         filters
     }
     /// filter values that fail the bloom filter up to max_bytes
-    fn filter_crds_values(&self, crds: &Crds, filter: &CrdsFilter) -> Vec<CrdsValue> {
+    fn filter_crds_values(&self, crds: &Crds, filters: &[CrdsFilter]) -> Vec<CrdsValue> {
         let mut ret = vec![];
         for v in crds.table.values() {
-            if filter.contains(&v.value_hash) {
-                continue;
+            if filters.iter().any(|filter| !filter.contains(&v.value_hash)) {
+                ret.push(v.value.clone());
             }
-            ret.push(v.value.clone());
         }
         ret
     }
@@ -395,10 +394,8 @@ mod test {
         let mut dest_crds = Crds::default();
         let mut dest = CrdsGossipPull::default();
         let (_, filters, caller) = req.unwrap();
-        for filter in filters.into_iter() {
-            let rsp = dest.process_pull_request(&mut dest_crds, caller.clone(), filter, 1);
-            assert!(rsp.is_empty());
-        }
+        let rsp = dest.process_pull_request(&mut dest_crds, caller.clone(), &filters, 1);
+        assert!(rsp.is_empty());
         assert!(dest_crds.lookup(&caller.label()).is_some());
         assert_eq!(
             dest_crds
@@ -455,14 +452,12 @@ mod test {
                 PACKET_DATA_SIZE,
             );
             let (_, filters, caller) = req.unwrap();
-            let mut rsp = vec![];
-            for filter in filters {
-                rsp = dest.process_pull_request(&mut dest_crds, caller.clone(), filter, 0);
-                // if there is a false positive this is empty
-                // prob should be around 0.1 per iteration
-                if rsp.is_empty() {
-                    continue;
-                }
+            let rsp =
+                dest.process_pull_request(&mut dest_crds, caller.clone(), &filters.as_ref(), 0);
+            // if there is a false positive this is empty
+            // prob should be around 0.1 per iteration
+            if rsp.is_empty() {
+                continue;
             }
 
             if rsp.is_empty() {

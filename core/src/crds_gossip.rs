@@ -148,11 +148,11 @@ impl CrdsGossip {
     pub fn process_pull_request(
         &mut self,
         caller: CrdsValue,
-        filter: CrdsFilter,
+        filters: &[CrdsFilter],
         now: u64,
     ) -> Vec<CrdsValue> {
         self.pull
-            .process_pull_request(&mut self.crds, caller, filter, now)
+            .process_pull_request(&mut self.crds, caller, filters, now)
     }
     /// process a pull response
     pub fn process_pull_response(

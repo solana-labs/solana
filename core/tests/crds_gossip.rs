@@ -403,13 +403,11 @@ fn network_run_pull(
                     .get(&to)
                     .map(|node| {
                         let mut rsp = vec![];
-                        for filter in filters {
-                            rsp.append(&mut node.lock().unwrap().process_pull_request(
-                                caller_info.clone(),
-                                filter,
-                                now,
-                            ));
-                        }
+                        rsp.append(&mut node.lock().unwrap().process_pull_request(
+                            caller_info.clone(),
+                            &filters,
+                            now,
+                        ));
                         rsp
                     })
                     .unwrap();
