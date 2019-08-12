@@ -19,14 +19,14 @@ crate::solana_name_id!(ID, "SysvarStakeHistory1111111111111111111111111");
 
 pub const MAX_STAKE_HISTORY: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
 pub struct StakeHistoryEntry {
-    pub previous_effective: u64, // effective stake at the previous epoch
-    pub activating: u64,         // requested to be warmed up, not fully activated yet
-    pub deactivating: u64,       // requested to be cooled down, not fully deactivated yet
+    pub effective: u64,    // effective stake at this epoch
+    pub activating: u64,   // sum of portion of stakes not fully warmed up
+    pub deactivating: u64, // requested to be cooled down, not fully deactivated yet
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
 pub struct StakeHistory {
     inner: HashMap<Epoch, StakeHistoryEntry>,
 }

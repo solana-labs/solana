@@ -2,6 +2,7 @@
 //! node stakes
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::sysvar::stake_history::StakeHistory;
 use solana_sdk::timing::Epoch;
 use solana_stake_api::stake_state::StakeState;
 use solana_vote_api::vote_state::VoteState;
@@ -21,6 +22,9 @@ pub struct Stakes {
 
     /// current epoch, used to calculate current stake
     epoch: Epoch,
+
+    /// history of staking levels
+    stake_history: StakeHistory,
 }
 
 impl Stakes {
@@ -42,6 +46,7 @@ impl Stakes {
                         )
                     })
                     .collect(),
+                ..Stakes::default()
             }
         }
     }

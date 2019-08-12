@@ -2428,6 +2428,7 @@ mod tests {
 
         let leader_stake = Stake {
             stake: leader_lamports,
+            activated: std::u64::MAX,
             ..Stake::default()
         };
 
