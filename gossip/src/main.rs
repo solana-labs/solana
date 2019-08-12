@@ -35,6 +35,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .default_value(&entrypoint_string)
+                .global(true)
                 .help("Rendezvous with the cluster at this entry point"),
         )
         .subcommand(
