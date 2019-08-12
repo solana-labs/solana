@@ -21,6 +21,58 @@ pub enum Shred {
     Coding(CodingShred),
 }
 
+impl Shred {
+    pub fn slot(&self) -> u64 {
+        match self {
+            Shred::FirstInSlot(s) => s.header.data_header.common_header.slot,
+            Shred::FirstInFECSet(s)
+            | Shred::Data(s)
+            | Shred::LastInFECSet(s)
+            | Shred::LastInSlot(s) => s.header.common_header.slot,
+            Shred::Coding(s) => s.header.common_header.slot,
+        }
+    }
+
+    pub fn index(&self) -> u32 {
+        match self {
+            Shred::FirstInSlot(s) => s.header.data_header.common_header.index,
+            Shred::FirstInFECSet(s)
+            | Shred::Data(s)
+            | Shred::LastInFECSet(s)
+            | Shred::LastInSlot(s) => s.header.common_header.index,
+            Shred::Coding(s) => s.header.common_header.index,
+        }
+    }
+
+    pub fn signature(&self) -> Signature {
+        match self {
+            Shred::FirstInSlot(s) => s.header.data_header.common_header.signature,
+            Shred::FirstInFECSet(s)
+            | Shred::Data(s)
+            | Shred::LastInFECSet(s)
+            | Shred::LastInSlot(s) => s.header.common_header.signature,
+            Shred::Coding(s) => s.header.common_header.signature,
+        }
+    }
+
+    pub fn seed(&self) -> [u8; 32] {
+        let mut seed = [0; 32];
+        let seed_len = seed.len();
+        let sig = match self {
+            Shred::FirstInSlot(s) => &s.header.data_header.common_header.signature,
+            Shred::FirstInFECSet(s)
+            | Shred::Data(s)
+            | Shred::LastInFECSet(s)
+            | Shred::LastInSlot(s) => &s.header.common_header.signature,
+            Shred::Coding(s) => &s.header.common_header.signature,
+        }
+        .as_ref();
+
+        seed[0..seed_len].copy_from_slice(&sig[(sig.len() - seed_len)..]);
+        seed
+    }
+}
+
 /// A common header that is present at start of every shred
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct ShredCommonHeader {
@@ -647,8 +699,9 @@ mod tests {
     #[test]
     fn test_data_shredder() {
         let keypair = Arc::new(Keypair::new());
-        let mut shredder = Shredder::new(0x123456789abcdef0, Some(5), 0.0, &keypair, 0)
-            .expect("Failed in creating shredder");
+        let slot = 0x123456789abcdef0;
+        let mut shredder =
+            Shredder::new(slot, Some(5), 0.0, &keypair, 0).expect("Failed in creating shredder");
 
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_shred, None);
@@ -695,15 +748,14 @@ mod tests {
         let deserialized_shred: Shred =
             bincode::deserialize(&shred).expect("Failed in deserializing the PDU");
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
-        if let Shred::FirstInSlot(data) = deserialized_shred {
-            assert!(data
-                .header
-                .data_header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.data_header.common_header.index, 0);
-        }
+        assert_eq!(deserialized_shred.index(), 0);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        let seed0 = deserialized_shred.seed();
+        // Test that same seed is generated for a given shred
+        assert_eq!(seed0, deserialized_shred.seed());
 
         // Test5: Write left over data, and assert that a data shred is being created
         shredder.write(&data[offset..]).unwrap();
@@ -724,14 +776,13 @@ mod tests {
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
-        if let Shred::LastInFECSet(data) = deserialized_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.index, 1);
-        }
+        assert_eq!(deserialized_shred.index(), 1);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        // Test that same seed is NOT generated for two different shreds
+        assert_ne!(seed0, deserialized_shred.seed());
 
         // Test7: Let's write some more data to the shredder.
         // Now we should get a new FEC block
@@ -749,14 +800,11 @@ mod tests {
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::FirstInFECSet(_));
-        if let Shred::FirstInFECSet(data) = deserialized_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.index, 2);
-        }
+        assert_eq!(deserialized_shred.index(), 2);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
 
         // Test8: Write more data to generate an intermediate data shred
         let offset = shredder.write(&data).unwrap();
@@ -771,14 +819,11 @@ mod tests {
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Data(_));
-        if let Shred::Data(data) = deserialized_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.index, 3);
-        }
+        assert_eq!(deserialized_shred.index(), 3);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
 
         // Test9: Write some data to shredder
         let data: Vec<u8> = (0..25).collect();
@@ -796,22 +841,20 @@ mod tests {
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::LastInSlot(_));
-        if let Shred::LastInSlot(data) = deserialized_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.index, 4);
-        }
+        assert_eq!(deserialized_shred.index(), 4);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
     }
 
     #[test]
     fn test_small_data_shredder() {
         let keypair = Arc::new(Keypair::new());
 
-        let mut shredder = Shredder::new(0x123456789abcdef0, Some(5), 0.0, &keypair, 0)
-            .expect("Failed in creating shredder");
+        let slot = 0x123456789abcdef0;
+        let mut shredder =
+            Shredder::new(slot, Some(5), 0.0, &keypair, 0).expect("Failed in creating shredder");
 
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_shred, None);
@@ -836,26 +879,21 @@ mod tests {
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
-        if let Shred::FirstInSlot(data) = deserialized_shred {
-            assert!(data
-                .header
-                .data_header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 0);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
-        if let Shred::LastInFECSet(data) = deserialized_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 1);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
 
         // Try shredder when no parent is provided
         let mut shredder = Shredder::new(0x123456789abcdef0, None, 0.0, &keypair, 2)
@@ -880,24 +918,20 @@ mod tests {
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
-        if let Shred::LastInFECSet(data) = deserialized_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 2);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
     }
 
     #[test]
     fn test_data_and_code_shredder() {
         let keypair = Arc::new(Keypair::new());
 
+        let slot = 0x123456789abcdef0;
         // Test that FEC rate cannot be > 1.0
-        assert_matches!(
-            Shredder::new(0x123456789abcdef0, Some(5), 1.001, &keypair, 0),
-            Err(_)
-        );
+        assert_matches!(Shredder::new(slot, Some(5), 1.001, &keypair, 0), Err(_));
 
         let mut shredder = Shredder::new(0x123456789abcdef0, Some(5), 1.0, &keypair, 0)
             .expect("Failed in creating shredder");
@@ -926,79 +960,66 @@ mod tests {
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
-        if let Shred::FirstInSlot(data) = deserialized_shred {
-            assert!(data
-                .header
-                .data_header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 0);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Data(_));
-        if let Shred::Data(data) = deserialized_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 1);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
-        if let Shred::LastInFECSet(data) = deserialized_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 2);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
 
         let coding_data_offset =
             (serialized_size(&Shred::Coding(CodingShred::empty_shred())).unwrap()
                 - serialized_size(&CodingShred::empty_shred()).unwrap()
                 + serialized_size(&Signature::default()).unwrap()) as usize as usize;
 
-        let shred = shredder.shreds.pop().unwrap();
+        let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Coding(_));
-        if let Shred::Coding(code) = deserialized_shred {
-            assert!(code
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 0);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
 
-        let shred = shredder.shreds.pop().unwrap();
+        let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Coding(_));
-        if let Shred::Coding(code) = deserialized_shred {
-            assert!(code
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 1);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
 
-        let shred = shredder.shreds.pop().unwrap();
+        let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::Coding(_));
-        if let Shred::Coding(code) = deserialized_shred {
-            assert!(code
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
-        }
+        assert_eq!(deserialized_shred.index(), 2);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert!(deserialized_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
     }
 
     #[test]
@@ -1077,27 +1098,19 @@ mod tests {
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::Data(_));
-        if let Shred::Data(data) = recovered_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.slot, slot);
-            assert_eq!(data.header.common_header.index, 1);
-        }
+        assert_eq!(recovered_shred.index(), 1);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::Data(_));
-        if let Shred::Data(data) = recovered_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.slot, slot);
-            assert_eq!(data.header.common_header.index, 3);
-        }
+        assert_eq!(recovered_shred.index(), 3);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         assert_eq!(result.recovered_code.len(), 3); // Coding shreds 5, 7, 9 were missing
         let recovered_shred = result.recovered_code.remove(0);
         if let Shred::Coding(code) = recovered_shred {
@@ -1145,40 +1158,27 @@ mod tests {
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::FirstInSlot(_));
-        if let Shred::FirstInSlot(data) = recovered_shred {
-            assert!(data
-                .header
-                .data_header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.data_header.common_header.slot, slot);
-            assert_eq!(data.header.data_header.common_header.index, 0);
-        }
+        assert_eq!(recovered_shred.index(), 0);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::Data(_));
-        if let Shred::Data(data) = recovered_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.slot, slot);
-            assert_eq!(data.header.common_header.index, 2);
-        }
+        assert_eq!(recovered_shred.index(), 2);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::LastInFECSet(_));
-        if let Shred::LastInFECSet(data) = recovered_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.slot, slot);
-            assert_eq!(data.header.common_header.index, 4);
-        }
+        assert_eq!(recovered_shred.index(), 4);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         assert_eq!(result.recovered_code.len(), 2); // Coding shreds 6, 8 were missing
         let recovered_shred = result.recovered_code.remove(0);
         if let Shred::Coding(code) = recovered_shred {
@@ -1241,40 +1241,27 @@ mod tests {
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::FirstInSlot(_));
-        if let Shred::FirstInSlot(data) = recovered_shred {
-            assert!(data
-                .header
-                .data_header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.data_header.common_header.slot, slot);
-            assert_eq!(data.header.data_header.common_header.index, 0);
-        }
+        assert_eq!(recovered_shred.index(), 0);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::Data(_));
-        if let Shred::Data(data) = recovered_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.slot, slot);
-            assert_eq!(data.header.common_header.index, 2);
-        }
+        assert_eq!(recovered_shred.index(), 2);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         let recovered_shred = result.recovered_data.remove(0);
         let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::LastInSlot(_));
-        if let Shred::LastInSlot(data) = recovered_shred {
-            assert!(data
-                .header
-                .common_header
-                .signature
-                .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-            assert_eq!(data.header.common_header.slot, slot);
-            assert_eq!(data.header.common_header.index, 4);
-        }
+        assert_eq!(recovered_shred.index(), 4);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred
+            .signature()
+            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
         assert_eq!(result.recovered_code.len(), 2); // Coding shreds 6, 8 were missing
         let recovered_shred = result.recovered_code.remove(0);
         if let Shred::Coding(code) = recovered_shred {
