@@ -75,6 +75,7 @@ pub mod validator;
 pub(crate) mod version;
 pub mod weighted_shuffle;
 pub mod window_service;
+pub mod voting_stage;
 
 #[macro_use]
 extern crate solana_budget_program;

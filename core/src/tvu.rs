@@ -26,6 +26,7 @@ use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::snapshot_package::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
+use crate::voting_stage::VotingStage;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -43,6 +44,7 @@ pub struct Tvu {
     ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
     snapshot_packager_service: Option<SnapshotPackagerService>,
+    voting_stage: VotingStage,
 }
 
 pub struct Sockets {
@@ -130,6 +132,9 @@ impl Tvu {
             }
         };
 
+        let (voting_sender, voting_receiver) = channel();
+        let voting_stage = VotingStage::new(voting_receiver);
+
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
             &keypair.pubkey(),
             vote_account,
@@ -142,7 +147,7 @@ impl Tvu {
             subscriptions,
             poh_recorder,
             leader_schedule_cache,
-            vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
+            vec![blockstream_slot_sender, ledger_cleanup_slot_sender, voting_sender],
             snapshot_package_sender,
         );
 
@@ -186,6 +191,7 @@ impl Tvu {
             ledger_cleanup_service,
             storage_stage,
             snapshot_packager_service,
+            voting_stage,
         }
     }
 }
