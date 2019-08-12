@@ -77,55 +77,62 @@ impl Stake {
         self.activated == std::u64::MAX
     }
 
-    pub fn activating(&self, epoch: Epoch, history: &StakeHistory) -> u64 {
+    pub fn activating(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
         self.stake_and_activating(epoch, history).1
     }
 
-    pub fn stake(&self, epoch: Epoch, history: &StakeHistory) -> u64 {
+    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
         self.stake_and_activating(epoch, history).0
     }
 
-    pub fn stake_and_activating(&self, epoch: Epoch, history: &StakeHistory) -> (u64, u64) {
+    pub fn stake_and_activating(&self, epoch: Epoch, history: Option<&StakeHistory>) -> (u64, u64) {
         if epoch >= self.deactivated {
             (0, 0) // TODO cooldown
         } else if self.is_bootstrap() {
             (self.stake, 0)
         } else if epoch > self.activated {
-            if let Some(mut entry) = history.get(&self.activated) {
-                let mut effective_stake = 0;
-                let mut next_epoch = self.activated;
+            if let Some(history) = history {
+                if let Some(mut entry) = history.get(&self.activated) {
+                    let mut effective_stake = 0;
+                    let mut next_epoch = self.activated;
 
-                // loop from my activation epoch until the current epoch
-                //   summing up my entitlement
-                loop {
-                    if entry.activating == 0 {
-                        break;
-                    }
-                    // how much of the growth in stake this account is
-                    //  entitled to take
-                    let weight = (self.stake - effective_stake) as f64 / entry.activating as f64;
+                    // loop from my activation epoch until the current epoch
+                    //   summing up my entitlement
+                    loop {
+                        if entry.activating == 0 {
+                            break;
+                        }
+                        // how much of the growth in stake this account is
+                        //  entitled to take
+                        let weight =
+                            (self.stake - effective_stake) as f64 / entry.activating as f64;
 
-                    // portion of activating stake in this epoch I'm entitled to
-                    effective_stake += (weight * entry.effective as f64 * STAKE_WARMUP_RATE) as u64;
+                        // portion of activating stake in this epoch I'm entitled to
+                        effective_stake +=
+                            (weight * entry.effective as f64 * STAKE_WARMUP_RATE) as u64;
 
-                    if effective_stake >= self.stake {
-                        effective_stake = self.stake;
-                        break;
-                    }
+                        if effective_stake >= self.stake {
+                            effective_stake = self.stake;
+                            break;
+                        }
 
-                    next_epoch += 1;
-                    if next_epoch >= epoch {
-                        break;
+                        next_epoch += 1;
+                        if next_epoch >= epoch {
+                            break;
+                        }
+                        if let Some(next_entry) = history.get(&next_epoch) {
+                            entry = next_entry;
+                        } else {
+                            break;
+                        }
                     }
-                    if let Some(next_entry) = history.get(&next_epoch) {
-                        entry = next_entry;
-                    } else {
-                        break;
-                    }
+                    (effective_stake, self.stake - effective_stake)
+                } else {
+                    // I've dropped out of warmup history, so my stake must be the full amount
+                    (self.stake, 0)
                 }
-                (effective_stake, self.stake - effective_stake)
             } else {
-                // I've dropped out of warmup history, so my stake must be the full amount
+                // no history, fully warmed up
                 (self.stake, 0)
             }
         } else if epoch == self.activated {
@@ -145,7 +152,7 @@ impl Stake {
         &self,
         point_value: f64,
         vote_state: &VoteState,
-        stake_history: &StakeHistory,
+        stake_history: Option<&StakeHistory>,
     ) -> Option<(u64, u64, u64)> {
         if self.credits_observed >= vote_state.credits() {
             return None;
@@ -307,8 +314,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 return Err(InstructionError::InvalidArgument);
             }
 
-            if let Some((stakers_reward, voters_reward, credits_observed)) =
-                stake.calculate_rewards(rewards.validator_point_value, &vote_state, stake_history)
+            if let Some((stakers_reward, voters_reward, credits_observed)) = stake
+                .calculate_rewards(
+                    rewards.validator_point_value,
+                    &vote_state,
+                    Some(stake_history),
+                )
             {
                 if rewards_account.account.lamports < (stakers_reward + voters_reward) {
                     return Err(InstructionError::UnbalancedInstruction);
@@ -344,14 +355,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Stake(stake) => {
                 // if deactivated and in cooldown
                 let staked = if clock.epoch >= stake.deactivated {
-                    dbg!(stake.stake(clock.epoch, stake_history))
+                    stake.stake(clock.epoch, Some(stake_history))
                 } else {
                     // Assume full stake if the stake is under warmup, or
                     //  hasn't been de-activated
-                    dbg!(stake.stake)
+                    stake.stake
                 };
                 if lamports > self.account.lamports.saturating_sub(staked) {
-                    dbg!((lamports, self.account.lamports.saturating_sub(staked)));
                     return Err(InstructionError::InsufficientFunds);
                 }
                 self.account.lamports -= lamports;
@@ -360,7 +370,6 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             }
             StakeState::Uninitialized => {
                 if lamports > self.account.lamports {
-                    dbg!(".");
                     return Err(InstructionError::InsufficientFunds);
                 }
                 self.account.lamports -= lamports;
@@ -380,7 +389,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 pub fn new_stake_history_entry<'a, I>(
     epoch: Epoch,
     stakes: I,
-    history: &StakeHistory,
+    history: Option<&StakeHistory>,
 ) -> StakeHistoryEntry
 where
     I: Iterator<Item = &'a Stake>,
@@ -441,7 +450,6 @@ mod tests {
         stakes: &[Stake],
     ) -> StakeHistory {
         let mut stake_history = StakeHistory::default();
-        dbg!(bootstrap);
 
         let bootstrap_stake = if let Some(bootstrap) = bootstrap {
             vec![Stake {
@@ -457,7 +465,7 @@ mod tests {
             let entry = new_stake_history_entry(
                 epoch,
                 stakes.iter().chain(bootstrap_stake.iter()),
-                &stake_history,
+                Some(&stake_history),
             );
             stake_history.add(epoch, entry);
         }
@@ -585,13 +593,13 @@ mod tests {
 
         let mut prev_total_effective_stake = stakes
             .iter()
-            .map(|stake| stake.stake(0, &stake_history))
+            .map(|stake| stake.stake(0, Some(&stake_history)))
             .sum::<u64>();
 
         for epoch in 1.. {
             let total_effective_stake = stakes
                 .iter()
-                .map(|stake| stake.stake(epoch, &stake_history))
+                .map(|stake| stake.stake(epoch, Some(&stake_history)))
                 .sum::<u64>();
 
             let delta = total_effective_stake - prev_total_effective_stake;
@@ -864,7 +872,7 @@ mod tests {
         // this one can't collect now, credits_observed == vote_state.credits()
         assert_eq!(
             None,
-            stake.calculate_rewards(1_000_000_000.0, &vote_state, &StakeHistory::default())
+            stake.calculate_rewards(1_000_000_000.0, &vote_state, None)
         );
 
         // put 2 credits in at epoch 0
@@ -875,7 +883,7 @@ mod tests {
         //   even though point value is huuge
         assert_eq!(
             None,
-            stake.calculate_rewards(1_000_000_000_000.0, &vote_state, &StakeHistory::default())
+            stake.calculate_rewards(1_000_000_000_000.0, &vote_state, None)
         );
 
         // put 1 credit in epoch 1, pushes the 2 above into a redeemable state
@@ -884,30 +892,27 @@ mod tests {
         // this one should be able to collect exactly 2
         assert_eq!(
             Some((0, stake.stake * 2, 2)),
-            stake.calculate_rewards(1.0, &vote_state, &StakeHistory::default())
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
 
         stake.credits_observed = 1;
         // this one should be able to collect exactly 1 (only observed one)
         assert_eq!(
             Some((0, stake.stake * 1, 2)),
-            stake.calculate_rewards(1.0, &vote_state, &StakeHistory::default())
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
 
         stake.credits_observed = 2;
         // this one should be able to collect none because credits_observed >= credits in a
         //  redeemable state (the 2 credits in epoch 0)
-        assert_eq!(
-            None,
-            stake.calculate_rewards(1.0, &vote_state, &StakeHistory::default())
-        );
+        assert_eq!(None, stake.calculate_rewards(1.0, &vote_state, None));
 
         // put 1 credit in epoch 2, pushes the 1 for epoch 1 to redeemable
         vote_state.increment_credits(2);
         // this one should be able to collect 1 now, one credit by a stake of 1
         assert_eq!(
             Some((0, stake.stake * 1, 3)),
-            stake.calculate_rewards(1.0, &vote_state, &StakeHistory::default())
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
 
         stake.credits_observed = 0;
@@ -915,7 +920,7 @@ mod tests {
         // (2 credits at stake of 1) + (1 credit at a stake of 2)
         assert_eq!(
             Some((0, stake.stake * 1 + stake.stake * 2, 3)),
-            stake.calculate_rewards(1.0, &vote_state, &StakeHistory::default())
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
 
         // same as above, but is a really small commission out of 32 bits,
@@ -923,12 +928,12 @@ mod tests {
         vote_state.commission = 1;
         assert_eq!(
             None, // would be Some((0, 2 * 1 + 1 * 2, 3)),
-            stake.calculate_rewards(1.0, &vote_state, &StakeHistory::default())
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
         vote_state.commission = std::u8::MAX - 1;
         assert_eq!(
             None, // would be pSome((0, 2 * 1 + 1 * 2, 3)),
-            stake.calculate_rewards(1.0, &vote_state, &StakeHistory::default())
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
     }
 
@@ -960,7 +965,7 @@ mod tests {
                 &mut vote_keyed_account,
                 &mut rewards_pool_keyed_account,
                 &rewards,
-                &StakeHistory::default()
+                &StakeHistory::default(),
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -1050,8 +1055,5 @@ mod tests {
             Err(InstructionError::InvalidArgument)
         );
     }
-    #[test]
-    #[ignored]
-    fn test_stake_warup_sim() {}
 
 }

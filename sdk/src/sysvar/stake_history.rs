@@ -64,9 +64,9 @@ impl Deref for StakeHistory {
     }
 }
 
-pub fn create_account(lamports: u64) -> Account {
+pub fn create_account(lamports: u64, stake_history: &StakeHistory) -> Account {
     let mut account = Account::new(lamports, StakeHistory::size_of(), &sysvar::id());
-    StakeHistory::default().to(&mut account).unwrap();
+    stake_history.to(&mut account).unwrap();
     account
 }
 
@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn test_create_account() {
         let lamports = 42;
-        let account = create_account(lamports);
+        let account = create_account(lamports, &StakeHistory::default());
         assert_eq!(account.data.len(), StakeHistory::size_of());
 
         let stake_history = StakeHistory::from(&account);
@@ -104,5 +104,10 @@ mod tests {
         }
         assert_eq!(stake_history.len(), MAX_STAKE_HISTORY);
         assert_eq!(*stake_history.keys().min().unwrap(), 1);
+        // verify the account can hold a full instance
+        assert_eq!(
+            StakeHistory::from(&create_account(lamports, &stake_history)),
+            Some(stake_history)
+        );
     }
 }
