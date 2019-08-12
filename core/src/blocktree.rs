@@ -34,6 +34,7 @@ use std::sync::{Arc, RwLock};
 
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
+use crate::shred::Shred;
 use solana_sdk::timing::Slot;
 
 mod db;
@@ -382,6 +383,150 @@ impl Blocktree {
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)>> {
         let slot_iterator = self.db.iter::<cf::Data>(Some((slot, 0)))?;
         Ok(slot_iterator.take_while(move |((blob_slot, _), _)| *blob_slot == slot))
+    }
+
+    pub fn insert_shared_shreds(&self, shared_shreds: &[Arc<Shred>]) -> Result<()> {
+        let db = &*self.db;
+        let mut batch_processor = self.batch_processor.write().unwrap();
+        let mut write_batch = batch_processor.batch()?;
+
+        let mut just_inserted_data_indexes = HashMap::new();
+        let mut slot_meta_working_set = HashMap::new();
+        let mut index_working_set = HashMap::new();
+
+        shared_shreds.iter().for_each(|shared_shred| {
+            let slot = shared_shred.slot();
+
+            let _ = index_working_set.entry(slot).or_insert_with(|| {
+                self.index_cf
+                    .get(slot)
+                    .unwrap()
+                    .unwrap_or_else(|| Index::new(slot))
+            });
+        });
+
+        // Possibly do erasure recovery here
+
+        let dummy_data = vec![];
+
+        for shared_shred in shared_shreds {
+            let slot = shared_shred.slot();
+            let index = shared_shred.index() as u64;
+
+            let inserted = Blocktree::insert_data_shred(
+                db,
+                &mut just_inserted_data_indexes,
+                &mut slot_meta_working_set,
+                &mut index_working_set,
+                shared_shred.borrow(),
+                &mut write_batch,
+            )?;
+
+            if inserted {
+                just_inserted_data_indexes.insert((slot, index), &dummy_data);
+            }
+        }
+
+        // Handle chaining for the working set
+        handle_chaining(&db, &mut write_batch, &slot_meta_working_set)?;
+
+        let (should_signal, newly_completed_slots) = prepare_signals(
+            &slot_meta_working_set,
+            &self.completed_slots_senders,
+            &mut write_batch,
+        )?;
+
+        for (&slot, index) in index_working_set.iter() {
+            write_batch.put::<cf::Index>(slot, index)?;
+        }
+
+        batch_processor.write(write_batch)?;
+
+        if should_signal {
+            for signal in &self.new_blobs_signals {
+                let _ = signal.try_send(true);
+            }
+        }
+
+        send_signals(
+            &self.new_blobs_signals,
+            &self.completed_slots_senders,
+            should_signal,
+            newly_completed_slots,
+        )?;
+
+        Ok(())
+    }
+
+    fn insert_data_shred(
+        db: &Database,
+        prev_inserted_data_indexes: &HashMap<(u64, u64), &[u8]>,
+        mut slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+        index_working_set: &mut HashMap<u64, Index>,
+        shred: &Shred,
+        write_batch: &mut WriteBatch,
+    ) -> Result<bool> {
+        let slot = shred.slot();
+        let index = shred.index() as u64;
+        let parent = if let Shred::FirstInSlot(s) = shred {
+            s.header.parent
+        } else {
+            std::u64::MAX
+        };
+
+        let last_in_slot = if let Shred::LastInSlot(_) = shred {
+            true
+        } else {
+            false
+        };
+
+        let entry = get_slot_meta_entry(db, &mut slot_meta_working_set, slot, parent);
+
+        let slot_meta = &mut entry.0.borrow_mut();
+        if is_orphan(slot_meta) {
+            slot_meta.parent_slot = parent;
+        }
+
+        let data_cf = db.column::<cf::ShredData>();
+
+        let check_data_cf = |slot, index| {
+            data_cf
+                .get_bytes((slot, index))
+                .map(|opt| opt.is_some())
+                .unwrap_or(false)
+        };
+
+        if should_insert(
+            slot_meta,
+            &prev_inserted_data_indexes,
+            index as u64,
+            slot,
+            last_in_slot,
+            check_data_cf,
+        ) {
+            let new_consumed = compute_consume_index(
+                prev_inserted_data_indexes,
+                slot_meta,
+                index,
+                slot,
+                check_data_cf,
+            );
+
+            let serialized_shred = bincode::serialize(shred).unwrap();
+            write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
+
+            update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
+
+            index_working_set
+                .get_mut(&slot)
+                .expect("Index must be present for all data blobs")
+                .data_mut()
+                .set_present(index, true);
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     /// Use this function to write data blobs to blocktree
@@ -1166,27 +1311,22 @@ fn insert_data_blob<'a>(
     let blob_index = blob_to_insert.index();
     let blob_slot = blob_to_insert.slot();
     let blob_size = blob_to_insert.size();
+    let data_cf = db.column::<cf::Data>();
 
-    let new_consumed = {
-        if slot_meta.consumed == blob_index {
-            let blob_datas = get_slot_consecutive_blobs(
-                blob_slot,
-                db,
-                prev_inserted_blob_datas,
-                // Don't start looking for consecutive blobs at blob_index,
-                // because we haven't inserted/committed the new blob_to_insert
-                // into the database or prev_inserted_blob_datas hashmap yet.
-                blob_index + 1,
-                None,
-            )?;
-
-            // Add one because we skipped this current blob when calling
-            // get_slot_consecutive_blobs() earlier
-            slot_meta.consumed + blob_datas.len() as u64 + 1
-        } else {
-            slot_meta.consumed
-        }
+    let check_data_cf = |slot, index| {
+        data_cf
+            .get_bytes((slot, index))
+            .map(|opt| opt.is_some())
+            .unwrap_or(false)
     };
+
+    let new_consumed = compute_consume_index(
+        prev_inserted_blob_datas,
+        slot_meta,
+        blob_index,
+        blob_slot,
+        check_data_cf,
+    );
 
     let serialized_blob_data = &blob_to_insert.data[..BLOB_HEADER_SIZE + blob_size];
 
@@ -1194,16 +1334,31 @@ fn insert_data_blob<'a>(
     // We don't want only some of these changes going through.
     write_batch.put_bytes::<cf::Data>((blob_slot, blob_index), serialized_blob_data)?;
     prev_inserted_blob_datas.insert((blob_slot, blob_index), serialized_blob_data);
+    update_slot_meta(
+        blob_to_insert.is_last_in_slot(),
+        slot_meta,
+        blob_index,
+        new_consumed,
+    );
+    Ok(())
+}
+
+fn update_slot_meta(
+    is_last_in_slot: bool,
+    slot_meta: &mut SlotMeta,
+    index: u64,
+    new_consumed: u64,
+) {
     // Index is zero-indexed, while the "received" height starts from 1,
     // so received = index + 1 for the same blob.
-    slot_meta.received = cmp::max(blob_index + 1, slot_meta.received);
+    slot_meta.received = cmp::max(index + 1, slot_meta.received);
     slot_meta.consumed = new_consumed;
     slot_meta.last_index = {
         // If the last index in the slot hasn't been set before, then
         // set it to this blob index
         if slot_meta.last_index == std::u64::MAX {
-            if blob_to_insert.is_last_in_slot() {
-                blob_index
+            if is_last_in_slot {
+                index
             } else {
                 std::u64::MAX
             }
@@ -1211,7 +1366,32 @@ fn insert_data_blob<'a>(
             slot_meta.last_index
         }
     };
-    Ok(())
+}
+
+fn compute_consume_index<F>(
+    prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
+    slot_meta: &mut SlotMeta,
+    index: u64,
+    slot: u64,
+    db_check: F,
+) -> u64
+where
+    F: Fn(u64, u64) -> bool,
+{
+    if slot_meta.consumed == index {
+        let mut current_index = index + 1;
+
+        while prev_inserted_blob_datas
+            .get(&(slot, current_index))
+            .is_some()
+            || db_check(slot, current_index)
+        {
+            current_index += 1;
+        }
+        current_index
+    } else {
+        slot_meta.consumed
+    }
 }
 
 /// Checks to see if the data blob passes integrity checks for insertion. Proceeds with
@@ -1223,17 +1403,35 @@ fn check_insert_data_blob<'a>(
     prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
     write_batch: &mut WriteBatch,
 ) -> bool {
-    let blob_slot = blob.slot();
-    let parent_slot = blob.parent();
+    let entry = get_slot_meta_entry(db, slot_meta_working_set, blob.slot(), blob.parent());
+
+    let slot_meta = &mut entry.0.borrow_mut();
+    if is_orphan(slot_meta) {
+        slot_meta.parent_slot = blob.parent();
+    }
+
+    // This slot is full, skip the bogus blob
+    // Check if this blob should be inserted
+    if !should_insert_blob(&slot_meta, db, &prev_inserted_blob_datas, blob) {
+        false
+    } else {
+        let _ = insert_data_blob(blob, db, prev_inserted_blob_datas, slot_meta, write_batch);
+        true
+    }
+}
+
+fn get_slot_meta_entry<'a>(
+    db: &Database,
+    slot_meta_working_set: &'a mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    slot: u64,
+    parent_slot: u64,
+) -> &'a mut (Rc<RefCell<SlotMeta>>, Option<SlotMeta>) {
     let meta_cf = db.column::<cf::SlotMeta>();
 
     // Check if we've already inserted the slot metadata for this blob's slot
-    let entry = slot_meta_working_set.entry(blob_slot).or_insert_with(|| {
+    let entry = slot_meta_working_set.entry(slot).or_insert_with(|| {
         // Store a 2-tuple of the metadata (working copy, backup copy)
-        if let Some(mut meta) = meta_cf
-            .get(blob_slot)
-            .expect("Expect database get to succeed")
-        {
+        if let Some(mut meta) = meta_cf.get(slot).expect("Expect database get to succeed") {
             let backup = Some(meta.clone());
             // If parent_slot == std::u64::MAX, then this is one of the orphans inserted
             // during the chaining process, see the function find_slot_meta_in_cached_state()
@@ -1246,22 +1444,13 @@ fn check_insert_data_blob<'a>(
             (Rc::new(RefCell::new(meta)), backup)
         } else {
             (
-                Rc::new(RefCell::new(SlotMeta::new(blob_slot, parent_slot))),
+                Rc::new(RefCell::new(SlotMeta::new(slot, parent_slot))),
                 None,
             )
         }
     });
 
-    let slot_meta = &mut entry.0.borrow_mut();
-
-    // This slot is full, skip the bogus blob
-    // Check if this blob should be inserted
-    if !should_insert_blob(&slot_meta, db, &prev_inserted_blob_datas, blob) {
-        false
-    } else {
-        let _ = insert_data_blob(blob, db, prev_inserted_blob_datas, slot_meta, write_batch);
-        true
-    }
+    entry
 }
 
 fn should_insert_blob(
@@ -1272,54 +1461,74 @@ fn should_insert_blob(
 ) -> bool {
     let blob_index = blob.index();
     let blob_slot = blob.slot();
+    let last_in_slot = blob.is_last_in_slot();
     let data_cf = db.column::<cf::Data>();
 
-    // Check that the blob doesn't already exist
-    if blob_index < slot.consumed
-        || prev_inserted_blob_datas.contains_key(&(blob_slot, blob_index))
-        || data_cf
-            .get_bytes((blob_slot, blob_index))
+    let check_data_cf = |slot, index| {
+        data_cf
+            .get_bytes((slot, index))
             .map(|opt| opt.is_some())
             .unwrap_or(false)
+    };
+
+    should_insert(
+        slot,
+        prev_inserted_blob_datas,
+        blob_index,
+        blob_slot,
+        last_in_slot,
+        check_data_cf,
+    )
+}
+
+fn should_insert<F>(
+    slot_meta: &SlotMeta,
+    prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
+    index: u64,
+    slot: u64,
+    last_in_slot: bool,
+    db_check: F,
+) -> bool
+where
+    F: Fn(u64, u64) -> bool,
+{
+    // Check that the index doesn't already exist
+    if index < slot_meta.consumed
+        || prev_inserted_blob_datas.contains_key(&(slot, index))
+        || db_check(slot, index)
     {
         return false;
     }
-
-    // Check that we do not receive blobs >= than the last_index
+    // Check that we do not receive index >= than the last_index
     // for the slot
-    let last_index = slot.last_index;
-    if blob_index >= last_index {
+    let last_index = slot_meta.last_index;
+    if index >= last_index {
         datapoint_error!(
             "blocktree_error",
             (
                 "error",
-                format!(
-                    "Received last blob with index {} >= slot.last_index {}",
-                    blob_index, last_index
-                ),
+                format!("Received index {} >= slot.last_index {}", index, last_index),
                 String
             )
         );
         return false;
     }
-
     // Check that we do not receive a blob with "last_index" true, but index
     // less than our current received
-    if blob.is_last_in_slot() && blob_index < slot.received {
+    if last_in_slot && index < slot_meta.received {
         datapoint_error!(
             "blocktree_error",
             (
                 "error",
                 format!(
-                    "Received last blob with index {} < slot.received {}",
-                    blob_index, slot.received
+                    "Received index {} < slot.received {}",
+                    index, slot_meta.received
                 ),
                 String
             )
         );
         return false;
     }
-
     true
 }
 
