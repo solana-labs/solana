@@ -47,6 +47,7 @@ members = [
     "replicator",
     "runtime",
     "sdk",
+    "sdk-c",
     "upload-perf",
     "validator-info",
     "vote-signer",
