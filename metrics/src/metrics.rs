@@ -528,20 +528,20 @@ pub fn set_panic_hook(program: &'static str) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use serde_json;
 
     struct MockMetricsWriter {
-        points_written: AtomicUsize,
+        points_written: Arc<Mutex<Vec<influxdb::Point>>>,
     }
     impl MockMetricsWriter {
         fn new() -> Self {
             MockMetricsWriter {
-                points_written: AtomicUsize::new(0),
+                points_written: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
         fn points_written(&self) -> usize {
-            return self.points_written.load(Ordering::Relaxed);
+            self.points_written.lock().unwrap().len()
         }
     }
 
@@ -549,13 +549,16 @@ mod test {
         fn write(&self, points: Vec<influxdb::Point>) {
             assert!(!points.is_empty());
 
+            let new_points = points.len();
             self.points_written
-                .fetch_add(points.len(), Ordering::Relaxed);
+                .lock()
+                .unwrap()
+                .extend(points.into_iter());
 
             info!(
                 "Writing {} points ({} total)",
-                points.len(),
-                self.points_written.load(Ordering::Relaxed)
+                new_points,
+                self.points_written()
             );
         }
     }
@@ -588,6 +591,35 @@ mod test {
 
         agent.flush();
         assert_eq!(writer.points_written(), 20);
+    }
+
+    #[test]
+    fn test_submit_counter_increment() {
+        let writer = Arc::new(MockMetricsWriter::new());
+        let agent = MetricsAgent::new(writer.clone(), Duration::from_secs(10), 1000);
+
+        for _ in 0..10 {
+            agent.submit_counter(
+                CounterPoint {
+                    name: "counter",
+                    count: 10,
+                    timestamp: 0,
+                },
+                Level::Info,
+                0, // use the same bucket
+            );
+        }
+
+        agent.flush();
+        assert_eq!(writer.points_written(), 1);
+
+        let submitted_point = writer.points_written.lock().unwrap()[0].clone();
+        let submitted_count = submitted_point.fields.get("count").unwrap();
+        let expected_count = &influxdb::Value::Integer(100);
+        assert_eq!(
+            serde_json::to_string(submitted_count).unwrap(),
+            serde_json::to_string(expected_count).unwrap()
+        );
     }
 
     #[test]
