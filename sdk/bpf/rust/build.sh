@@ -26,6 +26,8 @@ export AR="$bpf_sdk/dependencies/llvm-native/bin/llvm-ar"
 # Use the SDK's version of Rust to build for BPF
 export RUSTUP_TOOLCHAIN=bpf
 export RUSTFLAGS="
+    -v \
+    --emit=llvm-ir \
     -C lto=no \
     -C opt-level=2 \
     -C link-arg=-z -C link-arg=notext \
@@ -40,6 +42,6 @@ export XARGO_HOME="$bpf_sdk/dependencies/xargo"
 export XARGO_RUST_SRC="$bpf_sdk/dependencies/rust-bpf-sysroot/src"
 
 cd "$1"
-xargo build --target bpfel-unknown-unknown --release
+xargo build --target bpfel-unknown-unknown --release -vv
 
 { { set +x; } 2>/dev/null; echo Success; }

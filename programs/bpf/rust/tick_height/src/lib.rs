@@ -1,10 +1,10 @@
 //! @brief Example Rust-based BPF program that prints out the parameters passed to it
 
-#![no_std]
+// #![no_std]
 #![allow(unreachable_code)]
 
-#[cfg(not(test))]
-extern crate solana_sdk_bpf_no_std;
+// #[cfg(not(test))]
+// extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
 use byteorder::{ByteOrder, LittleEndian};

@@ -1,6 +1,6 @@
 //! @brief Solana Rust-based BPF program utility functions and types
 
-#![no_std]
+// #![no_std]
 
 extern crate solana_sdk_bpf_utils;
 

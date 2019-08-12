@@ -1,11 +1,11 @@
 //! @brief Example Rust-based BPF program that moves a lamport from one account to another
 
-#![no_std]
+// #![no_std]
 #![allow(unreachable_code)]
 #![allow(unused_attributes)]
 
-#[cfg(not(test))]
-extern crate solana_sdk_bpf_no_std;
+// #[cfg(not(test))]
+// extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
 use solana_sdk_bpf_utils::entrypoint::*;
@@ -18,6 +18,5 @@ fn process_instruction(ka: &mut [SolKeyedAccount], _info: &SolClusterInfo, _data
     // is seen by the runtime and fails as expected
     *ka[0].lamports -= 1;
 
-    info!("Success");
     true
 }

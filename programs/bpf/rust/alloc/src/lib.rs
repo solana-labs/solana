@@ -1,14 +1,14 @@
 //! @brief Example Rust-based BPF program that test dynamic memory allocation
-#![no_std]
+// #![no_std]
 #![allow(unused_attributes)]
 
 #[macro_use]
 extern crate alloc;
-#[cfg(not(test))]
-extern crate solana_sdk_bpf_no_std;
+// #[cfg(not(test))]
+// extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
-use alloc::vec::Vec;
+// use alloc::vec::Vec;
 use core::alloc::Layout;
 use core::mem;
 use solana_sdk_bpf_utils::info;
@@ -32,7 +32,6 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         let layout = Layout::from_size_align(100, mem::align_of::<u8>()).unwrap();
         let ptr = alloc::alloc::alloc(layout);
         if ptr.is_null() {
-            info!("Error: Alloc of 100 bytes failed");
             alloc::alloc::handle_alloc_error(layout);
         }
         alloc::alloc::dealloc(ptr, layout);
@@ -59,7 +58,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         alloc::alloc::dealloc(ptr, layout);
     }
 
-    // // TODO not supported for system or bump allocator
+    // TODO not supported bump allocator
     // unsafe {
     //     // Test alloc all bytes and one more (assumes heap size of 2048)
 
@@ -93,7 +92,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     }
 
     {
-        // TODO test Vec::new()
+        // test Vec::new()
 
         const ITERS: usize = 100;
         let mut v = Vec::new();

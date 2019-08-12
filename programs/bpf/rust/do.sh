@@ -57,14 +57,14 @@ perform_action() {
         # - rustfilt
         (
             pwd
-            ./do.sh clean "$3"
+            # ./do.sh clean "$3"
             ./do.sh build "$3"
 
             cd "$3"
 
             set +e
             cp ./target/dump.txt ./targetdump-last.txt 2>/dev/null
-            set -e
+            # set -e
 
             ls \
                 -la \

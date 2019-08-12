@@ -115,23 +115,23 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
   fi
 fi
 
-# Install Rust-BPF Sysroot sources
-version=v0.8
-if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
-  (
-    set -ex
-    rm -rf rust-bpf-sysroot*
-    rm -rf xargo
-    cmd="git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git"
-    $cmd
+# # Install Rust-BPF Sysroot sources
+# version=v0.8
+# if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
+#   (
+#     set -ex
+#     rm -rf rust-bpf-sysroot*
+#     rm -rf xargo
+#     cmd="git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git"
+#     $cmd
 
-    echo "$cmd" > rust-bpf-sysroot-$version.md
-  )
-  exitcode=$?
-  if [[ $exitcode -ne 0 ]]; then
-    rm -rf rust-bpf-sysroot
-    exit 1
-  fi
-fi
+#     echo "$cmd" > rust-bpf-sysroot-$version.md
+#   )
+#   exitcode=$?
+#   if [[ $exitcode -ne 0 ]]; then
+#     rm -rf rust-bpf-sysroot
+#     exit 1
+#   fi
+# fi
 
 exit 0

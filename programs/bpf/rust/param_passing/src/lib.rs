@@ -1,10 +1,10 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
-#![no_std]
+// #![no_std]
 #![allow(unused_attributes)]
 
-#[cfg(not(test))]
-extern crate solana_sdk_bpf_no_std;
+// #[cfg(not(test))]
+// extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
 use solana_bpf_rust_param_passing_dep::{Data, TestDep};
