@@ -3,11 +3,12 @@ use crate::stake_state::{StakeAccount, StakeState};
 use bincode::deserialize;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_instruction;
-use solana_sdk::sysvar;
+use solana_sdk::{
+    account::KeyedAccount,
+    instruction::{AccountMeta, Instruction, InstructionError},
+    pubkey::Pubkey,
+    system_instruction, sysvar,
+};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
@@ -192,7 +193,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::account::Account;
+    use solana_sdk::{account::Account, sysvar::stake_history::StakeHistory};
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
         let mut accounts: Vec<_> = instruction
@@ -204,7 +205,7 @@ mod tests {
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
                     sysvar::rewards::create_account(1, 0.0, 0.0)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
-                    sysvar::stake_history::create_account(1)
+                    sysvar::stake_history::create_account(1, &StakeHistory::default())
                 } else {
                     Account::default()
                 }
@@ -320,7 +321,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &mut sysvar::stake_history::create_account(1)
+                        &mut sysvar::stake_history::create_account(1, &StakeHistory::default())
                     ),
                 ],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
@@ -343,7 +344,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &mut sysvar::stake_history::create_account(1)
+                        &mut sysvar::stake_history::create_account(1, &StakeHistory::default())
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
@@ -365,7 +366,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &mut sysvar::stake_history::create_account(1)
+                        &mut sysvar::stake_history::create_account(1, &StakeHistory::default())
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
