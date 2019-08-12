@@ -412,7 +412,6 @@ EOF
     declare failOnFailure="$6"
     declare arrayName="$7"
 
-    # This check should eventually be moved to cloud provider specific script
     if [ "$publicIp" = "TERMINATED" ] || [ "$privateIp" = "TERMINATED" ]; then
       if $failOnFailure; then
         exit 1

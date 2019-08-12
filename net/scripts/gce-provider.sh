@@ -36,6 +36,17 @@ __cloud_FindInstances() {
              --filter "$filter" \
              --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status,zone)' \
            | grep RUNNING)
+
+  while read -r name status zone; do
+    privateIp=TERMINATED
+    publicIp=TERMINATED
+    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s\n" "$name" "$publicIp" "$privateIp" "$status" "$zone"
+
+    instances+=("$name:$publicIp:$privateIp:$zone")
+  done < <(gcloud compute instances list \
+             --filter "$filter" \
+             --format 'value(name,status,zone)' \
+           | grep TERMINATED)
 }
 
 #
@@ -251,6 +262,9 @@ cloud_WaitForInstanceReady() {
 #  declare instanceZone="$3"
   declare timeout="$4"
 
+  if [[ $instanceIp = "TERMINATED" ]]; then
+    return 1
+  fi
   timeout "${timeout}"s bash -c "set -o pipefail; until ping -c 3 $instanceIp | tr - _; do echo .; done"
 }
 
@@ -267,6 +281,10 @@ cloud_FetchFile() {
   declare remoteFile="$3"
   declare localFile="$4"
   declare zone="$5"
+
+  if [[ $publicIp = "TERMINATED" ]]; then
+    return 1
+  fi
 
   (
     set -x
