@@ -435,6 +435,20 @@ fn check_account_for_multiple_fees(
     Err(WalletError::InsufficientFundsForFee)?
 }
 
+fn check_unique_pubkeys(
+    pubkey0: (&Pubkey, String),
+    pubkey1: (&Pubkey, String),
+) -> Result<(), WalletError> {
+    if pubkey0.0 == pubkey1.0 {
+        Err(WalletError::BadParameter(format!(
+            "Identical pubkeys found: `{}` and `{}` must be unique",
+            pubkey0.1, pubkey1.1
+        )))
+    } else {
+        Ok(())
+    }
+}
+
 fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
@@ -522,6 +536,10 @@ fn process_create_vote_account(
     commission: u8,
     lamports: u64,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (node_pubkey, "node_pubkey".to_string()),
+    )?;
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
         vote_account_pubkey,
@@ -543,6 +561,13 @@ fn process_authorize_voter(
     authorized_voter_keypair: &Keypair,
     new_authorized_voter_pubkey: &Pubkey,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (
+            new_authorized_voter_pubkey,
+            "new_authorized_voter_pubkey".to_string(),
+        ),
+    )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize_voter(
         vote_account_pubkey,                // vote account to update
