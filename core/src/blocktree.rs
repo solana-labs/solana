@@ -91,6 +91,8 @@ pub struct Blocktree {
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
     index_cf: LedgerColumn<cf::Index>,
+    _data_shred_cf: LedgerColumn<cf::ShredData>,
+    _code_shred_cf: LedgerColumn<cf::ShredCode>,
     batch_processor: Arc<RwLock<BatchProcessor>>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
@@ -111,6 +113,10 @@ pub const ORPHANS_CF: &str = "orphans";
 pub const ROOT_CF: &str = "root";
 /// Column family for indexes
 pub const INDEX_CF: &str = "index";
+/// Column family for Data Shreds
+pub const DATA_SHRED_CF: &str = "data_shred";
+/// Column family for Code Shreds
+pub const CODE_SHRED_CF: &str = "code_shred";
 
 impl Blocktree {
     /// Opens a Ledger in directory, provides "infinite" window of blobs
@@ -143,6 +149,9 @@ impl Blocktree {
         let orphans_cf = db.column();
         let index_cf = db.column();
 
+        let data_shred_cf = db.column();
+        let code_shred_cf = db.column();
+
         let db = Arc::new(db);
 
         Ok(Blocktree {
@@ -154,6 +163,8 @@ impl Blocktree {
             erasure_meta_cf,
             orphans_cf,
             index_cf,
+            _data_shred_cf: data_shred_cf,
+            _code_shred_cf: code_shred_cf,
             new_blobs_signals: vec![],
             batch_processor,
             completed_slots_senders: vec![],

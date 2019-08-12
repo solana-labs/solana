@@ -44,6 +44,14 @@ pub mod columns {
     #[derive(Debug)]
     /// The index column
     pub struct Index;
+
+    #[derive(Debug)]
+    /// The shred data column
+    pub struct ShredData;
+
+    #[derive(Debug)]
+    /// The shred erasure code column
+    pub struct ShredCode;
 }
 
 pub trait Backend: Sized + Send + Sync {

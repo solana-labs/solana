@@ -33,7 +33,8 @@ impl Backend for Rocks {
 
     fn open(path: &Path) -> Result<Rocks> {
         use crate::blocktree::db::columns::{
-            Coding, Data, DeadSlots, ErasureMeta, Index, Orphans, Root, SlotMeta,
+            Coding, Data, DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
+            SlotMeta,
         };
 
         fs::create_dir_all(&path)?;
@@ -58,6 +59,10 @@ impl Backend for Rocks {
             ColumnFamilyDescriptor::new(Root::NAME, get_cf_options(Root::NAME));
         let index_cf_descriptor =
             ColumnFamilyDescriptor::new(Index::NAME, get_cf_options(Index::NAME));
+        let shred_data_cf_descriptor =
+            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options(ShredData::NAME));
+        let shred_code_cf_descriptor =
+            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options(ShredCode::NAME));
 
         let cfs = vec![
             meta_cf_descriptor,
@@ -68,6 +73,8 @@ impl Backend for Rocks {
             orphans_cf_descriptor,
             root_cf_descriptor,
             index_cf_descriptor,
+            shred_data_cf_descriptor,
+            shred_code_cf_descriptor,
         ];
 
         // Open the database
@@ -78,7 +85,8 @@ impl Backend for Rocks {
 
     fn columns(&self) -> Vec<&'static str> {
         use crate::blocktree::db::columns::{
-            Coding, Data, DeadSlots, ErasureMeta, Index, Orphans, Root, SlotMeta,
+            Coding, Data, DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
+            SlotMeta,
         };
 
         vec![
@@ -90,6 +98,8 @@ impl Backend for Rocks {
             Orphans::NAME,
             Root::NAME,
             SlotMeta::NAME,
+            ShredData::NAME,
+            ShredCode::NAME,
         ]
     }
 
@@ -172,6 +182,53 @@ impl Column<Rocks> for cf::Coding {
 
 impl Column<Rocks> for cf::Data {
     const NAME: &'static str = super::DATA_CF;
+    type Index = (u64, u64);
+
+    fn key((slot, index): (u64, u64)) -> Vec<u8> {
+        let mut key = vec![0; 16];
+        BigEndian::write_u64(&mut key[..8], slot);
+        BigEndian::write_u64(&mut key[8..16], index);
+        key
+    }
+
+    fn index(key: &[u8]) -> (u64, u64) {
+        let slot = BigEndian::read_u64(&key[..8]);
+        let index = BigEndian::read_u64(&key[8..16]);
+        (slot, index)
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index.0
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        (slot, 0)
+    }
+}
+
+impl Column<Rocks> for cf::ShredCode {
+    const NAME: &'static str = super::CODE_SHRED_CF;
+    type Index = (u64, u64);
+
+    fn key(index: (u64, u64)) -> Vec<u8> {
+        cf::ShredData::key(index)
+    }
+
+    fn index(key: &[u8]) -> (u64, u64) {
+        cf::ShredData::index(key)
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index.0
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        (slot, 0)
+    }
+}
+
+impl Column<Rocks> for cf::ShredData {
+    const NAME: &'static str = super::DATA_SHRED_CF;
     type Index = (u64, u64);
 
     fn key((slot, index): (u64, u64)) -> Vec<u8> {
