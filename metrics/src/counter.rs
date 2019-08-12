@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_metrisrate() {
+    fn test_metricsrate() {
         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
             .try_init()
             .ok();
