@@ -2355,7 +2355,9 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let bob_keypair = Keypair::new();
-        config.command = WalletCommand::AuthorizeVoter(bob_pubkey, bob_keypair, bob_pubkey);
+        let new_authorized_voter_pubkey = Pubkey::new_rand();
+        config.command =
+            WalletCommand::AuthorizeVoter(bob_pubkey, bob_keypair, new_authorized_voter_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
