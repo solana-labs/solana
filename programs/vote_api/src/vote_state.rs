@@ -21,17 +21,17 @@ pub const INITIAL_LOCKOUT: usize = 2;
 //  smaller numbers makes
 pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
-    /// A vote for height slot
-    pub slot: Slot,
-    // signature of the bank's state at given slot
+    /// A stack of votes starting with the oldest vote
+    pub slots: Vec<Slot>,
+    /// signature of the bank's state at the last slot
     pub hash: Hash,
 }
 
 impl Vote {
-    pub fn new(slot: Slot, hash: Hash) -> Self {
-        Self { slot, hash }
+    pub fn new(slots: Vec<Slot>, hash: Hash) -> Self {
+        Self { slots, hash }
     }
 }
 
@@ -42,9 +42,9 @@ pub struct Lockout {
 }
 
 impl Lockout {
-    pub fn new(vote: &Vote) -> Self {
+    pub fn new(slot: Slot) -> Self {
         Self {
-            slot: vote.slot,
+            slot,
             confirmation_count: 1,
         }
     }
@@ -147,52 +147,74 @@ impl VoteState {
             }
         }
     }
+    fn check_slots_are_valid(&self, vote: &Vote, slot_hashes: &[(Slot, Hash)]) -> bool {
+        let mut i = 0;
+        let mut j = slot_hashes.len();
+        while i < vote.slots.len() && j > 0 {
+            if self
+                .votes
+                .back()
+                .map_or(false, |old_vote| old_vote.slot >= vote.slots[i])
+            {
+                i += 1;
+                continue;
+            }
+            if vote.slots[i] != slot_hashes[j - 1].0 {
+                j -= 1;
+                continue;
+            }
+            i += 1;
+            j -= 1;
+        }
+        if j == slot_hashes.len() {
+            warn!(
+                "{} dropped vote {:?} to old: {:?} ",
+                self.node_pubkey, vote, slot_hashes
+            );
+            return false;
+        }
+        if i != vote.slots.len() {
+            warn!(
+                "{} dropped vote {:?} failed to match slot:  {:?}",
+                self.node_pubkey, vote, slot_hashes,
+            );
 
-    pub fn process_votes(&mut self, votes: &[Vote], slot_hashes: &[(Slot, Hash)], epoch: Epoch) {
-        votes
-            .iter()
-            .for_each(|v| self.process_vote(v, slot_hashes, epoch));
+            return false;
+        }
+        if slot_hashes[j].1 != vote.hash {
+            warn!(
+                "{} dropped vote {:?} failed to match hash {} {}",
+                self.node_pubkey, vote, vote.hash, slot_hashes[j].1
+            );
+            return false;
+        }
+        true
+    }
+    pub fn process_vote(&mut self, vote: &Vote, slot_hashes: &[(Slot, Hash)], epoch: Epoch) {
+        if vote.slots.is_empty() {
+            return;
+        }
+        if !self.check_slots_are_valid(vote, slot_hashes) {
+            return;
+        }
+        vote.slots.iter().for_each(|s| self.process_slot(*s, epoch));
     }
 
-    pub fn process_vote(&mut self, vote: &Vote, slot_hashes: &[(Slot, Hash)], epoch: Epoch) {
+    pub fn process_slot(&mut self, slot: Slot, epoch: Epoch) {
         // Ignore votes for slots earlier than we already have votes for
         if self
             .votes
             .back()
-            .map_or(false, |old_vote| old_vote.slot >= vote.slot)
+            .map_or(false, |old_vote| old_vote.slot >= slot)
         {
             return;
         }
 
-        // drop votes for which there is no matching slot and hash
-        if !slot_hashes
-            .iter()
-            .any(|(slot, hash)| vote.slot == *slot && vote.hash == *hash)
-        {
-            if log_enabled!(log::Level::Warn) {
-                for (slot, hash) in slot_hashes {
-                    if vote.slot == *slot {
-                        warn!(
-                            "{} dropped vote {:?} matched slot {}, but not hash {:?}",
-                            self.node_pubkey, vote, *slot, *hash
-                        );
-                    }
-                    if vote.hash == *hash {
-                        warn!(
-                            "{} dropped vote {:?} matched hash {:?}, but not slot {}",
-                            self.node_pubkey, vote, *slot, *hash
-                        );
-                    }
-                }
-            }
-            return;
-        }
+        let vote = Lockout::new(slot);
 
-        let vote = Lockout::new(&vote);
+        self.pop_expired_votes(slot);
 
-        self.pop_expired_votes(vote.slot);
-
-        // Once the stack is full, pop the oldest vote and distribute rewards
+        // Once the stack is full, pop the oldest lockout and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
             let vote = self.votes.pop_front().unwrap();
             self.root_slot = Some(vote.slot);
@@ -226,10 +248,11 @@ impl VoteState {
 
     /// "unchecked" functions used by tests and Tower
     pub fn process_vote_unchecked(&mut self, vote: &Vote) {
-        self.process_vote(vote, &[(vote.slot, vote.hash)], self.epoch);
+        let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
+        self.process_vote(vote, &slot_hashes, self.epoch);
     }
     pub fn process_slot_vote_unchecked(&mut self, slot: Slot) {
-        self.process_vote_unchecked(&Vote::new(slot, Hash::default()));
+        self.process_vote_unchecked(&Vote::new(vec![slot], Hash::default()));
     }
 
     pub fn nth_recent_vote(&self, position: usize) -> Option<&Lockout> {
@@ -337,12 +360,12 @@ pub fn initialize_account(
     ))
 }
 
-pub fn process_votes(
+pub fn process_vote(
     vote_account: &mut KeyedAccount,
     slot_hashes: &[(Slot, Hash)],
     clock: &Clock,
     other_signers: &[KeyedAccount],
-    votes: &[Vote],
+    vote: &Vote,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
@@ -360,7 +383,7 @@ pub fn process_votes(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    vote_state.process_votes(&votes, slot_hashes, clock.epoch);
+    vote_state.process_vote(vote, slot_hashes, clock.epoch);
     vote_account.set_state(&vote_state)
 }
 
@@ -422,7 +445,7 @@ mod tests {
         slot_hashes: &[(u64, Hash)],
         epoch: u64,
     ) -> Result<VoteState, InstructionError> {
-        process_votes(
+        process_vote(
             &mut KeyedAccount::new(vote_pubkey, true, vote_account),
             slot_hashes,
             &Clock {
@@ -430,7 +453,7 @@ mod tests {
                 ..Clock::default()
             },
             &[],
-            &[vote.clone()],
+            &vote.clone(),
         )?;
         vote_account.state()
     }
@@ -445,7 +468,7 @@ mod tests {
             vote_pubkey,
             vote_account,
             vote,
-            &[(vote.slot, vote.hash)],
+            &[(*vote.slots.last().unwrap(), vote.hash)],
             0,
         )
     }
@@ -475,10 +498,13 @@ mod tests {
     fn test_vote() {
         let (vote_pubkey, mut vote_account) = create_test_account();
 
-        let vote = Vote::new(1, Hash::default());
+        let vote = Vote::new(vec![1], Hash::default());
         let vote_state =
             simulate_process_vote_unchecked(&vote_pubkey, &mut vote_account, &vote).unwrap();
-        assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
+        assert_eq!(
+            vote_state.votes,
+            vec![Lockout::new(*vote.slots.last().unwrap())]
+        );
         assert_eq!(vote_state.credits(), 0);
     }
 
@@ -487,7 +513,7 @@ mod tests {
         let (vote_pubkey, mut vote_account) = create_test_account();
 
         let hash = hash(&[0u8]);
-        let vote = Vote::new(0, hash);
+        let vote = Vote::new(vec![0], hash);
 
         // wrong hash
         let vote_state = simulate_process_vote(
@@ -515,25 +541,25 @@ mod tests {
     fn test_vote_signature() {
         let (vote_pubkey, mut vote_account) = create_test_account();
 
-        let vote = Vote::new(1, Hash::default());
+        let vote = Vote::new(vec![1], Hash::default());
 
         // unsigned
-        let res = process_votes(
+        let res = process_vote(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[(vote.slot, vote.hash)],
+            &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
             &[],
-            &[vote],
+            &vote,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // unsigned
-        let res = process_votes(
+        let res = process_vote(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-            &[(vote.slot, vote.hash)],
+            &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
             &[],
-            &[vote],
+            &vote,
         );
         assert_eq!(res, Ok(()));
 
@@ -565,28 +591,28 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // not signed by authorized voter
-        let vote = Vote::new(2, Hash::default());
-        let res = process_votes(
+        let vote = Vote::new(vec![2], Hash::default());
+        let res = process_vote(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-            &[(vote.slot, vote.hash)],
+            &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
             &[],
-            &[vote],
+            &vote,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // signed by authorized voter
-        let vote = Vote::new(2, Hash::default());
-        let res = process_votes(
+        let vote = Vote::new(vec![2], Hash::default());
+        let res = process_vote(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[(vote.slot, vote.hash)],
+            &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
             &[KeyedAccount::new(
                 &authorized_voter_pubkey,
                 true,
                 &mut Account::default(),
             )],
-            &[vote],
+            &vote,
         );
         assert_eq!(res, Ok(()));
     }
@@ -599,7 +625,7 @@ mod tests {
         let res = simulate_process_vote_unchecked(
             &vote_pubkey,
             &mut vote_account,
-            &Vote::new(1, Hash::default()),
+            &Vote::new(vec![1], Hash::default()),
         );
         assert_eq!(res, Err(InstructionError::UninitializedAccount));
     }
@@ -649,12 +675,12 @@ mod tests {
         vote_state.process_slot_vote_unchecked((2 + INITIAL_LOCKOUT + 1) as u64);
         check_lockouts(&vote_state);
 
-        // Vote again, this time the vote stack depth increases, so the lockouts should
+        // Vote again, this time the vote stack depth increases, so the votes should
         // double for everybody
         vote_state.process_slot_vote_unchecked((2 + INITIAL_LOCKOUT + 2) as u64);
         check_lockouts(&vote_state);
 
-        // Vote again, this time the vote stack depth increases, so the lockouts should
+        // Vote again, this time the vote stack depth increases, so the votes should
         // double for everybody
         vote_state.process_slot_vote_unchecked((2 + INITIAL_LOCKOUT + 3) as u64);
         check_lockouts(&vote_state);
@@ -740,18 +766,15 @@ mod tests {
 
     fn check_lockouts(vote_state: &VoteState) {
         for (i, vote) in vote_state.votes.iter().enumerate() {
-            let num_lockouts = vote_state.votes.len() - i;
-            assert_eq!(
-                vote.lockout(),
-                INITIAL_LOCKOUT.pow(num_lockouts as u32) as u64
-            );
+            let num_votes = vote_state.votes.len() - i;
+            assert_eq!(vote.lockout(), INITIAL_LOCKOUT.pow(num_votes as u32) as u64);
         }
     }
 
     fn recent_votes(vote_state: &VoteState) -> Vec<Vote> {
         let start = vote_state.votes.len().saturating_sub(MAX_RECENT_VOTES);
         (start..vote_state.votes.len())
-            .map(|i| Vote::new(vote_state.votes.get(i).unwrap().slot, Hash::default()))
+            .map(|i| Vote::new(vec![vote_state.votes.get(i).unwrap().slot], Hash::default()))
             .collect()
     }
 
@@ -770,15 +793,94 @@ mod tests {
         assert_ne!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
 
         // as long as b has missed less than "NUM_RECENT" votes both accounts should be in sync
-        let votes: Vec<_> = (0..MAX_RECENT_VOTES)
-            .into_iter()
-            .map(|i| Vote::new(i as u64, Hash::default()))
-            .collect();
-        let slot_hashes: Vec<_> = votes.iter().map(|vote| (vote.slot, vote.hash)).collect();
+        let slots = (0u64..MAX_RECENT_VOTES as u64).into_iter().collect();
+        let vote = Vote::new(slots, Hash::default());
+        let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
 
-        vote_state_a.process_votes(&votes, &slot_hashes, 0);
-        vote_state_b.process_votes(&votes, &slot_hashes, 0);
+        vote_state_a.process_vote(&vote, &slot_hashes, 0);
+        vote_state_b.process_vote(&vote, &slot_hashes, 0);
         assert_eq!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
+    }
+
+    #[test]
+    fn test_process_vote_skips_old_vote() {
+        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        let vote = Vote::new(vec![0], Hash::default());
+        let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap() + 1, vote.hash)];
+        vote_state.process_vote(&vote, &slot_hashes, 0);
+        assert!(recent_votes(&vote_state).is_empty());
+    }
+
+    #[test]
+    fn test_check_slots_are_valid_vote_empty_slot_hashes() {
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        let vote = Vote::new(vec![0], Hash::default());
+        assert_eq!(vote_state.check_slots_are_valid(&vote, &vec![]), false);
+    }
+
+    #[test]
+    fn test_check_slots_are_valid_new_vote() {
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        let vote = Vote::new(vec![0], Hash::default());
+        let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
+        assert_eq!(vote_state.check_slots_are_valid(&vote, &slot_hashes), true);
+    }
+
+    #[test]
+    fn test_check_slots_are_valid_bad_hash() {
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        let vote = Vote::new(vec![0], Hash::default());
+        let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), hash(vote.hash.as_ref()))];
+        assert_eq!(vote_state.check_slots_are_valid(&vote, &slot_hashes), false);
+    }
+
+    #[test]
+    fn test_check_slots_are_valid_bad_slot() {
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        let vote = Vote::new(vec![1], Hash::default());
+        let slot_hashes: Vec<_> = vec![(0, vote.hash)];
+        assert_eq!(vote_state.check_slots_are_valid(&vote, &slot_hashes), false);
+    }
+
+    #[test]
+    fn test_check_slots_are_valid_duplicate_vote() {
+        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        let vote = Vote::new(vec![0], Hash::default());
+        let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
+        vote_state.process_vote(&vote, &slot_hashes, 0);
+        assert_eq!(vote_state.check_slots_are_valid(&vote, &slot_hashes), false);
+    }
+
+    #[test]
+    fn test_check_slots_are_valid_next_vote() {
+        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        let vote = Vote::new(vec![0], Hash::default());
+        let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
+        vote_state.process_vote(&vote, &slot_hashes, 0);
+
+        let vote = Vote::new(vec![0, 1], Hash::default());
+        let slot_hashes: Vec<_> = vec![(1, vote.hash), (0, vote.hash)];
+        assert_eq!(vote_state.check_slots_are_valid(&vote, &slot_hashes), true);
+    }
+
+    #[test]
+    fn test_check_slots_are_valid_next_vote_only() {
+        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        let vote = Vote::new(vec![0], Hash::default());
+        let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
+        vote_state.process_vote(&vote, &slot_hashes, 0);
+
+        let vote = Vote::new(vec![1], Hash::default());
+        let slot_hashes: Vec<_> = vec![(1, vote.hash), (0, vote.hash)];
+        assert_eq!(vote_state.check_slots_are_valid(&vote, &slot_hashes), true);
     }
 
     #[test]

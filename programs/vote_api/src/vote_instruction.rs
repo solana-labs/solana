@@ -23,7 +23,7 @@ pub enum VoteInstruction {
     AuthorizeVoter(Pubkey),
 
     /// A Vote instruction with recent votes
-    Vote(Vec<Vote>),
+    Vote(Vote),
 
     /// Withdraw some amount of funds
     Withdraw(u64),
@@ -94,11 +94,7 @@ pub fn authorize_voter(
     )
 }
 
-pub fn vote(
-    vote_pubkey: &Pubkey,
-    authorized_voter_pubkey: &Pubkey,
-    recent_votes: Vec<Vote>,
-) -> Instruction {
+pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) -> Instruction {
     let account_metas = metas_for_authorized_signer(
         vote_pubkey,
         authorized_voter_pubkey,
@@ -110,7 +106,7 @@ pub fn vote(
         ],
     );
 
-    Instruction::new(id(), &VoteInstruction::Vote(recent_votes), account_metas)
+    Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
 }
 
 pub fn withdraw(vote_pubkey: &Pubkey, lamports: u64, to_pubkey: &Pubkey) -> Instruction {
@@ -148,19 +144,19 @@ pub fn process_instruction(
         VoteInstruction::AuthorizeVoter(voter_pubkey) => {
             vote_state::authorize_voter(me, rest, &voter_pubkey)
         }
-        VoteInstruction::Vote(votes) => {
+        VoteInstruction::Vote(vote) => {
             datapoint_warn!("vote-native", ("count", 1, i64));
             if rest.len() < 2 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             let (slot_hashes_and_clock, other_signers) = rest.split_at_mut(2);
 
-            vote_state::process_votes(
+            vote_state::process_vote(
                 me,
                 &sysvar::slot_hashes::from_keyed_account(&slot_hashes_and_clock[0])?,
                 &sysvar::clock::from_keyed_account(&slot_hashes_and_clock[1])?,
                 other_signers,
-                &votes,
+                &vote,
             )
         }
         VoteInstruction::Withdraw(lamports) => {
@@ -232,7 +228,7 @@ mod tests {
             process_instruction(&vote(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                vec![Vote::default()]
+                Vote::default(),
             )),
             Err(InstructionError::InvalidAccountData),
         );

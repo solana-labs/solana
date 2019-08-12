@@ -5,12 +5,11 @@ use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
-pub const MAX_RECENT_VOTES: usize = 16;
 
 #[derive(Default, Debug)]
 pub struct StakeLockout {
@@ -33,7 +32,7 @@ pub struct Tower {
     threshold_depth: usize,
     threshold_size: f64,
     lockouts: VoteState,
-    recent_votes: VecDeque<Vote>,
+    last_vote: Vote,
 }
 
 impl Tower {
@@ -43,7 +42,7 @@ impl Tower {
             threshold_depth: VOTE_THRESHOLD_DEPTH,
             threshold_size: VOTE_THRESHOLD_SIZE,
             lockouts: VoteState::default(),
-            recent_votes: VecDeque::default(),
+            last_vote: Vote::default(),
         };
 
         tower.initialize_lockouts_from_bank_forks(&bank_forks, vote_account_pubkey);
@@ -165,24 +164,52 @@ impl Tower {
             .map(|lockout| (lockout.stake as f64 / total_staked as f64) > self.threshold_size)
             .unwrap_or(false)
     }
+    fn new_vote(
+        local_vote_state: &VoteState,
+        slot: u64,
+        hash: Hash,
+        last_bank_slot: Option<u64>,
+    ) -> Vote {
+        let mut local_vote_state = local_vote_state.clone();
+        let vote = Vote {
+            slots: vec![slot],
+            hash,
+        };
+        local_vote_state.process_vote_unchecked(&vote);
+        let slots = if let Some(lbs) = last_bank_slot {
+            local_vote_state
+                .votes
+                .iter()
+                .map(|v| v.slot)
+                .skip_while(|s| *s <= lbs)
+                .collect()
+        } else {
+            local_vote_state.votes.iter().map(|v| v.slot).collect()
+        };
+        trace!(
+            "new vote with {:?} {:?} {:?}",
+            last_bank_slot,
+            slots,
+            local_vote_state.votes
+        );
+        Vote { slots, hash }
+    }
+    fn last_bank_vote(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<u64> {
+        let vote_account = bank.vote_accounts().get(vote_account_pubkey)?.1.clone();
+        let bank_vote_state = VoteState::deserialize(&vote_account.data).ok()?;
+        bank_vote_state.votes.iter().map(|v| v.slot).last()
+    }
 
-    pub fn record_vote(&mut self, slot: u64, hash: Hash) -> Option<u64> {
+    pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey) -> Vote {
+        let last_vote = Self::last_bank_vote(bank, vote_account_pubkey);
+        Self::new_vote(&self.lockouts, bank.slot(), bank.hash(), last_vote)
+    }
+    pub fn record_bank_vote(&mut self, vote: Vote) -> Option<u64> {
+        let slot = *vote.slots.last().unwrap_or(&0);
         trace!("{} record_vote for {}", self.node_pubkey, slot);
         let root_slot = self.lockouts.root_slot;
-        let vote = Vote { slot, hash };
         self.lockouts.process_vote_unchecked(&vote);
-
-        // vote_state doesn't keep around the hashes, so we save them in recent_votes
-        self.recent_votes.push_back(vote);
-        let slots = self
-            .lockouts
-            .votes
-            .iter()
-            .skip(self.lockouts.votes.len().saturating_sub(MAX_RECENT_VOTES))
-            .map(|vote| vote.slot)
-            .collect::<Vec<_>>();
-        self.recent_votes
-            .retain(|vote| slots.iter().any(|slot| vote.slot == *slot));
+        self.last_vote = vote;
 
         datapoint_info!(
             "tower-vote",
@@ -195,9 +222,16 @@ impl Tower {
             None
         }
     }
+    pub fn record_vote(&mut self, slot: u64, hash: Hash) -> Option<u64> {
+        let vote = Vote {
+            slots: vec![slot],
+            hash,
+        };
+        self.record_bank_vote(vote)
+    }
 
-    pub fn recent_votes(&self) -> Vec<Vote> {
-        self.recent_votes.iter().cloned().collect::<Vec<_>>()
+    pub fn last_vote(&self) -> Vote {
+        self.last_vote.clone()
     }
 
     pub fn root(&self) -> Option<u64> {
@@ -767,6 +801,32 @@ mod test {
     }
 
     #[test]
+    fn test_new_vote() {
+        let local = VoteState::default();
+        let vote = Tower::new_vote(&local, 0, Hash::default(), None);
+        assert_eq!(vote.slots, vec![0]);
+    }
+
+    #[test]
+    fn test_new_vote_dup_vote() {
+        let local = VoteState::default();
+        let vote = Tower::new_vote(&local, 0, Hash::default(), Some(0));
+        assert!(vote.slots.is_empty());
+    }
+
+    #[test]
+    fn test_new_vote_next_vote() {
+        let mut local = VoteState::default();
+        let vote = Vote {
+            slots: vec![0],
+            hash: Hash::default(),
+        };
+        local.process_vote_unchecked(&vote);
+        let vote = Tower::new_vote(&local, 1, Hash::default(), Some(0));
+        assert_eq!(vote.slots, vec![1]);
+    }
+
+    #[test]
     fn test_check_vote_threshold_forks() {
         // Create the ancestor relationships
         let ancestors = (0..=(VOTE_THRESHOLD_DEPTH + 1) as u64)
@@ -818,14 +878,16 @@ mod test {
 
     fn vote_and_check_recent(num_votes: usize) {
         let mut tower = Tower::new_for_tests(1, 0.67);
-        let start = num_votes.saturating_sub(MAX_RECENT_VOTES);
-        let expected: Vec<_> = (start..num_votes)
-            .map(|i| Vote::new(i as u64, Hash::default()))
-            .collect();
+        let slots = if num_votes > 0 {
+            vec![num_votes as u64 - 1]
+        } else {
+            vec![]
+        };
+        let expected = Vote::new(slots, Hash::default());
         for i in 0..num_votes {
             tower.record_vote(i as u64, Hash::default());
         }
-        assert_eq!(expected, tower.recent_votes())
+        assert_eq!(expected, tower.last_vote())
     }
 
     #[test]
@@ -840,6 +902,6 @@ mod test {
 
     #[test]
     fn test_recent_votes_exact() {
-        vote_and_check_recent(MAX_RECENT_VOTES)
+        vote_and_check_recent(5)
     }
 }

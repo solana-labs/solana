@@ -409,7 +409,8 @@ impl ReplayStage {
         T: 'static + KeypairUtil + Send + Sync,
     {
         trace!("handle votable bank {}", bank.slot());
-        if let Some(new_root) = tower.record_vote(bank.slot(), bank.hash()) {
+        let vote = tower.new_vote_from_bank(bank, vote_account);
+        if let Some(new_root) = tower.record_bank_vote(vote) {
             // get the root bank before squash
             let root_bank = bank_forks
                 .read()
@@ -445,11 +446,8 @@ impl ReplayStage {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
 
             // Send our last few votes along with the new one
-            let vote_ix = vote_instruction::vote(
-                &vote_account,
-                &voting_keypair.pubkey(),
-                tower.recent_votes(),
-            );
+            let vote_ix =
+                vote_instruction::vote(&vote_account, &voting_keypair.pubkey(), tower.last_vote());
 
             let mut vote_tx =
                 Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));

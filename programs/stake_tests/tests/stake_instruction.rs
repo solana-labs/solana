@@ -40,7 +40,7 @@ fn fill_epoch_with_votes(
             vec![vote_instruction::vote(
                 &vote_pubkey,
                 &vote_pubkey,
-                vec![Vote::new(parent.slot() as u64, parent.hash())],
+                Vote::new(vec![parent.slot() as u64], parent.hash()),
             )],
             Some(&mint_pubkey),
         );
