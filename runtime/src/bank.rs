@@ -147,8 +147,8 @@ pub struct Bank {
     /// The set of parents including this bank
     pub ancestors: HashMap<u64, usize>,
 
-    /// Hash of this Bank's state. Only meaningful after freezing.
-    hash: RwLock<Hash>,
+    /// Hash of this Bank's state and frozen state. Only meaningful after freezing.
+    hash: RwLock<(Hash, bool)>,
 
     /// Hash of this Bank's parent's state
     parent_hash: Hash,
@@ -295,7 +295,7 @@ impl Bank {
             collector_fees: AtomicUsize::new(0),
             ancestors: HashMap::new(),
             epoch_stakes: HashMap::new(),
-            hash: RwLock::new(Hash::default()),
+            hash: RwLock::new((Hash::default(), false)),
             is_delta: AtomicBool::new(false),
             tick_height: AtomicUsize::new(parent.tick_height.load(Ordering::Relaxed)),
             signature_count: AtomicUsize::new(0),
@@ -360,16 +360,16 @@ impl Bank {
         self.epoch_schedule.get_epoch(self.slot)
     }
 
-    pub fn freeze_lock(&self) -> RwLockReadGuard<Hash> {
+    pub fn freeze_lock(&self) -> RwLockReadGuard<(Hash, bool)> {
         self.hash.read().unwrap()
     }
 
     pub fn hash(&self) -> Hash {
-        *self.hash.read().unwrap()
+        self.hash.read().unwrap().0
     }
 
     pub fn is_frozen(&self) -> bool {
-        *self.hash.read().unwrap() != Hash::default()
+        self.hash.read().unwrap().1
     }
 
     fn update_clock(&self) {
@@ -476,15 +476,11 @@ impl Bank {
     }
 
     fn set_hash(&self) -> bool {
-        let mut hash = self.hash.write().unwrap();
+        let hash = &mut self.hash.write().unwrap();
+        assert!(hash.1);
 
-        if *hash == Hash::default() {
-            // finish up any deferred changes to account state
-            self.commit_credits();
-            self.collect_fees();
-
-            // freeze is a one-way trip, idempotent
-            *hash = self.hash_internal_state();
+        if hash.0 == Hash::default() {
+            hash.0 = self.hash_internal_state();
             true
         } else {
             false
@@ -492,6 +488,17 @@ impl Bank {
     }
 
     pub fn freeze(&self) {
+        // freeze is a one-way trip, idempotent
+        let hash = &mut self.hash.write().unwrap();
+        if !hash.1 {
+            // finish up any deferred changes to account state
+            self.commit_credits();
+            self.collect_fees();
+            hash.1 = true;
+        }
+    }
+
+    pub fn calculate_hash(&self) {
         if self.set_hash() {
             self.update_slot_hashes();
         }
