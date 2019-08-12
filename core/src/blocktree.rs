@@ -47,8 +47,7 @@ macro_rules! db_imports {
         mod $mod;
 
         use $mod::$db;
-        use db::columns as cf;
-
+        use db::{columns as cf, IteratorMode, IteratorDirection};
         pub use db::columns;
 
         pub type Database = db::Database<$db>;
@@ -96,6 +95,7 @@ pub struct Blocktree {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     batch_processor: Arc<RwLock<BatchProcessor>>,
+    floor: Arc<RwLock<u64>>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
@@ -122,7 +122,7 @@ pub const CODE_SHRED_CF: &str = "code_shred";
 
 impl Blocktree {
     /// Opens a Ledger in directory, provides "infinite" window of blobs
-    pub fn open(ledger_path: &Path) -> Result<Blocktree> {
+    pub fn open(ledger_path: &Path, floor: Option<u64>) -> Result<Blocktree> {
         fs::create_dir_all(&ledger_path)?;
         let blocktree_path = ledger_path.join(BLOCKTREE_DIRECTORY);
 
@@ -156,6 +156,14 @@ impl Blocktree {
 
         let db = Arc::new(db);
 
+        // Get max root or 0 if it doesn't exist
+        let max_root = db
+            .iter::<cf::Root>(IteratorMode::End)?
+            .next()
+            .map(|(slot, _)| slot)
+            .unwrap_or(0);
+        let floor = Arc::new(RwLock::new(cmp::max(floor.unwrap_or(0), max_root)));
+
         Ok(Blocktree {
             db,
             meta_cf,
@@ -170,13 +178,15 @@ impl Blocktree {
             new_blobs_signals: vec![],
             batch_processor,
             completed_slots_senders: vec![],
+            floor,
         })
     }
 
     pub fn open_with_signal(
         ledger_path: &Path,
+        floor: Option<u64>,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        let mut blocktree = Self::open(ledger_path)?;
+        let mut blocktree = Self::open(ledger_path, floor)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
@@ -308,7 +318,9 @@ impl Blocktree {
     }
 
     pub fn slot_meta_iterator(&self, slot: u64) -> Result<impl Iterator<Item = (u64, SlotMeta)>> {
-        let meta_iter = self.db.iter::<cf::SlotMeta>(Some(slot))?;
+        let meta_iter = self
+            .db
+            .iter::<cf::SlotMeta>(IteratorMode::From(slot, IteratorDirection::Forward))?;
         Ok(meta_iter.map(|(slot, slot_meta_bytes)| {
             (
                 slot,
@@ -322,7 +334,9 @@ impl Blocktree {
         &self,
         slot: u64,
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)>> {
-        let slot_iterator = self.db.iter::<cf::Data>(Some((slot, 0)))?;
+        let slot_iterator = self
+            .db
+            .iter::<cf::Data>(IteratorMode::From((slot, 0), IteratorDirection::Forward))?;
         Ok(slot_iterator.take_while(move |((blob_slot, _), _)| *blob_slot == slot))
     }
 
@@ -1424,6 +1438,8 @@ impl Blocktree {
     }
 
     pub fn set_roots(&self, rooted_slots: &[u64]) -> Result<()> {
+        // Make sure rooted_slots is sorted
+        assert!(rooted_slots.windows(2).all(|w| w[0] <= w[1]));
         unsafe {
             let mut batch_processor = self.db.batch_processor();
             let mut write_batch = batch_processor.batch()?;
@@ -1433,6 +1449,9 @@ impl Blocktree {
 
             batch_processor.write(write_batch)?;
         }
+
+        let mut floor = self.floor.write().unwrap();
+        *floor = cmp::max(*rooted_slots.last().unwrap(), *floor);
         Ok(())
     }
 
@@ -1469,29 +1488,6 @@ impl Blocktree {
         results
     }
 
-    // Handle special case of writing genesis blobs. For instance, the first two entries
-    // don't count as ticks, even if they're empty entries
-    fn write_genesis_blobs(&self, blobs: &[Blob]) -> Result<()> {
-        // TODO: change bootstrap height to number of slots
-        let mut bootstrap_meta = SlotMeta::new(0, 1);
-        let last = blobs.last().unwrap();
-
-        let mut batch_processor = self.batch_processor.write().unwrap();
-
-        bootstrap_meta.consumed = last.index() + 1;
-        bootstrap_meta.received = last.index() + 1;
-        bootstrap_meta.is_connected = true;
-
-        let mut batch = batch_processor.batch()?;
-        batch.put::<cf::SlotMeta>(0, &bootstrap_meta)?;
-        for blob in blobs {
-            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()];
-            batch.put_bytes::<cf::Data>((blob.slot(), blob.index()), serialized_blob_datas)?;
-        }
-        batch_processor.write(batch)?;
-        Ok(())
-    }
-
     /// Prune blocktree such that slots higher than `target_slot` are deleted and all references to
     /// higher slots are removed
     pub fn prune(&self, target_slot: u64) {
@@ -1523,6 +1519,10 @@ impl Blocktree {
             )
             .expect("couldn't update meta");
         }
+    }
+
+    pub fn floor(&self) -> u64 {
+        *self.floor.read().unwrap()
     }
 }
 
@@ -2445,7 +2445,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     genesis_block.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
-    let blocktree = Blocktree::open(ledger_path)?;
+    let blocktree = Blocktree::open(ledger_path, None)?;
     let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
 
     let mut shredder = Shredder::new(0, Some(0), 0.0, &Arc::new(Keypair::new()), 0)
@@ -2466,29 +2466,6 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     blocktree.insert_shreds(shreds)?;
 
     Ok(last_hash)
-}
-
-pub fn genesis<'a, I>(ledger_path: &Path, keypair: &Keypair, entries: I) -> Result<()>
-where
-    I: IntoIterator<Item = &'a Entry>,
-{
-    let blocktree = Blocktree::open(ledger_path)?;
-
-    // TODO sign these blobs with keypair
-    let blobs: Vec<_> = entries
-        .into_iter()
-        .enumerate()
-        .map(|(idx, entry)| {
-            let mut b = entry.borrow().to_blob();
-            b.set_index(idx as u64);
-            b.set_id(&keypair.pubkey());
-            b.set_slot(0);
-            b
-        })
-        .collect();
-
-    blocktree.write_genesis_blobs(&blobs[..])?;
-    Ok(())
 }
 
 #[macro_export]
@@ -3397,7 +3374,7 @@ pub mod tests {
     pub fn test_forward_chaining_is_connected() {
         let blocktree_path = get_tmp_ledger_path("test_forward_chaining_is_connected");
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path, None).unwrap();
             let num_slots = 15;
             let entries_per_slot = 2;
             assert!(entries_per_slot > 1);
@@ -3480,7 +3457,7 @@ pub mod tests {
     pub fn test_chaining_tree() {
         let blocktree_path = get_tmp_ledger_path("test_chaining_tree");
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path, None).unwrap();
             let num_tree_levels = 6;
             assert!(num_tree_levels > 1);
             let branching_factor: u64 = 4;

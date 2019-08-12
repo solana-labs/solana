@@ -1,5 +1,5 @@
 use crate::blocktree::db::columns as cf;
-use crate::blocktree::db::{Backend, Column, DbCursor, IWriteBatch, TypedColumn};
+use crate::blocktree::db::{Backend, Column, DbCursor, IWriteBatch, TypedColumn, IteratorMode, IteratorDirection};
 use crate::blocktree::BlocktreeError;
 use crate::result::{Error, Result};
 use solana_sdk::timing::Slot;
@@ -7,7 +7,7 @@ use solana_sdk::timing::Slot;
 use byteorder::{BigEndian, ByteOrder};
 
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, Direction, IteratorMode,
+    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, Direction, IteratorMode as RocksIteratorMode,
     Options, WriteBatch as RWriteBatch, DB,
 };
 
@@ -130,14 +130,28 @@ impl Backend for Rocks {
         Ok(())
     }
 
-    fn iterator_cf(&self, cf: ColumnFamily, start_from: Option<&[u8]>) -> Result<DBIterator> {
+    fn iterator_cf(&self, cf: ColumnFamily, iterator_mode: IteratorMode<&[u8]>,) -> Result<DBIterator> {
         let iter = {
-            if let Some(start_from) = start_from {
-                self.0
-                    .iterator_cf(cf, IteratorMode::From(start_from, Direction::Forward))?
-            } else {
-                self.0.iterator_cf(cf, IteratorMode::Start)?
-            }
+                match iterator_mode {
+                    IteratorMode::Start => {
+                        self.0.iterator_cf(cf, RocksIteratorMode::Start)?
+                    }
+                    IteratorMode::End => {
+                        self.0.iterator_cf(cf, RocksIteratorMode::End)?
+                    }
+                    IteratorMode::From(start_from, direction) => {
+                        let rocks_direction = match direction {
+                            IteratorDirection::Forward => {
+                                Direction::Forward
+                            }
+                            IteratorDirection::Reverse => {
+                                Direction::Reverse
+                            }
+                        };
+                        self.0
+                            .iterator_cf(cf, RocksIteratorMode::From(start_from, rocks_direction))?
+                    }
+                }
         };
 
         Ok(iter)
