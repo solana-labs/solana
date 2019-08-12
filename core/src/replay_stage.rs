@@ -556,7 +556,7 @@ impl ReplayStage {
                 );
             }
         }
-        inc_new_high_rate_counter_info!("replay_stage-replay_transactions", tx_count);
+        inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
     }
 
