@@ -11,10 +11,9 @@
 
 use crate::contact_info::ContactInfo;
 use crate::crds::Crds;
-use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_BLOOM_SIZE};
+use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
-use crate::packet::BLOB_DATA_SIZE;
 use rand;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::Rng;
@@ -26,7 +25,6 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
-pub const CRDS_GOSSIP_PULL_MAX_FILTERS: usize = 8;
 pub const KEYS: f64 = 8f64;
 pub const FALSE_RATE: f64 = 0.01f64;
 
@@ -106,8 +104,6 @@ pub struct CrdsGossipPull {
     pub pull_request_time: HashMap<Pubkey, u64>,
     /// hash and insert time
     purged_values: VecDeque<(Hash, u64)>,
-    /// max bytes per message
-    pub max_bytes: usize,
     pub crds_timeout: u64,
 }
 
@@ -116,7 +112,6 @@ impl Default for CrdsGossipPull {
         Self {
             purged_values: VecDeque::new(),
             pull_request_time: HashMap::new(),
-            max_bytes: BLOB_DATA_SIZE,
             crds_timeout: CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         }
     }
@@ -129,12 +124,13 @@ impl CrdsGossipPull {
         self_id: &Pubkey,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
+        bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
         let options = self.pull_options(crds, &self_id, now, stakes);
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
-        let filters = self.build_crds_filters(crds);
+        let filters = self.build_crds_filters(crds, bloom_size);
         let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0)).unwrap();
         let random = index.sample(&mut rand::thread_rng());
         let self_info = crds
@@ -222,12 +218,12 @@ impl CrdsGossipPull {
     }
     // build a set of filters of the current crds table
     // num_filters - used to increase the likely hood of a value in crds being added to some filter
-    pub fn build_crds_filters(&self, crds: &Crds) -> Vec<CrdsFilter> {
+    pub fn build_crds_filters(&self, crds: &Crds, bloom_size: usize) -> Vec<CrdsFilter> {
         let num = cmp::max(
-            CRDS_GOSSIP_BLOOM_SIZE,
+            CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS,
             crds.table.values().count() + self.purged_values.len(),
         );
-        let mut filters = CrdsFilter::new_complete_set(num, self.max_bytes);
+        let mut filters = CrdsFilter::new_complete_set(num, bloom_size);
         for v in crds.table.values() {
             filters
                 .iter_mut()
@@ -282,6 +278,7 @@ mod test {
     use crate::contact_info::ContactInfo;
     use itertools::Itertools;
     use solana_sdk::hash::hash;
+    use solana_sdk::packet::PACKET_DATA_SIZE;
 
     #[test]
     fn test_new_pull_with_stakes() {
@@ -314,19 +311,19 @@ mod test {
         let id = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         assert_eq!(
-            node.new_pull_request(&crds, &id, 0, &HashMap::new()),
+            node.new_pull_request(&crds, &id, 0, &HashMap::new(), PACKET_DATA_SIZE),
             Err(CrdsGossipError::NoPeers)
         );
 
         crds.insert(entry.clone(), 0).unwrap();
         assert_eq!(
-            node.new_pull_request(&crds, &id, 0, &HashMap::new()),
+            node.new_pull_request(&crds, &id, 0, &HashMap::new(), PACKET_DATA_SIZE),
             Err(CrdsGossipError::NoPeers)
         );
 
         let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         crds.insert(new.clone(), 0).unwrap();
-        let req = node.new_pull_request(&crds, &id, 0, &HashMap::new());
+        let req = node.new_pull_request(&crds, &id, 0, &HashMap::new(), PACKET_DATA_SIZE);
         let (to, _, self_info) = req.unwrap();
         assert_eq!(to, new.label().pubkey());
         assert_eq!(self_info, entry);
@@ -349,7 +346,13 @@ mod test {
 
         // odds of getting the other request should be 1 in u64::max_value()
         for _ in 0..10 {
-            let req = node.new_pull_request(&crds, &node_pubkey, u64::max_value(), &HashMap::new());
+            let req = node.new_pull_request(
+                &crds,
+                &node_pubkey,
+                u64::max_value(),
+                &HashMap::new(),
+                PACKET_DATA_SIZE,
+            );
             let (to, _, self_info) = req.unwrap();
             assert_eq!(to, old.label().pubkey());
             assert_eq!(self_info, entry);
@@ -365,7 +368,13 @@ mod test {
         node_crds.insert(entry.clone(), 0).unwrap();
         let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         node_crds.insert(new.clone(), 0).unwrap();
-        let req = node.new_pull_request(&node_crds, &node_pubkey, 0, &HashMap::new());
+        let req = node.new_pull_request(
+            &node_crds,
+            &node_pubkey,
+            0,
+            &HashMap::new(),
+            PACKET_DATA_SIZE,
+        );
 
         let mut dest_crds = Crds::default();
         let mut dest = CrdsGossipPull::default();
@@ -422,7 +431,13 @@ mod test {
         let mut done = false;
         for _ in 0..30 {
             // there is a chance of a false positive with bloom filters
-            let req = node.new_pull_request(&node_crds, &node_pubkey, 0, &HashMap::new());
+            let req = node.new_pull_request(
+                &node_crds,
+                &node_pubkey,
+                0,
+                &HashMap::new(),
+                PACKET_DATA_SIZE,
+            );
             let (_, filters, caller) = req.unwrap();
             let mut rsp = vec![];
             for filter in filters {
@@ -487,7 +502,7 @@ mod test {
             // there is a chance of a false positive with bloom filters
             // assert that purged value is still in the set
             // chance of 30 consecutive false positives is 0.1^30
-            let filters = node.build_crds_filters(&node_crds);
+            let filters = node.build_crds_filters(&node_crds, PACKET_DATA_SIZE);
             assert!(filters.iter().any(|filter| filter.contains(&value_hash)));
         }
 

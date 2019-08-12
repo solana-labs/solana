@@ -13,7 +13,7 @@ use solana_sdk::signature::Signable;
 use std::collections::{HashMap, HashSet};
 
 ///The min size for bloom filters
-pub const CRDS_GOSSIP_BLOOM_SIZE: usize = 1000;
+pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
 
 #[derive(Clone)]
 pub struct CrdsGossip {
@@ -131,9 +131,10 @@ impl CrdsGossip {
         &self,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
+        bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
         self.pull
-            .new_pull_request(&self.crds, &self.id, now, stakes)
+            .new_pull_request(&self.crds, &self.id, now, stakes, bloom_size)
     }
 
     /// time when a request to `from` was initiated

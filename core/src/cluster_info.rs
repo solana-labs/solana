@@ -25,7 +25,7 @@ use crate::result::Result;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
 use crate::weighted_shuffle::weighted_shuffle;
-use bincode::{deserialize, serialize};
+use bincode::{deserialize, serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
 use rand::SeedableRng;
@@ -36,6 +36,7 @@ use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_err
 use solana_netutil::{
     bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
 };
+use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
@@ -841,7 +842,7 @@ impl ClusterInfo {
 
                 self.gossip
                     .pull
-                    .build_crds_filters(&self.gossip.crds)
+                    .build_crds_filters(&self.gossip.crds, Self::max_bloom_size())
                     .into_iter()
                     .for_each(|filter| {
                         pulls.push((entrypoint.id, filter, entrypoint.gossip, self_info.clone()))
@@ -874,11 +875,24 @@ impl ClusterInfo {
         messages
     }
 
+    // computes the maximum size for pull request blooms
+    pub fn max_bloom_size() -> usize {
+        let filter_size = serialized_size(&CrdsFilter::default())
+            .expect("unable to serialize default filter") as usize;
+        let protocol = Protocol::PullRequest(
+            CrdsFilter::default(),
+            CrdsValue::ContactInfo(ContactInfo::default()),
+        );
+        let protocol_size =
+            serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
+        PACKET_DATA_SIZE - (protocol_size - filter_size)
+    }
+
     fn new_pull_requests(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
         let mut pulls: Vec<_> = self
             .gossip
-            .new_pull_request(now, stakes)
+            .new_pull_request(now, stakes, Self::max_bloom_size())
             .ok()
             .into_iter()
             .filter_map(|(peer, filters, me)| {
@@ -2064,7 +2078,7 @@ mod tests {
 
         let (_, _, val) = cluster_info
             .gossip
-            .new_pull_request(timestamp(), &HashMap::new())
+            .new_pull_request(timestamp(), &HashMap::new(), ClusterInfo::max_bloom_size())
             .ok()
             .unwrap();
         assert!(val.verify());
