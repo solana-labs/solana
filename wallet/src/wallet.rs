@@ -532,7 +532,8 @@ fn process_create_vote_account(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -742,8 +743,9 @@ fn process_delegate_stake(
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
 
-    let signature_str = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair]);
+    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -846,7 +848,8 @@ fn process_create_replicator_storage_account(
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -865,7 +868,8 @@ fn process_create_validator_storage_account(
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
     Ok(signature_str.to_string())
 }
 
