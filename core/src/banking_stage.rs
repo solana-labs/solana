@@ -228,13 +228,10 @@ impl BankingStage {
             (new_tx_count as f32) / (proc_start.as_s())
         );
 
-        inc_new_high_rate_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets);
-        inc_new_high_rate_counter_info!("banking_stage-consumed_buffered_packets", new_tx_count);
-        inc_new_high_rate_counter_debug!("banking_stage-process_transactions", new_tx_count);
-        inc_new_high_rate_counter_debug!(
-            "banking_stage-dropped_batches_count",
-            dropped_batches_count
-        );
+        inc_new_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets);
+        inc_new_counter_info!("banking_stage-consumed_buffered_packets", new_tx_count);
+        inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
+        inc_new_counter_debug!("banking_stage-dropped_batches_count", dropped_batches_count);
 
         Ok(unprocessed_packets)
     }
@@ -813,7 +810,7 @@ impl BankingStage {
             count,
             id,
         );
-        inc_new_high_rate_counter_debug!("banking_stage-transactions_received", count);
+        inc_new_counter_debug!("banking_stage-transactions_received", count);
         let mut proc_start = Measure::start("process_received_packets_process");
         let mut new_tx_count = 0;
 
@@ -885,12 +882,9 @@ impl BankingStage {
             count,
             id,
         );
-        inc_new_high_rate_counter_debug!("banking_stage-process_packets", count);
-        inc_new_high_rate_counter_debug!("banking_stage-process_transactions", new_tx_count);
-        inc_new_high_rate_counter_debug!(
-            "banking_stage-dropped_batches_count",
-            dropped_batches_count
-        );
+        inc_new_counter_debug!("banking_stage-process_packets", count);
+        inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
+        inc_new_counter_debug!("banking_stage-dropped_batches_count", dropped_batches_count);
 
         *recv_start = Instant::now();
 

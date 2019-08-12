@@ -1170,7 +1170,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<SharedBlob> {
         let self_id = me.read().unwrap().gossip.id;
-        inc_new_high_rate_counter_debug!("cluster_info-push_message", 1);
+        inc_new_counter_debug!("cluster_info-push_message", 1);
 
         let updated: Vec<_> =
             me.write()

@@ -25,7 +25,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_metrics::{
-    datapoint_info, inc_new_counter_debug, inc_new_counter_error, inc_new_high_rate_counter_info,
+    datapoint_info, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
@@ -859,43 +859,43 @@ impl Bank {
 
     fn update_error_counters(error_counters: &ErrorCounters) {
         if 0 != error_counters.blockhash_not_found {
-            inc_new_high_rate_counter_error!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-blockhash_not_found",
                 error_counters.blockhash_not_found
             );
         }
         if 0 != error_counters.invalid_account_index {
-            inc_new_high_rate_counter_error!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-invalid_account_index",
                 error_counters.invalid_account_index
             );
         }
         if 0 != error_counters.reserve_blockhash {
-            inc_new_high_rate_counter_error!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-reserve_blockhash",
                 error_counters.reserve_blockhash
             );
         }
         if 0 != error_counters.duplicate_signature {
-            inc_new_high_rate_counter_error!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-duplicate_signature",
                 error_counters.duplicate_signature
             );
         }
         if 0 != error_counters.invalid_account_for_fee {
-            inc_new_high_rate_counter_error!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-invalid_account_for_fee",
                 error_counters.invalid_account_for_fee
             );
         }
         if 0 != error_counters.insufficient_funds {
-            inc_new_high_rate_counter_error!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-insufficient_funds",
                 error_counters.insufficient_funds
             );
         }
         if 0 != error_counters.account_loaded_twice {
-            inc_new_high_rate_counter_error!(
+            inc_new_counter_error!(
                 "bank-process_transactions-account_loaded_twice",
                 error_counters.account_loaded_twice
             );
@@ -916,7 +916,7 @@ impl Bank {
         usize,
     ) {
         debug!("processing transactions: {}", txs.len());
-        inc_new_high_rate_counter_info!("bank-process_transactions", txs.len());
+        inc_new_counter_info!("bank-process_transactions", txs.len());
         let mut error_counters = ErrorCounters::default();
         let mut load_time = Measure::start("accounts_load");
 
@@ -977,7 +977,7 @@ impl Bank {
         }
         if err_count > 0 {
             debug!("{} errors of {} txs", err_count, err_count + tx_count);
-            inc_new_high_rate_counter_error!(
+            inc_new_counter_error!(
                 "bank-process_transactions-account_not_found",
                 error_counters.account_not_found
             );
@@ -1053,8 +1053,8 @@ impl Bank {
         self.increment_transaction_count(tx_count);
         self.increment_signature_count(signature_count);
 
-        inc_new_high_rate_counter_info!("bank-process_transactions-txs", tx_count);
-        inc_new_high_rate_counter_info!("bank-process_transactions-sigs", signature_count);
+        inc_new_counter_info!("bank-process_transactions-txs", tx_count);
+        inc_new_counter_info!("bank-process_transactions-sigs", signature_count);
 
         if executed.iter().any(|res| Self::can_commit(res)) {
             self.is_delta.store(true, Ordering::Relaxed);

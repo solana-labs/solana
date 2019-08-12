@@ -4,7 +4,7 @@ use crate::exchange_instruction::*;
 use crate::exchange_state::*;
 use crate::faucet;
 use log::*;
-use solana_metrics::inc_new_high_rate_counter_info;
+use solana_metrics::inc_new_counter_info;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -296,7 +296,7 @@ impl ExchangeProcessor {
         // Trade holds the tokens in escrow
         account.tokens[from_token] -= info.tokens;
 
-        inc_new_high_rate_counter_info!("exchange_processor-trades", 1);
+        inc_new_counter_info!("exchange_processor-trades", 1);
 
         Self::serialize(
             &ExchangeState::Trade(OrderInfo {
@@ -390,7 +390,7 @@ impl ExchangeProcessor {
             Err(e)?
         }
 
-        inc_new_high_rate_counter_info!("exchange_processor-swaps", 1);
+        inc_new_counter_info!("exchange_processor-swaps", 1);
 
         if to_order.tokens == 0 {
             // Turn into token account
