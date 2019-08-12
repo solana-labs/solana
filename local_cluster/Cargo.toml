@@ -21,7 +21,6 @@ solana-storage-program = { path = "../programs/storage_program", version = "0.18
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre1" }
 
 [dev-dependencies]
-hashbrown = "0.5.0"
 serial_test = "0.2.0"
 serial_test_derive = "0.2.0"
 

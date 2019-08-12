@@ -1,6 +1,5 @@
 extern crate solana;
 
-use hashbrown::HashSet;
 use log::*;
 use serial_test_derive::serial;
 use solana::blocktree::Blocktree;
@@ -14,6 +13,7 @@ use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH};
 use solana_sdk::client::SyncClient;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::timing;
+use std::collections::HashSet;
 use std::thread::sleep;
 use std::time::Duration;
 

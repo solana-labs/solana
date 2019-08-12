@@ -7,7 +7,7 @@ type ForkList<T> = Vec<(Fork, T)>;
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    pub account_maps: hashbrown::HashMap<Pubkey, RwLock<ForkList<T>>>,
+    pub account_maps: HashMap<Pubkey, RwLock<ForkList<T>>>,
 
     pub roots: HashSet<Fork>,
 

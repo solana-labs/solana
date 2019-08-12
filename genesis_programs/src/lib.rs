@@ -35,7 +35,7 @@ pub fn get() -> Vec<(String, Pubkey)> {
 
 #[cfg(test)]
 mod tests {
-    use hashbrown::HashSet;
+    use std::collections::HashSet;
 
     #[test]
     fn test_id_uniqueness() {
