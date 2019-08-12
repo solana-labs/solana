@@ -22,10 +22,6 @@ solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre1" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre1" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre1" }
 
-[dev-dependencies]
-hashbrown = "0.5.0"
-
-
 [features]
 cuda = ["solana/cuda"]
 

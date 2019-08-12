@@ -8,7 +8,6 @@ use crate::consensus::VOTE_THRESHOLD_DEPTH;
 use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover_cluster;
-use hashbrown::HashSet;
 use solana_client::thin_client::create_client;
 use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 use solana_sdk::client::SyncClient;
@@ -22,6 +21,7 @@ use solana_sdk::timing::{
     NUM_CONSECUTIVE_LEADER_SLOTS,
 };
 use solana_sdk::transport::TransportError;
+use std::collections::HashSet;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
