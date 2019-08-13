@@ -113,39 +113,6 @@ pub(crate) mod tests {
         Bank::new_from_parent(parent, &Pubkey::default(), slot)
     }
 
-    #[test]
-    fn test_vote_account_stakes_at_epoch() {
-        let GenesisBlockInfo {
-            genesis_block,
-            voting_keypair,
-            ..
-        } = create_genesis_block_with_leader(1, &Pubkey::new_rand(), BOOTSTRAP_LEADER_LAMPORTS);
-
-        let bank = Bank::new(&genesis_block);
-
-        // Epoch doesn't exist
-        let mut expected = HashMap::new();
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 10), None);
-
-        let leader_stake = Stake {
-            stake: BOOTSTRAP_LEADER_LAMPORTS,
-            activated: std::u64::MAX, // exempt from warmup
-            ..Stake::default()
-        };
-
-        // First epoch has the bootstrap leader
-        expected.insert(voting_keypair.pubkey(), leader_stake.stake(0, None));
-
-        // henceforth, verify that we have snapshots of stake at epoch 0
-        let expected = Some(expected);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
-
-        // Second epoch carries same information
-        let bank = new_from_parent(&Arc::new(bank), 1);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 1), expected);
-    }
-
     pub(crate) fn setup_vote_and_stake_accounts(
         bank: &Bank,
         from_account: &Keypair,
