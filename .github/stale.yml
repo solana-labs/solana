@@ -1,0 +1,24 @@
+only: pulls
+
+# Number of days of inactivity before a pull request becomes stale
+daysUntilStale: 30
+
+# Number of days of inactivity before a stale pull request is closed
+daysUntilClose: 7
+
+# Issues with these labels will never be considered stale
+exemptLabels:
+  - security
+
+# Label to use when marking a pull request as stale
+staleLabel: wontfix
+
+# Comment to post when marking a pull request as stale. Set to `false` to disable
+markComment: >
+  This pull request has been automatically marked as stale because it has not had
+  recent activity. It will be closed if no further activity occurs.
+
+# Comment to post when closing a stale pull request. Set to `false` to disable
+closeComment: >
+  This stale pull request has been automatically closed.
+  Thank you for your contributions.
