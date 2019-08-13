@@ -70,8 +70,8 @@ impl RequestMiddleware for RpcRequestMiddleware {
     fn on_request(&self, request: hyper::Request<hyper::Body>) -> RequestMiddlewareAction {
         trace!("request uri: {}", request.uri());
         match request.uri().path() {
-            "/snapshot.tgz" => self.get("snapshot.tgz"),
-            "/genesis.tgz" => self.get("genesis.tgz"),
+            "/snapshot.tar.bz2" => self.get("snapshot.tar.bz2"),
+            "/genesis.tar.bz2" => self.get("genesis.tar.bz2"),
             _ => RequestMiddlewareAction::Proceed {
                 should_continue_on_invalid_cors: false,
                 request,

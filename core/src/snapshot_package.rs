@@ -1,7 +1,6 @@
 use crate::result::{Error, Result};
 use crate::service::Service;
-use flate2::write::GzEncoder;
-use flate2::Compression;
+use bzip2::write::BzEncoder;
 use solana_runtime::accounts_db::AccountStorageEntry;
 use std::fs;
 use std::path::Path;
@@ -77,11 +76,11 @@ impl SnapshotPackagerService {
         // Create the tar builder
         let tar_gz = tempfile::Builder::new()
             .prefix("new_state")
-            .suffix(".tgz")
+            .suffix(".tar.bz2")
             .tempfile_in(tar_dir)?;
 
         let temp_tar_path = tar_gz.path();
-        let enc = GzEncoder::new(&tar_gz, Compression::default());
+        let enc = BzEncoder::new(&tar_gz, bzip2::Compression::Default);
         let mut tar = tar::Builder::new(enc);
 
         // Create the list of paths to compress, starting with the snapshots

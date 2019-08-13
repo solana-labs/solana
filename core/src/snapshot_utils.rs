@@ -3,7 +3,7 @@ use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackage;
 use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use bincode::{deserialize_from, serialize_into};
-use flate2::read::GzDecoder;
+use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::SlotDelta;
@@ -198,15 +198,15 @@ pub fn bank_from_archive<P: AsRef<Path>>(
 }
 
 pub fn get_snapshot_tar_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
-    snapshot_output_dir.as_ref().join("snapshot.tgz")
+    snapshot_output_dir.as_ref().join("snapshot.tar.bz2")
 }
 
 pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_tar: P,
     unpack_dir: Q,
 ) -> Result<()> {
-    let tar_gz = File::open(snapshot_tar)?;
-    let tar = GzDecoder::new(tar_gz);
+    let tar_bz2 = File::open(snapshot_tar)?;
+    let tar = BzDecoder::new(BufReader::new(tar_bz2));
     let mut archive = Archive::new(tar);
     archive.unpack(&unpack_dir)?;
     Ok(())
