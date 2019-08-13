@@ -175,7 +175,7 @@ else
     gossip_entrypoint="$entrypoint_hostname":8001
   fi
 fi
-rpc_url=$("$here"/rpc-url.sh "$gossip_entrypoint")
+
 drone_address="${gossip_entrypoint%:*}":9900
 
 : "${identity_keypair_path:=$ledger_dir/identity-keypair.json}"
@@ -291,6 +291,7 @@ setup_validator_accounts() {
 }
 
 while true; do
+  rpc_url=$($solana_gossip get-rpc-url --entrypoint "$gossip_entrypoint")
   if new_genesis_block; then
     # If the genesis block has changed remove the now stale ledger and start all
     # over again
