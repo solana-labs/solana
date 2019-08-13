@@ -25,7 +25,6 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
-pub const KEYS: f64 = 8f64;
 pub const FALSE_RATE: f64 = 0.1f64;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
