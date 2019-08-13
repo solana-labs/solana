@@ -1,6 +1,6 @@
-use bincode::{deserialize, serialized_size};
+use bincode::{deserialize, serialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{pubkey::Pubkey, short_vec};
+use solana_sdk::{account::Account, pubkey::Pubkey, short_vec};
 
 pub mod config_instruction;
 pub mod config_processor;
@@ -40,4 +40,20 @@ pub fn get_config_data(bytes: &[u8]) -> Option<&[u8]> {
         .ok()
         .and_then(|keys| serialized_size(&keys).ok())
         .map(|offset| &bytes[offset as usize..])
+}
+
+// utility for pre-made Accounts
+pub fn create_config_account<T: ConfigState>(
+    keys: Vec<(Pubkey, bool)>,
+    config_data: &T,
+    lamports: u64,
+) -> Account {
+    let mut data = serialize(&ConfigKeys { keys }).unwrap();
+    data.extend_from_slice(&serialize(config_data).unwrap());
+    Account {
+        lamports,
+        data,
+        owner: id(),
+        ..Account::default()
+    }
 }

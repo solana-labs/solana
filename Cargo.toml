@@ -28,6 +28,7 @@ members = [
     "programs/budget_program",
     "programs/config_api",
     "programs/config_program",
+    "programs/config_tests",
     "programs/exchange_api",
     "programs/exchange_program",
     "programs/failure_program",
