@@ -55,7 +55,7 @@ impl CrdsFilter {
     }
     // generates a vec of filters that together hold a complete set of Hashes
     pub fn new_complete_set(num_items: usize, max_bytes: usize) -> Vec<Self> {
-        let max_bits = (max_bytes * 4) as f64;
+        let max_bits = (max_bytes * 8) as f64;
         let num_keys = Bloom::<Hash>::num_keys(max_bits, num_items as f64);
         let max_items = Self::max_items(max_bits, FALSE_RATE, num_keys);
         let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
@@ -97,9 +97,6 @@ impl CrdsFilter {
         accum
     }
     pub fn test_mask(&self, item: &Hash) -> bool {
-        //        if self.mask_bits == 0 {
-        //            return true;
-        //        }
         // only consider the highest mask_bits bits from the hash and set the rest to 1.
         let ones = (!0u64).checked_shr(self.mask_bits).unwrap_or(!0u64);
         let bits = Self::hash_as_u64(item) | ones;
