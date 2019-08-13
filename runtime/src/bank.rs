@@ -27,22 +27,24 @@ use solana_measure::measure::Measure;
 use solana_metrics::{
     datapoint_info, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
-use solana_sdk::account::Account;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::{hashv, Hash};
-use solana_sdk::inflation::Inflation;
-use solana_sdk::native_loader;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::system_transaction;
-use solana_sdk::sysvar::{
-    clock, fees, rewards,
-    slot_hashes::{self, SlotHashes},
+use solana_sdk::{
+    account::Account,
+    fee_calculator::FeeCalculator,
+    genesis_block::GenesisBlock,
+    hash::{hashv, Hash},
+    inflation::Inflation,
+    native_loader,
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
+    system_transaction,
+    sysvar::{
+        clock, fees, rewards,
+        slot_hashes::{self, SlotHashes},
+        stake_history,
+    },
+    timing::{duration_as_ns, get_segment_from_slot, Epoch, Slot, MAX_RECENT_BLOCKHASHES},
+    transaction::{Result, Transaction, TransactionError},
 };
-use solana_sdk::timing::{duration_as_ns, get_segment_from_slot, Slot, MAX_RECENT_BLOCKHASHES};
-use solana_sdk::transaction::{Result, Transaction, TransactionError};
-use std::cmp;
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Error as IOError, Read};
 use std::path::Path;
@@ -251,6 +253,7 @@ impl Bank {
             for epoch in 0..=bank.get_stakers_epoch(bank.slot) {
                 bank.epoch_stakes.insert(epoch, stakes.clone());
             }
+            bank.update_stake_history(None);
         }
         bank.update_clock();
         bank
@@ -330,6 +333,7 @@ impl Bank {
         });
 
         new.update_rewards(parent.epoch());
+        new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
         new.update_fees();
         new
@@ -401,8 +405,19 @@ impl Bank {
         self.store_account(&fees::id(), &fees::create_account(1, &self.fee_calculator));
     }
 
+    fn update_stake_history(&self, epoch: Option<Epoch>) {
+        if epoch == Some(self.epoch()) {
+            return;
+        }
+        // if I'm the first Bank in an epoch, ensure stake_history is updated
+        self.store_account(
+            &stake_history::id(),
+            &stake_history::create_account(1, self.stakes.read().unwrap().history()),
+        );
+    }
+
     // update reward for previous epoch
-    fn update_rewards(&mut self, epoch: u64) {
+    fn update_rewards(&mut self, epoch: Epoch) {
         if epoch == self.epoch() {
             return;
         }
@@ -626,7 +641,7 @@ impl Bank {
         if parents.is_empty() {
             self.last_blockhash_with_fee_calculator()
         } else {
-            let index = cmp::min(NUM_BLOCKHASH_CONFIRMATIONS, parents.len() - 1);
+            let index = NUM_BLOCKHASH_CONFIRMATIONS.min(parents.len() - 1);
             parents[index].last_blockhash_with_fee_calculator()
         }
     }
@@ -1294,7 +1309,7 @@ impl Bank {
     }
 
     /// Return the number of slots per epoch for the given epoch
-    pub fn get_slots_in_epoch(&self, epoch: u64) -> u64 {
+    pub fn get_slots_in_epoch(&self, epoch: Epoch) -> u64 {
         self.epoch_schedule.get_slots_in_epoch(epoch)
     }
 
@@ -1352,7 +1367,7 @@ impl Bank {
 
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
-    pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, (u64, Account)>> {
+    pub fn epoch_vote_accounts(&self, epoch: Epoch) -> Option<&HashMap<Pubkey, (u64, Account)>> {
         self.epoch_stakes.get(&epoch).map(Stakes::vote_accounts)
     }
 
@@ -2428,6 +2443,7 @@ mod tests {
 
         let leader_stake = Stake {
             stake: leader_lamports,
+            activated: std::u64::MAX, // bootstrap
             ..Stake::default()
         };
 
@@ -2442,7 +2458,7 @@ mod tests {
             // epoch_stakes are a snapshot at the stakers_slot_offset boundary
             //   in the prior epoch (0 in this case)
             assert_eq!(
-                leader_stake.stake(0),
+                leader_stake.stake(0, None),
                 vote_accounts.unwrap().get(&leader_vote_account).unwrap().0
             );
 
@@ -2458,7 +2474,7 @@ mod tests {
 
         assert!(child.epoch_vote_accounts(epoch).is_some());
         assert_eq!(
-            leader_stake.stake(child.epoch()),
+            leader_stake.stake(child.epoch(), None),
             child
                 .epoch_vote_accounts(epoch)
                 .unwrap()
@@ -2476,7 +2492,7 @@ mod tests {
         );
         assert!(child.epoch_vote_accounts(epoch).is_some());
         assert_eq!(
-            leader_stake.stake(child.epoch()),
+            leader_stake.stake(child.epoch(), None),
             child
                 .epoch_vote_accounts(epoch)
                 .unwrap()

@@ -1073,7 +1073,7 @@ mod test {
 
         assert_eq!(
             bank_forks.read().unwrap().get_fork_confidence(0).unwrap(),
-            &Confidence::new(0, 1, 2)
+            &Confidence::new(0, 3, 2)
         );
         assert!(bank_forks.read().unwrap().get_fork_confidence(1).is_none());
 
@@ -1112,15 +1112,15 @@ mod test {
 
         assert_eq!(
             bank_forks.read().unwrap().get_fork_confidence(0).unwrap(),
-            &Confidence::new_with_stake_weighted(1, 1, 14, 20)
+            &Confidence::new_with_stake_weighted(3, 3, 14, 60)
         );
         assert_eq!(
             bank_forks.read().unwrap().get_fork_confidence(1).unwrap(),
-            &Confidence::new_with_stake_weighted(1, 1, 6, 6)
+            &Confidence::new_with_stake_weighted(3, 3, 6, 18)
         );
         assert_eq!(
             bank_forks.read().unwrap().get_fork_confidence(2).unwrap(),
-            &Confidence::new_with_stake_weighted(0, 1, 2, 0)
+            &Confidence::new_with_stake_weighted(0, 3, 2, 0)
         );
     }
 }

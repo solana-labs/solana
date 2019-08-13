@@ -5,14 +5,18 @@
 
 use crate::id;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account::{Account, KeyedAccount};
-use solana_sdk::account_utils::State;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::sysvar;
-use solana_sdk::timing::Epoch;
+use solana_sdk::{
+    account::{Account, KeyedAccount},
+    account_utils::State,
+    instruction::InstructionError,
+    pubkey::Pubkey,
+    sysvar::{
+        self,
+        stake_history::{StakeHistory, StakeHistoryEntry},
+    },
+    timing::Epoch,
+};
 use solana_vote_api::vote_state::VoteState;
-use std::cmp;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum StakeState {
@@ -50,14 +54,15 @@ pub struct Stake {
     pub voter_pubkey: Pubkey,
     pub credits_observed: u64,
     pub stake: u64,         // stake amount activated
-    pub activated: Epoch,   // epoch the stake was activated
+    pub activated: Epoch, // epoch the stake was activated, std::Epoch::MAX if is a bootstrap stake
     pub deactivated: Epoch, // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
 }
-pub const STAKE_WARMUP_EPOCHS: Epoch = 3;
+
+pub const STAKE_WARMUP_RATE: f64 = 0.15;
 
 impl Default for Stake {
     fn default() -> Self {
-        Stake {
+        Self {
             voter_pubkey: Pubkey::default(),
             credits_observed: 0,
             stake: 0,
@@ -68,31 +73,72 @@ impl Default for Stake {
 }
 
 impl Stake {
-    pub fn stake(&self, epoch: Epoch) -> u64 {
-        // before "activated" or after deactivated?
-        if epoch < self.activated || epoch >= self.deactivated {
-            return 0;
-        }
+    pub fn is_bootstrap(&self) -> bool {
+        self.activated == std::u64::MAX
+    }
 
-        // curr epoch  |   0   |  1  |  2   ... | 100  | 101 | 102 | 103
-        // action      | activate    |        de-activate    |     |
-        //             |   |   |     |          |  |   |     |     |
-        //             |   v   |     |          |  v   |     |     |
-        // stake       |  1/3  | 2/3 | 3/3  ... | 3/3  | 2/3 | 1/3 | 0/3
-        // -------------------------------------------------------------
-        // activated   |   0   ...
-        // deactivated | std::u64::MAX ...        103 ...
+    pub fn activating(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
+        self.stake_and_activating(epoch, history).1
+    }
 
-        // activate/deactivate can't possibly overlap
-        //  (see delegate_stake() and deactivate())
-        if epoch - self.activated < STAKE_WARMUP_EPOCHS {
-            // warmup
-            (self.stake / STAKE_WARMUP_EPOCHS) * (epoch - self.activated + 1)
-        } else if self.deactivated - epoch < STAKE_WARMUP_EPOCHS {
-            // cooldown
-            (self.stake / STAKE_WARMUP_EPOCHS) * (self.deactivated - epoch)
+    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
+        self.stake_and_activating(epoch, history).0
+    }
+
+    pub fn stake_and_activating(&self, epoch: Epoch, history: Option<&StakeHistory>) -> (u64, u64) {
+        if epoch >= self.deactivated {
+            (0, 0) // TODO cooldown
+        } else if self.is_bootstrap() {
+            (self.stake, 0)
+        } else if epoch > self.activated {
+            if let Some(history) = history {
+                if let Some(mut entry) = history.get(&self.activated) {
+                    let mut effective_stake = 0;
+                    let mut next_epoch = self.activated;
+
+                    // loop from my activation epoch until the current epoch
+                    //   summing up my entitlement
+                    loop {
+                        if entry.activating == 0 {
+                            break;
+                        }
+                        // how much of the growth in stake this account is
+                        //  entitled to take
+                        let weight =
+                            (self.stake - effective_stake) as f64 / entry.activating as f64;
+
+                        // portion of activating stake in this epoch I'm entitled to
+                        effective_stake +=
+                            (weight * entry.effective as f64 * STAKE_WARMUP_RATE) as u64;
+
+                        if effective_stake >= self.stake {
+                            effective_stake = self.stake;
+                            break;
+                        }
+
+                        next_epoch += 1;
+                        if next_epoch >= epoch {
+                            break;
+                        }
+                        if let Some(next_entry) = history.get(&next_epoch) {
+                            entry = next_entry;
+                        } else {
+                            break;
+                        }
+                    }
+                    (effective_stake, self.stake - effective_stake)
+                } else {
+                    // I've dropped out of warmup history, so my stake must be the full amount
+                    (self.stake, 0)
+                }
+            } else {
+                // no history, fully warmed up
+                (self.stake, 0)
+            }
+        } else if epoch == self.activated {
+            (0, self.stake)
         } else {
-            self.stake
+            (0, 0)
         }
     }
 
@@ -106,6 +152,7 @@ impl Stake {
         &self,
         point_value: f64,
         vote_state: &VoteState,
+        stake_history: Option<&StakeHistory>,
     ) -> Option<(u64, u64, u64)> {
         if self.credits_observed >= vote_state.credits() {
             return None;
@@ -128,12 +175,12 @@ impl Stake {
                 0
             };
 
-            total_rewards += (self.stake(*epoch) * epoch_credits) as f64 * point_value;
+            total_rewards +=
+                (self.stake(*epoch, stake_history) * epoch_credits) as f64 * point_value;
 
             // don't want to assume anything about order of the iterator...
-            credits_observed = std::cmp::max(credits_observed, *credits);
+            credits_observed = credits_observed.max(*credits);
         }
-
         // don't bother trying to collect fractional lamports
         if total_rewards < 1f64 {
             return None;
@@ -153,23 +200,28 @@ impl Stake {
         ))
     }
 
-    fn delegate(&mut self, stake: u64, voter_pubkey: &Pubkey, vote_state: &VoteState, epoch: u64) {
-        assert!(std::u64::MAX - epoch >= (STAKE_WARMUP_EPOCHS * 2));
+    fn new_bootstrap(stake: u64, voter_pubkey: &Pubkey, vote_state: &VoteState) -> Self {
+        Self {
+            stake,
+            activated: std::u64::MAX,
+            voter_pubkey: *voter_pubkey,
+            credits_observed: vote_state.credits(),
+            ..Stake::default()
+        }
+    }
 
-        // resets the current stake's credits
-        self.voter_pubkey = *voter_pubkey;
-        self.credits_observed = vote_state.credits();
-
-        // when this stake was activated
-        self.activated = epoch;
-        self.stake = stake;
+    fn new(stake: u64, voter_pubkey: &Pubkey, vote_state: &VoteState, activated: Epoch) -> Self {
+        Self {
+            stake,
+            activated,
+            voter_pubkey: *voter_pubkey,
+            credits_observed: vote_state.credits(),
+            ..Stake::default()
+        }
     }
 
     fn deactivate(&mut self, epoch: u64) {
-        self.deactivated = std::cmp::max(
-            epoch + STAKE_WARMUP_EPOCHS,
-            self.activated + 2 * STAKE_WARMUP_EPOCHS - 1,
-        );
+        self.deactivated = epoch;
     }
 }
 
@@ -190,12 +242,14 @@ pub trait StakeAccount {
         vote_account: &mut KeyedAccount,
         rewards_account: &mut KeyedAccount,
         rewards: &sysvar::rewards::Rewards,
+        stake_history: &sysvar::stake_history::StakeHistory,
     ) -> Result<(), InstructionError>;
     fn withdraw(
         &mut self,
         lamports: u64,
         to: &mut KeyedAccount,
         clock: &sysvar::clock::Clock,
+        stake_history: &sysvar::stake_history::StakeHistory,
     ) -> Result<(), InstructionError>;
 }
 
@@ -215,9 +269,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         }
 
         if let StakeState::Uninitialized = self.state()? {
-            let mut stake = Stake::default();
-
-            stake.delegate(
+            let stake = Stake::new(
                 new_stake,
                 vote_account.unsigned_key(),
                 &vote_account.state()?,
@@ -251,6 +303,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         vote_account: &mut KeyedAccount,
         rewards_account: &mut KeyedAccount,
         rewards: &sysvar::rewards::Rewards,
+        stake_history: &sysvar::stake_history::StakeHistory,
     ) -> Result<(), InstructionError> {
         if let (StakeState::Stake(mut stake), StakeState::RewardsPool) =
             (self.state()?, rewards_account.state()?)
@@ -261,8 +314,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 return Err(InstructionError::InvalidArgument);
             }
 
-            if let Some((stakers_reward, voters_reward, credits_observed)) =
-                stake.calculate_rewards(rewards.validator_point_value, &vote_state)
+            if let Some((stakers_reward, voters_reward, credits_observed)) = stake
+                .calculate_rewards(
+                    rewards.validator_point_value,
+                    &vote_state,
+                    Some(stake_history),
+                )
             {
                 if rewards_account.account.lamports < (stakers_reward + voters_reward) {
                     return Err(InstructionError::UnbalancedInstruction);
@@ -288,16 +345,17 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         lamports: u64,
         to: &mut KeyedAccount,
         clock: &sysvar::clock::Clock,
+        stake_history: &sysvar::stake_history::StakeHistory,
     ) -> Result<(), InstructionError> {
         if self.signer_key().is_none() {
             return Err(InstructionError::MissingRequiredSignature);
         }
 
         match self.state()? {
-            StakeState::Stake(mut stake) => {
+            StakeState::Stake(stake) => {
                 // if deactivated and in cooldown
                 let staked = if clock.epoch >= stake.deactivated {
-                    stake.stake(clock.epoch)
+                    stake.stake(clock.epoch, Some(stake_history))
                 } else {
                     // Assume full stake if the stake is under warmup, or
                     //  hasn't been de-activated
@@ -308,9 +366,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 }
                 self.account.lamports -= lamports;
                 to.account.lamports += lamports;
-                // Adjust the stake (in case balance dropped below stake)
-                stake.stake = cmp::min(stake.stake, self.account.lamports);
-                self.set_state(&StakeState::Stake(stake))
+                Ok(())
             }
             StakeState::Uninitialized => {
                 if lamports > self.account.lamports {
@@ -325,6 +381,35 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
 }
 
+//find_min<'a, I>(vals: I) -> Option<&'a u32>
+//where
+//    I: Iterator<Item = &'a u32>,
+
+// utility function, used by runtime::Stakes, tests
+pub fn new_stake_history_entry<'a, I>(
+    epoch: Epoch,
+    stakes: I,
+    history: Option<&StakeHistory>,
+) -> StakeHistoryEntry
+where
+    I: Iterator<Item = &'a Stake>,
+{
+    // whatever the stake says they  had for the epoch
+    //  and whatever the were still waiting for
+    let (effective, activating): (Vec<_>, Vec<_>) = stakes
+        .map(|stake| stake.stake_and_activating(epoch, history))
+        .unzip();
+
+    let effective = effective.iter().sum();
+    let activating = activating.iter().sum();
+
+    StakeHistoryEntry {
+        effective,
+        activating,
+        ..StakeHistoryEntry::default()
+    }
+}
+
 // utility function, used by Bank, tests, genesis
 pub fn create_stake_account(
     voter_pubkey: &Pubkey,
@@ -334,13 +419,11 @@ pub fn create_stake_account(
     let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
     stake_account
-        .set_state(&StakeState::Stake(Stake {
-            voter_pubkey: *voter_pubkey,
-            credits_observed: vote_state.credits(),
-            stake: lamports,
-            activated: 0,
-            deactivated: std::u64::MAX,
-        }))
+        .set_state(&StakeState::Stake(Stake::new_bootstrap(
+            lamports,
+            voter_pubkey,
+            vote_state,
+        )))
         .expect("set_state");
 
     stake_account
@@ -360,6 +443,35 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_program;
     use solana_vote_api::vote_state;
+
+    fn create_stake_history_from_stakes(
+        bootstrap: Option<u64>,
+        epochs: std::ops::Range<Epoch>,
+        stakes: &[Stake],
+    ) -> StakeHistory {
+        let mut stake_history = StakeHistory::default();
+
+        let bootstrap_stake = if let Some(bootstrap) = bootstrap {
+            vec![Stake {
+                activated: std::u64::MAX,
+                stake: bootstrap,
+                ..Stake::default()
+            }]
+        } else {
+            vec![]
+        };
+
+        for epoch in epochs {
+            let entry = new_stake_history_entry(
+                epoch,
+                stakes.iter().chain(bootstrap_stake.iter()),
+                Some(&stake_history),
+            );
+            stake_history.add(epoch, entry);
+        }
+
+        stake_history
+    }
 
     #[test]
     fn test_stake_delegate_stake() {
@@ -439,27 +551,66 @@ mod tests {
     }
 
     #[test]
-    fn test_stake_stake() {
-        let mut stake = Stake::default();
-        assert_eq!(stake.stake(0), 0);
-        let staked = STAKE_WARMUP_EPOCHS;
-        stake.delegate(staked, &Pubkey::default(), &VoteState::default(), 1);
-        // test warmup
-        for i in 0..STAKE_WARMUP_EPOCHS {
-            assert_eq!(stake.stake(i), i);
-        }
-        assert_eq!(stake.stake(STAKE_WARMUP_EPOCHS * 42), staked);
+    fn test_stake_warmup() {
+        let stakes = [
+            Stake {
+                stake: 1_000,
+                activated: std::u64::MAX,
+                ..Stake::default()
+            },
+            Stake {
+                stake: 1_000,
+                activated: 0,
+                ..Stake::default()
+            },
+            Stake {
+                stake: 1_000,
+                activated: 1,
+                ..Stake::default()
+            },
+            Stake {
+                stake: 1_000,
+                activated: 2,
+                ..Stake::default()
+            },
+            Stake {
+                stake: 1_000,
+                activated: 2,
+                ..Stake::default()
+            },
+            Stake {
+                stake: 1_000,
+                activated: 4,
+                ..Stake::default()
+            },
+        ];
+        // chosen to ensure that the last activated stake (at 4) finishes warming up
+        //  a stake takes 2.0f64.log(1.0 + STAKE_WARMUP_RATE)  epochs to warm up
+        //  all else equal, but the above overlap
+        let epochs = 20;
 
-        stake.deactivate(STAKE_WARMUP_EPOCHS);
+        let stake_history = create_stake_history_from_stakes(None, 0..epochs, &stakes);
 
-        // test cooldown
-        for i in STAKE_WARMUP_EPOCHS..STAKE_WARMUP_EPOCHS * 2 {
-            assert_eq!(
-                stake.stake(i),
-                staked - (staked / STAKE_WARMUP_EPOCHS) * (i - STAKE_WARMUP_EPOCHS)
-            );
+        let mut prev_total_effective_stake = stakes
+            .iter()
+            .map(|stake| stake.stake(0, Some(&stake_history)))
+            .sum::<u64>();
+
+        for epoch in 1.. {
+            let total_effective_stake = stakes
+                .iter()
+                .map(|stake| stake.stake(epoch, Some(&stake_history)))
+                .sum::<u64>();
+
+            let delta = total_effective_stake - prev_total_effective_stake;
+
+            if delta == 0 {
+                break;
+            }
+            assert!(epoch < epochs); // should have warmed everything up by this time
+            assert!(delta as f64 / prev_total_effective_stake as f64 <= STAKE_WARMUP_RATE);
+            prev_total_effective_stake = total_effective_stake;
         }
-        assert_eq!(stake.stake(STAKE_WARMUP_EPOCHS * 42), 0);
     }
 
     #[test]
@@ -528,14 +679,24 @@ mod tests {
         // unsigned keyed account should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
+            stake_keyed_account.withdraw(
+                total_lamports,
+                &mut to_keyed_account,
+                &clock,
+                &StakeHistory::default()
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
 
         // signed keyed account and uninitialized should work
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
+            stake_keyed_account.withdraw(
+                total_lamports,
+                &mut to_keyed_account,
+                &clock,
+                &StakeHistory::default()
+            ),
             Ok(())
         );
         assert_eq!(stake_account.lamports, 0);
@@ -546,7 +707,12 @@ mod tests {
         // signed keyed account and uninitialized, more than available should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports + 1, &mut to_keyed_account, &clock),
+            stake_keyed_account.withdraw(
+                total_lamports + 1,
+                &mut to_keyed_account,
+                &clock,
+                &StakeHistory::default()
+            ),
             Err(InstructionError::InsufficientFunds)
         );
 
@@ -567,7 +733,8 @@ mod tests {
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports,
                 &mut to_keyed_account,
-                &clock
+                &clock,
+                &StakeHistory::default()
             ),
             Ok(())
         );
@@ -580,7 +747,8 @@ mod tests {
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports + 1,
                 &mut to_keyed_account,
-                &clock
+                &clock,
+                &StakeHistory::default()
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -591,17 +759,27 @@ mod tests {
             Ok(())
         );
         // simulate time passing
-        clock.epoch += STAKE_WARMUP_EPOCHS * 2;
+        clock.epoch += 100;
 
         // Try to withdraw more than what's available
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports + 1, &mut to_keyed_account, &clock),
+            stake_keyed_account.withdraw(
+                total_lamports + 1,
+                &mut to_keyed_account,
+                &clock,
+                &StakeHistory::default()
+            ),
             Err(InstructionError::InsufficientFunds)
         );
 
         // Try to withdraw all lamports
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
+            stake_keyed_account.withdraw(
+                total_lamports,
+                &mut to_keyed_account,
+                &clock,
+                &StakeHistory::default()
+            ),
             Ok(())
         );
         assert_eq!(stake_account.lamports, 0);
@@ -625,7 +803,7 @@ mod tests {
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
-        // Stake some lamports (available lampoorts for withdrawls will reduce)
+        // Stake some lamports (available lampoorts for withdrawals will reduce)
         let vote_pubkey = Pubkey::new_rand();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
@@ -636,12 +814,19 @@ mod tests {
             Ok(())
         );
 
+        let stake_history = create_stake_history_from_stakes(
+            None,
+            0..future.epoch,
+            &[StakeState::stake_from(&stake_keyed_account.account).unwrap()],
+        );
+
         // Try to withdraw stake
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports + 1,
                 &mut to_keyed_account,
-                &clock
+                &clock,
+                &stake_history
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -667,7 +852,12 @@ mod tests {
         stake_keyed_account.set_state(&stake_state).unwrap();
 
         assert_eq!(
-            stake_keyed_account.withdraw(total_lamports, &mut to_keyed_account, &clock),
+            stake_keyed_account.withdraw(
+                total_lamports,
+                &mut to_keyed_account,
+                &clock,
+                &StakeHistory::default()
+            ),
             Err(InstructionError::InvalidAccountData)
         );
     }
@@ -675,62 +865,62 @@ mod tests {
     #[test]
     fn test_stake_state_calculate_rewards() {
         let mut vote_state = VoteState::default();
-        let mut stake = Stake::default();
-
-        // warmup makes this look like zero until WARMUP_EPOCHS
-        stake.stake = 1;
+        // assume stake.stake() is right
+        // bootstrap means fully-vested stake at epoch 0
+        let mut stake = Stake::new_bootstrap(1, &Pubkey::default(), &vote_state);
 
         // this one can't collect now, credits_observed == vote_state.credits()
-        assert_eq!(None, stake.calculate_rewards(1_000_000_000.0, &vote_state));
+        assert_eq!(
+            None,
+            stake.calculate_rewards(1_000_000_000.0, &vote_state, None)
+        );
 
         // put 2 credits in at epoch 0
         vote_state.increment_credits(0);
         vote_state.increment_credits(0);
 
         // this one can't collect now, no epoch credits have been saved off
-        assert_eq!(None, stake.calculate_rewards(1_000_000_000.0, &vote_state));
+        //   even though point value is huuge
+        assert_eq!(
+            None,
+            stake.calculate_rewards(1_000_000_000_000.0, &vote_state, None)
+        );
 
         // put 1 credit in epoch 1, pushes the 2 above into a redeemable state
         vote_state.increment_credits(1);
 
-        // still can't collect yet, warmup puts the kibosh on it
-        assert_eq!(None, stake.calculate_rewards(1.0, &vote_state));
-
-        stake.stake = STAKE_WARMUP_EPOCHS;
         // this one should be able to collect exactly 2
         assert_eq!(
-            Some((0, 1 * 2, 2)),
-            stake.calculate_rewards(1.0, &vote_state)
+            Some((0, stake.stake * 2, 2)),
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
 
-        stake.stake = STAKE_WARMUP_EPOCHS;
         stake.credits_observed = 1;
         // this one should be able to collect exactly 1 (only observed one)
         assert_eq!(
-            Some((0, 1 * 1, 2)),
-            stake.calculate_rewards(1.0, &vote_state)
+            Some((0, stake.stake * 1, 2)),
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
 
-        stake.stake = STAKE_WARMUP_EPOCHS;
         stake.credits_observed = 2;
         // this one should be able to collect none because credits_observed >= credits in a
         //  redeemable state (the 2 credits in epoch 0)
-        assert_eq!(None, stake.calculate_rewards(1.0, &vote_state));
+        assert_eq!(None, stake.calculate_rewards(1.0, &vote_state, None));
 
         // put 1 credit in epoch 2, pushes the 1 for epoch 1 to redeemable
         vote_state.increment_credits(2);
-        // this one should be able to collect two now, one credit by a stake of 2
+        // this one should be able to collect 1 now, one credit by a stake of 1
         assert_eq!(
-            Some((0, 2 * 1, 3)),
-            stake.calculate_rewards(1.0, &vote_state)
+            Some((0, stake.stake * 1, 3)),
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
 
         stake.credits_observed = 0;
         // this one should be able to collect everything from t=0 a warmed up stake of 2
         // (2 credits at stake of 1) + (1 credit at a stake of 2)
         assert_eq!(
-            Some((0, 2 * 1 + 1 * 2, 3)),
-            stake.calculate_rewards(1.0, &vote_state)
+            Some((0, stake.stake * 1 + stake.stake * 2, 3)),
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
 
         // same as above, but is a really small commission out of 32 bits,
@@ -738,12 +928,12 @@ mod tests {
         vote_state.commission = 1;
         assert_eq!(
             None, // would be Some((0, 2 * 1 + 1 * 2, 3)),
-            stake.calculate_rewards(1.0, &vote_state)
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
         vote_state.commission = std::u8::MAX - 1;
         assert_eq!(
             None, // would be pSome((0, 2 * 1 + 1 * 2, 3)),
-            stake.calculate_rewards(1.0, &vote_state)
+            stake.calculate_rewards(1.0, &vote_state, None)
         );
     }
 
@@ -774,7 +964,8 @@ mod tests {
             stake_keyed_account.redeem_vote_credits(
                 &mut vote_keyed_account,
                 &mut rewards_pool_keyed_account,
-                &rewards
+                &rewards,
+                &StakeHistory::default(),
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -783,22 +974,31 @@ mod tests {
         assert!(stake_keyed_account
             .delegate_stake(&vote_keyed_account, stake_lamports, &clock)
             .is_ok());
+
+        let stake_history = create_stake_history_from_stakes(
+            Some(100),
+            0..10,
+            &[StakeState::stake_from(&stake_keyed_account.account).unwrap()],
+        );
+
         // no credits to claim
         assert_eq!(
             stake_keyed_account.redeem_vote_credits(
                 &mut vote_keyed_account,
                 &mut rewards_pool_keyed_account,
-                &rewards
+                &rewards,
+                &stake_history,
             ),
             Err(InstructionError::CustomError(1))
         );
 
-        // swapped rewards and vote, deserialization of rewards_pool fails
+        // in this call, we've swapped rewards and vote, deserialization of rewards_pool fails
         assert_eq!(
             stake_keyed_account.redeem_vote_credits(
                 &mut rewards_pool_keyed_account,
                 &mut vote_keyed_account,
-                &rewards
+                &rewards,
+                &StakeHistory::default(),
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -809,9 +1009,9 @@ mod tests {
         let mut vote_state = VoteState::from(&vote_account).unwrap();
         // put in some credits in epoch 0 for which we should have a non-zero stake
         for _i in 0..100 {
-            vote_state.increment_credits(0);
+            vote_state.increment_credits(1);
         }
-        vote_state.increment_credits(1);
+        vote_state.increment_credits(2);
 
         vote_state.to(&mut vote_account).unwrap();
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
@@ -822,7 +1022,8 @@ mod tests {
             stake_keyed_account.redeem_vote_credits(
                 &mut vote_keyed_account,
                 &mut rewards_pool_keyed_account,
-                &rewards
+                &rewards,
+                &StakeHistory::default(),
             ),
             Err(InstructionError::UnbalancedInstruction)
         );
@@ -833,7 +1034,8 @@ mod tests {
             stake_keyed_account.redeem_vote_credits(
                 &mut vote_keyed_account,
                 &mut rewards_pool_keyed_account,
-                &rewards
+                &rewards,
+                &stake_history,
             ),
             Ok(())
         );
@@ -847,7 +1049,8 @@ mod tests {
             stake_keyed_account.redeem_vote_credits(
                 &mut wrong_vote_keyed_account,
                 &mut rewards_pool_keyed_account,
-                &rewards
+                &rewards,
+                &stake_history,
             ),
             Err(InstructionError::InvalidArgument)
         );

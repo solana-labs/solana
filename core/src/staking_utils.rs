@@ -119,6 +119,7 @@ pub(crate) mod tests {
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::sysvar::stake_history::{self, StakeHistory};
     use solana_sdk::transaction::Transaction;
     use solana_stake_api::stake_instruction;
     use solana_stake_api::stake_state::Stake;
@@ -145,11 +146,12 @@ pub(crate) mod tests {
 
         let leader_stake = Stake {
             stake: BOOTSTRAP_LEADER_LAMPORTS,
+            activated: std::u64::MAX, // exempt from warmup
             ..Stake::default()
         };
 
         // First epoch has the bootstrap leader
-        expected.insert(voting_keypair.pubkey(), leader_stake.stake(0));
+        expected.insert(voting_keypair.pubkey(), leader_stake.stake(0, None));
 
         // henceforth, verify that we have snapshots of stake at epoch 0
         let expected = Some(expected);
@@ -214,6 +216,7 @@ pub(crate) mod tests {
         let stake = BOOTSTRAP_LEADER_LAMPORTS * 100;
         let leader_stake = Stake {
             stake: BOOTSTRAP_LEADER_LAMPORTS,
+            activated: std::u64::MAX, // mark as bootstrap
             ..Stake::default()
         };
 
@@ -251,26 +254,35 @@ pub(crate) mod tests {
             ..Stake::default()
         };
 
-        let epoch = bank.get_stakers_epoch(bank.slot());
+        let first_stakers_epoch = bank.get_stakers_epoch(bank.slot());
         // find the first slot in the next staker's epoch
-        let mut slot = 1;
-        while bank.get_stakers_epoch(slot) <= epoch {
+        let mut slot = bank.slot();
+        loop {
             slot += 1;
+            if bank.get_stakers_epoch(slot) != first_stakers_epoch {
+                break;
+            }
         }
         let bank = new_from_parent(&Arc::new(bank), slot);
-        let epoch = bank.get_stakers_epoch(slot);
+        let next_stakers_epoch = bank.get_stakers_epoch(slot);
 
-        let result: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
-        assert_eq!(result, vec![(leader_stake.stake(0), None)]);
+        let result: Vec<_> = epoch_stakes_and_lockouts(&bank, first_stakers_epoch);
+        assert_eq!(
+            result,
+            vec![(leader_stake.stake(first_stakers_epoch, None), None)]
+        );
 
         // epoch stakes and lockouts are saved off for the future epoch, should
         //  match current bank state
-        let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, epoch);
+        let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, next_stakers_epoch);
         result.sort();
+        let stake_history =
+            StakeHistory::from(&bank.get_account(&stake_history::id()).unwrap()).unwrap();
         let mut expected = vec![
-            (leader_stake.stake(bank.epoch()), None),
-            (other_stake.stake(bank.epoch()), None),
+            (leader_stake.stake(bank.epoch(), Some(&stake_history)), None),
+            (other_stake.stake(bank.epoch(), Some(&stake_history)), None),
         ];
+
         expected.sort();
         assert_eq!(result, expected);
     }

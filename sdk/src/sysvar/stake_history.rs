@@ -19,14 +19,14 @@ crate::solana_name_id!(ID, "SysvarStakeHistory1111111111111111111111111");
 
 pub const MAX_STAKE_HISTORY: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
 pub struct StakeHistoryEntry {
-    pub previous_effective: u64, // effective stake at the previous epoch
-    pub activating: u64,         // requested to be warmed up, not fully activated yet
-    pub deactivating: u64,       // requested to be cooled down, not fully deactivated yet
+    pub effective: u64,    // effective stake at this epoch
+    pub activating: u64,   // sum of portion of stakes not fully warmed up
+    pub deactivating: u64, // requested to be cooled down, not fully deactivated yet
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
 pub struct StakeHistory {
     inner: HashMap<Epoch, StakeHistoryEntry>,
 }
@@ -64,9 +64,9 @@ impl Deref for StakeHistory {
     }
 }
 
-pub fn create_account(lamports: u64) -> Account {
+pub fn create_account(lamports: u64, stake_history: &StakeHistory) -> Account {
     let mut account = Account::new(lamports, StakeHistory::size_of(), &sysvar::id());
-    StakeHistory::default().to(&mut account).unwrap();
+    stake_history.to(&mut account).unwrap();
     account
 }
 
@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn test_create_account() {
         let lamports = 42;
-        let account = create_account(lamports);
+        let account = create_account(lamports, &StakeHistory::default());
         assert_eq!(account.data.len(), StakeHistory::size_of());
 
         let stake_history = StakeHistory::from(&account);
@@ -104,5 +104,10 @@ mod tests {
         }
         assert_eq!(stake_history.len(), MAX_STAKE_HISTORY);
         assert_eq!(*stake_history.keys().min().unwrap(), 1);
+        // verify the account can hold a full instance
+        assert_eq!(
+            StakeHistory::from(&create_account(lamports, &stake_history)),
+            Some(stake_history)
+        );
     }
 }
