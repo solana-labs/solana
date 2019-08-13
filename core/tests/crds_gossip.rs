@@ -1,7 +1,6 @@
 use bincode::serialized_size;
 use log::*;
 use rayon::prelude::*;
-use solana::cluster_info::ClusterInfo;
 use solana::contact_info::ContactInfo;
 use solana::crds_gossip::*;
 use solana::crds_gossip_error::CrdsGossipError;
@@ -381,36 +380,27 @@ fn network_run_pull(
                 .filter_map(|from| {
                     from.lock()
                         .unwrap()
-                        .new_pull_request(now, &HashMap::new(), ClusterInfo::max_bloom_size())
+                        .new_pull_request(now, &HashMap::new())
                         .ok()
                 })
                 .collect()
         };
         let transfered: Vec<_> = requests
             .into_par_iter()
-            .map(|(to, filters, caller_info)| {
+            .map(|(to, request, caller_info)| {
                 let mut bytes: usize = 0;
                 let mut msgs: usize = 0;
                 let mut overhead: usize = 0;
                 let from = caller_info.label().pubkey();
-                bytes += filters.iter().map(|f| f.filter.keys.len()).sum::<usize>();
-                bytes += filters
-                    .iter()
-                    .map(|f| f.filter.bits.len() as usize / 8)
-                    .sum::<usize>();
+                bytes += request.keys.len();
+                bytes += (request.bits.len() / 8) as usize;
                 bytes += serialized_size(&caller_info).unwrap() as usize;
                 let rsp = network
                     .get(&to)
                     .map(|node| {
-                        let mut rsp = vec![];
-                        for filter in filters {
-                            rsp.append(&mut node.lock().unwrap().process_pull_request(
-                                caller_info.clone(),
-                                filter,
-                                now,
-                            ));
-                        }
-                        rsp
+                        node.lock()
+                            .unwrap()
+                            .process_pull_request(caller_info, request, now)
                     })
                     .unwrap();
                 bytes += serialized_size(&rsp).unwrap() as usize;

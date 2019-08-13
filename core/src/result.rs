@@ -31,7 +31,6 @@ pub enum Error {
     PohRecorderError(poh_recorder::PohRecorderError),
     BlocktreeError(blocktree::BlocktreeError),
     FsExtra(fs_extra::error::Error),
-    ToBlobError,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
