@@ -85,7 +85,18 @@ type ForkStores = HashMap<usize, Arc<AccountStorageEntry>>;
 
 #[derive(Clone, Default, Debug)]
 pub struct AccountStorage(pub HashMap<Fork, ForkStores>);
-
+pub struct AccountStorageSerialize<'a> {
+    account_storage: &'a AccountStorage,
+    slot: u64,
+}
+impl<'a> AccountStorageSerialize<'a> {
+    pub fn new(account_storage: &'a AccountStorage, slot: u64) -> Self {
+        Self {
+            account_storage,
+            slot,
+        }
+    }
+}
 struct AccountStorageVisitor;
 
 impl<'de> Visitor<'de> for AccountStorageVisitor {
@@ -113,22 +124,26 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
     }
 }
 
-impl Serialize for AccountStorage {
+impl<'a> Serialize for AccountStorageSerialize<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut len: usize = 0;
-        for storage in self.0.values() {
-            len += storage.len();
+        for (fork_id, storage) in &self.account_storage.0 {
+            if *fork_id <= self.slot {
+                len += storage.len();
+            }
         }
         let mut map = serializer.serialize_map(Some(len))?;
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        for fork_storage in self.0.values() {
+        for fork_storage in self.account_storage.0.values() {
             for (storage_id, account_storage_entry) in fork_storage {
-                map.serialize_entry(storage_id, &**account_storage_entry)?;
-                count += 1;
+                if account_storage_entry.fork_id <= self.slot {
+                    map.serialize_entry(storage_id, &**account_storage_entry)?;
+                    count += 1;
+                }
             }
         }
         serialize_account_storage_timer.stop();
@@ -296,6 +311,34 @@ pub fn get_temp_accounts_paths(count: u32) -> IOResult<(Vec<TempDir>, String)> {
         .map(|t| t.path().to_str().unwrap().to_owned())
         .collect();
     Ok((temp_dirs, paths.join(",")))
+}
+
+pub struct AccountsDBSerialize<'a> {
+    accounts_db: &'a AccountsDB,
+    slot: u64,
+}
+
+impl<'a> AccountsDBSerialize<'a> {
+    pub fn new(accounts_db: &'a AccountsDB, slot: u64) -> Self {
+        Self { accounts_db, slot }
+    }
+}
+
+impl<'a> Serialize for AccountsDBSerialize<'a> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        use serde::ser::Error;
+        let storage = self.accounts_db.storage.read().unwrap();
+        let mut wr = Cursor::new(vec![]);
+        let version: u64 = self.accounts_db.write_version.load(Ordering::Relaxed) as u64;
+        let account_storage_serialize = AccountStorageSerialize::new(&*storage, self.slot);
+        serialize_into(&mut wr, &account_storage_serialize).map_err(Error::custom)?;
+        serialize_into(&mut wr, &version).map_err(Error::custom)?;
+        let len = wr.position() as usize;
+        serializer.serialize_bytes(&wr.into_inner()[..len])
+    }
 }
 
 // This structure handles the load/store of the accounts
@@ -879,27 +922,11 @@ impl AccountsDB {
     }
 }
 
-impl Serialize for AccountsDB {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        use serde::ser::Error;
-        let storage = self.storage.read().unwrap();
-        let mut wr = Cursor::new(vec![]);
-        let version: u64 = self.write_version.load(Ordering::Relaxed) as u64;
-        serialize_into(&mut wr, &*storage).map_err(Error::custom)?;
-        serialize_into(&mut wr, &version).map_err(Error::custom)?;
-        let len = wr.position() as usize;
-        serializer.serialize_bytes(&wr.into_inner()[..len])
-    }
-}
-
 #[cfg(test)]
 pub mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
-    use bincode::{serialize_into, serialized_size};
+    use bincode::serialize_into;
     use maplit::hashmap;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -1387,12 +1414,12 @@ pub mod tests {
         let mut pubkeys1: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys1, 1, 10, 0, 0);
 
-        let mut buf = vec![0u8; serialized_size(&accounts).unwrap() as usize];
-        let mut writer = Cursor::new(&mut buf[..]);
-        serialize_into(&mut writer, &accounts).unwrap();
+        let mut writer = Cursor::new(vec![]);
+        serialize_into(&mut writer, &AccountsDBSerialize::new(&accounts, 1)).unwrap();
         assert!(check_storage(&accounts, 0, 100));
         assert!(check_storage(&accounts, 1, 10));
 
+        let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(None);
         let local_paths = daccounts.paths();
