@@ -56,7 +56,7 @@ done
 : "${storage_keypair:="$SOLANA_ROOT"/farf/replicator-storage-keypair"$label".json}"
 ledger="$SOLANA_ROOT"/farf/replicator-ledger"$label"
 
-rpc_url=$("$here"/rpc-url.sh "$entrypoint")
+rpc_url=$($solana_gossip get-rpc-url --entrypoint "$entrypoint")
 
 if [[ ! -r $identity_keypair ]]; then
   $solana_keygen new -o "$identity_keypair"
