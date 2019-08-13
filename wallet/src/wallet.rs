@@ -1,7 +1,7 @@
 use crate::display::println_name_value;
 use chrono::prelude::*;
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use console::style;
+use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
+use console::{style, Emoji};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json;
@@ -33,14 +33,18 @@ use solana_stake_api::stake_instruction;
 use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::VoteState;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{error, fmt};
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+
+static CHECK_MARK: Emoji = Emoji("✅ ", "");
+static CROSS_MARK: Emoji = Emoji("❌ ", "");
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -77,6 +81,11 @@ pub enum WalletCommand {
         Option<Vec<Pubkey>>,
         Option<Pubkey>,
     ),
+    Ping {
+        interval: Duration,
+        count: Option<u64>,
+        timeout: Duration,
+    },
     // TimeElapsed(to, process_id, timestamp)
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>),
     // Witness(to, process_id)
@@ -366,6 +375,20 @@ pub fn parse_command(
                 witness_vec,
                 cancelable,
             ))
+        }
+        ("ping", Some(ping_matches)) => {
+            let interval = Duration::from_secs(value_t_or_exit!(ping_matches, "interval", u64));
+            let count = if ping_matches.is_present("count") {
+                Some(value_t_or_exit!(ping_matches, "count", u64))
+            } else {
+                None
+            };
+            let timeout = Duration::from_secs(value_t_or_exit!(ping_matches, "timeout", u64));
+            Ok(WalletCommand::Ping {
+                interval,
+                count,
+                timeout,
+            })
         }
         ("send-signature", Some(sig_matches)) => {
             let to = value_of(&sig_matches, "to").unwrap();
@@ -1180,6 +1203,122 @@ fn process_get_version(rpc_client: &RpcClient, config: &WalletConfig) -> Process
     Ok("".to_string())
 }
 
+fn process_ping(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    interval: &Duration,
+    count: &Option<u64>,
+    timeout: &Duration,
+) -> ProcessResult {
+    let to = Keypair::new().pubkey();
+
+    println_name_value("Source account:", &config.keypair.pubkey().to_string());
+    println_name_value("Destination account:", &to.to_string());
+    println!();
+
+    let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+    ctrlc::set_handler(move || {
+        let _ = signal_sender.send(());
+    })
+    .expect("Error setting Ctrl-C handler");
+
+    let mut last_blockhash = Hash::default();
+    let mut submit_count = 0;
+    let mut confirmed_count = 0;
+    let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
+
+    'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
+        let (recent_blockhash, fee_calculator) = rpc_client.get_new_blockhash(&last_blockhash)?;
+        last_blockhash = recent_blockhash;
+
+        let transaction = system_transaction::transfer(&config.keypair, &to, 1, recent_blockhash);
+        check_account_for_fee(rpc_client, config, &fee_calculator, &transaction.message)?;
+
+        match rpc_client.send_transaction(&transaction) {
+            Ok(signature) => {
+                let transaction_sent = Instant::now();
+                loop {
+                    let signature_status = rpc_client.get_signature_status(&signature)?;
+                    let elapsed_time = Instant::now().duration_since(transaction_sent);
+                    if let Some(transaction_status) = signature_status {
+                        match transaction_status {
+                            Ok(()) => {
+                                let elapsed_time_millis = elapsed_time.as_millis() as u64;
+                                confirmation_time.push_back(elapsed_time_millis);
+                                println!(
+                                    "{}1 lamport transferred: seq={:<3} time={:>4}ms signature={}",
+                                    CHECK_MARK, seq, elapsed_time_millis, signature
+                                );
+                                confirmed_count += 1;
+                            }
+                            Err(err) => {
+                                println!(
+                                    "{}Transaction failed:    seq={:<3} error={:?} signature={}",
+                                    CROSS_MARK, seq, err, signature
+                                );
+                            }
+                        }
+                        break;
+                    }
+
+                    if elapsed_time >= *timeout {
+                        println!(
+                            "{}Confirmation timeout:  seq={:<3}             signature={}",
+                            CROSS_MARK, seq, signature
+                        );
+                        break;
+                    }
+
+                    // Sleep for half a slot
+                    if signal_receiver
+                        .recv_timeout(Duration::from_millis(
+                            500 * solana_sdk::timing::DEFAULT_TICKS_PER_SLOT
+                                / solana_sdk::timing::DEFAULT_NUM_TICKS_PER_SECOND,
+                        ))
+                        .is_ok()
+                    {
+                        break 'mainloop;
+                    }
+                }
+            }
+            Err(err) => {
+                println!(
+                    "{}Submit failed:         seq={:<3} error={:?}",
+                    CROSS_MARK, seq, err
+                );
+            }
+        }
+        submit_count += 1;
+
+        if signal_receiver.recv_timeout(*interval).is_ok() {
+            break 'mainloop;
+        }
+    }
+
+    println!();
+    println!("--- transaction statistics ---");
+    println!(
+        "{} transactions submitted, {} transactions confirmed, {:.1}% transaction loss",
+        submit_count,
+        confirmed_count,
+        (100. - f64::from(confirmed_count) / f64::from(submit_count) * 100.)
+    );
+    if !confirmation_time.is_empty() {
+        let samples: Vec<f64> = confirmation_time.iter().map(|t| *t as f64).collect();
+        let dist = criterion_stats::Distribution::from(samples.into_boxed_slice());
+        let mean = dist.mean();
+        println!(
+            "confirmation min/mean/max/stddev = {:.0}/{:.0}/{:.0}/{:.0} ms",
+            dist.min(),
+            mean,
+            dist.max(),
+            dist.std_dev(Some(mean))
+        );
+    }
+
+    Ok("".to_string())
+}
+
 pub fn process_command(config: &WalletConfig) -> ProcessResult {
     if let WalletCommand::Address = config.command {
         // Get address of this client
@@ -1360,6 +1499,12 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             witnesses,
             *cancelable,
         ),
+
+        WalletCommand::Ping {
+            interval,
+            count,
+            timeout,
+        } => process_ping(&rpc_client, config, interval, count, timeout),
 
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
@@ -1926,6 +2071,36 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("cancelable")
                         .takes_value(false),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("ping")
+                .about("Submit transactions sequentially")
+                .arg(
+                    Arg::with_name("interval")
+                        .short("i")
+                        .long("interval")
+                        .value_name("SECONDS")
+                        .takes_value(true)
+                        .default_value("2")
+                        .help("Wait interval seconds between submitting the next transaction"),
+                )
+                .arg(
+                    Arg::with_name("count")
+                        .short("c")
+                        .long("count")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .help("Stop after submitting count transactions"),
+                )
+                .arg(
+                    Arg::with_name("timeout")
+                        .short("t")
+                        .long("timeout")
+                        .value_name("SECONDS")
+                        .takes_value(true)
+                        .default_value("10")
+                        .help("Wait up to timeout seconds for transaction confirmation"),
+                )
         )
         .subcommand(
             SubCommand::with_name("send-signature")
