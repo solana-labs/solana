@@ -26,35 +26,50 @@ use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 pub const KEYS: f64 = 8f64;
-pub const FALSE_RATE: f64 = 0.01f64;
+pub const FALSE_RATE: f64 = 0.1f64;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct CrdsFilter {
     pub filter: Bloom<Hash>,
     mask: u64,
+    mask_bits: u32,
 }
 
 impl CrdsFilter {
     pub fn new_rand(num_items: usize, max_bytes: usize) -> Self {
         let max_bits = (max_bytes * 8) as f64;
-        let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
-        let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
+        let num_keys = Bloom::<Hash>::num_keys(max_bits, num_items as f64);
+        let max_items = Self::max_items(max_bits, FALSE_RATE, num_keys);
         let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
+        let keys = (0..num_keys as u64)
+            .map(|_| rand::thread_rng().gen())
+            .collect();
+        let filter = Bloom::new(max_bits as usize, keys);
         let seed: u64 = rand::thread_rng().gen_range(0, 2u64.pow(mask_bits));
         let mask = Self::compute_mask(seed, mask_bits);
-        CrdsFilter { filter, mask }
+        CrdsFilter {
+            filter,
+            mask,
+            mask_bits,
+        }
     }
     // generates a vec of filters that together hold a complete set of Hashes
     pub fn new_complete_set(num_items: usize, max_bytes: usize) -> Vec<Self> {
-        let max_bits = (max_bytes * 8) as f64;
-        let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
+        let max_bits = (max_bytes * 4) as f64;
+        let num_keys = Bloom::<Hash>::num_keys(max_bits, num_items as f64);
+        let max_items = Self::max_items(max_bits, FALSE_RATE, num_keys);
         let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
         // for each possible mask combination, generate a new filter.
         let mut filters = vec![];
         for seed in 0..2u64.pow(mask_bits) {
             let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
             let mask = Self::compute_mask(seed, mask_bits);
-            filters.push(CrdsFilter { filter, mask })
+            let filter = CrdsFilter {
+                filter,
+                mask,
+                mask_bits,
+            };
+            filters.push(filter)
         }
         filters
     }
@@ -82,8 +97,13 @@ impl CrdsFilter {
         accum
     }
     pub fn test_mask(&self, item: &Hash) -> bool {
-        let bits = Self::hash_as_u64(item);
-        (bits & self.mask) == bits
+        //        if self.mask_bits == 0 {
+        //            return true;
+        //        }
+        // only consider the highest mask_bits bits from the hash and set the rest to 1.
+        let ones = (!0u64).checked_shr(self.mask_bits).unwrap_or(!0u64);
+        let bits = Self::hash_as_u64(item) | ones;
+        bits == self.mask
     }
     pub fn add(&mut self, item: &Hash) {
         if self.test_mask(item) {
@@ -187,7 +207,7 @@ impl CrdsGossipPull {
         let old = crds.insert(caller, now);
         if let Some(val) = old.ok().and_then(|opt| opt) {
             self.purged_values
-                .push_back((val.value_hash, val.local_timestamp))
+                .push_back((val.value_hash, val.local_timestamp));
         }
         crds.update_record_timestamp(&key, now);
         rv
@@ -544,8 +564,25 @@ mod test {
         assert!(filter.contains(&h));
     }
     #[test]
+    fn test_crds_filter_complete_set_add_mask() {
+        let mut filters = CrdsFilter::new_complete_set(1000, 10);
+        assert!(filters.iter().all(|f| f.mask_bits > 0));
+        let mut h: Hash = Hash::default();
+        // rev to make the hash::default() miss on the first few test_masks
+        while !filters.iter().rev().any(|f| f.test_mask(&h)) {
+            h = hash(h.as_ref());
+        }
+        let filter = filters.iter_mut().find(|f| f.test_mask(&h)).unwrap();
+        assert!(filter.test_mask(&h));
+        //if the mask succeeds, we want the guaranteed negative
+        assert!(!filter.contains(&h));
+        filter.add(&h);
+        assert!(filter.contains(&h));
+    }
+    #[test]
     fn test_crds_filter_contains_mask() {
         let filter = CrdsFilter::new_rand(1000, 10);
+        assert!(filter.mask_bits > 0);
         let mut h: Hash = Hash::default();
         while filter.test_mask(&h) {
             h = hash(h.as_ref());

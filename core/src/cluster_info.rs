@@ -62,8 +62,8 @@ pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 
-/// Allow protocol messages to carry only 1KB of data a time
-const TARGET_PROTOCOL_PAYLOAD_SIZE: u64 = 1024;
+/// The maximum size of a protocol payload
+const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -862,13 +862,20 @@ impl ClusterInfo {
             let mut size = 0;
             let mut payload = vec![];
             while let Some(msg) = msgs.pop() {
-                // always put at least one msg. The PROTOCOL_PAYLOAD_SIZE is not a hard limit
                 let msg_size = msg.size();
-                size += msg_size;
-                payload.push(msg);
-                if size > TARGET_PROTOCOL_PAYLOAD_SIZE {
+                if size + msg_size > MAX_PROTOCOL_PAYLOAD_SIZE as u64 {
+                    if msg_size < MAX_PROTOCOL_PAYLOAD_SIZE as u64 {
+                        msgs.push(msg);
+                    } else {
+                        warn!(
+                            "dropping message larger than the maximum payload size {:?}",
+                            msg
+                        );
+                    }
                     break;
                 }
+                size += msg_size;
+                payload.push(msg);
             }
             messages.push(payload);
         }
@@ -2322,7 +2329,7 @@ mod tests {
     fn test_split_messages(value: CrdsValue) {
         const NUM_VALUES: usize = 30;
         let value_size = value.size();
-        let expected_len = NUM_VALUES / (TARGET_PROTOCOL_PAYLOAD_SIZE / value_size).max(1) as usize;
+        let expected_len = NUM_VALUES / (MAX_PROTOCOL_PAYLOAD_SIZE / value_size).max(1) as usize;
         let msgs = vec![value; NUM_VALUES];
 
         let split = ClusterInfo::split_gossip_messages(msgs);

@@ -50,7 +50,7 @@ impl<T: BloomHashIndex> Bloom<T> {
     pub fn num_keys(num_bits: f64, num_items: f64) -> f64 {
         let n = num_items;
         let m = num_bits;
-        ((m / n) * 2f64.ln()).round()
+        1f64.max(((m / n) * 2f64.ln()).round())
     }
     fn pos(&self, key: &T, k: u64) -> u64 {
         key.hash_at_index(k) % self.bits.len()
