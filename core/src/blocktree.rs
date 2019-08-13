@@ -411,11 +411,11 @@ impl Blocktree {
 
         for shared_shred in shared_shreds {
             let slot = shared_shred.slot();
-            let index = shared_shred.index() as u64;
+            let index = u64::from(shared_shred.index());
 
             let inserted = Blocktree::insert_data_shred(
                 db,
-                &mut just_inserted_data_indexes,
+                &just_inserted_data_indexes,
                 &mut slot_meta_working_set,
                 &mut index_working_set,
                 shared_shred.borrow(),
@@ -467,7 +467,7 @@ impl Blocktree {
         write_batch: &mut WriteBatch,
     ) -> Result<bool> {
         let slot = shred.slot();
-        let index = shred.index() as u64;
+        let index = u64::from(shred.index());
         let parent = if let Shred::FirstInSlot(s) = shred {
             s.header.parent
         } else {
