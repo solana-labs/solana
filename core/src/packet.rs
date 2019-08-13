@@ -335,9 +335,7 @@ pub fn to_blob<T: Serialize>(resp: T, rsp_addr: SocketAddr) -> Result<Blob> {
     let mut b = Blob::default();
     let v = bincode::serialize(&resp)?;
     let len = v.len();
-    if len > BLOB_SIZE {
-        return Err(Error::ToBlobError);
-    }
+    assert!(len <= BLOB_SIZE);
     b.data[..len].copy_from_slice(&v);
     b.meta.size = len;
     b.meta.set_addr(&rsp_addr);

@@ -5,15 +5,17 @@
 
 use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::{CrdsFilter, CrdsGossipPull};
+use crate::crds_gossip_pull::CrdsGossipPull;
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
+use solana_runtime::bloom::Bloom;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signable;
 use std::collections::{HashMap, HashSet};
 
 ///The min size for bloom filters
-pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
+pub const CRDS_GOSSIP_BLOOM_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct CrdsGossip {
@@ -131,10 +133,9 @@ impl CrdsGossip {
         &self,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
-        bloom_size: usize,
-    ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
+    ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
         self.pull
-            .new_pull_request(&self.crds, &self.id, now, stakes, bloom_size)
+            .new_pull_request(&self.crds, &self.id, now, stakes)
     }
 
     /// time when a request to `from` was initiated
@@ -148,7 +149,7 @@ impl CrdsGossip {
     pub fn process_pull_request(
         &mut self,
         caller: CrdsValue,
-        filter: CrdsFilter,
+        filter: Bloom<Hash>,
         now: u64,
     ) -> Vec<CrdsValue> {
         self.pull

@@ -10,7 +10,7 @@
 
 use crate::contact_info::ContactInfo;
 use crate::crds::{Crds, VersionedCrdsValue};
-use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
+use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_BLOOM_SIZE};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use crate::packet::BLOB_DATA_SIZE;
@@ -258,7 +258,7 @@ impl CrdsGossipPush {
                     if new_items.get(&item.id).is_some() {
                         continue;
                     }
-                    let size = cmp::max(CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS, network_size);
+                    let size = cmp::max(CRDS_GOSSIP_BLOOM_SIZE, network_size);
                     let mut bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
                     bloom.add(&item.id);
                     new_items.insert(item.id, bloom);
