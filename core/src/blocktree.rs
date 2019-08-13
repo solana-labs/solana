@@ -1429,7 +1429,7 @@ fn get_slot_meta_entry<'a>(
     let meta_cf = db.column::<cf::SlotMeta>();
 
     // Check if we've already inserted the slot metadata for this blob's slot
-    let entry = slot_meta_working_set.entry(slot).or_insert_with(|| {
+    slot_meta_working_set.entry(slot).or_insert_with(|| {
         // Store a 2-tuple of the metadata (working copy, backup copy)
         if let Some(mut meta) = meta_cf.get(slot).expect("Expect database get to succeed") {
             let backup = Some(meta.clone());
@@ -1448,9 +1448,7 @@ fn get_slot_meta_entry<'a>(
                 None,
             )
         }
-    });
-
-    entry
+    })
 }
 
 fn should_insert_blob(
