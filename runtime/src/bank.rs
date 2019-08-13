@@ -410,7 +410,6 @@ impl Bank {
             return;
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
-
         self.store_account(
             &stake_history::id(),
             &stake_history::create_account(1, self.stakes.read().unwrap().history()),
