@@ -1,6 +1,6 @@
 //! Config program
 
-use crate::config_instruction::ConfigKeys;
+use crate::ConfigKeys;
 use bincode::deserialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
@@ -113,9 +113,14 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
 
-    #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct MyConfig {
         pub item: u64,
+    }
+    impl Default for MyConfig {
+        fn default() -> Self {
+            Self { item: 123456789 }
+        }
     }
     impl MyConfig {
         pub fn new(item: u64) -> Self {
@@ -149,14 +154,14 @@ mod tests {
 
         let bank_client = BankClient::new(bank);
         bank_client
-            .send_instruction(
-                mint_keypair,
-                config_instruction::create_account::<MyConfig>(
+            .send_message(
+                &[mint_keypair, &config_keypair],
+                Message::new(config_instruction::create_account::<MyConfig>(
                     &mint_keypair.pubkey(),
                     &config_pubkey,
                     1,
                     keys,
-                ),
+                )),
             )
             .expect("new_account");
 
@@ -173,8 +178,8 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(
-            MyConfig::default(),
-            MyConfig::deserialize(&config_account_data).unwrap()
+            Some(MyConfig::default()),
+            deserialize(crate::get_config_data(&config_account_data).unwrap()).ok()
         );
     }
 
