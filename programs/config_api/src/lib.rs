@@ -1,4 +1,4 @@
-use bincode::{deserialize, serialize, serialized_size};
+use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{pubkey::Pubkey, short_vec};
 
@@ -30,10 +30,8 @@ pub struct ConfigKeys {
 }
 
 impl ConfigKeys {
-    pub fn serialized_size(keys: Vec<(Pubkey, bool)>) -> usize {
-        serialize(&ConfigKeys { keys })
-            .unwrap_or_else(|_| vec![])
-            .len()
+    pub fn serialized_size(keys: Vec<(Pubkey, bool)>) -> u64 {
+        serialized_size(&ConfigKeys { keys }).unwrap()
     }
 }
 

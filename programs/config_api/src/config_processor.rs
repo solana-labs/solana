@@ -102,7 +102,7 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config_instruction, id, ConfigState};
+    use crate::{config_instruction, get_config_data, id, ConfigState};
     use bincode::{deserialize, serialized_size};
     use serde_derive::{Deserialize, Serialize};
     use solana_runtime::bank::Bank;
@@ -179,7 +179,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             Some(MyConfig::default()),
-            deserialize(crate::get_config_data(&config_account_data).unwrap()).ok()
+            deserialize(get_config_data(&config_account_data).unwrap()).ok()
         );
     }
 
@@ -205,11 +205,9 @@ mod tests {
             .get_account_data(&config_pubkey)
             .unwrap()
             .unwrap();
-        let meta_length = ConfigKeys::serialized_size(keys);
-        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
         assert_eq!(
-            my_config,
-            MyConfig::deserialize(&config_account_data).unwrap()
+            Some(my_config),
+            deserialize(get_config_data(&config_account_data).unwrap()).ok()
         );
     }
 
@@ -286,13 +284,11 @@ mod tests {
             .get_account_data(&config_pubkey)
             .unwrap()
             .unwrap();
-        let meta_length = ConfigKeys::serialized_size(keys.clone());
-        let meta_data: ConfigKeys = deserialize(&config_account_data[0..meta_length]).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account_data).unwrap();
         assert_eq!(meta_data.keys, keys);
-        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
         assert_eq!(
-            my_config,
-            MyConfig::deserialize(&config_account_data).unwrap()
+            Some(my_config),
+            deserialize(get_config_data(&config_account_data).unwrap()).ok()
         );
     }
 
@@ -389,13 +385,11 @@ mod tests {
             .get_account_data(&config_pubkey)
             .unwrap()
             .unwrap();
-        let meta_length = ConfigKeys::serialized_size(keys.clone());
-        let meta_data: ConfigKeys = deserialize(&config_account_data[0..meta_length]).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account_data).unwrap();
         assert_eq!(meta_data.keys, keys);
-        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
         assert_eq!(
             new_config,
-            MyConfig::deserialize(&config_account_data).unwrap()
+            MyConfig::deserialize(get_config_data(&config_account_data).unwrap()).unwrap()
         );
 
         // Attempt update with incomplete signatures
@@ -464,13 +458,11 @@ mod tests {
             .get_account_data(&config_pubkey)
             .unwrap()
             .unwrap();
-        let meta_length = ConfigKeys::serialized_size(keys.clone());
-        let meta_data: ConfigKeys = deserialize(&config_account_data[0..meta_length]).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account_data).unwrap();
         assert_eq!(meta_data.keys, keys);
-        let config_account_data = &config_account_data[meta_length..config_account_data.len()];
         assert_eq!(
             new_config,
-            MyConfig::deserialize(&config_account_data).unwrap()
+            MyConfig::deserialize(get_config_data(&config_account_data).unwrap()).unwrap()
         );
 
         // Attempt update with incomplete signatures
