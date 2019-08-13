@@ -3,9 +3,9 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::accounts::Accounts;
-use crate::accounts_db::AccountStorageEntry;
 use crate::accounts_db::{
-    AppendVecId, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
+    AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters, InstructionAccounts,
+    InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
@@ -62,10 +62,13 @@ pub struct BankRc {
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
+
+    /// Current slot
+    slot: u64,
 }
 
 impl BankRc {
-    pub fn new(account_paths: String, id: AppendVecId) -> Self {
+    pub fn new(account_paths: String, id: AppendVecId, slot: u64) -> Self {
         let accounts = Accounts::new(Some(account_paths));
         accounts
             .accounts_db
@@ -74,6 +77,7 @@ impl BankRc {
         BankRc {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
+            slot,
         }
     }
 
@@ -108,7 +112,9 @@ impl Serialize for BankRc {
     {
         use serde::ser::Error;
         let mut wr = Cursor::new(Vec::new());
-        serialize_into(&mut wr, &*self.accounts.accounts_db).map_err(Error::custom)?;
+        let accounts_db_serialize =
+            AccountsDBSerialize::new(&*self.accounts.accounts_db, self.slot);
+        serialize_into(&mut wr, &accounts_db_serialize).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
     }
@@ -267,6 +273,7 @@ impl Bank {
         let rc = BankRc {
             accounts: Arc::new(Accounts::new_from_parent(&parent.rc.accounts)),
             parent: RwLock::new(Some(parent.clone())),
+            slot,
         };
         let src = StatusCacheRc {
             status_cache: parent.src.status_cache.clone(),
@@ -350,7 +357,10 @@ impl Bank {
         id: AppendVecId,
     ) -> Self {
         let mut bank = Self::default();
-        bank.set_bank_rc(&BankRc::new(account_paths, id), &status_cache_rc);
+        bank.set_bank_rc(
+            &BankRc::new(account_paths, id, bank.slot()),
+            &status_cache_rc,
+        );
         bank.process_genesis_block(genesis_block);
         bank.ancestors.insert(0, 0);
         bank
@@ -2775,7 +2785,7 @@ mod tests {
         // Create a new set of directories for this bank's accounts
         let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();;
         dbank.set_bank_rc(
-            &BankRc::new(dbank_paths.clone(), 0),
+            &BankRc::new(dbank_paths.clone(), 0, dbank.slot()),
             &StatusCacheRc::default(),
         );
         // Create a directory to simulate AppendVecs unpackaged from a snapshot tar

@@ -60,7 +60,12 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
 
     // Get a reference to all the relevant AccountStorageEntries
-    let account_storage_entries = bank.rc.get_storage_entries();
+    let account_storage_entries: Vec<_> = bank
+        .rc
+        .get_storage_entries()
+        .into_iter()
+        .filter(|x| x.fork_id() <= bank.slot())
+        .collect();
 
     // Create a snapshot package
     info!(

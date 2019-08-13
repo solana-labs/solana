@@ -62,7 +62,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
 fn test_accounts_hash_internal_state(bencher: &mut Bencher) {
     let accounts = Accounts::new(Some("bench_accounts_hash_internal".to_string()));
     let mut pubkeys: Vec<Pubkey> = vec![];
-    create_test_accounts(&accounts, &mut pubkeys, 60000);
+    create_test_accounts(&accounts, &mut pubkeys, 60000, 0);
     bencher.iter(|| {
         accounts.hash_internal_state(0);
     });

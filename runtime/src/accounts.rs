@@ -628,11 +628,11 @@ impl Accounts {
     }
 }
 
-pub fn create_test_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {
+pub fn create_test_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize, fork: u64) {
     for t in 0..num {
         let pubkey = Pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
-        accounts.store_slow(0, &pubkey, &account);
+        accounts.store_slow(fork, &pubkey, &account);
         pubkeys.push(pubkey);
     }
 }
@@ -642,9 +642,9 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
-    use crate::accounts_db::get_temp_accounts_paths;
     use crate::accounts_db::tests::copy_append_vecs;
-    use bincode::{serialize_into, serialized_size};
+    use crate::accounts_db::{get_temp_accounts_paths, AccountsDBSerialize};
+    use bincode::serialize_into;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
     use solana_sdk::fee_calculator::FeeCalculator;
@@ -1164,20 +1164,23 @@ mod tests {
         let accounts = Accounts::new(Some(paths));
 
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_test_accounts(&accounts, &mut pubkeys, 100);
+        create_test_accounts(&accounts, &mut pubkeys, 100, 0);
         check_accounts(&accounts, &pubkeys, 100);
         accounts.add_root(0);
 
-        let sz = serialized_size(&*accounts.accounts_db).unwrap();
-        let mut buf = vec![0u8; sz as usize];
-        let mut writer = Cursor::new(&mut buf[..]);
-        serialize_into(&mut writer, &*accounts.accounts_db).unwrap();
+        let mut writer = Cursor::new(vec![]);
+        serialize_into(
+            &mut writer,
+            &AccountsDBSerialize::new(&*accounts.accounts_db, 0),
+        )
+        .unwrap();
 
         let copied_accounts = TempDir::new().unwrap();
 
         // Simulate obtaining a copy of the AppendVecs from a tarball
         copy_append_vecs(&accounts.accounts_db, copied_accounts.path()).unwrap();
 
+        let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
         let daccounts = Accounts::new(Some(daccounts_paths.clone()));
