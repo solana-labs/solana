@@ -6,6 +6,7 @@ use bzip2::write::BzEncoder;
 >>>>>>> Change tar to use shell command
 use solana_runtime::accounts_db::AccountStorageEntry;
 use std::fs;
+use std::io::{Error as IOError, ErrorKind};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
@@ -103,6 +104,7 @@ impl SnapshotPackagerService {
         }
 
         // Tar the staging directory into the archive `temp_tar_gz`
+        let s = staging_dir.path().to_str().unwrap().to_string();
         let temp_tar_gz = tempfile::Builder::new()
             .prefix("new_state")
             .suffix(".tar.bz2")
@@ -110,14 +112,25 @@ impl SnapshotPackagerService {
         let temp_tar_path = temp_tar_gz.path();
         let mut args = vec!["jcfhS"];
         args.push(temp_tar_path.to_str().unwrap());
-        args.push(staging_accounts_dir.to_str().unwrap());
-        args.push(staging_snapshots_dir.to_str().unwrap());
+        args.push("-C");
+        args.push(&s);
+        args.push(TAR_ACCOUNTS_DIR);
+        args.push(TAR_SNAPSHOTS_DIR);
 
-        std::process::Command::new("tar").args(&args).spawn()?;
+        let status = std::process::Command::new("tar").args(&args).status()?;
 
+        if !status.success() {
+            return Err(Self::get_io_error(&format!(
+                "Error trying to generate snapshot archive: {}",
+                status
+            )));
+        }
+
+        println!("args: {:?}, temp_dir: {:?}", args, staging_dir.into_path());
         // Once everything is successful, overwrite the previous tarball so that other validators
         // can fetch this newly packaged snapshot
         let _ = fs::remove_file(&snapshot_package.tar_output_file);
+        println!("hardlinking");
         fs::hard_link(&temp_tar_path, &snapshot_package.tar_output_file)?;
         Ok(())
     }
@@ -130,6 +143,11 @@ impl SnapshotPackagerService {
         }
         Self::package_snapshots(&snapshot_package)?;
         Ok(())
+    }
+
+    fn get_io_error(error: &str) -> Error {
+        warn!("Snapshot Packaging Error: {:?}", error);
+        Error::IO(IOError::new(ErrorKind::Other, error))
     }
 }
 
@@ -189,6 +207,7 @@ mod tests {
         }
 
         // Create a packageable snapshot
+        println!("{:?}", temp_dir.into_path());
         let output_tar_path = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
         let snapshot_package = SnapshotPackage::new(
             link_snapshots_dir,

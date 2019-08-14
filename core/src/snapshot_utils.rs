@@ -13,7 +13,6 @@ use std::fs;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
-use tar::Archive;
 
 const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 
@@ -256,7 +255,7 @@ fn get_bank_snapshot_dir<P: AsRef<Path>>(path: P, slot: u64) -> PathBuf {
 }
 
 fn get_io_error(error: &str) -> Error {
-    warn!("BankForks error: {:?}", error);
+    warn!("Snapshot Error: {:?}", error);
     Error::IO(IOError::new(ErrorKind::Other, error))
 }
 
@@ -276,11 +275,17 @@ pub mod tests {
         R: AsRef<Path>,
     {
         let temp_dir = TempDir::new().unwrap();
-        let unpack_dir = temp_dir.path();
+        let unpack_dir = temp_dir.path().to_path_buf();
         untar_snapshot_in(snapshot_tar, &unpack_dir).unwrap();
+        temp_dir.into_path();
 
         // Check snapshots are the same
         let unpacked_snapshots = unpack_dir.join(&TAR_SNAPSHOTS_DIR);
+        println!(
+            "snapshots to verify: {:?}, unpacked snapshots: {:?}",
+            snapshots_to_verify.as_ref(),
+            unpacked_snapshots,
+        );
         assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
         // Check the account entries are the same
