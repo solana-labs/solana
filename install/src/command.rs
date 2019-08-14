@@ -6,7 +6,7 @@ use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
-use solana_config_api::config_instruction::{self, ConfigKeys};
+use solana_config_api::{config_instruction, get_config_data};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil, Signable};
@@ -200,7 +200,7 @@ fn new_update_manifest(
             1,      // lamports
             vec![], // additional keys
         );
-        let mut transaction = Transaction::new_unsigned_instructions(vec![new_account]);
+        let mut transaction = Transaction::new_unsigned_instructions(new_account);
         transaction.sign(&[from_keypair], recent_blockhash);
 
         rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
@@ -236,13 +236,14 @@ fn get_update_manifest(
     rpc_client: &RpcClient,
     update_manifest_pubkey: &Pubkey,
 ) -> Result<UpdateManifest, String> {
-    let mut data = rpc_client
+    let data = rpc_client
         .get_account_data(update_manifest_pubkey)
         .map_err(|err| format!("Unable to fetch update manifest: {}", err))?;
-    let data = data.split_off(ConfigKeys::serialized_size(vec![]));
 
+    let config_data = get_config_data(&data)
+        .map_err(|err| format!("Unable to get at config_data to update manifest: {}", err))?;
     let signed_update_manifest =
-        SignedUpdateManifest::deserialize(update_manifest_pubkey, &data)
+        SignedUpdateManifest::deserialize(update_manifest_pubkey, config_data)
             .map_err(|err| format!("Unable to deserialize update manifest: {}", err))?;
     Ok(signed_update_manifest.manifest)
 }

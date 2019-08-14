@@ -6,7 +6,7 @@ use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use solana_client::rpc_client::RpcClient;
-use solana_config_api::{config_instruction, config_instruction::ConfigKeys, ConfigState};
+use solana_config_api::{config_instruction, get_config_data, ConfigKeys, ConfigState};
 use solana_sdk::account::Account;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
@@ -31,7 +31,7 @@ solana_sdk::solana_name_id!(
     "Va1idator1nfo111111111111111111111111111111"
 );
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 struct ValidatorInfo {
     info: String,
 }
@@ -152,8 +152,7 @@ fn parse_validator_info(
     let key_list: ConfigKeys = deserialize(&account_data)?;
     if !key_list.keys.is_empty() {
         let (validator_pubkey, _) = key_list.keys[1];
-        let meta_length = ConfigKeys::serialized_size(key_list.keys);
-        let validator_info: String = deserialize(&account_data[meta_length..])?;
+        let validator_info: String = deserialize(&get_config_data(account_data)?)?;
         Ok((validator_pubkey, validator_info))
     } else {
         Err(format!(
@@ -334,15 +333,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     "Publishing info for Validator {:?}",
                     validator_keypair.pubkey()
                 );
-                let instructions = vec![
-                    config_instruction::create_account::<ValidatorInfo>(
-                        &validator_keypair.pubkey(),
-                        &info_keypair.pubkey(),
-                        1,
-                        keys.clone(),
-                    ),
-                    config_instruction::store(&info_keypair.pubkey(), true, keys, &validator_info),
-                ];
+                let mut instructions = config_instruction::create_account::<ValidatorInfo>(
+                    &validator_keypair.pubkey(),
+                    &info_keypair.pubkey(),
+                    1,
+                    keys.clone(),
+                );
+                instructions.extend_from_slice(&[config_instruction::store(
+                    &info_keypair.pubkey(),
+                    true,
+                    keys,
+                    &validator_info,
+                )]);
                 let signers = vec![&validator_keypair, &info_keypair];
                 let message = Message::new(instructions);
                 (message, signers)

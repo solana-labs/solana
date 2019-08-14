@@ -13,11 +13,8 @@ bincode = "1.1.4"
 log = "0.4.8"
 serde = "1.0.98"
 serde_derive = "1.0.98"
-solana-logger = { path = "../../logger", version = "0.18.0-pre1" }
 solana-sdk = { path = "../../sdk", version = "0.18.0-pre1" }
 
-[dev-dependencies]
-solana-runtime = { path = "../../runtime", version = "0.18.0-pre1" }
 
 [lib]
 crate-type = ["lib"]
