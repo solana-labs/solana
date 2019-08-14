@@ -154,5 +154,7 @@ mod test {
         assert_eq!(Bloom::<Hash>::num_keys(1000f64, 50f64) as u64, 14u64);
         assert_eq!(Bloom::<Hash>::num_keys(2000f64, 50f64) as u64, 28u64);
         assert_eq!(Bloom::<Hash>::num_keys(2000f64, 25f64) as u64, 55u64);
+        //ensure min keys is 1
+        assert_eq!(Bloom::<Hash>::num_keys(20f64, 1000f64) as u64, 1u64);
     }
 }
