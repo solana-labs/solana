@@ -35,10 +35,9 @@ impl ConfigKeys {
     }
 }
 
-pub fn get_config_data(bytes: &[u8]) -> Option<&[u8]> {
+pub fn get_config_data(bytes: &[u8]) -> Result<&[u8], bincode::Error> {
     deserialize::<ConfigKeys>(bytes)
-        .ok()
-        .and_then(|keys| serialized_size(&keys).ok())
+        .and_then(|keys| serialized_size(&keys))
         .map(|offset| &bytes[offset as usize..])
 }
 
