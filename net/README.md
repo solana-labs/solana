@@ -81,8 +81,9 @@ $ ./net.sh start -f "cuda"
 
 ### How to interact with a CD testnet deployed by ci/testnet-deploy.sh
 
-**AWS-Specific Extra Setup**: Follow the steps in `scripts/add-solana-user-authorized_keys.sh`,
-then redeploy the testnet before continuing in this section.
+**AWS-Specific Extra Setup**: Follow the steps in
+`scripts/solana-user-authorized_keys.sh`, then redeploy the testnet
+before continuing in this section.
 
 Taking **master-testnet-solana-com** as an example, configure your workspace for
 the testnet using:
