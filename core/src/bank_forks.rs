@@ -504,7 +504,7 @@ mod tests {
         );
     }
 
-    fn restore_from_snapshot(old_bank_forks: BankForks, account_paths: String) {
+    fn restore_from_snapshot(old_bank_forks: &BankForks, account_paths: String) {
         let (snapshot_path, snapshot_package_output_path) = old_bank_forks
             .snapshot_config
             .as_ref()
@@ -541,26 +541,14 @@ mod tests {
         F: Fn(&mut Bank, &Keypair),
     {
         solana_logger::setup();
-        let accounts_dir = TempDir::new().unwrap();
-        let snapshot_dir = TempDir::new().unwrap();
-        let snapshot_output_path = TempDir::new().unwrap();
-        let GenesisBlockInfo {
-            genesis_block,
-            mint_keypair,
-            ..
-        } = create_genesis_block(10_000);
-        let bank0 = Bank::new_with_paths(
-            &genesis_block,
-            Some(accounts_dir.path().to_str().unwrap().to_string()),
-        );
-        bank0.freeze();
-        let mut bank_forks = BankForks::new(0, bank0);
-        let snapshot_config = SnapshotConfig::new(
-            PathBuf::from(snapshot_dir.path()),
-            PathBuf::from(snapshot_output_path.path()),
-            1,
-        );
-        bank_forks.set_snapshot_config(snapshot_config.clone());
+        // Set up snapshotting config
+        let mut snapshot_test_config = setup_snapshot_test(1);
+
+        let bank_forks = &mut snapshot_test_config.bank_forks;
+        let accounts_dir = &snapshot_test_config.accounts_dir;
+        let snapshot_config = &snapshot_test_config.snapshot_config;
+        let mint_keypair = &snapshot_test_config.genesis_block_info.mint_keypair;
+
         let (s, _r) = channel();
         let sender = Some(s);
         for slot in 0..last_slot {
@@ -662,34 +650,24 @@ mod tests {
     #[test]
     fn test_concurrent_snapshot_packaging() {
         solana_logger::setup();
-        let accounts_dir = TempDir::new().unwrap();
-        let snapshots_dir = TempDir::new().unwrap();
-        let snapshot_output_path = TempDir::new().unwrap();
-        let GenesisBlockInfo {
-            genesis_block,
-            mint_keypair,
-            ..
-        } = create_genesis_block(10_000);
-        let (sender, receiver) = channel();
-        let (fake_sender, _fake_receiver) = channel();
-        let bank0 = Bank::new_with_paths(
-            &genesis_block,
-            Some(accounts_dir.path().to_str().unwrap().to_string()),
-        );
-        bank0.freeze();
 
-        // Set up bank forks
-        let mut bank_forks = BankForks::new(0, bank0);
-        let snapshot_config = SnapshotConfig::new(
-            PathBuf::from(snapshots_dir.path()),
-            PathBuf::from(snapshot_output_path.path()),
-            1,
-        );
-        bank_forks.set_snapshot_config(snapshot_config.clone());
+        // Set up snapshotting config
+        let mut snapshot_test_config = setup_snapshot_test(1);
+
+        let bank_forks = &mut snapshot_test_config.bank_forks;
+        let accounts_dir = &snapshot_test_config.accounts_dir;
+        let snapshots_dir = &snapshot_test_config.snapshot_dir;
+        let snapshot_config = &snapshot_test_config.snapshot_config;
+        let mint_keypair = &snapshot_test_config.genesis_block_info.mint_keypair;
+        let genesis_block = &snapshot_test_config.genesis_block_info.genesis_block;
 
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
         snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &vec![]).unwrap();
+
+        // Set up snapshotting channels
+        let (sender, receiver) = channel();
+        let (fake_sender, _fake_receiver) = channel();
 
         // Create next MAX_CACHE_ENTRIES + 2 banks and snapshots. Every bank will get snapshotted
         // and the snapshot purging logic will run on every snapshot taken. This means the three
@@ -746,7 +724,7 @@ mod tests {
 
             if slot == saved_slot as u64 {
                 let options = CopyOptions::new();
-                fs_extra::dir::copy(&accounts_dir, &saved_accounts_dir, &options).unwrap();
+                fs_extra::dir::copy(accounts_dir, &saved_accounts_dir, &options).unwrap();
                 let snapshot_paths: Vec<_> = fs::read_dir(&snapshot_config.snapshot_path)
                     .unwrap()
                     .filter_map(|entry| {
@@ -805,16 +783,12 @@ mod tests {
     }
 
     #[test]
-    fn test_status_cache_roots_equals_slots_since_snapshot() {
-        solana_logger::setup();
-    }
-
-    #[test]
     fn test_slots_since_snapshot() {
         solana_logger::setup();
         for add_root_interval in 1..10 {
-            let (snapshot_sender, snapshot_receiver) = channel();
-            let num_set_roots = 10;
+            let (snapshot_sender, _snapshot_receiver) = channel();
+            let num_set_roots = MAX_CACHE_ENTRIES * 5;
+            // Make sure this test never clears bank.slots_since_snapshot
             let mut snapshot_test_config =
                 setup_snapshot_test(add_root_interval * num_set_roots * 2);
             let mut current_bank = snapshot_test_config.bank_forks[0].clone();
@@ -830,11 +804,23 @@ mod tests {
                 snapshot_test_config
                     .bank_forks
                     .set_root(current_bank.slot(), &snapshot_sender);
+
+                let slots_since_snapshot_hashset: HashSet<_> = snapshot_test_config
+                    .bank_forks
+                    .slots_since_snapshot
+                    .iter()
+                    .cloned()
+                    .collect();
+                assert_eq!(slots_since_snapshot_hashset, current_bank.src.roots());
             }
+
+            let expected_slots_since_snapshot =
+                (0..=num_set_roots as u64 * add_root_interval as u64).collect_vec();
+            let num_old_slots = expected_slots_since_snapshot.len() - MAX_CACHE_ENTRIES;
 
             assert_eq!(
                 snapshot_test_config.bank_forks.slots_since_snapshot(),
-                &((0..=num_set_roots as u64 * add_root_interval as u64).collect_vec()[..])
+                &expected_slots_since_snapshot[num_old_slots..],
             );
         }
     }
@@ -842,26 +828,23 @@ mod tests {
     struct SnapshotTestConfig {
         accounts_dir: TempDir,
         snapshot_dir: TempDir,
-        snapshot_output_path: TempDir,
-        pub snapshot_config: SnapshotConfig,
-        pub bank_forks: BankForks,
+        _snapshot_output_path: TempDir,
+        snapshot_config: SnapshotConfig,
+        bank_forks: BankForks,
+        genesis_block_info: GenesisBlockInfo,
     }
 
     fn setup_snapshot_test(snapshot_interval: usize) -> SnapshotTestConfig {
         let accounts_dir = TempDir::new().unwrap();
         let snapshot_dir = TempDir::new().unwrap();
         let snapshot_output_path = TempDir::new().unwrap();
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
+        let genesis_block_info = create_genesis_block(10_000);
         let bank0 = Bank::new_with_paths(
-            &genesis_block,
+            &genesis_block_info.genesis_block,
             Some(accounts_dir.path().to_str().unwrap().to_string()),
         );
         bank0.freeze();
         let mut bank_forks = BankForks::new(0, bank0);
-
-        // We will call bank_forks.set_root() every `add_root_interval` banks,
-        // a `num_set_roots` number of times.
-        let num_set_roots = 10;
 
         let snapshot_config = SnapshotConfig::new(
             PathBuf::from(snapshot_dir.path()),
@@ -872,9 +855,10 @@ mod tests {
         SnapshotTestConfig {
             accounts_dir,
             snapshot_dir,
-            snapshot_output_path,
+            _snapshot_output_path: snapshot_output_path,
             snapshot_config,
             bank_forks,
+            genesis_block_info,
         }
     }
 }

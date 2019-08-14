@@ -124,6 +124,10 @@ impl<T: Serialize + Clone> StatusCache<T> {
         self.purge_roots();
     }
 
+    pub fn roots(&self) -> &HashSet<u64> {
+        &self.roots
+    }
+
     /// Insert a new signature for a specific slot.
     pub fn insert(&mut self, transaction_blockhash: &Hash, sig: &Signature, slot: Slot, res: T) {
         let sig_index: usize;
