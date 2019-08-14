@@ -18,6 +18,7 @@ solana-logger = { path = "../../logger", version = "0.18.0-pre1" }
 solana-metrics = { path = "../../metrics", version = "0.18.0-pre1" }
 solana-sdk = { path = "../../sdk", version = "0.18.0-pre1" }
 solana-vote-api = { path = "../vote_api", version = "0.18.0-pre1" }
+solana-config-api = { path = "../config_api", version = "0.18.0-pre1" }
 
 [lib]
 crate-type = ["lib"]

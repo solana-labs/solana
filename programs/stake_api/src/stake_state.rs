@@ -3,7 +3,7 @@
 //! * keep track of rewards
 //! * own mining pools
 
-use crate::id;
+use crate::{config::Config, id};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
@@ -56,9 +56,8 @@ pub struct Stake {
     pub stake: u64,         // stake amount activated
     pub activated: Epoch, // epoch the stake was activated, std::Epoch::MAX if is a bootstrap stake
     pub deactivated: Epoch, // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
+    pub config: Config,
 }
-
-pub const STAKE_WARMUP_RATE: f64 = 0.15;
 
 impl Default for Stake {
     fn default() -> Self {
@@ -68,6 +67,7 @@ impl Default for Stake {
             stake: 0,
             activated: 0,
             deactivated: std::u64::MAX,
+            config: Config::default(),
         }
     }
 }
@@ -109,7 +109,7 @@ impl Stake {
 
                         // portion of activating stake in this epoch I'm entitled to
                         effective_stake +=
-                            (weight * entry.effective as f64 * STAKE_WARMUP_RATE) as u64;
+                            (weight * entry.effective as f64 * self.config.warmup_rate) as u64;
 
                         if effective_stake >= self.stake {
                             effective_stake = self.stake;
@@ -210,12 +210,19 @@ impl Stake {
         }
     }
 
-    fn new(stake: u64, voter_pubkey: &Pubkey, vote_state: &VoteState, activated: Epoch) -> Self {
+    fn new(
+        stake: u64,
+        voter_pubkey: &Pubkey,
+        vote_state: &VoteState,
+        activated: Epoch,
+        config: &Config,
+    ) -> Self {
         Self {
             stake,
             activated,
             voter_pubkey: *voter_pubkey,
             credits_observed: vote_state.credits(),
+            config: *config,
             ..Stake::default()
         }
     }
@@ -231,6 +238,7 @@ pub trait StakeAccount {
         vote_account: &KeyedAccount,
         stake: u64,
         clock: &sysvar::clock::Clock,
+        config: &Config,
     ) -> Result<(), InstructionError>;
     fn deactivate_stake(
         &mut self,
@@ -259,6 +267,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         vote_account: &KeyedAccount,
         new_stake: u64,
         clock: &sysvar::clock::Clock,
+        config: &Config,
     ) -> Result<(), InstructionError> {
         if self.signer_key().is_none() {
             return Err(InstructionError::MissingRequiredSignature);
@@ -274,6 +283,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 vote_account.unsigned_key(),
                 &vote_account.state()?,
                 clock.epoch,
+                config,
             );
 
             self.set_state(&StakeState::Stake(stake))
@@ -381,10 +391,6 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
 }
 
-//find_min<'a, I>(vals: I) -> Option<&'a u32>
-//where
-//    I: Iterator<Item = &'a u32>,
-
 // utility function, used by runtime::Stakes, tests
 pub fn new_stake_history_entry<'a, I>(
     epoch: Epoch,
@@ -427,11 +433,6 @@ pub fn create_stake_account(
         .expect("set_state");
 
     stake_account
-}
-
-// utility function, used by Bank, tests, genesis
-pub fn create_rewards_pool() -> Account {
-    Account::new_data(std::u64::MAX, &StakeState::RewardsPool, &crate::id()).unwrap()
 }
 
 #[cfg(test)]
@@ -506,14 +507,19 @@ mod tests {
         }
 
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, 0, &clock),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, 0, &clock, &Config::default()),
             Err(InstructionError::MissingRequiredSignature)
         );
 
         // signed keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account, stake_lamports, &clock)
+            .delegate_stake(
+                &vote_keyed_account,
+                stake_lamports,
+                &clock,
+                &Config::default()
+            )
             .is_ok());
 
         // verify that delegate_stake() looks right, compare against hand-rolled
@@ -526,19 +532,30 @@ mod tests {
                 stake: stake_lamports,
                 activated: clock.epoch,
                 deactivated: std::u64::MAX,
+                config: Config::default()
             })
         );
         // verify that delegate_stake can't be called twice StakeState::default()
         // signed keyed account
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &clock),
+            stake_keyed_account.delegate_stake(
+                &vote_keyed_account,
+                stake_lamports,
+                &clock,
+                &Config::default()
+            ),
             Err(InstructionError::InvalidAccountData)
         );
 
         // verify can only stake up to account lamports
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports + 1, &clock),
+            stake_keyed_account.delegate_stake(
+                &vote_keyed_account,
+                stake_lamports + 1,
+                &clock,
+                &Config::default()
+            ),
             Err(InstructionError::InsufficientFunds)
         );
 
@@ -546,7 +563,7 @@ mod tests {
 
         stake_keyed_account.set_state(&stake_state).unwrap();
         assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account, 0, &clock)
+            .delegate_stake(&vote_keyed_account, 0, &clock, &Config::default())
             .is_err());
     }
 
@@ -608,7 +625,9 @@ mod tests {
                 break;
             }
             assert!(epoch < epochs); // should have warmed everything up by this time
-            assert!(delta as f64 / prev_total_effective_stake as f64 <= STAKE_WARMUP_RATE);
+            assert!(
+                delta as f64 / prev_total_effective_stake as f64 <= Config::default().warmup_rate
+            );
             prev_total_effective_stake = total_effective_stake;
         }
     }
@@ -651,7 +670,12 @@ mod tests {
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &clock),
+            stake_keyed_account.delegate_stake(
+                &vote_keyed_account,
+                stake_lamports,
+                &clock,
+                &Config::default()
+            ),
             Ok(())
         );
 
@@ -723,7 +747,12 @@ mod tests {
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &clock),
+            stake_keyed_account.delegate_stake(
+                &vote_keyed_account,
+                stake_lamports,
+                &clock,
+                &Config::default()
+            ),
             Ok(())
         );
 
@@ -810,7 +839,12 @@ mod tests {
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, stake_lamports, &future),
+            stake_keyed_account.delegate_stake(
+                &vote_keyed_account,
+                stake_lamports,
+                &future,
+                &Config::default()
+            ),
             Ok(())
         );
 
@@ -944,7 +978,12 @@ mod tests {
         rewards.validator_point_value = 100.0;
 
         let rewards_pool_pubkey = Pubkey::new_rand();
-        let mut rewards_pool_account = create_rewards_pool();
+        let mut rewards_pool_account = Account::new_data(
+            std::u64::MAX,
+            &StakeState::RewardsPool,
+            &crate::rewards_pools::id(),
+        )
+        .unwrap();
         let mut rewards_pool_keyed_account =
             KeyedAccount::new(&rewards_pool_pubkey, false, &mut rewards_pool_account);
 
@@ -972,7 +1011,12 @@ mod tests {
 
         // delegate the stake
         assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account, stake_lamports, &clock)
+            .delegate_stake(
+                &vote_keyed_account,
+                stake_lamports,
+                &clock,
+                &Config::default()
+            )
             .is_ok());
 
         let stake_history = create_stake_history_from_stakes(

@@ -2,12 +2,13 @@
 //! * initialize genesis with rewards pools
 //! * keep track of rewards
 //! * own mining pools
-
-use crate::stake_state::create_rewards_pool;
+use crate::stake_state::StakeState;
 use rand::{thread_rng, Rng};
-use solana_sdk::genesis_block::Builder;
-use solana_sdk::hash::{hash, Hash};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{
+    account::Account,
+    hash::{hash, Hash},
+    pubkey::Pubkey,
+};
 
 // base rewards pool ID
 const ID: [u8; 32] = [
@@ -20,16 +21,6 @@ solana_sdk::solana_name_id!(ID, "StakeRewards1111111111111111111111111111111");
 // to cut down on collisions for redemptions, we make multiple accounts
 pub const NUM_REWARDS_POOLS: usize = 256;
 
-pub fn genesis(mut builder: Builder) -> Builder {
-    let mut pubkey = id();
-
-    for _i in 0..NUM_REWARDS_POOLS {
-        builder = builder.rewards_pool(pubkey, create_rewards_pool());
-        pubkey = Pubkey::new(hash(pubkey.as_ref()).as_ref());
-    }
-    builder
-}
-
 pub fn random_id() -> Pubkey {
     let mut id = Hash::new(&ID);
 
@@ -40,24 +31,31 @@ pub fn random_id() -> Pubkey {
     Pubkey::new(id.as_ref())
 }
 
+pub fn genesis() -> Vec<(Pubkey, Account)> {
+    let mut accounts = Vec::with_capacity(NUM_REWARDS_POOLS);
+    let mut pubkey = id();
+
+    for _i in 0..NUM_REWARDS_POOLS {
+        accounts.push((
+            pubkey,
+            Account::new_data(std::u64::MAX, &StakeState::RewardsPool, &crate::id()).unwrap(),
+        ));
+        pubkey = Pubkey::new(hash(pubkey.as_ref()).as_ref());
+    }
+    accounts
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::genesis_block::Builder;
 
     #[test]
     fn test() {
-        let builder = Builder::new();
-
-        let genesis_block = genesis(builder).build();
+        let accounts = genesis();
 
         for _i in 0..NUM_REWARDS_POOLS {
             let id = random_id();
-            assert!(genesis_block
-                .rewards_pools
-                .iter()
-                .position(|x| x.0 == id)
-                .is_some());
+            assert!(accounts.iter().position(|x| x.0 == id).is_some());
         }
     }
 }
