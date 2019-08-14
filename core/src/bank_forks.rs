@@ -222,6 +222,10 @@ impl BankForks {
                 .skip(1);
             self.slots_since_snapshot.extend(new_rooted_path);
             self.slots_since_snapshot.push(root);
+            if self.slots_since_snapshot.len() > MAX_CACHE_ENTRIES {
+                let num_to_remove = self.slots_since_snapshot.len() - MAX_CACHE_ENTRIES;
+                self.slots_since_snapshot.drain(0..num_to_remove);
+            }
         }
 
         root_bank.squash();
@@ -801,48 +805,76 @@ mod tests {
     }
 
     #[test]
+    fn test_status_cache_roots_equals_slots_since_snapshot() {
+        solana_logger::setup();
+    }
+
+    #[test]
     fn test_slots_since_snapshot() {
         solana_logger::setup();
         for add_root_interval in 1..10 {
-            let (s, _r) = channel();
-            let accounts_dir = TempDir::new().unwrap();
-            let snapshot_dir = TempDir::new().unwrap();
-            let snapshot_output_path = TempDir::new().unwrap();
-            let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-            let bank0 = Bank::new_with_paths(
-                &genesis_block,
-                Some(accounts_dir.path().to_str().unwrap().to_string()),
-            );
-            bank0.freeze();
-            let mut bank_forks = BankForks::new(0, bank0);
-
-            // We will call bank_forks.set_root() every `add_root_interval` banks,
-            // a `num_set_roots` number of times.
+            let (snapshot_sender, snapshot_receiver) = channel();
             let num_set_roots = 10;
-
-            let snapshot_config = SnapshotConfig::new(
-                PathBuf::from(snapshot_dir.path()),
-                PathBuf::from(snapshot_output_path.path()),
-                add_root_interval * num_set_roots * 2,
-            );
-            bank_forks.set_snapshot_config(snapshot_config.clone());
-            let mut current_bank = bank_forks[0].clone();
-            let sender = Some(s);
+            let mut snapshot_test_config =
+                setup_snapshot_test(add_root_interval * num_set_roots * 2);
+            let mut current_bank = snapshot_test_config.bank_forks[0].clone();
+            let snapshot_sender = Some(snapshot_sender);
             for _ in 0..num_set_roots {
                 for _ in 0..add_root_interval {
                     let new_slot = current_bank.slot() + 1;
                     let new_bank =
                         Bank::new_from_parent(&current_bank, &Pubkey::default(), new_slot);
-                    bank_forks.insert(new_bank);
-                    current_bank = bank_forks[new_slot].clone();
+                    snapshot_test_config.bank_forks.insert(new_bank);
+                    current_bank = snapshot_test_config.bank_forks[new_slot].clone();
                 }
-                bank_forks.set_root(current_bank.slot(), &sender);
+                snapshot_test_config
+                    .bank_forks
+                    .set_root(current_bank.slot(), &snapshot_sender);
             }
 
             assert_eq!(
-                bank_forks.slots_since_snapshot(),
+                snapshot_test_config.bank_forks.slots_since_snapshot(),
                 &((0..=num_set_roots as u64 * add_root_interval as u64).collect_vec()[..])
             );
+        }
+    }
+
+    struct SnapshotTestConfig {
+        accounts_dir: TempDir,
+        snapshot_dir: TempDir,
+        snapshot_output_path: TempDir,
+        pub snapshot_config: SnapshotConfig,
+        pub bank_forks: BankForks,
+    }
+
+    fn setup_snapshot_test(snapshot_interval: usize) -> SnapshotTestConfig {
+        let accounts_dir = TempDir::new().unwrap();
+        let snapshot_dir = TempDir::new().unwrap();
+        let snapshot_output_path = TempDir::new().unwrap();
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
+        let bank0 = Bank::new_with_paths(
+            &genesis_block,
+            Some(accounts_dir.path().to_str().unwrap().to_string()),
+        );
+        bank0.freeze();
+        let mut bank_forks = BankForks::new(0, bank0);
+
+        // We will call bank_forks.set_root() every `add_root_interval` banks,
+        // a `num_set_roots` number of times.
+        let num_set_roots = 10;
+
+        let snapshot_config = SnapshotConfig::new(
+            PathBuf::from(snapshot_dir.path()),
+            PathBuf::from(snapshot_output_path.path()),
+            snapshot_interval,
+        );
+        bank_forks.set_snapshot_config(snapshot_config.clone());
+        SnapshotTestConfig {
+            accounts_dir,
+            snapshot_dir,
+            snapshot_output_path,
+            snapshot_config,
+            bank_forks,
         }
     }
 }
