@@ -29,20 +29,6 @@ pub fn staked_nodes(bank: &Bank) -> HashMap<Pubkey, u64> {
     to_staked_nodes(to_vote_states(bank.vote_accounts().into_iter()))
 }
 
-/// At the specified epoch, collect the node account balance and vote states for nodes that
-/// have non-zero balance in their corresponding staking accounts
-pub fn vote_account_stakes_at_epoch(
-    bank: &Bank,
-    epoch_height: u64,
-) -> Option<HashMap<Pubkey, u64>> {
-    bank.epoch_vote_accounts(epoch_height).map(|accounts| {
-        accounts
-            .iter()
-            .map(|(id, (stake, _))| (*id, *stake))
-            .collect()
-    })
-}
-
 /// At the specified epoch, collect the delegate account balance and vote states for delegates
 /// that have non-zero balance in any of their managed staking accounts
 pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
@@ -112,10 +98,7 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::genesis_utils::{
-        create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
-        BOOTSTRAP_LEADER_LAMPORTS,
-    };
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -128,39 +111,6 @@ pub(crate) mod tests {
 
     fn new_from_parent(parent: &Arc<Bank>, slot: u64) -> Bank {
         Bank::new_from_parent(parent, &Pubkey::default(), slot)
-    }
-
-    #[test]
-    fn test_vote_account_stakes_at_epoch() {
-        let GenesisBlockInfo {
-            genesis_block,
-            voting_keypair,
-            ..
-        } = create_genesis_block_with_leader(1, &Pubkey::new_rand(), BOOTSTRAP_LEADER_LAMPORTS);
-
-        let bank = Bank::new(&genesis_block);
-
-        // Epoch doesn't exist
-        let mut expected = HashMap::new();
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 10), None);
-
-        let leader_stake = Stake {
-            stake: BOOTSTRAP_LEADER_LAMPORTS,
-            activated: std::u64::MAX, // exempt from warmup
-            ..Stake::default()
-        };
-
-        // First epoch has the bootstrap leader
-        expected.insert(voting_keypair.pubkey(), leader_stake.stake(0, None));
-
-        // henceforth, verify that we have snapshots of stake at epoch 0
-        let expected = Some(expected);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
-
-        // Second epoch carries same information
-        let bank = new_from_parent(&Arc::new(bank), 1);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
-        assert_eq!(vote_account_stakes_at_epoch(&bank, 1), expected);
     }
 
     pub(crate) fn setup_vote_and_stake_accounts(
