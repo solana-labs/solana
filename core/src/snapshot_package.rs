@@ -1,9 +1,5 @@
 use crate::result::{Error, Result};
 use crate::service::Service;
-<<<<<<< HEAD
-use bzip2::write::BzEncoder;
-=======
->>>>>>> Change tar to use shell command
 use solana_runtime::accounts_db::AccountStorageEntry;
 use std::fs;
 use std::io::{Error as IOError, ErrorKind};

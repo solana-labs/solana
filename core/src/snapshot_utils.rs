@@ -13,6 +13,7 @@ use std::fs;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
+use tar::Archive;
 
 const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 
