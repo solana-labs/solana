@@ -19,6 +19,7 @@ solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre1" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre1" }
 solana-storage-program = { path = "../programs/storage_program", version = "0.18.0-pre1" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre1" }
+symlink = "0.1.0"
 
 [dev-dependencies]
 serial_test = "0.2.0"
