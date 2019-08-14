@@ -1,19 +1,14 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
-use crate::result::{Error, Result};
+use crate::result::Result;
 use crate::snapshot_package::SnapshotPackageSender;
-use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use crate::snapshot_utils;
-use crate::snapshot_utils::untar_snapshot_in;
-use fs_extra::dir::CopyOptions;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::MAX_CACHE_ENTRIES;
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::io::{Error as IOError, ErrorKind};
 use std::ops::Index;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -164,18 +159,29 @@ impl BankForks {
         self.banks.get(&bank_slot)
     }
 
-    pub fn new_from_banks(initial_banks: &[Arc<Bank>], root: u64) -> Self {
+    pub fn new_from_banks(initial_forks: &[Arc<Bank>], rooted_path: Vec<u64>) -> Self {
         let mut banks = HashMap::new();
-        let working_bank = initial_banks[0].clone();
-        for bank in initial_banks {
+        let working_bank = initial_forks[0].clone();
+
+        // Iterate through the heads of all the different forks
+        for bank in initial_forks {
             banks.insert(bank.slot(), bank.clone());
+            let parents = bank.parents();
+            for parent in parents {
+                if banks.contains_key(&parent.slot()) {
+                    // All ancestors have already been inserted by another fork
+                    break;
+                }
+                banks.insert(parent.slot(), parent.clone());
+            }
         }
+
         Self {
-            root,
+            root: *rooted_path.last().unwrap(),
             banks,
             working_bank,
             snapshot_config: None,
-            slots_since_snapshot: vec![],
+            slots_since_snapshot: rooted_path,
             confidence: HashMap::new(),
         }
     }
@@ -367,54 +373,6 @@ impl BankForks {
     pub fn snapshot_config(&self) -> &Option<SnapshotConfig> {
         &self.snapshot_config
     }
-
-    pub fn load_from_snapshot<P: AsRef<Path>>(
-        account_paths: String,
-        snapshot_config: &SnapshotConfig,
-        snapshot_tar: P,
-    ) -> Result<Self> {
-        // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
-        let unpack_dir = tempfile::tempdir_in(snapshot_config.snapshot_path())?;
-        untar_snapshot_in(&snapshot_tar, &unpack_dir)?;
-
-        let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
-        let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
-        let snapshot_paths = snapshot_utils::get_snapshot_paths(&unpacked_snapshots_dir);
-        let bank = snapshot_utils::bank_from_snapshots(
-            account_paths,
-            &snapshot_paths,
-            unpacked_accounts_dir,
-        )?;
-
-        let bank = Arc::new(bank);
-        // Move the unpacked snapshots into `snapshot_config.snapshot_path()`
-        let dir_files = fs::read_dir(unpacked_snapshots_dir).expect("Invalid snapshot path");
-        let paths: Vec<PathBuf> = dir_files
-            .filter_map(|entry| entry.ok().map(|e| e.path()))
-            .collect();
-        let mut copy_options = CopyOptions::new();
-        copy_options.overwrite = true;
-        fs_extra::move_items(&paths, snapshot_config.snapshot_path(), &copy_options)?;
-
-        let mut banks = HashMap::new();
-        banks.insert(bank.slot(), bank.clone());
-        let root = bank.slot();
-        let snapshot_paths = snapshot_utils::get_snapshot_paths(&snapshot_config.snapshot_path);
-        if snapshot_paths.is_empty() {
-            return Err(Error::IO(IOError::new(
-                ErrorKind::Other,
-                "no snapshots found",
-            )));
-        }
-        Ok(BankForks {
-            banks,
-            working_bank: bank,
-            root,
-            snapshot_config: None,
-            slots_since_snapshot: vec![snapshot_paths.last().unwrap().slot],
-            confidence: HashMap::new(),
-        })
-    }
 }
 
 #[cfg(test)]
@@ -429,6 +387,7 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
+    use std::fs;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use tempfile::TempDir;
@@ -541,35 +500,35 @@ mod tests {
         );
     }
 
-    fn restore_from_snapshot(bank_forks: BankForks, account_paths: String, last_slot: u64) {
-        let (snapshot_path, snapshot_package_output_path) = bank_forks
+    fn restore_from_snapshot(old_bank_forks: BankForks, account_paths: String) {
+        let (snapshot_path, snapshot_package_output_path) = old_bank_forks
             .snapshot_config
             .as_ref()
             .map(|c| (&c.snapshot_path, &c.snapshot_package_output_path))
             .unwrap();
 
-        let new = BankForks::load_from_snapshot(
+        let deserialized_bank = snapshot_utils::bank_from_archive(
             account_paths,
-            bank_forks.snapshot_config.as_ref().unwrap(),
+            old_bank_forks.snapshot_config.as_ref().unwrap(),
             snapshot_utils::get_snapshot_tar_path(snapshot_package_output_path),
         )
         .unwrap();
 
-        for (slot, _) in new.banks.iter() {
-            if *slot > 0 {
-                let bank = bank_forks.banks.get(slot).unwrap().clone();
-                let new_bank = new.banks.get(slot).unwrap();
-                bank.compare_bank(&new_bank);
-            }
-        }
+        let bank = old_bank_forks
+            .banks
+            .get(&deserialized_bank.slot())
+            .unwrap()
+            .clone();
+        bank.compare_bank(&deserialized_bank);
 
-        assert_eq!(new.working_bank().slot(), last_slot);
-        for (slot, _) in new.banks.iter() {
-            snapshot_utils::remove_snapshot(*slot, snapshot_path).unwrap();
+        let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&snapshot_path);
+
+        for p in slot_snapshot_paths {
+            snapshot_utils::remove_snapshot(p.slot, &snapshot_path).unwrap();
         }
     }
 
-    // creates banks upto "last_slot" and runs the input function `f` on each bank created
+    // creates banks up to "last_slot" and runs the input function `f` on each bank created
     // also marks each bank as root and generates snapshots
     // finally tries to restore from the last bank's snapshot and compares the restored bank to the
     // `last_slot` bank
@@ -627,7 +586,6 @@ mod tests {
         restore_from_snapshot(
             bank_forks,
             accounts_dir.path().to_str().unwrap().to_string(),
-            last_slot,
         );
     }
 

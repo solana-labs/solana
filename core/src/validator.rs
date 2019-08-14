@@ -355,30 +355,28 @@ fn get_bank_forks(
             // Check that the snapshot tar exists, try to load the snapshot if it does
             if tar.exists() {
                 // Fail hard here if snapshot fails to load, don't silently continue
-                let bank_forks = BankForks::load_from_snapshot(
-                    //&genesis_block,
+                let deserialized_bank = snapshot_utils::bank_from_archive(
                     account_paths
                         .clone()
                         .expect("Account paths not present when booting from snapshot"),
                     snapshot_config,
-                    tar,
+                    &tar,
                 )
                 .expect("Load from snapshot failed");
 
-                let bank = &bank_forks.working_bank();
-                let fork_info = BankForksInfo {
-                    bank_slot: bank.slot(),
-                    entry_height: bank.tick_height(),
-                };
-                result = Some((
-                    bank_forks,
-                    vec![fork_info],
-                    LeaderScheduleCache::new_from_bank(bank),
-                ));
+                result = Some(
+                    blocktree_processor::process_blocktree_from_root(
+                        blocktree,
+                        Arc::new(deserialized_bank),
+                        verify_ledger,
+                        dev_halt_at_slot,
+                    )
+                    .expect("processing blocktree after loading snapshot failed"),
+                );
             }
         }
 
-        // If loading from a snapshot failed/snapshot didn't exist
+        // If a snapshot doesn't exist
         if result.is_none() {
             result = Some(
                 blocktree_processor::process_blocktree(
