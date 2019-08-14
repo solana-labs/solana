@@ -119,7 +119,11 @@ impl SnapshotPackagerService {
     }
 
     fn run(snapshot_receiver: &SnapshotPackageReceiver) -> Result<()> {
-        let snapshot_package = snapshot_receiver.recv_timeout(Duration::from_secs(1))?;
+        let mut snapshot_package = snapshot_receiver.recv_timeout(Duration::from_secs(1))?;
+        // Only package the latest
+        while let Ok(new_snapshot_package) = snapshot_receiver.recv() {
+            snapshot_package = new_snapshot_package;
+        }
         Self::package_snapshots(&snapshot_package)?;
         Ok(())
     }

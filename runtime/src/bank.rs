@@ -45,7 +45,7 @@ use solana_sdk::{
     timing::{duration_as_ns, get_segment_from_slot, Epoch, Slot, MAX_RECENT_BLOCKHASHES},
     transaction::{Result, Transaction, TransactionError},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufReader, Cursor, Error as IOError, Read};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -124,13 +124,17 @@ impl Serialize for BankRc {
 pub struct StatusCacheRc {
     /// where all the Accounts are stored
     /// A cache of signature statuses
-    status_cache: Arc<RwLock<BankStatusCache>>,
+    pub status_cache: Arc<RwLock<BankStatusCache>>,
 }
 
 impl StatusCacheRc {
     pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<Result<()>>> {
         let sc = self.status_cache.read().unwrap();
         sc.slot_deltas(slots)
+    }
+
+    pub fn roots(&self) -> HashSet<u64> {
+        self.status_cache.read().unwrap().roots().clone()
     }
 
     pub fn append(&self, slot_deltas: &[SlotDelta<Result<()>>]) {
