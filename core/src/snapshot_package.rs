@@ -104,7 +104,6 @@ impl SnapshotPackagerService {
         }
 
         // Tar the staging directory into the archive `temp_tar_gz`
-        let s = staging_dir.path().to_str().unwrap().to_string();
         let temp_tar_gz = tempfile::Builder::new()
             .prefix("new_state")
             .suffix(".tar.bz2")
@@ -113,7 +112,7 @@ impl SnapshotPackagerService {
         let mut args = vec!["jcfhS"];
         args.push(temp_tar_path.to_str().unwrap());
         args.push("-C");
-        args.push(&s);
+        args.push(staging_dir.path().to_str().unwrap());
         args.push(TAR_ACCOUNTS_DIR);
         args.push(TAR_SNAPSHOTS_DIR);
 
@@ -126,11 +125,9 @@ impl SnapshotPackagerService {
             )));
         }
 
-        println!("args: {:?}, temp_dir: {:?}", args, staging_dir.into_path());
         // Once everything is successful, overwrite the previous tarball so that other validators
         // can fetch this newly packaged snapshot
         let _ = fs::remove_file(&snapshot_package.tar_output_file);
-        println!("hardlinking");
         fs::hard_link(&temp_tar_path, &snapshot_package.tar_output_file)?;
         Ok(())
     }
@@ -207,7 +204,6 @@ mod tests {
         }
 
         // Create a packageable snapshot
-        println!("{:?}", temp_dir.into_path());
         let output_tar_path = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
         let snapshot_package = SnapshotPackage::new(
             link_snapshots_dir,

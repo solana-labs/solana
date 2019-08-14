@@ -275,17 +275,11 @@ pub mod tests {
         R: AsRef<Path>,
     {
         let temp_dir = TempDir::new().unwrap();
-        let unpack_dir = temp_dir.path().to_path_buf();
+        let unpack_dir = temp_dir.path();
         untar_snapshot_in(snapshot_tar, &unpack_dir).unwrap();
-        temp_dir.into_path();
 
         // Check snapshots are the same
         let unpacked_snapshots = unpack_dir.join(&TAR_SNAPSHOTS_DIR);
-        println!(
-            "snapshots to verify: {:?}, unpacked snapshots: {:?}",
-            snapshots_to_verify.as_ref(),
-            unpacked_snapshots,
-        );
         assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
         // Check the account entries are the same
