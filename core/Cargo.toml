@@ -44,7 +44,6 @@ rand = "0.6.5"
 rand_chacha = "0.1.1"
 rayon = "1.1.0"
 reqwest = "0.9.19"
-rocksdb = "0.11.0"
 serde = "1.0.98"
 serde_derive = "1.0.98"
 serde_json = "1.0.40"
@@ -82,6 +81,13 @@ untrusted = "0.7.0"
 reed-solomon-erasure = { version = "3.1.1", features = ["pure-rust"] }
 [target.'cfg(not(windows))'.dependencies]
 reed-solomon-erasure = "3.1.1"
+
+[dependencies.rocksdb]
+# Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
+# when also using the bzip2 crate
+version = "0.11.0"
+default-features = false
+features = ["lz4"]
 
 [dev-dependencies]
 hex-literal = "0.2.0"
