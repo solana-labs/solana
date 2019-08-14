@@ -4,7 +4,7 @@ use solana_sdk::{
     genesis_block::{Builder, GenesisBlock},
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
-    system_program,
+    system_program::{self, solana_system_program},
 };
 use solana_stake_api;
 use solana_vote_api::vote_state;
@@ -68,6 +68,7 @@ pub fn create_genesis_block_with_leader(
         ])
         // Bare minimum program set
         .native_instruction_processors(&[
+            solana_system_program(),
             solana_bpf_loader_program!(),
             solana_vote_program!(),
             solana_stake_program!(),

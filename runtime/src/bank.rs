@@ -613,12 +613,6 @@ impl Bank {
 
         self.inflation = genesis_block.inflation.clone();
 
-        // Add native programs mandatory for the MessageProcessor to function
-        self.register_native_instruction_processor(
-            "solana_system_program",
-            &solana_sdk::system_program::id(),
-        );
-
         // Add additional native programs specified in the genesis block
         for (name, program_id) in &genesis_block.native_instruction_processors {
             self.register_native_instruction_processor(name, program_id);
