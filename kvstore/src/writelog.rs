@@ -109,7 +109,7 @@ trait LogWriter: std::fmt::Debug + Write + Send + Sync {
 /// Holds actual logging related state
 #[derive(Debug)]
 struct Logger {
-    writer: Box<LogWriter>,
+    writer: Box<dyn LogWriter>,
 }
 
 impl Logger {

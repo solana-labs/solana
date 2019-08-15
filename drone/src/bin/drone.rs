@@ -7,7 +7,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-fn main() -> Result<(), Box<error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_filter("solana=info");
     solana_metrics::set_panic_hook("drone");
     let matches = App::new(crate_name!())

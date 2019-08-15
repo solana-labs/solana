@@ -1294,7 +1294,12 @@ mod tests {
             ];
 
             let mut results = vec![Ok(()), Ok(())];
-            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder);
+            let _ = BankingStage::record_transactions(
+                bank.slot(),
+                &transactions,
+                &results,
+                &poh_recorder,
+            );
             let (_, entries) = entry_receiver.recv().unwrap();
             assert_eq!(entries[0].0.transactions.len(), transactions.len());
 

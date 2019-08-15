@@ -78,7 +78,7 @@ impl Disk {
 }
 
 impl Mapper for Disk {
-    fn make_table(&self, kind: Kind, func: &mut FnMut(Writer, Writer)) -> Result<SSTable> {
+    fn make_table(&self, kind: Kind, func: &mut dyn FnMut(Writer, Writer)) -> Result<SSTable> {
         let storage = self.choose_storage();
 
         let id = next_id(kind);
