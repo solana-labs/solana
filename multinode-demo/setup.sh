@@ -34,5 +34,5 @@ $solana_genesis "${args[@]}"
 (
   cd "$SOLANA_CONFIG_DIR"/bootstrap-leader
   set -x
-  tar zcvfS genesis.tgz genesis.bin rocksdb
+  tar jcvfS genesis.tar.bz2 genesis.bin rocksdb
 )

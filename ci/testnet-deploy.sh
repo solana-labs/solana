@@ -90,7 +90,7 @@ Deploys a CD testnet
                         - Attempt to generate a TLS certificate using this DNS name
    --fullnode-additional-disk-size-gb [number]
                         - Size of additional disk in GB for all fullnodes
-   --no-snapshot
+   --no-snapshot-fetch
                         - If set, disables booting validators from a snapshot
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
@@ -137,7 +137,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --machine-type* ]]; then # Bypass quoted long args for GPUs
       shortArgs+=("$1")
       shift
-    elif [[ $1 = --no-snapshot ]]; then
+    elif [[ $1 = --no-snapshot-fetch ]]; then
       maybeNoSnapshot="$1"
       shift 1
     else

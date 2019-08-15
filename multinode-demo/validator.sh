@@ -41,10 +41,6 @@ label=
 identity_keypair_path=
 voting_keypair_path=
 no_restart=0
-# TODO: Enable boot_from_snapshot when snapshots work
-#boot_from_snapshot=1
-boot_from_snapshot=0
-reset_ledger=0
 gossip_entrypoint=
 ledger_dir=
 
@@ -56,9 +52,6 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --no-restart ]]; then
       no_restart=1
-      shift
-    elif [[ $1 = --no-snapshot ]]; then
-      boot_from_snapshot=0
       shift
     elif [[ $1 = --poll-for-new-genesis-block ]]; then
       poll_for_new_genesis_block=1
@@ -91,6 +84,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --node-lamports ]]; then
       node_lamports="$2"
       shift 2
+    elif [[ $1 = --no-snapshot-fetch ]]; then
+      args+=("$1")
+      shift
     elif [[ $1 = --no-voting ]]; then
       args+=("$1")
       shift
@@ -114,9 +110,6 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --no-airdrop ]]; then
       airdrops_enabled=0
-      shift
-    elif [[ $1 = --reset-ledger ]]; then
-      reset_ledger=1
       shift
     elif [[ $1 = --ledger ]]; then
       ledger_dir=$2
@@ -187,14 +180,10 @@ if ((airdrops_enabled)); then
   default_arg --rpc-drone-address "$drone_address"
 fi
 
-accounts_dir="$ledger_dir"/accounts
-snapshot_dir="$ledger_dir"/snapshots
-
 default_arg --identity "$identity_keypair_path"
 default_arg --voting-keypair "$voting_keypair_path"
 default_arg --storage-keypair "$storage_keypair_path"
 default_arg --ledger "$ledger_dir"
-default_arg --accounts "$accounts_dir"
 #default_arg --snapshot-interval-slots 100
 
 if [[ -n $SOLANA_CUDA ]]; then
@@ -213,14 +202,14 @@ new_genesis_block() {
     return
   fi
 
-  rm -f "$ledger_dir"/new-genesis.tgz
+  rm -f "$ledger_dir"/new-genesis.tar.bz2
   (
     set -x
-    curl -f "$rpc_url"/genesis.tgz -o "$ledger_dir"/new-genesis.tgz
+    curl -f "$rpc_url"/genesis.tar.bz2 -o "$ledger_dir"/new-genesis.tar.bz2
   ) || {
     echo "Error: failed to fetch new genesis ledger"
   }
-  ! diff -q "$ledger_dir"/new-genesis.tgz "$ledger_dir"/genesis.tgz >/dev/null 2>&1
+  ! diff -q "$ledger_dir"/new-genesis.tar.bz2 "$ledger_dir"/genesis.tar.bz2 >/dev/null 2>&1
 }
 
 set -e
@@ -244,15 +233,6 @@ kill_node_and_exit() {
   exit
 }
 trap 'kill_node_and_exit' INT TERM ERR
-
-if ((reset_ledger)); then
-  echo "Resetting ledger..."
-  (
-    set -x
-    rm -rf "$ledger_dir"
-  )
-fi
-
 
 wallet() {
   (
@@ -301,48 +281,6 @@ while true; do
     )
   fi
 
-  if [[ ! -f "$ledger_dir"/.genesis ]]; then
-      echo "Fetching ledger from $rpc_url/genesis.tgz..."
-      SECONDS=
-      mkdir -p "$ledger_dir"
-      while ! curl -f "$rpc_url"/genesis.tgz -o "$ledger_dir"/genesis.tgz; do
-        echo "Genesis ledger fetch failed"
-        sleep 5
-      done
-      echo "Fetched genesis ledger in $SECONDS seconds"
-
-      (
-        set -x
-        cd "$ledger_dir"
-        tar -zxf genesis.tgz
-        touch .genesis
-      )
-
-      (
-        if ((boot_from_snapshot)); then
-          SECONDS=
-
-          echo "Fetching state snapshot $rpc_url/snapshot.tgz..."
-          mkdir -p "$snapshot_dir"
-          if ! curl -f "$rpc_url"/snapshot.tgz -o "$snapshot_dir"/snapshot.tgz; then
-            echo "State snapshot fetch failed"
-            rm -f "$snapshot_dir"/snapshot.tgz
-            exit 0  # None fatal
-          fi
-          echo "Fetched snapshot in $SECONDS seconds"
-
-          SECONDS=
-          (
-            set -x
-            cd "$snapshot_dir"
-            tar -zxf snapshot.tgz
-            rm snapshot.tgz
-          )
-          echo "Extracted snapshot in $SECONDS seconds"
-        fi
-      )
-  fi
-
   [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
   [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
   [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
@@ -360,8 +298,6 @@ identity pubkey: $identity_pubkey
 vote pubkey: $vote_pubkey
 storage pubkey: $storage_pubkey
 ledger: $ledger_dir
-accounts: $accounts_dir
-snapshots: $snapshot_dir
 ========================================================================
 EOF
 

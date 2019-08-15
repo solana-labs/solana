@@ -102,9 +102,9 @@ extern crate solana_metrics;
 #[macro_use]
 extern crate matches;
 
+extern crate bzip2;
 extern crate crossbeam_channel;
 extern crate dir_diff;
-extern crate flate2;
 extern crate fs_extra;
 extern crate tar;
 extern crate tempfile;
