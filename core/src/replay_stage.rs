@@ -586,7 +586,7 @@ impl ReplayStage {
             })
             .filter(|b| {
                 let has_voted = tower.has_voted(b.slot());
-                trace!("bank is has_voted: {} {}", b.slot(), has_voted);
+                trace!("bank has_voted: {} {}", b.slot(), has_voted);
                 !has_voted
             })
             .filter(|b| {

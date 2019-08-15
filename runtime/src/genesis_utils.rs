@@ -6,7 +6,7 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     system_program,
 };
-use solana_stake_api;
+use solana_stake_api::stake_state;
 use solana_vote_api::vote_state;
 
 // The default stake placed with the bootstrap leader
@@ -32,12 +32,17 @@ pub fn create_genesis_block_with_leader(
     let voting_keypair = Keypair::new();
     let staking_keypair = Keypair::new();
 
-    // TODO: de-duplicate the stake once passive staking
-    //  is fully implemented
-    let (vote_account, vote_state) = vote_state::create_bootstrap_leader_account(
+    // TODO: de-duplicate the stake... passive staking is fully implemented
+    let vote_account = vote_state::create_account(
         &voting_keypair.pubkey(),
         &bootstrap_leader_pubkey,
         0,
+        bootstrap_leader_stake_lamports,
+    );
+
+    let stake_account = stake_state::create_account(
+        &voting_keypair.pubkey(),
+        &vote_account,
         bootstrap_leader_stake_lamports,
     );
 
@@ -57,14 +62,7 @@ pub fn create_genesis_block_with_leader(
             // where votes go to
             (voting_keypair.pubkey(), vote_account),
             // passive bootstrap leader stake, duplicates above temporarily
-            (
-                staking_keypair.pubkey(),
-                solana_stake_api::stake_state::create_stake_account(
-                    &voting_keypair.pubkey(),
-                    &vote_state,
-                    bootstrap_leader_stake_lamports,
-                ),
-            ),
+            (staking_keypair.pubkey(), stake_account),
         ])
         // Bare minimum program set
         .native_instruction_processors(&[
