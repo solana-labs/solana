@@ -1,3 +1,4 @@
+pub mod cluster_tests;
 pub mod local_cluster;
 
 #[macro_use]
