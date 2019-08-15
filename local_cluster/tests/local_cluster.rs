@@ -348,17 +348,18 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        // Remove any snapshots made so far so that we know then next snapshot will include all of the
-        // balances
-        trace!("Clearing tar file");
-        let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
-        let _ = fs::remove_file(tar);
+        // Get slot after which this was generated
+        let client = cluster
+            .get_validator_client(&cluster.entry_point_info.id)
+            .unwrap();
+        let last_slot = client.get_slot().expect("Couldn't get slot");
 
-        // Wait for snapshot to be made
+        // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
+        // must include the transactions just pushed
         let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
         trace!("Waiting for tar to be generated");
         loop {
-            if tar.exists() {
+            if tar.exists() && snapshot_utils::bank_slot_from_archive(&tar).unwrap() >= last_slot {
                 break;
             }
             sleep(Duration::from_millis(100));
