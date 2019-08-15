@@ -11,6 +11,13 @@ software, which may feature breaking changes. Generally, the edge testnet tracks
 the tip of master, beta tracks the latest tagged minor release, and stable
 tracks the most stable tagged release.
 
+### Get Testnet Version
+You can submit a JSON-RPC request to see the specific version of the cluster.
+```bash
+$ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' edge.testnet.solana.com:8899
+{"jsonrpc":"2.0","result":{"solana-core":"0.18.0-pre1"},"id":1}
+```
+
 ## Using a Different Testnet
 This guide is written in the context of testnet.solana.com, our most stable
 cluster. To participate in another testnet, you will need to modify some of the
@@ -41,6 +48,16 @@ different testnet. For instance:
 ```bash
 $ solana-wallet --url http://beta.testnet.solana.com:8899 balance
 ```
+
+Solana-wallet includes `get` and `set` configuration commands to automatically
+set the `--url` argument for future wallet commands.
+For example:
+```bash
+$ solana-wallet set --url http://beta.testnet.solana.com:8899
+$ solana-wallet balance # Same result as command above
+```
+(You can always override the set configuration by explicitly passing the `--url`
+argument with a command.)
 
 Solana-gossip and solana-validator commands already require an explicit
 `--entrypoint` argument. Simply replace testnet.solana.com in the examples with

@@ -23,7 +23,7 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
 ## Check Vote Activity
-The vote pubkey for the validator can also be found by running:
+The vote pubkey for the validator can be found by running:
 ```bash
 $ solana-keygen pubkey ~/validator-vote-keypair.json
 ```
@@ -38,7 +38,7 @@ $ solana-wallet show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 Your lamport balance should decrease by the transaction fee amount as your
 validator submits votes, and increase after serving as the leader:
 ```bash
-$ solana-wallet --keypair ~/validator-keypair.json
+$ solana-wallet balance
 ```
 
 ## Check Slot Number
