@@ -241,7 +241,7 @@ fn verify_and_process_entries(
         return Err(BlocktreeProcessorError::LedgerVerificationFailed);
     }
 
-    process_entries(&bank, &entries).map_err(|err| {
+    process_entries(&bank, &entries, true).map_err(|err| {
         warn!(
             "Failed to process entries for slot {}: {:?}",
             bank.slot(),
