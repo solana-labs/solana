@@ -403,7 +403,7 @@ fn network_run_pull(
                     .get(&to)
                     .map(|node| {
                         let mut rsp = vec![];
-                        rsp.append(&mut node.lock().unwrap().process_pull_request(
+                        rsp.append(&mut node.lock().unwrap().process_pull_requests(
                             caller_info.clone(),
                             &filters,
                             now,

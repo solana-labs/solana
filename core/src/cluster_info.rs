@@ -152,8 +152,9 @@ impl Signable for PruneData {
 }
 
 struct PullData {
+    pub from_addr: SocketAddr,
     pub caller: CrdsValue,
-    pub filters: Vec<(SocketAddr, CrdsFilter)>,
+    pub filter: CrdsFilter,
 }
 
 // TODO These messages should go through the gpu pipeline for spam filtering
@@ -1108,10 +1109,10 @@ impl ClusterInfo {
         blocktree: Option<&Arc<Blocktree>>,
         stakes: &HashMap<Pubkey, u64>,
         blobs: &[SharedBlob],
-    ) -> Vec<SharedBlob> {
+        response_sender: &BlobSender,
+    ) {
         // iter over the blobs, collect pulls separately and process everything else
-        let mut gossip_pulls: HashMap<Pubkey, PullData> = HashMap::new();
-        let mut responses = Vec::new();
+        let mut gossip_pull_data: Vec<PullData> = vec![];
         blobs.iter().for_each(|blob| {
             let blob = blob.read().unwrap();
             let from_addr = blob.meta.addr();
@@ -1131,14 +1132,11 @@ impl ClusterInfo {
                                 warn!("PullRequest ignored, I'm talking to myself");
                                 inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
                             } else {
-                                gossip_pulls
-                                    .entry(caller.pubkey())
-                                    .or_insert(PullData {
-                                        caller,
-                                        filters: vec![],
-                                    })
-                                    .filters
-                                    .push((from_addr, filter));
+                                gossip_pull_data.push(PullData {
+                                    from_addr,
+                                    caller,
+                                    filter,
+                                });
                             }
                         }
                     }
@@ -1166,7 +1164,8 @@ impl ClusterInfo {
                             }
                             ret
                         });
-                        responses.append(&mut Self::handle_push_message(me, &from, data, stakes))
+                        let _ignore_disconnect = response_sender
+                            .send(Self::handle_push_message(me, &from, data, stakes));
                     }
                     Protocol::PruneMessage(from, data) => {
                         if data.verify() {
@@ -1194,49 +1193,48 @@ impl ClusterInfo {
                             inc_new_counter_debug!("cluster_info-gossip_prune_msg_verify_fail", 1);
                         }
                     }
-                    _ => responses
-                        .append(&mut Self::handle_repair(me, &from_addr, blocktree, request)),
+                    _ => {
+                        let _ignore_disconnect = response_sender
+                            .send(Self::handle_repair(me, &from_addr, blocktree, request));
+                    }
                 })
         });
         // process the collected pulls together
-        responses.append(&mut Self::handle_pull_requests(me, &mut gossip_pulls));
-        responses
+        let _ignore_disconnect =
+            response_sender.send(Self::handle_pull_requests(me, gossip_pull_data));
     }
 
-    fn handle_pull_requests(
-        me: &Arc<RwLock<Self>>,
-        requests: &mut HashMap<Pubkey, PullData>,
-    ) -> Vec<SharedBlob> {
-        requests
-            .drain()
-            .flat_map(|(_, pull_data)| {
-                let self_id = me.read().unwrap().id();
-                let now = timestamp();
-                let from_addr = pull_data.filters.last().unwrap().0;
-                let pull_response = me.write().unwrap().gossip.process_pull_request(
-                    pull_data.caller,
-                    &pull_data
-                        .filters
-                        .into_iter()
-                        .map(|(_, filter)| filter)
-                        .collect::<Vec<_>>(),
-                    now,
-                );
-                let len = pull_response.len();
+    fn handle_pull_requests(me: &Arc<RwLock<Self>>, requests: Vec<PullData>) -> Vec<SharedBlob> {
+        // split the requests into addrs and filters
+        let mut caller_and_filters = vec![];
+        let mut addrs = vec![];
+        for pull_data in requests {
+            caller_and_filters.push((pull_data.caller, pull_data.filter));
+            addrs.push(pull_data.from_addr);
+        }
+        let now = timestamp();
+        let self_id = me.read().unwrap().id();
+        let pull_responses = me
+            .write()
+            .unwrap()
+            .gossip
+            .process_pull_requests(caller_and_filters, now);
+        pull_responses
+            .into_iter()
+            .zip(addrs.into_iter())
+            .flat_map(|(response, from_addr)| {
+                let len = response.len();
                 trace!("get updates since response {}", len);
-                let responses: Vec<_> = Self::split_gossip_messages(pull_response)
-                    .into_iter()
-                    .map(move |payload| Protocol::PullResponse(self_id, payload))
-                    .collect();
-                // The remote node may not know its public IP:PORT. Instead of responding to the caller's
-                // gossip addr, respond to the origin addr. The last origin addr is picked from the list of
-                // addrs.
                 inc_new_counter_debug!("cluster_info-pull_request-rsp", len);
-                responses
+                Self::split_gossip_messages(response)
                     .into_iter()
-                    .map(|rsp| to_shared_blob(rsp, from_addr).ok().into_iter())
-                    .flatten()
-                    .collect::<Vec<_>>()
+                    .filter_map(move |payload| {
+                        let protocol = Protocol::PullResponse(self_id, payload);
+                        // The remote node may not know its public IP:PORT. Instead of responding to the caller's
+                        // gossip addr, respond to the origin addr. The last origin addr is picked from the list of
+                        // addrs.
+                        to_shared_blob(protocol, from_addr).ok()
+                    })
             })
             .collect()
     }
@@ -1420,8 +1418,7 @@ impl ClusterInfo {
             None => HashMap::new(),
         };
 
-        let responses = Self::handle_blobs(obj, blocktree, &stakes, &reqs);
-        response_sender.send(responses)?;
+        Self::handle_blobs(obj, blocktree, &stakes, &reqs, response_sender);
         Ok(())
     }
     pub fn listen(
