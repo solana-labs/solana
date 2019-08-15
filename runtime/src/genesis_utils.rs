@@ -74,7 +74,7 @@ pub fn create_genesis_block_with_leader(
         ])
         .fee_calculator(FeeCalculator::new(0)); // most tests don't want fees
 
-    builder = solana_stake_api::rewards_pools::genesis(builder);
+    builder = solana_stake_api::genesis(builder);
     builder = solana_storage_api::rewards_pools::genesis(builder);
 
     GenesisBlockInfo {

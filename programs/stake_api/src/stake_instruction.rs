@@ -1,5 +1,7 @@
-use crate::id;
-use crate::stake_state::{StakeAccount, StakeState};
+use crate::{
+    config, id,
+    stake_state::{StakeAccount, StakeState},
+};
 use bincode::deserialize;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
@@ -18,6 +20,7 @@ pub enum StakeInstruction {
     ///    0 - Uninitialized StakeAccount to be delegated <= must have this signature
     ///    1 - VoteAccount to which this Stake will be delegated
     ///    2 - Clock sysvar Account that carries clock bank epoch
+    ///    3 - Config Account that carries stake config
     ///
     /// The u64 is the portion of the Stake account balance to be activated,
     ///    must be less than StakeAccount.lamports
@@ -96,6 +99,7 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -
         AccountMeta::new(*stake_pubkey, true),
         AccountMeta::new_credit_only(*vote_pubkey, false),
         AccountMeta::new_credit_only(sysvar::clock::id(), false),
+        AccountMeta::new_credit_only(crate::config::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
 }
@@ -139,12 +143,17 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::DelegateStake(stake) => {
-            if rest.len() != 2 {
+            if rest.len() != 3 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             let vote = &rest[0];
 
-            me.delegate_stake(vote, stake, &sysvar::clock::from_keyed_account(&rest[1])?)
+            me.delegate_stake(
+                vote,
+                stake,
+                &sysvar::clock::from_keyed_account(&rest[1])?,
+                &config::from_keyed_account(&rest[2])?,
+            )
         }
         StakeInstruction::RedeemVoteCredits => {
             if rest.len() != 4 {
@@ -206,6 +215,8 @@ mod tests {
                     sysvar::rewards::create_account(1, 0.0, 0.0)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
                     sysvar::stake_history::create_account(1, &StakeHistory::default())
+                } else if config::check_id(&meta.pubkey) {
+                    config::create_account(1, &config::Config::default())
                 } else {
                     Account::default()
                 }
@@ -298,6 +309,11 @@ mod tests {
                         &sysvar::clock::id(),
                         false,
                         &mut sysvar::clock::create_account(1, 0, 0, 0, 0)
+                    ),
+                    KeyedAccount::new(
+                        &config::id(),
+                        false,
+                        &mut config::create_account(1, &config::Config::default())
                     ),
                 ],
                 &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),
