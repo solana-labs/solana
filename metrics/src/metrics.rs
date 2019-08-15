@@ -7,8 +7,9 @@ use log::*;
 use solana_sdk::hash::hash;
 use solana_sdk::timing;
 use std::collections::HashMap;
+use std::convert::Into;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Barrier, Mutex, Once, ONCE_INIT};
+use std::sync::{Arc, Barrier, Mutex, Once};
 use std::thread;
 use std::time::{Duration, Instant};
 use std::{cmp, env};
@@ -55,11 +56,6 @@ macro_rules! datapoint {
     };
     (@point $name:expr) => {
         $crate::influxdb::Point::new(&$name)
-    };
-    ($name:expr) => {
-        if log_enabled!(log::Level::Debug) {
-            $crate::submit($crate::datapoint!(@point $name), log::Level::Debug);
-        }
     };
     ($name:expr, $($fields:tt)+) => {
         if log_enabled!(log::Level::Debug) {
@@ -125,27 +121,49 @@ macro_rules! datapoint_debug {
 }
 
 lazy_static! {
-    static ref HOST_INFO: String = {
-        let v = env::var("SOLANA_METRICS_DISPLAY_HOSTNAME")
-            .map(|x| {
-                x.parse()
-                    .expect("Failed to parse SOLANA_METRICS_DISPLAY_HOSTNAME")
-            })
-            .unwrap_or(0);
-
-        let name: String = hostname().unwrap_or_else(|_| "".to_string());
-        if v == 0 {
-            hash(name.as_bytes()).to_string()
-        } else {
-            name
-        }
+    static ref HOST_ID: String = {
+        env::var("SOLANA_METRICS_HOST_ID").unwrap_or_else(|_| {
+            let hostname: String = hostname().unwrap_or_else(|_| "".to_string());
+            format!("host-{}", hash(hostname.as_bytes())).to_string()
+        })
     };
+}
+
+type CounterMap = HashMap<(&'static str, u64), CounterPoint>;
+
+#[derive(Clone, Debug)]
+pub struct CounterPoint {
+    pub name: &'static str,
+    pub count: i64,
+    pub timestamp: u64,
+}
+
+impl CounterPoint {
+    #[cfg(test)]
+    fn new(name: &'static str) -> Self {
+        CounterPoint {
+            name,
+            count: 0,
+            timestamp: 0,
+        }
+    }
+}
+
+impl Into<influxdb::Point> for CounterPoint {
+    fn into(self) -> influxdb::Point {
+        let mut point = influxdb::Point::new(self.name);
+        point.add_tag("host_id", influxdb::Value::String(HOST_ID.to_string()));
+        point.add_field("count", influxdb::Value::Integer(self.count));
+        point.add_timestamp(self.timestamp as i64);
+        point
+    }
 }
 
 #[derive(Debug)]
 enum MetricsCommand {
-    Submit(influxdb::Point, log::Level),
     Flush(Arc<Barrier>),
+    Submit(influxdb::Point, log::Level),
+    SubmitCounter(CounterPoint, log::Level, u64),
 }
 
 struct MetricsAgent {
@@ -254,7 +272,7 @@ impl MetricsAgent {
 
         let extra = influxdb::Point::new("metrics")
             .add_timestamp(timing::timestamp() as i64)
-            .add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()))
+            .add_tag("host_id", influxdb::Value::String(HOST_ID.to_string()))
             .add_field(
                 "points_written",
                 influxdb::Value::Integer(points_written as i64),
@@ -284,7 +302,7 @@ impl MetricsAgent {
     ) {
         trace!("run: enter");
         let mut last_write_time = Instant::now();
-        let mut points_map = HashMap::<log::Level, (Instant, Vec<Point>)>::new();
+        let mut points_map = HashMap::<log::Level, (Instant, CounterMap, Vec<Point>)>::new();
         let max_points = write_frequency_secs.as_secs() as usize * max_points_per_sec;
 
         loop {
@@ -292,19 +310,37 @@ impl MetricsAgent {
                 Ok(cmd) => match cmd {
                     MetricsCommand::Flush(barrier) => {
                         debug!("metrics_thread: flush");
-                        points_map.retain(|_, (_, points)| {
-                            writer.write(points.to_vec());
+                        points_map.drain().for_each(|(_, (_, counters, points))| {
+                            let counter_points = counters.into_iter().map(|(_, v)| v.into());
+                            let points: Vec<_> = points.into_iter().chain(counter_points).collect();
+                            writer.write(points);
                             last_write_time = Instant::now();
-                            false
                         });
                         barrier.wait();
                     }
                     MetricsCommand::Submit(point, level) => {
                         debug!("run: submit {:?}", point);
-                        let (_, points) = points_map
-                            .entry(level)
-                            .or_insert((last_write_time, Vec::new()));
+                        let (_, _, points) = points_map.entry(level).or_insert((
+                            last_write_time,
+                            HashMap::new(),
+                            Vec::new(),
+                        ));
                         points.push(point);
+                    }
+                    MetricsCommand::SubmitCounter(counter, level, bucket) => {
+                        debug!("run: submit counter {:?}", counter);
+                        let (_, counters, _) = points_map.entry(level).or_insert((
+                            last_write_time,
+                            HashMap::new(),
+                            Vec::new(),
+                        ));
+
+                        let key = (counter.name, bucket);
+                        if let Some(value) = counters.get_mut(&key) {
+                            value.count += counter.count;
+                        } else {
+                            counters.insert(key, counter);
+                        }
                     }
                 },
                 Err(RecvTimeoutError::Timeout) => {
@@ -329,7 +365,9 @@ impl MetricsAgent {
                 ]
                 .iter()
                 .for_each(|x| {
-                    if let Some((last_time, points)) = points_map.remove(x) {
+                    if let Some((last_time, counters, points)) = points_map.remove(x) {
+                        let counter_points = counters.into_iter().map(|(_, v)| v.into());
+                        let points: Vec<_> = points.into_iter().chain(counter_points).collect();
                         let num_written = Self::write(
                             &points,
                             last_time,
@@ -351,13 +389,19 @@ impl MetricsAgent {
     }
 
     pub fn submit(&self, mut point: influxdb::Point, level: log::Level) {
-        point.add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()));
         if point.timestamp.is_none() {
-            point.timestamp = Some(timing::timestamp() as i64);
+            point.add_timestamp(timing::timestamp() as i64);
         }
         debug!("Submitting point: {:?}", point);
         self.sender
             .send(MetricsCommand::Submit(point, level))
+            .unwrap();
+    }
+
+    pub fn submit_counter(&self, point: CounterPoint, level: log::Level, bucket: u64) {
+        debug!("Submitting counter point: {:?}", point);
+        self.sender
+            .send(MetricsCommand::SubmitCounter(point, level, bucket))
             .unwrap();
     }
 
@@ -379,7 +423,7 @@ impl Drop for MetricsAgent {
 }
 
 fn get_singleton_agent() -> Arc<Mutex<MetricsAgent>> {
-    static INIT: Once = ONCE_INIT;
+    static INIT: Once = Once::new();
     static mut AGENT: Option<Arc<Mutex<MetricsAgent>>> = None;
     unsafe {
         INIT.call_once(|| AGENT = Some(Arc::new(Mutex::new(MetricsAgent::default()))));
@@ -392,10 +436,19 @@ fn get_singleton_agent() -> Arc<Mutex<MetricsAgent>> {
 
 /// Submits a new point from any thread.  Note that points are internally queued
 /// and transmitted periodically in batches.
-pub fn submit(point: influxdb::Point, level: log::Level) {
+pub fn submit(mut point: influxdb::Point, level: log::Level) {
+    point.add_tag("host_id", influxdb::Value::String(HOST_ID.to_string()));
     let agent_mutex = get_singleton_agent();
     let agent = agent_mutex.lock().unwrap();
     agent.submit(point, level);
+}
+
+/// Submits a new counter or updates an existing counter from any thread.  Note that points are
+/// internally queued and transmitted periodically in batches.
+pub fn submit_counter(point: CounterPoint, level: log::Level, bucket: u64) {
+    let agent_mutex = get_singleton_agent();
+    let agent = agent_mutex.lock().unwrap();
+    agent.submit_counter(point, level, bucket);
 }
 
 fn get_env_settings() -> Result<(String, String, String, String), env::VarError> {
@@ -430,7 +483,7 @@ pub fn flush() {
 /// Hook the panic handler to generate a data point on each panic
 pub fn set_panic_hook(program: &'static str) {
     use std::panic;
-    static SET_HOOK: Once = ONCE_INIT;
+    static SET_HOOK: Once = Once::new();
     SET_HOOK.call_once(|| {
         let default_hook = panic::take_hook();
         panic::set_hook(Box::new(move |ono| {
@@ -444,6 +497,7 @@ pub fn set_panic_hook(program: &'static str) {
                             thread::current().name().unwrap_or("?").to_string(),
                         ),
                     )
+                    .add_tag("host_id", influxdb::Value::String(HOST_ID.to_string()))
                     // The 'one' field exists to give Kapacitor Alerts a numerical value
                     // to filter on
                     .add_field("one", influxdb::Value::Integer(1))
@@ -461,7 +515,6 @@ pub fn set_panic_hook(program: &'static str) {
                             None => "?".to_string(),
                         }),
                     )
-                    .add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()))
                     .to_owned(),
                 Level::Error,
             );
@@ -475,20 +528,20 @@ pub fn set_panic_hook(program: &'static str) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use serde_json;
 
     struct MockMetricsWriter {
-        points_written: AtomicUsize,
+        points_written: Arc<Mutex<Vec<influxdb::Point>>>,
     }
     impl MockMetricsWriter {
         fn new() -> Self {
             MockMetricsWriter {
-                points_written: AtomicUsize::new(0),
+                points_written: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
         fn points_written(&self) -> usize {
-            return self.points_written.load(Ordering::Relaxed);
+            self.points_written.lock().unwrap().len()
         }
     }
 
@@ -496,13 +549,16 @@ mod test {
         fn write(&self, points: Vec<influxdb::Point>) {
             assert!(!points.is_empty());
 
+            let new_points = points.len();
             self.points_written
-                .fetch_add(points.len(), Ordering::Relaxed);
+                .lock()
+                .unwrap()
+                .extend(points.into_iter());
 
             info!(
                 "Writing {} points ({} total)",
-                points.len(),
-                self.points_written.load(Ordering::Relaxed)
+                new_points,
+                self.points_written()
             );
         }
     }
@@ -521,6 +577,63 @@ mod test {
 
         agent.flush();
         assert_eq!(writer.points_written(), 42);
+    }
+
+    #[test]
+    fn test_submit_counter() {
+        let writer = Arc::new(MockMetricsWriter::new());
+        let agent = MetricsAgent::new(writer.clone(), Duration::from_secs(10), 1000);
+
+        for i in 0..10 {
+            agent.submit_counter(CounterPoint::new("counter - 1"), Level::Info, i);
+            agent.submit_counter(CounterPoint::new("counter - 2"), Level::Info, i);
+        }
+
+        agent.flush();
+        assert_eq!(writer.points_written(), 20);
+    }
+
+    #[test]
+    fn test_submit_counter_increment() {
+        let writer = Arc::new(MockMetricsWriter::new());
+        let agent = MetricsAgent::new(writer.clone(), Duration::from_secs(10), 1000);
+
+        for _ in 0..10 {
+            agent.submit_counter(
+                CounterPoint {
+                    name: "counter",
+                    count: 10,
+                    timestamp: 0,
+                },
+                Level::Info,
+                0, // use the same bucket
+            );
+        }
+
+        agent.flush();
+        assert_eq!(writer.points_written(), 1);
+
+        let submitted_point = writer.points_written.lock().unwrap()[0].clone();
+        let submitted_count = submitted_point.fields.get("count").unwrap();
+        let expected_count = &influxdb::Value::Integer(100);
+        assert_eq!(
+            serde_json::to_string(submitted_count).unwrap(),
+            serde_json::to_string(expected_count).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_submit_bucketed_counter() {
+        let writer = Arc::new(MockMetricsWriter::new());
+        let agent = MetricsAgent::new(writer.clone(), Duration::from_secs(10), 1000);
+
+        for i in 0..50 {
+            agent.submit_counter(CounterPoint::new("counter - 1"), Level::Info, i / 10);
+            agent.submit_counter(CounterPoint::new("counter - 2"), Level::Info, i / 10);
+        }
+
+        agent.flush();
+        assert_eq!(writer.points_written(), 10);
     }
 
     #[test]
@@ -619,7 +732,6 @@ mod test {
                 }
             };
         }
-        datapoint!("name");
         datapoint!("name", ("field name", "test".to_string(), String));
         datapoint!("name", ("field name", 12.34_f64, f64));
         datapoint!("name", ("field name", true, bool));

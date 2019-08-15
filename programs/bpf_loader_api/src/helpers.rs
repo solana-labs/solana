@@ -86,6 +86,8 @@ fn verify_string(addr: u64, ro_regions: &[MemoryRegion]) -> Result<(()), Error> 
     ))
 }
 
+type Context = Option<Box<dyn Any + 'static>>;
+
 /// Abort helper functions, called when the BPF program calls `abort()`
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
@@ -95,7 +97,7 @@ pub fn helper_abort_verify(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -110,7 +112,7 @@ pub fn helper_abort(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
 ) -> u64 {
     // Never called because its verify function always returns an error
     0
@@ -125,7 +127,7 @@ pub fn helper_sol_panic_verify(
     column: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -150,7 +152,7 @@ pub fn helper_sol_panic(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
 ) -> u64 {
     // Never called because its verify function always returns an error
     0
@@ -164,7 +166,7 @@ pub fn helper_sol_log_verify(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -176,7 +178,7 @@ pub fn helper_sol_log(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
 ) -> u64 {
     let c_buf: *const c_char = addr as *const c_char;
     let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
@@ -192,7 +194,7 @@ pub fn helper_sol_log_verify_(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -212,7 +214,7 @@ pub fn helper_sol_log_(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
 ) -> u64 {
     let ptr: *const u8 = addr as *const u8;
     let message = unsafe { from_utf8(from_raw_parts(ptr, len as usize)).unwrap() };
@@ -225,7 +227,7 @@ pub fn helper_sol_log_u64(
     arg3: u64,
     arg4: u64,
     arg5: u64,
-    _context: &mut Option<Box<Any + 'static>>,
+    _context: &mut Context,
 ) -> u64 {
     info!(
         "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
@@ -246,7 +248,7 @@ pub fn helper_sol_alloc_free(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    context: &mut Option<Box<Any + 'static>>,
+    context: &mut Context,
 ) -> u64 {
     if let Some(context) = context {
         if let Some(allocator) = context.downcast_mut::<BPFAllocator>() {

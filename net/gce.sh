@@ -12,7 +12,7 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuBootstrapLeaderMachineType="--machine-type n1-standard-16 --min-cpu-platform Intel%20Skylake"
+  cpuBootstrapLeaderMachineType="--custom-cpu 12 --custom-memory 32GB --min-cpu-platform Intel%20Skylake"
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
@@ -63,6 +63,7 @@ blockstreamer=false
 fullNodeBootDiskSizeInGb=1000
 clientBootDiskSizeInGb=75
 replicatorBootDiskSizeInGb=1000
+fullNodeAdditionalDiskSizeInGb=
 externalNodes=false
 failOnValidatorBootupFailure=true
 
@@ -126,7 +127,10 @@ Manage testnet instances
    --letsencrypt [dns name] - Attempt to generate a TLS certificate using this
                               DNS name (useful only when the -a and -P options
                               are also provided)
-
+   --fullnode-additional-disk-size-gb [number]
+                    - Add an additional [number] GB SSD to all fullnodes to store the config directory.
+                      If not set, config will be written to the boot disk by default.
+                      Only supported on GCE.
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
 
@@ -152,6 +156,12 @@ while [[ -n $1 ]]; do
     if [[ $1 = --letsencrypt ]]; then
       letsEncryptDomainName="$2"
       shift 2
+    elif [[ $1 = --fullnode-additional-disk-size-gb ]]; then
+      fullNodeAdditionalDiskSizeInGb="$2"
+      shift 2
+    elif [[ $1 == --machine-type* ]]; then # Bypass quoted long args for GPUs
+      shortArgs+=("$1")
+      shift
     else
       usage "Unknown long option: $1"
     fi
@@ -234,8 +244,14 @@ case $cloudProvider in
 gce)
   ;;
 ec2)
+  if [[ -n $fullNodeAdditionalDiskSizeInGb ]] ; then
+    usage "Error: --fullnode-additional-disk-size-gb currently only supported with cloud provider: gce"
+  fi
   ;;
 azure)
+  if [[ -n $fullNodeAdditionalDiskSizeInGb ]] ; then
+    usage "Error: --fullnode-additional-disk-size-gb currently only supported with cloud provider: gce"
+  fi
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -396,7 +412,6 @@ EOF
     declare failOnFailure="$6"
     declare arrayName="$7"
 
-    # This check should eventually be moved to cloud provider specific script
     if [ "$publicIp" = "TERMINATED" ] || [ "$privateIp" = "TERMINATED" ]; then
       if $failOnFailure; then
         exit 1
@@ -615,7 +630,7 @@ $(
   cat \
     disable-background-upgrades.sh \
     create-solana-user.sh \
-    add-solana-user-authorized_keys.sh \
+    add-testnet-solana-user-authorized_keys.sh \
     install-certbot.sh \
     install-earlyoom.sh \
     install-libssl-compatability.sh \
@@ -628,6 +643,10 @@ $(
 
     if "$enableGpu"; then
       cat enable-nvidia-persistence-mode.sh
+    fi
+
+    if [[ -n $fullNodeAdditionalDiskSizeInGb ]]; then
+      cat mount-additional-disk.sh
     fi
 
 )
@@ -656,7 +675,7 @@ EOF
   else
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
+      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb"
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
@@ -676,7 +695,7 @@ EOF
       fi
       cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
         "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-        "$startupScript" "" "$bootDiskType" &
+        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" &
     done
 
     wait

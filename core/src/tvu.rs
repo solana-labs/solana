@@ -18,15 +18,18 @@ use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
+use crate::ledger_cleanup_service::LedgerCleanupService;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
+use crate::snapshot_package::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
@@ -37,7 +40,9 @@ pub struct Tvu {
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
     blockstream_service: Option<BlockstreamService>,
+    ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
+    snapshot_packager_service: Option<SnapshotPackagerService>,
 }
 
 pub struct Sockets {
@@ -63,7 +68,8 @@ impl Tvu {
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
         storage_state: &StorageState,
-        blockstream: Option<&String>,
+        blockstream_unix_socket: Option<&PathBuf>,
+        max_ledger_slots: Option<u64>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -110,7 +116,21 @@ impl Tvu {
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
         );
 
-        let (replay_stage, slot_full_receiver, root_bank_receiver) = ReplayStage::new(
+        let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
+        let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
+        let (snapshot_packager_service, snapshot_package_sender) = {
+            let snapshot_config = { bank_forks.read().unwrap().snapshot_config().clone() };
+            if snapshot_config.is_some() {
+                // Start a snapshot packaging service
+                let (sender, receiver) = channel();
+                let snapshot_packager_service = SnapshotPackagerService::new(receiver, exit);
+                (Some(snapshot_packager_service), Some(sender))
+            } else {
+                (None, None)
+            }
+        };
+
+        let (replay_stage, root_bank_receiver) = ReplayStage::new(
             &keypair.pubkey(),
             vote_account,
             voting_keypair,
@@ -122,19 +142,30 @@ impl Tvu {
             subscriptions,
             poh_recorder,
             leader_schedule_cache,
+            vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
+            snapshot_package_sender,
         );
 
-        let blockstream_service = if blockstream.is_some() {
+        let blockstream_service = if blockstream_unix_socket.is_some() {
             let blockstream_service = BlockstreamService::new(
-                slot_full_receiver,
+                blockstream_slot_receiver,
                 blocktree.clone(),
-                blockstream.unwrap().to_string(),
+                blockstream_unix_socket.unwrap(),
                 &exit,
             );
             Some(blockstream_service)
         } else {
             None
         };
+
+        let ledger_cleanup_service = max_ledger_slots.map(|max_ledger_slots| {
+            LedgerCleanupService::new(
+                ledger_cleanup_slot_receiver,
+                blocktree.clone(),
+                max_ledger_slots,
+                &exit,
+            )
+        });
 
         let storage_stage = StorageStage::new(
             storage_state,
@@ -152,7 +183,9 @@ impl Tvu {
             retransmit_stage,
             replay_stage,
             blockstream_service,
+            ledger_cleanup_service,
             storage_stage,
+            snapshot_packager_service,
         }
     }
 }
@@ -167,7 +200,13 @@ impl Service for Tvu {
         if self.blockstream_service.is_some() {
             self.blockstream_service.unwrap().join()?;
         }
+        if self.ledger_cleanup_service.is_some() {
+            self.ledger_cleanup_service.unwrap().join()?;
+        }
         self.replay_stage.join()?;
+        if let Some(s) = self.snapshot_packager_service {
+            s.join()?;
+        }
         Ok(())
     }
 }
@@ -225,6 +264,7 @@ pub mod tests {
             },
             blocktree,
             &StorageState::default(),
+            None,
             None,
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),

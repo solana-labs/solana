@@ -107,7 +107,7 @@ pub fn discover(
     );
     Err(std::io::Error::new(
         std::io::ErrorKind::Other,
-        "Failed to converge",
+        "Discover failed",
     ))
 }
 

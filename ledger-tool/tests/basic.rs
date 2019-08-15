@@ -4,7 +4,6 @@ extern crate solana;
 use assert_cmd::prelude::*;
 use solana::blocktree::create_new_tmp_ledger;
 use solana::genesis_utils::create_genesis_block;
-use std::cmp;
 use std::process::Command;
 use std::process::Output;
 
@@ -39,6 +38,8 @@ fn nominal() {
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
     let ticks = ticks_per_slot as usize;
 
+    let ledger_path = ledger_path.to_str().unwrap();
+
     // Basic validation
     let output = run_ledger_tool(&["-l", &ledger_path, "verify"]);
     assert!(output.status.success());
@@ -46,22 +47,5 @@ fn nominal() {
     // Print everything
     let output = run_ledger_tool(&["-l", &ledger_path, "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), ticks);
-
-    // Only print the first N items
-    let count = cmp::min(genesis_block.ticks_per_slot, 5);
-    let output = run_ledger_tool(&["-l", &ledger_path, "-n", &count.to_string(), "print"]);
-    println!("{:?}", output);
-    assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), count as usize);
-
-    // Skip entries with no hashes
-    let output = run_ledger_tool(&["-l", &ledger_path, "-h", "1", "print"]);
-    assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), ticks);
-
-    // Skip entries with fewer than 2 hashes (skip everything)
-    let output = run_ledger_tool(&["-l", &ledger_path, "-h", "2", "print"]);
-    assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), 0);
+    assert_eq!(count_newlines(&output.stdout), ticks + 1);
 }

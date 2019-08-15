@@ -39,7 +39,7 @@ check_balance_output() {
 
 pay_and_confirm() {
   exec 42>&1
-  signature=$($solana_wallet "${entrypoint[@]}" pay "$@" | tee >(cat - >&42))
+  signature=$($solana_wallet "${entrypoint[@]}" pay "$@" | tail -c 88 | tee >(cat - >&42))
   $solana_wallet "${entrypoint[@]}" confirm "$signature"
 }
 

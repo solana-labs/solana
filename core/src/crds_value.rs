@@ -1,5 +1,5 @@
 use crate::contact_info::ContactInfo;
-use bincode::serialize;
+use bincode::{serialize, serialized_size};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
@@ -188,6 +188,11 @@ impl CrdsValue {
             CrdsValueLabel::Vote(*key),
             CrdsValueLabel::EpochSlots(*key),
         ]
+    }
+
+    /// Returns the size (in bytes) of a CrdsValue
+    pub fn size(&self) -> u64 {
+        serialized_size(&self).expect("unable to serialize contact info")
     }
 }
 

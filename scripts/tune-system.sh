@@ -23,7 +23,7 @@ sysctl_write() {
   fi
 
   echo "$ $cmd"
-  $cmd
+  $cmd || true
 
   # Some versions of sysctl exit with 0 on permission denied errors
   current_value=$(sysctl -n "$name")

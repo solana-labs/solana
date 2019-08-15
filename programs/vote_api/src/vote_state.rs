@@ -9,7 +9,7 @@ use solana_sdk::account_utils::State;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::syscall::current::Current;
+use solana_sdk::sysvar::clock::Clock;
 pub use solana_sdk::timing::{Epoch, Slot};
 use std::collections::VecDeque;
 
@@ -74,9 +74,9 @@ pub struct VoteState {
     pub commission: u8,
     pub root_slot: Option<u64>,
 
-    /// current epoch
+    /// clock epoch
     epoch: Epoch,
-    /// current credits earned, monotonically increasing
+    /// clock credits earned, monotonically increasing
     credits: u64,
 
     /// credits as of previous epoch
@@ -173,14 +173,14 @@ impl VoteState {
                 for (slot, hash) in slot_hashes {
                     if vote.slot == *slot {
                         warn!(
-                            "dropped vote {:?} matched slot {}, but not hash {:?}",
-                            vote, *slot, *hash
+                            "{} dropped vote {:?} matched slot {}, but not hash {:?}",
+                            self.node_pubkey, vote, *slot, *hash
                         );
                     }
                     if vote.hash == *hash {
                         warn!(
-                            "dropped vote {:?} matched hash {:?}, but not slot {}",
-                            vote, *hash, *slot,
+                            "{} dropped vote {:?} matched hash {:?}, but not slot {}",
+                            self.node_pubkey, vote, *slot, *hash
                         );
                     }
                 }
@@ -224,7 +224,7 @@ impl VoteState {
         self.credits += 1;
     }
 
-    /// "uncheckeds" used by tests, locktower
+    /// "unchecked" functions used by tests and Tower
     pub fn process_vote_unchecked(&mut self, vote: &Vote) {
         self.process_vote(vote, &[(vote.slot, vote.hash)], self.epoch);
     }
@@ -286,7 +286,7 @@ pub fn authorize_voter(
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
-    // current authorized signer must say "yay"
+    // clock authorized signer must say "yay"
     let authorized = Some(&vote_state.authorized_voter_pubkey);
     if vote_account.signer_key() != authorized
         && other_signers
@@ -298,6 +298,23 @@ pub fn authorize_voter(
 
     vote_state.authorized_voter_pubkey = *authorized_voter_pubkey;
     vote_account.set_state(&vote_state)
+}
+
+/// Withdraw funds from the vote account
+pub fn withdraw(
+    vote_account: &mut KeyedAccount,
+    lamports: u64,
+    to_account: &mut KeyedAccount,
+) -> Result<(), InstructionError> {
+    if vote_account.signer_key().is_none() {
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+    if vote_account.account.lamports < lamports {
+        return Err(InstructionError::InsufficientFunds);
+    }
+    vote_account.account.lamports -= lamports;
+    to_account.account.lamports += lamports;
+    Ok(())
 }
 
 /// Initialize the vote_state for a vote account
@@ -323,7 +340,7 @@ pub fn initialize_account(
 pub fn process_votes(
     vote_account: &mut KeyedAccount,
     slot_hashes: &[(Slot, Hash)],
-    current: &Current,
+    clock: &Clock,
     other_signers: &[KeyedAccount],
     votes: &[Vote],
 ) -> Result<(), InstructionError> {
@@ -343,7 +360,7 @@ pub fn process_votes(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    vote_state.process_votes(&votes, slot_hashes, current.epoch);
+    vote_state.process_votes(&votes, slot_hashes, clock.epoch);
     vote_account.set_state(&vote_state)
 }
 
@@ -427,9 +444,9 @@ mod tests {
         process_votes(
             &mut KeyedAccount::new(vote_pubkey, true, vote_account),
             slot_hashes,
-            &Current {
+            &Clock {
                 epoch,
-                ..Current::default()
+                ..Clock::default()
             },
             &[],
             &[vote.clone()],
@@ -533,7 +550,7 @@ mod tests {
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[(vote.slot, vote.hash)],
-            &Current::default(),
+            &Clock::default(),
             &[],
             &[vote],
         );
@@ -543,7 +560,7 @@ mod tests {
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &[(vote.slot, vote.hash)],
-            &Current::default(),
+            &Clock::default(),
             &[],
             &[vote],
         );
@@ -581,7 +598,7 @@ mod tests {
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &[(vote.slot, vote.hash)],
-            &Current::default(),
+            &Clock::default(),
             &[],
             &[vote],
         );
@@ -592,7 +609,7 @@ mod tests {
         let res = process_votes(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[(vote.slot, vote.hash)],
-            &Current::default(),
+            &Clock::default(),
             &[KeyedAccount::new(
                 &authorized_voter_pubkey,
                 true,
@@ -809,6 +826,39 @@ mod tests {
             (voter_portion.round(), staker_portion.round(), was_split),
             (5.0, 5.0, true)
         );
+    }
+
+    #[test]
+    fn test_vote_state_withdraw() {
+        let (vote_pubkey, mut vote_account) = create_test_account();
+
+        // unsigned
+        let res = withdraw(
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            0,
+            &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut Account::default()),
+        );
+        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+
+        // insufficient funds
+        let res = withdraw(
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+            101,
+            &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut Account::default()),
+        );
+        assert_eq!(res, Err(InstructionError::InsufficientFunds));
+
+        // all good
+        let mut to_account = Account::default();
+        let lamports = vote_account.lamports;
+        let res = withdraw(
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+            lamports,
+            &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut to_account),
+        );
+        assert_eq!(res, Ok(()));
+        assert_eq!(vote_account.lamports, 0);
+        assert_eq!(to_account.lamports, lamports);
     }
 
     #[test]

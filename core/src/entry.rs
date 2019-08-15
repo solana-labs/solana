@@ -175,7 +175,7 @@ pub fn hash_transactions(transactions: &[Transaction]) -> Hash {
     // a hash of a slice of transactions only needs to hash the signatures
     let signatures: Vec<_> = transactions
         .iter()
-        .flat_map(|tx| tx.signatures.iter().map(|sig| sig.as_ref()))
+        .flat_map(|tx| tx.signatures.iter())
         .collect();
     let merkle_tree = MerkleTree::new(&signatures);
     if let Some(root_hash) = merkle_tree.get_root() {

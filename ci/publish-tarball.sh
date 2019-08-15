@@ -49,7 +49,8 @@ windows)
   TARGET=x86_64-pc-windows-msvc
   ;;
 *)
-  TARGET=unknown-unknown-unknown
+  echo CI_OS_NAME unset
+  exit 1
   ;;
 esac
 
@@ -69,6 +70,12 @@ echo --- Creating tarball
 
   source ci/rust-version.sh stable
   scripts/cargo-install-all.sh +"$rust_stable" solana-release
+
+  # Reduce the archive size until
+  # https://github.com/appveyor/ci/issues/2997 is fixed
+  if [[ -n $APPVEYOR ]]; then
+    rm -f solana-release/bin/solana-validator.exe solana-release/bin/solana-bench-exchange.exe
+  fi
 
   if $PERF_LIBS; then
     rm -rf target/perf-libs
@@ -94,22 +101,14 @@ echo --- Creating tarball
 set -e
 cd "$(dirname "$0")"/..
 export USE_INSTALL=1
+export REQUIRE_LEDGER_DIR=1
+export REQUIRE_KEYPAIRS=1
 exec multinode-demo/validator.sh "$@"
 EOF
   chmod +x solana-release/bin/validator.sh
 
-  # Add a wrapper script for clear-config.sh
-  # TODO: Remove multinode/... from tarball
-  cat > solana-release/bin/clear-config.sh <<'EOF'
-#!/usr/bin/env bash
-set -e
-cd "$(dirname "$0")"/..
-export USE_INSTALL=1
-exec multinode-demo/clear-config.sh "$@"
-EOF
-  chmod +x solana-release/bin/clear-config.sh
-
-  tar jvcf solana-release-$TARGET.tar.bz2 solana-release/
+  tar cvf solana-release-$TARGET.tar solana-release
+  bzip2 solana-release-$TARGET.tar
   cp solana-release/bin/solana-install-init solana-install-init-$TARGET
 )
 

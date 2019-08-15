@@ -5,23 +5,36 @@ use std::fs::{create_dir_all, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub enum ExplicitRelease {
+    Semver(String),
+    Channel(String),
+}
+
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 pub struct Config {
     pub json_rpc_url: String,
     pub update_manifest_pubkey: Pubkey,
     pub current_update_manifest: Option<UpdateManifest>,
     pub update_poll_secs: u64,
+    pub explicit_release: Option<ExplicitRelease>,
     releases_dir: PathBuf,
     active_release_dir: PathBuf,
 }
 
 impl Config {
-    pub fn new(data_dir: &str, json_rpc_url: &str, update_manifest_pubkey: &Pubkey) -> Self {
+    pub fn new(
+        data_dir: &str,
+        json_rpc_url: &str,
+        update_manifest_pubkey: &Pubkey,
+        explicit_release: Option<ExplicitRelease>,
+    ) -> Self {
         Self {
             json_rpc_url: json_rpc_url.to_string(),
             update_manifest_pubkey: *update_manifest_pubkey,
             current_update_manifest: None,
             update_poll_secs: 60, // check for updates once a minute
+            explicit_release,
             releases_dir: PathBuf::from(data_dir).join("releases"),
             active_release_dir: PathBuf::from(data_dir).join("active_release"),
         }
@@ -64,7 +77,7 @@ impl Config {
         self.active_release_dir.join("bin")
     }
 
-    pub fn release_dir(&self, release_sha256: &str) -> PathBuf {
-        self.releases_dir.join(release_sha256)
+    pub fn release_dir(&self, release_id: &str) -> PathBuf {
+        self.releases_dir.join(release_id)
     }
 }

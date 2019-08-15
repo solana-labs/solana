@@ -13,7 +13,6 @@
 use crate::blocktree::Blocktree;
 use crate::entry::Entry;
 use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::leader_schedule_utils;
 use crate::poh::Poh;
 use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
@@ -22,12 +21,15 @@ use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 pub use solana_sdk::timing::Slot;
+use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 use solana_sdk::transaction::Transaction;
+use std::cmp;
 use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-const MAX_LAST_LEADER_GRACE_TICKS_FACTOR: u64 = 2;
+const GRACE_TICKS_FACTOR: u64 = 2;
+const MAX_GRACE_TICKS: u64 = 12;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PohRecorderError {
@@ -49,14 +51,14 @@ pub struct PohRecorder {
     pub poh: Arc<Mutex<Poh>>,
     tick_height: u64,
     clear_bank_signal: Option<SyncSender<bool>>,
-    start_slot: Slot,
-    start_tick: u64,
+    start_slot: Slot, // parent slot
+    start_tick: u64,  // first tick this recorder will observe
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntries>,
     start_leader_at_tick: Option<u64>,
     last_leader_tick: u64, // zero if none
-    max_last_leader_grace_ticks: u64,
+    grace_ticks: u64,
     id: Pubkey,
     blocktree: Arc<Blocktree>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
@@ -75,11 +77,9 @@ impl PohRecorder {
                 Some(&self.blocktree),
             );
             assert_eq!(self.ticks_per_slot, bank.ticks_per_slot());
-            let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
-                &next_leader_slot,
-                self.ticks_per_slot,
-                self.max_last_leader_grace_ticks,
-            );
+            let (start_leader_at_tick, last_leader_tick, grace_ticks) =
+                Self::compute_leader_slot_ticks(next_leader_slot, self.ticks_per_slot);
+            self.grace_ticks = grace_ticks;
             self.start_leader_at_tick = start_leader_at_tick;
             self.last_leader_tick = last_leader_tick;
         }
@@ -89,32 +89,22 @@ impl PohRecorder {
     }
 
     pub fn would_be_leader(&self, within_next_n_ticks: u64) -> bool {
-        let close_to_leader_tick = self.start_leader_at_tick.map_or(false, |leader_tick| {
-            let leader_ideal_start_tick =
-                leader_tick.saturating_sub(self.max_last_leader_grace_ticks);
+        self.has_bank()
+            || self.start_leader_at_tick.map_or(false, |leader_tick| {
+                let ideal_leader_tick = leader_tick.saturating_sub(self.grace_ticks);
 
-            self.tick_height <= self.last_leader_tick
-                && self.tick_height >= leader_ideal_start_tick.saturating_sub(within_next_n_ticks)
-        });
-
-        self.working_bank.is_some() || close_to_leader_tick
-    }
-
-    pub fn next_slot_leader(&self) -> Option<Pubkey> {
-        let slot =
-            leader_schedule_utils::tick_height_to_slot(self.ticks_per_slot, self.tick_height);
-        self.leader_schedule_cache.slot_leader_at(slot + 1, None)
+                self.tick_height <= self.last_leader_tick
+                    && self.tick_height >= ideal_leader_tick.saturating_sub(within_next_n_ticks)
+            })
     }
 
     pub fn leader_after_slots(&self, slots: u64) -> Option<Pubkey> {
-        let slot =
-            leader_schedule_utils::tick_height_to_slot(self.ticks_per_slot, self.tick_height);
         self.leader_schedule_cache
-            .slot_leader_at(slot + slots, None)
+            .slot_leader_at(self.tick_height / self.ticks_per_slot + slots, None)
     }
 
-    pub fn start_slot(&self) -> Slot {
-        self.start_slot
+    pub fn next_slot_leader(&self) -> Option<Pubkey> {
+        self.leader_after_slots(1)
     }
 
     pub fn bank(&self) -> Option<Arc<Bank>> {
@@ -135,81 +125,89 @@ impl PohRecorder {
 
     /// returns if leader tick has reached, how many grace ticks were afforded,
     ///   imputed leader_slot and self.start_slot
+    /// reached_leader_tick() == true means "ready for a bank"
     pub fn reached_leader_tick(&self) -> (bool, u64, Slot, Slot) {
-        let slot =
-            leader_schedule_utils::tick_height_to_slot(self.ticks_per_slot, self.tick_height);
-
         trace!(
-            "tick_height {}, start_tick {} start_leader_at_tick {:?}, grace {}",
+            "tick_height {}, start_tick {}, start_leader_at_tick {:?}, grace {}, has_bank {}",
             self.tick_height,
             self.start_tick,
             self.start_leader_at_tick,
-            self.max_last_leader_grace_ticks
+            self.grace_ticks,
+            self.has_bank()
         );
 
+        let next_tick = self.tick_height + 1;
+
         if let Some(target_tick) = self.start_leader_at_tick {
-            let leader_ideal_start_tick =
-                target_tick.saturating_sub(self.max_last_leader_grace_ticks);
-            // Check if either grace period has expired,
-            // or target tick is = grace period (i.e. poh recorder was just reset)
-            if self.tick_height >= target_tick
-                || self.max_last_leader_grace_ticks >= target_tick.saturating_sub(self.start_tick)
-            {
+            // we've reached target_tick OR poh was reset to run immediately
+            if next_tick >= target_tick || self.start_tick + self.grace_ticks == target_tick {
+                assert!(next_tick >= self.start_tick);
+                let ideal_target_tick = target_tick.saturating_sub(self.grace_ticks);
+
                 return (
                     true,
-                    self.tick_height.saturating_sub(leader_ideal_start_tick),
-                    slot,
+                    next_tick.saturating_sub(ideal_target_tick),
+                    next_tick / self.ticks_per_slot,
                     self.start_slot,
                 );
             }
         }
-        (false, 0, slot, self.start_slot)
+        (false, 0, next_tick / self.ticks_per_slot, self.start_slot)
     }
 
+    // returns (start_leader_at_tick, last_leader_tick, grace_ticks) given the next slot this
+    //  recorder will lead
     fn compute_leader_slot_ticks(
-        next_leader_slot: &Option<Slot>,
+        next_leader_slot: Option<(Slot, Slot)>,
         ticks_per_slot: u64,
-        grace_ticks: u64,
-    ) -> (Option<u64>, u64) {
+    ) -> (Option<u64>, u64, u64) {
         next_leader_slot
-            .map(|slot| {
-                (
-                    Some(slot * ticks_per_slot + grace_ticks),
-                    (slot + 1) * ticks_per_slot - 1,
-                )
+            .map(|(first, last)| {
+                let first_tick = first * ticks_per_slot;
+                let last_tick = (last + 1) * ticks_per_slot - 1;
+                let grace_ticks = cmp::min(
+                    MAX_GRACE_TICKS,
+                    (last_tick - first_tick + 1) / GRACE_TICKS_FACTOR,
+                );
+                (Some(first_tick + grace_ticks), last_tick, grace_ticks)
             })
-            .unwrap_or((None, 0))
+            .unwrap_or((
+                None,
+                0,
+                cmp::min(
+                    MAX_GRACE_TICKS,
+                    ticks_per_slot * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR,
+                ),
+            ))
     }
 
     // synchronize PoH with a bank
     pub fn reset(
         &mut self,
-        tick_height: u64,
         blockhash: Hash,
         start_slot: Slot,
-        next_leader_slot: Option<Slot>,
+        next_leader_slot: Option<(Slot, Slot)>,
     ) {
         self.clear_bank();
         let mut cache = vec![];
         {
             let mut poh = self.poh.lock().unwrap();
             info!(
-                "reset poh from: {},{} to: {},{}",
-                poh.hash, self.tick_height, blockhash, tick_height,
+                "reset poh from: {},{},{} to: {},{}",
+                poh.hash, self.tick_height, self.start_slot, blockhash, start_slot
             );
             poh.reset(blockhash, self.poh_config.hashes_per_tick);
         }
 
         std::mem::swap(&mut cache, &mut self.tick_cache);
+
         self.start_slot = start_slot;
-        self.start_tick = tick_height + 1;
-        self.tick_height = tick_height;
-        self.max_last_leader_grace_ticks = self.ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
-        let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
-            &next_leader_slot,
-            self.ticks_per_slot,
-            self.max_last_leader_grace_ticks,
-        );
+        self.start_tick = (start_slot + 1) * self.ticks_per_slot;
+        self.tick_height = self.start_tick - 1;
+
+        let (start_leader_at_tick, last_leader_tick, grace_ticks) =
+            Self::compute_leader_slot_ticks(next_leader_slot, self.ticks_per_slot);
+        self.grace_ticks = grace_ticks;
         self.start_leader_at_tick = start_leader_at_tick;
         self.last_leader_tick = last_leader_tick;
     }
@@ -218,6 +216,7 @@ impl PohRecorder {
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
         self.working_bank = Some(working_bank);
+        let _ = self.flush_cache(false);
     }
     pub fn set_bank(&mut self, bank: &Arc<Bank>) {
         let working_bank = WorkingBank {
@@ -256,7 +255,7 @@ impl PohRecorder {
             .take_while(|x| x.1 <= working_bank.max_tick_height)
             .count();
         let send_result = if entry_count > 0 {
-            debug!(
+            trace!(
                 "flush_cache: bank_slot: {} tick_height: {} max: {} sending: {}",
                 working_bank.bank.slot(),
                 working_bank.bank.tick_height(),
@@ -299,9 +298,7 @@ impl PohRecorder {
         let poh_entry = self.poh.lock().unwrap().tick();
         inc_new_counter_warn!(
             "poh_recorder-tick_lock_contention",
-            timing::duration_as_ms(&now.elapsed()) as usize,
-            0,
-            1000
+            timing::duration_as_ms(&now.elapsed()) as usize
         );
         let now = Instant::now();
         if let Some(poh_entry) = poh_entry {
@@ -311,9 +308,7 @@ impl PohRecorder {
             if self.start_leader_at_tick.is_none() {
                 inc_new_counter_warn!(
                     "poh_recorder-tick_overhead",
-                    timing::duration_as_ms(&now.elapsed()) as usize,
-                    0,
-                    1000
+                    timing::duration_as_ms(&now.elapsed()) as usize
                 );
                 return;
             }
@@ -329,9 +324,7 @@ impl PohRecorder {
         }
         inc_new_counter_warn!(
             "poh_recorder-tick_overhead",
-            timing::duration_as_ms(&now.elapsed()) as usize,
-            0,
-            1000
+            timing::duration_as_ms(&now.elapsed()) as usize
         );
     }
 
@@ -359,9 +352,7 @@ impl PohRecorder {
             if let Some(poh_entry) = self.poh.lock().unwrap().record(mixin) {
                 inc_new_counter_warn!(
                     "poh_recorder-record_lock_contention",
-                    timing::duration_as_ms(&now.elapsed()) as usize,
-                    0,
-                    1000
+                    timing::duration_as_ms(&now.elapsed()) as usize
                 );
                 let entry = Entry {
                     num_hashes: poh_entry.num_hashes,
@@ -383,7 +374,7 @@ impl PohRecorder {
         tick_height: u64,
         last_entry_hash: Hash,
         start_slot: Slot,
-        next_leader_slot: Option<Slot>,
+        next_leader_slot: Option<(Slot, Slot)>,
         ticks_per_slot: u64,
         id: &Pubkey,
         blocktree: &Arc<Blocktree>,
@@ -396,12 +387,8 @@ impl PohRecorder {
             poh_config.hashes_per_tick,
         )));
         let (sender, receiver) = channel();
-        let max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
-        let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
-            &next_leader_slot,
-            ticks_per_slot,
-            max_last_leader_grace_ticks,
-        );
+        let (start_leader_at_tick, last_leader_tick, grace_ticks) =
+            Self::compute_leader_slot_ticks(next_leader_slot, ticks_per_slot);
         (
             Self {
                 poh,
@@ -414,7 +401,7 @@ impl PohRecorder {
                 start_tick: tick_height + 1,
                 start_leader_at_tick,
                 last_leader_tick,
-                max_last_leader_grace_ticks,
+                grace_ticks,
                 id: *id,
                 blocktree: blocktree.clone(),
                 leader_schedule_cache: leader_schedule_cache.clone(),
@@ -432,7 +419,7 @@ impl PohRecorder {
         tick_height: u64,
         last_entry_hash: Hash,
         start_slot: Slot,
-        next_leader_slot: Option<Slot>,
+        next_leader_slot: Option<(Slot, Slot)>,
         ticks_per_slot: u64,
         id: &Pubkey,
         blocktree: &Arc<Blocktree>,
@@ -476,7 +463,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -503,7 +490,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -529,7 +516,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -538,7 +525,7 @@ mod tests {
             );
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 1);
-            poh_recorder.reset(0, Hash::default(), 0, Some(4));
+            poh_recorder.reset(Hash::default(), 0, Some((4, 4)));
             assert_eq!(poh_recorder.tick_cache.len(), 0);
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -557,7 +544,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -591,7 +578,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -637,7 +624,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -681,7 +668,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -719,7 +706,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -759,7 +746,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -806,7 +793,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -850,7 +837,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -885,7 +872,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -896,7 +883,7 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 2);
             let hash = poh_recorder.poh.lock().unwrap().hash;
-            poh_recorder.reset(poh_recorder.tick_height, hash, 0, Some(4));
+            poh_recorder.reset(hash, 0, Some((4, 4)));
             assert_eq!(poh_recorder.tick_cache.len(), 0);
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -912,7 +899,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -922,12 +909,7 @@ mod tests {
             poh_recorder.tick();
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 2);
-            poh_recorder.reset(
-                poh_recorder.tick_cache[0].1,
-                poh_recorder.tick_cache[0].0.hash,
-                0,
-                Some(4),
-            );
+            poh_recorder.reset(poh_recorder.tick_cache[0].0.hash, 0, Some((4, 4)));
             assert_eq!(poh_recorder.tick_cache.len(), 0);
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -935,6 +917,8 @@ mod tests {
 
     #[test]
     fn test_reset_to_new_value() {
+        solana_logger::setup();
+
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree =
@@ -943,7 +927,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -955,10 +939,10 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 3);
             assert_eq!(poh_recorder.tick_height, 3);
-            poh_recorder.reset(1, hash(b"hello"), 0, Some(4));
+            poh_recorder.reset(hash(b"hello"), 0, Some((4, 4))); // parent slot 0 implies tick_height of 3
             assert_eq!(poh_recorder.tick_cache.len(), 0);
             poh_recorder.tick();
-            assert_eq!(poh_recorder.tick_height, 2);
+            assert_eq!(poh_recorder.tick_height, 4);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
@@ -975,7 +959,7 @@ mod tests {
                 0,
                 Hash::default(),
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -988,7 +972,7 @@ mod tests {
                 max_tick_height: 3,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.reset(1, hash(b"hello"), 0, Some(4));
+            poh_recorder.reset(hash(b"hello"), 0, Some((4, 4)));
             assert!(poh_recorder.working_bank.is_none());
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -1040,7 +1024,7 @@ mod tests {
                 0,
                 prev_hash,
                 0,
-                Some(4),
+                Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
@@ -1068,13 +1052,15 @@ mod tests {
                 .is_err());
             assert!(poh_recorder.working_bank.is_none());
             // Make sure the starting slot is updated
-            assert_eq!(poh_recorder.start_slot(), end_slot);
+            assert_eq!(poh_recorder.start_slot, end_slot);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_reached_leader_tick() {
+        solana_logger::setup();
+
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree =
@@ -1097,13 +1083,13 @@ mod tests {
             // Test that with no leader slot, we don't reach the leader tick
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
-            poh_recorder.reset(poh_recorder.tick_height(), bank.last_blockhash(), 0, None);
+            poh_recorder.reset(bank.last_blockhash(), 0, None);
 
             // Test that with no leader slot in reset(), we don't reach the leader tick
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
             // Provide a leader slot 1 slot down
-            poh_recorder.reset(bank.ticks_per_slot(), bank.last_blockhash(), 0, Some(2));
+            poh_recorder.reset(bank.last_blockhash(), 0, Some((2, 2)));
 
             let init_ticks = poh_recorder.tick_height();
 
@@ -1121,27 +1107,16 @@ mod tests {
             // Test that we don't reach the leader tick because of grace ticks
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
-            // reset poh now. it should discard the grace ticks wait
-            poh_recorder.reset(
-                poh_recorder.tick_height(),
-                bank.last_blockhash(),
-                1,
-                Some(2),
-            );
-            // without sending more ticks, we should be leader now
+            // reset poh now. we should immediately be leader
+            poh_recorder.reset(bank.last_blockhash(), 1, Some((2, 2)));
             assert_eq!(poh_recorder.reached_leader_tick().0, true);
             assert_eq!(poh_recorder.reached_leader_tick().1, 0);
 
             // Now test that with grace ticks we can reach leader ticks
             // Set the leader slot 1 slot down
-            poh_recorder.reset(
-                poh_recorder.tick_height(),
-                bank.last_blockhash(),
-                2,
-                Some(3),
-            );
+            poh_recorder.reset(bank.last_blockhash(), 1, Some((3, 3)));
 
-            // Send one slot worth of ticks
+            // Send one slot worth of ticks ("skips" slot 2)
             for _ in 0..bank.ticks_per_slot() {
                 poh_recorder.tick();
             }
@@ -1150,62 +1125,38 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
             // Send 1 less tick than the grace ticks
-            for _ in 0..bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR - 1 {
+            for _ in 0..bank.ticks_per_slot() * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR {
                 poh_recorder.tick();
             }
-            // We are still not the leader
-            assert_eq!(poh_recorder.reached_leader_tick().0, false);
-
-            // Send one more tick
-            poh_recorder.tick();
 
             // We should be the leader now
             assert_eq!(poh_recorder.reached_leader_tick().0, true);
             assert_eq!(
                 poh_recorder.reached_leader_tick().1,
-                bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR
+                bank.ticks_per_slot() * NUM_CONSECUTIVE_LEADER_SLOTS / GRACE_TICKS_FACTOR
             );
 
             // Let's test that correct grace ticks are reported
             // Set the leader slot 1 slot down
-            poh_recorder.reset(
-                poh_recorder.tick_height(),
-                bank.last_blockhash(),
-                3,
-                Some(4),
-            );
+            poh_recorder.reset(bank.last_blockhash(), 2, Some((4, 4)));
 
-            // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
-            for _ in
-                bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR..bank.ticks_per_slot()
-            {
+            // send ticks for a slot
+            for _ in 0..bank.ticks_per_slot() {
                 poh_recorder.tick();
             }
 
-            // Send one extra tick before resetting (so that there's one grace tick)
-            poh_recorder.tick();
-
             // We are not the leader yet, as expected
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
-            poh_recorder.reset(
-                poh_recorder.tick_height(),
-                bank.last_blockhash(),
-                3,
-                Some(4),
-            );
+            poh_recorder.reset(bank.last_blockhash(), 3, Some((4, 4)));
+
             // without sending more ticks, we should be leader now
             assert_eq!(poh_recorder.reached_leader_tick().0, true);
-            assert_eq!(poh_recorder.reached_leader_tick().1, 1);
+            assert_eq!(poh_recorder.reached_leader_tick().1, 0);
 
             // Let's test that if a node overshoots the ticks for its target
             // leader slot, reached_leader_tick() will return true, because it's overdue
             // Set the leader slot 1 slot down
-            poh_recorder.reset(
-                poh_recorder.tick_height(),
-                bank.last_blockhash(),
-                4,
-                Some(5),
-            );
+            poh_recorder.reset(bank.last_blockhash(), 4, Some((5, 5)));
 
             // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
             for _ in 0..4 * bank.ticks_per_slot() {
@@ -1245,7 +1196,7 @@ mod tests {
                 false
             );
 
-            poh_recorder.reset(poh_recorder.tick_height(), bank.last_blockhash(), 0, None);
+            poh_recorder.reset(bank.last_blockhash(), 0, None);
 
             assert_eq!(
                 poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
@@ -1253,12 +1204,8 @@ mod tests {
             );
 
             // We reset with leader slot after 3 slots
-            poh_recorder.reset(
-                poh_recorder.tick_height(),
-                bank.last_blockhash(),
-                0,
-                Some(bank.slot() + 3),
-            );
+            let bank_slot = bank.slot() + 3;
+            poh_recorder.reset(bank.last_blockhash(), 0, Some((bank_slot, bank_slot)));
 
             // Test that the node won't be leader in next 2 slots
             assert_eq!(
@@ -1277,6 +1224,8 @@ mod tests {
                 false
             );
 
+            // Move the bank up a slot (so that max_tick_height > slot 0's tick_height)
+            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
             // If we set the working bank, the node should be leader within next 2 slots
             poh_recorder.set_bank(&bank);
             assert_eq!(
@@ -1284,5 +1233,66 @@ mod tests {
                 true
             );
         }
+    }
+
+    #[test]
+    fn test_flush_virtual_ticks() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            // test that virtual ticks are flushed into a newly set bank asap
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let genesis_blockhash = bank.last_blockhash();
+
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                bank.last_blockhash(),
+                0,
+                Some((2, 2)),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+            //create a new bank
+            let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 2));
+            //put 2 slots worth of virtual ticks into poh
+            for _ in 0..(bank.ticks_per_slot() * 2) {
+                poh_recorder.tick();
+            }
+            poh_recorder.set_bank(&bank.clone());
+            assert!(!bank.check_hash_age(&genesis_blockhash, 1));
+        }
+    }
+
+    #[test]
+    fn test_compute_leader_slots() {
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(None, 0),
+            (None, 0, 0)
+        );
+
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(Some((4, 4)), 8),
+            (Some(36), 39, 4)
+        );
+
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(Some((4, 7)), 8),
+            (Some(44), 63, MAX_GRACE_TICKS)
+        );
+
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(Some((6, 7)), 8),
+            (Some(56), 63, 8)
+        );
+
+        assert_eq!(
+            PohRecorder::compute_leader_slot_ticks(Some((6, 7)), 4),
+            (Some(28), 31, 4)
+        );
     }
 }

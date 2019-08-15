@@ -1,5 +1,4 @@
-use generic_array::typenum::U32;
-use generic_array::GenericArray;
+use std::convert::TryFrom;
 use std::error;
 use std::fmt;
 use std::fs::{self, File};
@@ -8,9 +7,11 @@ use std::mem;
 use std::path::Path;
 use std::str::FromStr;
 
-#[repr(C)]
+pub use bs58;
+
+#[repr(transparent)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Pubkey(GenericArray<u8, U32>);
+pub struct Pubkey([u8; 32]);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsePubkeyError {
@@ -43,7 +44,10 @@ impl FromStr for Pubkey {
 
 impl Pubkey {
     pub fn new(pubkey_vec: &[u8]) -> Self {
-        Pubkey(GenericArray::clone_from_slice(&pubkey_vec))
+        Self(
+            <[u8; 32]>::try_from(<&[u8]>::clone(&pubkey_vec))
+                .expect("Slice must be the same length as a Pubkey"),
+        )
     }
 
     pub fn new_rand() -> Self {
@@ -69,7 +73,7 @@ impl fmt::Display for Pubkey {
     }
 }
 
-pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<error::Error>> {
+pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn error::Error>> {
     let printable = format!("{}", pubkey);
     let serialized = serde_json::to_string(&printable)?;
 
@@ -82,7 +86,7 @@ pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<error::Erro
     Ok(())
 }
 
-pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<error::Error>> {
+pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
     let f = File::open(infile.to_string())?;
     let printable: String = serde_json::from_reader(f)?;
     Ok(Pubkey::from_str(&printable)?)
@@ -120,7 +124,7 @@ macro_rules! solana_name_id(
         fn test_name_id() {
             // un-comment me to see what the id should look like, given a name
             //  if id().to_string() != $name {
-            //      panic!("id for `{}` should be `{:?}`", $name, bs58::decode($name).into_vec().unwrap());
+            //      panic!("id for `{}` should be `{:?}`", $name, $crate::pubkey::bs58::decode($name).into_vec().unwrap());
             //  }
             assert_eq!(id().to_string(), $name)
         }
@@ -166,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_write_pubkey() -> Result<(), Box<error::Error>> {
+    fn test_read_write_pubkey() -> Result<(), Box<dyn error::Error>> {
         let filename = "test_pubkey.json";
         let pubkey = Pubkey::new_rand();
         write_pubkey(filename, pubkey)?;

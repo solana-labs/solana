@@ -1,6 +1,5 @@
 //! Native loader
 use crate::message_processor::SymbolCache;
-use bincode::deserialize;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
@@ -9,7 +8,6 @@ use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils;
-use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::path::PathBuf;
@@ -66,88 +64,53 @@ fn library_open(path: &PathBuf) -> std::io::Result<Library> {
     Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
 }
 
-pub fn entrypoint(
+pub fn invoke_entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     ix_data: &[u8],
     symbol_cache: &SymbolCache,
 ) -> Result<(), InstructionError> {
-    if keyed_accounts[0].account.executable {
-        // dispatch it
-        let (names, params) = keyed_accounts.split_at_mut(1);
-        let name_vec = &names[0].account.data;
-        if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
-            unsafe {
-                return entrypoint(program_id, params, ix_data);
-            }
+    // dispatch it
+    let (names, params) = keyed_accounts.split_at_mut(1);
+    let name_vec = &names[0].account.data;
+    if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
+        unsafe {
+            return entrypoint(program_id, params, ix_data);
         }
-        let name = match str::from_utf8(name_vec) {
-            Ok(v) => v,
-            Err(e) => {
-                warn!("Invalid UTF-8 sequence: {}", e);
-                return Err(InstructionError::GenericError);
-            }
-        };
-        trace!("Call native {:?}", name);
-        let path = create_path(&name);
-        match library_open(&path) {
-            Ok(library) => unsafe {
-                let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
-                    match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            warn!(
-                                "{:?}: Unable to find {:?} in program",
-                                e,
-                                instruction_processor_utils::ENTRYPOINT
-                            );
-                            return Err(InstructionError::GenericError);
-                        }
-                    };
-                let ret = entrypoint(program_id, params, ix_data);
-                symbol_cache
-                    .write()
-                    .unwrap()
-                    .insert(name_vec.to_vec(), entrypoint);
-                return ret;
-            },
-            Err(e) => {
-                warn!("Unable to load: {:?}", e);
-                return Err(InstructionError::GenericError);
-            }
-        }
-    } else if let Ok(instruction) = deserialize(ix_data) {
-        if keyed_accounts[0].signer_key().is_none() {
-            warn!("key[0] did not sign the transaction");
+    }
+    let name = match str::from_utf8(name_vec) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!("Invalid UTF-8 sequence: {}", e);
             return Err(InstructionError::GenericError);
         }
-        match instruction {
-            LoaderInstruction::Write { offset, bytes } => {
-                trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
-                let offset = offset as usize;
-                if keyed_accounts[0].account.data.len() < offset + bytes.len() {
-                    warn!(
-                        "Error: Overflow, {} < {}",
-                        keyed_accounts[0].account.data.len(),
-                        offset + bytes.len()
-                    );
-                    return Err(InstructionError::GenericError);
-                }
-                // native loader takes a name and we assume it all comes in at once
-                keyed_accounts[0].account.data = bytes;
-            }
-
-            LoaderInstruction::Finalize => {
-                keyed_accounts[0].account.executable = true;
-                trace!(
-                    "NativeLoader::Finalize prog: {:?}",
-                    keyed_accounts[0].signer_key().unwrap()
-                );
-            }
+    };
+    trace!("Call native {:?}", name);
+    let path = create_path(&name);
+    match library_open(&path) {
+        Ok(library) => unsafe {
+            let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
+                match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        warn!(
+                            "{:?}: Unable to find {:?} in program",
+                            e,
+                            instruction_processor_utils::ENTRYPOINT
+                        );
+                        return Err(InstructionError::GenericError);
+                    }
+                };
+            let ret = entrypoint(program_id, params, ix_data);
+            symbol_cache
+                .write()
+                .unwrap()
+                .insert(name_vec.to_vec(), entrypoint);
+            ret
+        },
+        Err(e) => {
+            warn!("Unable to load: {:?}", e);
+            Err(InstructionError::GenericError)
         }
-    } else {
-        warn!("Invalid data in instruction: {:?}", ix_data);
-        return Err(InstructionError::GenericError);
     }
-    Ok(())
 }

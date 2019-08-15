@@ -1,5 +1,6 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::cuda_runtime::PinnedVec;
+use crate::erasure::ErasureConfig;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::recycler::{Recycler, Reset};
 use crate::result::{Error, Result};
@@ -11,13 +12,11 @@ pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signable;
 use solana_sdk::signature::Signature;
-use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::io;
 use std::io::Cursor;
-use std::io::Write;
 use std::mem;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
@@ -29,11 +28,11 @@ pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
-pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
+pub const BLOB_SIZE: usize = (2 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
 pub const BLOB_DATA_ALIGN: usize = 16; // safe for erasure input pointers, gf.c needs 16byte-aligned buffers
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
-pub const PACKETS_PER_BLOB: usize = 256; // reasonable estimate for payment packets per blob based on ~200b transaction size
+pub const PACKETS_PER_BLOB: usize = 8; // reasonable estimate for payment packets per blob based on ~200b transaction size
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
@@ -292,7 +291,7 @@ impl Packets {
                     total_size += size;
                     // Try to batch into blob-sized buffers
                     // will cause less re-shuffling later on.
-                    if start.elapsed().as_millis() > 1 || total_size >= (BLOB_DATA_SIZE - 4096) {
+                    if start.elapsed().as_millis() > 1 || total_size >= (BLOB_DATA_SIZE - 512) {
                         break;
                     }
                 }
@@ -336,7 +335,9 @@ pub fn to_blob<T: Serialize>(resp: T, rsp_addr: SocketAddr) -> Result<Blob> {
     let mut b = Blob::default();
     let v = bincode::serialize(&resp)?;
     let len = v.len();
-    assert!(len <= BLOB_SIZE);
+    if len > BLOB_SIZE {
+        return Err(Error::ToBlobError);
+    }
     b.data[..len].copy_from_slice(&v);
     b.meta.size = len;
     b.meta.set_addr(&rsp_addr);
@@ -364,18 +365,6 @@ pub fn to_shared_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<Share
     Ok(blobs)
 }
 
-pub fn packets_to_blobs<T: Borrow<Packet>>(packets: &[T]) -> Vec<Blob> {
-    let mut current_index = 0;
-    let mut blobs = vec![];
-    while current_index < packets.len() {
-        let mut blob = Blob::default();
-        current_index += blob.store_packets(&packets[current_index..]) as usize;
-        blobs.push(blob);
-    }
-
-    blobs
-}
-
 macro_rules! range {
     ($prev:expr, $type:ident) => {
         $prev..$prev + size_of::<$type>()
@@ -385,11 +374,13 @@ macro_rules! range {
 const SIGNATURE_RANGE: std::ops::Range<usize> = range!(0, Signature);
 const FORWARDED_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, bool);
 const PARENT_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u64);
-const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
+const VERSION_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
+const SLOT_RANGE: std::ops::Range<usize> = range!(VERSION_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
 const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
 const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
-const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
+const ERASURE_CONFIG_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, ErasureConfig);
+const SIZE_RANGE: std::ops::Range<usize> = range!(ERASURE_CONFIG_RANGE.end, u64);
 
 macro_rules! align {
     ($x:expr, $align:expr) => {
@@ -426,6 +417,7 @@ impl Blob {
             out.position() as usize
         };
         blob.set_size(pos);
+        blob.set_erasure_config(&ErasureConfig::default());
         blob
     }
 
@@ -434,6 +426,12 @@ impl Blob {
     }
     pub fn set_parent(&mut self, ix: u64) {
         LittleEndian::write_u64(&mut self.data[PARENT_RANGE], ix);
+    }
+    pub fn version(&self) -> u64 {
+        LittleEndian::read_u64(&self.data[VERSION_RANGE])
+    }
+    pub fn set_version(&mut self, version: u64) {
+        LittleEndian::write_u64(&mut self.data[VERSION_RANGE], version);
     }
     pub fn slot(&self) -> u64 {
         LittleEndian::read_u64(&self.data[SLOT_RANGE])
@@ -446,6 +444,14 @@ impl Blob {
     }
     pub fn set_index(&mut self, ix: u64) {
         LittleEndian::write_u64(&mut self.data[INDEX_RANGE], ix);
+    }
+
+    pub fn set_erasure_config(&mut self, config: &ErasureConfig) {
+        self.data[ERASURE_CONFIG_RANGE].copy_from_slice(&bincode::serialize(config).unwrap())
+    }
+
+    pub fn erasure_config(&self) -> ErasureConfig {
+        bincode::deserialize(&self.data[ERASURE_CONFIG_RANGE]).unwrap_or_default()
     }
 
     pub fn seed(&self) -> [u8; 32] {
@@ -538,52 +544,6 @@ impl Blob {
 
     pub fn get_signature_bytes(&self) -> &[u8] {
         &self.data[SIGNATURE_RANGE]
-    }
-
-    pub fn store_packets<T: Borrow<Packet>>(&mut self, packets: &[T]) -> u64 {
-        let size = self.size();
-        let mut cursor = Cursor::new(&mut self.data_mut()[size..]);
-        let mut written = 0;
-        let mut last_index = 0;
-        for packet in packets {
-            if bincode::serialize_into(&mut cursor, &packet.borrow().meta.size).is_err() {
-                break;
-            }
-            let packet = packet.borrow();
-            if cursor.write_all(&packet.data[..packet.meta.size]).is_err() {
-                break;
-            }
-
-            written = cursor.position() as usize;
-            last_index += 1;
-        }
-
-        self.set_size(size + written);
-        last_index
-    }
-
-    // other side of store_packets
-    pub fn load_packets(&self, packets: &mut PinnedVec<Packet>) {
-        // rough estimate
-        let mut pos = 0;
-        let size_len = bincode::serialized_size(&0usize).unwrap() as usize;
-
-        while pos + size_len < self.size() {
-            let size: usize = bincode::deserialize_from(&self.data()[pos..]).unwrap();
-
-            pos += size_len;
-
-            if size > PACKET_DATA_SIZE || pos + size > self.size() {
-                break;
-            }
-
-            let mut packet = Packet::default();
-            packet.meta.size = size;
-            packet.data[..size].copy_from_slice(&self.data()[pos..pos + size]);
-
-            pos += size;
-            packets.push(packet);
-        }
     }
 
     pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
@@ -683,8 +643,6 @@ pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut blob_index: u64, slot:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode;
-    use rand::Rng;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
@@ -808,59 +766,12 @@ mod tests {
     }
 
     #[test]
-    fn test_store_blobs_max() {
-        let serialized_size_size = bincode::serialized_size(&0usize).unwrap() as usize;
-        let serialized_packet_size = serialized_size_size + PACKET_DATA_SIZE;
-        let num_packets = (BLOB_SIZE - BLOB_HEADER_SIZE) / serialized_packet_size + 1;
-        let mut blob = Blob::default();
-        let packets: Vec<_> = (0..num_packets)
-            .map(|_| {
-                let mut packet = Packet::default();
-                packet.meta.size = PACKET_DATA_SIZE;
-                packet
-            })
-            .collect();
+    fn test_blob_erasure_config() {
+        let mut b = Blob::default();
+        let config = ErasureConfig::new(32, 16);
+        b.set_erasure_config(&config);
 
-        // Everything except the last packet should have been written
-        assert_eq!(blob.store_packets(&packets[..]), (num_packets - 1) as u64);
-
-        blob = Blob::default();
-        // Store packets such that blob only has room for one more
-        assert_eq!(
-            blob.store_packets(&packets[..num_packets - 2]),
-            (num_packets - 2) as u64
-        );
-
-        // Fill the last packet in the blob
-        assert_eq!(blob.store_packets(&packets[..num_packets - 2]), 1);
-
-        // Blob is now full
-        assert_eq!(blob.store_packets(&packets), 0);
-    }
-
-    #[test]
-    fn test_packets_to_blobs() {
-        let mut rng = rand::thread_rng();
-
-        let packets: Vec<_> = (0..2)
-            .map(|_| {
-                let mut packet = Packet::default();
-                packet.meta.size = rng.gen_range(1, PACKET_DATA_SIZE);
-                for i in 0..packet.meta.size {
-                    packet.data[i] = rng.gen_range(1, std::u8::MAX);
-                }
-                packet
-            })
-            .collect();
-
-        let blobs = packets_to_blobs(&packets[..]);
-
-        let mut reconstructed_packets = PinnedVec::default();
-        blobs
-            .iter()
-            .for_each(|b| b.load_packets(&mut reconstructed_packets));
-
-        assert_eq!(reconstructed_packets[..], packets[..]);
+        assert_eq!(config, b.erasure_config());
     }
 
     #[test]
@@ -917,5 +828,13 @@ mod tests {
         assert_eq!(packets.packets.len(), 10);
         packets.reset();
         assert_eq!(packets.packets.len(), 0);
+    }
+
+    #[test]
+    fn test_version() {
+        let mut b = Blob::default();
+        assert_eq!(b.version(), 0);
+        b.set_version(1);
+        assert_eq!(b.version(), 1);
     }
 }

@@ -84,7 +84,7 @@ impl MerkleTree {
         capacity
     }
 
-    pub fn new(items: &[&[u8]]) -> Self {
+    pub fn new<T: AsRef<[u8]>>(items: &[T]) -> Self {
         let cap = MerkleTree::calculate_vec_capacity(items.len());
         let mut mt = MerkleTree {
             leaf_count: items.len(),
@@ -92,6 +92,7 @@ impl MerkleTree {
         };
 
         for item in items {
+            let item = item.as_ref();
             let hash = hash_leaf!(item);
             mt.nodes.push(hash);
         }
@@ -178,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_tree_from_empty() {
-        let mt = MerkleTree::new(&[]);
+        let mt = MerkleTree::new::<[u8; 0]>(&[]);
         assert_eq!(mt.get_root(), None);
     }
 

@@ -1,0 +1,14 @@
+/include/
+/farf/
+/target/
+
+**/*.rs.bk
+.cargo
+
+# log files
+*.log
+log-*.txt
+
+# intellij files
+/.idea/
+/solana.iml

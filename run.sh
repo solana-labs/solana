@@ -37,7 +37,7 @@ done
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
-dataDir=$PWD/config-local/"$(basename "$0" .sh)"
+dataDir=$PWD/config/"$(basename "$0" .sh)"
 ledgerDir=$PWD/config/ledger
 
 set -x
@@ -61,12 +61,6 @@ else
 fi
 solana-keygen new -f -o "$dataDir"/drone-keypair.json
 solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
-
-leaderVoteAccountPubkey=$(\
-  solana-wallet \
-    --keypair "$dataDir"/leader-vote-account-keypair.json  \
-    address \
-)
 
 solana-genesis \
   --lamports 1000000000 \
@@ -94,13 +88,12 @@ args=(
   --identity "$dataDir"/leader-keypair.json
   --storage-keypair "$dataDir"/leader-storage-account-keypair.json
   --voting-keypair "$dataDir"/leader-vote-account-keypair.json
-  --vote-account "$leaderVoteAccountPubkey"
   --ledger "$ledgerDir"
   --gossip-port 8001
   --rpc-port 8899
   --rpc-drone-address 127.0.0.1:9900
   --accounts "$dataDir"/accounts
-  --snapshot-path "$dataDir"/snapshots
+  --snapshot-interval-slots 100
 )
 if [[ -n $blockstreamSocket ]]; then
   args+=(--blockstream "$blockstreamSocket")

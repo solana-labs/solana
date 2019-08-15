@@ -66,6 +66,7 @@ pub fn create_genesis_block_with_leader(
                 ),
             ),
         ])
+        // Bare minimum program set
         .native_instruction_processors(&[
             solana_bpf_loader_program!(),
             solana_vote_program!(),

@@ -28,7 +28,7 @@ use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::timing::{get_segment_from_slot, timestamp};
+use solana_sdk::timing::{get_complete_segment_from_slot, get_segment_from_slot, timestamp};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
 use solana_storage_api::storage_contract::StorageContract;
@@ -45,6 +45,8 @@ use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
 
+static ENCRYPTED_FILENAME: &'static str = "ledger.enc";
+
 #[derive(Serialize, Deserialize)]
 pub enum ReplicatorRequest {
     GetSlotHeight(SocketAddr),
@@ -60,7 +62,7 @@ pub struct Replicator {
 struct ReplicatorMeta {
     slot: u64,
     slots_per_segment: u64,
-    ledger_path: String,
+    ledger_path: PathBuf,
     signature: Signature,
     ledger_data_file_encrypted: PathBuf,
     sampling_offsets: Vec<u64>,
@@ -114,7 +116,8 @@ fn get_slot_from_signature(
         | (u64::from(signature_vec[1]) << 8)
         | (u64::from(signature_vec[1]) << 16)
         | (u64::from(signature_vec[2]) << 24);
-    let max_segment_index = get_segment_from_slot(storage_turn, slots_per_segment);
+    let max_segment_index =
+        get_complete_segment_from_slot(storage_turn, slots_per_segment).unwrap();
     segment_index %= max_segment_index as u64;
     segment_index * slots_per_segment
 }
@@ -197,7 +200,7 @@ impl Replicator {
     /// * `keypair` - Keypair for this replicator
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        ledger_path: &str,
+        ledger_path: &Path,
         node: Node,
         cluster_entrypoint: ContactInfo,
         keypair: Arc<Keypair>,
@@ -260,7 +263,7 @@ impl Replicator {
             let exit = exit.clone();
             let node_info = node.info.clone();
             let mut meta = ReplicatorMeta {
-                ledger_path: ledger_path.to_string(),
+                ledger_path: ledger_path.to_path_buf(),
                 ..ReplicatorMeta::default()
             };
             spawn(move || {
@@ -513,8 +516,7 @@ impl Replicator {
     }
 
     fn encrypt_ledger(meta: &mut ReplicatorMeta, blocktree: &Arc<Blocktree>) -> Result<()> {
-        let ledger_path = Path::new(&meta.ledger_path);
-        meta.ledger_data_file_encrypted = ledger_path.join("ledger.enc");
+        meta.ledger_data_file_encrypted = meta.ledger_path.join(ENCRYPTED_FILENAME);
 
         {
             let mut ivec = [0u8; 64];
@@ -580,7 +582,7 @@ impl Replicator {
                     return Err(Error::IO(<io::Error>::new(
                         io::ErrorKind::Other,
                         "unable to get recent blockhash, can't submit proof",
-                    )))
+                    )));
                 }
             };
 
@@ -709,7 +711,7 @@ impl Replicator {
                 previous_blockhash,
                 exit,
             )?;
-            if get_segment_from_slot(turn_slot, slots_per_segment) != 0 {
+            if get_complete_segment_from_slot(turn_slot, slots_per_segment).is_some() {
                 return Ok((blockhash, turn_slot));
             }
         }
@@ -907,7 +909,7 @@ mod tests {
 
     fn tmp_file_path(name: &str) -> PathBuf {
         use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let keypair = Keypair::new();
 
         let mut path = PathBuf::new();

@@ -10,7 +10,7 @@
 
 use crate::contact_info::ContactInfo;
 use crate::crds::{Crds, VersionedCrdsValue};
-use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_BLOOM_SIZE};
+use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use crate::packet::BLOB_DATA_SIZE;
@@ -72,7 +72,7 @@ impl CrdsGossipPush {
 
     fn prune_stake_threshold(self_stake: u64, origin_stake: u64) -> u64 {
         let min_path_stake = self_stake.min(origin_stake);
-        (CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT * min_path_stake as f64).round() as u64
+        ((CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT * min_path_stake as f64).round() as u64).max(1)
     }
 
     pub fn prune_received_cache(
@@ -258,7 +258,7 @@ impl CrdsGossipPush {
                     if new_items.get(&item.id).is_some() {
                         continue;
                     }
-                    let size = cmp::max(CRDS_GOSSIP_BLOOM_SIZE, network_size);
+                    let size = cmp::max(CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS, network_size);
                     let mut bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
                     bloom.add(&item.id);
                     new_items.insert(item.id, bloom);

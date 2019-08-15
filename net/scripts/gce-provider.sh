@@ -36,6 +36,17 @@ __cloud_FindInstances() {
              --filter "$filter" \
              --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status,zone)' \
            | grep RUNNING)
+
+  while read -r name status zone; do
+    privateIp=TERMINATED
+    publicIp=TERMINATED
+    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s\n" "$name" "$publicIp" "$privateIp" "$status" "$zone"
+
+    instances+=("$name:$publicIp:$privateIp:$zone")
+  done < <(gcloud compute instances list \
+             --filter "$filter" \
+             --format 'value(name,status,zone)' \
+           | grep TERMINATED)
 }
 
 #
@@ -126,6 +137,7 @@ cloud_CreateInstances() {
   declare optionalStartupScript="$8"
   declare optionalAddress="$9"
   declare optionalBootDiskType="${10}"
+  declare optionalAdditionalDiskSize="${11}"
 
   if $enableGpu; then
     # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
@@ -198,6 +210,22 @@ cloud_CreateInstances() {
     set -x
     gcloud beta compute instances create "${nodes[@]}" "${args[@]}"
   )
+
+  if [[ -n $optionalAdditionalDiskSize ]]; then
+    if [[ $numNodes = 1 ]]; then
+      (
+        set -x
+        cloud_CreateAndAttachPersistentDisk "${namePrefix}" "$optionalAdditionalDiskSize" "pd-ssd" "$zone"
+      )
+    else
+      for node in $(seq -f "${namePrefix}%0${#numNodes}g" 1 "$numNodes"); do
+        (
+          set -x
+          cloud_CreateAndAttachPersistentDisk "${node}" "$optionalAdditionalDiskSize" "pd-ssd" "$zone"
+        )
+      done
+    fi
+  fi
 }
 
 #
@@ -234,6 +262,9 @@ cloud_WaitForInstanceReady() {
 #  declare instanceZone="$3"
   declare timeout="$4"
 
+  if [[ $instanceIp = "TERMINATED" ]]; then
+    return 1
+  fi
   timeout "${timeout}"s bash -c "set -o pipefail; until ping -c 3 $instanceIp | tr - _; do echo .; done"
 }
 
@@ -251,8 +282,40 @@ cloud_FetchFile() {
   declare localFile="$4"
   declare zone="$5"
 
+  if [[ $publicIp = "TERMINATED" ]]; then
+    return 1
+  fi
+
   (
     set -x
     gcloud compute scp --zone "$zone" "$instanceName:$remoteFile" "$localFile"
   )
+}
+
+#
+# cloud_CreateAndAttachPersistentDisk [instanceName] [diskSize] [diskType]
+#
+# Create a persistent disk and attach it to a pre-existing VM instance.
+# Set disk to auto-delete upon instance deletion
+#
+cloud_CreateAndAttachPersistentDisk() {
+  declare instanceName="$1"
+  declare diskSize="$2"
+  declare diskType="$3"
+  declare zone="$4"
+  diskName="${instanceName}-pd"
+
+  gcloud beta compute disks create "$diskName" \
+    --size "$diskSize" \
+    --type "$diskType" \
+    --zone "$zone"
+
+  gcloud compute instances attach-disk "$instanceName" \
+    --disk "$diskName" \
+    --zone "$zone"
+
+  gcloud compute instances set-disk-auto-delete "$instanceName" \
+    --disk "$diskName" \
+    --zone "$zone" \
+    --auto-delete
 }

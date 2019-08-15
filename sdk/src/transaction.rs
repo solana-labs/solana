@@ -193,9 +193,24 @@ impl Transaction {
     ///  if recent_blockhash is not the same as currently in the transaction,
     ///  clear any prior signatures and update recent_blockhash
     pub fn partial_sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
-        let signed_keys =
-            &self.message.account_keys[0..self.message.header.num_required_signatures as usize];
+        let positions = self
+            .get_signing_keypair_positions(keypairs)
+            .expect("account_keys doesn't contain num_required_signatures keys");
+        let positions: Vec<usize> = positions
+            .iter()
+            .map(|pos| pos.expect("keypair-pubkey mismatch"))
+            .collect();
+        self.partial_sign_unchecked(keypairs, positions, recent_blockhash)
+    }
 
+    /// Sign the transaction and place the signatures in their associated positions in `signatures`
+    /// without checking that the positions are correct.
+    pub fn partial_sign_unchecked<T: KeypairUtil>(
+        &mut self,
+        keypairs: &[&T],
+        positions: Vec<usize>,
+        recent_blockhash: Hash,
+    ) {
         // if you change the blockhash, you're re-signing...
         if recent_blockhash != self.message.recent_blockhash {
             self.message.recent_blockhash = recent_blockhash;
@@ -204,14 +219,30 @@ impl Transaction {
                 .for_each(|signature| *signature = Signature::default());
         }
 
-        for keypair in keypairs {
-            let i = signed_keys
-                .iter()
-                .position(|pubkey| pubkey == &keypair.pubkey())
-                .expect("keypair-pubkey mismatch");
-
-            self.signatures[i] = keypair.sign_message(&self.message_data())
+        for i in 0..positions.len() {
+            self.signatures[positions[i]] = keypairs[i].sign_message(&self.message_data())
         }
+    }
+
+    /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs
+    pub fn get_signing_keypair_positions<T: KeypairUtil>(
+        &self,
+        keypairs: &[&T],
+    ) -> Result<Vec<Option<usize>>> {
+        if self.message.account_keys.len() < self.message.header.num_required_signatures as usize {
+            return Err(TransactionError::InvalidAccountIndex);
+        }
+        let signed_keys =
+            &self.message.account_keys[0..self.message.header.num_required_signatures as usize];
+
+        Ok(keypairs
+            .iter()
+            .map(|keypair| {
+                signed_keys
+                    .iter()
+                    .position(|pubkey| pubkey == &keypair.pubkey())
+            })
+            .collect())
     }
 
     pub fn is_signed(&self) -> bool {

@@ -234,6 +234,7 @@ impl ClusterInfoRepairListener {
 
                 let _ = Self::serve_repairs_to_repairee(
                     my_pubkey,
+                    repairee_pubkey,
                     my_root,
                     blocktree,
                     &repairee_epoch_slots,
@@ -249,8 +250,10 @@ impl ClusterInfoRepairListener {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn serve_repairs_to_repairee(
         my_pubkey: &Pubkey,
+        repairee_pubkey: &Pubkey,
         my_root: u64,
         blocktree: &Blocktree,
         repairee_epoch_slots: &EpochSlots,
@@ -263,8 +266,8 @@ impl ClusterInfoRepairListener {
         let slot_iter = blocktree.rooted_slot_iterator(repairee_epoch_slots.root);
         if slot_iter.is_err() {
             info!(
-                "Root for repairee is on different fork. My root: {}, repairee_root: {}",
-                my_root, repairee_epoch_slots.root
+                "Root for repairee is on different fork. My root: {}, repairee_root: {} repairee_pubkey: {:?}",
+                my_root, repairee_epoch_slots.root, repairee_pubkey,
             );
             return Ok(());
         }
@@ -656,6 +659,7 @@ mod tests {
         for repairman_pubkey in &eligible_repairmen {
             ClusterInfoRepairListener::serve_repairs_to_repairee(
                 &repairman_pubkey,
+                &mock_repairee.id,
                 num_slots - 1,
                 &blocktree,
                 &repairee_epoch_slots,
@@ -725,6 +729,7 @@ mod tests {
 
         ClusterInfoRepairListener::serve_repairs_to_repairee(
             &my_pubkey,
+            &mock_repairee.id,
             total_slots - 1,
             &blocktree,
             &repairee_epoch_slots,
@@ -746,6 +751,7 @@ mod tests {
             EpochSlots::new(mock_repairee.id, stakers_slot_offset, repairee_slots, 1);
         ClusterInfoRepairListener::serve_repairs_to_repairee(
             &my_pubkey,
+            &mock_repairee.id,
             total_slots - 1,
             &blocktree,
             &repairee_epoch_slots,

@@ -5,6 +5,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::storage_stage::StorageState;
+use crate::version::VERSION;
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
@@ -220,6 +221,26 @@ pub struct RpcVoteAccountInfo {
     pub commission: u8,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcEpochInfo {
+    /// The current epoch
+    pub epoch: u64,
+
+    /// The current slot, relative to the start of the current epoch
+    pub slot_index: u64,
+
+    /// The number of slots in this epoch
+    pub slots_in_epoch: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct RpcVersionInfo {
+    /// The current version of solana-core
+    pub solana_core: String,
+}
+
 #[rpc(server)]
 pub trait RpcSol {
     type Metadata;
@@ -238,6 +259,12 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, _: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
+
+    #[rpc(meta, name = "getEpochInfo")]
+    fn get_epoch_info(&self, _: Self::Metadata) -> Result<RpcEpochInfo>;
+
+    #[rpc(meta, name = "getLeaderSchedule")]
+    fn get_leader_schedule(&self, _: Self::Metadata) -> Result<Option<Vec<String>>>;
 
     #[rpc(meta, name = "getRecentBlockhash")]
     fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<(String, FeeCalculator)>;
@@ -298,6 +325,12 @@ pub trait RpcSol {
         _: Self::Metadata,
         _: String,
     ) -> Result<Option<(usize, transaction::Result<()>)>>;
+
+    #[rpc(meta, name = "getVersion")]
+    fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo>;
+
+    #[rpc(meta, name = "setLogFilter")]
+    fn set_log_filter(&self, _: Self::Metadata, _: String) -> Result<()>;
 }
 
 pub struct RpcSolImpl;
@@ -367,6 +400,32 @@ impl RpcSol for RpcSolImpl {
                 }
             })
             .collect())
+    }
+
+    fn get_epoch_info(&self, meta: Self::Metadata) -> Result<RpcEpochInfo> {
+        let bank = meta.request_processor.read().unwrap().bank();
+        let epoch_schedule = bank.epoch_schedule();
+        let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
+        Ok(RpcEpochInfo {
+            epoch,
+            slot_index,
+            slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
+        })
+    }
+
+    fn get_leader_schedule(&self, meta: Self::Metadata) -> Result<Option<Vec<String>>> {
+        let bank = meta.request_processor.read().unwrap().bank();
+        Ok(
+            crate::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
+                |leader_schedule| {
+                    leader_schedule
+                        .get_slot_leaders()
+                        .iter()
+                        .map(|pubkey| pubkey.to_string())
+                        .collect()
+                },
+            ),
+        )
     }
 
     fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<(String, FeeCalculator)> {
@@ -557,6 +616,17 @@ impl RpcSol for RpcSolImpl {
     fn fullnode_exit(&self, meta: Self::Metadata) -> Result<bool> {
         meta.request_processor.read().unwrap().fullnode_exit()
     }
+
+    fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
+        Ok(RpcVersionInfo {
+            solana_core: VERSION.to_string(),
+        })
+    }
+
+    fn set_log_filter(&self, _: Self::Metadata, filter: String) -> Result<()> {
+        solana_logger::setup_with_filter(&filter);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -565,6 +635,7 @@ mod tests {
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
+    use solana_sdk::fee_calculator::DEFAULT_BURN_PERCENT;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -896,7 +967,7 @@ mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": [ blockhash.to_string(), {
-                "burnPercent": 50,
+                "burnPercent": DEFAULT_BURN_PERCENT,
                 "lamportsPerSignature": 0,
                 "maxLamportsPerSignature": 0,
                 "minLamportsPerSignature": 0,
@@ -1042,5 +1113,26 @@ mod tests {
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
+    }
+
+    #[test]
+    fn test_rpc_get_version() {
+        let bob_pubkey = Pubkey::new_rand();
+        let (io, meta, ..) = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVersion"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "solana-core": VERSION
+            },
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
     }
 }

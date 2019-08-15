@@ -1,9 +1,11 @@
+use crate::display::println_name_value;
 use chrono::prelude::*;
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
+use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
+use console::{style, Emoji};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json;
-use serde_json::json;
+use serde_json::{json, Value};
 use solana_budget_api;
 use solana_budget_api::budget_instruction;
 use solana_budget_api::budget_state::BudgetError;
@@ -16,6 +18,7 @@ use solana_drone::drone::DRONE_PORT;
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::account_utils::State;
 use solana_sdk::bpf_loader;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils::DecodeError;
@@ -29,14 +32,19 @@ use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_stake_api::stake_instruction;
 use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_instruction;
+use solana_vote_api::vote_state::VoteState;
+use std::collections::VecDeque;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{error, fmt};
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+
+static CHECK_MARK: Emoji = Emoji("✅ ", "");
+static CROSS_MARK: Emoji = Emoji("❌ ", "");
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -49,11 +57,11 @@ pub enum WalletCommand {
     Confirm(Signature),
     AuthorizeVoter(Pubkey, Keypair, Pubkey),
     CreateVoteAccount(Pubkey, Pubkey, u8, u64),
+    ShowAccount(Pubkey, Option<String>),
     ShowVoteAccount(Pubkey),
-    CreateStakeAccount(Pubkey, u64),
-    DelegateStake(Keypair, Pubkey, u64),
+    DelegateStake(Keypair, Pubkey, u64, bool),
     WithdrawStake(Keypair, Pubkey, u64),
-    DeactivateStake(Keypair),
+    DeactivateStake(Keypair, Pubkey),
     RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
     CreateReplicatorStorageAccount(Pubkey, Pubkey),
@@ -61,7 +69,9 @@ pub enum WalletCommand {
     ClaimStorageReward(Pubkey, Pubkey),
     ShowStorageAccount(Pubkey),
     Deploy(String),
+    GetSlot,
     GetTransactionCount,
+    GetVersion,
     // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
         u64,
@@ -71,6 +81,11 @@ pub enum WalletCommand {
         Option<Vec<Pubkey>>,
         Option<Pubkey>,
     ),
+    Ping {
+        interval: Duration,
+        count: Option<u64>,
+        timeout: Duration,
+    },
     // TimeElapsed(to, process_id, timestamp)
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>),
     // Witness(to, process_id)
@@ -79,8 +94,9 @@ pub enum WalletCommand {
 
 #[derive(Debug, Clone)]
 pub enum WalletError {
-    CommandNotRecognized(String),
     BadParameter(String),
+    CommandNotRecognized(String),
+    InsufficientFundsForFee,
     DynamicProgramError(String),
     RpcRequestError(String),
 }
@@ -159,14 +175,26 @@ where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Debug,
 {
-    matches
-        .value_of(name)
-        .map(|value| value.parse::<T>().unwrap())
+    if let Some(value) = matches.value_of(name) {
+        value.parse::<T>().ok()
+    } else {
+        None
+    }
 }
 
 // Return the keypair for an argument with filename `name` or None if not present.
 fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
-    matches.value_of(name).map(|x| read_keypair(x).unwrap())
+    if let Some(value) = matches.value_of(name) {
+        read_keypair(value).ok()
+    } else {
+        None
+    }
+}
+
+// Return a pubkey for an argument that can itself be parsed into a pubkey,
+// or is a filename that can be read as a keypair
+fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
+    value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
 
 pub fn parse_command(
@@ -181,7 +209,7 @@ pub fn parse_command(
             Ok(WalletCommand::Airdrop(lamports))
         }
         ("balance", Some(balance_matches)) => {
-            let pubkey = value_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
+            let pubkey = pubkey_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
             Ok(WalletCommand::Balance(pubkey))
         }
         ("cancel", Some(cancel_matches)) => {
@@ -198,8 +226,8 @@ pub fn parse_command(
             }
         }
         ("create-vote-account", Some(matches)) => {
-            let voting_account_pubkey = value_of(matches, "voting_account_pubkey").unwrap();
-            let node_pubkey = value_of(matches, "node_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+            let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
             let commission = if let Some(commission) = matches.value_of("commission") {
                 commission.parse()?
             } else {
@@ -207,103 +235,106 @@ pub fn parse_command(
             };
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateVoteAccount(
-                voting_account_pubkey,
+                vote_account_pubkey,
                 node_pubkey,
                 commission,
                 lamports,
             ))
         }
         ("authorize-voter", Some(matches)) => {
-            let voting_account_pubkey = value_of(matches, "voting_account_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
             let authorized_voter_keypair =
                 keypair_of(matches, "authorized_voter_keypair_file").unwrap();
             let new_authorized_voter_pubkey =
-                value_of(matches, "new_authorized_voter_pubkey").unwrap();
+                pubkey_of(matches, "new_authorized_voter_pubkey").unwrap();
 
             Ok(WalletCommand::AuthorizeVoter(
-                voting_account_pubkey,
+                vote_account_pubkey,
                 authorized_voter_keypair,
                 new_authorized_voter_pubkey,
             ))
         }
-        ("show-vote-account", Some(matches)) => {
-            let voting_account_pubkey = value_of(matches, "voting_account_pubkey").unwrap();
-            Ok(WalletCommand::ShowVoteAccount(voting_account_pubkey))
-        }
-        ("create-stake-account", Some(matches)) => {
-            let staking_account_pubkey = value_of(matches, "staking_account_pubkey").unwrap();
-            let lamports = matches.value_of("lamports").unwrap().parse()?;
-            Ok(WalletCommand::CreateStakeAccount(
-                staking_account_pubkey,
-                lamports,
+        ("show-account", Some(matches)) => {
+            let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
+            let output_file = matches.value_of("output_file");
+            Ok(WalletCommand::ShowAccount(
+                account_pubkey,
+                output_file.map(ToString::to_string),
             ))
         }
+        ("show-vote-account", Some(matches)) => {
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+            Ok(WalletCommand::ShowVoteAccount(vote_account_pubkey))
+        }
         ("delegate-stake", Some(matches)) => {
-            let staking_account_keypair =
-                keypair_of(matches, "staking_account_keypair_file").unwrap();
-            let voting_account_pubkey = value_of(matches, "voting_account_pubkey").unwrap();
-            let stake = matches.value_of("stake").unwrap().parse()?;
+            let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+            let lamports_to_stake = matches.value_of("lamports_to_stake").unwrap().parse()?;
+            let force = matches.is_present("force");
             Ok(WalletCommand::DelegateStake(
-                staking_account_keypair,
-                voting_account_pubkey,
-                stake,
+                stake_account_keypair,
+                vote_account_pubkey,
+                lamports_to_stake,
+                force,
             ))
         }
         ("withdraw-stake", Some(matches)) => {
-            let staking_account_keypair =
-                keypair_of(matches, "staking_account_keypair_file").unwrap();
+            let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
             let destination_account_pubkey =
-                value_of(matches, "destination_account_pubkey").unwrap();
+                pubkey_of(matches, "destination_account_pubkey").unwrap();
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::WithdrawStake(
-                staking_account_keypair,
+                stake_account_keypair,
                 destination_account_pubkey,
                 lamports,
             ))
         }
         ("deactivate-stake", Some(matches)) => {
-            let staking_account_keypair =
-                keypair_of(matches, "staking_account_keypair_file").unwrap();
-            Ok(WalletCommand::DeactivateStake(staking_account_keypair))
+            let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
+            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
+            Ok(WalletCommand::DeactivateStake(
+                stake_account_keypair,
+                vote_account_pubkey,
+            ))
         }
         ("redeem-vote-credits", Some(matches)) => {
-            let staking_account_pubkey = value_of(matches, "staking_account_pubkey").unwrap();
-            let voting_account_pubkey = value_of(matches, "voting_account_pubkey").unwrap();
+            let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
             Ok(WalletCommand::RedeemVoteCredits(
-                staking_account_pubkey,
-                voting_account_pubkey,
+                stake_account_pubkey,
+                vote_account_pubkey,
             ))
         }
         ("show-stake-account", Some(matches)) => {
-            let staking_account_pubkey = value_of(matches, "staking_account_pubkey").unwrap();
-            Ok(WalletCommand::ShowStakeAccount(staking_account_pubkey))
+            let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+            Ok(WalletCommand::ShowStakeAccount(stake_account_pubkey))
         }
         ("create-replicator-storage-account", Some(matches)) => {
-            let account_owner = value_of(matches, "storage_account_owner").unwrap();
-            let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
+            let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::CreateReplicatorStorageAccount(
                 account_owner,
                 storage_account_pubkey,
             ))
         }
         ("create-validator-storage-account", Some(matches)) => {
-            let account_owner = value_of(matches, "storage_account_owner").unwrap();
-            let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
+            let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::CreateValidatorStorageAccount(
                 account_owner,
                 storage_account_pubkey,
             ))
         }
         ("claim-storage-reward", Some(matches)) => {
-            let node_account_pubkey = value_of(matches, "node_account_pubkey").unwrap();
-            let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
+            let node_account_pubkey = pubkey_of(matches, "node_account_pubkey").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::ClaimStorageReward(
                 node_account_pubkey,
                 storage_account_pubkey,
             ))
         }
         ("show-storage-account", Some(matches)) => {
-            let storage_account_pubkey = value_of(matches, "storage_account_pubkey").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::ShowStorageAccount(storage_account_pubkey))
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
@@ -312,6 +343,7 @@ pub fn parse_command(
                 .unwrap()
                 .to_string(),
         )),
+        ("get-slot", Some(_matches)) => Ok(WalletCommand::GetSlot),
         ("get-transaction-count", Some(_matches)) => Ok(WalletCommand::GetTransactionCount),
         ("pay", Some(pay_matches)) => {
             let lamports = pay_matches.value_of("lamports").unwrap().parse()?;
@@ -344,6 +376,20 @@ pub fn parse_command(
                 cancelable,
             ))
         }
+        ("ping", Some(ping_matches)) => {
+            let interval = Duration::from_secs(value_t_or_exit!(ping_matches, "interval", u64));
+            let count = if ping_matches.is_present("count") {
+                Some(value_t_or_exit!(ping_matches, "count", u64))
+            } else {
+                None
+            };
+            let timeout = Duration::from_secs(value_t_or_exit!(ping_matches, "timeout", u64));
+            Ok(WalletCommand::Ping {
+                interval,
+                count,
+                timeout,
+            })
+        }
         ("send-signature", Some(sig_matches)) => {
             let to = value_of(&sig_matches, "to").unwrap();
             let process_id = value_of(&sig_matches, "process_id").unwrap();
@@ -369,6 +415,7 @@ pub fn parse_command(
             };
             Ok(WalletCommand::TimeElapsed(to, process_id, dt))
         }
+        ("cluster-version", Some(_matches)) => Ok(WalletCommand::GetVersion),
         ("", None) => {
             eprintln!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
@@ -381,6 +428,49 @@ pub fn parse_command(
 }
 
 type ProcessResult = Result<String, Box<dyn error::Error>>;
+
+fn check_account_for_fee(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    fee_calculator: &FeeCalculator,
+    message: &Message,
+) -> Result<(), Box<dyn error::Error>> {
+    check_account_for_multiple_fees(rpc_client, config, fee_calculator, &[message])
+}
+
+fn check_account_for_multiple_fees(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    fee_calculator: &FeeCalculator,
+    messages: &[&Message],
+) -> Result<(), Box<dyn error::Error>> {
+    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
+    if let Some(lamports) = balance {
+        if lamports
+            >= messages
+                .iter()
+                .map(|message| fee_calculator.calculate_fee(message))
+                .sum()
+        {
+            return Ok(());
+        }
+    }
+    Err(WalletError::InsufficientFundsForFee)?
+}
+
+fn check_unique_pubkeys(
+    pubkey0: (&Pubkey, String),
+    pubkey1: (&Pubkey, String),
+) -> Result<(), WalletError> {
+    if pubkey0.0 == pubkey1.0 {
+        Err(WalletError::BadParameter(format!(
+            "Identical pubkeys found: `{}` and `{}` must be unique",
+            pubkey0.1, pubkey1.1
+        )))
+    } else {
+        Ok(())
+    }
+}
 
 fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
@@ -464,34 +554,47 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
 fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    voting_account_pubkey: &Pubkey,
+    vote_account_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
     commission: u8,
     lamports: u64,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (node_pubkey, "node_pubkey".to_string()),
+    )?;
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
-        voting_account_pubkey,
+        vote_account_pubkey,
         node_pubkey,
         commission,
         lamports,
     );
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
     Ok(signature_str.to_string())
 }
 
 fn process_authorize_voter(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    voting_account_pubkey: &Pubkey,
+    vote_account_pubkey: &Pubkey,
     authorized_voter_keypair: &Keypair,
     new_authorized_voter_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    check_unique_pubkeys(
+        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (
+            new_authorized_voter_pubkey,
+            "new_authorized_voter_pubkey".to_string(),
+        ),
+    )?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize_voter(
-        voting_account_pubkey,              // vote account to update
+        vote_account_pubkey,                // vote account to update
         &authorized_voter_keypair.pubkey(), // current authorized voter (often the vote account itself)
         new_authorized_voter_pubkey,        // new vote signer
     )];
@@ -502,26 +605,59 @@ fn process_authorize_voter(
         &[&config.keypair, &authorized_voter_keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_voter_keypair])?;
     Ok(signature_str.to_string())
 }
 
+fn process_show_account(
+    rpc_client: &RpcClient,
+    _config: &WalletConfig,
+    account_pubkey: &Pubkey,
+    output_file: &Option<String>,
+) -> ProcessResult {
+    let account = rpc_client.get_account(account_pubkey)?;
+
+    println!();
+    println!("Public Key: {}", account_pubkey);
+    println!("Lamports: {}", account.lamports);
+    println!("Owner: {}", account.owner);
+    println!("Executable: {}", account.executable);
+
+    if let Some(output_file) = output_file {
+        let mut f = File::create(output_file)?;
+        f.write_all(&account.data)?;
+        println!();
+        println!("Wrote account data to {}", output_file);
+    } else {
+        use pretty_hex::*;
+        println!("{:?}", account.data.hex_dump());
+    }
+
+    Ok("".to_string())
+}
+
 fn process_show_vote_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
-    voting_account_pubkey: &Pubkey,
+    vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    use solana_vote_api::vote_state::VoteState;
-    let vote_account_lamports = rpc_client.retry_get_balance(voting_account_pubkey, 5)?;
-    let vote_account_data = rpc_client.get_account_data(voting_account_pubkey)?;
-    let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
+    let vote_account = rpc_client.get_account(vote_account_pubkey)?;
+
+    if vote_account.owner != solana_vote_api::id() {
+        Err(WalletError::RpcRequestError(
+            format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
+        ))?;
+    }
+
+    let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
         WalletError::RpcRequestError(
             "Account data could not be deserialized to vote state".to_string(),
         )
     })?;
 
-    println!("account lamports: {}", vote_account_lamports.unwrap());
+    println!("account lamports: {}", vote_account.lamports);
     println!("node id: {}", vote_state.node_pubkey);
     println!(
         "authorized voter pubkey: {}",
@@ -540,93 +676,137 @@ fn process_show_vote_account(
         }
     );
     if !vote_state.votes.is_empty() {
-        println!("votes:");
-        for vote in vote_state.votes {
+        println!("recent votes:");
+        for vote in &vote_state.votes {
             println!(
-                "- slot={}, confirmation count={}",
+                "- slot: {}\n  confirmation count: {}",
                 vote.slot, vote.confirmation_count
+            );
+        }
+
+        // TODO: Use the real GenesisBlock from the cluster.
+        let genesis_block = solana_sdk::genesis_block::GenesisBlock::default();
+        let epoch_schedule = solana_runtime::epoch_schedule::EpochSchedule::new(
+            genesis_block.slots_per_epoch,
+            genesis_block.stakers_slot_offset,
+            genesis_block.epoch_warmup,
+        );
+
+        println!("epoch voting history:");
+        for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
+            let credits_earned = credits - prev_credits;
+            let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
+            println!(
+                "- epoch: {}\n  slots in epoch: {}\n  credits earned: {}",
+                epoch, slots_in_epoch, credits_earned,
             );
         }
     }
     Ok("".to_string())
 }
 
-fn process_create_stake_account(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    staking_account_pubkey: &Pubkey,
-    lamports: u64,
-) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = stake_instruction::create_stake_account(
-        &config.keypair.pubkey(),
-        staking_account_pubkey,
-        lamports,
-    );
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair],
-        recent_blockhash,
-    );
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
-    Ok(signature_str.to_string())
-}
-
 fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    staking_account_keypair: &Keypair,
+    stake_account_keypair: &Keypair,
+    vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = stake_instruction::deactivate_stake(&staking_account_keypair.pubkey());
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs =
+        stake_instruction::deactivate_stake(&stake_account_keypair.pubkey(), vote_account_pubkey);
     let mut tx = Transaction::new_signed_with_payer(
         vec![ixs],
         Some(&config.keypair.pubkey()),
-        &[&config.keypair, &staking_account_keypair],
+        &[&config.keypair, &stake_account_keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &staking_account_keypair])?;
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
     Ok(signature_str.to_string())
 }
 
 fn process_delegate_stake(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    staking_account_keypair: &Keypair,
-    voting_account_pubkey: &Pubkey,
-    stake: u64,
+    stake_account_keypair: &Keypair,
+    vote_account_pubkey: &Pubkey,
+    lamports: u64,
+    force: bool,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![stake_instruction::delegate_stake(
-        &staking_account_keypair.pubkey(),
-        voting_account_pubkey,
-        stake,
-    )];
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let ixs = stake_instruction::create_stake_account_and_delegate_stake(
+        &config.keypair.pubkey(),
+        &stake_account_keypair.pubkey(),
+        vote_account_pubkey,
+        lamports,
+    );
+
+    // Sanity check the vote account to ensure it is attached to a validator that has recently
+    // voted at the tip of the ledger
+    let vote_account_data = rpc_client
+        .get_account_data(vote_account_pubkey)
+        .map_err(|_| {
+            WalletError::RpcRequestError(format!("Vote account not found: {}", vote_account_pubkey))
+        })?;
+
+    let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
+        WalletError::RpcRequestError(
+            "Account data could not be deserialized to vote state".to_string(),
+        )
+    })?;
+
+    let sanity_check_result = match vote_state.root_slot {
+        None => Err(WalletError::BadParameter(
+            "Unable to delegate. Vote account has no root slot".to_string(),
+        )),
+        Some(root_slot) => {
+            let slot = rpc_client.get_slot()?;
+            if root_slot + solana_sdk::timing::DEFAULT_SLOTS_PER_TURN < slot {
+                Err(WalletError::BadParameter(
+                    format!(
+                    "Unable to delegate. Vote account root slot ({}) is too old, the current slot is {}", root_slot, slot
+                    )
+                ))
+            } else {
+                Ok(())
+            }
+        }
+    };
+
+    if sanity_check_result.is_err() {
+        if !force {
+            sanity_check_result?;
+        } else {
+            println!("--force supplied, ignoring: {:?}", sanity_check_result);
+        }
+    }
 
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
         Some(&config.keypair.pubkey()),
-        &[&config.keypair, &staking_account_keypair],
+        &[&config.keypair, &stake_account_keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
 
-    let signature_str = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &staking_account_keypair])?;
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair]);
+    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
     Ok(signature_str.to_string())
 }
 
 fn process_withdraw_stake(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    staking_account_keypair: &Keypair,
+    stake_account_keypair: &Keypair,
     destination_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::withdraw(
-        &staking_account_keypair.pubkey(),
+        &stake_account_keypair.pubkey(),
         destination_account_pubkey,
         lamports,
     )];
@@ -634,25 +814,26 @@ fn process_withdraw_stake(
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
         Some(&config.keypair.pubkey()),
-        &[&config.keypair, &staking_account_keypair],
+        &[&config.keypair, &stake_account_keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
 
     let signature_str = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &staking_account_keypair])?;
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
     Ok(signature_str.to_string())
 }
 
 fn process_redeem_vote_credits(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    staking_account_pubkey: &Pubkey,
-    voting_account_pubkey: &Pubkey,
+    stake_account_pubkey: &Pubkey,
+    vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::redeem_vote_credits(
-        staking_account_pubkey,
-        voting_account_pubkey,
+        stake_account_pubkey,
+        vote_account_pubkey,
     )];
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
@@ -660,6 +841,7 @@ fn process_redeem_vote_credits(
         &[&config.keypair],
         recent_blockhash,
     );
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
@@ -667,21 +849,35 @@ fn process_redeem_vote_credits(
 fn process_show_stake_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
-    staking_account_pubkey: &Pubkey,
+    stake_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     use solana_stake_api::stake_state::StakeState;
-    let stake_account = rpc_client.get_account(staking_account_pubkey)?;
+    let stake_account = rpc_client.get_account(stake_account_pubkey)?;
+    if stake_account.owner != solana_stake_api::id() {
+        Err(WalletError::RpcRequestError(
+            format!("{:?} is not a stake account", stake_account_pubkey).to_string(),
+        ))?;
+    }
     match stake_account.state() {
         Ok(StakeState::Stake(stake)) => {
-            println!("account lamports: {}", stake_account.lamports);
-            println!("voter pubkey: {}", stake.voter_pubkey);
+            println!("total stake: {}", stake_account.lamports);
             println!("credits observed: {}", stake.credits_observed);
-            println!("stake: {}", stake.stake);
+            println!("delegated stake: {}", stake.stake);
+            if stake.voter_pubkey != Pubkey::default() {
+                println!("delegated voter pubkey: {}", stake.voter_pubkey);
+            }
+            println!("stake activates at epoch: {}", stake.activated);
+            if stake.deactivated < std::u64::MAX {
+                println!("stake deactivates at epoch: {}", stake.deactivated);
+            }
             Ok("".to_string())
         }
-        _ => Err(WalletError::RpcRequestError(
-            "Account data could not be deserialized to stake state".to_string(),
-        ))?,
+        Ok(StakeState::RewardsPool) => Ok("Stake account is a rewards pool".to_string()),
+        Ok(StakeState::Uninitialized) => Ok("Stake account is uninitialized".to_string()),
+        Err(err) => Err(WalletError::RpcRequestError(format!(
+            "Account data could not be deserialized to stake state: {:?}",
+            err
+        )))?,
     }
 }
 
@@ -691,7 +887,7 @@ fn process_create_replicator_storage_account(
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_replicator_storage_account(
         &config.keypair.pubkey(),
         &account_owner,
@@ -699,7 +895,9 @@ fn process_create_replicator_storage_account(
         1,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -709,7 +907,7 @@ fn process_create_validator_storage_account(
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_validator_storage_account(
         &config.keypair.pubkey(),
         account_owner,
@@ -717,7 +915,9 @@ fn process_create_validator_storage_account(
         1,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -727,15 +927,16 @@ fn process_claim_storage_reward(
     node_account_pubkey: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let instruction =
         storage_instruction::claim_reward(node_account_pubkey, storage_account_pubkey);
     let signers = [&config.keypair];
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
 
-    let mut transaction = Transaction::new(&signers, message, recent_blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut transaction, &signers)?;
+    let mut tx = Transaction::new(&signers, message, recent_blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &signers)?;
     Ok(signature_str.to_string())
 }
 
@@ -744,8 +945,15 @@ fn process_show_storage_account(
     _config: &WalletConfig,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    use solana_storage_api::storage_contract::StorageContract;
     let account = rpc_client.get_account(storage_account_pubkey)?;
+
+    if account.owner != solana_storage_api::id() {
+        Err(WalletError::RpcRequestError(
+            format!("{:?} is not a storage account", storage_account_pubkey).to_string(),
+        ))?;
+    }
+
+    use solana_storage_api::storage_contract::StorageContract;
     let storage_contract: StorageContract = account.state().map_err(|err| {
         WalletError::RpcRequestError(
             format!("Unable to deserialize storage account: {:?}", err).to_string(),
@@ -761,16 +969,6 @@ fn process_deploy(
     config: &WalletConfig,
     program_location: &str,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
-    if let Some(lamports) = balance {
-        if lamports < 1 {
-            Err(WalletError::DynamicProgramError(
-                "Insufficient funds".to_string(),
-            ))?
-        }
-    }
-
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let program_id = Keypair::new();
     let mut file = File::open(program_location).map_err(|err| {
         WalletError::DynamicProgramError(
@@ -784,7 +982,10 @@ fn process_deploy(
         )
     })?;
 
-    let mut tx = system_transaction::create_account(
+    // Build transactions to calculate fees
+    let mut messages: Vec<&Message> = Vec::new();
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let mut create_account_tx = system_transaction::create_account(
         &config.keypair,
         &program_id.pubkey(),
         blockhash,
@@ -792,13 +993,7 @@ fn process_deploy(
         program_data.len() as u64,
         &bpf_loader::id(),
     );
-    trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<SystemError>(result).map_err(|_| {
-        WalletError::DynamicProgramError("Program allocate space failed".to_string())
-    })?;
-
-    trace!("Writing program data");
+    messages.push(&create_account_tx.message);
     let signers = [&config.keypair, &program_id];
     let write_transactions: Vec<_> = program_data
         .chunks(USERDATA_CHUNK_SIZE)
@@ -814,14 +1009,30 @@ fn process_deploy(
             Transaction::new(&signers, message, blockhash)
         })
         .collect();
+    for transaction in write_transactions.iter() {
+        messages.push(&transaction.message);
+    }
+
+    let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
+    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+    let mut finalize_tx = Transaction::new(&signers, message, blockhash);
+    messages.push(&finalize_tx.message);
+
+    check_account_for_multiple_fees(rpc_client, config, &fee_calculator, &messages)?;
+
+    trace!("Creating program account");
+    let result =
+        rpc_client.send_and_confirm_transaction(&mut create_account_tx, &[&config.keypair]);
+    log_instruction_custom_error::<SystemError>(result).map_err(|_| {
+        WalletError::DynamicProgramError("Program allocate space failed".to_string())
+    })?;
+
+    trace!("Writing program data");
     rpc_client.send_and_confirm_transactions(write_transactions, &signers)?;
 
     trace!("Finalizing program account");
-    let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
-    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
-    let mut tx = Transaction::new(&signers, message, blockhash);
     rpc_client
-        .send_and_confirm_transaction(&mut tx, &signers)
+        .send_and_confirm_transaction(&mut finalize_tx, &signers)
         .map_err(|_| {
             WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
         })?;
@@ -842,10 +1053,11 @@ fn process_pay(
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: Option<Pubkey>,
 ) -> ProcessResult {
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     if timestamp == None && *witnesses == None {
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
+        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         let signature_str = log_instruction_custom_error::<SystemError>(result)?;
         Ok(signature_str.to_string())
@@ -869,6 +1081,7 @@ fn process_pay(
             lamports,
         );
         let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
+        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
@@ -901,6 +1114,7 @@ fn process_pay(
         );
         let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
         let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
         Ok(json!({
@@ -914,16 +1128,22 @@ fn process_pay(
 }
 
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey) -> ProcessResult {
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ix = budget_instruction::apply_signature(
         &config.keypair.pubkey(),
         pubkey,
         &config.keypair.pubkey(),
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
     Ok(signature_str.to_string())
+}
+
+fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
+    let slot = rpc_client.get_slot()?;
+    Ok(slot.to_string())
 }
 
 fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
@@ -934,21 +1154,15 @@ fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
 fn process_time_elapsed(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    drone_addr: SocketAddr,
     to: &Pubkey,
     pubkey: &Pubkey,
     dt: DateTime<Utc>,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
-
-    if let Some(0) = balance {
-        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.keypair.pubkey(), 1)?;
-    }
-
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
@@ -958,23 +1172,151 @@ fn process_time_elapsed(
 fn process_witness(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    drone_addr: SocketAddr,
     to: &Pubkey,
     pubkey: &Pubkey,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
+    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    if let Some(0) = balance {
-        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.keypair.pubkey(), 1)?;
-    }
-
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
     Ok(signature_str.to_string())
+}
+
+fn process_get_version(rpc_client: &RpcClient, config: &WalletConfig) -> ProcessResult {
+    let remote_version: Value = serde_json::from_str(&rpc_client.get_version()?)?;
+    println!(
+        "{} {}",
+        style("Cluster versions from:").bold(),
+        config.json_rpc_url
+    );
+    if let Some(versions) = remote_version.as_object() {
+        for (key, value) in versions.iter() {
+            if let Some(value_string) = value.as_str() {
+                println_name_value(&format!("* {}:", key), &value_string);
+            }
+        }
+    }
+    Ok("".to_string())
+}
+
+fn process_ping(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    interval: &Duration,
+    count: &Option<u64>,
+    timeout: &Duration,
+) -> ProcessResult {
+    let to = Keypair::new().pubkey();
+
+    println_name_value("Source account:", &config.keypair.pubkey().to_string());
+    println_name_value("Destination account:", &to.to_string());
+    println!();
+
+    let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+    ctrlc::set_handler(move || {
+        let _ = signal_sender.send(());
+    })
+    .expect("Error setting Ctrl-C handler");
+
+    let mut last_blockhash = Hash::default();
+    let mut submit_count = 0;
+    let mut confirmed_count = 0;
+    let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
+
+    'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
+        let (recent_blockhash, fee_calculator) = rpc_client.get_new_blockhash(&last_blockhash)?;
+        last_blockhash = recent_blockhash;
+
+        let transaction = system_transaction::transfer(&config.keypair, &to, 1, recent_blockhash);
+        check_account_for_fee(rpc_client, config, &fee_calculator, &transaction.message)?;
+
+        match rpc_client.send_transaction(&transaction) {
+            Ok(signature) => {
+                let transaction_sent = Instant::now();
+                loop {
+                    let signature_status = rpc_client.get_signature_status(&signature)?;
+                    let elapsed_time = Instant::now().duration_since(transaction_sent);
+                    if let Some(transaction_status) = signature_status {
+                        match transaction_status {
+                            Ok(()) => {
+                                let elapsed_time_millis = elapsed_time.as_millis() as u64;
+                                confirmation_time.push_back(elapsed_time_millis);
+                                println!(
+                                    "{}1 lamport transferred: seq={:<3} time={:>4}ms signature={}",
+                                    CHECK_MARK, seq, elapsed_time_millis, signature
+                                );
+                                confirmed_count += 1;
+                            }
+                            Err(err) => {
+                                println!(
+                                    "{}Transaction failed:    seq={:<3} error={:?} signature={}",
+                                    CROSS_MARK, seq, err, signature
+                                );
+                            }
+                        }
+                        break;
+                    }
+
+                    if elapsed_time >= *timeout {
+                        println!(
+                            "{}Confirmation timeout:  seq={:<3}             signature={}",
+                            CROSS_MARK, seq, signature
+                        );
+                        break;
+                    }
+
+                    // Sleep for half a slot
+                    if signal_receiver
+                        .recv_timeout(Duration::from_millis(
+                            500 * solana_sdk::timing::DEFAULT_TICKS_PER_SLOT
+                                / solana_sdk::timing::DEFAULT_NUM_TICKS_PER_SECOND,
+                        ))
+                        .is_ok()
+                    {
+                        break 'mainloop;
+                    }
+                }
+            }
+            Err(err) => {
+                println!(
+                    "{}Submit failed:         seq={:<3} error={:?}",
+                    CROSS_MARK, seq, err
+                );
+            }
+        }
+        submit_count += 1;
+
+        if signal_receiver.recv_timeout(*interval).is_ok() {
+            break 'mainloop;
+        }
+    }
+
+    println!();
+    println!("--- transaction statistics ---");
+    println!(
+        "{} transactions submitted, {} transactions confirmed, {:.1}% transaction loss",
+        submit_count,
+        confirmed_count,
+        (100. - f64::from(confirmed_count) / f64::from(submit_count) * 100.)
+    );
+    if !confirmation_time.is_empty() {
+        let samples: Vec<f64> = confirmation_time.iter().map(|t| *t as f64).collect();
+        let dist = criterion_stats::Distribution::from(samples.into_boxed_slice());
+        let mean = dist.mean();
+        println!(
+            "confirmation min/mean/max/stddev = {:.0}/{:.0}/{:.0}/{:.0} ms",
+            dist.min(),
+            mean,
+            dist.max(),
+            dist.std_dev(Some(mean))
+        );
+    }
+
+    Ok("".to_string())
 }
 
 pub fn process_command(config: &WalletConfig) -> ProcessResult {
@@ -982,6 +1324,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         // Get address of this client
         return Ok(format!("{}", config.keypair.pubkey()));
     }
+    println_name_value("Using RPC Endpoint:", &config.json_rpc_url);
 
     let drone_addr = config.drone_addr();
 
@@ -1016,78 +1359,86 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 
         // Create vote account
         WalletCommand::CreateVoteAccount(
-            voting_account_pubkey,
+            vote_account_pubkey,
             node_pubkey,
             commission,
             lamports,
         ) => process_create_vote_account(
             &rpc_client,
             config,
-            &voting_account_pubkey,
+            &vote_account_pubkey,
             &node_pubkey,
             *commission,
             *lamports,
         ),
-        // Configure staking account already created
+
         WalletCommand::AuthorizeVoter(
-            voting_account_pubkey,
+            vote_account_pubkey,
             authorized_voter_keypair,
             new_authorized_voter_pubkey,
         ) => process_authorize_voter(
             &rpc_client,
             config,
-            &voting_account_pubkey,
+            &vote_account_pubkey,
             &authorized_voter_keypair,
             &new_authorized_voter_pubkey,
         ),
-        // Show a vote account
-        WalletCommand::ShowVoteAccount(voting_account_pubkey) => {
-            process_show_vote_account(&rpc_client, config, &voting_account_pubkey)
+
+        WalletCommand::ShowAccount(account_pubkey, output_file) => {
+            process_show_account(&rpc_client, config, &account_pubkey, &output_file)
         }
 
-        // Create stake account
-        WalletCommand::CreateStakeAccount(staking_account_pubkey, lamports) => {
-            process_create_stake_account(&rpc_client, config, &staking_account_pubkey, *lamports)
+        WalletCommand::ShowVoteAccount(vote_account_pubkey) => {
+            process_show_vote_account(&rpc_client, config, &vote_account_pubkey)
         }
 
-        WalletCommand::DelegateStake(staking_account_keypair, voting_account_pubkey, lamports) => {
-            process_delegate_stake(
-                &rpc_client,
-                config,
-                &staking_account_keypair,
-                &voting_account_pubkey,
-                *lamports,
-            )
-        }
+        WalletCommand::DelegateStake(
+            stake_account_keypair,
+            vote_account_pubkey,
+            lamports,
+            force,
+        ) => process_delegate_stake(
+            &rpc_client,
+            config,
+            &stake_account_keypair,
+            &vote_account_pubkey,
+            *lamports,
+            *force,
+        ),
 
         WalletCommand::WithdrawStake(
-            staking_account_keypair,
+            stake_account_keypair,
             destination_account_pubkey,
             lamports,
         ) => process_withdraw_stake(
             &rpc_client,
             config,
-            &staking_account_keypair,
+            &stake_account_keypair,
             &destination_account_pubkey,
             *lamports,
         ),
 
         // Deactivate stake account
-        WalletCommand::DeactivateStake(staking_account_keypair) => {
-            process_deactivate_stake_account(&rpc_client, config, &staking_account_keypair)
-        }
-
-        WalletCommand::RedeemVoteCredits(staking_account_pubkey, voting_account_pubkey) => {
-            process_redeem_vote_credits(
+        WalletCommand::DeactivateStake(stake_account_keypair, vote_account_pubkey) => {
+            process_deactivate_stake_account(
                 &rpc_client,
                 config,
-                &staking_account_pubkey,
-                &voting_account_pubkey,
+                &stake_account_keypair,
+                &vote_account_pubkey,
             )
         }
 
-        WalletCommand::ShowStakeAccount(staking_account_pubkey) => {
-            process_show_stake_account(&rpc_client, config, &staking_account_pubkey)
+        WalletCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey) => {
+            process_redeem_vote_credits(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &vote_account_pubkey,
+            )
+        }
+
+        WalletCommand::ShowStakeAccount(stake_account_pubkey) => {
+            process_show_stake_account(&rpc_client, config, &stake_account_pubkey)
         }
 
         WalletCommand::CreateReplicatorStorageAccount(
@@ -1127,6 +1478,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_deploy(&rpc_client, config, program_location)
         }
 
+        WalletCommand::GetSlot => process_get_slot(&rpc_client),
         WalletCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
 
         // If client has positive balance, pay lamports to another address
@@ -1148,15 +1500,22 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             *cancelable,
         ),
 
+        WalletCommand::Ping {
+            interval,
+            count,
+            timeout,
+        } => process_ping(&rpc_client, config, interval, count, timeout),
+
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
-            process_time_elapsed(&rpc_client, config, drone_addr, &to, &pubkey, *dt)
+            process_time_elapsed(&rpc_client, config, &to, &pubkey, *dt)
         }
 
         // Apply witness signature to contract
-        WalletCommand::Witness(to, pubkey) => {
-            process_witness(&rpc_client, config, drone_addr, &to, &pubkey)
-        }
+        WalletCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
+
+        // Return software version of wallet and cluster entrypoint node
+        WalletCommand::GetVersion => process_get_version(&rpc_client, config),
     }
 }
 
@@ -1258,6 +1617,15 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
+// Return an error if string cannot be parsed as pubkey string or keypair file location
+fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
+    is_pubkey(string.clone()).or_else(|_| {
+        read_keypair(&string)
+            .map(|_| ())
+            .map_err(|err| format!("{:?}", err))
+    })
+}
+
 pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
     App::new(name)
         .about(about)
@@ -1271,7 +1639,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(1)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to request"),
@@ -1285,7 +1653,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The public key of the balance to check"),
                 ),
         )
@@ -1295,7 +1663,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(1)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1318,18 +1686,18 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("authorize-voter")
                 .about("Authorize a new vote signing keypair for the given vote account")
                 .arg(
-                    Arg::with_name("voting_account_pubkey")
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account in which to set the authorized voter"),
                 )
                 .arg(
                     Arg::with_name("authorized_voter_keypair_file")
                         .index(2)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("CURRENT VOTER KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
                         .help("Keypair file for the currently authorized vote signer"),
@@ -1337,38 +1705,38 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("new_authorized_voter_pubkey")
                         .index(3)
-                        .value_name("PUBKEY")
+                        .value_name("NEW VOTER PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("New vote signer to authorize"),
                 ),
         )
         .subcommand(
             SubCommand::with_name("create-vote-account")
-                .about("Create vote account for a node")
+                .about("Create a vote account")
                 .arg(
-                    Arg::with_name("voting_account_pubkey")
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account address to fund"),
                 )
                 .arg(
                     Arg::with_name("node_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("VALIDATOR PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
-                        .help("Node that will vote in this account"),
+                        .validator(is_pubkey_or_keypair)
+                        .help("Validator that will vote with this account"),
                 )
                 .arg(
                     Arg::with_name("lamports")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to send to the vote account"),
@@ -1382,104 +1750,120 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
+            SubCommand::with_name("show-account")
+                .about("Show the contents of an account")
+                .arg(
+                    Arg::with_name("account_pubkey")
+                        .index(1)
+                        .value_name("ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("output_file")
+                        .long("output")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the account data to this file"),
+                )
+        )
+        .subcommand(
             SubCommand::with_name("show-vote-account")
                 .about("Show the contents of a vote account")
                 .arg(
-                    Arg::with_name("voting_account_pubkey")
+                    Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Vote account pubkey"),
                 )
         )
-       .subcommand(
-            SubCommand::with_name("create-stake-account")
-                .about("Create staking account")
-                .arg(
-                    Arg::with_name("staking_account_pubkey")
-                        .index(1)
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("Staking account address to fund"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .index(2)
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The number of lamports to send to staking account"),
-                ),
-        )
         .subcommand(
             SubCommand::with_name("delegate-stake")
-                .about("Delegate the stake to some vote account")
+                .about("Delegate stake to a vote account")
                 .arg(
-                    Arg::with_name("staking_account_keypair_file")
+                    Arg::with_name("force")
+                        .long("force")
+                        .takes_value(false)
+                        .hidden(true) // Don't document this argument to discourage its use
+                        .help("Override vote account sanity checks (use carefully!)"),
+                )
+                .arg(
+                    Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
-                        .help("Keypair file for the staking account, for signing the delegate transaction."),
+                        .help("Keypair file for the new stake account"),
                 )
                 .arg(
-                    Arg::with_name("voting_account_pubkey")
+                    Arg::with_name("vote_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
-                        .help("The voting account to which the stake will be delegated"),
+                        .validator(is_pubkey_or_keypair)
+                        .help("The vote account to which the stake will be delegated"),
                 )
                 .arg(
-                    Arg::with_name("stake")
+                    Arg::with_name("lamports_to_stake")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to stake, must be less than the stake account's balance."),
+                        .help("The number of lamports to stake"),
                 ),
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
-                .about("Deactivate the delegated stake from the staking account")
+                .about("Deactivate the delegated stake from the stake account")
                 .arg(
-                    Arg::with_name("staking_account_keypair_file")
+                    Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
-                        .help("Keypair file for the staking account, for signing the delegate transaction."),
+                        .help("Keypair file for the stake account, for signing the delegate transaction."),
+                )
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The vote account to which the stake is currently delegated"),
                 )
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")
                 .about("Withdraw the unstaked lamports from the stake account")
                 .arg(
-                    Arg::with_name("staking_account_keypair_file")
+                    Arg::with_name("stake_account_keypair_file")
                         .index(1)
-                        .value_name("KEYPAIR_FILE")
+                        .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
-                        .help("Keypair file for the staking account, for signing the withdraw transaction."),
+                        .help("Keypair file for the stake account, for signing the withdraw transaction."),
                 )
                 .arg(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("DESTINATION PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The account where the lamports should be transfered"),
                 )
                 .arg(
                     Arg::with_name("lamports")
                         .index(3)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to to withdraw from the stake account."),
@@ -1487,45 +1871,36 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         )
         .subcommand(
             SubCommand::with_name("redeem-vote-credits")
-                .about("Redeem credits in the staking account")
+                .about("Redeem credits in the stake account")
                 .arg(
-                    Arg::with_name("mining_pool_account_pubkey")
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("MINING POOL PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("Mining pool account to redeem credits from"),
-                )
-                .arg(
-                    Arg::with_name("staking_account_pubkey")
-                        .index(2)
                         .value_name("STAKING ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Staking account address to redeem credits for"),
                 )
                 .arg(
-                    Arg::with_name("voting_account_pubkey")
-                        .index(3)
-                        .value_name("PUBKEY")
+                    Arg::with_name("vote_account_pubkey")
+                        .index(2)
+                        .value_name("VOTE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
-                        .help("The voting account to which the stake was previously delegated."),
+                        .validator(is_pubkey_or_keypair)
+                        .help("The vote account to which the stake was previously delegated."),
                 ),
         )
         .subcommand(
             SubCommand::with_name("show-stake-account")
                 .about("Show the contents of a stake account")
                 .arg(
-                    Arg::with_name("staking_account_pubkey")
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STAKE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Stake account pubkey"),
                 )
         )
@@ -1535,16 +1910,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage mining pool account address to fund"),
                 )
                 .arg(
                     Arg::with_name("lamports")
                         .index(2)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to assign to the storage mining pool account"),
@@ -1556,18 +1931,18 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
         )
         .subcommand(
@@ -1576,18 +1951,18 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                 )
         )
         .subcommand(
@@ -1599,7 +1974,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("NODE PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The node account to credit the rewards to"),
                 )
                 .arg(
@@ -1608,7 +1983,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage account address to redeem credits for"),
                 ))
 
@@ -1618,10 +1993,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("Storage account pubkey"),
                 )
         )
@@ -1631,11 +2006,15 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
-                        .value_name("PATH")
+                        .value_name("PATH TO PROGRAM")
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
                 ), // TODO: Add "loader" argument; current default is bpf_loader
+        )
+        .subcommand(
+            SubCommand::with_name("get-slot")
+                .about("Get current slot"),
         )
         .subcommand(
             SubCommand::with_name("get-transaction-count")
@@ -1656,7 +2035,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("lamports")
                         .index(2)
-                        .value_name("NUM")
+                        .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to send"),
@@ -1694,6 +2073,36 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
+            SubCommand::with_name("ping")
+                .about("Submit transactions sequentially")
+                .arg(
+                    Arg::with_name("interval")
+                        .short("i")
+                        .long("interval")
+                        .value_name("SECONDS")
+                        .takes_value(true)
+                        .default_value("2")
+                        .help("Wait interval seconds between submitting the next transaction"),
+                )
+                .arg(
+                    Arg::with_name("count")
+                        .short("c")
+                        .long("count")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .help("Stop after submitting count transactions"),
+                )
+                .arg(
+                    Arg::with_name("timeout")
+                        .short("t")
+                        .long("timeout")
+                        .value_name("SECONDS")
+                        .takes_value(true)
+                        .default_value("10")
+                        .help("Wait up to timeout seconds for transaction confirmation"),
+                )
+        )
+        .subcommand(
             SubCommand::with_name("send-signature")
                 .about("Send a signature to authorize a transfer")
                 .arg(
@@ -1708,7 +2117,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to authorize"),
@@ -1729,7 +2138,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS_ID")
+                        .value_name("PROCESS ID")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to unlock"),
@@ -1741,6 +2150,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .help("Optional arbitrary timestamp to apply"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("cluster-version")
+                .about("Get the version of the cluster entrypoint"),
         )
 }
 
@@ -1798,6 +2211,28 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "airdrop", "notint"]);
         assert!(parse_command(&pubkey, &test_bad_airdrop).is_err());
+
+        // Test Balance Subcommand, incl pubkey and keypair-file inputs
+        let keypair_file = make_tmp_path("keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let keypair = read_keypair(&keypair_file).unwrap();
+        let test_balance = test_commands.clone().get_matches_from(vec![
+            "test",
+            "balance",
+            &keypair.pubkey().to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_balance).unwrap(),
+            WalletCommand::Balance(keypair.pubkey())
+        );
+        let test_balance =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "balance", &keypair_file]);
+        assert_eq!(
+            parse_command(&pubkey, &test_balance).unwrap(),
+            WalletCommand::Balance(keypair.pubkey())
+        );
 
         // Test Cancel Subcommand
         let test_cancel =
@@ -1870,20 +2305,9 @@ mod tests {
             WalletCommand::CreateVoteAccount(pubkey, node_pubkey, 0, 50)
         );
 
-        // Test Create Stake Account
-        let test_create_stake_account = test_commands.clone().get_matches_from(vec![
-            "test",
-            "create-stake-account",
-            &pubkey_string,
-            "50",
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_create_stake_account).unwrap(),
-            WalletCommand::CreateStakeAccount(pubkey, 50)
-        );
-
+        // Test DelegateStake Subcommand
         fn make_tmp_path(name: &str) -> String {
-            let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+            let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
             let keypair = Keypair::new();
 
             let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
@@ -1899,7 +2323,7 @@ mod tests {
         let keypair_file = make_tmp_path("keypair_file");
         gen_keypair_file(&keypair_file).unwrap();
         let keypair = read_keypair(&keypair_file).unwrap();
-        // Test Delegate Stake Subcommand
+
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -1909,13 +2333,24 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
-            WalletCommand::DelegateStake(keypair, pubkey, 42)
+            WalletCommand::DelegateStake(keypair, pubkey, 42, false)
         );
 
-        let keypair_file = make_tmp_path("keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
         let keypair = read_keypair(&keypair_file).unwrap();
-        // Test Withdraw from Stake Account
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            "--force",
+            &keypair_file,
+            &pubkey_string,
+            "42",
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_delegate_stake).unwrap(),
+            WalletCommand::DelegateStake(keypair, pubkey, 42, true)
+        );
+
+        // Test WithdrawStake Subcommand
         let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "withdraw-stake",
@@ -1923,22 +2358,25 @@ mod tests {
             &pubkey_string,
             "42",
         ]);
+        let keypair = read_keypair(&keypair_file).unwrap();
         assert_eq!(
             parse_command(&pubkey, &test_withdraw_stake).unwrap(),
             WalletCommand::WithdrawStake(keypair, pubkey, 42)
         );
 
-        // Test Deactivate Stake Subcommand
+        // Test DeactivateStake Subcommand
         let keypair_file = make_tmp_path("keypair_file");
         gen_keypair_file(&keypair_file).unwrap();
         let keypair = read_keypair(&keypair_file).unwrap();
-        let test_deactivate_stake =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "deactivate-stake", &keypair_file]);
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &keypair_file,
+            &pubkey_string,
+        ]);
         assert_eq!(
             parse_command(&pubkey, &test_deactivate_stake).unwrap(),
-            WalletCommand::DeactivateStake(keypair)
+            WalletCommand::DeactivateStake(keypair, pubkey)
         );
 
         // Test Deploy Subcommand
@@ -2096,19 +2534,21 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let bob_keypair = Keypair::new();
-        config.command = WalletCommand::AuthorizeVoter(bob_pubkey, bob_keypair, bob_pubkey);
+        let new_authorized_voter_pubkey = Pubkey::new_rand();
+        config.command =
+            WalletCommand::AuthorizeVoter(bob_pubkey, bob_keypair, new_authorized_voter_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        config.command = WalletCommand::CreateStakeAccount(bob_pubkey, 10);
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
-
+        // TODO: Need to add mock GetAccountInfo to mock_rpc_client_request.rs to re-enable the
+        // DeactivateStake test.
+        /*
         let bob_keypair = Keypair::new();
-        let node_pubkey = Pubkey::new_rand();
-        config.command = WalletCommand::DelegateStake(bob_keypair.into(), node_pubkey, 100);
+        let vote_pubkey = Pubkey::new_rand();
+        config.command = WalletCommand::DelegateStake(bob_keypair.into(), vote_pubkey, 100, true);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        */
 
         let bob_keypair = Keypair::new();
         let to_pubkey = Pubkey::new_rand();
@@ -2117,9 +2557,13 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let bob_keypair = Keypair::new();
-        config.command = WalletCommand::DeactivateStake(bob_keypair.into());
+        let vote_pubkey = Pubkey::new_rand();
+        config.command = WalletCommand::DeactivateStake(bob_keypair.into(), vote_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+
+        config.command = WalletCommand::GetSlot;
+        assert_eq!(process_command(&config).unwrap(), "0");
 
         config.command = WalletCommand::GetTransactionCount;
         assert_eq!(process_command(&config).unwrap(), "1234");
@@ -2228,6 +2672,9 @@ mod tests {
         config.command = WalletCommand::AuthorizeVoter(bob_pubkey, Keypair::new(), bob_pubkey);
         assert!(process_command(&config).is_err());
 
+        config.command = WalletCommand::GetSlot;
+        assert!(process_command(&config).is_err());
+
         config.command = WalletCommand::GetTransactionCount;
         assert!(process_command(&config).is_err());
 
@@ -2269,7 +2716,7 @@ mod tests {
 
         // Success case
         let mut config = WalletConfig::default();
-        config.rpc_client = Some(RpcClient::new_mock("succeeds".to_string()));
+        config.rpc_client = Some(RpcClient::new_mock("deploy_succeeds".to_string()));
 
         config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());
         let result = process_command(&config);
@@ -2284,10 +2731,7 @@ mod tests {
 
         assert!(program_id.parse::<Pubkey>().is_ok());
 
-        // Failure cases
-        config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
-        assert!(process_command(&config).is_err());
-
+        // Failure case
         config.command = WalletCommand::Deploy("bad/file/location.so".to_string());
         assert!(process_command(&config).is_err());
     }

@@ -16,7 +16,7 @@ build_script:
 notifications:
   - provider: Slack
     incoming_webhook:
-      secure: 6HTXVh+FBz29LGJb+taFOo9dqoADfo9xyAszeyXZF5Ub9t5NERytKAR35B2wb+uIOOCBF8+JhmH4437Cgf/ti4IqvURzW1QReXK7eQhn1EI=
+      secure: 6HnLbeS6/Iv7JSMrrHQ7V9OSIjH/3KFzvZiinNWgQqEN0e9A6zaE4MwEXUYDWbcvVJiQneWit6dswY8Scoms2rS1PWEN5N6sjgLgyzroptc=
     channel: ci-status
     on_build_success: false
     on_build_failure: true
@@ -25,16 +25,16 @@ notifications:
 deploy:
   - provider: S3
     access_key_id:
-      secure: ptvqM/yvgeTeA12XOzybH1KYNh95AdfEvqoH9mvP2ic=
+      secure: G6uzyGqbkMCXS2+sCeBCT/+s/11AHLWXCuGayfKcMEE=
     secret_access_key:
-      secure: IkrgBlz5hdxvwcJdMXyyHUrpWhKa6fXLOD/8rm/rjKqYCdrba9B8V1nLZVrzXGGy
+      secure: Lc+aVrbcPSXoDV7h2J7gqKT+HX0n3eEzp3JIrSP2pcKxbAikGnCtOogCiHO9/er2
     bucket: release.solana.com
     region: us-west-1
     set_public: true
 
   - provider: GitHub
     auth_token:
-      secure: vQ3jMl5LQrit6+TQONA3ZgQjZ/Ej62BN2ReVb2NSOwjITHMu1131hjc3dOrMEZL6
+      secure: JdggY+mrznklWDcV0yvetHhD9eRcNdc627q6NcZdZAJsDidYcGgZ/tgYJiXb9D1A
     draft: false
     prerelease: false
     on:

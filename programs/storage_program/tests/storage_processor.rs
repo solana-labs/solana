@@ -12,10 +12,10 @@ use solana_sdk::instruction::{Instruction, InstructionError};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::syscall::current::Current;
-use solana_sdk::syscall::rewards::Rewards;
-use solana_sdk::syscall::{current, rewards};
 use solana_sdk::system_instruction;
+use solana_sdk::sysvar::clock::Clock;
+use solana_sdk::sysvar::rewards::Rewards;
+use solana_sdk::sysvar::{clock, rewards};
 use solana_sdk::timing::{
     get_segment_from_slot, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT,
 };
@@ -126,21 +126,18 @@ fn test_proof_bounds() {
         Hash::default(),
     );
     // the proof is for segment 0, need to move the slot into segment 2
-    let mut current_account = current::create_account(1, 0, 0, 0, 0);
-    Current::to(
-        &Current {
+    let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+    Clock::to(
+        &Clock {
             slot: DEFAULT_SLOTS_PER_SEGMENT * 2,
             segment: 2,
             epoch: 0,
             stakers_epoch: 0,
         },
-        &mut current_account,
+        &mut clock_account,
     );
 
-    assert_eq!(
-        test_instruction(&ix, &mut [account, current_account]),
-        Ok(())
-    );
+    assert_eq!(test_instruction(&ix, &mut [account, clock_account]), Ok(()));
 }
 
 #[test]
@@ -154,12 +151,12 @@ fn test_storage_tx() {
 #[test]
 fn test_serialize_overflow() {
     let pubkey = Pubkey::new_rand();
-    let current_id = current::id();
+    let clock_id = clock::id();
     let mut keyed_accounts = Vec::new();
     let mut user_account = Account::default();
-    let mut current_account = current::create_account(1, 0, 0, 0, 0);
+    let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
     keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
-    keyed_accounts.push(KeyedAccount::new(&current_id, false, &mut current_account));
+    keyed_accounts.push(KeyedAccount::new(&clock_id, false, &mut clock_account));
 
     let ix = storage_instruction::advertise_recent_blockhash(&pubkey, Hash::default(), 1);
 
@@ -182,20 +179,20 @@ fn test_invalid_accounts_len() {
         Hash::default(),
     );
     // move tick height into segment 1
-    let mut current_account = current::create_account(1, 0, 0, 0, 0);
-    Current::to(
-        &Current {
+    let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+    Clock::to(
+        &Clock {
             slot: 16,
             segment: 1,
             epoch: 0,
             stakers_epoch: 0,
         },
-        &mut current_account,
+        &mut clock_account,
     );
 
     assert!(test_instruction(&ix, &mut accounts).is_err());
 
-    let mut accounts = [Account::default(), current_account, Account::default()];
+    let mut accounts = [Account::default(), clock_account, Account::default()];
 
     assert!(test_instruction(&ix, &mut accounts).is_err());
 }
@@ -242,21 +239,18 @@ fn test_submit_mining_ok() {
         Hash::default(),
     );
     // move slot into segment 1
-    let mut current_account = current::create_account(1, 0, 0, 0, 0);
-    Current::to(
-        &Current {
+    let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+    Clock::to(
+        &Clock {
             slot: DEFAULT_SLOTS_PER_SEGMENT,
             segment: 1,
             epoch: 0,
             stakers_epoch: 0,
         },
-        &mut current_account,
+        &mut clock_account,
     );
 
-    assert_matches!(
-        test_instruction(&ix, &mut [account, current_account]),
-        Ok(_)
-    );
+    assert_matches!(test_instruction(&ix, &mut [account, clock_account]), Ok(_));
 }
 
 #[test]

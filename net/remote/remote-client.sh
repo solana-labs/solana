@@ -8,11 +8,12 @@ echo "$(date) | $0 $*" > client.log
 deployMethod="$1"
 entrypointIp="$2"
 clientToRun="$3"
-RUST_LOG="$4"
+if [[ -n $4 ]]; then
+  export RUST_LOG="$4"
+fi
 benchTpsExtraArgs="$5"
 benchExchangeExtraArgs="$6"
 clientIndex="$7"
-export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 
 missing() {
   echo "Error: $1 not specified"
@@ -40,6 +41,8 @@ local|tar)
   source ./target/perf-libs/env.sh
 
   net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+  ;;
+skip)
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"

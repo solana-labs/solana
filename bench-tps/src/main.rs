@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[macro_use]
+extern crate solana_move_loader_program;
+
 mod bench;
 mod cli;
 
@@ -6,7 +10,7 @@ use crate::bench::{
 };
 use solana::gossip_service::{discover_cluster, get_multi_client};
 use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -17,7 +21,7 @@ use std::process::exit;
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
 
 fn main() {
-    solana_logger::setup();
+    solana_logger::setup_with_filter("solana=info");
     solana_metrics::set_panic_hook("bench-tps");
 
     let matches = cli::build_args().get_matches();
@@ -37,6 +41,7 @@ fn main() {
         write_to_client_file,
         read_from_client_file,
         target_lamports_per_signature,
+        use_move,
     } = cli_config;
 
     if write_to_client_file {
@@ -78,7 +83,7 @@ fn main() {
         exit(1);
     }
 
-    let (keypairs, keypair_balance) = if read_from_client_file {
+    let (keypairs, move_keypairs, keypair_balance) = if read_from_client_file && !use_move {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
@@ -91,7 +96,11 @@ fn main() {
             keypairs.push(Keypair::from_bytes(&bytes).unwrap());
             last_balance = balance;
         });
-        (keypairs, last_balance)
+        // Sort keypairs so that do_bench_tps() uses the same subset of accounts for each run.
+        // This prevents the amount of storage needed for bench-tps accounts from creeping up
+        // across multiple runs.
+        keypairs.sort_by(|x, y| x.pubkey().to_string().cmp(&y.pubkey().to_string()));
+        (keypairs, None, last_balance)
     } else {
         generate_and_fund_keypairs(
             &client,
@@ -99,6 +108,7 @@ fn main() {
             &id,
             tx_count,
             NUM_LAMPORTS_PER_ACCOUNT,
+            use_move,
         )
         .unwrap_or_else(|e| {
             eprintln!("Error could not fund keys: {:?}", e);
@@ -113,7 +123,14 @@ fn main() {
         duration,
         tx_count,
         sustained,
+        use_move,
     };
 
-    do_bench_tps(vec![client], config, keypairs, keypair_balance);
+    do_bench_tps(
+        vec![client],
+        config,
+        keypairs,
+        keypair_balance,
+        move_keypairs,
+    );
 }

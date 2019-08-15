@@ -23,7 +23,7 @@ pub struct ContactInfo {
     /// transactions address
     pub tpu: SocketAddr,
     /// address to forward unprocessed transactions to
-    pub tpu_via_blobs: SocketAddr,
+    pub tpu_forwards: SocketAddr,
     /// storage data address
     pub storage_addr: SocketAddr,
     /// address to which to send JSON-RPC requests
@@ -78,7 +78,7 @@ impl Default for ContactInfo {
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
             tpu: socketaddr_any!(),
-            tpu_via_blobs: socketaddr_any!(),
+            tpu_forwards: socketaddr_any!(),
             storage_addr: socketaddr_any!(),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
@@ -94,7 +94,7 @@ impl ContactInfo {
         gossip: SocketAddr,
         tvu: SocketAddr,
         tpu: SocketAddr,
-        tpu_via_blobs: SocketAddr,
+        tpu_forwards: SocketAddr,
         storage_addr: SocketAddr,
         rpc: SocketAddr,
         rpc_pubsub: SocketAddr,
@@ -106,7 +106,7 @@ impl ContactInfo {
             gossip,
             tvu,
             tpu,
-            tpu_via_blobs,
+            tpu_forwards,
             storage_addr,
             rpc,
             rpc_pubsub,
@@ -157,7 +157,7 @@ impl ContactInfo {
         let tpu_addr = *bind_addr;
         let gossip_addr = next_port(&bind_addr, 1);
         let tvu_addr = next_port(&bind_addr, 2);
-        let tpu_via_blobs_addr = next_port(&bind_addr, 3);
+        let tpu_forwards_addr = next_port(&bind_addr, 3);
         let rpc_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         Self::new(
@@ -165,7 +165,7 @@ impl ContactInfo {
             gossip_addr,
             tvu_addr,
             tpu_addr,
-            tpu_via_blobs_addr,
+            tpu_forwards_addr,
             "0.0.0.0:0".parse().unwrap(),
             rpc_addr,
             rpc_pubsub_addr,
@@ -233,7 +233,7 @@ impl Signable for ContactInfo {
             gossip: SocketAddr,
             tvu: SocketAddr,
             tpu: SocketAddr,
-            tpu_via_blobs: SocketAddr,
+            tpu_forwards: SocketAddr,
             storage_addr: SocketAddr,
             rpc: SocketAddr,
             rpc_pubsub: SocketAddr,
@@ -247,7 +247,7 @@ impl Signable for ContactInfo {
             tvu: me.tvu,
             tpu: me.tpu,
             storage_addr: me.storage_addr,
-            tpu_via_blobs: me.tpu_via_blobs,
+            tpu_forwards: me.tpu_forwards,
             rpc: me.rpc,
             rpc_pubsub: me.rpc_pubsub,
             wallclock: me.wallclock,
@@ -287,7 +287,7 @@ mod tests {
         let ci = ContactInfo::default();
         assert!(ci.gossip.ip().is_unspecified());
         assert!(ci.tvu.ip().is_unspecified());
-        assert!(ci.tpu_via_blobs.ip().is_unspecified());
+        assert!(ci.tpu_forwards.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
         assert!(ci.tpu.ip().is_unspecified());
@@ -298,7 +298,7 @@ mod tests {
         let ci = ContactInfo::new_multicast();
         assert!(ci.gossip.ip().is_multicast());
         assert!(ci.tvu.ip().is_multicast());
-        assert!(ci.tpu_via_blobs.ip().is_multicast());
+        assert!(ci.tpu_forwards.ip().is_multicast());
         assert!(ci.rpc.ip().is_multicast());
         assert!(ci.rpc_pubsub.ip().is_multicast());
         assert!(ci.tpu.ip().is_multicast());
@@ -310,7 +310,7 @@ mod tests {
         let ci = ContactInfo::new_gossip_entry_point(&addr);
         assert_eq!(ci.gossip, addr);
         assert!(ci.tvu.ip().is_unspecified());
-        assert!(ci.tpu_via_blobs.ip().is_unspecified());
+        assert!(ci.tpu_forwards.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
         assert!(ci.tpu.ip().is_unspecified());
@@ -323,7 +323,7 @@ mod tests {
         assert_eq!(ci.tpu, addr);
         assert_eq!(ci.gossip.port(), 11);
         assert_eq!(ci.tvu.port(), 12);
-        assert_eq!(ci.tpu_via_blobs.port(), 13);
+        assert_eq!(ci.tpu_forwards.port(), 13);
         assert_eq!(ci.rpc.port(), 8899);
         assert_eq!(ci.rpc_pubsub.port(), 8900);
         assert!(ci.storage_addr.ip().is_unspecified());
@@ -338,7 +338,7 @@ mod tests {
         assert_eq!(d1.id, keypair.pubkey());
         assert_eq!(d1.gossip, socketaddr!("127.0.0.1:1235"));
         assert_eq!(d1.tvu, socketaddr!("127.0.0.1:1236"));
-        assert_eq!(d1.tpu_via_blobs, socketaddr!("127.0.0.1:1237"));
+        assert_eq!(d1.tpu_forwards, socketaddr!("127.0.0.1:1237"));
         assert_eq!(d1.tpu, socketaddr!("127.0.0.1:1234"));
         assert_eq!(d1.rpc, socketaddr!("127.0.0.1:8899"));
         assert_eq!(d1.rpc_pubsub, socketaddr!("127.0.0.1:8900"));

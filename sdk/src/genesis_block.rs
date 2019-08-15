@@ -6,6 +6,7 @@ use crate::hash::{hash, Hash};
 use crate::inflation::Inflation;
 use crate::poh_config::PohConfig;
 use crate::pubkey::Pubkey;
+use crate::rent::Rent;
 use crate::signature::{Keypair, KeypairUtil};
 use crate::system_program;
 use crate::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT};
@@ -28,6 +29,7 @@ pub struct GenesisBlock {
     pub poh_config: PohConfig,
     pub fee_calculator: FeeCalculator,
     pub inflation: Inflation,
+    pub rent: Rent,
 }
 
 // useful for basic tests
@@ -59,6 +61,7 @@ impl Default for GenesisBlock {
             poh_config: PohConfig::default(),
             inflation: Inflation::default(),
             fee_calculator: FeeCalculator::default(),
+            rent: Rent::default(),
         }
     }
 }
@@ -163,7 +166,7 @@ impl GenesisBlock {
         hash(&serialized.into_bytes())
     }
 
-    pub fn load(ledger_path: &str) -> Result<Self, std::io::Error> {
+    pub fn load(ledger_path: &Path) -> Result<Self, std::io::Error> {
         let file = OpenOptions::new()
             .read(true)
             .open(&Path::new(ledger_path).join("genesis.bin"))
@@ -176,14 +179,13 @@ impl GenesisBlock {
         Ok(genesis_block)
     }
 
-    pub fn write(&self, ledger_path: &str) -> Result<(), std::io::Error> {
+    pub fn write(&self, ledger_path: &Path) -> Result<(), std::io::Error> {
         let serialized = serialize(&self)
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))?;
 
-        let dir = Path::new(ledger_path);
-        std::fs::create_dir_all(&dir)?;
+        std::fs::create_dir_all(&ledger_path)?;
 
-        let mut file = File::create(&dir.join("genesis.bin"))?;
+        let mut file = File::create(&ledger_path.join("genesis.bin"))?;
         file.write_all(&serialized)
     }
 }
@@ -192,12 +194,19 @@ impl GenesisBlock {
 mod tests {
     use super::*;
     use crate::signature::{Keypair, KeypairUtil};
+    use std::path::PathBuf;
 
-    fn make_tmp_path(name: &str) -> String {
-        let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+    fn make_tmp_path(name: &str) -> PathBuf {
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let keypair = Keypair::new();
 
-        let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
+        let path = [
+            out_dir,
+            "tmp".to_string(),
+            format!("{}-{}", name, keypair.pubkey()),
+        ]
+        .iter()
+        .collect();
 
         // whack any possible collision
         let _ignored = std::fs::remove_dir_all(&path);

@@ -60,14 +60,15 @@ while [[ $1 = -o ]]; do
   esac
 done
 
-RUST_LOG="$1"
-export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
+if [[ -n $1 ]]; then
+  export RUST_LOG="$1"
+fi
 
 source net/common.sh
 loadConfigFile
 
 case $deployMethod in
-local|tar)
+local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   if [[ -r target/perf-libs/env.sh ]]; then
@@ -75,15 +76,13 @@ local|tar)
     source target/perf-libs/env.sh
   fi
 
-  entrypointRsyncUrl="$sanityTargetIp:~/solana"
-
   solana_gossip=solana-gossip
   solana_install=solana-install
   solana_keygen=solana-keygen
   solana_ledger_tool=solana-ledger-tool
 
-  ledger=config-local/bootstrap-leader-ledger
-  client_id=config-local/client-id.json
+  ledger=config/bootstrap-leader
+  client_id=config/client-id.json
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -158,9 +157,8 @@ echo "--- $sanityTargetIp: validator sanity"
 if $validatorSanity; then
   (
     set -x -o pipefail
-    timeout 10s ./multinode-demo/validator-x.sh --stake 0 \
-      "$entrypointRsyncUrl" \
-      "$sanityTargetIp:8001" 2>&1 | tee validator-sanity.log
+    timeout 10s ./multinode-demo/validator-x.sh \
+      --no-restart --entrypoint "$sanityTargetIp:8001" 2>&1 | tee validator-sanity.log
   ) || {
     exitcode=$?
     [[ $exitcode -eq 124 ]] || exit $exitcode

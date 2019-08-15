@@ -57,6 +57,14 @@ fn test_wallet_timestamp_tx() {
         .unwrap();
     check_balance(50, &rpc_client, &config_payer.keypair.pubkey());
 
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &drone_addr,
+        &config_witness.keypair.pubkey(),
+        1,
+    )
+    .unwrap();
+
     // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
     let date_string = "\"2018-09-19T17:30:59Z\"";
     let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
@@ -120,6 +128,13 @@ fn test_wallet_witness_tx() {
 
     request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.keypair.pubkey(), 50)
         .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &drone_addr,
+        &config_witness.keypair.pubkey(),
+        1,
+    )
+    .unwrap();
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
     config_payer.command = WalletCommand::Pay(

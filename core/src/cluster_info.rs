@@ -17,7 +17,7 @@ use crate::blocktree::Blocktree;
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
 use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::repair_service::RepairType;
@@ -25,21 +25,18 @@ use crate::result::Result;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
 use crate::weighted_shuffle::weighted_shuffle;
-use bincode::{deserialize, serialize};
+use bincode::{deserialize, serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
 use rand::SeedableRng;
 use rand::{thread_rng, Rng};
 use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
-use solana_metrics::{
-    datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_warn,
-};
+use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_netutil::{
     bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
 };
-use solana_runtime::bloom::Bloom;
-use solana_sdk::hash::Hash;
+use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
@@ -64,6 +61,9 @@ pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
+
+/// The maximum size of a protocol payload
+const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -156,7 +156,7 @@ impl Signable for PruneData {
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
     /// Gossip protocol messages
-    PullRequest(Bloom<Hash>, CrdsValue),
+    PullRequest(CrdsFilter, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
     PruneMessage(Pubkey, PruneData),
@@ -719,9 +719,10 @@ impl ClusterInfo {
         last_err?;
 
         inc_new_counter_debug!("cluster_info-broadcast-max_idx", blobs_len);
-        if broadcast_table_len != 0 {
-            inc_new_counter_warn!("broadcast_service-num_peers", broadcast_table_len + 1);
-        }
+        datapoint_info!(
+            "cluster_info-num_nodes",
+            ("count", broadcast_table_len + 1, i64)
+        );
         Ok(())
     }
 
@@ -830,7 +831,7 @@ impl ClusterInfo {
         }
     }
     // If the network entrypoint hasn't been discovered yet, add it to the crds table
-    fn add_entrypoint(&mut self, pulls: &mut Vec<(Pubkey, Bloom<Hash>, SocketAddr, CrdsValue)>) {
+    fn add_entrypoint(&mut self, pulls: &mut Vec<(Pubkey, CrdsFilter, SocketAddr, CrdsValue)>) {
         match &self.entrypoint {
             Some(entrypoint) => {
                 let self_info = self
@@ -839,41 +840,87 @@ impl ClusterInfo {
                     .lookup(&CrdsValueLabel::ContactInfo(self.id()))
                     .unwrap_or_else(|| panic!("self_id invalid {}", self.id()));
 
-                pulls.push((
-                    entrypoint.id,
-                    self.gossip.pull.build_crds_filter(&self.gossip.crds),
-                    entrypoint.gossip,
-                    self_info.clone(),
-                ))
+                self.gossip
+                    .pull
+                    .build_crds_filters(&self.gossip.crds, Self::max_bloom_size())
+                    .into_iter()
+                    .for_each(|filter| {
+                        pulls.push((entrypoint.id, filter, entrypoint.gossip, self_info.clone()))
+                    })
             }
             None => (),
         }
     }
 
+    /// Splits a Vec of CrdsValues into a nested Vec, trying to make sure that
+    /// each Vec is no larger than `PROTOCOL_PAYLOAD_SIZE`
+    /// Note: some messages cannot be contained within that size so in the worst case this returns
+    /// N nested Vecs with 1 item each.
+    fn split_gossip_messages(mut msgs: Vec<CrdsValue>) -> Vec<Vec<CrdsValue>> {
+        let mut messages = vec![];
+        while !msgs.is_empty() {
+            let mut size = 0;
+            let mut payload = vec![];
+            while let Some(msg) = msgs.pop() {
+                let msg_size = msg.size();
+                if size + msg_size > MAX_PROTOCOL_PAYLOAD_SIZE as u64 {
+                    if msg_size < MAX_PROTOCOL_PAYLOAD_SIZE as u64 {
+                        msgs.push(msg);
+                    } else {
+                        warn!(
+                            "dropping message larger than the maximum payload size {:?}",
+                            msg
+                        );
+                    }
+                    break;
+                }
+                size += msg_size;
+                payload.push(msg);
+            }
+            messages.push(payload);
+        }
+        messages
+    }
+
+    // computes the maximum size for pull request blooms
+    pub fn max_bloom_size() -> usize {
+        let filter_size = serialized_size(&CrdsFilter::default())
+            .expect("unable to serialize default filter") as usize;
+        let protocol = Protocol::PullRequest(
+            CrdsFilter::default(),
+            CrdsValue::ContactInfo(ContactInfo::default()),
+        );
+        let protocol_size =
+            serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
+        PACKET_DATA_SIZE - (protocol_size - filter_size)
+    }
+
     fn new_pull_requests(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
-        let pulls: Vec<_> = self
+        let mut pulls: Vec<_> = self
             .gossip
-            .new_pull_request(now, stakes)
+            .new_pull_request(now, stakes, Self::max_bloom_size())
             .ok()
             .into_iter()
-            .collect();
-
-        let mut pr: Vec<_> = pulls
-            .into_iter()
-            .filter_map(|(peer, filter, self_info)| {
+            .filter_map(|(peer, filters, me)| {
                 let peer_label = CrdsValueLabel::ContactInfo(peer);
                 self.gossip
                     .crds
                     .lookup(&peer_label)
                     .and_then(CrdsValue::contact_info)
-                    .map(|peer_info| (peer, filter, peer_info.gossip, self_info))
+                    .map(move |peer_info| {
+                        filters
+                            .into_iter()
+                            .map(move |f| (peer, f, peer_info.gossip, me.clone()))
+                    })
             })
+            .flatten()
             .collect();
-        if pr.is_empty() {
-            self.add_entrypoint(&mut pr);
+        if pulls.is_empty() {
+            self.add_entrypoint(&mut pulls);
         }
-        pr.into_iter()
+        pulls
+            .into_iter()
             .map(|(peer, filter, gossip, self_info)| {
                 self.gossip.mark_pull_request_creation_time(&peer, now);
                 (gossip, Protocol::PullRequest(filter, self_info))
@@ -893,7 +940,12 @@ impl ClusterInfo {
                     .and_then(CrdsValue::contact_info)
                     .map(|p| (p.gossip, messages))
             })
-            .map(|(peer, msgs)| (peer, Protocol::PushMessage(self_id, msgs)))
+            .map(|(peer, msgs)| {
+                Self::split_gossip_messages(msgs)
+                    .into_iter()
+                    .map(move |payload| (peer, Protocol::PushMessage(self_id, payload)))
+            })
+            .flatten()
             .collect()
     }
 
@@ -1063,7 +1115,7 @@ impl ClusterInfo {
 
     fn handle_pull_request(
         me: &Arc<RwLock<Self>>,
-        filter: Bloom<Hash>,
+        filter: CrdsFilter,
         caller: CrdsValue,
         from_addr: &SocketAddr,
     ) -> Vec<SharedBlob> {
@@ -1089,11 +1141,18 @@ impl ClusterInfo {
             .process_pull_request(caller, filter, now);
         let len = data.len();
         trace!("get updates since response {}", len);
-        let rsp = Protocol::PullResponse(self_id, data);
+        let responses: Vec<_> = Self::split_gossip_messages(data)
+            .into_iter()
+            .map(move |payload| Protocol::PullResponse(self_id, payload))
+            .collect();
         // The remote node may not know its public IP:PORT. Instead of responding to the caller's
         // gossip addr, respond to the origin addr.
         inc_new_counter_debug!("cluster_info-pull_request-rsp", len);
-        to_shared_blob(rsp, *from_addr).ok().into_iter().collect()
+        responses
+            .into_iter()
+            .map(|rsp| to_shared_blob(rsp, *from_addr).ok().into_iter())
+            .flatten()
+            .collect()
     }
 
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: &Pubkey, data: Vec<CrdsValue>) {
@@ -1118,7 +1177,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<SharedBlob> {
         let self_id = me.read().unwrap().gossip.id;
-        inc_new_counter_debug!("cluster_info-push_message", 1, 0, 1000);
+        inc_new_counter_debug!("cluster_info-push_message", 1);
 
         let updated: Vec<_> =
             me.write()
@@ -1464,7 +1523,7 @@ pub struct Sockets {
     pub gossip: UdpSocket,
     pub tvu: Vec<UdpSocket>,
     pub tpu: Vec<UdpSocket>,
-    pub tpu_via_blobs: Vec<UdpSocket>,
+    pub tpu_forwards: Vec<UdpSocket>,
     pub broadcast: UdpSocket,
     pub repair: UdpSocket,
     pub retransmit: UdpSocket,
@@ -1509,7 +1568,7 @@ impl Node {
                 gossip,
                 tvu: vec![tvu],
                 tpu: vec![],
-                tpu_via_blobs: vec![],
+                tpu_forwards: vec![],
                 broadcast,
                 repair,
                 retransmit,
@@ -1521,7 +1580,7 @@ impl Node {
         let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let tpu_via_blobs = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tpu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let rpc_port = find_available_port_in_range((1024, 65535)).unwrap();
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_port);
@@ -1537,7 +1596,7 @@ impl Node {
             gossip.local_addr().unwrap(),
             tvu.local_addr().unwrap(),
             tpu.local_addr().unwrap(),
-            tpu_via_blobs.local_addr().unwrap(),
+            tpu_forwards.local_addr().unwrap(),
             storage.local_addr().unwrap(),
             rpc_addr,
             rpc_pubsub_addr,
@@ -1549,7 +1608,7 @@ impl Node {
                 gossip,
                 tvu: vec![tvu],
                 tpu: vec![tpu],
-                tpu_via_blobs: vec![tpu_via_blobs],
+                tpu_forwards: vec![tpu_forwards],
                 broadcast,
                 repair,
                 retransmit,
@@ -1583,7 +1642,7 @@ impl Node {
 
         let (tpu_port, tpu_sockets) = multi_bind_in_range(port_range, 32).expect("tpu multi_bind");
 
-        let (tpu_via_blobs_port, tpu_via_blobs_sockets) =
+        let (tpu_forwards_port, tpu_forwards_sockets) =
             multi_bind_in_range(port_range, 8).expect("tpu multi_bind");
 
         let (_, repair) = Self::bind(port_range);
@@ -1595,7 +1654,7 @@ impl Node {
             SocketAddr::new(gossip_addr.ip(), gossip_port),
             SocketAddr::new(gossip_addr.ip(), tvu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_port),
-            SocketAddr::new(gossip_addr.ip(), tpu_via_blobs_port),
+            SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
             socketaddr_any!(),
             socketaddr_any!(),
             socketaddr_any!(),
@@ -1609,7 +1668,7 @@ impl Node {
                 gossip,
                 tvu: tvu_sockets,
                 tpu: tpu_sockets,
-                tpu_via_blobs: tpu_via_blobs_sockets,
+                tpu_forwards: tpu_forwards_sockets,
                 broadcast,
                 repair,
                 retransmit,
@@ -1630,9 +1689,9 @@ impl Node {
 
         let empty = socketaddr_any!();
         new.info.tpu = empty;
-        new.info.tpu_via_blobs = empty;
+        new.info.tpu_forwards = empty;
         new.sockets.tpu = vec![];
-        new.sockets.tpu_via_blobs = vec![];
+        new.sockets.tpu_forwards = vec![];
 
         new
     }
@@ -1652,6 +1711,7 @@ mod tests {
     use crate::blocktree::tests::make_many_slot_entries;
     use crate::blocktree::Blocktree;
     use crate::crds_value::CrdsValueLabel;
+    use crate::erasure::ErasureConfig;
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::repair_service::RepairType;
     use crate::result::Error;
@@ -1816,6 +1876,7 @@ mod tests {
                 w_blob.set_size(data_size);
                 w_blob.set_index(1);
                 w_blob.set_slot(2);
+                w_blob.set_erasure_config(&ErasureConfig::default());
                 w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
             }
 
@@ -1860,6 +1921,7 @@ mod tests {
                     blob.set_size(data_size);
                     blob.set_index(i);
                     blob.set_slot(2);
+                    blob.set_erasure_config(&ErasureConfig::default());
                     blob.meta.size = data_size + BLOB_HEADER_SIZE;
                     blob
                 })
@@ -2023,7 +2085,7 @@ mod tests {
 
         let (_, _, val) = cluster_info
             .gossip
-            .new_pull_request(timestamp(), &HashMap::new())
+            .new_pull_request(timestamp(), &HashMap::new(), ClusterInfo::max_bloom_size())
             .ok()
             .unwrap();
         assert!(val.verify());
@@ -2199,45 +2261,79 @@ mod tests {
         assert_eq!(votes, vec![]);
         assert_eq!(max_ts, new_max_ts);
     }
-}
-#[test]
-fn test_add_entrypoint() {
-    let node_keypair = Arc::new(Keypair::new());
-    let mut cluster_info = ClusterInfo::new(
-        ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
-        node_keypair,
-    );
-    let entrypoint_pubkey = Pubkey::new_rand();
-    let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
-    cluster_info.set_entrypoint(entrypoint.clone());
-    let pulls = cluster_info.new_pull_requests(&HashMap::new());
-    assert_eq!(1, pulls.len());
-    match pulls.get(0) {
-        Some((addr, msg)) => {
-            assert_eq!(*addr, entrypoint.gossip);
-            match msg {
-                Protocol::PullRequest(_, value) => {
-                    assert!(value.verify());
-                    assert_eq!(value.pubkey(), cluster_info.id())
+
+    #[test]
+    fn test_add_entrypoint() {
+        let node_keypair = Arc::new(Keypair::new());
+        let mut cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            node_keypair,
+        );
+        let entrypoint_pubkey = Pubkey::new_rand();
+        let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
+        cluster_info.set_entrypoint(entrypoint.clone());
+        let pulls = cluster_info.new_pull_requests(&HashMap::new());
+        assert_eq!(1, pulls.len() as u64);
+        match pulls.get(0) {
+            Some((addr, msg)) => {
+                assert_eq!(*addr, entrypoint.gossip);
+                match msg {
+                    Protocol::PullRequest(_, value) => {
+                        assert!(value.verify());
+                        assert_eq!(value.pubkey(), cluster_info.id())
+                    }
+                    _ => panic!("wrong protocol"),
                 }
-                _ => panic!("wrong protocol"),
             }
+            None => panic!("entrypoint should be a pull destination"),
         }
-        None => panic!("entrypoint should be a pull destination"),
+
+        // now add this message back to the table and make sure after the next pull, the entrypoint is unset
+        let entrypoint_crdsvalue = CrdsValue::ContactInfo(entrypoint.clone());
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        ClusterInfo::handle_pull_response(
+            &cluster_info,
+            &entrypoint_pubkey,
+            vec![entrypoint_crdsvalue],
+        );
+        let pulls = cluster_info
+            .write()
+            .unwrap()
+            .new_pull_requests(&HashMap::new());
+        assert_eq!(1, pulls.len() as u64);
+        assert_eq!(cluster_info.read().unwrap().entrypoint, Some(entrypoint));
     }
 
-    // now add this message back to the table and make sure after the next pull, the entrypoint is unset
-    let entrypoint_crdsvalue = CrdsValue::ContactInfo(entrypoint.clone());
-    let cluster_info = Arc::new(RwLock::new(cluster_info));
-    ClusterInfo::handle_pull_response(
-        &cluster_info,
-        &entrypoint_pubkey,
-        vec![entrypoint_crdsvalue],
-    );
-    let pulls = cluster_info
-        .write()
-        .unwrap()
-        .new_pull_requests(&HashMap::new());
-    assert_eq!(1, pulls.len());
-    assert_eq!(cluster_info.read().unwrap().entrypoint, Some(entrypoint));
+    #[test]
+    fn test_split_messages_small() {
+        let value = CrdsValue::ContactInfo(ContactInfo::default());
+        test_split_messages(value);
+    }
+
+    #[test]
+    fn test_split_messages_large() {
+        let mut btree_slots = BTreeSet::new();
+        for i in 0..128 {
+            btree_slots.insert(i);
+        }
+        let value = CrdsValue::EpochSlots(EpochSlots {
+            from: Pubkey::default(),
+            root: 0,
+            slots: btree_slots,
+            signature: Signature::default(),
+            wallclock: 0,
+        });
+        test_split_messages(value);
+    }
+
+    fn test_split_messages(value: CrdsValue) {
+        const NUM_VALUES: usize = 30;
+        let value_size = value.size();
+        let expected_len = NUM_VALUES / (MAX_PROTOCOL_PAYLOAD_SIZE / value_size).max(1) as usize;
+        let msgs = vec![value; NUM_VALUES];
+
+        let split = ClusterInfo::split_gossip_messages(msgs);
+        assert!(split.len() <= expected_len);
+    }
+
 }

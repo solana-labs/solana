@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 582,
-  "iteration": 1558471455221,
+  "id": 834,
+  "iteration": 1565538180842,
   "links": [
     {
       "asDropdown": true,
@@ -103,7 +103,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "last",
+      "tableColumn": "mode",
       "targets": [
         {
           "groupBy": [
@@ -123,7 +123,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"host_id\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter \n",
+          "query": "SELECT MODE(last) FROM ( SELECT last(\"leader\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter GROUP BY host_id )\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
@@ -236,7 +236,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"count\") FROM \"$testnet\".\"autogen\".\"broadcast_service-num_peers\" WHERE $timeFilter GROUP BY time(1s) \n\n",
+          "query": "SELECT LAST(median) FROM ( SELECT median(count) FROM \"$testnet\".\"autogen\".\"cluster_info-num_nodes\" WHERE $timeFilter AND count > 0 GROUP BY time(5s) )\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -325,46 +325,9 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT count(\"count\") AS \"total\" FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT MEDIAN(\"host_count\") AS \"total\" FROM ( SELECT COUNT(\"count\") as host_count FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter GROUP BY time($__interval), host_id ) GROUP BY time($__interval) fill(0)",
           "rawQuery": true,
           "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT count(\"count\") AS \" \" FROM \"$testnet\".\"autogen\".\"validator-vote_sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "A",
           "resultFormat": "time_series",
           "select": [
             [
@@ -502,7 +465,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-record_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT MEDIAN(tx_count) AS sum FROM (SELECT SUM(\"count\")  AS tx_count FROM \"$testnet\".\"autogen\".\"bank-process_transactions\" WHERE $timeFilter AND count > 0 GROUP BY time(1s), host_id) GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -614,7 +577,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MAX(\"sum\") FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-record_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT MAX(\"median_sum\") FROM ( SELECT MEDIAN(tx_count) AS median_sum FROM (SELECT SUM(\"count\") AS tx_count FROM \"$testnet\".\"autogen\".\"bank-process_transactions\" WHERE $timeFilter AND count > 0 GROUP BY time(1s), host_id) GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -726,7 +689,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"banking_stage-record_transactions\" WHERE $timeFilter \n\n",
+          "query": "SELECT MEDIAN(tx_count) AS transactions FROM (SELECT SUM(\"count\")  AS tx_count FROM \"$testnet\".\"autogen\".\"bank-process_transactions\" WHERE $timeFilter GROUP BY host_id) WHERE tx_count > 0\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -818,7 +781,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "sum",
+      "tableColumn": "median",
       "targets": [
         {
           "groupBy": [
@@ -838,7 +801,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter \n",
+          "query": "SELECT MEDIAN(\"vote_count\") FROM ( SELECT sum(\"count\") as vote_count FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter  GROUP BY host_id )\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
@@ -1556,9 +1519,85 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
+          "query": "select median(\"tx_count\") as \"transactions\" from (select sum(\"count\") / 2  as \"tx_count\" from \"$testnet\".\"autogen\".\"bank-process_transactions\" where $timeFilter AND count > 0 GROUP BY time(2s), host_id) group by time(2s) fill(0)",
+          "rawQuery": true,
+          "refId": "E",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "orderByTime": "ASC",
+          "policy": "default",
           "query": "SELECT sum(\"count\") / 2 AS \"transactions\" FROM \"$testnet\".\"autogen\".\"banking_stage-record_transactions\" WHERE $timeFilter GROUP BY time(2s) FILL(0)\n",
           "rawQuery": true,
           "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "select median(\"tx_count\") as \"transactions\" from (select sum(\"count\") / 2  as \"tx_count\" from \"$testnet\".\"autogen\".\"replay_stage-replay_transactions\" where $timeFilter AND count > 0 GROUP BY time(2s), host_id) group by time(2s) fill(0)",
+          "rawQuery": true,
+          "refId": "D",
           "resultFormat": "time_series",
           "select": [
             [
@@ -1623,6 +1662,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "decimals": null,
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -1670,86 +1710,10 @@
               "type": "fill"
             }
           ],
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT mean(\"total_peers\") as \"total peers\" FROM \"$testnet\".\"autogen\".\"vote_stage-peer_count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"valid_peers\") as \"valid peers\" FROM \"$testnet\".\"autogen\".\"vote_stage-peer_count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") AS \"peers\" FROM \"$testnet\".\"autogen\".\"broadcast_service-num_peers\" WHERE $timeFilter GROUP BY time(1s) FILL(0)",
+          "query": "SELECT median(\"count\") AS \"total\" FROM \"$testnet\".\"autogen\".\"cluster_info-num_nodes\" WHERE $timeFilter AND count > 0 GROUP BY time(5s)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -1773,7 +1737,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Nodes in Network",
+      "title": "Node Count",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -1789,8 +1753,9 @@
       },
       "yaxes": [
         {
+          "decimals": 0,
           "format": "short",
-          "label": null,
+          "label": "",
           "logBase": 1,
           "max": null,
           "min": null,
@@ -1876,7 +1841,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(1s) FILL(0)\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -4311,7 +4276,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") / 3 FROM \"$testnet\".\"autogen\".\"exchange_processor-trades\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
+          "query": "SELECT sum(\"count\") / 3 FROM \"$testnet\".\"autogen\".\"exchange_processor-trades\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -4348,7 +4313,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") / 3 FROM \"$testnet\".\"autogen\".\"exchange_processor-swaps\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
+          "query": "SELECT sum(\"count\") / 3 FROM \"$testnet\".\"autogen\".\"exchange_processor-swaps\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -4462,7 +4427,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") / 3 AS \"trades\" FROM \"$testnet\".\"autogen\".\"bench-exchange-trades\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
+          "query": "SELECT sum(\"count\") / 3 AS \"trades\" FROM \"$testnet\".\"autogen\".\"bench-exchange-trades\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -4499,7 +4464,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") / 3 AS \"swaps\" FROM \"$testnet\".\"autogen\".\"bench-exchange-swaps\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
+          "query": "SELECT sum(\"count\") / 3 AS \"swaps\" FROM \"$testnet\".\"autogen\".\"bench-exchange-swaps\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -4536,7 +4501,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") / 3 AS \"transfers\" FROM \"$testnet\".\"autogen\".\"bench-exchange-do_tx_transfers\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
+          "query": "SELECT sum(\"count\") / 3 AS \"transfers\" FROM \"$testnet\".\"autogen\".\"bench-exchange-do_tx_transfers\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(3s)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -4623,7 +4588,7 @@
         "x": 0,
         "y": 57
       },
-      "id": 44,
+      "id": 40,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4963,7 +4928,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"retransmit\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT sum(\"count\") AS \"retransmit\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "I",
           "resultFormat": "time_series",
@@ -5037,7 +5002,7 @@
         "x": 8,
         "y": 57
       },
-      "id": 46,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5080,7 +5045,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT sum(\"count\") AS \"sigverify\" FROM \"$testnet\".\"autogen\".\"sigverify_stage-time_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"sigverify\" FROM \"$testnet\".\"autogen\".\"sigverify_stage-time_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -5117,7 +5082,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"banking\" FROM \"$testnet\".\"autogen\".\"banking_stage-time_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"banking\" FROM \"$testnet\".\"autogen\".\"banking_stage-time_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -5154,7 +5119,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"request\" FROM \"$testnet\".\"autogen\".\"request_stage-time_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"request\" FROM \"$testnet\".\"autogen\".\"request_stage-time_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -5191,7 +5156,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"write\" FROM \"$testnet\".\"autogen\".\"ledger_writer_stage-time_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"write\" FROM \"$testnet\".\"autogen\".\"ledger_writer_stage-time_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series",
@@ -5228,7 +5193,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"broadcast\" FROM \"$testnet\".\"autogen\".\"broadcast_service-time_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"broadcast\" FROM \"$testnet\".\"autogen\".\"broadcast_service-time_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
           "refId": "E",
           "resultFormat": "time_series",
@@ -5265,7 +5230,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"banking_stall\" FROM \"$testnet\".\"autogen\".\"banking_stage-stall_time_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT sum(\"count\") AS \"banking_stall\" FROM \"$testnet\".\"autogen\".\"banking_stage-stall_time_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "F",
           "resultFormat": "time_series",
@@ -5302,7 +5267,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"banking_buffered\" FROM \"$testnet\".\"autogen\".\"banking_stage-buffered_packet_time_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT sum(\"count\") AS \"banking_buffered\" FROM \"$testnet\".\"autogen\".\"banking_stage-buffered_packet_time_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "G",
           "resultFormat": "time_series",
@@ -5366,9 +5331,9 @@
     {
       "aliasColors": {
         "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
         "tower-observed.squash_account": "#0a437c",
         "tower-observed.squash_cache": "#ea6460",
-        "replay_stage-new_leader.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -5383,7 +5348,7 @@
         "x": 16,
         "y": 57
       },
-      "id": 47,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5426,7 +5391,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"bank-forks_set_root_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"bank-forks_set_root_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -5465,7 +5430,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"squash_accounts_ms\")  AS \"squash_account\" FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"squash_accounts_ms\")  AS \"squash_account\" FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -5504,7 +5469,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"squash_cache_ms\")  AS \"squash_cache\" FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"squash_cache_ms\")  AS \"squash_cache\" FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -5576,8 +5541,8 @@
         "cluster-info.repair": "#ba43a9",
         "fetch_stage-discard_forwards.sum": "#00ffbb",
         "fetch_stage-honor_forwards.sum": "#bf1b00",
-        "tower-vote.last": "#00ffbb",
         "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -5592,7 +5557,7 @@
         "x": 0,
         "y": 63
       },
-      "id": 50,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5635,7 +5600,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-buffered_packets\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-buffered_packets\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -5672,7 +5637,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-forwarded_packets\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-forwarded_packets\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -5709,7 +5674,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-consumed_buffered_packets\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-consumed_buffered_packets\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -5746,7 +5711,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-rebuffered_packets\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-rebuffered_packets\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series",
@@ -5783,7 +5748,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"fetch_stage-honor_forwards\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"fetch_stage-honor_forwards\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "E",
           "resultFormat": "time_series",
@@ -5820,7 +5785,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"fetch_stage-discard_forwards\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"fetch_stage-discard_forwards\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "F",
           "resultFormat": "time_series",
@@ -5892,10 +5857,10 @@
         "cluster-info.repair": "#ba43a9",
         "fetch_stage-discard_forwards.sum": "#00ffbb",
         "fetch_stage-honor_forwards.sum": "#bf1b00",
-        "tower-vote.last": "#00ffbb",
         "poh_recorder-record_lock_contention.sum": "#5195ce",
         "poh_recorder-tick_lock_contention.sum": "#962d82",
         "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -5910,7 +5875,7 @@
         "x": 8,
         "y": 63
       },
-      "id": 60,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5951,7 +5916,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_lock_contention\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "F",
           "resultFormat": "time_series",
@@ -5988,7 +5953,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_lock_contention\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -6025,7 +5990,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_overhead\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_overhead\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -6099,7 +6064,7 @@
         "x": 16,
         "y": 63
       },
-      "id": 41,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6293,7 +6258,7 @@
         "x": 0,
         "y": 69
       },
-      "id": 42,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6334,7 +6299,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-ix\") AS \"repair-ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-ix\") AS \"repair-ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -6371,7 +6336,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-slot\") AS \"repair-slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-slot\") AS \"repair-slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -6449,7 +6414,7 @@
         "x": 8,
         "y": 69
       },
-      "id": 43,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6490,7 +6455,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-orphan\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_orphan\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-orphan\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_orphan\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -6568,7 +6533,7 @@
         "x": 16,
         "y": 69
       },
-      "id": 49,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6609,7 +6574,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-highest-slot\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-highest-slot\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -6646,7 +6611,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-highest-ix\") AS \"ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-highest-ix\") AS \"ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -6720,7 +6685,7 @@
         "x": 0,
         "y": 74
       },
-      "id": 40,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6873,7 +6838,7 @@
         "x": 12,
         "y": 74
       },
-      "id": 48,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6916,7 +6881,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT last(\"consumed\") AS \"validator\" FROM \"$testnet\".\"autogen\".\"window-stage\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT last(\"consumed\") AS \"validator\" FROM \"$testnet\".\"autogen\".\"window-stage\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -7025,7 +6990,7 @@
       },
       "id": 51,
       "panels": [],
-      "title": "Locktower Consensus",
+      "title": "Tower Consensus",
       "type": "row"
     },
     {
@@ -7089,7 +7054,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT last(\"latest\") - last(\"root\") FROM \"$testnet\".\"autogen\".\"tower-vote\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"latest\") - last(\"root\") FROM \"$testnet\".\"autogen\".\"tower-vote\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -7126,7 +7091,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"slot\") - last(\"root\") FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"slot\") - last(\"root\") FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -7150,7 +7115,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Locktower Distance in Latest and Root Slot ($hostid)",
+      "title": "Tower Distance in Latest and Root Slot ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -7190,8 +7155,8 @@
     {
       "aliasColors": {
         "cluster-info.repair": "#ba43a9",
-        "tower-vote.last": "#00ffbb",
         "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -7249,7 +7214,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT last(\"root\") FROM \"$testnet\".\"autogen\".\"tower-vote\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"root\") FROM \"$testnet\".\"autogen\".\"tower-vote\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -7286,7 +7251,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"root\") FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"root\") FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -7310,7 +7275,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Locktower Root Slot ($hostid)",
+      "title": "Tower Root Slot ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -7408,7 +7373,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT last(\"count\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE   host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT median(\"slot\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -7432,7 +7397,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Leader Change ($hostid)",
+      "title": "Leader Change",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -8048,6 +8013,10 @@
       },
       {
         "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "datasource": "$datasource",
         "hide": 0,
         "includeAll": true,
@@ -8055,7 +8024,7 @@
         "multi": false,
         "name": "hostid",
         "options": [],
-        "query": "SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-fullnode-new\" ",
+        "query": "SELECT DISTINCT(\"id\") FROM \"$testnet\".\"autogen\".\"validator-new\" ",
         "refresh": 2,
         "regex": "",
         "sort": 1,
@@ -8068,7 +8037,7 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {

@@ -2,10 +2,12 @@ use bincode::deserialize;
 use clap::{
     crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
+use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use solana_client::rpc_client::RpcClient;
-use solana_config_api::{config_instruction, config_instruction::ConfigKeys, ConfigState};
+use solana_config_api::{config_instruction, get_config_data, ConfigKeys, ConfigState};
+use solana_sdk::account::Account;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
@@ -15,8 +17,8 @@ use std::process::exit;
 
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
 pub const MAX_LONG_FIELD_LENGTH: usize = 300;
-pub const MAX_VALIDATOR_INFO: u64 = 570;
-pub const JSON_RPC_URL: &str = "https://api.testnet.solana.com/";
+pub const MAX_VALIDATOR_INFO: u64 = 576;
+pub const JSON_RPC_URL: &str = "http://testnet.solana.com:8899";
 
 // Config account key: Va1idator1nfo111111111111111111111111111111
 pub const REGISTER_CONFIG_KEY: [u8; 32] = [
@@ -29,7 +31,7 @@ solana_sdk::solana_name_id!(
     "Va1idator1nfo111111111111111111111111111111"
 );
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 struct ValidatorInfo {
     info: String,
 }
@@ -99,7 +101,30 @@ fn check_details_length(string: String) -> Result<(), String> {
     }
 }
 
-fn parse_args(matches: &ArgMatches<'_>) -> Result<String, Box<dyn error::Error>> {
+fn verify_keybase(
+    validator_pubkey: &Pubkey,
+    keybase_username: &Value,
+) -> Result<(), Box<dyn error::Error>> {
+    if let Some(keybase_username) = keybase_username.as_str() {
+        let url = format!(
+            "https://keybase.pub/{}/solana/validator-{:?}",
+            keybase_username, validator_pubkey
+        );
+        let client = Client::new();
+        if client.head(&url).send()?.status().is_success() {
+            Ok(())
+        } else {
+            Err(format!("keybase_username could not be confirmed at: {}. Please add this pubkey file to your keybase profile to connect", url))?
+        }
+    } else {
+        Err(format!(
+            "keybase_username could not be parsed as String: {}",
+            keybase_username
+        ))?
+    }
+}
+
+fn parse_args(matches: &ArgMatches<'_>) -> Value {
     let mut map = Map::new();
     map.insert(
         "name".to_string(),
@@ -111,22 +136,30 @@ fn parse_args(matches: &ArgMatches<'_>) -> Result<String, Box<dyn error::Error>>
     if let Some(details) = matches.value_of("details") {
         map.insert("details".to_string(), Value::String(details.to_string()));
     }
-    if let Some(keybase_id) = matches.value_of("keybase_id") {
+    if let Some(keybase_username) = matches.value_of("keybase_username") {
         map.insert(
-            "keybaseId".to_string(),
-            Value::String(keybase_id.to_string()),
+            "keybaseUsername".to_string(),
+            Value::String(keybase_username.to_string()),
         );
     }
-    let string = serde_json::to_string(&Value::Object(map))?;
-    Ok(string)
+    Value::Object(map)
 }
 
-fn parse_validator_info(account_data: &[u8]) -> Result<(Pubkey, String), Box<dyn error::Error>> {
+fn parse_validator_info(
+    pubkey: &Pubkey,
+    account_data: &[u8],
+) -> Result<(Pubkey, String), Box<dyn error::Error>> {
     let key_list: ConfigKeys = deserialize(&account_data)?;
-    let (validator_pubkey, _) = key_list.keys[1];
-    let meta_length = ConfigKeys::serialized_size(key_list.keys);
-    let validator_info: String = deserialize(&account_data[meta_length..])?;
-    Ok((validator_pubkey, validator_info))
+    if !key_list.keys.is_empty() {
+        let (validator_pubkey, _) = key_list.keys[1];
+        let validator_info: String = deserialize(&get_config_data(account_data)?)?;
+        Ok((validator_pubkey, validator_info))
+    } else {
+        Err(format!(
+            "account {} found, but could not be parsed as ValidatorInfo",
+            pubkey
+        ))?
+    }
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -150,12 +183,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
                 .arg(
                     Arg::with_name("validator_keypair")
-                        .short("v")
-                        .long("validator-keypair")
-                        .value_name("PATH")
+                        .index(1)
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .help("/path/to/id.json"),
+                        .help("/path/to/validator-keypair.json"),
                 )
                 .arg(
                     Arg::with_name("info_pubkey")
@@ -168,9 +200,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
                 .arg(
                     Arg::with_name("name")
-                        .short("n")
-                        .long("name")
-                        .value_name("STRING")
+                        .index(2)
+                        .value_name("NAME")
                         .takes_value(true)
                         .required(true)
                         .validator(is_short_field)
@@ -186,19 +217,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Validator website url"),
                 )
                 .arg(
-                    Arg::with_name("keybase_id")
+                    Arg::with_name("keybase_username")
                         .short("k")
                         .long("keybase")
-                        .value_name("STRING")
+                        .value_name("USERNAME")
                         .takes_value(true)
                         .validator(is_short_field)
-                        .help("Validator Keybase id"),
+                        .help("Validator Keybase username"),
                 )
                 .arg(
                     Arg::with_name("details")
                         .short("d")
                         .long("details")
-                        .value_name("STRING")
+                        .value_name("DETAILS")
                         .takes_value(true)
                         .validator(check_details_length)
                         .help(&format!(
@@ -223,21 +254,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
                 .arg(
                     Arg::with_name("info_pubkey")
-                        .short("p")
-                        .long("info-pubkey")
+                        .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .required_unless("all")
-                        .conflicts_with("all")
                         .validator(is_pubkey)
-                        .help("The pubkey of the Validator info account"),
-                )
-                .arg(
-                    Arg::with_name("all")
-                        .short("a")
-                        .long("all")
-                        .required_unless("info_pubkey")
-                        .help("Return all current Validator info"),
+                        .help("The pubkey of the Validator info account; without this argument, returns all"),
                 ),
         )
         .get_matches();
@@ -261,19 +282,40 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             };
             let validator_keypair = read_keypair(id_path)?;
 
-            // Create validator-info keypair to use if info_pubkey no provided or does not exist
+            // Check for existing validator-info account
+            let all_config = rpc_client.get_program_accounts(&solana_config_api::id())?;
+            let existing_account = all_config
+                .iter()
+                .filter(|(_, account)| {
+                    let key_list: ConfigKeys =
+                        deserialize(&account.data).map_err(|_| false).unwrap();
+                    key_list.keys.contains(&(id(), false))
+                })
+                .find(|(pubkey, account)| {
+                    let (validator_pubkey, _) =
+                        parse_validator_info(&pubkey, &account.data).unwrap();
+                    validator_pubkey == validator_keypair.pubkey()
+                });
+
+            // Create validator-info keypair to use if info_pubkey not provided or does not exist
             let info_keypair = Keypair::new();
             let mut info_pubkey = if let Some(pubkey) = matches.value_of("info_pubkey") {
                 pubkey.parse::<Pubkey>().unwrap()
+            } else if let Some(validator_info) = existing_account {
+                validator_info.0
             } else {
                 info_keypair.pubkey()
             };
 
             // Prepare validator info
             let keys = vec![(id(), false), (validator_keypair.pubkey(), true)];
-            let validator_info = parse_args(&matches)?;
+            let validator_info = parse_args(&matches);
+            if let Some(string) = validator_info.get("keybaseUsername") {
+                verify_keybase(&validator_keypair.pubkey(), &string)?;
+            }
+            let validator_string = serde_json::to_string(&validator_info)?;
             let validator_info = ValidatorInfo {
-                info: validator_info,
+                info: validator_string,
             };
 
             // Check existence of validator-info account
@@ -291,15 +333,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     "Publishing info for Validator {:?}",
                     validator_keypair.pubkey()
                 );
-                let instructions = vec![
-                    config_instruction::create_account::<ValidatorInfo>(
-                        &validator_keypair.pubkey(),
-                        &info_keypair.pubkey(),
-                        1,
-                        keys.clone(),
-                    ),
-                    config_instruction::store(&info_keypair.pubkey(), true, keys, &validator_info),
-                ];
+                let mut instructions = config_instruction::create_account::<ValidatorInfo>(
+                    &validator_keypair.pubkey(),
+                    &info_keypair.pubkey(),
+                    1,
+                    keys.clone(),
+                );
+                instructions.extend_from_slice(&[config_instruction::store(
+                    &info_keypair.pubkey(),
+                    true,
+                    keys,
+                    &validator_info,
+                )]);
                 let signers = vec![&validator_keypair, &info_keypair];
                 let message = Message::new(instructions);
                 (message, signers)
@@ -334,32 +379,35 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
             let rpc_client = RpcClient::new(json_rpc_url.to_string());
 
-            if matches.is_present("all") {
-                let all_validator_info =
-                    rpc_client.get_program_accounts(&solana_config_api::id())?;
-                for (info_pubkey, account) in all_validator_info.iter().filter(|(_, account)| {
-                    let key_list: ConfigKeys =
-                        deserialize(&account.data).map_err(|_| false).unwrap();
-                    key_list.keys.contains(&(id(), false))
-                }) {
+            if matches.is_present("info_pubkey") {
+                if let Some(pubkey) = matches.value_of("info_pubkey") {
+                    let info_pubkey = pubkey.parse::<Pubkey>().unwrap();
+                    let validator_info_data = rpc_client.get_account_data(&info_pubkey)?;
+                    let (validator_pubkey, validator_info) =
+                        parse_validator_info(&info_pubkey, &validator_info_data)?;
+                    println!("Validator pubkey: {:?}", validator_pubkey);
+                    println!("Info: {}", validator_info);
+                }
+            } else {
+                let all_config = rpc_client.get_program_accounts(&solana_config_api::id())?;
+                let all_validator_info: Vec<&(Pubkey, Account)> = all_config
+                    .iter()
+                    .filter(|(_, account)| {
+                        let key_list: ConfigKeys =
+                            deserialize(&account.data).map_err(|_| false).unwrap();
+                        key_list.keys.contains(&(id(), false))
+                    })
+                    .collect();
+                if all_validator_info.is_empty() {
+                    println!("No validator info accounts found");
+                }
+                for (info_pubkey, account) in all_validator_info.iter() {
                     println!("Validator info from {:?}", info_pubkey);
-                    let (validator_pubkey, validator_info) = parse_validator_info(&account.data)?;
+                    let (validator_pubkey, validator_info) =
+                        parse_validator_info(&info_pubkey, &account.data)?;
                     println!("  Validator pubkey: {:?}", validator_pubkey);
                     println!("  Info: {}", validator_info);
                 }
-            } else {
-                let info_pubkey = if let Some(keypair) = matches.value_of("info_keypair") {
-                    read_keypair(keypair)?.pubkey()
-                } else if let Some(pubkey) = matches.value_of("info_pubkey") {
-                    pubkey.parse::<Pubkey>().unwrap()
-                } else {
-                    Pubkey::default() // unreachable
-                };
-                let validator_info_data = rpc_client.get_account_data(&info_pubkey)?;
-                let (validator_pubkey, validator_info) =
-                    parse_validator_info(&validator_info_data)?;
-                println!("Validator pubkey: {:?}", validator_pubkey);
-                println!("Info: {}", validator_info);
             }
         }
         _ => unreachable!(),
@@ -397,15 +445,18 @@ mod tests {
         let matches = App::new("test")
             .arg(Arg::with_name("name").short("n").takes_value(true))
             .arg(Arg::with_name("website").short("w").takes_value(true))
-            .arg(Arg::with_name("keybase_id").short("k").takes_value(true))
+            .arg(
+                Arg::with_name("keybase_username")
+                    .short("k")
+                    .takes_value(true),
+            )
             .arg(Arg::with_name("details").short("d").takes_value(true))
-            .get_matches_from(vec!["test", "-n", "Alice", "-k", "464bb0f2956f7e83"]);
-        let expected_string = serde_json::to_string(&json!({
+            .get_matches_from(vec!["test", "-n", "Alice", "-k", "alice_keybase"]);
+        let expected = json!({
             "name": "Alice",
-            "keybaseId": "464bb0f2956f7e83",
-        }))
-        .unwrap();
-        assert_eq!(parse_args(&matches).unwrap(), expected_string);
+            "keybaseUsername": "alice_keybase",
+        });
+        assert_eq!(parse_args(&matches), expected);
     }
 
     #[test]
@@ -449,7 +500,10 @@ mod tests {
         };
         let data = serialize(&(config, validator_info)).unwrap();
 
-        assert_eq!(parse_validator_info(&data).unwrap(), (pubkey, info_string));
+        assert_eq!(
+            parse_validator_info(&Pubkey::default(), &data).unwrap(),
+            (pubkey, info_string)
+        );
     }
 
     #[test]
@@ -465,7 +519,10 @@ mod tests {
             "website".to_string(),
             Value::String(max_short_string.clone()),
         );
-        info.insert("keybaseId".to_string(), Value::String(max_short_string));
+        info.insert(
+            "keybaseUsername".to_string(),
+            Value::String(max_short_string),
+        );
         info.insert("details".to_string(), Value::String(max_long_string));
         let info_string = serde_json::to_string(&Value::Object(info)).unwrap();
 

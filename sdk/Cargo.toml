@@ -1,6 +1,6 @@
 [package]
 name = "solana-sdk"
-version = "0.17.0"
+version = "0.18.0-pre1"
 description = "Solana SDK"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,19 +14,19 @@ bincode = "1.1.4"
 bs58 = "0.2.0"
 byteorder = "1.3.2"
 chrono = { version = "0.4.7", features = ["serde"] }
-generic-array = { version = "0.13.1", default-features = false, features = ["serde"] }
+generic-array = { version = "0.13.2", default-features = false, features = ["serde", "more_lengths"] }
 hex = "0.3.2"
 itertools = "0.8.0"
-log = "0.4.2"
+log = "0.4.8"
 memmap = "0.6.2"
 num-derive = "0.2"
 num-traits = "0.2"
 rand = "0.6.5"
 rayon = "1.1.0"
-serde = "1.0.94"
-serde_derive = "1.0.94"
+serde = "1.0.98"
+serde_derive = "1.0.98"
 serde_json = "1.0.40"
 sha2 = "0.8.0"
 solana-ed25519-dalek = "0.2.0"
-solana-logger = { path = "../logger", version = "0.17.0" }
-untrusted = "0.6.2"
+solana-logger = { path = "../logger", version = "0.18.0-pre1" }
+untrusted = "0.7.0"

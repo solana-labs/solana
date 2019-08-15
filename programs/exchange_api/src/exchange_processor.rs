@@ -39,7 +39,7 @@ impl ExchangeProcessor {
         }
     }
 
-    fn deserialize_trade(data: &[u8]) -> Result<OrderInfo, InstructionError> {
+    fn deserialize_order(data: &[u8]) -> Result<OrderInfo, InstructionError> {
         let state: ExchangeState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let ExchangeState::Trade(info) = state {
             Ok(info)
@@ -63,9 +63,9 @@ impl ExchangeProcessor {
     fn trade_to_token_account(trade: &OrderInfo) -> TokenAccountInfo {
         // Turn trade order into token account
 
-        let token = match trade.direction {
-            Direction::To => trade.pair.secondary(),
-            Direction::From => trade.pair.primary(),
+        let token = match trade.side {
+            OrderSide::Ask => trade.pair.Quote,
+            OrderSide::Bid => trade.pair.Base,
         };
 
         let mut account = TokenAccountInfo::default().owner(&trade.owner);
@@ -131,8 +131,8 @@ impl ExchangeProcessor {
 
         trace!("pp {} sp {}", primary_profit, secondary_profit);
 
-        let primary_token = to_trade.pair.primary();
-        let secondary_token = from_trade.pair.secondary();
+        let primary_token = to_trade.pair.Base;
+        let secondary_token = from_trade.pair.Quote;
 
         // Update tokens
 
@@ -224,9 +224,9 @@ impl ExchangeProcessor {
                         Err(InstructionError::GenericError)?
                     }
 
-                    let from_token = match from_trade.direction {
-                        Direction::To => from_trade.pair.secondary(),
-                        Direction::From => from_trade.pair.primary(),
+                    let from_token = match from_trade.side {
+                        OrderSide::Ask => from_trade.pair.Quote,
+                        OrderSide::Bid => from_trade.pair.Base,
                     };
                     if token != from_token {
                         error!("Trade to transfer from does not hold correct token");
@@ -259,12 +259,12 @@ impl ExchangeProcessor {
         )
     }
 
-    fn do_trade_request(
+    fn do_order_request(
         keyed_accounts: &mut [KeyedAccount],
         info: &OrderRequestInfo,
     ) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
-        const TRADE_INDEX: usize = 1;
+        const ORDER_INDEX: usize = 1;
         const ACCOUNT_INDEX: usize = 2;
 
         if keyed_accounts.len() < 3 {
@@ -272,7 +272,7 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        Self::is_account_unallocated(&keyed_accounts[TRADE_INDEX].account.data)?;
+        Self::is_account_unallocated(&keyed_accounts[ORDER_INDEX].account.data)?;
 
         let mut account = Self::deserialize_account(&keyed_accounts[ACCOUNT_INDEX].account.data)?;
 
@@ -280,34 +280,34 @@ impl ExchangeProcessor {
             error!("Signer does not own account");
             Err(InstructionError::GenericError)?
         }
-        let from_token = match info.direction {
-            Direction::To => info.pair.primary(),
-            Direction::From => info.pair.secondary(),
+        let from_token = match info.side {
+            OrderSide::Ask => info.pair.Base,
+            OrderSide::Bid => info.pair.Quote,
         };
         if account.tokens[from_token] < info.tokens {
             error!("From token balance is too low");
             Err(InstructionError::GenericError)?
         }
 
-        if let Err(e) = check_trade(info.direction, info.tokens, info.price) {
+        if let Err(e) = check_trade(info.side, info.tokens, info.price) {
             bincode::serialize(&e).unwrap();
         }
 
         // Trade holds the tokens in escrow
         account.tokens[from_token] -= info.tokens;
 
-        inc_new_counter_info!("exchange_processor-trades", 1, 1000, 1000);
+        inc_new_counter_info!("exchange_processor-trades", 1);
 
         Self::serialize(
             &ExchangeState::Trade(OrderInfo {
                 owner: *keyed_accounts[OWNER_INDEX].unsigned_key(),
-                direction: info.direction,
+                side: info.side,
                 pair: info.pair,
                 tokens: info.tokens,
                 price: info.price,
                 tokens_settled: 0,
             }),
-            &mut keyed_accounts[TRADE_INDEX].account.data,
+            &mut keyed_accounts[ORDER_INDEX].account.data,
         )?;
         Self::serialize(
             &ExchangeState::Account(account),
@@ -317,39 +317,39 @@ impl ExchangeProcessor {
 
     fn do_order_cancellation(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
-        const TRADE_INDEX: usize = 1;
+        const ORDER_INDEX: usize = 1;
 
         if keyed_accounts.len() < 2 {
             error!("Not enough accounts");
             Err(InstructionError::InvalidArgument)?
         }
 
-        let trade = Self::deserialize_trade(&keyed_accounts[TRADE_INDEX].account.data)?;
+        let order = Self::deserialize_order(&keyed_accounts[ORDER_INDEX].account.data)?;
 
-        if &trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
+        if &order.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own trade");
             Err(InstructionError::GenericError)?
         }
 
-        let token = match trade.direction {
-            Direction::To => trade.pair.primary(),
-            Direction::From => trade.pair.secondary(),
+        let token = match order.side {
+            OrderSide::Ask => order.pair.Base,
+            OrderSide::Bid => order.pair.Quote,
         };
 
-        let mut account = TokenAccountInfo::default().owner(&trade.owner);
-        account.tokens[token] = trade.tokens;
-        account.tokens[token] += trade.tokens_settled;
+        let mut account = TokenAccountInfo::default().owner(&order.owner);
+        account.tokens[token] = order.tokens;
+        account.tokens[token] += order.tokens_settled;
 
         // Turn trade order into a token account
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut keyed_accounts[TRADE_INDEX].account.data,
+            &mut keyed_accounts[ORDER_INDEX].account.data,
         )
     }
 
     fn do_swap_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        const TO_TRADE_INDEX: usize = 1;
-        const FROM_TRADE_INDEX: usize = 2;
+        const TO_ORDER_INDEX: usize = 1;
+        const FROM_ORDER_INDEX: usize = 2;
         const PROFIT_ACCOUNT_INDEX: usize = 3;
 
         if keyed_accounts.len() < 4 {
@@ -357,64 +357,64 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let mut to_trade = Self::deserialize_trade(&keyed_accounts[TO_TRADE_INDEX].account.data)?;
-        let mut from_trade =
-            Self::deserialize_trade(&keyed_accounts[FROM_TRADE_INDEX].account.data)?;
+        let mut to_order = Self::deserialize_order(&keyed_accounts[TO_ORDER_INDEX].account.data)?;
+        let mut from_order =
+            Self::deserialize_order(&keyed_accounts[FROM_ORDER_INDEX].account.data)?;
         let mut profit_account =
             Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].account.data)?;
 
-        if to_trade.direction != Direction::To {
+        if to_order.side != OrderSide::Ask {
             error!("To trade is not a To");
             Err(InstructionError::InvalidArgument)?
         }
-        if from_trade.direction != Direction::From {
+        if from_order.side != OrderSide::Bid {
             error!("From trade is not a From");
             Err(InstructionError::InvalidArgument)?
         }
-        if to_trade.pair != from_trade.pair {
+        if to_order.pair != from_order.pair {
             error!("Mismatched token pairs");
             Err(InstructionError::InvalidArgument)?
         }
-        if to_trade.direction == from_trade.direction {
-            error!("Matching trade directions");
+        if to_order.side == from_order.side {
+            error!("Matching trade sides");
             Err(InstructionError::InvalidArgument)?
         }
 
         if let Err(e) =
-            Self::calculate_swap(SCALER, &mut to_trade, &mut from_trade, &mut profit_account)
+            Self::calculate_swap(SCALER, &mut to_order, &mut from_order, &mut profit_account)
         {
             error!(
                 "Swap calculation failed from {} for {} to {} for {}",
-                from_trade.tokens, from_trade.price, to_trade.tokens, to_trade.price,
+                from_order.tokens, from_order.price, to_order.tokens, to_order.price,
             );
             Err(e)?
         }
 
-        inc_new_counter_info!("exchange_processor-swaps", 1, 1000, 1000);
+        inc_new_counter_info!("exchange_processor-swaps", 1);
 
-        if to_trade.tokens == 0 {
+        if to_order.tokens == 0 {
             // Turn into token account
             Self::serialize(
-                &ExchangeState::Account(Self::trade_to_token_account(&from_trade)),
-                &mut keyed_accounts[TO_TRADE_INDEX].account.data,
+                &ExchangeState::Account(Self::trade_to_token_account(&from_order)),
+                &mut keyed_accounts[TO_ORDER_INDEX].account.data,
             )?;
         } else {
             Self::serialize(
-                &ExchangeState::Trade(to_trade),
-                &mut keyed_accounts[TO_TRADE_INDEX].account.data,
+                &ExchangeState::Trade(to_order),
+                &mut keyed_accounts[TO_ORDER_INDEX].account.data,
             )?;
         }
 
-        if from_trade.tokens == 0 {
+        if from_order.tokens == 0 {
             // Turn into token account
             Self::serialize(
-                &ExchangeState::Account(Self::trade_to_token_account(&from_trade)),
-                &mut keyed_accounts[FROM_TRADE_INDEX].account.data,
+                &ExchangeState::Account(Self::trade_to_token_account(&from_order)),
+                &mut keyed_accounts[FROM_ORDER_INDEX].account.data,
             )?;
         } else {
             Self::serialize(
-                &ExchangeState::Trade(from_trade),
-                &mut keyed_accounts[FROM_TRADE_INDEX].account.data,
+                &ExchangeState::Trade(from_order),
+                &mut keyed_accounts[FROM_ORDER_INDEX].account.data,
             )?;
         }
 
@@ -447,7 +447,7 @@ pub fn process_instruction(
             ExchangeProcessor::do_transfer_request(keyed_accounts, token, tokens)
         }
         ExchangeInstruction::OrderRequest(info) => {
-            ExchangeProcessor::do_trade_request(keyed_accounts, &info)
+            ExchangeProcessor::do_order_request(keyed_accounts, &info)
         }
         ExchangeInstruction::OrderCancellation => {
             ExchangeProcessor::do_order_cancellation(keyed_accounts)
@@ -488,7 +488,7 @@ mod test {
             secondary_price,
         );
         let mut to_trade = OrderInfo::default();
-        let mut from_trade = OrderInfo::default().direction(Direction::From);
+        let mut from_trade = OrderInfo::default().side(OrderSide::Bid);
         let mut profit_account = TokenAccountInfo::default();
 
         to_trade.tokens = primary_tokens;
@@ -602,8 +602,8 @@ mod test {
     fn trade(
         client: &BankClient,
         owner: &Keypair,
-        direction: Direction,
-        pair: TokenPair,
+        side: OrderSide,
+        pair: AssetPair,
         from_token: Token,
         src_tokens: u64,
         trade_tokens: u64,
@@ -616,7 +616,7 @@ mod test {
         let instruction = exchange_instruction::trade_request(
             &owner.pubkey(),
             &trade,
-            direction,
+            side,
             pair,
             trade_tokens,
             price,
@@ -700,8 +700,8 @@ mod test {
         let (trade, src) = trade(
             &client,
             &owner,
-            Direction::To,
-            TokenPair::AB,
+            OrderSide::Ask,
+            AssetPair::default(),
             Token::A,
             42,
             2,
@@ -716,13 +716,13 @@ mod test {
         assert_eq!(
             OrderInfo {
                 owner: owner.pubkey(),
-                direction: Direction::To,
-                pair: TokenPair::AB,
+                side: OrderSide::Ask,
+                pair: AssetPair::default(),
                 tokens: 2,
                 price: 1000,
                 tokens_settled: 0
             },
-            ExchangeProcessor::deserialize_trade(&trade_account_data).unwrap()
+            ExchangeProcessor::deserialize_order(&trade_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
@@ -742,8 +742,8 @@ mod test {
         let (to_trade, _) = trade(
             &client,
             &owner,
-            Direction::To,
-            TokenPair::AB,
+            OrderSide::Ask,
+            AssetPair::default(),
             Token::A,
             2,
             2,
@@ -752,8 +752,8 @@ mod test {
         let (from_trade, _) = trade(
             &client,
             &owner,
-            Direction::From,
-            TokenPair::AB,
+            OrderSide::Bid,
+            AssetPair::default(),
             Token::B,
             3,
             3,
@@ -775,13 +775,13 @@ mod test {
         assert_eq!(
             OrderInfo {
                 owner: owner.pubkey(),
-                direction: Direction::To,
-                pair: TokenPair::AB,
+                side: OrderSide::Ask,
+                pair: AssetPair::default(),
                 tokens: 1,
                 price: 2000,
                 tokens_settled: 2,
             },
-            ExchangeProcessor::deserialize_trade(&to_trade_account_data).unwrap()
+            ExchangeProcessor::deserialize_order(&to_trade_account_data).unwrap()
         );
 
         assert_eq!(
@@ -809,8 +809,8 @@ mod test {
         let (to_trade, _) = trade(
             &client,
             &owner,
-            Direction::To,
-            TokenPair::AB,
+            OrderSide::Ask,
+            AssetPair::default(),
             Token::A,
             3,
             3,
@@ -819,8 +819,8 @@ mod test {
         let (from_trade, _) = trade(
             &client,
             &owner,
-            Direction::From,
-            TokenPair::AB,
+            OrderSide::Bid,
+            AssetPair::default(),
             Token::B,
             3,
             3,

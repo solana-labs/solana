@@ -19,6 +19,7 @@ use std::str::FromStr;
 
 pub type Keypair = ed25519_dalek::Keypair;
 
+#[repr(transparent)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Signature(GenericArray<u8, U64>);
 
@@ -74,6 +75,12 @@ impl fmt::Display for Signature {
     }
 }
 
+impl Into<[u8; 64]> for Signature {
+    fn into(self) -> [u8; 64] {
+        <GenericArray<u8, U64> as Into<[u8; 64]>>::into(self.0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseSignatureError {
     WrongSize,
@@ -118,7 +125,7 @@ impl KeypairUtil for Keypair {
     }
 }
 
-pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
+pub fn read_keypair(path: &str) -> Result<Keypair, Box<dyn error::Error>> {
     let file = File::open(path.to_string())?;
     let bytes: Vec<u8> = serde_json::from_reader(file)?;
     let keypair = Keypair::from_bytes(&bytes)
@@ -126,7 +133,7 @@ pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
     Ok(keypair)
 }
 
-pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<error::Error>> {
+pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<dyn error::Error>> {
     let keypair_bytes = Keypair::new().to_bytes();
     let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
 
@@ -147,7 +154,7 @@ mod tests {
 
     fn tmp_file_path(name: &str) -> String {
         use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let keypair = Keypair::new();
 
         format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey()).to_string()

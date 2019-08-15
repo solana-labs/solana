@@ -24,6 +24,8 @@ Operate a configured testnet
  restart  - Shortcut for stop then start
  update   - Live update all network nodes
  logs     - Fetch remote logs from each network node
+ startnode- Start an individual node (previously stopped with stopNode)
+ stopnode - Stop an individual node
 
  start/update-specific options:
    -T [tarFilename]                   - Deploy the specified release tarball
@@ -54,12 +56,27 @@ Operate a configured testnet
 
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
+   --no-airdrop
+                                      - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
    --lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 100000000000000 lamports minted in genesis
-   --stake-internal-nodes NUM_LAMPORTS_PER_NODE
-                                      - Amount to stake internal nodes in genesis block.  If set, airdrops are disabled.
+   --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
+                                      - Amount to stake internal nodes.
+   --internal-nodes-lamports NUM_LAMPORTS_PER_NODE
+                                      - Amount to fund internal nodes in genesis block.
    --external-accounts-file FILE_PATH
-                                      - A YML file with a list of account pubkeys and corresponding stakes for external nodes
+                                      - A YML file with a list of account pubkeys and corresponding lamport balances in genesis block for external nodes
+   --no-snapshot-fetch
+                                      - If set, disables booting validators from a snapshot
+   --skip-ledger-verify
+                                      - If set, validators will skip verifying
+                                        the ledger they already have saved to disk at
+                                        boot (results in a much faster boot)
+   --no-deploy
+                                      - Don't deploy new software, use the
+                                        existing deployment
+
+
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
@@ -72,6 +89,9 @@ Operate a configured testnet
 
  logs-specific options:
    none
+
+ startnode/stopnode-specific options:
+   -i [ip address]                    - IP Address of the node to start or stop
 
 Note: if RUST_LOG is set in the environment it will be propogated into the
       network nodes.
@@ -87,6 +107,7 @@ skipSetup=false
 updateNodes=false
 customPrograms=
 updatePlatforms=
+nodeAddress=
 numBenchTpsClients=0
 numBenchExchangeClients=0
 benchTpsExtraArgs=
@@ -96,7 +117,11 @@ genesisOptions=
 numFullnodesRequested=
 externalPrimordialAccountsFile=
 remoteExternalPrimordialAccountsFile=
-stakeNodesInGenesisBlock=
+internalNodesStakeLamports=
+internalNodesLamports=
+maybeNoSnapshot=""
+maybeSkipLedgerVerify=""
+maybeDisableAirdrops=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -114,16 +139,31 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --lamports ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
+    elif [[ $1 = --no-snapshot-fetch ]]; then
+      maybeNoSnapshot="$1"
+      shift 1
+    elif [[ $1 = --no-deploy ]]; then
+      deployMethod=skip
+      shift 1
+    elif [[ $1 = --skip-ledger-verify ]]; then
+      maybeSkipLedgerVerify="$1"
+      shift 1
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
       shift 2
-    elif [[ $1 = --stake-internal-nodes ]]; then
-      stakeNodesInGenesisBlock="$2"
+    elif [[ $1 = --internal-nodes-stake-lamports ]]; then
+      internalNodesStakeLamports="$2"
+      shift 2
+    elif [[ $1 = --internal-nodes-lamports ]]; then
+      internalNodesLamports="$2"
       shift 2
     elif [[ $1 = --external-accounts-file ]]; then
       externalPrimordialAccountsFile="$2"
       remoteExternalPrimordialAccountsFile=/tmp/external-primordial-accounts.yml
       shift 2
+    elif [[ $1 = --no-airdrop ]]; then
+      maybeDisableAirdrops="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -314,8 +354,8 @@ startCommon() {
 
 startBootstrapLeader() {
   declare ipAddress=$1
-  declare logFile="$2"
-  declare nodeIndex="$3"
+  declare nodeIndex="$2"
+  declare logFile="$3"
   echo "--- Starting bootstrap leader: $ipAddress"
   echo "start log: $logFile"
 
@@ -333,11 +373,14 @@ startBootstrapLeader() {
     local)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
       ;;
+    skip)
+      ;;
     *)
       usage "Internal error: invalid deployMethod: $deployMethod"
       ;;
     esac
 
+    # shellcheck disable=SC2086 # Don't want to double quote "$maybeNoSnapshot $maybeSkipLedgerVerify"
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
@@ -348,11 +391,14 @@ startBootstrapLeader() {
          $skipSetup \
          $failOnValidatorBootupFailure \
          \"$remoteExternalPrimordialAccountsFile\" \
-         \"$stakeNodesInGenesisBlock\" \
+         \"$maybeDisableAirdrops\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
          $nodeIndex \
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
+         "$maybeNoSnapshot $maybeSkipLedgerVerify" \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -366,6 +412,16 @@ startNode() {
   declare nodeType=$2
   declare nodeIndex="$3"
   declare logFile="$netLogDir/fullnode-$ipAddress.log"
+
+  if [[ -z $nodeType ]]; then
+    echo nodeType not specified
+    exit 1
+  fi
+
+  if [[ -z $nodeIndex ]]; then
+    echo nodeIndex not specified
+    exit 1
+  fi
 
   echo "--- Starting $nodeType: $ipAddress"
   echo "start log: $logFile"
@@ -399,9 +455,14 @@ startNode() {
          $skipSetup \
          $failOnValidatorBootupFailure \
          \"$remoteExternalPrimordialAccountsFile\" \
-         \"$stakeNodesInGenesisBlock\" \
+         \"$maybeDisableAirdrops\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
          $nodeIndex \
+         $numBenchTpsClients \"$benchTpsExtraArgs\" \
+         $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -430,6 +491,8 @@ startClient() {
 }
 
 sanity() {
+  declare skipBlockstreamerSanity=$1
+
   $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
 
   declare ok=true
@@ -447,7 +510,7 @@ sanity() {
   ) || ok=false
   $ok || exit 1
 
-  if [[ -n $blockstreamer ]]; then
+  if [[ -z $skipBlockstreamerSanity && -n $blockstreamer ]]; then
     # If there's a blockstreamer node run a reduced sanity check on it as well
     echo "--- Sanity: $blockstreamer"
     (
@@ -487,10 +550,38 @@ deployUpdate() {
     ) || ok=false
     $ok || exit 1
   done
-
 }
 
-start() {
+getNodeType() {
+  echo "getNodeType: $nodeAddress"
+  [[ -n $nodeAddress ]] || {
+    echo "Error: nodeAddress not set"
+    exit 1
+  }
+  nodeIndex=0 # <-- global
+  nodeType=validator # <-- global
+
+  for ipAddress in "${fullnodeIpList[@]}" b "${blockstreamerIpList[@]}" r "${replicatorIpList[@]}"; do
+    if [[ $ipAddress = b ]]; then
+      nodeType=blockstreamer
+      continue
+    elif [[ $ipAddress = r ]]; then
+      nodeType=replicator
+      continue
+    fi
+
+    if [[ $ipAddress = "$nodeAddress" ]]; then
+      echo "getNodeType: $nodeType ($nodeIndex)"
+      return
+    fi
+    ((nodeIndex = nodeIndex + 1))
+  done
+
+  echo "Error: Unknown node: $nodeAddress"
+  exit 1
+}
+
+prepare_deploy() {
   case $deployMethod in
   tar)
     if [[ -n $releaseChannel ]]; then
@@ -518,11 +609,15 @@ start() {
   local)
     build
     ;;
+  skip)
+    ;;
   *)
     usage "Internal error: invalid deployMethod: $deployMethod"
     ;;
   esac
+}
 
+deploy() {
   echo "Deployment started at $(date)"
   if $updateNodes; then
     $metricsWriteDatapoint "testnet-deploy net-update-begin=1"
@@ -531,23 +626,14 @@ start() {
   fi
 
   declare bootstrapLeader=true
-  declare nodeType=validator
-  declare loopCount=0
-  for ipAddress in "${fullnodeIpList[@]}" b "${blockstreamerIpList[@]}" r "${replicatorIpList[@]}"; do
-    if [[ $ipAddress = b ]]; then
-      nodeType=blockstreamer
-      continue
-    elif [[ $ipAddress = r ]]; then
-      nodeType=replicator
-      continue
-    fi
-    if $updateNodes; then
-      stopNode "$ipAddress" true
-    fi
+  for nodeAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${replicatorIpList[@]}"; do
+    nodeType=
+    nodeIndex=
+    getNodeType
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$ipAddress" "$netLogDir/bootstrap-leader-$ipAddress.log" $loopCount
+      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-leader-$ipAddress.log"
       bootstrapNodeDeployTime=$SECONDS
       $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
@@ -555,14 +641,17 @@ start() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" $nodeType $loopCount
+      startNode "$ipAddress" $nodeType $nodeIndex
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
       # it can handle.
-      ((loopCount++ % 2 == 0)) && sleep 2
+      if ((nodeIndex % 2 == 0)); then
+        sleep 2
+      fi
     fi
   done
+
 
   for pid in "${pids[@]}"; do
     declare ok=true
@@ -588,7 +677,8 @@ start() {
       stopNode "$ipAddress" true
     done
   fi
-  sanity
+  sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
+                                 # have caught up to the bootstrap leader yet
 
   SECONDS=0
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
@@ -618,6 +708,8 @@ start() {
     ;;
   local)
     networkVersion="$(git rev-parse HEAD || echo local-unknown)"
+    ;;
+  skip)
     ;;
   *)
     usage "Internal error: invalid deployMethod: $deployMethod"
@@ -651,7 +743,9 @@ stopNode() {
       ! tmux list-sessions || tmux kill-session
       for pid in solana/{net-stats,oom-monitor}.pid; do
         pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
-        sudo kill -- -\$pgid
+        if [[ -n \$pgid ]]; then
+          sudo kill -- -\$pgid
+        fi
       done
       for pattern in node solana- remote-; do
         pkill -9 \$pattern
@@ -695,11 +789,13 @@ stop() {
 
 case $command in
 restart)
+  prepare_deploy
   stop
-  start
+  deploy
   ;;
 start)
-  start
+  prepare_deploy
+  deploy
   ;;
 update)
   skipSetup=true
@@ -713,10 +809,21 @@ stop)
   stop
   ;;
 stopnode)
+  if [[ -z $nodeAddress ]]; then
+    usage "node address (-i) not specified"
+    exit 1
+  fi
   stopNode "$nodeAddress" true
   ;;
 startnode)
-  startNode "$nodeAddress" validator
+  if [[ -z $nodeAddress ]]; then
+    usage "node address (-i) not specified"
+    exit 1
+  fi
+  nodeType=
+  nodeIndex=
+  getNodeType
+  startNode "$nodeAddress" $nodeType $nodeIndex
   ;;
 logs)
   fetchRemoteLog() {

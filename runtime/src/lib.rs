@@ -1,4 +1,4 @@
-mod accounts;
+pub mod accounts;
 pub mod accounts_db;
 pub mod accounts_index;
 pub mod append_vec;
@@ -33,3 +33,6 @@ extern crate solana_bpf_loader_program;
 
 #[macro_use]
 extern crate serde_derive;
+
+extern crate fs_extra;
+extern crate tempfile;
