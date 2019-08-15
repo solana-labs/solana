@@ -201,7 +201,8 @@ fn new_update_manifest(
             vec![], // additional keys
         );
         let mut transaction = Transaction::new_unsigned_instructions(new_account);
-        transaction.sign(&[from_keypair], recent_blockhash);
+        let signers = [from_keypair, update_manifest_keypair];
+        transaction.sign(&signers, recent_blockhash);
 
         rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
     }
