@@ -51,7 +51,7 @@ impl Memory {
 }
 
 impl Mapper for Memory {
-    fn make_table(&self, kind: Kind, func: &mut FnMut(Writer, Writer)) -> Result<SSTable> {
+    fn make_table(&self, kind: Kind, func: &mut dyn FnMut(Writer, Writer)) -> Result<SSTable> {
         let backing = self.get_backing(kind);
         let id = next_id();
 

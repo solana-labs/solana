@@ -660,7 +660,7 @@ fn verify_funding_transfer<T: SyncClient + ?Sized>(
     false
 }
 
-pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamports: u64) {
+pub fn fund_keys(client: &dyn Client, source: &Keypair, dests: &[Arc<Keypair>], lamports: u64) {
     let total = lamports * (dests.len() as u64 + 1);
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Arc<Keypair>> = dests.iter().collect();
@@ -778,7 +778,7 @@ pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamp
     }
 }
 
-pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts: &[Pubkey]) {
+pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], accounts: &[Pubkey]) {
     let mut notfunded: Vec<(&Arc<Keypair>, &Pubkey)> = signers.iter().zip(accounts).collect();
 
     while !notfunded.is_empty() {
@@ -908,7 +908,7 @@ fn generate_keypairs(num: u64) -> Vec<Keypair> {
     rnd.gen_n_keypairs(num)
 }
 
-pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, amount: u64) {
+pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypair, amount: u64) {
     let balance = client.get_balance(&id.pubkey());
     let balance = balance.unwrap_or(0);
     if balance >= amount {

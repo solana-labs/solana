@@ -247,15 +247,15 @@ fn main() {
                 })
                 .collect();
 
-            let mut output_file: Box<Write> = if let Some(path) = args_matches.value_of("slot_list")
-            {
-                match File::create(path) {
-                    Ok(file) => Box::new(file),
-                    _ => Box::new(stdout()),
-                }
-            } else {
-                Box::new(stdout())
-            };
+            let mut output_file: Box<dyn Write> =
+                if let Some(path) = args_matches.value_of("slot_list") {
+                    match File::create(path) {
+                        Ok(file) => Box::new(file),
+                        _ => Box::new(stdout()),
+                    }
+                } else {
+                    Box::new(stdout())
+                };
 
             slot_hash
                 .into_iter()

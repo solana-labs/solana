@@ -332,7 +332,7 @@ fn load_tables(root: &Path, mapper: &dyn Mapper) -> Result<Vec<BTreeMap<Key, SST
     Ok(tables)
 }
 
-fn dump_tables(root: &Path, mapper: &Mapper) -> Result<()> {
+fn dump_tables(root: &Path, mapper: &dyn Mapper) -> Result<()> {
     mapper.serialize_state_to(&root.join(TABLES_FILE))?;
     Ok(())
 }

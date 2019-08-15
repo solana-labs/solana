@@ -40,7 +40,10 @@ impl Signable for SignedUpdateManifest {
 }
 
 impl SignedUpdateManifest {
-    pub fn deserialize(account_pubkey: &Pubkey, input: &[u8]) -> Result<Self, Box<error::Error>> {
+    pub fn deserialize(
+        account_pubkey: &Pubkey,
+        input: &[u8],
+    ) -> Result<Self, Box<dyn error::Error>> {
         let mut manifest: SignedUpdateManifest = bincode::deserialize(input)?;
         manifest.account_pubkey = *account_pubkey;
         if !manifest.verify() {

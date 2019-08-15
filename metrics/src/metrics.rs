@@ -236,7 +236,7 @@ impl Default for MetricsAgent {
 
 impl MetricsAgent {
     fn new(
-        writer: Arc<MetricsWriter + Send + Sync>,
+        writer: Arc<dyn MetricsWriter + Send + Sync>,
         write_frequency_secs: Duration,
         max_points_per_sec: usize,
     ) -> Self {
@@ -251,7 +251,7 @@ impl MetricsAgent {
         points: &[Point],
         last_write_time: Instant,
         max_points: usize,
-        writer: &Arc<MetricsWriter + Send + Sync>,
+        writer: &Arc<dyn MetricsWriter + Send + Sync>,
         max_points_per_sec: usize,
     ) -> usize {
         if points.is_empty() {
@@ -296,7 +296,7 @@ impl MetricsAgent {
 
     fn run(
         receiver: &Receiver<MetricsCommand>,
-        writer: &Arc<MetricsWriter + Send + Sync>,
+        writer: &Arc<dyn MetricsWriter + Send + Sync>,
         write_frequency_secs: Duration,
         max_points_per_sec: usize,
     ) {
