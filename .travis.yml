@@ -12,7 +12,7 @@ install:
 
 script:
   - source ci/env.sh
-  - ci/publish-tarball.sh
+  - travis_wait 100 ci/publish-tarball.sh
 
 branches:
   only:
