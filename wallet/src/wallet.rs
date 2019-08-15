@@ -563,6 +563,10 @@ fn process_create_vote_account(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
         (node_pubkey, "node_pubkey".to_string()),
     )?;
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+    )?;
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
         vote_account_pubkey,
@@ -734,6 +738,13 @@ fn process_delegate_stake(
     lamports: u64,
     force: bool,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (
+            &stake_account_keypair.pubkey(),
+            "stake_account_keypair".to_string(),
+        ),
+    )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ixs = stake_instruction::create_stake_account_and_delegate_stake(
@@ -887,6 +898,13 @@ fn process_create_replicator_storage_account(
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (
+            &storage_account_pubkey,
+            "storage_account_pubkey".to_string(),
+        ),
+    )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_replicator_storage_account(
         &config.keypair.pubkey(),
@@ -907,6 +925,13 @@ fn process_create_validator_storage_account(
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (
+            &storage_account_pubkey,
+            "storage_account_pubkey".to_string(),
+        ),
+    )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_validator_storage_account(
         &config.keypair.pubkey(),
@@ -1053,6 +1078,10 @@ fn process_pay(
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: Option<Pubkey>,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (to, "to".to_string()),
+    )?;
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     if timestamp == None && *witnesses == None {
