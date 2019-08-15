@@ -544,7 +544,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blocktree.set_roots(&[4, 1, 0]).unwrap();
+        blocktree.set_roots(&[0, 1, 4]).unwrap();
 
         let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();

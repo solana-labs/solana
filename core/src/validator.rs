@@ -493,12 +493,7 @@ pub fn new_banks_from_blocktree(
     adjust_ulimit_nofile();
 
     let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
-<<<<<<< HEAD
         Blocktree::open_with_signal(blocktree_path).expect("Failed to open ledger database");
-=======
-        Blocktree::open_with_signal(blocktree_path, None)
-            .expect("Expected to successfully open database ledger");
->>>>>>> Add floor to blocktree
 
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) = get_bank_forks(
         &genesis_block,

@@ -95,7 +95,7 @@ pub struct Blocktree {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     batch_processor: Arc<RwLock<BatchProcessor>>,
-    floor: Arc<RwLock<u64>>,
+    last_root: Arc<RwLock<u64>>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
@@ -122,7 +122,7 @@ pub const CODE_SHRED_CF: &str = "code_shred";
 
 impl Blocktree {
     /// Opens a Ledger in directory, provides "infinite" window of blobs
-    pub fn open(ledger_path: &Path, floor: Option<u64>) -> Result<Blocktree> {
+    pub fn open(ledger_path: &Path) -> Result<Blocktree> {
         fs::create_dir_all(&ledger_path)?;
         let blocktree_path = ledger_path.join(BLOCKTREE_DIRECTORY);
 
@@ -162,7 +162,7 @@ impl Blocktree {
             .next()
             .map(|(slot, _)| slot)
             .unwrap_or(0);
-        let floor = Arc::new(RwLock::new(cmp::max(floor.unwrap_or(0), max_root)));
+        let last_root = Arc::new(RwLock::new(max_root));
 
         Ok(Blocktree {
             db,
@@ -178,15 +178,14 @@ impl Blocktree {
             new_blobs_signals: vec![],
             batch_processor,
             completed_slots_senders: vec![],
-            floor,
+            last_root,
         })
     }
 
     pub fn open_with_signal(
         ledger_path: &Path,
-        floor: Option<u64>,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        let mut blocktree = Self::open(ledger_path, floor)?;
+        let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
@@ -477,14 +476,14 @@ impl Blocktree {
                         &mut write_batch,
                     )
                 }
-            } else if Blocktree::insert_data_shred(
-                db,
-                &mut slot_meta_working_set,
-                &mut index_working_set,
-                &shred,
-                &mut write_batch,
-            )
-            .unwrap_or(false)
+            } else if self
+                .insert_data_shred(
+                    &mut slot_meta_working_set,
+                    &mut index_working_set,
+                    &shred,
+                    &mut write_batch,
+                )
+                .unwrap_or(false)
             {
                 just_inserted_data_shreds.insert((slot, shred_index), shred);
             }
@@ -499,8 +498,7 @@ impl Blocktree {
         );
 
         recovered_data.into_iter().for_each(|shred| {
-            let _ = Blocktree::insert_data_shred(
-                db,
+            let _ = self.insert_data_shred(
                 &mut slot_meta_working_set,
                 &mut index_working_set,
                 &shred,
@@ -509,7 +507,7 @@ impl Blocktree {
         });
 
         // Handle chaining for the working set
-        handle_chaining(&db, &mut write_batch, &slot_meta_working_set)?;
+        handle_chaining(&self.db, &mut write_batch, &slot_meta_working_set)?;
 
         let (should_signal, newly_completed_slots) = prepare_signals(
             &slot_meta_working_set,
@@ -589,7 +587,7 @@ impl Blocktree {
     }
 
     fn insert_data_shred(
-        db: &Database,
+        &self,
         mut slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
         index_working_set: &mut HashMap<u64, Index>,
         shred: &Shred,
@@ -606,14 +604,14 @@ impl Blocktree {
             false
         };
 
-        let entry = get_slot_meta_entry(db, &mut slot_meta_working_set, slot, parent);
+        let entry = get_slot_meta_entry(&self.db, &mut slot_meta_working_set, slot, parent);
 
         let slot_meta = &mut entry.0.borrow_mut();
         if is_orphan(slot_meta) {
             slot_meta.parent_slot = parent;
         }
 
-        let data_cf = db.column::<cf::ShredData>();
+        let data_cf = self.db.column::<cf::ShredData>();
 
         let check_data_cf = |slot, index| {
             data_cf
@@ -628,7 +626,14 @@ impl Blocktree {
             .data_mut();
 
         if !index_meta.is_present(index)
-            && should_insert(slot_meta, index, slot, last_in_slot, check_data_cf)
+            && should_insert(
+                slot_meta,
+                index,
+                slot,
+                last_in_slot,
+                check_data_cf,
+                *self.last_root.read().unwrap(),
+            )
         {
             let new_consumed = if slot_meta.consumed == index {
                 let mut current_index = index + 1;
@@ -642,8 +647,10 @@ impl Blocktree {
             };
 
             let serialized_shred = bincode::serialize(shred).unwrap();
-            write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
 
+            // Commit step: commit all changes to the mutable structures at once, or none at all.
+            // We don't want only a subset of these changes going through.
+            write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
             update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
             index_meta.set_present(index, true);
             trace!("inserted shred into slot {:?} and index {:?}", slot, index);
@@ -898,6 +905,7 @@ impl Blocktree {
                 &mut index_working_set,
                 &mut prev_inserted_blob_datas,
                 &mut write_batch,
+                *self.last_root.read().unwrap(),
             )?;
         } else {
             insert_data_blob_batch(
@@ -907,6 +915,7 @@ impl Blocktree {
                 &mut index_working_set,
                 &mut prev_inserted_blob_datas,
                 &mut write_batch,
+                *self.last_root.read().unwrap(),
             )?;
         }
 
@@ -1148,6 +1157,7 @@ impl Blocktree {
                 &mut index_working_set,
                 &mut prev_inserted_blob_datas,
                 &mut writebatch,
+                *self.last_root.read().unwrap(),
             )?;
 
             // Handle chaining for the working set
@@ -1438,8 +1448,6 @@ impl Blocktree {
     }
 
     pub fn set_roots(&self, rooted_slots: &[u64]) -> Result<()> {
-        // Make sure rooted_slots is sorted
-        assert!(rooted_slots.windows(2).all(|w| w[0] <= w[1]));
         unsafe {
             let mut batch_processor = self.db.batch_processor();
             let mut write_batch = batch_processor.batch()?;
@@ -1450,8 +1458,11 @@ impl Blocktree {
             batch_processor.write(write_batch)?;
         }
 
-        let mut floor = self.floor.write().unwrap();
-        *floor = cmp::max(*rooted_slots.last().unwrap(), *floor);
+        let mut last_root = self.last_root.write().unwrap();
+        if *last_root == std::u64::MAX {
+            *last_root = 0;
+        }
+        *last_root = cmp::max(*rooted_slots.iter().max().unwrap(), *last_root);
         Ok(())
     }
 
@@ -1521,8 +1532,8 @@ impl Blocktree {
         }
     }
 
-    pub fn floor(&self) -> u64 {
-        *self.floor.read().unwrap()
+    pub fn last_root(&self) -> u64 {
+        *self.last_root.read().unwrap()
     }
 }
 
@@ -1533,6 +1544,7 @@ fn insert_data_blob_batch<'a, I>(
     index_working_set: &mut HashMap<u64, Index>,
     prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
     write_batch: &mut WriteBatch,
+    last_root: u64,
 ) -> Result<()>
 where
     I: IntoIterator<Item = &'a Blob>,
@@ -1544,6 +1556,7 @@ where
             slot_meta_working_set,
             prev_inserted_blob_datas,
             write_batch,
+            last_root,
         );
 
         if inserted {
@@ -1589,7 +1602,7 @@ fn insert_data_blob<'a>(
     let serialized_blob_data = &blob_to_insert.data[..BLOB_HEADER_SIZE + blob_size];
 
     // Commit step: commit all changes to the mutable structures at once, or none at all.
-    // We don't want only some of these changes going through.
+    // We don't want only a subset of these changes going through.
     write_batch.put_bytes::<cf::Data>((blob_slot, blob_index), serialized_blob_data)?;
     prev_inserted_blob_datas.insert((blob_slot, blob_index), serialized_blob_data);
     update_slot_meta(
@@ -1660,6 +1673,7 @@ fn check_insert_data_blob<'a>(
     slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
     prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
     write_batch: &mut WriteBatch,
+    last_root: u64,
 ) -> bool {
     let entry = get_slot_meta_entry(db, slot_meta_working_set, blob.slot(), blob.parent());
 
@@ -1670,7 +1684,7 @@ fn check_insert_data_blob<'a>(
 
     // This slot is full, skip the bogus blob
     // Check if this blob should be inserted
-    if !should_insert_blob(&slot_meta, db, &prev_inserted_blob_datas, blob) {
+    if !should_insert_blob(&slot_meta, db, &prev_inserted_blob_datas, blob, last_root) {
         false
     } else {
         let _ = insert_data_blob(blob, db, prev_inserted_blob_datas, slot_meta, write_batch);
@@ -1714,6 +1728,7 @@ fn should_insert_blob(
     db: &Database,
     prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
     blob: &Blob,
+    last_slot: u64,
 ) -> bool {
     let blob_index = blob.index();
     let blob_slot = blob.slot();
@@ -1728,7 +1743,14 @@ fn should_insert_blob(
     };
 
     !prev_inserted_blob_datas.contains_key(&(blob_slot, blob_index))
-        && should_insert(slot, blob_index, blob_slot, last_in_slot, check_data_cf)
+        && should_insert(
+            slot,
+            blob_index,
+            blob_slot,
+            last_in_slot,
+            check_data_cf,
+            last_slot,
+        )
 }
 
 fn should_insert<F>(
@@ -1737,6 +1759,7 @@ fn should_insert<F>(
     slot: u64,
     last_in_slot: bool,
     db_check: F,
+    last_root: u64,
 ) -> bool
 where
     F: Fn(u64, u64) -> bool,
@@ -1775,7 +1798,40 @@ where
         );
         return false;
     }
+
+    if !is_valid_write_to_slot_0(slot, slot_meta.parent_slot, last_root) {
+        // Check that the parent_slot < slot
+        if slot_meta.parent_slot >= slot {
+            datapoint_error!(
+                "blocktree_error",
+                (
+                    "error",
+                    format!(
+                        "Received blob with parent_slot {} >= slot {}",
+                        slot_meta.parent_slot, slot
+                    ),
+                    String
+                )
+            );
+            return false;
+        }
+
+        // Check that the blob is for a slot that is past the root
+        if slot <= last_root {
+            return false;
+        }
+
+        // Ignore blobs that chain to slots before the last root
+        if slot_meta.parent_slot < last_root {
+            return false;
+        }
+    }
+
     true
+}
+
+fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: u64, last_root: u64) -> bool {
+    slot_to_write == 0 && last_root == 0 && parent_slot == 0
 }
 
 fn send_signals(
@@ -2445,7 +2501,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     genesis_block.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
-    let blocktree = Blocktree::open(ledger_path, None)?;
+    let blocktree = Blocktree::open(ledger_path)?;
     let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
 
     let mut shredder = Shredder::new(0, Some(0), 0.0, &Arc::new(Keypair::new()), 0)
@@ -2464,6 +2520,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
         .collect();
 
     blocktree.insert_shreds(shreds)?;
+    blocktree.set_roots(&[0])?;
 
     Ok(last_hash)
 }
@@ -3374,7 +3431,7 @@ pub mod tests {
     pub fn test_forward_chaining_is_connected() {
         let blocktree_path = get_tmp_ledger_path("test_forward_chaining_is_connected");
         {
-            let blocktree = Blocktree::open(&blocktree_path, None).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 15;
             let entries_per_slot = 2;
             assert!(entries_per_slot > 1);
@@ -3457,7 +3514,7 @@ pub mod tests {
     pub fn test_chaining_tree() {
         let blocktree_path = get_tmp_ledger_path("test_chaining_tree");
         {
-            let blocktree = Blocktree::open(&blocktree_path, None).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_tree_levels = 6;
             assert!(num_tree_levels > 1);
             let branching_factor: u64 = 4;
@@ -3886,7 +3943,8 @@ pub mod tests {
             &slot_meta,
             &blocktree.db,
             &HashMap::new(),
-            &blobs[4].clone()
+            &blobs[4].clone(),
+            0
         ));
 
         // Trying to insert the same blob again should fail
@@ -3896,7 +3954,8 @@ pub mod tests {
             &slot_meta,
             &blocktree.db,
             &HashMap::new(),
-            &blobs[7].clone()
+            &blobs[7].clone(),
+            0
         ));
 
         // Trying to insert another "is_last" blob with index < the received index
@@ -3909,7 +3968,8 @@ pub mod tests {
             &slot_meta,
             &blocktree.db,
             &HashMap::new(),
-            &blobs[8].clone()
+            &blobs[8].clone(),
+            0
         ));
 
         // Insert the 10th blob, which is marked as "is_last"
@@ -3922,7 +3982,8 @@ pub mod tests {
             &slot_meta,
             &blocktree.db,
             &HashMap::new(),
-            &blobs[10].clone()
+            &blobs[10].clone(),
+            0
         ));
 
         drop(blocktree);
@@ -3986,8 +4047,11 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         let chained_slots = vec![0, 2, 4, 7, 12, 15];
+        assert_eq!(blocktree.last_root(), 0);
 
         blocktree.set_roots(&chained_slots).unwrap();
+
+        assert_eq!(blocktree.last_root(), 15);
 
         for i in chained_slots {
             assert!(blocktree.is_root(i));
@@ -4018,7 +4082,10 @@ pub mod tests {
                 assert_eq!(meta.last_index, 5)
             });
 
-        let data_iter = blocktree.data_cf.iter(Some((0, 0))).unwrap();
+        let data_iter = blocktree
+            .data_cf
+            .iter(IteratorMode::From((0, 0), IteratorDirection::Forward))
+            .unwrap();
         for ((slot, _), _) in data_iter {
             if slot > 5 {
                 assert!(false);
@@ -4832,10 +4899,8 @@ pub mod tests {
         let mut slots_shreds_and_entries = vec![];
         for (i, slot) in chain.iter().enumerate() {
             let parent_slot = {
-                if *slot == 0 {
+                if *slot == 0 || i == 0 {
                     0
-                } else if i == 0 {
-                    std::u64::MAX
                 } else {
                     chain[i - 1]
                 }

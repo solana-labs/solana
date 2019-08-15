@@ -219,8 +219,7 @@ impl Replicator {
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
         let blocktree = Arc::new(
-            Blocktree::open(ledger_path, None)
-                .expect("Expected to be able to open database ledger"),
+            Blocktree::open(ledger_path).expect("Expected to be able to open database ledger"),
         );
 
         let gossip_service = GossipService::new(
