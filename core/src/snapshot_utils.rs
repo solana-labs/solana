@@ -256,7 +256,7 @@ fn get_bank_snapshot_dir<P: AsRef<Path>>(path: P, slot: u64) -> PathBuf {
 }
 
 fn get_io_error(error: &str) -> Error {
-    warn!("BankForks error: {:?}", error);
+    warn!("Snapshot Error: {:?}", error);
     Error::IO(IOError::new(ErrorKind::Other, error))
 }
 
