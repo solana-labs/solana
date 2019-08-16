@@ -96,6 +96,7 @@ impl Validator {
         assert_eq!(id, node.info.id);
 
         warn!("identity pubkey: {:?}", id);
+        warn!("vote pubkey: {:?}", vote_account);
         warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
         info!("entrypoint: {:?}", entrypoint_info_option);
         info!("{:?}", node.info);
