@@ -9,7 +9,6 @@ pub enum RpcRequest {
     GetAccountInfo,
     GetBalance,
     GetClusterNodes,
-    GetEpochVoteAccounts,
     GetNumBlocksSinceSignatureConfirmation,
     GetProgramAccounts,
     GetRecentBlockhash,
@@ -22,6 +21,7 @@ pub enum RpcRequest {
     GetStoragePubkeysForSlot,
     GetTransactionCount,
     GetVersion,
+    GetVoteAccounts,
     RegisterNode,
     RequestAirdrop,
     SendTransaction,
@@ -38,7 +38,6 @@ impl RpcRequest {
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
             RpcRequest::GetClusterNodes => "getClusterNodes",
-            RpcRequest::GetEpochVoteAccounts => "getEpochVoteAccounts",
             RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
                 "getNumBlocksSinceSignatureConfirmation"
             }
@@ -53,6 +52,7 @@ impl RpcRequest {
             RpcRequest::GetStoragePubkeysForSlot => "getStoragePubkeysForSlot",
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::GetVersion => "getVersion",
+            RpcRequest::GetVoteAccounts => "getVoteAccounts",
             RpcRequest::RegisterNode => "registerNode",
             RpcRequest::RequestAirdrop => "requestAirdrop",
             RpcRequest::SendTransaction => "sendTransaction",
