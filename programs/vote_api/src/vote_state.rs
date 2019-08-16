@@ -380,25 +380,6 @@ pub fn create_account(
     vote_account
 }
 
-// utility function, used by solana-genesis, tests
-pub fn create_bootstrap_leader_account(
-    vote_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
-    commission: u8,
-    vote_lamports: u64,
-) -> (Account, VoteState) {
-    // Construct a vote account for the bootstrap_leader such that the leader_scheduler
-    // will be forced to select it as the leader for height 0
-    let mut vote_account = create_account(&vote_pubkey, &node_pubkey, commission, vote_lamports);
-
-    let mut vote_state: VoteState = vote_account.state().unwrap();
-    // TODO: get a hash for slot 0?
-    vote_state.process_slot_vote_unchecked(0);
-
-    vote_account.set_state(&vote_state).unwrap();
-    (vote_account, vote_state)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,16 +448,6 @@ mod tests {
             &[(vote.slot, vote.hash)],
             0,
         )
-    }
-
-    #[test]
-    fn test_vote_create_bootstrap_leader_account() {
-        let vote_pubkey = Pubkey::new_rand();
-        let (_vote_account, vote_state) =
-            vote_state::create_bootstrap_leader_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-
-        assert_eq!(vote_state.votes.len(), 1);
-        assert_eq!(vote_state.votes[0], Lockout::new(&Vote::default()));
     }
 
     #[test]

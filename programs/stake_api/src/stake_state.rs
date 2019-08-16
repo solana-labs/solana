@@ -417,18 +417,16 @@ where
 }
 
 // utility function, used by Bank, tests, genesis
-pub fn create_stake_account(
-    voter_pubkey: &Pubkey,
-    vote_state: &VoteState,
-    lamports: u64,
-) -> Account {
+pub fn create_account(voter_pubkey: &Pubkey, vote_account: &Account, lamports: u64) -> Account {
     let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
+
+    let vote_state = VoteState::from(vote_account).expect("vote_state");
 
     stake_account
         .set_state(&StakeState::Stake(Stake::new_bootstrap(
             lamports,
             voter_pubkey,
-            vote_state,
+            &vote_state,
         )))
         .expect("set_state");
 
