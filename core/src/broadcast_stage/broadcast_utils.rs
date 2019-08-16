@@ -4,10 +4,12 @@ use crate::erasure::CodingGenerator;
 use crate::packet::{self, SharedBlob};
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::Result;
+use crate::shred::Shredder;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_runtime::bank::Bank;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable};
+use std::io::Write;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -95,6 +97,34 @@ pub(super) fn entries_to_blobs(
     let coding = generate_coding_blobs(&blobs, &thread_pool, coding_generator, &keypair);
 
     (blobs, coding)
+}
+
+pub fn entries_to_shreds(
+    ventries: Vec<Vec<(Entry, u64)>>,
+    last_tick: u64,
+    bank_max_tick: u64,
+    shredder: &mut Shredder,
+) {
+    ventries.iter().enumerate().for_each(|(i, entries)| {
+        entries.iter().for_each(|(entry, _)| {
+            trace!("Shredding entry {:#?}", entry);
+            let data = bincode::serialize(entry).unwrap();
+            trace!("Writing to shred {:#?}", &data);
+            shredder.write(&data).unwrap();
+        });
+        trace!(
+            "Shredded {:?} entries into {:?} shreds",
+            entries.len(),
+            shredder.shreds.len()
+        );
+        if i + 1 == ventries.len() && last_tick == bank_max_tick {
+            debug!("Finalized slot for the shreds");
+            shredder.finalize_slot();
+        } else {
+            debug!("Finalized fec block for the shreds");
+            shredder.finalize_fec_block();
+        }
+    })
 }
 
 pub(super) fn generate_data_blobs(

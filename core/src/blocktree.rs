@@ -1,10 +1,12 @@
 //! The `block_tree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
+use crate::broadcast_stage::broadcast_utils::entries_to_shreds;
 use crate::entry::Entry;
 use crate::erasure::{ErasureConfig, Session};
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
+use crate::shred::{Shred, Shredder};
 
 #[cfg(feature = "kvstore")]
 use solana_kvstore as kvstore;
@@ -34,7 +36,6 @@ use std::sync::{Arc, RwLock};
 
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
-use crate::shred::Shred;
 use solana_sdk::timing::Slot;
 
 mod db;
@@ -92,7 +93,7 @@ pub struct Blocktree {
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
     index_cf: LedgerColumn<cf::Index>,
-    _data_shred_cf: LedgerColumn<cf::ShredData>,
+    data_shred_cf: LedgerColumn<cf::ShredData>,
     _code_shred_cf: LedgerColumn<cf::ShredCode>,
     batch_processor: Arc<RwLock<BatchProcessor>>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
@@ -164,7 +165,7 @@ impl Blocktree {
             erasure_meta_cf,
             orphans_cf,
             index_cf,
-            _data_shred_cf: data_shred_cf,
+            data_shred_cf,
             _code_shred_cf: code_shred_cf,
             new_blobs_signals: vec![],
             batch_processor,
@@ -385,7 +386,7 @@ impl Blocktree {
         Ok(slot_iterator.take_while(move |((blob_slot, _), _)| *blob_slot == slot))
     }
 
-    pub fn insert_shared_shreds(&self, shared_shreds: &[Arc<Shred>]) -> Result<()> {
+    pub fn insert_shreds(&self, shreds: &[Shred]) -> Result<()> {
         let db = &*self.db;
         let mut batch_processor = self.batch_processor.write().unwrap();
         let mut write_batch = batch_processor.batch()?;
@@ -394,8 +395,8 @@ impl Blocktree {
         let mut slot_meta_working_set = HashMap::new();
         let mut index_working_set = HashMap::new();
 
-        shared_shreds.iter().for_each(|shared_shred| {
-            let slot = shared_shred.slot();
+        shreds.iter().for_each(|shred| {
+            let slot = shred.slot();
 
             let _ = index_working_set.entry(slot).or_insert_with(|| {
                 self.index_cf
@@ -409,16 +410,16 @@ impl Blocktree {
 
         let dummy_data = vec![];
 
-        for shared_shred in shared_shreds {
-            let slot = shared_shred.slot();
-            let index = u64::from(shared_shred.index());
+        for shred in shreds {
+            let slot = shred.slot();
+            let index = u64::from(shred.index());
 
             let inserted = Blocktree::insert_data_shred(
                 db,
                 &just_inserted_data_indexes,
                 &mut slot_meta_working_set,
                 &mut index_working_set,
-                shared_shred.borrow(),
+                shred,
                 &mut write_batch,
             )?;
 
@@ -469,12 +470,14 @@ impl Blocktree {
         let slot = shred.slot();
         let index = u64::from(shred.index());
         let parent = if let Shred::FirstInSlot(s) = shred {
+            debug!("got first in slot");
             s.header.parent
         } else {
             std::u64::MAX
         };
 
         let last_in_slot = if let Shred::LastInSlot(_) = shred {
+            debug!("got last in slot");
             true
         } else {
             false
@@ -516,17 +519,21 @@ impl Blocktree {
             write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
 
             update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
-
             index_working_set
                 .get_mut(&slot)
                 .expect("Index must be present for all data blobs")
                 .data_mut()
                 .set_present(index, true);
-
+            trace!("inserted shred into slot {:?} and index {:?}", slot, index);
             Ok(true)
         } else {
+            debug!("didn't insert shred");
             Ok(false)
         }
+    }
+
+    pub fn get_data_shred(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
+        self.data_shred_cf.get_bytes((slot, index))
     }
 
     /// Use this function to write data blobs to blocktree
@@ -814,7 +821,7 @@ impl Blocktree {
     }
 
     pub fn get_data_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
-        self.data_cf.get_bytes((slot, index))
+        self.get_data_shred(slot, index)
     }
 
     /// Manually update the meta for a slot.
@@ -991,11 +998,13 @@ impl Blocktree {
     }
 
     pub fn get_data_blob(&self, slot: u64, blob_index: u64) -> Result<Option<Blob>> {
-        let bytes = self.get_data_blob_bytes(slot, blob_index)?;
+        let bytes = self.get_data_shred(slot, blob_index)?;
         Ok(bytes.map(|bytes| {
             let blob = Blob::new(&bytes);
-            assert!(blob.slot() == slot);
-            assert!(blob.index() == blob_index);
+            /*
+                        assert!(blob.slot() == slot);
+                        assert!(blob.index() == blob_index);
+            */
             blob
         }))
     }
@@ -1094,9 +1103,9 @@ impl Blocktree {
         &self,
         slot: u64,
         blob_start_index: u64,
-        max_entries: Option<u64>,
+        _max_entries: Option<u64>,
     ) -> Result<Vec<Entry>> {
-        self.get_slot_entries_with_blob_count(slot, blob_start_index, max_entries)
+        self.get_slot_entries_with_shred_count(slot, blob_start_index)
             .map(|x| x.0)
     }
 
@@ -1123,6 +1132,77 @@ impl Blocktree {
         let blobs =
             deserialize_blobs(&consecutive_blobs).map_err(BlocktreeError::InvalidBlobData)?;
         Ok((blobs, num))
+    }
+
+    pub fn get_slot_entries_with_shred_count(
+        &self,
+        slot: u64,
+        start_index: u64,
+    ) -> Result<(Vec<Entry>, usize)> {
+        // Find the next consecutive block of blobs.
+        let serialized_shreds = get_slot_consecutive_shreds(slot, &self.db, start_index)?;
+        trace!(
+            "Found {:?} shreds for slot {:?}",
+            serialized_shreds.len(),
+            slot
+        );
+        let mut shreds: Vec<Shred> = serialized_shreds
+            .iter()
+            .map(|serialzied_shred| {
+                let shred: Shred =
+                    bincode::deserialize(serialzied_shred).expect("Failed to deserialize shred");
+                shred
+            })
+            .collect();
+
+        let mut all_entries = vec![];
+        let mut num = 0;
+        loop {
+            let mut look_for_last_shred = true;
+
+            let mut shred_chunk = vec![];
+            while look_for_last_shred && shreds.len() != 0 {
+                let shred = shreds.remove(0);
+                if let Shred::LastInFECSet(_) = shred {
+                    look_for_last_shred = false;
+                } else if let Shred::LastInSlot(_) = shred {
+                    look_for_last_shred = false;
+                }
+                shred_chunk.push(shred);
+            }
+
+            debug!(
+                "{:?} shreds in last FEC set. Looking for last shred {:?}",
+                shred_chunk.len(),
+                look_for_last_shred
+            );
+
+            // Break if we didn't find the last shred (as more data is required)
+            if look_for_last_shred {
+                break;
+            }
+
+            if let Ok(deshred) = Shredder::deshred(&shred_chunk) {
+                let mut payload_offset = 0;
+                while let Ok(entry) = bincode::deserialize(&deshred.payload[payload_offset..]) {
+                    let entry: Entry = entry;
+                    trace!("Found entry: {:#?}", entry);
+                    if entry.num_hashes == 0 {
+                        break;
+                    }
+                    payload_offset += bincode::serialized_size(&entry).unwrap() as usize;
+                    all_entries.push(entry);
+                }
+                num += shred_chunk.len();
+            } else {
+                debug!("Failed in deshredding shred payloads");
+                break;
+            }
+        }
+
+        trace!("Found {:?} entries", all_entries.len());
+
+        Ok((all_entries, num))
     }
 
     // Returns slots connecting to any element of the list `slots`.
@@ -1683,6 +1763,22 @@ fn get_slot_consecutive_blobs<'a>(
     Ok(blobs)
 }
 
+fn get_slot_consecutive_shreds<'a>(
+    slot: u64,
+    db: &Database,
+    mut current_index: u64,
+) -> Result<Vec<Cow<'a, [u8]>>> {
+    let mut serialized_shreds: Vec<Cow<[u8]>> = vec![];
+    let data_cf = db.column::<cf::ShredData>();
+
+    while let Some(serialized_shred) = data_cf.get_bytes((slot, current_index))? {
+        serialized_shreds.push(Cow::Owned(serialized_shred));
+        current_index += 1;
+    }
+
+    Ok(serialized_shreds)
+}
+
 // Chaining based on latest discussion here: https://github.com/solana-labs/solana/pull/2253
 fn handle_chaining(
     db: &Database,
@@ -2183,9 +2279,33 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open(ledger_path)?;
     let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
-    blocktree.write_entries(0, 0, 0, ticks_per_slot, &entries)?;
 
-    Ok(entries.last().unwrap().hash)
+    let mut shredder = Shredder::new(0, Some(0), 0.0, &Arc::new(Keypair::new()), 0)
+        .expect("Failed to create entry shredder");
+    let last_hash = entries.last().unwrap().hash;
+
+    let entries_tuples = entries
+        .into_iter()
+        .map(|e| {
+            let num = e.num_hashes;
+            (e, num)
+        })
+        .collect();
+    entries_to_shreds(
+        vec![entries_tuples],
+        ticks_per_slot,
+        ticks_per_slot,
+        &mut shredder,
+    );
+    let shreds: Vec<Shred> = shredder
+        .shreds
+        .iter()
+        .map(|s| bincode::deserialize(s).unwrap())
+        .collect();
+
+    blocktree.insert_shreds(&shreds)?;
+
+    Ok(last_hash)
 }
 
 pub fn genesis<'a, I>(ledger_path: &Path, keypair: &Keypair, entries: I) -> Result<()>

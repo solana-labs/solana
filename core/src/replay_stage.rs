@@ -360,6 +360,7 @@ impl ReplayStage {
         let mut tx_count = 0;
         let result =
             Self::load_blocktree_entries(bank, blocktree, progress).and_then(|(entries, num)| {
+                debug!("Replaying {:?} entries, num {:?}", entries.len(), num);
                 tx_count += entries.iter().map(|e| e.transactions.len()).sum::<usize>();
                 Self::replay_entries_into_bank(bank, entries, progress, num)
             });
@@ -532,6 +533,7 @@ impl ReplayStage {
         for bank_slot in &active_banks {
             // If the fork was marked as dead, don't replay it
             if progress.get(bank_slot).map(|p| p.is_dead).unwrap_or(false) {
+                debug!("bank_slot {:?} is marked dead", *bank_slot);
                 continue;
             }
 
@@ -681,7 +683,7 @@ impl ReplayStage {
         let bank_progress = &mut progress
             .entry(bank_slot)
             .or_insert_with(|| ForkProgress::new(bank.last_blockhash()));
-        blocktree.get_slot_entries_with_blob_count(bank_slot, bank_progress.num_blobs as u64, None)
+        blocktree.get_slot_entries_with_shred_count(bank_slot, bank_progress.num_blobs as u64)
     }
 
     fn replay_entries_into_bank(

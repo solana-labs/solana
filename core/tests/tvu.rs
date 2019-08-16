@@ -129,6 +129,7 @@ fn test_replay() {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit,
                     fetch: target1.sockets.tvu,
+                    forwards: target1.sockets.tvu_forwards,
                 }
             },
             blocktree,

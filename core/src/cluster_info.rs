@@ -19,7 +19,7 @@ use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
 use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
-use crate::packet::{to_shared_blob, SharedBlob, BLOB_SIZE};
+use crate::packet::{to_shared_blob, Packet, SharedBlob};
 use crate::repair_service::RepairType;
 use crate::result::Result;
 use crate::staking_utils;
@@ -732,13 +732,37 @@ impl ClusterInfo {
         Ok(())
     }
 
+    pub fn broadcast_shreds(
+        &self,
+        s: &UdpSocket,
+        shreds: &[Vec<u8>],
+        seeds: &[[u8; 32]],
+        stakes: Option<&HashMap<Pubkey, u64>>,
+    ) -> Result<()> {
+        let mut last_err = Ok(());
+        let mut broadcast_table_len = 0;
+        shreds.into_iter().zip(seeds).for_each(|(shred, seed)| {
+            let broadcast_table = self.sorted_tvu_peers(stakes, ChaChaRng::from_seed(*seed));
+            broadcast_table_len = cmp::max(broadcast_table_len, broadcast_table.len());
+
+            if !broadcast_table.is_empty() {
+                if let Err(e) = s.send_to(shred, &broadcast_table[0].tvu) {
+                    trace!("{}: broadcast result {:?}", self.id(), e);
+                    last_err = Err(e);
+                }
+            }
+        });
+
+        last_err?;
+        Ok(())
+    }
     /// retransmit messages to a list of nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
     pub fn retransmit_to(
         obj: &Arc<RwLock<Self>>,
         peers: &[ContactInfo],
-        blob: &SharedBlob,
+        packet: &Packet,
         slot_leader_pubkey: Option<Pubkey>,
         s: &UdpSocket,
         forwarded: bool,
@@ -748,29 +772,16 @@ impl ClusterInfo {
             let s = obj.read().unwrap();
             (s.my_data().clone(), peers)
         };
-        // hold a write lock so no one modifies the blob until we send it
-        let mut wblob = blob.write().unwrap();
-        let was_forwarded = !wblob.should_forward();
-        wblob.set_forwarded(forwarded);
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
             .filter(|v| v.id != slot_leader_pubkey.unwrap_or_default())
             .map(|v| {
-                debug!(
-                    "{}: retransmit blob {} to {} {}",
-                    me.id,
-                    wblob.index(),
-                    v.id,
-                    v.tvu,
-                );
-                //TODO profile this, may need multiple sockets for par_iter
-                assert!(wblob.meta.size <= BLOB_SIZE);
-                s.send_to(&wblob.data[..wblob.meta.size], &v.tvu)
+                let dest = if forwarded { &v.tvu_forwards } else { &v.tvu };
+                debug!("{}: retransmit packet to {} {}", me.id, v.id, *dest,);
+                s.send_to(&packet.data, dest)
             })
             .collect();
-        // reset the blob to its old state. This avoids us having to copy the blob to modify it
-        wblob.set_forwarded(was_forwarded);
         for e in errs {
             if let Err(e) = &e {
                 inc_new_counter_error!("cluster_info-retransmit-send_to_error", 1, 1);
@@ -1469,6 +1480,7 @@ impl ClusterInfo {
             daddr,
             daddr,
             daddr,
+            daddr,
             timestamp(),
         );
         (node, gossip_socket)
@@ -1481,6 +1493,7 @@ impl ClusterInfo {
 
         let node = ContactInfo::new(
             id,
+            daddr,
             daddr,
             daddr,
             daddr,
@@ -1534,6 +1547,7 @@ pub fn compute_retransmit_peers(
 pub struct Sockets {
     pub gossip: UdpSocket,
     pub tvu: Vec<UdpSocket>,
+    pub tvu_forwards: Vec<UdpSocket>,
     pub tpu: Vec<UdpSocket>,
     pub tpu_forwards: Vec<UdpSocket>,
     pub broadcast: UdpSocket,
@@ -1556,6 +1570,7 @@ impl Node {
     pub fn new_localhost_replicator(pubkey: &Pubkey) -> Self {
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let storage = UdpSocket::bind("127.0.0.1:0").unwrap();
         let empty = "0.0.0.0:0".parse().unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1566,6 +1581,7 @@ impl Node {
             pubkey,
             gossip.local_addr().unwrap(),
             tvu.local_addr().unwrap(),
+            tvu_forwards.local_addr().unwrap(),
             empty,
             empty,
             storage.local_addr().unwrap(),
@@ -1579,6 +1595,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 tvu: vec![tvu],
+                tvu_forwards: vec![],
                 tpu: vec![],
                 tpu_forwards: vec![],
                 broadcast,
@@ -1592,6 +1609,7 @@ impl Node {
         let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tpu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let rpc_port = find_available_port_in_range((1024, 65535)).unwrap();
@@ -1607,6 +1625,7 @@ impl Node {
             pubkey,
             gossip.local_addr().unwrap(),
             tvu.local_addr().unwrap(),
+            tvu_forwards.local_addr().unwrap(),
             tpu.local_addr().unwrap(),
             tpu_forwards.local_addr().unwrap(),
             storage.local_addr().unwrap(),
@@ -1619,6 +1638,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 tvu: vec![tvu],
+                tvu_forwards: vec![tvu_forwards],
                 tpu: vec![tpu],
                 tpu_forwards: vec![tpu_forwards],
                 broadcast,
@@ -1652,6 +1672,9 @@ impl Node {
 
         let (tvu_port, tvu_sockets) = multi_bind_in_range(port_range, 8).expect("tvu multi_bind");
 
+        let (tvu_forwards_port, tvu_forwards_sockets) =
+            multi_bind_in_range(port_range, 8).expect("tpu multi_bind");
+
         let (tpu_port, tpu_sockets) = multi_bind_in_range(port_range, 32).expect("tpu multi_bind");
 
         let (tpu_forwards_port, tpu_forwards_sockets) =
@@ -1665,6 +1688,7 @@ impl Node {
             pubkey,
             SocketAddr::new(gossip_addr.ip(), gossip_port),
             SocketAddr::new(gossip_addr.ip(), tvu_port),
+            SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
             SocketAddr::new(gossip_addr.ip(), tpu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
             socketaddr_any!(),
@@ -1679,6 +1703,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 tvu: tvu_sockets,
+                tvu_forwards: tvu_forwards_sockets,
                 tpu: tpu_sockets,
                 tpu_forwards: tpu_forwards_sockets,
                 broadcast,
@@ -1815,6 +1840,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1238),
             socketaddr!([127, 0, 0, 1], 1239),
             socketaddr!([127, 0, 0, 1], 1240),
+            socketaddr!([127, 0, 0, 1], 1241),
             0,
         );
         cluster_info.insert_info(nxt.clone());
@@ -1834,6 +1860,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1238),
             socketaddr!([127, 0, 0, 1], 1239),
             socketaddr!([127, 0, 0, 1], 1240),
+            socketaddr!([127, 0, 0, 1], 1241),
             0,
         );
         cluster_info.insert_info(nxt);
@@ -1870,6 +1897,7 @@ mod tests {
                 socketaddr!("127.0.0.1:1238"),
                 socketaddr!("127.0.0.1:1239"),
                 socketaddr!("127.0.0.1:1240"),
+                socketaddr!("127.0.0.1:1241"),
                 0,
             );
             let rv = ClusterInfo::run_window_request(
