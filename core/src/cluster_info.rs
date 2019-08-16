@@ -873,7 +873,7 @@ impl ClusterInfo {
                     if msg_size < MAX_PROTOCOL_PAYLOAD_SIZE as u64 {
                         msgs.push(msg);
                     } else {
-                        warn!(
+                        debug!(
                             "dropping message larger than the maximum payload size {:?}",
                             msg
                         );
