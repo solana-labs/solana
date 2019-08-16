@@ -174,6 +174,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     info!("done sleeping for 2 fortnights");
     for ingress_node in &cluster_nodes {
         if ingress_node.id == entry_point_info.id {
+            info!("ingress_node.id == entry_point_info.id, continuing...");
             continue;
         }
 
@@ -217,12 +218,14 @@ pub fn kill_entry_and_spend_and_verify_rest(
                     Ok(sig) => sig,
                 }
             };
-
+            info!("poll_all_nodes_for_signature()");
             match poll_all_nodes_for_signature(&entry_point_info, &cluster_nodes, &sig, confs) {
                 Err(e) => {
+                    info!("poll_all_nodes_for_signature() failed {:?}", e);
                     result = Err(e);
                 }
                 Ok(()) => {
+                    info!("poll_all_nodes_for_signature() succeeded, done.");
                     break;
                 }
             }
