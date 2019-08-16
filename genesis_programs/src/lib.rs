@@ -1,4 +1,5 @@
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::system_program::solana_system_program;
 
 #[macro_use]
 extern crate solana_bpf_loader_program;
@@ -21,6 +22,7 @@ extern crate solana_vote_program;
 
 pub fn get() -> Vec<(String, Pubkey)> {
     vec![
+        solana_system_program(),
         solana_bpf_loader_program!(),
         solana_budget_program!(),
         solana_config_program!(),
