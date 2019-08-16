@@ -2,20 +2,17 @@ extern crate solana;
 
 use log::*;
 use serial_test_derive::serial;
-use solana::blocktree::Blocktree;
-use solana::broadcast_stage::BroadcastStageType;
-use solana::cluster::Cluster;
-use solana::cluster_tests;
-use solana::gossip_service::discover_cluster;
-use solana::validator::ValidatorConfig;
-use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
+use solana::{
+    blocktree::Blocktree, broadcast_stage::BroadcastStageType, cluster::Cluster,
+    gossip_service::discover_cluster, validator::ValidatorConfig,
+};
+use solana_local_cluster::{
+    cluster_tests,
+    local_cluster::{ClusterConfig, LocalCluster},
+};
 use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH};
-use solana_sdk::client::SyncClient;
-use solana_sdk::poh_config::PohConfig;
-use solana_sdk::timing;
-use std::collections::HashSet;
-use std::thread::sleep;
-use std::time::Duration;
+use solana_sdk::{client::SyncClient, poh_config::PohConfig, timing};
+use std::{collections::HashSet, thread::sleep, time::Duration};
 
 #[test]
 #[serial]
