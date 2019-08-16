@@ -180,21 +180,21 @@ impl Validator {
             ))
         };
 
+        info!(
+            "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
+            bank.epoch(),
+            bank.slot(),
+            bank.tick_height(),
+            bank.last_blockhash(),
+            leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
+        );
+
         if config.dev_halt_at_slot.is_some() {
             // Park with the RPC service running, ready for inspection!
-            warn!(
-                "Validator halted at slot {} (epoch {})",
-                bank.slot(),
-                bank.epoch()
-            );
+            warn!("Validator halted");
             std::thread::park();
         }
 
-        info!(
-            "starting PoH... {} {}",
-            bank.tick_height(),
-            bank.last_blockhash(),
-        );
         let blocktree = Arc::new(blocktree);
 
         let poh_config = Arc::new(poh_config);
