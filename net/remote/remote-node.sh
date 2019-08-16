@@ -174,6 +174,9 @@ local|tar|skip)
     pid=$!
     oom_score_adj "$pid" 1000
     waitForNodeToInit
+
+    solana-validator-info publish -u http://127.0.0.1:8899 \
+      bootstrap-leader/identity-keypair.json "$(hostname)" -k team/solana --force || true
     ;;
   validator|blockstreamer)
     if [[ $deployMethod != skip ]]; then
@@ -207,9 +210,10 @@ local|tar|skip)
       fi
     fi
 
-    if [[ -f ~/solana/fullnode-identity.json ]]; then
-      args+=(--identity ~/solana/fullnode-identity.json)
+    if [[ ! -f ~/solana/fullnode-identity.json ]]; then
+      solana-keygen new -o ~/solana/fullnode-identity.json
     fi
+    args+=(--identity ~/solana/fullnode-identity.json)
 
     if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
@@ -275,6 +279,9 @@ local|tar|skip)
 
       ./multinode-demo/delegate-stake.sh "${args[@]}"
     fi
+
+    solana-validator-info publish -u http://127.0.0.1:8899 \
+      ~/solana/fullnode-identity.json "$(hostname)" -k team/solana --force || true
     ;;
   replicator)
     if [[ $deployMethod != skip ]]; then
