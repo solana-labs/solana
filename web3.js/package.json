@@ -108,7 +108,7 @@
     "flow-bin": "0.105.2",
     "flow-typed": "2.6.1",
     "fs-file-tree": "1.0.7",
-    "jest": "24.8.0",
+    "jest": "24.9.0",
     "marked": "^0.7.0",
     "prettier": "^1.14.3",
     "rimraf": "3.0.0",
