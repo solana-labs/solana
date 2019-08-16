@@ -846,7 +846,10 @@ impl Replicator {
                 }
             }
             let res = r_reader.recv_timeout(Duration::new(1, 0));
-            if let Ok(blobs) = res {
+            if let Ok(mut blobs) = res {
+                while let Ok(mut more) = r_reader.try_recv() {
+                    blobs.append(&mut more);
+                }
                 window_service::process_blobs(&blobs, blocktree)?;
             }
             // check if all the slots in the segment are complete
