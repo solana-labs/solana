@@ -133,7 +133,7 @@ impl Default for WalletConfig {
             command: WalletCommand::Balance(Pubkey::default()),
             drone_host: None,
             drone_port: DRONE_PORT,
-            json_rpc_url: "http://testnet.solana.com:8899".to_string(),
+            json_rpc_url: "http://127.0.0.1:8899".to_string(),
             keypair: Keypair::new(),
             rpc_client: None,
         }

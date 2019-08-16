@@ -18,7 +18,7 @@ use std::process::exit;
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
 pub const MAX_LONG_FIELD_LENGTH: usize = 300;
 pub const MAX_VALIDATOR_INFO: u64 = 576;
-pub const JSON_RPC_URL: &str = "http://testnet.solana.com:8899";
+pub const JSON_RPC_URL: &str = "http://127.0.0.1:8899";
 
 // Config account key: Va1idator1nfo111111111111111111111111111111
 pub const REGISTER_CONFIG_KEY: [u8; 32] = [
