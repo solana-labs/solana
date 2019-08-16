@@ -92,6 +92,7 @@ impl Default for ContactInfo {
 }
 
 impl ContactInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: &Pubkey,
         gossip: SocketAddr,

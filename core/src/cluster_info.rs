@@ -741,7 +741,7 @@ impl ClusterInfo {
     ) -> Result<()> {
         let mut last_err = Ok(());
         let mut broadcast_table_len = 0;
-        shreds.into_iter().zip(seeds).for_each(|(shred, seed)| {
+        shreds.iter().zip(seeds).for_each(|(shred, seed)| {
             let broadcast_table = self.sorted_tvu_peers(stakes, ChaChaRng::from_seed(*seed));
             broadcast_table_len = cmp::max(broadcast_table_len, broadcast_table.len());
 

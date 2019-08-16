@@ -107,10 +107,9 @@ where
 
     if !packets.packets.is_empty() {
         match retransmit.send(packets) {
-            Ok(_) => (),
-            //        Err(Error::SendError) => Ok(()),
-            Err(_) => (),
-        };
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }?;
     }
 
     blocktree.insert_shreds(&shreds)?;
@@ -271,14 +270,7 @@ mod test {
     fn local_entries_to_shred(entries: Vec<Entry>, keypair: &Arc<Keypair>) -> Vec<Shred> {
         let mut shredder =
             Shredder::new(0, Some(0), 0.0, keypair, 0).expect("Failed to create entry shredder");
-        let entries_tuples = entries
-            .into_iter()
-            .map(|e| {
-                let num = e.num_hashes;
-                (e, num)
-            })
-            .collect();
-        entries_to_shreds(vec![entries_tuples], 0, 0, &mut shredder);
+        entries_to_shreds(vec![entries], 0, 0, &mut shredder);
         shredder
             .shreds
             .iter()

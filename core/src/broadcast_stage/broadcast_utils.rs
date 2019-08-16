@@ -100,18 +100,17 @@ pub(super) fn entries_to_blobs(
 }
 
 pub fn entries_to_shreds(
-    ventries: Vec<Vec<(Entry, u64)>>,
+    ventries: Vec<Vec<Entry>>,
     last_tick: u64,
     bank_max_tick: u64,
     shredder: &mut Shredder,
 ) {
     ventries.iter().enumerate().for_each(|(i, entries)| {
-        entries.iter().for_each(|(entry, _)| {
-            trace!("Shredding entry {:#?}", entry);
-            let data = bincode::serialize(entry).unwrap();
-            trace!("Writing to shred {:#?}", &data);
-            shredder.write(&data).unwrap();
-        });
+        let data = bincode::serialize(entries).unwrap();
+        let mut offset = 0;
+        while offset < data.len() {
+            offset += shredder.write(&data[offset..]).unwrap();
+        }
         trace!(
             "Shredded {:?} entries into {:?} shreds",
             entries.len(),

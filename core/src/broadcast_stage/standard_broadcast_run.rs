@@ -103,8 +103,16 @@ impl BroadcastRun for StandardBroadcastRun {
         };
         let mut shredder = shredder.expect("Expected to create a new shredder");
 
+        let ventries = receive_results
+            .ventries
+            .into_iter()
+            .map(|entries_tuple| {
+                let (entries, _): (Vec<_>, Vec<_>) = entries_tuple.into_iter().unzip();
+                entries
+            })
+            .collect();
         broadcast_utils::entries_to_shreds(
-            receive_results.ventries,
+            ventries,
             last_tick,
             bank.max_tick_height(),
             &mut shredder,

@@ -1154,7 +1154,7 @@ impl Blocktree {
             let mut look_for_last_shred = true;
 
             let mut shred_chunk = vec![];
-            while look_for_last_shred && shreds.len() != 0 {
+            while look_for_last_shred && !shreds.is_empty() {
                 let shred = shreds.remove(0);
                 if let Shred::LastInFECSet(_) = shred {
                     look_for_last_shred = false;
@@ -1176,16 +1176,9 @@ impl Blocktree {
             }
 
             if let Ok(deshred) = Shredder::deshred(&shred_chunk) {
-                let mut payload_offset = 0;
-                while let Ok(entry) = bincode::deserialize(&deshred.payload[payload_offset..]) {
-                    let entry: Entry = entry;
-                    trace!("Found entry: {:#?}", entry);
-                    if entry.num_hashes == 0 {
-                        break;
-                    }
-                    payload_offset += bincode::serialized_size(&entry).unwrap() as usize;
-                    all_entries.push(entry);
-                }
+                let entries: Vec<Entry> = bincode::deserialize(&deshred.payload)?;
+                trace!("Found entries: {:#?}", entries);
+                all_entries.extend(entries);
                 num += shred_chunk.len();
             } else {
                 debug!("Failed in deshredding shred payloads");
@@ -2276,20 +2269,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     let mut shredder = Shredder::new(0, Some(0), 0.0, &Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
     let last_hash = entries.last().unwrap().hash;
-
-    let entries_tuples = entries
-        .into_iter()
-        .map(|e| {
-            let num = e.num_hashes;
-            (e, num)
-        })
-        .collect();
-    entries_to_shreds(
-        vec![entries_tuples],
-        ticks_per_slot,
-        ticks_per_slot,
-        &mut shredder,
-    );
+    entries_to_shreds(vec![entries], ticks_per_slot, ticks_per_slot, &mut shredder);
     let shreds: Vec<Shred> = shredder
         .shreds
         .iter()
