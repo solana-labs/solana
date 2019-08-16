@@ -485,10 +485,10 @@ The result field will be a JSON object of `current` and `delinquent` accounts,
 each containing an array of JSON objects with the following sub fields:
 * `votePubkey` - Vote account public key, as base-58 encoded string
 * `nodePubkey` - Node public key, as base-58 encoded string
-* `stake` - the stake, in lamports, delegated to this vote account
+* `activatedStake` - the stake, in lamports, delegated to this vote account and active in this epoch
 * `epochVoteAccount` - bool, whether the vote account is staked for this epoch
-* `commission`, a 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
-* `recentVote` - Most recent slot voted on by this vote account
+* `commission`, an 8-bit integer used as a fraction (commission/MAX_U8) for rewards payout
+* `lastVote` - Most recent slot voted on by this vote account
 
 ##### Example:
 ```bash
@@ -496,7 +496,7 @@ each containing an array of JSON objects with the following sub fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"current":[{"commission":0,"epochVoteAccount":true,"nodePubkey":"B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD","recentVote":147,"stake":42,"votePubkey":"3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"}],"delinquent":[{"commission":127,"epochVoteAccount":false,"nodePubkey":"6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f","recentVote":0,"stake":0,"votePubkey":"CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"}]},"id":1}
+{"jsonrpc":"2.0","result":{"current":[{"commission":0,"epochVoteAccount":true,"nodePubkey":"B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD","lastVote":147,"activatedStake":42,"votePubkey":"3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"}],"delinquent":[{"commission":127,"epochVoteAccount":false,"nodePubkey":"6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f","lastVote":0,"activatedStake":0,"votePubkey":"CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"}]},"id":1}
 ```
 
 ---

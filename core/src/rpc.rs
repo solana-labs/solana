@@ -133,9 +133,9 @@ impl JsonRpcRequestProcessor {
             Vec<RpcVoteAccountInfo>,
         ) = vote_accounts
             .iter()
-            .map(|(pubkey, (stake, account))| {
+            .map(|(pubkey, (activated_stake, account))| {
                 let vote_state = VoteState::from(&account).unwrap_or_default();
-                let recent_vote = if let Some(vote) = vote_state.votes.iter().last() {
+                let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
                     vote.slot
                 } else {
                     0
@@ -146,14 +146,14 @@ impl JsonRpcRequestProcessor {
                 RpcVoteAccountInfo {
                     vote_pubkey: (pubkey).to_string(),
                     node_pubkey: vote_state.node_pubkey.to_string(),
-                    stake: *stake,
+                    activated_stake: *activated_stake,
                     commission: vote_state.commission,
                     epoch_vote_account,
-                    recent_vote,
+                    last_vote,
                 }
             })
             .partition(|vote_account_info| {
-                vote_account_info.recent_vote >= bank.slot() - MAX_LOCKOUT_HISTORY as u64
+                vote_account_info.last_vote >= bank.slot() - MAX_LOCKOUT_HISTORY as u64
             });
         Ok(RpcVoteAccountStatus {
             current: current_vote_accounts,
@@ -242,7 +242,7 @@ pub struct RpcVoteAccountInfo {
     pub node_pubkey: String,
 
     /// The current stake, in lamports, delegated to this vote account
-    pub stake: u64,
+    pub activated_stake: u64,
 
     /// An 8-bit integer used as a fraction (commission/MAX_U8) for rewards payout
     pub commission: u8,
@@ -251,7 +251,7 @@ pub struct RpcVoteAccountInfo {
     pub epoch_vote_account: bool,
 
     /// Most recent slot voted on by this vote account
-    pub recent_vote: u64,
+    pub last_vote: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
