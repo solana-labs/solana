@@ -291,7 +291,7 @@ pub fn parse_command(
         }
         ("deactivate-stake", Some(matches)) => {
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
-            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
             Ok(WalletCommand::DeactivateStake(
                 stake_account_keypair,
                 vote_account_pubkey,
@@ -1865,7 +1865,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The vote account to which the stake is currently delegated"),
                 )
         )
