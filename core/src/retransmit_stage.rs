@@ -36,7 +36,7 @@ fn retransmit(
         packets.packets.append(&mut nq.packets);
     }
 
-    //    datapoint_info!("retransmit-stage", ("count", blobs.len(), i64));
+    datapoint_info!("retransmit-stage", ("count", packets.packets.len(), i64));
 
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());

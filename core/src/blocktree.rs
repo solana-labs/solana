@@ -999,14 +999,7 @@ impl Blocktree {
 
     pub fn get_data_blob(&self, slot: u64, blob_index: u64) -> Result<Option<Blob>> {
         let bytes = self.get_data_shred(slot, blob_index)?;
-        Ok(bytes.map(|bytes| {
-            let blob = Blob::new(&bytes);
-            /*
-                        assert!(blob.slot() == slot);
-                        assert!(blob.index() == blob_index);
-            */
-            blob
-        }))
+        Ok(bytes.map(|bytes| Blob::new(&bytes)))
     }
 
     pub fn get_entries_bytes(
