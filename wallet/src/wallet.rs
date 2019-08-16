@@ -503,19 +503,6 @@ fn process_airdrop(
         .retry_get_balance(&config.keypair.pubkey(), 5)?
         .unwrap_or(previous_balance);
 
-    if current_balance < previous_balance {
-        Err(format!(
-            "Airdrop failed: current_balance({}) < previous_balance({})",
-            current_balance, previous_balance
-        ))?;
-    }
-    if current_balance - previous_balance < lamports {
-        Err(format!(
-            "Airdrop failed: Account balance increased by {} instead of {}",
-            current_balance - previous_balance,
-            lamports
-        ))?;
-    }
     Ok(format!("Your balance is: {:?}", current_balance))
 }
 
@@ -2656,7 +2643,7 @@ mod tests {
 
         // Need airdrop cases
         config.command = WalletCommand::Airdrop(50);
-        assert!(process_command(&config).is_err());
+        assert!(process_command(&config).is_ok());
 
         config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
