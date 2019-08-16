@@ -16,7 +16,7 @@ use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::{self, Transaction};
-use solana_vote_api::vote_state::VoteState;
+use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -122,22 +122,43 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank().capitalization())
     }
 
-    fn get_epoch_vote_accounts(&self) -> Result<Vec<RpcVoteAccountInfo>> {
+    fn get_vote_accounts(&self) -> Result<RpcVoteAccountStatus> {
         let bank = self.bank();
-        Ok(bank
+        let vote_accounts = bank.vote_accounts();
+        let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
-            .ok_or_else(Error::invalid_request)?
+            .ok_or_else(Error::invalid_request)?;
+        let (current_vote_accounts, delinquent_vote_accounts): (
+            Vec<RpcVoteAccountInfo>,
+            Vec<RpcVoteAccountInfo>,
+        ) = vote_accounts
             .iter()
-            .map(|(pubkey, (stake, account))| {
-                let vote_state = VoteState::from(account).unwrap_or_default();
+            .map(|(pubkey, (activated_stake, account))| {
+                let vote_state = VoteState::from(&account).unwrap_or_default();
+                let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
+                    vote.slot
+                } else {
+                    0
+                };
+                let epoch_vote_account = epoch_vote_accounts
+                    .iter()
+                    .any(|(epoch_vote_pubkey, _)| epoch_vote_pubkey == pubkey);
                 RpcVoteAccountInfo {
-                    vote_pubkey: (*pubkey).to_string(),
+                    vote_pubkey: (pubkey).to_string(),
                     node_pubkey: vote_state.node_pubkey.to_string(),
-                    stake: *stake,
+                    activated_stake: *activated_stake,
                     commission: vote_state.commission,
+                    epoch_vote_account,
+                    last_vote,
                 }
             })
-            .collect::<Vec<_>>())
+            .partition(|vote_account_info| {
+                vote_account_info.last_vote >= bank.slot() - MAX_LOCKOUT_HISTORY as u64
+            });
+        Ok(RpcVoteAccountStatus {
+            current: current_vote_accounts,
+            delinquent: delinquent_vote_accounts,
+        })
     }
 
     fn get_storage_turn_rate(&self) -> Result<u64> {
@@ -204,6 +225,12 @@ pub struct RpcContactInfo {
     /// JSON RPC port
     pub rpc: Option<SocketAddr>,
 }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcVoteAccountStatus {
+    pub current: Vec<RpcVoteAccountInfo>,
+    pub delinquent: Vec<RpcVoteAccountInfo>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -215,10 +242,16 @@ pub struct RpcVoteAccountInfo {
     pub node_pubkey: String,
 
     /// The current stake, in lamports, delegated to this vote account
-    pub stake: u64,
+    pub activated_stake: u64,
 
     /// An 8-bit integer used as a fraction (commission/MAX_U8) for rewards payout
     pub commission: u8,
+
+    /// Whether this account is staked for the current epoch
+    pub epoch_vote_account: bool,
+
+    /// Most recent slot voted on by this vote account
+    pub last_vote: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -294,8 +327,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "getSlotLeader")]
     fn get_slot_leader(&self, _: Self::Metadata) -> Result<String>;
 
-    #[rpc(meta, name = "getEpochVoteAccounts")]
-    fn get_epoch_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<RpcVoteAccountInfo>>;
+    #[rpc(meta, name = "getVoteAccounts")]
+    fn get_vote_accounts(&self, _: Self::Metadata) -> Result<RpcVoteAccountStatus>;
 
     #[rpc(meta, name = "getStorageTurnRate")]
     fn get_storage_turn_rate(&self, _: Self::Metadata) -> Result<u64>;
@@ -581,11 +614,8 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().get_slot_leader()
     }
 
-    fn get_epoch_vote_accounts(&self, meta: Self::Metadata) -> Result<Vec<RpcVoteAccountInfo>> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_epoch_vote_accounts()
+    fn get_vote_accounts(&self, meta: Self::Metadata) -> Result<RpcVoteAccountStatus> {
+        meta.request_processor.read().unwrap().get_vote_accounts()
     }
 
     fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64> {

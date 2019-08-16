@@ -26,7 +26,6 @@ Methods
 * [getBalance](#getbalance)
 * [getClusterNodes](#getclusternodes)
 * [getEpochInfo](#getepochinfo)
-* [getEpochVoteAccounts](#getepochvoteaccounts)
 * [getLeaderSchedule](#getleaderschedule)
 * [getProgramAccounts](#getprogramaccounts)
 * [getRecentBlockhash](#getrecentblockhash)
@@ -40,6 +39,7 @@ Methods
 * [getTransactionCount](#gettransactioncount)
 * [getTotalSupply](#gettotalsupply)
 * [getVersion](#getversion)
+* [getVoteAccounts](#getvoteaccounts)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
 * [startSubscriptionChannel](#startsubscriptionchannel)
@@ -195,30 +195,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
-```
-
----
-
-### getEpochVoteAccounts
-Returns the account info and associated stake for all the voting accounts in the current epoch.
-
-##### Parameters:
-None
-
-##### Results:
-The result field will be an array of JSON objects, each with the following sub fields:
-* `votePubkey` - Vote account public key, as base-58 encoded string
-* `nodePubkey` - Node public key, as base-58 encoded string
-* `stake` - the stake, in lamports, delegated to this vote account
-* `commission`, a 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
-
-##### Example:
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":[{"commission":0,"nodePubkey":"Et2RaZJdJRTzTkodUwiHr4H6sLkVmijBFv8tkd7oSSFY","stake":42,"votePubkey":"B4CdWq3NBSoH2wYsVE1CaZSWPo2ZtopE4SJipQhZ3srF"}],"id":1}
 ```
 
 ---
@@ -494,6 +470,33 @@ The result field will be a JSON object with the following sub fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":{"solana-core": "0.17.2"},"id":1}
+```
+
+---
+
+### getVoteAccounts
+Returns the account info and associated stake for all the voting accounts in the current bank.
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be a JSON object of `current` and `delinquent` accounts,
+each containing an array of JSON objects with the following sub fields:
+* `votePubkey` - Vote account public key, as base-58 encoded string
+* `nodePubkey` - Node public key, as base-58 encoded string
+* `activatedStake` - the stake, in lamports, delegated to this vote account and active in this epoch
+* `epochVoteAccount` - bool, whether the vote account is staked for this epoch
+* `commission`, an 8-bit integer used as a fraction (commission/MAX_U8) for rewards payout
+* `lastVote` - Most recent slot voted on by this vote account
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"current":[{"commission":0,"epochVoteAccount":true,"nodePubkey":"B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD","lastVote":147,"activatedStake":42,"votePubkey":"3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"}],"delinquent":[{"commission":127,"epochVoteAccount":false,"nodePubkey":"6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f","lastVote":0,"activatedStake":0,"votePubkey":"CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"}]},"id":1}
 ```
 
 ---
