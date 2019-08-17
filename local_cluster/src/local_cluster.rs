@@ -508,19 +508,11 @@ impl LocalCluster {
                     (_, None) => Err(Error::new(ErrorKind::Other, "invalid vote account data")),
                 }
             }
-            (Ok(None), _) => Err(Error::new(
+            (Ok(None), _) | (Err(_), _) => Err(Error::new(
                 ErrorKind::Other,
                 "unable to retrieve stake account data",
             )),
-            (_, Ok(None)) => Err(Error::new(
-                ErrorKind::Other,
-                "unable to retrieve vote account data",
-            )),
-            (Err(_), _) => Err(Error::new(
-                ErrorKind::Other,
-                "unable to retrieve stake account data",
-            )),
-            (_, Err(_)) => Err(Error::new(
+            (_, Ok(None)) | (_, Err(_)) => Err(Error::new(
                 ErrorKind::Other,
                 "unable to retrieve vote account data",
             )),
