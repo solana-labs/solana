@@ -58,7 +58,7 @@ solana-logger = { path = "../logger", version = "0.18.0-pre1" }
 solana-merkle-tree = { path = "../merkle-tree", version = "0.18.0-pre1" }
 solana-metrics = { path = "../metrics", version = "0.18.0-pre1" }
 solana-measure = { path = "../measure", version = "0.18.0-pre1" }
-solana-netutil = { path = "../netutil", version = "0.18.0-pre1" }
+solana-netutil = { path = "../utils/netutil", version = "0.18.0-pre1" }
 solana-runtime = { path = "../runtime", version = "0.18.0-pre1" }
 solana-sdk = { path = "../sdk", version = "0.18.0-pre1" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre1" }
