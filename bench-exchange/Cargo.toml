@@ -32,7 +32,7 @@ solana-exchange-api = { path = "../programs/exchange_api", version = "0.18.0-pre
 solana-exchange-program = { path = "../programs/exchange_program", version = "0.18.0-pre1" }
 solana-logger = { path = "../logger", version = "0.18.0-pre1" }
 solana-metrics = { path = "../metrics", version = "0.18.0-pre1" }
-solana-netutil = { path = "../netutil", version = "0.18.0-pre1" }
+solana-netutil = { path = "../utils/netutil", version = "0.18.0-pre1" }
 solana-runtime = { path = "../runtime", version = "0.18.0-pre1" }
 solana-sdk = { path = "../sdk", version = "0.18.0-pre1" }
 untrusted = "0.7.0"

@@ -29,7 +29,7 @@ solana-budget-api = { path = "../programs/budget_api", version = "0.18.0-pre1" }
 solana-client = { path = "../client", version = "0.18.0-pre1" }
 solana-drone = { path = "../drone", version = "0.18.0-pre1" }
 solana-logger = { path = "../logger", version = "0.18.0-pre1" }
-solana-netutil = { path = "../netutil", version = "0.18.0-pre1" }
+solana-netutil = { path = "../utils/netutil", version = "0.18.0-pre1" }
 solana-runtime = { path = "../runtime", version = "0.18.0-pre1" }
 solana-sdk = { path = "../sdk", version = "0.18.0-pre1" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre1" }
