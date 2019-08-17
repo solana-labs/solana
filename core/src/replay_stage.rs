@@ -103,9 +103,7 @@ impl ReplayStage {
         let subscriptions = subscriptions.clone();
         let bank_forks = bank_forks.clone();
         let poh_recorder = poh_recorder.clone();
-
-        let my_pubkey: Pubkey = "9hhrtfrDFSeqkTeGf4EW85Q4ED42mP8Tv3YU6x3Ri5Ss"; // *my_pubkey;
-        let vote_account: Pubkey = "237U7NmeMeZuv7th647EPGYx7XN1gLE9V3cEY56Lb8tX";
+        let my_pubkey = *my_pubkey;
         let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
         // Start the replay stage loop
         let leader_schedule_cache = leader_schedule_cache.clone();
