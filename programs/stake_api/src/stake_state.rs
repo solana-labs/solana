@@ -473,7 +473,6 @@ where
         effective,
         activating,
         deactivating,
-        ..StakeHistoryEntry::default()
     }
 }
 
