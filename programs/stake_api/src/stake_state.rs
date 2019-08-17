@@ -115,7 +115,6 @@ impl Stake {
             //   summing up my entitlement
             loop {
                 if entry.deactivating == 0 {
-                    eprint!(" {} no deactivating", next_epoch);
                     break;
                 }
                 // I'm trying to get to zero, how much of the deactivation in stake
@@ -694,7 +693,7 @@ mod tests {
 
             // uncomment and add ! for fun with graphing
             //eprint("{:8} {:8} {:8} ", epoch, total_effective_stake, delta);
-            //(0..(total_effective_stake as usize / (stakes.len() * 5))).for_each(|_| eprint!("#"));
+            //(0..(total_effective_stake as usize / (stakes.len() * 5))).for_each(|_| eprint("#"));
             //eprintln();
 
             assert!(
