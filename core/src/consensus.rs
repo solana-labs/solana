@@ -75,6 +75,7 @@ impl Tower {
             if lamports == 0 {
                 continue;
             }
+            trace!("{} {} with stake {}", self.node_pubkey, key, lamports);
             let vote_state = VoteState::from(&account);
             if vote_state.is_none() {
                 datapoint_warn!(
