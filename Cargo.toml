@@ -51,6 +51,7 @@ members = [
     "sdk-c",
     "upload-perf",
     "validator-info",
+    "utils/fixed_buf",
     "vote-signer",
     "wallet",
 ]
