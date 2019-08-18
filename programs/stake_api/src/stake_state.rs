@@ -73,23 +73,15 @@ impl Default for Stake {
 }
 
 impl Stake {
-    pub fn is_bootstrap(&self) -> bool {
+    fn is_bootstrap(&self) -> bool {
         self.activation_epoch == std::u64::MAX
-    }
-
-    pub fn activating(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.stake_activating_and_deactivating(epoch, history).1
-    }
-
-    pub fn deactivating(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.stake_activating_and_deactivating(epoch, history).2
     }
 
     pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
         self.stake_activating_and_deactivating(epoch, history).0
     }
 
-    pub fn stake_activating_and_deactivating(
+    fn stake_activating_and_deactivating(
         &self,
         epoch: Epoch,
         history: Option<&StakeHistory>,
@@ -205,7 +197,7 @@ impl Stake {
     ///   * staker_rewards to be distributed
     ///   * new value for credits_observed in the stake
     //  returns None if there's no payout or if any deserved payout is < 1 lamport
-    pub fn calculate_rewards(
+    fn calculate_rewards(
         &self,
         point_value: f64,
         vote_state: &VoteState,
@@ -258,13 +250,13 @@ impl Stake {
     }
 
     fn new_bootstrap(stake: u64, voter_pubkey: &Pubkey, vote_state: &VoteState) -> Self {
-        Self {
+        Self::new(
             stake,
-            activation_epoch: std::u64::MAX,
-            voter_pubkey: *voter_pubkey,
-            credits_observed: vote_state.credits(),
-            ..Stake::default()
-        }
+            voter_pubkey,
+            vote_state,
+            std::u64::MAX,
+            &Config::default(),
+        )
     }
 
     fn new(
@@ -502,33 +494,35 @@ mod tests {
     use solana_sdk::system_program;
     use solana_vote_api::vote_state;
 
-    fn create_stake_history_from_stakes(
-        bootstrap: Option<u64>,
-        epochs: std::ops::Range<Epoch>,
-        stakes: &[Stake],
-    ) -> StakeHistory {
-        let mut stake_history = StakeHistory::default();
+    #[test]
+    fn test_stake_state_stake_from_fail() {
+        let mut stake_account = Account::new(0, std::mem::size_of::<StakeState>(), &id());
 
-        let bootstrap_stake = if let Some(bootstrap) = bootstrap {
-            vec![Stake {
+        stake_account
+            .set_state(&StakeState::default())
+            .expect("set_state");
+
+        assert_eq!(StakeState::stake_from(&stake_account), None);
+    }
+
+    #[test]
+    fn test_stake_is_bootstrap() {
+        assert_eq!(
+            Stake {
                 activation_epoch: std::u64::MAX,
-                stake: bootstrap,
                 ..Stake::default()
-            }]
-        } else {
-            vec![]
-        };
-
-        for epoch in epochs {
-            let entry = new_stake_history_entry(
-                epoch,
-                stakes.iter().chain(bootstrap_stake.iter()),
-                Some(&stake_history),
-            );
-            stake_history.add(epoch, entry);
-        }
-
-        stake_history
+            }
+            .is_bootstrap(),
+            true
+        );
+        assert_eq!(
+            Stake {
+                activation_epoch: 0,
+                ..Stake::default()
+            }
+            .is_bootstrap(),
+            false
+        );
     }
 
     #[test]
@@ -624,8 +618,172 @@ mod tests {
             .is_err());
     }
 
+    fn create_stake_history_from_stakes(
+        bootstrap: Option<u64>,
+        epochs: std::ops::Range<Epoch>,
+        stakes: &[Stake],
+    ) -> StakeHistory {
+        let mut stake_history = StakeHistory::default();
+
+        let bootstrap_stake = if let Some(bootstrap) = bootstrap {
+            vec![Stake {
+                activation_epoch: std::u64::MAX,
+                stake: bootstrap,
+                ..Stake::default()
+            }]
+        } else {
+            vec![]
+        };
+
+        for epoch in epochs {
+            let entry = new_stake_history_entry(
+                epoch,
+                stakes.iter().chain(bootstrap_stake.iter()),
+                Some(&stake_history),
+            );
+            stake_history.add(epoch, entry);
+        }
+
+        stake_history
+    }
+
     #[test]
-    fn test_stake_warmup() {
+    fn test_stake_activating_and_deactivating() {
+        let stake = Stake {
+            stake: 1_000,
+            activation_epoch: 0, // activating at zero
+            deactivation_epoch: 5,
+            ..Stake::default()
+        };
+
+        // save this off so stake.config.warmup_rate changes don't break this test
+        let increment = (1_000 as f64 * stake.config.warmup_rate) as u64;
+
+        let mut stake_history = StakeHistory::default();
+        // assert that this stake follows step function if there's no history
+        assert_eq!(
+            stake.stake_activating_and_deactivating(stake.activation_epoch, Some(&stake_history)),
+            (0, stake.stake, 0)
+        );
+        for epoch in stake.activation_epoch + 1..stake.deactivation_epoch {
+            assert_eq!(
+                stake.stake_activating_and_deactivating(epoch, Some(&stake_history)),
+                (stake.stake, 0, 0)
+            );
+        }
+        // assert that this stake is full deactivating
+        assert_eq!(
+            stake.stake_activating_and_deactivating(stake.deactivation_epoch, Some(&stake_history)),
+            (stake.stake, 0, stake.stake)
+        );
+        // assert that this stake is fully deactivated if there's no history
+        assert_eq!(
+            stake.stake_activating_and_deactivating(
+                stake.deactivation_epoch + 1,
+                Some(&stake_history)
+            ),
+            (0, 0, 0)
+        );
+
+        stake_history.add(
+            0u64, // entry for zero doesn't have my activating amount
+            StakeHistoryEntry {
+                effective: 1_000,
+                activating: 0,
+                ..StakeHistoryEntry::default()
+            },
+        );
+        // assert that this stake is broken, because above setup is broken
+        assert_eq!(
+            stake.stake_activating_and_deactivating(1, Some(&stake_history)),
+            (0, stake.stake, 0)
+        );
+
+        stake_history.add(
+            0u64, // entry for zero has my activating amount
+            StakeHistoryEntry {
+                effective: 1_000,
+                activating: 1_000,
+                ..StakeHistoryEntry::default()
+            },
+            // no entry for 1, so this stake gets shorted
+        );
+        // assert that this stake is broken, because above setup is broken
+        assert_eq!(
+            stake.stake_activating_and_deactivating(2, Some(&stake_history)),
+            (increment, stake.stake - increment, 0)
+        );
+
+        // start over, test deactivation edge cases
+        let mut stake_history = StakeHistory::default();
+
+        stake_history.add(
+            stake.deactivation_epoch, // entry for zero doesn't have my de-activating amount
+            StakeHistoryEntry {
+                effective: 1_000,
+                activating: 0,
+                ..StakeHistoryEntry::default()
+            },
+        );
+        // assert that this stake is broken, because above setup is broken
+        assert_eq!(
+            stake.stake_activating_and_deactivating(
+                stake.deactivation_epoch + 1,
+                Some(&stake_history)
+            ),
+            (stake.stake, 0, stake.stake) // says "I'm still waiting for deactivation"
+        );
+
+        // put in my initial deactivating amount, but don't put in an entry for next
+        stake_history.add(
+            stake.deactivation_epoch, // entry for zero has my de-activating amount
+            StakeHistoryEntry {
+                effective: 1_000,
+                deactivating: 1_000,
+                ..StakeHistoryEntry::default()
+            },
+        );
+        // assert that this stake is broken, because above setup is broken
+        assert_eq!(
+            stake.stake_activating_and_deactivating(
+                stake.deactivation_epoch + 2,
+                Some(&stake_history)
+            ),
+            (stake.stake - increment, 0, stake.stake - increment) // hung, should be lower
+        );
+    }
+
+    #[test]
+    fn test_stake_warmup_cooldown_sub_integer_moves() {
+        let stakes = [Stake {
+            stake: 2,
+            activation_epoch: 0, // activating at zero
+            deactivation_epoch: 5,
+            ..Stake::default()
+        }];
+        // give 2 epochs of cooldown
+        let epochs = 7;
+        // make boostrap stake smaller than warmup so warmup/cooldownn
+        //  increment is always smaller than 1
+        let bootstrap = (stakes[0].config.warmup_rate * 100.0 / 2.0) as u64;
+        let stake_history = create_stake_history_from_stakes(Some(bootstrap), 0..epochs, &stakes);
+        let mut max_stake = 0;
+        let mut min_stake = 2;
+
+        for epoch in 0..epochs {
+            let stake = stakes
+                .iter()
+                .map(|stake| stake.stake(epoch, Some(&stake_history)))
+                .sum::<u64>();
+            max_stake = max_stake.max(stake);
+            min_stake = min_stake.min(stake);
+        }
+        assert_eq!(max_stake, 2);
+        assert_eq!(min_stake, 0);
+    }
+
+    #[test]
+    fn test_stake_warmup_cooldown() {
         let stakes = [
             Stake {
                 // never deactivates
