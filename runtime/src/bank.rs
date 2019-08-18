@@ -2451,7 +2451,7 @@ mod tests {
 
         let leader_stake = Stake {
             stake: leader_lamports,
-            activated: std::u64::MAX, // bootstrap
+            activation_epoch: std::u64::MAX, // bootstrap
             ..Stake::default()
         };
 

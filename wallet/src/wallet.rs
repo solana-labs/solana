@@ -864,9 +864,15 @@ fn process_show_stake_account(
             if stake.voter_pubkey != Pubkey::default() {
                 println!("delegated voter pubkey: {}", stake.voter_pubkey);
             }
-            println!("stake activates at epoch: {}", stake.activated);
-            if stake.deactivated < std::u64::MAX {
-                println!("stake deactivates at epoch: {}", stake.deactivated);
+            println!(
+                "stake activates starting from epoch: {}",
+                stake.activation_epoch
+            );
+            if stake.deactivation_epoch < std::u64::MAX {
+                println!(
+                    "stake deactivates starting from epoch: {}",
+                    stake.deactivation_epoch
+                );
             }
             Ok("".to_string())
         }
