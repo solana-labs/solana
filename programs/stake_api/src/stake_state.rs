@@ -73,7 +73,7 @@ impl Default for Stake {
 }
 
 impl Stake {
-    pub fn is_bootstrap(&self) -> bool {
+    fn is_bootstrap(&self) -> bool {
         self.activation_epoch == std::u64::MAX
     }
 
@@ -81,7 +81,7 @@ impl Stake {
         self.stake_activating_and_deactivating(epoch, history).0
     }
 
-    pub fn stake_activating_and_deactivating(
+    fn stake_activating_and_deactivating(
         &self,
         epoch: Epoch,
         history: Option<&StakeHistory>,
@@ -197,7 +197,7 @@ impl Stake {
     ///   * staker_rewards to be distributed
     ///   * new value for credits_observed in the stake
     //  returns None if there's no payout or if any deserved payout is < 1 lamport
-    pub fn calculate_rewards(
+    fn calculate_rewards(
         &self,
         point_value: f64,
         vote_state: &VoteState,
@@ -250,13 +250,13 @@ impl Stake {
     }
 
     fn new_bootstrap(stake: u64, voter_pubkey: &Pubkey, vote_state: &VoteState) -> Self {
-        Self {
+        Self::new(
             stake,
-            activation_epoch: std::u64::MAX,
-            voter_pubkey: *voter_pubkey,
-            credits_observed: vote_state.credits(),
-            ..Stake::default()
-        }
+            voter_pubkey,
+            vote_state,
+            std::u64::MAX,
+            &Config::default(),
+        )
     }
 
     fn new(
