@@ -512,7 +512,8 @@ impl Accounts {
         res: &[Result<()>],
         loaded: &mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        let accounts_to_store = self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded);
+        let accounts_to_store =
+            self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded);
         self.accounts_db.store(fork, &accounts_to_store);
     }
 
