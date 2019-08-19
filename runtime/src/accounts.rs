@@ -512,19 +512,7 @@ impl Accounts {
         res: &[Result<()>],
         loaded: &mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-<<<<<<< HEAD
-        let accounts = self.collect_accounts(txs, txs_iteration_order, res, loaded);
-        // Only store credit-debit accounts immediately
-        let mut accounts_to_store: HashMap<&Pubkey, &Account> = HashMap::new();
-
-        for (pubkey, (account, is_debitable)) in accounts.iter() {
-            if *is_debitable {
-                accounts_to_store.insert(pubkey, account);
-            }
-        }
-=======
-        let accounts_to_store = self.collect_accounts_to_store(txs, res, loaded);
->>>>>>> a8b82a0b680b2716923f6f4b80c71f6a573a3d3b
+        let accounts_to_store = self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded);
         self.accounts_db.store(fork, &accounts_to_store);
     }
 
@@ -599,19 +587,13 @@ impl Accounts {
         txs_iteration_order: Option<&'a [usize]>,
         res: &'a [Result<()>],
         loaded: &'a mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
-<<<<<<< HEAD
-    ) -> HashMap<&'a Pubkey, (&'a Account, bool)> {
-        let mut accounts: HashMap<&Pubkey, (&Account, bool)> = HashMap::new();
+    ) -> Vec<(&'a Pubkey, &'a Account)> {
+        let mut accounts = Vec::new();
         for (i, (raccs, tx)) in loaded
             .iter_mut()
             .zip(OrderedIterator::new(txs, txs_iteration_order))
             .enumerate()
         {
-=======
-    ) -> Vec<(&'a Pubkey, &'a Account)> {
-        let mut accounts = Vec::new();
-        for (i, raccs) in loaded.iter_mut().enumerate() {
->>>>>>> a8b82a0b680b2716923f6f4b80c71f6a573a3d3b
             if res[i].is_err() || raccs.is_err() {
                 continue;
             }
@@ -1543,7 +1525,8 @@ mod tests {
                 },
             );
         }
-        let collected_accounts = accounts.collect_accounts_to_store(&txs, None, &loaders, &mut loaded);
+        let collected_accounts =
+            accounts.collect_accounts_to_store(&txs, None, &loaders, &mut loaded);
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()
