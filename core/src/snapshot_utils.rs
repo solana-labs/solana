@@ -58,8 +58,6 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_file: P,
     snapshot_path: Q,
 ) -> Result<SnapshotPackage> {
-    let slot = bank.slot();
-
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
 
@@ -74,7 +72,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     // Create a snapshot package
     info!(
         "Snapshot for bank: {} has {} account storage entries",
-        slot,
+        bank.slot(),
         account_storage_entries.len()
     );
 
