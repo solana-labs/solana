@@ -223,10 +223,10 @@ summed and used to divide the rewards portion of epoch inflation to arrive at a
 point value.  This value is recorded in the bank in a
 [sysvar](terminology.md#sysvar) that maps epochs to point values.
 
-During redemption, the stake program counts the points earned by the stake for each
-epoch, multiplies that by the epoch's point value and transfers the result from
-a rewards account into the stake and vote accounts according to the vote account's
-commission setting.
+During redemption, the stake program counts the points earned by the stake for
+each epoch, multiplies that by the epoch's point value, and transfers lamports in
+that amount from a rewards account into the stake and vote accounts according to
+the vote account's commission setting.
 
 ### Economics
 
@@ -245,18 +245,16 @@ stake.  Points earned is the product of vote credits and stake.
 ### Stake warmup, cooldown, withdrawal
 
 Stakes, once delegated, do not become effective immediately.  They must first
-pass through a warm up period.  During this period, changing at each epoch
-boundaries, some portion of the stake is considered "effective", the rest is
-considered "activating".
+pass through a warm up period.  During this period some portion of the stake is
+considered "effective", the rest is considered "activating". Changes occur on
+epoch boundaries.
 
 The stake program limits the rate of change to total network stake, reflected
-in the stake program's `config::warmup_rate`, by default 15% per epoch.
+in the stake program's `config::warmup_rate` (typically 15% per epoch).
 
-Therefore, the amount of stake that can be warmed up each epoch is a function of the
+The amount of stake that can be warmed up each epoch is a function of the
 previous epoch's total effective stake, total activating stake, and the stake
 program's configured warmup rate.
-
-Rewards are paid against the "effective" portion of the stake for that epoch.
 
 Cooldown works the same way.  Once a stake is deactivated, some part of it
 is considered "effective", and also "deactivating".  As the stake cools
@@ -264,6 +262,8 @@ down, it continues to earn rewards and be exposed to slashing, but it also
 becomes available for withdrawal.
 
 Bootstrap stakes are not subject to warmup.
+
+Rewards are paid against the "effective" portion of the stake for that epoch.
 
 #### Warmup example
 
