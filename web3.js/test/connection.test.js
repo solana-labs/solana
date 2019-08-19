@@ -210,15 +210,15 @@ test('get cluster nodes', async () => {
   }
 });
 
-test('getEpochVoteAccounts', async () => {
+test('getVoteAccounts', async () => {
   if (mockRpcEnabled) {
     console.log('non-live test skipped');
     return;
   }
 
   const connection = new Connection(url);
-  const voteAccounts = await connection.getEpochVoteAccounts();
-  expect(voteAccounts.length).toBeGreaterThan(0);
+  const voteAccounts = await connection.getVoteAccounts();
+  expect(voteAccounts.current.length).toBeGreaterThan(0);
 });
 
 test('confirm transaction - error', async () => {

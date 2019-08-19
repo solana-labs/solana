@@ -92,7 +92,7 @@ declare module '@solana/web3.js' {
     ): Promise<Array<[PublicKey, AccountInfo]>>;
     getBalance(publicKey: PublicKey): Promise<number>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
-    getEpochVoteAccounts(): Promise<Array<VoteAccountInfo>>;
+    getVoteAccounts(): Promise<VoteAccountStatus>;
     confirmTransaction(signature: TransactionSignature): Promise<boolean>;
     getSlot(): Promise<number>;
     getSlotLeader(): Promise<string>;
