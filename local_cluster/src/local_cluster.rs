@@ -257,8 +257,8 @@ impl LocalCluster {
         cluster
     }
 
-    pub fn exit(&self) {
-        for node in self.fullnodes.values() {
+    pub fn exit(&mut self) {
+        for node in self.fullnodes.values_mut() {
             node.exit();
         }
     }
@@ -587,7 +587,7 @@ impl Cluster for LocalCluster {
 
     fn restart_node(&mut self, pubkey: Pubkey) {
         // Shut down the fullnode
-        let node = self.fullnodes.remove(&pubkey).unwrap();
+        let mut node = self.fullnodes.remove(&pubkey).unwrap();
         node.exit();
         node.join().unwrap();
 

@@ -7,15 +7,15 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
-    hyper, AccessControlAllowOrigin, DomainsValidation, RequestMiddleware, RequestMiddlewareAction,
-    ServerBuilder,
+    hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
+    RequestMiddlewareAction, ServerBuilder,
 };
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Duration;
+use std::thread::{self, Builder, JoinHandle};
 use tokio::prelude::Future;
 
 pub struct JsonRpcService {
@@ -23,6 +23,8 @@ pub struct JsonRpcService {
 
     #[cfg(test)]
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by test_rpc_new()...
+
+    pub close_handle: Option<CloseHandle>,
 }
 
 #[derive(Default)]
@@ -101,9 +103,9 @@ impl JsonRpcService {
         let request_processor_ = request_processor.clone();
 
         let cluster_info = cluster_info.clone();
-        let exit_ = exit.clone();
         let ledger_path = ledger_path.to_path_buf();
 
+        let (close_handle_sender, close_handle_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
             .spawn(move || {
@@ -126,17 +128,26 @@ impl JsonRpcService {
                     return;
                 }
 
-                while !exit_.load(Ordering::Relaxed) {
-                    sleep(Duration::from_millis(100));
-                }
-                server.unwrap().close();
+                let server = server.unwrap();
+                close_handle_sender.send(server.close_handle()).unwrap();
+                server.wait();
             })
             .unwrap();
+
+        let close_handle = close_handle_receiver.recv().unwrap();
         Self {
             thread_hdl,
             #[cfg(test)]
             request_processor,
+            close_handle: Some(close_handle),
         }
+    }
+
+    pub fn exit(&mut self) {
+        self.close_handle
+            .take()
+            .expect("Already closed rpc service")
+            .close();
     }
 }
 
@@ -156,6 +167,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::KeypairUtil;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn test_rpc_new() {

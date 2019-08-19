@@ -320,11 +320,12 @@ impl Validator {
     }
 
     // Used for notifying many nodes in parallel to exit
-    pub fn exit(&self) {
+    pub fn exit(&mut self) {
         self.exit.store(true, Ordering::Relaxed);
+        self.rpc_service.as_mut().map(|r| r.exit());
     }
 
-    pub fn close(self) -> Result<()> {
+    pub fn close(mut self) -> Result<()> {
         self.exit();
         self.join()
     }
@@ -543,7 +544,7 @@ mod tests {
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
-        let validators: Vec<Validator> = (0..2)
+        let mut validators: Vec<Validator> = (0..2)
             .map(|_| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
@@ -569,7 +570,7 @@ mod tests {
             .collect();
 
         // Each validator can exit in parallel to speed many sequential calls to `join`
-        validators.iter().for_each(|v| v.exit());
+        validators.iter_mut().for_each(|v| v.exit());
         // While join is called sequentially, the above exit call notified all the
         // validators to exit from all their threads
         validators.into_iter().for_each(|validator| {
