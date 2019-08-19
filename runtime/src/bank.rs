@@ -674,7 +674,12 @@ impl Bank {
         }
     }
 
-    fn update_transaction_statuses(&self, txs: &[Transaction], txs_iteration_order: Option<&[usize]>, res: &[Result<()>]) {
+    fn update_transaction_statuses(
+        &self,
+        txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
+        res: &[Result<()>],
+    ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
         for (i, tx) in OrderedIterator::new(txs, txs_iteration_order).enumerate() {
             if Self::can_commit(&res[i]) && !tx.signatures.is_empty() {
@@ -1110,9 +1115,13 @@ impl Bank {
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let mut write_time = Measure::start("write_time");
-        self.rc
-            .accounts
-            .store_accounts(self.slot(), txs, txs_iteration_order, executed, loaded_accounts);
+        self.rc.accounts.store_accounts(
+            self.slot(),
+            txs,
+            txs_iteration_order,
+            executed,
+            loaded_accounts,
+        );
 
         self.update_cached_accounts(txs, txs_iteration_order, executed, loaded_accounts);
 
@@ -1361,7 +1370,11 @@ impl Bank {
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        for (i, (raccs, tx)) in loaded.iter().zip(OrderedIterator::new(txs, txs_iteration_order)).enumerate() {
+        for (i, (raccs, tx)) in loaded
+            .iter()
+            .zip(OrderedIterator::new(txs, txs_iteration_order))
+            .enumerate()
+        {
             if res[i].is_err() || raccs.is_err() {
                 continue;
             }

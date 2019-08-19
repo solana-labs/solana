@@ -599,7 +599,11 @@ impl Accounts {
         loaded: &'a mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) -> HashMap<&'a Pubkey, (&'a Account, bool)> {
         let mut accounts: HashMap<&Pubkey, (&Account, bool)> = HashMap::new();
-        for (i, (raccs, tx)) in loaded.iter_mut().zip(OrderedIterator::new(txs, txs_iteration_order)).enumerate() {
+        for (i, (raccs, tx)) in loaded
+            .iter_mut()
+            .zip(OrderedIterator::new(txs, txs_iteration_order))
+            .enumerate()
+        {
             if res[i].is_err() || raccs.is_err() {
                 continue;
             }
