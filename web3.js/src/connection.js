@@ -40,14 +40,30 @@ type ContactInfo = {
  * @typedef {Object} VoteAccountInfo
  * @property {string} votePubkey Public key of the vote account
  * @property {string} nodePubkey Identity public key of the node voting with this account
- * @property {string} stake The stake, in lamports, delegated to this vote account
- * @property {string} commission A 8-bit unsigned integer used as a fraction (commission/0xFF) for rewards payout
+ * @property {number} activatedStake The stake, in lamports, delegated to this vote account and activated
+ * @property {boolean} epochVoteAccount Whether the vote account is staked for this epoch
+ * @property {number} commission A 8-bit unsigned integer used as a fraction (commission/0xFF) for rewards payout
+ * @property {number} lastVote Most recent slot voted on by this vote account
  */
 type VoteAccountInfo = {
   votePubkey: string,
   nodePubkey: string,
-  stake: number,
+  activatedStake: number,
+  epochVoteAccount: boolean,
   commission: number,
+  lastVote: number,
+};
+
+/**
+ * A collection of cluster vote accounts
+ *
+ * @typedef {Object} VoteAccountStatus
+ * @property {Array<VoteAccountInfo>} current Active vote accounts
+ * @property {Array<VoteAccountInfo>} delinquent Inactive vote accounts
+ */
+type VoteAccountStatus = {
+  current: Array<VoteAccountInfo>,
+  delinquent: Array<VoteAccountInfo>,
 };
 
 function createRpcRequest(url): RpcRequest {
@@ -198,17 +214,31 @@ const GetClusterNodes_015 = jsonRpcResult(
 );
 
 /**
- * Expected JSON RPC response for the "getEpochVoteAccounts" message
+ * Expected JSON RPC response for the "getVoteAccounts" message
  */
-const GetEpochVoteAccounts = jsonRpcResult(
-  struct.list([
-    struct({
-      votePubkey: 'string',
-      nodePubkey: 'string',
-      stake: 'number',
-      commission: 'number',
-    }),
-  ]),
+const GetVoteAccounts = jsonRpcResult(
+  struct({
+    current: struct.list([
+      struct({
+        votePubkey: 'string',
+        nodePubkey: 'string',
+        activatedStake: 'number',
+        epochVoteAccount: 'boolean',
+        commission: 'number',
+        lastVote: 'number',
+      }),
+    ]),
+    delinquent: struct.list([
+      struct({
+        votePubkey: 'string',
+        nodePubkey: 'string',
+        activatedStake: 'number',
+        epochVoteAccount: 'boolean',
+        commission: 'number',
+        lastVote: 'number',
+      }),
+    ]),
+  }),
 );
 
 /**
@@ -529,9 +559,9 @@ export class Connection {
   /**
    * Return the list of nodes that are currently participating in the cluster
    */
-  async getEpochVoteAccounts(): Promise<Array<VoteAccountInfo>> {
-    const unsafeRes = await this._rpcRequest('getEpochVoteAccounts', []);
-    const res = GetEpochVoteAccounts(unsafeRes);
+  async getVoteAccounts(): Promise<VoteAccountStatus> {
+    const unsafeRes = await this._rpcRequest('getVoteAccounts', []);
+    const res = GetVoteAccounts(unsafeRes);
     //const res = unsafeRes;
     if (res.error) {
       throw new Error(res.error.message);
