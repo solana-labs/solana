@@ -509,6 +509,7 @@ impl BankingStage {
         if num_to_commit != 0 {
             bank.commit_transactions(
                 txs,
+                None,
                 &mut loaded_accounts,
                 &results,
                 tx_count,
