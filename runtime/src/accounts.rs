@@ -510,10 +510,11 @@ impl Accounts {
         &self,
         fork: Fork,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         res: &[Result<()>],
         loaded: &mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        let accounts = self.collect_accounts(txs, res, loaded);
+        let accounts = self.collect_accounts(txs, txs_iteration_order, res, loaded);
         // Only store credit-debit accounts immediately
         let mut accounts_to_store: HashMap<&Pubkey, &Account> = HashMap::new();
 
@@ -593,16 +594,17 @@ impl Accounts {
     fn collect_accounts<'a>(
         &self,
         txs: &'a [Transaction],
+        txs_iteration_order: Option<&'a [usize]>,
         res: &'a [Result<()>],
         loaded: &'a mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) -> HashMap<&'a Pubkey, (&'a Account, bool)> {
         let mut accounts: HashMap<&Pubkey, (&Account, bool)> = HashMap::new();
-        for (i, raccs) in loaded.iter_mut().enumerate() {
+        for (i, (raccs, tx)) in loaded.iter_mut().zip(OrderedIterator::new(txs, txs_iteration_order)).enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
             }
 
-            let message = &txs[i].message();
+            let message = &tx.message();
             let acc = raccs.as_mut().unwrap();
             for (((i, key), account), credit) in message
                 .account_keys

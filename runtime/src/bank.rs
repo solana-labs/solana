@@ -674,9 +674,9 @@ impl Bank {
         }
     }
 
-    fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
+    fn update_transaction_statuses(&self, txs: &[Transaction], txs_iteration_order: Option<&[usize]>, res: &[Result<()>]) {
         let mut status_cache = self.src.status_cache.write().unwrap();
-        for (i, tx) in txs.iter().enumerate() {
+        for (i, tx) in OrderedIterator::new(txs, txs_iteration_order).enumerate() {
             if Self::can_commit(&res[i]) && !tx.signatures.is_empty() {
                 status_cache.insert(
                     &tx.message().recent_blockhash,
@@ -1043,12 +1043,12 @@ impl Bank {
     fn filter_program_errors_and_collect_fee(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
-        let results = txs
-            .iter()
+        let results = OrderedIterator::new(txs, txs_iteration_order)
             .zip(executed.iter())
             .map(|(tx, res)| {
                 let fee_calculator = hash_queue
@@ -1083,6 +1083,7 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         loaded_accounts: &mut [Result<(
             InstructionAccounts,
             InstructionLoaders,
@@ -1111,15 +1112,15 @@ impl Bank {
         let mut write_time = Measure::start("write_time");
         self.rc
             .accounts
-            .store_accounts(self.slot(), txs, executed, loaded_accounts);
+            .store_accounts(self.slot(), txs, txs_iteration_order, executed, loaded_accounts);
 
-        self.update_cached_accounts(txs, executed, loaded_accounts);
+        self.update_cached_accounts(txs, txs_iteration_order, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         write_time.stop();
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
-        self.update_transaction_statuses(txs, &executed);
-        self.filter_program_errors_and_collect_fee(txs, executed)
+        self.update_transaction_statuses(txs, txs_iteration_order, &executed);
+        self.filter_program_errors_and_collect_fee(txs, txs_iteration_order, executed)
     }
 
     /// Process a batch of transactions.
@@ -1136,6 +1137,7 @@ impl Bank {
 
         self.commit_transactions(
             txs,
+            txs_iteration_order,
             &mut loaded_accounts,
             &executed,
             tx_count,
@@ -1355,15 +1357,16 @@ impl Bank {
     fn update_cached_accounts(
         &self,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        for (i, raccs) in loaded.iter().enumerate() {
+        for (i, (raccs, tx)) in loaded.iter().zip(OrderedIterator::new(txs, txs_iteration_order)).enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
             }
 
-            let message = &txs[i].message();
+            let message = &tx.message();
             let acc = raccs.as_ref().unwrap();
 
             for (pubkey, account) in
