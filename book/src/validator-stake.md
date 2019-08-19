@@ -37,5 +37,5 @@ rewards.
 Note that a stake account may only be used once, so after deactivation, use the
 wallet's `withdraw-stake` command to recover the previously staked lamports.
 
-Be sure and redeem your credits before withdrawing all your lamports.  
+Be sure and redeem your credits before withdrawing all your lamports.
 Once the account is fully withdrawn, the account is destroyed.
