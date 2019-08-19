@@ -315,9 +315,7 @@ impl Accounts {
 
     /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
-        let mut accounts = HashMap::new();
-        accounts.insert(pubkey, account);
-        self.accounts_db.store(fork, &accounts);
+        self.accounts_db.store(fork, &[(pubkey, account)]);
     }
 
     fn get_read_access_credit_only<'a>(
@@ -507,15 +505,7 @@ impl Accounts {
         res: &[Result<()>],
         loaded: &mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        let accounts = self.collect_accounts(txs, res, loaded);
-        // Only store credit-debit accounts immediately
-        let mut accounts_to_store: HashMap<&Pubkey, &Account> = HashMap::new();
-
-        for (pubkey, (account, is_debitable)) in accounts.iter() {
-            if *is_debitable {
-                accounts_to_store.insert(pubkey, account);
-            }
-        }
+        let accounts_to_store = self.collect_accounts_to_store(txs, res, loaded);
         self.accounts_db.store(fork, &accounts_to_store);
     }
 
@@ -584,13 +574,13 @@ impl Accounts {
         }
     }
 
-    fn collect_accounts<'a>(
+    fn collect_accounts_to_store<'a>(
         &self,
         txs: &'a [Transaction],
         res: &'a [Result<()>],
         loaded: &'a mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
-    ) -> HashMap<&'a Pubkey, (&'a Account, bool)> {
-        let mut accounts: HashMap<&Pubkey, (&Account, bool)> = HashMap::new();
+    ) -> Vec<(&'a Pubkey, &'a Account)> {
+        let mut accounts = Vec::new();
         for (i, raccs) in loaded.iter_mut().enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
@@ -605,22 +595,20 @@ impl Accounts {
                 .zip(acc.0.iter())
                 .zip(acc.2.iter())
             {
-                if !accounts.contains_key(key) {
-                    accounts.insert(key, (account, message.is_debitable(i)));
+                if message.is_debitable(i) {
+                    accounts.push((key, account));
                 }
                 if *credit > 0 {
                     // Increment credit-only account balance Atomic
-                    if accounts.get_mut(key).is_some() {
-                        self.credit_only_account_locks
-                            .read()
-                            .unwrap()
-                            .as_ref()
-                            .expect("Collect accounts should only be called before a commit, and credit only account locks should exist before a commit")
-                            .get(key)
-                            .unwrap()
-                            .credits
-                            .fetch_add(*credit, Ordering::Relaxed);
-                    }
+                    self.credit_only_account_locks
+                        .read()
+                        .unwrap()
+                        .as_ref()
+                        .expect("Collect accounts should only be called before a commit, and credit only account locks should exist before a commit")
+                        .get(key)
+                        .unwrap()
+                        .credits
+                        .fetch_add(*credit, Ordering::Relaxed);
                 }
             }
         }
@@ -1453,7 +1441,7 @@ mod tests {
     }
 
     #[test]
-    fn test_collect_accounts() {
+    fn test_collect_accounts_to_store() {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let pubkey = Pubkey::new_rand();
@@ -1519,19 +1507,17 @@ mod tests {
                 },
             );
         }
-        let collected_accounts = accounts.collect_accounts(&txs, &loaders, &mut loaded);
-        assert_eq!(collected_accounts.len(), 3);
-        assert!(collected_accounts.contains_key(&keypair0.pubkey()));
-        assert!(collected_accounts.contains_key(&keypair1.pubkey()));
-        assert!(collected_accounts.contains_key(&pubkey));
+        let collected_accounts = accounts.collect_accounts_to_store(&txs, &loaders, &mut loaded);
+        assert_eq!(collected_accounts.len(), 2);
+        assert!(collected_accounts
+            .iter()
+            .find(|(pubkey, _account)| *pubkey == &keypair0.pubkey())
+            .is_some());
+        assert!(collected_accounts
+            .iter()
+            .find(|(pubkey, _account)| *pubkey == &keypair1.pubkey())
+            .is_some());
 
-        let credit_debit_account0 = collected_accounts.get(&keypair0.pubkey()).unwrap();
-        assert_eq!(credit_debit_account0.1, true);
-        let credit_debit_account1 = collected_accounts.get(&keypair1.pubkey()).unwrap();
-        assert_eq!(credit_debit_account1.1, true);
-
-        let credit_only_account = collected_accounts.get(&pubkey).unwrap();
-        assert_eq!(credit_only_account.1, false);
         // Ensure credit_only_lock reflects credits from both accounts: 2 + 3 = 5
         let credit_only_locks = accounts.credit_only_account_locks.read().unwrap();
         let credit_only_locks = credit_only_locks.as_ref().unwrap();
