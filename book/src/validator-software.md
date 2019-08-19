@@ -57,7 +57,7 @@ If building for CUDA (Linux only), fetch the perf-libs first then include the
 `cuda` feature flag when building:
 ```bash
 $ ./fetch-perf-libs.sh
-$ source /home/mvines/ws/solana/target/perf-libs/env.sh
+$ source target/perf-libs/env.sh
 $ ./scripts/cargo-install-all.sh . cuda
 $ export PATH=$PWD/bin:$PATH
 ```
