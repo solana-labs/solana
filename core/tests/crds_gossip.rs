@@ -399,17 +399,23 @@ fn network_run_pull(
                     .map(|f| f.filter.bits.len() as usize / 8)
                     .sum::<usize>();
                 bytes += serialized_size(&caller_info).unwrap() as usize;
+                let filters = filters
+                    .into_iter()
+                    .map(|f| (caller_info.clone(), f))
+                    .collect();
                 let rsp = network
                     .get(&to)
                     .map(|node| {
                         let mut rsp = vec![];
-                        for filter in filters {
-                            rsp.append(&mut node.lock().unwrap().process_pull_request(
-                                caller_info.clone(),
-                                filter,
-                                now,
-                            ));
-                        }
+                        rsp.append(
+                            &mut node
+                                .lock()
+                                .unwrap()
+                                .process_pull_requests(filters, now)
+                                .into_iter()
+                                .flatten()
+                                .collect(),
+                        );
                         rsp
                     })
                     .unwrap();

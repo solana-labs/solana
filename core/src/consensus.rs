@@ -75,6 +75,7 @@ impl Tower {
             if lamports == 0 {
                 continue;
             }
+            trace!("{} {} with stake {}", self.node_pubkey, key, lamports);
             let vote_state = VoteState::from(&account);
             if vote_state.is_none() {
                 datapoint_warn!(
@@ -166,6 +167,7 @@ impl Tower {
     }
 
     pub fn record_vote(&mut self, slot: u64, hash: Hash) -> Option<u64> {
+        trace!("{} record_vote for {}", self.node_pubkey, slot);
         let root_slot = self.lockouts.root_slot;
         let vote = Vote { slot, hash };
         self.lockouts.process_vote_unchecked(&vote);
@@ -344,6 +346,12 @@ impl Tower {
             if let Some((_stake, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
                 let vote_state = VoteState::deserialize(&vote_account.data)
                     .expect("vote_account isn't a VoteState?");
+                trace!(
+                    "{} lockouts initialized to {:?}",
+                    self.node_pubkey,
+                    vote_state
+                );
+
                 assert_eq!(
                     vote_state.node_pubkey, self.node_pubkey,
                     "vote account's node_pubkey doesn't match",

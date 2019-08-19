@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#
 # Contains the public keys for users that should automatically be granted access
 # to ALL testnets and datacenter nodes.
 #
@@ -8,6 +8,7 @@
 # 3. Add an entry to SOLANA_PUBKEYS with the contents of ~/.ssh/id-solana-testnet.pub
 #
 # If you need multiple keys with your username, repeatedly add your username to SOLANA_USERS, once per key
+#
 
 SOLANA_USERS=()
 SOLANA_PUBKEYS=()

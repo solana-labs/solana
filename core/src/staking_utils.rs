@@ -166,7 +166,7 @@ pub(crate) mod tests {
         let stake = BOOTSTRAP_LEADER_LAMPORTS * 100;
         let leader_stake = Stake {
             stake: BOOTSTRAP_LEADER_LAMPORTS,
-            activated: std::u64::MAX, // mark as bootstrap
+            activation_epoch: std::u64::MAX, // mark as bootstrap
             ..Stake::default()
         };
 
@@ -200,7 +200,7 @@ pub(crate) mod tests {
         // simulated stake
         let other_stake = Stake {
             stake,
-            activated: bank.epoch(),
+            activation_epoch: bank.epoch(),
             ..Stake::default()
         };
 

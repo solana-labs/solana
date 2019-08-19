@@ -12,7 +12,7 @@ pub use self::disk::Disk;
 pub use self::memory::Memory;
 
 pub trait Mapper: std::fmt::Debug + Send + Sync {
-    fn make_table(&self, kind: Kind, func: &mut FnMut(Writer, Writer)) -> Result<SSTable>;
+    fn make_table(&self, kind: Kind, func: &mut dyn FnMut(Writer, Writer)) -> Result<SSTable>;
     fn rotate_tables(&self) -> Result<()>;
     fn empty_trash(&self) -> Result<()>;
     fn active_set(&self) -> Result<Vec<SSTable>>;

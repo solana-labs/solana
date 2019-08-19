@@ -191,21 +191,22 @@ impl CrdsGossipPull {
     }
 
     /// process a pull request and create a response
-    pub fn process_pull_request(
+    pub fn process_pull_requests(
         &mut self,
         crds: &mut Crds,
-        caller: CrdsValue,
-        filter: CrdsFilter,
+        requests: Vec<(CrdsValue, CrdsFilter)>,
         now: u64,
-    ) -> Vec<CrdsValue> {
-        let rv = self.filter_crds_values(crds, &filter);
-        let key = caller.label().pubkey();
-        let old = crds.insert(caller, now);
-        if let Some(val) = old.ok().and_then(|opt| opt) {
-            self.purged_values
-                .push_back((val.value_hash, val.local_timestamp));
-        }
-        crds.update_record_timestamp(&key, now);
+    ) -> Vec<Vec<CrdsValue>> {
+        let rv = self.filter_crds_values(crds, &requests);
+        requests.into_iter().for_each(|(caller, _)| {
+            let key = caller.label().pubkey();
+            let old = crds.insert(caller, now);
+            if let Some(val) = old.ok().and_then(|opt| opt) {
+                self.purged_values
+                    .push_back((val.value_hash, val.local_timestamp));
+            }
+            crds.update_record_timestamp(&key, now);
+        });
         rv
     }
     /// process a pull response
@@ -251,13 +252,18 @@ impl CrdsGossipPull {
         filters
     }
     /// filter values that fail the bloom filter up to max_bytes
-    fn filter_crds_values(&self, crds: &Crds, filter: &CrdsFilter) -> Vec<CrdsValue> {
-        let mut ret = vec![];
+    fn filter_crds_values(
+        &self,
+        crds: &Crds,
+        filters: &[(CrdsValue, CrdsFilter)],
+    ) -> Vec<Vec<CrdsValue>> {
+        let mut ret = vec![vec![]; filters.len()];
         for v in crds.table.values() {
-            if filter.contains(&v.value_hash) {
-                continue;
-            }
-            ret.push(v.value.clone());
+            filters.iter().enumerate().for_each(|(i, (_, filter))| {
+                if !filter.contains(&v.value_hash) {
+                    ret[i].push(v.value.clone());
+                }
+            });
         }
         ret
     }
@@ -395,10 +401,9 @@ mod test {
         let mut dest_crds = Crds::default();
         let mut dest = CrdsGossipPull::default();
         let (_, filters, caller) = req.unwrap();
-        for filter in filters.into_iter() {
-            let rsp = dest.process_pull_request(&mut dest_crds, caller.clone(), filter, 1);
-            assert!(rsp.is_empty());
-        }
+        let filters = filters.into_iter().map(|f| (caller.clone(), f)).collect();
+        let rsp = dest.process_pull_requests(&mut dest_crds, filters, 1);
+        assert!(rsp.iter().all(|rsp| rsp.is_empty()));
         assert!(dest_crds.lookup(&caller.label()).is_some());
         assert_eq!(
             dest_crds
@@ -455,21 +460,20 @@ mod test {
                 PACKET_DATA_SIZE,
             );
             let (_, filters, caller) = req.unwrap();
-            let mut rsp = vec![];
-            for filter in filters {
-                rsp = dest.process_pull_request(&mut dest_crds, caller.clone(), filter, 0);
-                // if there is a false positive this is empty
-                // prob should be around 0.1 per iteration
-                if rsp.is_empty() {
-                    continue;
-                }
+            let filters = filters.into_iter().map(|f| (caller.clone(), f)).collect();
+            let mut rsp = dest.process_pull_requests(&mut dest_crds, filters, 0);
+            // if there is a false positive this is empty
+            // prob should be around 0.1 per iteration
+            if rsp.is_empty() {
+                continue;
             }
 
             if rsp.is_empty() {
                 continue;
             }
             assert_eq!(rsp.len(), 1);
-            let failed = node.process_pull_response(&mut node_crds, &node_pubkey, rsp, 1);
+            let failed =
+                node.process_pull_response(&mut node_crds, &node_pubkey, rsp.pop().unwrap(), 1);
             assert_eq!(failed, 0);
             assert_eq!(
                 node_crds

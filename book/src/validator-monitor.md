@@ -23,7 +23,7 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
 ## Check Vote Activity
-The vote pubkey for the validator can also be found by running:
+The vote pubkey for the validator can be found by running:
 ```bash
 $ solana-keygen pubkey ~/validator-vote-keypair.json
 ```
@@ -38,7 +38,7 @@ $ solana-wallet show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 Your lamport balance should decrease by the transaction fee amount as your
 validator submits votes, and increase after serving as the leader:
 ```bash
-$ solana-wallet --keypair ~/validator-keypair.json
+$ solana-wallet balance
 ```
 
 ## Check Slot Number
@@ -68,8 +68,8 @@ cluster, as well as the health of the cluster:
 ```bash
 # Similar to solana-gossip, you should see your validator in the list of cluster nodes
 $ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getClusterNodes"}' http://testnet.solana.com:8899
-# If your validator is properly staked and voting, it should appear in the list of epoch vote accounts
-$ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://testnet.solana.com:8899
+# If your validator is properly voting, it should appear in the list of `current` vote accounts. If staked, `stake` should be > 0
+$ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://testnet.solana.com:8899
 # Returns the current leader schedule
 $ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://testnet.solana.com:8899
 # Returns info about the current epoch. slotIndex should progress on subsequent calls.

@@ -133,7 +133,7 @@ impl Default for WalletConfig {
             command: WalletCommand::Balance(Pubkey::default()),
             drone_host: None,
             drone_port: DRONE_PORT,
-            json_rpc_url: "http://testnet.solana.com:8899".to_string(),
+            json_rpc_url: "http://127.0.0.1:8899".to_string(),
             keypair: Keypair::new(),
             rpc_client: None,
         }
@@ -291,7 +291,7 @@ pub fn parse_command(
         }
         ("deactivate-stake", Some(matches)) => {
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
-            let vote_account_pubkey = value_of(matches, "vote_account_pubkey").unwrap();
+            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
             Ok(WalletCommand::DeactivateStake(
                 stake_account_keypair,
                 vote_account_pubkey,
@@ -503,19 +503,6 @@ fn process_airdrop(
         .retry_get_balance(&config.keypair.pubkey(), 5)?
         .unwrap_or(previous_balance);
 
-    if current_balance < previous_balance {
-        Err(format!(
-            "Airdrop failed: current_balance({}) < previous_balance({})",
-            current_balance, previous_balance
-        ))?;
-    }
-    if current_balance - previous_balance < lamports {
-        Err(format!(
-            "Airdrop failed: Account balance increased by {} instead of {}",
-            current_balance - previous_balance,
-            lamports
-        ))?;
-    }
     Ok(format!("Your balance is: {:?}", current_balance))
 }
 
@@ -562,6 +549,10 @@ fn process_create_vote_account(
     check_unique_pubkeys(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
         (node_pubkey, "node_pubkey".to_string()),
+    )?;
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (vote_account_pubkey, "vote_account_pubkey".to_string()),
     )?;
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
@@ -734,6 +725,13 @@ fn process_delegate_stake(
     lamports: u64,
     force: bool,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (
+            &stake_account_keypair.pubkey(),
+            "stake_account_keypair".to_string(),
+        ),
+    )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ixs = stake_instruction::create_stake_account_and_delegate_stake(
@@ -866,9 +864,15 @@ fn process_show_stake_account(
             if stake.voter_pubkey != Pubkey::default() {
                 println!("delegated voter pubkey: {}", stake.voter_pubkey);
             }
-            println!("stake activates at epoch: {}", stake.activated);
-            if stake.deactivated < std::u64::MAX {
-                println!("stake deactivates at epoch: {}", stake.deactivated);
+            println!(
+                "stake activates starting from epoch: {}",
+                stake.activation_epoch
+            );
+            if stake.deactivation_epoch < std::u64::MAX {
+                println!(
+                    "stake deactivates starting from epoch: {}",
+                    stake.deactivation_epoch
+                );
             }
             Ok("".to_string())
         }
@@ -887,6 +891,13 @@ fn process_create_replicator_storage_account(
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (
+            &storage_account_pubkey,
+            "storage_account_pubkey".to_string(),
+        ),
+    )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_replicator_storage_account(
         &config.keypair.pubkey(),
@@ -907,6 +918,13 @@ fn process_create_validator_storage_account(
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (
+            &storage_account_pubkey,
+            "storage_account_pubkey".to_string(),
+        ),
+    )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_validator_storage_account(
         &config.keypair.pubkey(),
@@ -1053,6 +1071,10 @@ fn process_pay(
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: Option<Pubkey>,
 ) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (to, "to".to_string()),
+    )?;
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     if timestamp == None && *witnesses == None {
@@ -1836,7 +1858,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The vote account to which the stake is currently delegated"),
                 )
         )
@@ -2627,7 +2649,7 @@ mod tests {
 
         // Need airdrop cases
         config.command = WalletCommand::Airdrop(50);
-        assert!(process_command(&config).is_err());
+        assert!(process_command(&config).is_ok());
 
         config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);

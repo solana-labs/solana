@@ -397,7 +397,7 @@ fn main() {
             entrypoint_addr,
             &gossip_addr,
             &ledger_path,
-            !matches.is_present("no_snapshot_fetch"),
+            matches.is_present("no_snapshot_fetch"),
         )
         .unwrap_or_else(|err| {
             eprintln!("Failed to download ledger: {}", err);

@@ -1,30 +1,31 @@
-use crate::blocktree::Blocktree;
 /// Cluster independant integration tests
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
-use crate::cluster_info::FULLNODE_PORT_RANGE;
-use crate::consensus::VOTE_THRESHOLD_DEPTH;
-use crate::contact_info::ContactInfo;
-use crate::entry::{Entry, EntrySlice};
-use crate::gossip_service::discover_cluster;
+use solana::{
+    blocktree::Blocktree,
+    cluster_info::FULLNODE_PORT_RANGE,
+    consensus::VOTE_THRESHOLD_DEPTH,
+    contact_info::ContactInfo,
+    entry::{Entry, EntrySlice},
+    gossip_service::discover_cluster,
+};
 use solana_client::thin_client::create_client;
 use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
-use solana_sdk::client::SyncClient;
-use solana_sdk::hash::Hash;
-use solana_sdk::poh_config::PohConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction;
-use solana_sdk::timing::{
-    duration_as_ms, DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
-    NUM_CONSECUTIVE_LEADER_SLOTS,
+use solana_sdk::{
+    client::SyncClient,
+    hash::Hash,
+    poh_config::PohConfig,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil, Signature},
+    system_transaction,
+    timing::{
+        duration_as_ms, DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
+        NUM_CONSECUTIVE_LEADER_SLOTS,
+    },
+    transport::TransportError,
 };
-use solana_sdk::transport::TransportError;
-use std::collections::HashSet;
-use std::path::Path;
-use std::thread::sleep;
-use std::time::Duration;
+use std::{collections::HashSet, path::Path, thread::sleep, time::Duration};
 
 const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_NUM_TICKS_PER_SECOND;
 
@@ -173,6 +174,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     info!("done sleeping for 2 fortnights");
     for ingress_node in &cluster_nodes {
         if ingress_node.id == entry_point_info.id {
+            info!("ingress_node.id == entry_point_info.id, continuing...");
             continue;
         }
 
@@ -216,12 +218,14 @@ pub fn kill_entry_and_spend_and_verify_rest(
                     Ok(sig) => sig,
                 }
             };
-
+            info!("poll_all_nodes_for_signature()");
             match poll_all_nodes_for_signature(&entry_point_info, &cluster_nodes, &sig, confs) {
                 Err(e) => {
+                    info!("poll_all_nodes_for_signature() failed {:?}", e);
                     result = Err(e);
                 }
                 Ok(()) => {
+                    info!("poll_all_nodes_for_signature() succeeded, done.");
                     break;
                 }
             }

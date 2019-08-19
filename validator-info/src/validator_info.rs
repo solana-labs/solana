@@ -18,7 +18,7 @@ use std::process::exit;
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
 pub const MAX_LONG_FIELD_LENGTH: usize = 300;
 pub const MAX_VALIDATOR_INFO: u64 = 576;
-pub const JSON_RPC_URL: &str = "http://testnet.solana.com:8899";
+pub const JSON_RPC_URL: &str = "http://127.0.0.1:8899";
 
 // Config account key: Va1idator1nfo111111111111111111111111111111
 pub const REGISTER_CONFIG_KEY: [u8; 32] = [
@@ -235,7 +235,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help(&format!(
                             "Validator description, max characters: {}",
                             MAX_LONG_FIELD_LENGTH
-                        )),
+                        ))
+                )
+                .arg(
+                    Arg::with_name("force")
+                        .long("force")
+                        .takes_value(false)
+                        .hidden(true) // Don't document this argument to discourage its use
+                        .help("Override keybase username validity check"),
                 ),
         )
         .subcommand(
@@ -311,7 +318,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let keys = vec![(id(), false), (validator_keypair.pubkey(), true)];
             let validator_info = parse_args(&matches);
             if let Some(string) = validator_info.get("keybaseUsername") {
-                verify_keybase(&validator_keypair.pubkey(), &string)?;
+                let result = verify_keybase(&validator_keypair.pubkey(), &string);
+                if result.is_err() {
+                    if matches.is_present("force") {
+                        println!("--force supplied, ignoring: {:?}", result);
+                    } else {
+                        result?;
+                    }
+                }
             }
             let validator_string = serde_json::to_string(&validator_info)?;
             let validator_info = ValidatorInfo {

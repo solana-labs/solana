@@ -145,14 +145,13 @@ impl CrdsGossip {
         self.pull.mark_pull_request_creation_time(from, now)
     }
     /// process a pull request and create a response
-    pub fn process_pull_request(
+    pub fn process_pull_requests(
         &mut self,
-        caller: CrdsValue,
-        filter: CrdsFilter,
+        filters: Vec<(CrdsValue, CrdsFilter)>,
         now: u64,
-    ) -> Vec<CrdsValue> {
+    ) -> Vec<Vec<CrdsValue>> {
         self.pull
-            .process_pull_request(&mut self.crds, caller, filter, now)
+            .process_pull_requests(&mut self.crds, filters, now)
     }
     /// process a pull response
     pub fn process_pull_response(

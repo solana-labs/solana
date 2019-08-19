@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 pub const RPC_PORT: u16 = 8989;
 
-fn main() -> Result<(), Box<error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     solana_metrics::set_panic_hook("vote-signer");
 
     let matches = App::new(crate_name!())

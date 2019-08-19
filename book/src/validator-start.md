@@ -22,6 +22,8 @@ for more detail on cluster activity.
 Sanity check that you are able to interact with the cluster by receiving a small
 airdrop of lamports from the testnet drone:
 ```bash
+$ solana-wallet set --url http://testnet.solana.com:8899
+$ solana-wallet get
 $ solana-wallet airdrop 123
 $ solana-wallet balance
 ```
@@ -34,20 +36,38 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
 ## Start your Validator
-Now create an identity keypair for your validator by running:
+Create an identity keypair for your validator by running:
 ```bash
 $ solana-keygen new -o ~/validator-keypair.json
 ```
-and airdrop yourself some lamports to get started:
+
+### Wallet Configuration
+You can set solana-wallet configuration to use your validator keypair for all
+following commands:
+```bash
+$ solana-wallet set --keypair ~/validator-keypair.json
+```
+
+**All following solana-wallet commands assume you have set `--keypair` config to
+**your validator identity keypair.**
+If you haven't, you will need to add the `--keypair` argument to each command, like:
 ```bash
 $ solana-wallet --keypair ~/validator-keypair.json airdrop 1000
+```
+(You can always override the set configuration by explicitly passing the
+`--keypair` argument with a command.)
+
+### Validator Start
+Airdrop yourself some lamports to get started:
+```bash
+$ solana-wallet airdrop 1000
 ```
 
 Your validator will need a vote account.  Create it now with the following
 commands:
 ```bash
 $ solana-keygen new -o ~/validator-vote-keypair.json
-$ solana-wallet --keypair ~/validator-keypair.json create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json 1
+$ solana-wallet create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json 1
 ```
 
 Then use one of the following commands, depending on your installation
@@ -55,18 +75,18 @@ choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
-$ validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block --entrypoint testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run validator.sh -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ solana-install run validator.sh -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block --entrypoint testnet.solana.com
 ```
 
 If you built from source:
 ```bash
-$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --poll-for-new-genesis-block testnet.solana.com
+$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --poll-for-new-genesis-block --entrypoint testnet.solana.com
 ```
 
 ### Enabling CUDA

@@ -1,34 +1,37 @@
-use solana::blocktree::create_new_tmp_ledger;
-use solana::cluster::Cluster;
-use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
-use solana::contact_info::ContactInfo;
-use solana::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
-use solana::gossip_service::discover_cluster;
-use solana::replicator::Replicator;
-use solana::service::Service;
-use solana::validator::{Validator, ValidatorConfig};
-use solana_client::thin_client::create_client;
-use solana_client::thin_client::ThinClient;
-use solana_sdk::client::SyncClient;
-use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::message::Message;
-use solana_sdk::poh_config::PohConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction;
-use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
-use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT};
-use solana_sdk::transaction::Transaction;
-use solana_stake_api::stake_instruction;
-use solana_storage_api::storage_contract;
-use solana_storage_api::storage_instruction;
-use solana_vote_api::vote_instruction;
-use solana_vote_api::vote_state::VoteState;
-use std::collections::HashMap;
-use std::fs::remove_dir_all;
-use std::io::{Error, ErrorKind, Result};
-use std::path::PathBuf;
-use std::sync::Arc;
+use solana::{
+    blocktree::create_new_tmp_ledger,
+    cluster::Cluster,
+    cluster_info::{Node, FULLNODE_PORT_RANGE},
+    contact_info::ContactInfo,
+    genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
+    gossip_service::discover_cluster,
+    replicator::Replicator,
+    service::Service,
+    validator::{Validator, ValidatorConfig},
+};
+use solana_client::thin_client::{create_client, ThinClient};
+use solana_sdk::{
+    client::SyncClient,
+    genesis_block::GenesisBlock,
+    message::Message,
+    poh_config::PohConfig,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_transaction,
+    timing::DEFAULT_TICKS_PER_SLOT,
+    timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
+    transaction::Transaction,
+};
+use solana_stake_api::{config as stake_config, stake_instruction, stake_state::StakeState};
+use solana_storage_api::{storage_contract, storage_instruction};
+use solana_vote_api::{vote_instruction, vote_state::VoteState};
+use std::{
+    collections::HashMap,
+    fs::remove_dir_all,
+    io::{Error, ErrorKind, Result},
+    path::PathBuf,
+    sync::Arc,
+};
 
 pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,
@@ -164,6 +167,19 @@ impl LocalCluster {
         genesis_block.accounts.push((
             storage_keypair.pubkey(),
             storage_contract::create_validator_storage_account(leader_pubkey, 1),
+        ));
+
+        // override staking config
+        genesis_block.accounts.push((
+            stake_config::id(),
+            stake_config::create_account(
+                1,
+                &stake_config::Config {
+                    warmup_rate: 1_000_000_000.0f64,
+                    cooldown_rate: 1_000_000_000.0f64,
+                    slash_penalty: std::u8::MAX,
+                },
+            ),
         ));
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
@@ -430,6 +446,8 @@ impl LocalCluster {
     ) -> Result<()> {
         let vote_account_pubkey = vote_account.pubkey();
         let node_pubkey = from_account.pubkey();
+        let stake_account_keypair = Keypair::new();
+        let stake_account_pubkey = stake_account_keypair.pubkey();
 
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
@@ -453,8 +471,6 @@ impl LocalCluster {
                 .wait_for_balance(&vote_account_pubkey, Some(amount))
                 .expect("get balance");
 
-            let stake_account_keypair = Keypair::new();
-            let stake_account_pubkey = stake_account_keypair.pubkey();
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref(), &stake_account_keypair],
                 stake_instruction::create_stake_account_and_delegate_stake(
@@ -477,22 +493,48 @@ impl LocalCluster {
             client
                 .wait_for_balance(&stake_account_pubkey, Some(amount))
                 .expect("get balance");
+        } else {
+            warn!(
+                "{} vote_account already has a balance?!?",
+                vote_account_pubkey
+            );
         }
-        info!("Checking for vote account registration");
-        let vote_account_user_data = client.get_account_data(&vote_account_pubkey);
-        if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
-            if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
-                if vote_state.node_pubkey == node_pubkey {
-                    info!("vote account registered");
-                    return Ok(());
+        info!("Checking for vote account registration of {}", node_pubkey);
+        match (
+            client.get_account(&stake_account_pubkey),
+            client.get_account(&vote_account_pubkey),
+        ) {
+            (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
+                match (
+                    StakeState::stake_from(&stake_account),
+                    VoteState::from(&vote_account),
+                ) {
+                    (Some(stake_state), Some(vote_state)) => {
+                        if stake_state.voter_pubkey != vote_account_pubkey
+                            || stake_state.stake != amount
+                        {
+                            Err(Error::new(ErrorKind::Other, "invalid stake account state"))
+                        } else if vote_state.node_pubkey != node_pubkey {
+                            Err(Error::new(ErrorKind::Other, "invalid vote account state"))
+                        } else {
+                            info!("node {} {:?} {:?}", node_pubkey, stake_state, vote_state);
+
+                            Ok(())
+                        }
+                    }
+                    (None, _) => Err(Error::new(ErrorKind::Other, "invalid stake account data")),
+                    (_, None) => Err(Error::new(ErrorKind::Other, "invalid vote account data")),
                 }
             }
+            (Ok(None), _) | (Err(_), _) => Err(Error::new(
+                ErrorKind::Other,
+                "unable to retrieve stake account data",
+            )),
+            (_, Ok(None)) | (_, Err(_)) => Err(Error::new(
+                ErrorKind::Other,
+                "unable to retrieve vote account data",
+            )),
         }
-
-        Err(Error::new(
-            ErrorKind::Other,
-            "expected successful vote account registration",
-        ))
     }
 
     /// Sets up the storage account for validators/replicators and assumes the funder is the owner
