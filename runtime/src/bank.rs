@@ -1993,7 +1993,7 @@ mod tests {
         ];
         let initial_balance = bank.get_balance(&leader);
 
-        let results = bank.filter_program_errors_and_collect_fee(&vec![tx1, tx2], &results);
+        let results = bank.filter_program_errors_and_collect_fee(&vec![tx1, tx2], None, &results);
         bank.freeze();
         assert_eq!(
             bank.get_balance(&leader),

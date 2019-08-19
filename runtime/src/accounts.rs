@@ -1537,7 +1537,7 @@ mod tests {
                 },
             );
         }
-        let collected_accounts = accounts.collect_accounts(&txs, &loaders, &mut loaded);
+        let collected_accounts = accounts.collect_accounts(&txs, None, &loaders, &mut loaded);
         assert_eq!(collected_accounts.len(), 3);
         assert!(collected_accounts.contains_key(&keypair0.pubkey()));
         assert!(collected_accounts.contains_key(&keypair1.pubkey()));
