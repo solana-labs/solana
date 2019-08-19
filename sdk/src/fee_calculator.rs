@@ -1,5 +1,5 @@
 use crate::message::Message;
-use crate::timing::{DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
+use crate::timing::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
 use log::*;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
@@ -28,7 +28,7 @@ pub struct FeeCalculator {
 /// TODO: determine good values for these
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 42;
 pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: usize =
-    710_000 * DEFAULT_TICKS_PER_SLOT as usize / DEFAULT_NUM_TICKS_PER_SECOND as usize;
+    710_000 * DEFAULT_TICKS_PER_SLOT as usize / DEFAULT_TICKS_PER_SECOND as usize;
 pub const DEFAULT_BURN_PERCENT: u8 = 127;
 
 impl Default for FeeCalculator {

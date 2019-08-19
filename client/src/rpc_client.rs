@@ -11,7 +11,7 @@ use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{KeypairUtil, Signature};
-use solana_sdk::timing::{DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
+use solana_sdk::timing::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
 use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::error;
 use std::io;
@@ -135,7 +135,7 @@ impl RpcClient {
                 if cfg!(not(test)) {
                     // Retry ~twice during a slot
                     sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_NUM_TICKS_PER_SECOND,
+                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
                     ));
                 }
             };
@@ -181,7 +181,7 @@ impl RpcClient {
                     // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
                     // when all the write transactions modify the same program account (eg, deploying a
                     // new program)
-                    sleep(Duration::from_millis(1000 / DEFAULT_NUM_TICKS_PER_SECOND));
+                    sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
                 }
 
                 let signature = self.send_transaction(&transaction).ok();
@@ -195,7 +195,7 @@ impl RpcClient {
                 if cfg!(not(test)) {
                     // Retry ~twice during a slot
                     sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_NUM_TICKS_PER_SECOND,
+                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
                     ));
                 }
 
@@ -387,7 +387,7 @@ impl RpcClient {
 
             // Retry ~twice during a slot
             sleep(Duration::from_millis(
-                500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_NUM_TICKS_PER_SECOND,
+                500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
             ));
             num_retries -= 1;
         }

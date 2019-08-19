@@ -20,14 +20,14 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil, Signature},
     system_transaction,
     timing::{
-        duration_as_ms, DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
+        duration_as_ms, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
         NUM_CONSECUTIVE_LEADER_SLOTS,
     },
     transport::TransportError,
 };
 use std::{collections::HashSet, path::Path, thread::sleep, time::Duration};
 
-const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_NUM_TICKS_PER_SECOND;
+const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
 
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
