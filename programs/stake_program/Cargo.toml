@@ -1,6 +1,6 @@
 [package]
 name = "solana-stake-program"
-version = "0.18.0-pre1"
+version = "0.18.0-pre2"
 description = "Solana stake program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,9 +10,9 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.8"
-solana-logger = { path = "../../logger", version = "0.18.0-pre1" }
-solana-sdk = { path = "../../sdk", version = "0.18.0-pre1" }
-solana-stake-api = { path = "../stake_api", version = "0.18.0-pre1" }
+solana-logger = { path = "../../logger", version = "0.18.0-pre2" }
+solana-sdk = { path = "../../sdk", version = "0.18.0-pre2" }
+solana-stake-api = { path = "../stake_api", version = "0.18.0-pre2" }
 
 [lib]
 crate-type = ["lib", "cdylib"]

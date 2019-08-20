@@ -1,6 +1,6 @@
 [package]
 name = "solana-storage-api"
-version = "0.18.0-pre1"
+version = "0.18.0-pre2"
 description = "Solana Storage program API"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -17,8 +17,8 @@ num-derive = "0.2"
 num-traits = "0.2"
 serde = "1.0.99"
 serde_derive = "1.0.98"
-solana-logger = { path = "../../logger", version = "0.18.0-pre1" }
-solana-sdk = { path = "../../sdk", version = "0.18.0-pre1" }
+solana-logger = { path = "../../logger", version = "0.18.0-pre2" }
+solana-sdk = { path = "../../sdk", version = "0.18.0-pre2" }
 
 [lib]
 crate-type = ["lib"]

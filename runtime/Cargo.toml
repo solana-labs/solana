@@ -1,6 +1,6 @@
 [package]
 name = "solana-runtime"
-version = "0.18.0-pre1"
+version = "0.18.0-pre2"
 description = "Solana runtime"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -24,17 +24,17 @@ rayon = "1.1.0"
 serde = { version = "1.0.99", features = ["rc"] }
 serde_derive = "1.0.98"
 serde_json = "1.0.40"
-solana-logger = { path = "../logger", version = "0.18.0-pre1" }
-solana-measure = { path = "../measure", version = "0.18.0-pre1" }
-solana-metrics = { path = "../metrics", version = "0.18.0-pre1" }
-solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.18.0-pre1" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.18.0-pre1" }
-solana-sdk = { path = "../sdk", version = "0.18.0-pre1" }
-solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre1" }
-solana-stake-program = { path = "../programs/stake_program", version = "0.18.0-pre1" }
-solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre1" }
-solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre1" }
-solana-vote-program = { path = "../programs/vote_program", version = "0.18.0-pre1" }
+solana-logger = { path = "../logger", version = "0.18.0-pre2" }
+solana-measure = { path = "../measure", version = "0.18.0-pre2" }
+solana-metrics = { path = "../metrics", version = "0.18.0-pre2" }
+solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.18.0-pre2" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.18.0-pre2" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre2" }
+solana-stake-api = { path = "../programs/stake_api", version = "0.18.0-pre2" }
+solana-stake-program = { path = "../programs/stake_program", version = "0.18.0-pre2" }
+solana-storage-api = { path = "../programs/storage_api", version = "0.18.0-pre2" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.18.0-pre2" }
+solana-vote-program = { path = "../programs/vote_program", version = "0.18.0-pre2" }
 sys-info = "0.5.7"
 tempfile = "3.1.0"
 

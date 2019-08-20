@@ -1,6 +1,6 @@
 [package]
 name = "solana-stake-api"
-version = "0.18.0-pre1"
+version = "0.18.0-pre2"
 description = "Solana Stake program API"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,11 +14,11 @@ log = "0.4.8"
 rand = "0.6.5"
 serde = "1.0.99"
 serde_derive = "1.0.98"
-solana-logger = { path = "../../logger", version = "0.18.0-pre1" }
-solana-metrics = { path = "../../metrics", version = "0.18.0-pre1" }
-solana-sdk = { path = "../../sdk", version = "0.18.0-pre1" }
-solana-vote-api = { path = "../vote_api", version = "0.18.0-pre1" }
-solana-config-api = { path = "../config_api", version = "0.18.0-pre1" }
+solana-logger = { path = "../../logger", version = "0.18.0-pre2" }
+solana-metrics = { path = "../../metrics", version = "0.18.0-pre2" }
+solana-sdk = { path = "../../sdk", version = "0.18.0-pre2" }
+solana-vote-api = { path = "../vote_api", version = "0.18.0-pre2" }
+solana-config-api = { path = "../config_api", version = "0.18.0-pre2" }
 
 [lib]
 crate-type = ["lib"]
