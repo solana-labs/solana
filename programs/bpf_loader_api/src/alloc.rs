@@ -3,8 +3,8 @@ use std::fmt;
 
 /// Based loosely on the unstable std::alloc::Alloc trait
 pub trait Alloc {
-    fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr>;
-    fn dealloc(&mut self, ptr: *mut u8, layout: Layout);
+    fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr>;
+    fn dealloc(&mut self, addr: u64, layout: Layout);
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
