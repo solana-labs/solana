@@ -5,6 +5,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::storage_stage::StorageState;
+use crate::validator::ValidatorExit;
 use crate::version::VERSION;
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
@@ -18,7 +19,6 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction::{self, Transaction};
 use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -43,7 +43,7 @@ pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
     storage_state: StorageState,
     config: JsonRpcConfig,
-    fullnode_exit: Arc<AtomicBool>,
+    validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
 }
 
 impl JsonRpcRequestProcessor {
@@ -55,13 +55,13 @@ impl JsonRpcRequestProcessor {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
-        fullnode_exit: &Arc<AtomicBool>,
+        validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         JsonRpcRequestProcessor {
             bank_forks,
             storage_state,
             config,
-            fullnode_exit: fullnode_exit.clone(),
+            validator_exit: validator_exit.clone(),
         }
     }
 
@@ -185,7 +185,9 @@ impl JsonRpcRequestProcessor {
     pub fn fullnode_exit(&self) -> Result<bool> {
         if self.config.enable_fullnode_exit {
             warn!("fullnode_exit request...");
-            self.fullnode_exit.store(true, Ordering::Relaxed);
+            if let Some(x) = self.validator_exit.write().unwrap().take() {
+                x.exit()
+            }
             Ok(true)
         } else {
             debug!("fullnode_exit ignored");
@@ -660,7 +662,7 @@ impl RpcSol for RpcSolImpl {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
@@ -671,6 +673,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::TransactionError;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread;
 
     const TEST_MINT_LAMPORTS: u64 = 10_000;
@@ -682,6 +685,7 @@ mod tests {
         let bank = bank_forks.read().unwrap().working_bank();
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
 
         let blockhash = bank.confirmed_last_blockhash().0;
         let tx = system_transaction::transfer(&alice, pubkey, 20, blockhash);
@@ -694,7 +698,7 @@ mod tests {
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
-            &exit,
+            &validator_exit,
         )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::default(),
@@ -722,13 +726,14 @@ mod tests {
     fn test_rpc_request_processor_new() {
         let bob_pubkey = Pubkey::new_rand();
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
-            &exit,
+            &validator_exit,
         );
         thread::spawn(move || {
             let blockhash = bank.confirmed_last_blockhash().0;
@@ -1037,6 +1042,7 @@ mod tests {
     #[test]
     fn test_rpc_send_bad_tx() {
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -1047,7 +1053,7 @@ mod tests {
                     StorageState::default(),
                     JsonRpcConfig::default(),
                     new_bank_forks().0,
-                    &exit,
+                    &validator_exit,
                 );
                 Arc::new(RwLock::new(request_processor))
             },
@@ -1117,14 +1123,22 @@ mod tests {
         )
     }
 
+    pub fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option<ValidatorExit>>> {
+        let mut validator_exit = ValidatorExit::default();
+        let exit_ = exit.clone();
+        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+        Arc::new(RwLock::new(Some(validator_exit)))
+    }
+
     #[test]
     fn test_rpc_request_processor_config_default_trait_fullnode_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             new_bank_forks().0,
-            &exit,
+            &validator_exit,
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -1133,13 +1147,14 @@ mod tests {
     #[test]
     fn test_rpc_request_processor_allow_fullnode_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
         let mut config = JsonRpcConfig::default();
         config.enable_fullnode_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             config,
             new_bank_forks().0,
-            &exit,
+            &validator_exit,
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);

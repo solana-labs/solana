@@ -5,14 +5,15 @@ use crate::cluster_info::ClusterInfo;
 use crate::rpc::*;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
+use crate::validator::ValidatorExit;
 use jsonrpc_core::MetaIoHandler;
+use jsonrpc_http_server::CloseHandle;
 use jsonrpc_http_server::{
-    hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
-    RequestMiddlewareAction, ServerBuilder,
+    hyper, AccessControlAllowOrigin, DomainsValidation, RequestMiddleware, RequestMiddlewareAction,
+    ServerBuilder,
 };
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
@@ -24,7 +25,7 @@ pub struct JsonRpcService {
     #[cfg(test)]
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by test_rpc_new()...
 
-    pub close_handle: Option<CloseHandle>,
+    close_handle: Option<CloseHandle>,
 }
 
 #[derive(Default)]
@@ -90,7 +91,7 @@ impl JsonRpcService {
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
         ledger_path: &Path,
-        exit: &Arc<AtomicBool>,
+        validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -98,7 +99,7 @@ impl JsonRpcService {
             storage_state,
             config,
             bank_forks,
-            exit,
+            validator_exit,
         )));
         let request_processor_ = request_processor.clone();
 
@@ -135,6 +136,12 @@ impl JsonRpcService {
             .unwrap();
 
         let close_handle = close_handle_receiver.recv().unwrap();
+        let close_handle_ = close_handle.clone();
+        let mut validator_exit_write = validator_exit.write().unwrap();
+        validator_exit_write
+            .as_mut()
+            .unwrap()
+            .register_exit(Box::new(move || close_handle_.close()));
         Self {
             thread_hdl,
             #[cfg(test)]
@@ -144,10 +151,9 @@ impl JsonRpcService {
     }
 
     pub fn exit(&mut self) {
-        self.close_handle
-            .take()
-            .expect("Already closed rpc service")
-            .close();
+        if let Some(c) = self.close_handle.take() {
+            c.close()
+        }
     }
 }
 
@@ -164,10 +170,11 @@ mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::rpc::tests::create_validator_exit;
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::KeypairUtil;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use std::sync::atomic::Ordering;
+    use std::sync::atomic::AtomicBool;
 
     #[test]
     fn test_rpc_new() {
@@ -177,6 +184,7 @@ mod tests {
             ..
         } = create_genesis_block(10_000);
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
         let bank = Bank::new(&genesis_block);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::default(),
@@ -186,14 +194,14 @@ mod tests {
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
-        let rpc_service = JsonRpcService::new(
+        let mut rpc_service = JsonRpcService::new(
             &cluster_info,
             rpc_addr,
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
             &PathBuf::from("farf"),
-            &exit,
+            &validator_exit,
         );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
@@ -206,7 +214,7 @@ mod tests {
                 .unwrap()
                 .get_balance(&mint_keypair.pubkey())
         );
-        exit.store(true, Ordering::Relaxed);
+        rpc_service.exit();
         rpc_service.join().unwrap();
     }
 }
