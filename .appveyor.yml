@@ -26,7 +26,7 @@ deploy:
     access_key_id:
       secure: fTbJl6JpFebR40J7cOWZ2mXBa3kIvEiXgzxAj6L3N7A=
     secret_access_key:
-      secure: vItsBXb2rEFLvkWtVn/Rc/hSfY5n1QS3VBLjB1wOH+I=
+      secure: vItsBXb2rEFLvkWtVn/Rcxu5a5+2EwC+b7GsA0waJy9hXh6XuBAD0lnHd9re3g/4
     bucket: release.solana.com
     region: us-west-1
     set_public: true
