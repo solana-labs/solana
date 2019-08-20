@@ -343,6 +343,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     pub fn window_send_test() {
         solana_logger::setup();
         // setup a leader whose id is used to generates blobs and a validator
@@ -435,6 +436,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     pub fn window_send_leader_test2() {
         solana_logger::setup();
         // setup a leader whose id is used to generates blobs and a validator

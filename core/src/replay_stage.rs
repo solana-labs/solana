@@ -944,8 +944,6 @@ mod test {
                 ],
             );
             entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
-                .pop()
-                .unwrap()
         });
 
         assert_matches!(
@@ -972,8 +970,6 @@ mod test {
                 )],
             );
             entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
-                .pop()
-                .unwrap()
         });
 
         assert_matches!(res, Err(Error::BlobError(BlobError::VerificationFailed)));
@@ -997,13 +993,11 @@ mod test {
                 )],
             );
             entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
-                .pop()
-                .unwrap()
         });
 
         assert_matches!(
             res,
-            Err(Error::BlocktreeError(BlocktreeError::InvalidBlobData(_)))
+            Err(Error::TransactionError(TransactionError::AccountNotFound))
         );
     }
 
@@ -1011,7 +1005,7 @@ mod test {
     // marked as dead. Returns the error for caller to verify.
     fn check_dead_fork<F>(shred_to_insert: F) -> Result<()>
     where
-        F: Fn(&Hash, u64) -> Shred,
+        F: Fn(&Hash, u64) -> Vec<Shred>,
     {
         let ledger_path = get_tmp_ledger_path!();
         let res = {
@@ -1023,8 +1017,8 @@ mod test {
             let mut progress = HashMap::new();
             let last_blockhash = bank0.last_blockhash();
             progress.insert(bank0.slot(), ForkProgress::new(last_blockhash));
-            let shred = shred_to_insert(&last_blockhash, bank0.slot());
-            blocktree.insert_shreds(&[shred]).unwrap();
+            let shreds = shred_to_insert(&last_blockhash, bank0.slot());
+            blocktree.insert_shreds(&shreds).unwrap();
             let (res, _tx_count) =
                 ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut progress);
 

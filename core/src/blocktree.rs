@@ -625,7 +625,7 @@ impl Blocktree {
         parent: Option<u64>,
         is_full_slot: bool,
         entries: I,
-    ) -> Result<()>
+    ) -> Result<usize>
     where
         I: IntoIterator,
         I::Item: Borrow<Entry>,
@@ -686,7 +686,7 @@ impl Blocktree {
             );
         }
 
-        if is_full_slot {
+        if is_full_slot && remaining_ticks_in_slot != 0 {
             shredder.finalize_slot();
         }
         let shreds: Vec<Shred> = shredder
@@ -696,7 +696,9 @@ impl Blocktree {
             .collect();
         all_shreds.extend(shreds);
 
-        self.insert_shreds(&all_shreds)
+        let num_shreds = all_shreds.len();
+        self.insert_shreds(&all_shreds)?;
+        Ok(num_shreds)
     }
 
     pub fn insert_data_blobs<I>(&self, new_blobs: I) -> Result<()>
@@ -2483,19 +2485,34 @@ pub mod tests {
         {
             let ticks_per_slot = 10;
             let num_slots = 10;
-            let num_ticks = ticks_per_slot * num_slots;
             let ledger = Blocktree::open(&ledger_path).unwrap();
+            let mut ticks = vec![];
+            //let mut shreds_per_slot = 0 as u64;
+            let mut shreds_per_slot = vec![];
 
-            let ticks = create_ticks(num_ticks, Hash::default());
-            ledger
-                .write_entries(0, 0, 0, ticks_per_slot, ticks.clone())
-                .unwrap();
+            for i in 0..num_slots {
+                let mut new_ticks = create_ticks(ticks_per_slot, Hash::default());
+                let num_shreds = ledger
+                    .write_entries_using_shreds(
+                        i,
+                        0,
+                        0,
+                        ticks_per_slot,
+                        Some(i.saturating_sub(1)),
+                        true,
+                        new_ticks.clone(),
+                    )
+                    .unwrap() as u64;
+                shreds_per_slot.push(num_shreds);
+                ticks.append(&mut new_ticks);
+            }
 
             for i in 0..num_slots {
                 let meta = ledger.meta(i).unwrap().unwrap();
-                assert_eq!(meta.consumed, ticks_per_slot);
-                assert_eq!(meta.received, ticks_per_slot);
-                assert_eq!(meta.last_index, ticks_per_slot - 1);
+                let num_shreds = shreds_per_slot[i as usize];
+                assert_eq!(meta.consumed, num_shreds);
+                assert_eq!(meta.received, num_shreds);
+                assert_eq!(meta.last_index, num_shreds - 1);
                 if i == num_slots - 1 {
                     assert!(meta.next_slots.is_empty());
                 } else {
@@ -2513,45 +2530,47 @@ pub mod tests {
                 );
             }
 
-            // Simulate writing to the end of a slot with existing ticks
-            ledger
-                .write_entries(
-                    num_slots,
-                    ticks_per_slot - 1,
-                    ticks_per_slot - 2,
-                    ticks_per_slot,
-                    &ticks[0..2],
-                )
-                .unwrap();
+            /*
+                        // Simulate writing to the end of a slot with existing ticks
+                        ledger
+                            .write_entries(
+                                num_slots,
+                                ticks_per_slot - 1,
+                                ticks_per_slot - 2,
+                                ticks_per_slot,
+                                &ticks[0..2],
+                            )
+                            .unwrap();
 
-            let meta = ledger.meta(num_slots).unwrap().unwrap();
-            assert_eq!(meta.consumed, 0);
-            // received blob was ticks_per_slot - 2, so received should be ticks_per_slot - 2 + 1
-            assert_eq!(meta.received, ticks_per_slot - 1);
-            // last blob index ticks_per_slot - 2 because that's the blob that made tick_height == ticks_per_slot
-            // for the slot
-            assert_eq!(meta.last_index, ticks_per_slot - 2);
-            assert_eq!(meta.parent_slot, num_slots - 1);
-            assert_eq!(meta.next_slots, vec![num_slots + 1]);
-            assert_eq!(
-                &ticks[0..1],
-                &ledger
-                    .get_slot_entries(num_slots, ticks_per_slot - 2, None)
-                    .unwrap()[..]
-            );
+                        let meta = ledger.meta(num_slots).unwrap().unwrap();
+                        assert_eq!(meta.consumed, 0);
+                        // received blob was ticks_per_slot - 2, so received should be ticks_per_slot - 2 + 1
+                        assert_eq!(meta.received, ticks_per_slot - 1);
+                        // last blob index ticks_per_slot - 2 because that's the blob that made tick_height == ticks_per_slot
+                        // for the slot
+                        assert_eq!(meta.last_index, ticks_per_slot - 2);
+                        assert_eq!(meta.parent_slot, num_slots - 1);
+                        assert_eq!(meta.next_slots, vec![num_slots + 1]);
+                        assert_eq!(
+                            &ticks[0..1],
+                            &ledger
+                                .get_slot_entries(num_slots, ticks_per_slot - 2, None)
+                                .unwrap()[..]
+                        );
 
-            // We wrote two entries, the second should spill into slot num_slots + 1
-            let meta = ledger.meta(num_slots + 1).unwrap().unwrap();
-            assert_eq!(meta.consumed, 1);
-            assert_eq!(meta.received, 1);
-            assert_eq!(meta.last_index, std::u64::MAX);
-            assert_eq!(meta.parent_slot, num_slots);
-            assert!(meta.next_slots.is_empty());
+                        // We wrote two entries, the second should spill into slot num_slots + 1
+                        let meta = ledger.meta(num_slots + 1).unwrap().unwrap();
+                        assert_eq!(meta.consumed, 1);
+                        assert_eq!(meta.received, 1);
+                        assert_eq!(meta.last_index, std::u64::MAX);
+                        assert_eq!(meta.parent_slot, num_slots);
+                        assert!(meta.next_slots.is_empty());
 
-            assert_eq!(
-                &ticks[1..2],
-                &ledger.get_slot_entries(num_slots + 1, 0, None).unwrap()[..]
-            );
+                        assert_eq!(
+                            &ticks[1..2],
+                            &ledger.get_slot_entries(num_slots + 1, 0, None).unwrap()[..]
+                        );
+            */
         }
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
@@ -2895,30 +2914,35 @@ pub mod tests {
                 let parent_slot = if i == 0 { 0 } else { i - 1 };
                 // Write entries
                 let num_entries = 21 as u64 * (i + 1);
-                let (blobs, original_entries) = make_slot_entries(slot, parent_slot, num_entries);
+                let (mut shreds, original_entries) =
+                    make_slot_entries_using_shreds(slot, parent_slot, num_entries);
 
-                blocktree
-                    .write_blobs(blobs.iter().skip(1).step_by(2))
-                    .unwrap();
+                let num_shreds = shreds.len() as u64;
+                let mut odd_shreds = vec![];
+                for i in (0..num_shreds).rev() {
+                    if i % 2 != 0 {
+                        odd_shreds.insert(0, shreds.remove(i as usize));
+                    }
+                }
+                blocktree.insert_shreds(&odd_shreds).unwrap();
 
                 assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), vec![]);
 
                 let meta = blocktree.meta(slot).unwrap().unwrap();
-                if num_entries % 2 == 0 {
-                    assert_eq!(meta.received, num_entries);
+                if num_shreds % 2 == 0 {
+                    assert_eq!(meta.received, num_shreds);
                 } else {
                     debug!("got here");
-                    assert_eq!(meta.received, num_entries - 1);
+                    assert_eq!(meta.received, num_shreds - 1);
                 }
                 assert_eq!(meta.consumed, 0);
-                assert_eq!(meta.parent_slot, parent_slot);
-                if num_entries % 2 == 0 {
-                    assert_eq!(meta.last_index, num_entries - 1);
+                if num_shreds % 2 == 0 {
+                    assert_eq!(meta.last_index, num_shreds - 1);
                 } else {
                     assert_eq!(meta.last_index, std::u64::MAX);
                 }
 
-                blocktree.write_blobs(blobs.iter().step_by(2)).unwrap();
+                blocktree.insert_shreds(&shreds).unwrap();
 
                 assert_eq!(
                     blocktree.get_slot_entries(slot, 0, None).unwrap(),
@@ -2926,10 +2950,10 @@ pub mod tests {
                 );
 
                 let meta = blocktree.meta(slot).unwrap().unwrap();
-                assert_eq!(meta.received, num_entries);
-                assert_eq!(meta.consumed, num_entries);
+                assert_eq!(meta.received, num_shreds);
+                assert_eq!(meta.consumed, num_shreds);
                 assert_eq!(meta.parent_slot, parent_slot);
-                assert_eq!(meta.last_index, num_entries - 1);
+                assert_eq!(meta.last_index, num_shreds - 1);
             }
         }
 
@@ -2944,45 +2968,31 @@ pub mod tests {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             // Make duplicate entries and blobs
-            let num_duplicates = 2;
             let num_unique_entries = 10;
-            let (original_entries, blobs) = {
-                let (blobs, entries) = make_slot_entries(0, 0, num_unique_entries);
-                let entries: Vec<_> = entries
-                    .into_iter()
-                    .flat_map(|e| vec![e.clone(), e])
-                    .collect();
-                let blobs: Vec<_> = blobs.into_iter().flat_map(|b| vec![b.clone(), b]).collect();
-                (entries, blobs)
-            };
+            let (mut original_shreds, original_entries) =
+                make_slot_entries_using_shreds(0, 0, num_unique_entries);
 
-            blocktree
-                .write_blobs(
-                    blobs
-                        .iter()
-                        .skip(num_duplicates as usize)
-                        .step_by(num_duplicates as usize * 2),
-                )
-                .unwrap();
+            // Discard first shred
+            original_shreds.remove(0);
+
+            blocktree.insert_shreds(&original_shreds).unwrap();
 
             assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), vec![]);
 
-            blocktree
-                .write_blobs(blobs.iter().step_by(num_duplicates as usize * 2))
-                .unwrap();
+            let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true);
+            blocktree.insert_shreds(&duplicate_shreds).unwrap();
 
-            let expected: Vec<_> = original_entries
-                .into_iter()
-                .step_by(num_duplicates as usize)
-                .collect();
+            assert_eq!(
+                blocktree.get_slot_entries(0, 0, None).unwrap(),
+                original_entries
+            );
 
-            assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), expected,);
-
+            let num_shreds = duplicate_shreds.len() as u64;
             let meta = blocktree.meta(0).unwrap().unwrap();
-            assert_eq!(meta.consumed, num_unique_entries);
-            assert_eq!(meta.received, num_unique_entries);
+            assert_eq!(meta.consumed, num_shreds);
+            assert_eq!(meta.received, num_shreds);
             assert_eq!(meta.parent_slot, 0);
-            assert_eq!(meta.last_index, num_unique_entries - 1);
+            assert_eq!(meta.last_index, num_shreds - 1);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
@@ -3589,7 +3599,8 @@ pub mod tests {
             // Create blobs and entries
             let num_entries = 20 as u64;
             let mut entries = vec![];
-            let mut blobs = vec![];
+            let mut shreds = vec![];
+            let mut num_shreds_per_slot = 0;
             for slot in 0..num_entries {
                 let parent_slot = {
                     if slot == 0 {
@@ -3599,19 +3610,24 @@ pub mod tests {
                     }
                 };
 
-                let (mut blob, entry) = make_slot_entries(slot, parent_slot, 1);
-                blob[0].set_index(slot);
-                blobs.extend(blob);
+                let (mut shred, entry) = make_slot_entries_using_shreds(slot, parent_slot, 1);
+                num_shreds_per_slot = shred.len() as u64;
+                shred
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(i, shred)| shred.set_index(slot as u32 + i as u32));
+                shreds.extend(shred);
                 entries.extend(entry);
             }
 
+            let num_shreds = shreds.len();
             // Write blobs to the database
             if should_bulk_write {
-                blocktree.write_blobs(blobs.iter()).unwrap();
+                blocktree.insert_shreds(&shreds).unwrap();
             } else {
-                for i in 0..num_entries {
-                    let i = i as usize;
-                    blocktree.write_blobs(&blobs[i..i + 1]).unwrap();
+                for _ in 0..num_shreds {
+                    let shred = shreds.remove(0);
+                    blocktree.insert_shreds(&vec![shred]).unwrap();
                 }
             }
 
@@ -3622,14 +3638,14 @@ pub mod tests {
                 );
 
                 let meta = blocktree.meta(i).unwrap().unwrap();
-                assert_eq!(meta.received, i + 1);
-                assert_eq!(meta.last_index, i);
+                assert_eq!(meta.received, i + num_shreds_per_slot);
+                assert_eq!(meta.last_index, i + num_shreds_per_slot - 1);
                 if i != 0 {
                     assert_eq!(meta.parent_slot, i - 1);
-                    assert!(meta.consumed == 0);
+                    assert_eq!(meta.consumed, 0);
                 } else {
                     assert_eq!(meta.parent_slot, 0);
-                    assert!(meta.consumed == 1);
+                    assert_eq!(meta.consumed, num_shreds_per_slot);
                 }
             }
         }
