@@ -1639,13 +1639,16 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
+// Return an error if a pubkey cannot be parsed.
+fn is_keypair(string: String) -> Result<(), String> {
+    read_keypair(&string)
+        .map(|_| ())
+        .map_err(|err| format!("{:?}", err))
+}
+
 // Return an error if string cannot be parsed as pubkey string or keypair file location
 fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
-    is_pubkey(string.clone()).or_else(|_| {
-        read_keypair(&string)
-            .map(|_| ())
-            .map_err(|err| format!("{:?}", err))
-    })
+    is_pubkey(string.clone()).or_else(|_| is_keypair(string))
 }
 
 pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
@@ -1722,6 +1725,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("CURRENT VOTER KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_keypair)
                         .help("Keypair file for the currently authorized vote signer"),
                 )
                 .arg(
@@ -1821,6 +1825,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_keypair)
                         .help("Keypair file for the new stake account"),
                 )
                 .arg(
@@ -1871,6 +1876,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("STAKE ACCOUNT KEYPAIR FILE")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_keypair)
                         .help("Keypair file for the stake account, for signing the withdraw transaction."),
                 )
                 .arg(
