@@ -7,25 +7,25 @@ based fee for this resource consumption, also known as Rent.
 
 ## Two-tiered rent regime
 
-Accounts which maintain a minimum balance equivalent to 2 years of rent are exempt from
-rent.  Accounts whose balance falls below this threshold are charged rent 
-at a rate specified in genesis, in lamports per kilobyte-year.
+Accounts which maintain a minimum balance equivalent to 2 years of rent payments are exempt.  Accounts whose balance falls below this threshold are charged rent at a rate specified in genesis, in lamports per kilobyte-year.  The network charges rent on a per-epoch 
+basis, in credit for the next epoch (but in arrears when necessary), and `Account::rent_epoch` keeps track of the next time 
+rent should be collected from the account.  
 
 ## Collecting rent
 
-Rent is charged at the end of each slot on all accounts that were accessed during that block.  A field in the account `Account::rent_slot` is keeps track of the last time rent was paid by this account.
+Rent is due at account creation time for one epoch's worth of time, and the new account has `Account::rent_epoch` of `current_epoch + 1`.  After that, the bank deducts rent from accounts during normal transaction processing as part of the load phase.
 
-If the account is in the exempt rent regime, `Account::rent_slot` is simply updated to the current slot.
+If the account is in the exempt regime, `Account::rent_epoch` is simply pushed to `current_epoch + 1`.
 
-If the account not exempt, the difference between the current slot and `rent_slot` is used to calculate the number of years since the last rent payment, which is passed to `Rent::due()` to calculate the amount of rent owed by this account.  Any fractional lamports are truncated.  Rent is collected from the account and `Account::rent_slot` is updated to the current slot.
+If the account is non-exempt, the difference between the next epoch and `Account::rent_epoch` is used to calculate the amount of rent owed by this account (via `Rent::due()`).  Any fractional lamports of the calculation are truncated.  Rent due is deducted from `Account::lamports` and `Account::rent_epoch` is updated to the next epoch.  If the amount of rent due is less than one lamport, no changes are made to the account.
 
-If the amount of rent due is less than one lamport, no rent is collected and `Account::rent_slot` is not updated.
+Accounts whose balance is insufficient to satisfy their rent due fail to load.
 
-`Rent::burn_percent` of the rent collected is destroyed, the rest is distributed to validator accounts by stake weight, a la transaction fees.  Any fractional lamports are destroyed.
+A percentage of the rent collected is destroyed.  The rest is distributed to validator accounts by stake weight, a la transaction fees, at the end of the slot.
 
-## Deliquency
+## Credit only
 
-Accounts whose balance reaches zero due to rent collection are dropped.
+Credit only accounts are treated as a special case.  They are loaded as if rent were due, but updates to their state may be delayed until the end of the slot.
 
 ## Design considerations, others considered
 
