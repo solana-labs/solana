@@ -581,7 +581,7 @@ pub mod test {
                     );
 
                     for idx in start_index..data_end {
-                        let opt_bytes = blocktree.get_data_blob_bytes(slot, idx).unwrap();
+                        let opt_bytes = blocktree.get_data_shred_bytes(slot, idx).unwrap();
                         assert!(opt_bytes.is_some());
                     }
 

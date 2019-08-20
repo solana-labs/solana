@@ -130,7 +130,7 @@ mod tests {
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
 
         blocktree
-            .write_entries_using_shreds(0, 0, 0, ticks_per_slot, None, true, &entries)
+            .write_entries(0, 0, 0, ticks_per_slot, &entries)
             .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_single_output.txt.enc");

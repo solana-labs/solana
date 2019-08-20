@@ -1038,7 +1038,7 @@ impl ClusterInfo {
     ) -> Vec<SharedBlob> {
         if let Some(blocktree) = blocktree {
             // Try to find the requested index in one of the slots
-            let blob = blocktree.get_data_blob(slot, blob_index);
+            let blob = blocktree.get_data_shred_as_blob(slot, blob_index);
 
             if let Ok(Some(mut blob)) = blob {
                 inc_new_counter_debug!("cluster_info-window-request-ledger", 1);
@@ -1073,7 +1073,7 @@ impl ClusterInfo {
             if let Ok(Some(meta)) = meta {
                 if meta.received > highest_index {
                     // meta.received must be at least 1 by this point
-                    let blob = blocktree.get_data_blob(slot, meta.received - 1);
+                    let blob = blocktree.get_data_shred_as_blob(slot, meta.received - 1);
 
                     if let Ok(Some(mut blob)) = blob {
                         blob.meta.set_addr(from_addr);
@@ -1099,7 +1099,7 @@ impl ClusterInfo {
                 if meta.received == 0 {
                     break;
                 }
-                let blob = blocktree.get_data_blob(slot, meta.received - 1);
+                let blob = blocktree.get_data_shred_as_blob(slot, meta.received - 1);
                 if let Ok(Some(mut blob)) = blob {
                     blob.meta.set_addr(from_addr);
                     res.push(Arc::new(RwLock::new(blob)));
@@ -2011,7 +2011,10 @@ mod tests {
                 .rev()
                 .map(|slot| {
                     let index = blocktree.meta(slot).unwrap().unwrap().received - 1;
-                    blocktree.get_data_blob(slot, index).unwrap().unwrap()
+                    blocktree
+                        .get_data_shred_as_blob(slot, index)
+                        .unwrap()
+                        .unwrap()
                 })
                 .collect();
             assert_eq!(rv, expected)

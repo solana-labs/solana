@@ -343,7 +343,7 @@ mod test {
             for i in 0..max_tick_height - start_tick_height {
                 let slot = (start_tick_height + i + 1) / ticks_per_slot;
 
-                let result = blocktree.get_data_blob(slot, blob_index).unwrap();
+                let result = blocktree.get_data_shred_as_blob(slot, blob_index).unwrap();
 
                 blob_index += 1;
                 result.expect("expect blob presence");

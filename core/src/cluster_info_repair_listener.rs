@@ -315,7 +315,7 @@ impl ClusterInfoRepairListener {
                         // sending the blobs in this slot for repair, we expect these slots
                         // to be full.
                         if let Some(blob_data) = blocktree
-                            .get_data_blob_bytes(slot, blob_index as u64)
+                            .get_data_shred_bytes(slot, blob_index as u64)
                             .expect("Failed to read data blob from blocktree")
                         {
                             socket.send_to(&blob_data[..], repairee_tvu)?;

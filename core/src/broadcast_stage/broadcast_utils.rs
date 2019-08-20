@@ -111,6 +111,7 @@ pub fn entries_to_shreds(
         while offset < data.len() {
             offset += shredder.write(&data[offset..]).unwrap();
         }
+        //        bincode::serialize_into(&shredder, &entries).unwrap();
         trace!(
             "Shredded {:?} entries into {:?} shreds",
             entries.len(),

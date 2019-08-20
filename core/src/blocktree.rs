@@ -905,7 +905,7 @@ impl Blocktree {
         Ok(())
     }
 
-    pub fn get_data_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
+    pub fn get_data_shred_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
         self.get_data_shred(slot, index)
     }
 
@@ -1082,7 +1082,7 @@ impl Blocktree {
         Ok(())
     }
 
-    pub fn get_data_blob(&self, slot: u64, blob_index: u64) -> Result<Option<Blob>> {
+    pub fn get_data_shred_as_blob(&self, slot: u64, blob_index: u64) -> Result<Option<Blob>> {
         let bytes = self.get_data_shred(slot, blob_index)?;
         Ok(bytes.map(|bytes| Blob::new(&bytes)))
     }
@@ -2688,14 +2688,14 @@ pub mod tests {
     }
 
     #[test]
-    fn test_insert_data_blobs_basic() {
+    fn test_insert_data_shreds_basic() {
         let num_entries = 5;
         assert!(num_entries > 1);
 
         let (mut shreds, entries) = make_slot_entries_using_shreds(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
-        let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_basic");
+        let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_basic");
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Insert last blob, we're missing the other blobs, so no consecutive
@@ -2733,12 +2733,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_insert_data_blobs_reverse() {
+    fn test_insert_data_shreds_reverse() {
         let num_entries = 10;
         let (mut shreds, entries) = make_slot_entries_using_shreds(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
-        let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_reverse");
+        let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_reverse");
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Insert blobs in reverse, check for consecutive returned blobs
@@ -2769,8 +2769,8 @@ pub mod tests {
 
     #[test]
     fn test_insert_slots() {
-        test_insert_data_blobs_slots("test_insert_data_blobs_slots_single", false);
-        test_insert_data_blobs_slots("test_insert_data_blobs_slots_bulk", true);
+        test_insert_data_shreds_slots("test_insert_data_blobs_slots_single", false);
+        test_insert_data_shreds_slots("test_insert_data_blobs_slots_bulk", true);
     }
 
     #[test]
@@ -2905,7 +2905,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_insert_data_blobs_consecutive() {
+    pub fn test_insert_data_shreds_consecutive() {
         let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -2961,7 +2961,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_insert_data_blobs_duplicate() {
+    pub fn test_insert_data_shreds_duplicate() {
         // Create RocksDb ledger
         let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_duplicate");
         {
@@ -3591,7 +3591,7 @@ pub mod tests {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
-    fn test_insert_data_blobs_slots(name: &str, should_bulk_write: bool) {
+    fn test_insert_data_shreds_slots(name: &str, should_bulk_write: bool) {
         let blocktree_path = get_tmp_ledger_path(name);
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
