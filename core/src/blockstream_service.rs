@@ -70,7 +70,7 @@ impl BlockstreamService {
             .iter()
             .filter(|entry| entry.is_tick())
             .fold(0, |acc, _| acc + 1);
-        let mut tick_height = if slot > 0 {
+        let mut tick_height = if slot > 0 && ticks_per_slot > 0 {
             ticks_per_slot * slot - 1
         } else {
             0
@@ -161,7 +161,7 @@ mod test {
         let expected_tick_heights = [5, 6, 7, 8, 8, 9];
 
         blocktree
-            .write_entries(1, 0, 0, ticks_per_slot, &entries)
+            .write_entries_using_shreds(1, 0, 0, ticks_per_slot, None, true, &entries)
             .unwrap();
 
         slot_full_sender.send((1, leader_pubkey)).unwrap();

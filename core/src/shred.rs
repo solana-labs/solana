@@ -56,6 +56,17 @@ impl Shred {
         }
     }
 
+    pub fn set_index(&mut self, index: u32) {
+        match self {
+            Shred::FirstInSlot(s) => s.header.data_header.common_header.index = index,
+            Shred::FirstInFECSet(s)
+            | Shred::Data(s)
+            | Shred::LastInFECSet(s)
+            | Shred::LastInSlot(s) => s.header.common_header.index = index,
+            Shred::Coding(s) => s.header.common_header.index = index,
+        };
+    }
+
     pub fn signature(&self) -> Signature {
         match self {
             Shred::FirstInSlot(s) => s.header.data_header.common_header.signature,

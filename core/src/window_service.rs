@@ -502,7 +502,7 @@ mod test {
             t_responder
         };
         let mut q = Vec::new();
-        while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(500)) {
+        while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(5000)) {
             q.append(&mut nq.packets);
         }
         assert!(q.len() > 10);

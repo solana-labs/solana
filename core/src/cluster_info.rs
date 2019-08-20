@@ -1745,15 +1745,17 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries;
+    use crate::blocktree::tests::make_many_slot_entries_using_shreds;
     use crate::blocktree::Blocktree;
+    use crate::blocktree_processor::tests::fill_blocktree_slot_with_ticks;
     use crate::crds_value::CrdsValueLabel;
-    use crate::erasure::ErasureConfig;
-    use crate::packet::{Blob, BLOB_HEADER_SIZE};
     use crate::repair_service::RepairType;
     use crate::result::Error;
+    use crate::shred::{FirstDataShred, Shred};
     use crate::test_tx::test_tx;
+    use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::{Arc, RwLock};
@@ -1909,19 +1911,12 @@ mod tests {
                 0,
             );
             assert!(rv.is_empty());
-            let data_size = 1;
-            let blob = SharedBlob::default();
-            {
-                let mut w_blob = blob.write().unwrap();
-                w_blob.set_size(data_size);
-                w_blob.set_index(1);
-                w_blob.set_slot(2);
-                w_blob.set_erasure_config(&ErasureConfig::default());
-                w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
-            }
+            let mut shred = Shred::FirstInSlot(FirstDataShred::default());
+            shred.set_slot(2);
+            shred.set_index(1);
 
             blocktree
-                .write_shared_blobs(vec![&blob])
+                .insert_shreds(&vec![shred])
                 .expect("Expect successful ledger write");
 
             let rv = ClusterInfo::run_window_request(
@@ -1933,10 +1928,12 @@ mod tests {
                 1,
             );
             assert!(!rv.is_empty());
-            let v = rv[0].clone();
-            assert_eq!(v.read().unwrap().index(), 1);
-            assert_eq!(v.read().unwrap().slot(), 2);
-            assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
+            let rv: Vec<Shred> = rv
+                .into_iter()
+                .map(|b| bincode::deserialize(&b.read().unwrap().data).unwrap())
+                .collect();
+            assert_eq!(rv[0].index(), 1);
+            assert_eq!(rv[0].slot(), 2);
         }
 
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -1953,37 +1950,30 @@ mod tests {
                 ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 0, 0);
             assert!(rv.is_empty());
 
-            let data_size = 1;
-            let max_index = 5;
-            let blobs: Vec<_> = (0..max_index)
-                .map(|i| {
-                    let mut blob = Blob::default();
-                    blob.set_size(data_size);
-                    blob.set_index(i);
-                    blob.set_slot(2);
-                    blob.set_erasure_config(&ErasureConfig::default());
-                    blob.meta.size = data_size + BLOB_HEADER_SIZE;
-                    blob
-                })
-                .collect();
-
-            blocktree
-                .write_blobs(&blobs)
-                .expect("Expect successful ledger write");
+            let _ = fill_blocktree_slot_with_ticks(
+                &blocktree,
+                DEFAULT_TICKS_PER_SLOT,
+                2,
+                1,
+                Hash::default(),
+            );
 
             let rv =
                 ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 2, 1);
+            let rv: Vec<Shred> = rv
+                .into_iter()
+                .map(|b| bincode::deserialize(&b.read().unwrap().data).unwrap())
+                .collect();
             assert!(!rv.is_empty());
-            let v = rv[0].clone();
-            assert_eq!(v.read().unwrap().index(), max_index - 1);
-            assert_eq!(v.read().unwrap().slot(), 2);
-            assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
+            let index = blocktree.meta(2).unwrap().unwrap().received - 1;
+            assert_eq!(rv[0].index(), index as u32);
+            assert_eq!(rv[0].slot(), 2);
 
             let rv = ClusterInfo::run_highest_window_request(
                 &socketaddr_any!(),
                 Some(&blocktree),
                 2,
-                max_index,
+                index + 1,
             );
             assert!(rv.is_empty());
         }
@@ -2001,10 +1991,10 @@ mod tests {
             assert!(rv.is_empty());
 
             // Create slots 1, 2, 3 with 5 blobs apiece
-            let (blobs, _) = make_many_slot_entries(1, 3, 5);
+            let (blobs, _) = make_many_slot_entries_using_shreds(1, 3, 5);
 
             blocktree
-                .write_blobs(&blobs)
+                .insert_shreds(&blobs)
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset
@@ -2019,7 +2009,10 @@ mod tests {
                 .collect();
             let expected: Vec<_> = (1..=3)
                 .rev()
-                .map(|slot| blocktree.get_data_blob(slot, 4).unwrap().unwrap())
+                .map(|slot| {
+                    let index = blocktree.meta(slot).unwrap().unwrap().received - 1;
+                    blocktree.get_data_blob(slot, index).unwrap().unwrap()
+                })
                 .collect();
             assert_eq!(rv, expected)
         }

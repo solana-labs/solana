@@ -617,6 +617,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_serve_repairs_to_repairee() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();

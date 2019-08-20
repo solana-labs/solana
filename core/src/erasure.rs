@@ -544,6 +544,7 @@ pub mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_erasure_generate_blocktree_with_coding() {
         let cases = vec![
             (NUM_DATA, NUM_CODING, 7, 5),
