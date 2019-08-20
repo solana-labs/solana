@@ -2348,4 +2348,18 @@ mod tests {
         assert!(split.len() <= expected_len);
     }
 
+    #[test]
+    fn test_crds_filter_size() {
+        //sanity test to ensure filter size never exceeds MTU size
+        check_pull_request_size(CrdsFilter::new_rand(1000, 10));
+        check_pull_request_size(CrdsFilter::new_rand(1000, 1000));
+        check_pull_request_size(CrdsFilter::new_rand(100000, 1000));
+        check_pull_request_size(CrdsFilter::new_rand(100000, ClusterInfo::max_bloom_size()));
+    }
+
+    fn check_pull_request_size(filter: CrdsFilter) {
+        let value = CrdsValue::ContactInfo(ContactInfo::default());
+        let protocol = Protocol::PullRequest(filter, value.clone());
+        assert!(serialized_size(&protocol).unwrap() <= PACKET_DATA_SIZE as u64);
+    }
 }
