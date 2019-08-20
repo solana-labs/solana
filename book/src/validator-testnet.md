@@ -27,16 +27,16 @@ commands in the following pages.
 If you are bootstrapping with `solana-install`, you can specify the release tag or named channel to install to match your desired testnet.
 
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.5/install/solana-install-init.sh | sh -s - 0.17.2
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s - 0.18.0
 ```
 
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.5/install/solana-install-init.sh | sh -s - beta
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s - beta
 ```
 
 Similarly, you can add this argument to the `solana-install` command if you've built the program from source:
 ```bash
-$ solana-install init 0.17.2
+$ solana-install init 0.18.0
 ```
 
 If you are downloading pre-compiled binaries or building from source, simply choose the release matching your desired testnet.

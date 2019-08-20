@@ -53,8 +53,7 @@ software.
 
 ##### Linux and mac OS
 ```bash
-$ export SOLANA_RELEASE=v0.16.0  # skip this line to install the latest release
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.0/install/solana-install-init.sh | sh -s
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s
 ```
 
 Alternatively build the `solana-install` program from source and run the
