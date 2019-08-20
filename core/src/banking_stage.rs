@@ -25,7 +25,7 @@ use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{
-    self, DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
+    self, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
     MAX_TRANSACTION_FORWARDING_DELAY,
 };
 use solana_sdk::transaction::{self, Transaction, TransactionError};
@@ -700,7 +700,7 @@ impl BankingStage {
                 .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY)
                 .saturating_sub(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET * bank.ticks_per_slot()
-                        / DEFAULT_NUM_TICKS_PER_SECOND) as usize,
+                        / DEFAULT_TICKS_PER_SECOND) as usize,
                 ),
             &mut error_counters,
         );

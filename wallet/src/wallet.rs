@@ -1295,7 +1295,7 @@ fn process_ping(
                     if signal_receiver
                         .recv_timeout(Duration::from_millis(
                             500 * solana_sdk::timing::DEFAULT_TICKS_PER_SLOT
-                                / solana_sdk::timing::DEFAULT_NUM_TICKS_PER_SECOND,
+                                / solana_sdk::timing::DEFAULT_TICKS_PER_SECOND,
                         ))
                         .is_ok()
                     {

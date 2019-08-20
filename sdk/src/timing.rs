@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 // The default tick rate that the cluster attempts to achieve.  Note that the actual tick
 // rate at any given time should be expected to drift
-pub const DEFAULT_NUM_TICKS_PER_SECOND: u64 = 10;
+pub const DEFAULT_TICKS_PER_SECOND: u64 = 10;
 
 // At 10 ticks/s, 4 ticks per slot implies that leader rotation and voting will happen
 // every 400 ms. A fast voting cadence ensures faster finality and convergence
