@@ -783,7 +783,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_slots_since_snapshot() {
         solana_logger::setup();
         for add_root_interval in 1..10 {
