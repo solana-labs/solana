@@ -119,7 +119,7 @@ mod tests {
 
         let entries = make_tiny_deterministic_test_entries(slots_per_segment);
         blocktree
-            .write_entries(0, 0, 0, ticks_per_slot, &entries)
+            .write_entries_using_shreds(0, 0, 0, ticks_per_slot, None, true, &entries)
             .unwrap();
 
         let mut key = hex!(
@@ -135,7 +135,7 @@ mod tests {
         hasher.hash(&buf[..size]);
 
         //  golden needs to be updated if blob stuff changes....
-        let golden: Hash = "7hgFLHveuv9zvHpp6qpco9AHAJKyczdgxiktEMkeghDQ"
+        let golden: Hash = "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn"
             .parse()
             .unwrap();
 

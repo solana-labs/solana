@@ -49,6 +49,7 @@ pub struct Sockets {
     pub fetch: Vec<UdpSocket>,
     pub repair: UdpSocket,
     pub retransmit: UdpSocket,
+    pub forwards: Vec<UdpSocket>,
 }
 
 impl Tvu {
@@ -90,15 +91,23 @@ impl Tvu {
             repair: repair_socket,
             fetch: fetch_sockets,
             retransmit: retransmit_socket,
+            forwards: tvu_forward_sockets,
         } = sockets;
 
-        let (blob_fetch_sender, blob_fetch_receiver) = channel();
+        let (fetch_sender, fetch_receiver) = channel();
 
         let repair_socket = Arc::new(repair_socket);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
             fetch_sockets.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
-        let fetch_stage = BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, &exit);
+        let blob_forward_sockets: Vec<Arc<UdpSocket>> =
+            tvu_forward_sockets.into_iter().map(Arc::new).collect();
+        let fetch_stage = BlobFetchStage::new_multi_socket_packet(
+            blob_sockets,
+            blob_forward_sockets,
+            &fetch_sender,
+            &exit,
+        );
 
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
@@ -110,7 +119,7 @@ impl Tvu {
             &cluster_info,
             Arc::new(retransmit_socket),
             repair_socket,
-            blob_fetch_receiver,
+            fetch_receiver,
             &exit,
             completed_slots_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
@@ -260,6 +269,7 @@ pub mod tests {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit,
                     fetch: target1.sockets.tvu,
+                    forwards: target1.sockets.tvu_forwards,
                 }
             },
             blocktree,

@@ -259,6 +259,12 @@ impl Validator {
                 .iter()
                 .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
                 .collect(),
+            forwards: node
+                .sockets
+                .tvu_forwards
+                .iter()
+                .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
+                .collect(),
         };
 
         let voting_keypair = if config.voting_disabled {

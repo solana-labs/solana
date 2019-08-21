@@ -429,8 +429,17 @@ pub mod tests {
         let entries = create_ticks(ticks_per_slot, last_entry_hash);
         let last_entry_hash = entries.last().unwrap().hash;
 
-        let blobs = entries_to_blobs(&entries, slot, parent_slot, true);
-        blocktree.insert_data_blobs(blobs.iter()).unwrap();
+        blocktree
+            .write_entries_using_shreds(
+                slot,
+                0,
+                0,
+                ticks_per_slot,
+                Some(parent_slot),
+                true,
+                &entries,
+            )
+            .unwrap();
 
         last_entry_hash
     }
@@ -815,7 +824,7 @@ pub mod tests {
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
         blocktree
-            .write_entries(1, 0, 0, genesis_block.ticks_per_slot, &entries)
+            .write_entries_using_shreds(1, 0, 0, genesis_block.ticks_per_slot, None, true, &entries)
             .unwrap();
         let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();

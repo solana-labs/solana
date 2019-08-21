@@ -19,7 +19,7 @@ use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
 use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
-use crate::packet::{to_shared_blob, SharedBlob, BLOB_SIZE};
+use crate::packet::{to_shared_blob, Packet, SharedBlob};
 use crate::repair_service::RepairType;
 use crate::result::Result;
 use crate::staking_utils;
@@ -732,13 +732,37 @@ impl ClusterInfo {
         Ok(())
     }
 
+    pub fn broadcast_shreds(
+        &self,
+        s: &UdpSocket,
+        shreds: &[Vec<u8>],
+        seeds: &[[u8; 32]],
+        stakes: Option<&HashMap<Pubkey, u64>>,
+    ) -> Result<()> {
+        let mut last_err = Ok(());
+        let mut broadcast_table_len = 0;
+        shreds.iter().zip(seeds).for_each(|(shred, seed)| {
+            let broadcast_table = self.sorted_tvu_peers(stakes, ChaChaRng::from_seed(*seed));
+            broadcast_table_len = cmp::max(broadcast_table_len, broadcast_table.len());
+
+            if !broadcast_table.is_empty() {
+                if let Err(e) = s.send_to(shred, &broadcast_table[0].tvu) {
+                    trace!("{}: broadcast result {:?}", self.id(), e);
+                    last_err = Err(e);
+                }
+            }
+        });
+
+        last_err?;
+        Ok(())
+    }
     /// retransmit messages to a list of nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
     pub fn retransmit_to(
         obj: &Arc<RwLock<Self>>,
         peers: &[ContactInfo],
-        blob: &SharedBlob,
+        packet: &Packet,
         slot_leader_pubkey: Option<Pubkey>,
         s: &UdpSocket,
         forwarded: bool,
@@ -748,29 +772,16 @@ impl ClusterInfo {
             let s = obj.read().unwrap();
             (s.my_data().clone(), peers)
         };
-        // hold a write lock so no one modifies the blob until we send it
-        let mut wblob = blob.write().unwrap();
-        let was_forwarded = !wblob.should_forward();
-        wblob.set_forwarded(forwarded);
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
             .filter(|v| v.id != slot_leader_pubkey.unwrap_or_default())
             .map(|v| {
-                debug!(
-                    "{}: retransmit blob {} to {} {}",
-                    me.id,
-                    wblob.index(),
-                    v.id,
-                    v.tvu,
-                );
-                //TODO profile this, may need multiple sockets for par_iter
-                assert!(wblob.meta.size <= BLOB_SIZE);
-                s.send_to(&wblob.data[..wblob.meta.size], &v.tvu)
+                let dest = if forwarded { &v.tvu_forwards } else { &v.tvu };
+                debug!("{}: retransmit packet to {} {}", me.id, v.id, *dest,);
+                s.send_to(&packet.data, dest)
             })
             .collect();
-        // reset the blob to its old state. This avoids us having to copy the blob to modify it
-        wblob.set_forwarded(was_forwarded);
         for e in errs {
             if let Err(e) = &e {
                 inc_new_counter_error!("cluster_info-retransmit-send_to_error", 1, 1);
@@ -1027,7 +1038,7 @@ impl ClusterInfo {
     ) -> Vec<SharedBlob> {
         if let Some(blocktree) = blocktree {
             // Try to find the requested index in one of the slots
-            let blob = blocktree.get_data_blob(slot, blob_index);
+            let blob = blocktree.get_data_shred_as_blob(slot, blob_index);
 
             if let Ok(Some(mut blob)) = blob {
                 inc_new_counter_debug!("cluster_info-window-request-ledger", 1);
@@ -1062,7 +1073,7 @@ impl ClusterInfo {
             if let Ok(Some(meta)) = meta {
                 if meta.received > highest_index {
                     // meta.received must be at least 1 by this point
-                    let blob = blocktree.get_data_blob(slot, meta.received - 1);
+                    let blob = blocktree.get_data_shred_as_blob(slot, meta.received - 1);
 
                     if let Ok(Some(mut blob)) = blob {
                         blob.meta.set_addr(from_addr);
@@ -1088,7 +1099,7 @@ impl ClusterInfo {
                 if meta.received == 0 {
                     break;
                 }
-                let blob = blocktree.get_data_blob(slot, meta.received - 1);
+                let blob = blocktree.get_data_shred_as_blob(slot, meta.received - 1);
                 if let Ok(Some(mut blob)) = blob {
                     blob.meta.set_addr(from_addr);
                     res.push(Arc::new(RwLock::new(blob)));
@@ -1469,6 +1480,7 @@ impl ClusterInfo {
             daddr,
             daddr,
             daddr,
+            daddr,
             timestamp(),
         );
         (node, gossip_socket)
@@ -1481,6 +1493,7 @@ impl ClusterInfo {
 
         let node = ContactInfo::new(
             id,
+            daddr,
             daddr,
             daddr,
             daddr,
@@ -1534,6 +1547,7 @@ pub fn compute_retransmit_peers(
 pub struct Sockets {
     pub gossip: UdpSocket,
     pub tvu: Vec<UdpSocket>,
+    pub tvu_forwards: Vec<UdpSocket>,
     pub tpu: Vec<UdpSocket>,
     pub tpu_forwards: Vec<UdpSocket>,
     pub broadcast: UdpSocket,
@@ -1556,6 +1570,7 @@ impl Node {
     pub fn new_localhost_replicator(pubkey: &Pubkey) -> Self {
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let storage = UdpSocket::bind("127.0.0.1:0").unwrap();
         let empty = "0.0.0.0:0".parse().unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1566,6 +1581,7 @@ impl Node {
             pubkey,
             gossip.local_addr().unwrap(),
             tvu.local_addr().unwrap(),
+            tvu_forwards.local_addr().unwrap(),
             empty,
             empty,
             storage.local_addr().unwrap(),
@@ -1579,6 +1595,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 tvu: vec![tvu],
+                tvu_forwards: vec![],
                 tpu: vec![],
                 tpu_forwards: vec![],
                 broadcast,
@@ -1592,6 +1609,7 @@ impl Node {
         let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tpu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let rpc_port = find_available_port_in_range((1024, 65535)).unwrap();
@@ -1607,6 +1625,7 @@ impl Node {
             pubkey,
             gossip.local_addr().unwrap(),
             tvu.local_addr().unwrap(),
+            tvu_forwards.local_addr().unwrap(),
             tpu.local_addr().unwrap(),
             tpu_forwards.local_addr().unwrap(),
             storage.local_addr().unwrap(),
@@ -1619,6 +1638,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 tvu: vec![tvu],
+                tvu_forwards: vec![tvu_forwards],
                 tpu: vec![tpu],
                 tpu_forwards: vec![tpu_forwards],
                 broadcast,
@@ -1652,6 +1672,9 @@ impl Node {
 
         let (tvu_port, tvu_sockets) = multi_bind_in_range(port_range, 8).expect("tvu multi_bind");
 
+        let (tvu_forwards_port, tvu_forwards_sockets) =
+            multi_bind_in_range(port_range, 8).expect("tpu multi_bind");
+
         let (tpu_port, tpu_sockets) = multi_bind_in_range(port_range, 32).expect("tpu multi_bind");
 
         let (tpu_forwards_port, tpu_forwards_sockets) =
@@ -1665,6 +1688,7 @@ impl Node {
             pubkey,
             SocketAddr::new(gossip_addr.ip(), gossip_port),
             SocketAddr::new(gossip_addr.ip(), tvu_port),
+            SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
             SocketAddr::new(gossip_addr.ip(), tpu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
             socketaddr_any!(),
@@ -1679,6 +1703,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 tvu: tvu_sockets,
+                tvu_forwards: tvu_forwards_sockets,
                 tpu: tpu_sockets,
                 tpu_forwards: tpu_forwards_sockets,
                 broadcast,
@@ -1720,15 +1745,17 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries;
+    use crate::blocktree::tests::make_many_slot_entries_using_shreds;
     use crate::blocktree::Blocktree;
+    use crate::blocktree_processor::tests::fill_blocktree_slot_with_ticks;
     use crate::crds_value::CrdsValueLabel;
-    use crate::erasure::ErasureConfig;
-    use crate::packet::{Blob, BLOB_HEADER_SIZE};
     use crate::repair_service::RepairType;
     use crate::result::Error;
+    use crate::shred::{FirstDataShred, Shred};
     use crate::test_tx::test_tx;
+    use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::{Arc, RwLock};
@@ -1815,6 +1842,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1238),
             socketaddr!([127, 0, 0, 1], 1239),
             socketaddr!([127, 0, 0, 1], 1240),
+            socketaddr!([127, 0, 0, 1], 1241),
             0,
         );
         cluster_info.insert_info(nxt.clone());
@@ -1834,6 +1862,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1238),
             socketaddr!([127, 0, 0, 1], 1239),
             socketaddr!([127, 0, 0, 1], 1240),
+            socketaddr!([127, 0, 0, 1], 1241),
             0,
         );
         cluster_info.insert_info(nxt);
@@ -1870,6 +1899,7 @@ mod tests {
                 socketaddr!("127.0.0.1:1238"),
                 socketaddr!("127.0.0.1:1239"),
                 socketaddr!("127.0.0.1:1240"),
+                socketaddr!("127.0.0.1:1241"),
                 0,
             );
             let rv = ClusterInfo::run_window_request(
@@ -1881,19 +1911,12 @@ mod tests {
                 0,
             );
             assert!(rv.is_empty());
-            let data_size = 1;
-            let blob = SharedBlob::default();
-            {
-                let mut w_blob = blob.write().unwrap();
-                w_blob.set_size(data_size);
-                w_blob.set_index(1);
-                w_blob.set_slot(2);
-                w_blob.set_erasure_config(&ErasureConfig::default());
-                w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
-            }
+            let mut shred = Shred::FirstInSlot(FirstDataShred::default());
+            shred.set_slot(2);
+            shred.set_index(1);
 
             blocktree
-                .write_shared_blobs(vec![&blob])
+                .insert_shreds(&vec![shred])
                 .expect("Expect successful ledger write");
 
             let rv = ClusterInfo::run_window_request(
@@ -1905,10 +1928,12 @@ mod tests {
                 1,
             );
             assert!(!rv.is_empty());
-            let v = rv[0].clone();
-            assert_eq!(v.read().unwrap().index(), 1);
-            assert_eq!(v.read().unwrap().slot(), 2);
-            assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
+            let rv: Vec<Shred> = rv
+                .into_iter()
+                .map(|b| bincode::deserialize(&b.read().unwrap().data).unwrap())
+                .collect();
+            assert_eq!(rv[0].index(), 1);
+            assert_eq!(rv[0].slot(), 2);
         }
 
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -1925,37 +1950,30 @@ mod tests {
                 ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 0, 0);
             assert!(rv.is_empty());
 
-            let data_size = 1;
-            let max_index = 5;
-            let blobs: Vec<_> = (0..max_index)
-                .map(|i| {
-                    let mut blob = Blob::default();
-                    blob.set_size(data_size);
-                    blob.set_index(i);
-                    blob.set_slot(2);
-                    blob.set_erasure_config(&ErasureConfig::default());
-                    blob.meta.size = data_size + BLOB_HEADER_SIZE;
-                    blob
-                })
-                .collect();
-
-            blocktree
-                .write_blobs(&blobs)
-                .expect("Expect successful ledger write");
+            let _ = fill_blocktree_slot_with_ticks(
+                &blocktree,
+                DEFAULT_TICKS_PER_SLOT,
+                2,
+                1,
+                Hash::default(),
+            );
 
             let rv =
                 ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 2, 1);
+            let rv: Vec<Shred> = rv
+                .into_iter()
+                .map(|b| bincode::deserialize(&b.read().unwrap().data).unwrap())
+                .collect();
             assert!(!rv.is_empty());
-            let v = rv[0].clone();
-            assert_eq!(v.read().unwrap().index(), max_index - 1);
-            assert_eq!(v.read().unwrap().slot(), 2);
-            assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
+            let index = blocktree.meta(2).unwrap().unwrap().received - 1;
+            assert_eq!(rv[0].index(), index as u32);
+            assert_eq!(rv[0].slot(), 2);
 
             let rv = ClusterInfo::run_highest_window_request(
                 &socketaddr_any!(),
                 Some(&blocktree),
                 2,
-                max_index,
+                index + 1,
             );
             assert!(rv.is_empty());
         }
@@ -1973,10 +1991,10 @@ mod tests {
             assert!(rv.is_empty());
 
             // Create slots 1, 2, 3 with 5 blobs apiece
-            let (blobs, _) = make_many_slot_entries(1, 3, 5);
+            let (blobs, _) = make_many_slot_entries_using_shreds(1, 3, 5);
 
             blocktree
-                .write_blobs(&blobs)
+                .insert_shreds(&blobs)
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset
@@ -1991,7 +2009,13 @@ mod tests {
                 .collect();
             let expected: Vec<_> = (1..=3)
                 .rev()
-                .map(|slot| blocktree.get_data_blob(slot, 4).unwrap().unwrap())
+                .map(|slot| {
+                    let index = blocktree.meta(slot).unwrap().unwrap().received - 1;
+                    blocktree
+                        .get_data_shred_as_blob(slot, index)
+                        .unwrap()
+                        .unwrap()
+                })
                 .collect();
             assert_eq!(rv, expected)
         }

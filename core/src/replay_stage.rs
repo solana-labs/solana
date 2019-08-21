@@ -360,6 +360,7 @@ impl ReplayStage {
         let mut tx_count = 0;
         let result =
             Self::load_blocktree_entries(bank, blocktree, progress).and_then(|(entries, num)| {
+                debug!("Replaying {:?} entries, num {:?}", entries.len(), num);
                 tx_count += entries.iter().map(|e| e.transactions.len()).sum::<usize>();
                 Self::replay_entries_into_bank(bank, entries, progress, num)
             });
@@ -532,6 +533,7 @@ impl ReplayStage {
         for bank_slot in &active_banks {
             // If the fork was marked as dead, don't replay it
             if progress.get(bank_slot).map(|p| p.is_dead).unwrap_or(false) {
+                debug!("bank_slot {:?} is marked dead", *bank_slot);
                 continue;
             }
 
@@ -681,7 +683,7 @@ impl ReplayStage {
         let bank_progress = &mut progress
             .entry(bank_slot)
             .or_insert_with(|| ForkProgress::new(bank.last_blockhash()));
-        blocktree.get_slot_entries_with_blob_count(bank_slot, bank_progress.num_blobs as u64, None)
+        blocktree.get_slot_entries_with_shred_count(bank_slot, bank_progress.num_blobs as u64)
     }
 
     fn replay_entries_into_bank(
@@ -841,11 +843,13 @@ mod test {
     use super::*;
     use crate::bank_forks::Confidence;
     use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::tests::entries_to_test_shreds;
     use crate::entry;
     use crate::erasure::ErasureConfig;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
-    use crate::packet::{Blob, BLOB_HEADER_SIZE};
+    use crate::packet::Blob;
     use crate::replay_stage::ReplayStage;
+    use crate::shred::Shred;
     use solana_runtime::genesis_utils::GenesisBlockInfo;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -920,8 +924,8 @@ mod test {
         let missing_keypair = Keypair::new();
         let missing_keypair2 = Keypair::new();
 
-        let res = check_dead_fork(|blockhash| {
-            entry::next_entry(
+        let res = check_dead_fork(|blockhash, slot| {
+            let entry = entry::next_entry(
                 blockhash,
                 1,
                 vec![
@@ -938,8 +942,8 @@ mod test {
                         *blockhash,
                     ), // should cause AccountNotFound error
                 ],
-            )
-            .to_blob()
+            );
+            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
         });
 
         assert_matches!(
@@ -952,9 +956,9 @@ mod test {
     fn test_dead_fork_entry_verification_failure() {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
-        let res = check_dead_fork(|blockhash| {
+        let res = check_dead_fork(|blockhash, slot| {
             let bad_hash = hash(&[2; 30]);
-            entry::next_entry(
+            let entry = entry::next_entry(
                 // User wrong blockhash so that the the entry causes an entry verification failure
                 &bad_hash,
                 1,
@@ -964,8 +968,8 @@ mod test {
                     2,
                     *blockhash,
                 )],
-            )
-            .to_blob()
+            );
+            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
         });
 
         assert_matches!(res, Err(Error::BlobError(BlobError::VerificationFailed)));
@@ -977,8 +981,8 @@ mod test {
         let keypair2 = Keypair::new();
         // Insert entry that causes blob deserialization failure
 
-        let res = check_dead_fork(|blockhash| {
-            let mut b = entry::next_entry(
+        let res = check_dead_fork(|blockhash, slot| {
+            let entry = entry::next_entry(
                 &blockhash,
                 1,
                 vec![system_transaction::create_user_account(
@@ -987,23 +991,21 @@ mod test {
                     2,
                     *blockhash,
                 )],
-            )
-            .to_blob();
-            b.set_size(BLOB_HEADER_SIZE);
-            b
+            );
+            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
         });
 
         assert_matches!(
             res,
-            Err(Error::BlocktreeError(BlocktreeError::InvalidBlobData(_)))
+            Err(Error::TransactionError(TransactionError::AccountNotFound))
         );
     }
 
     // Given a blob and a fatal expected error, check that replaying that blob causes causes the fork to be
     // marked as dead. Returns the error for caller to verify.
-    fn check_dead_fork<F>(blob_to_insert: F) -> Result<()>
+    fn check_dead_fork<F>(shred_to_insert: F) -> Result<()>
     where
-        F: Fn(&Hash) -> Blob,
+        F: Fn(&Hash, u64) -> Vec<Shred>,
     {
         let ledger_path = get_tmp_ledger_path!();
         let res = {
@@ -1015,8 +1017,8 @@ mod test {
             let mut progress = HashMap::new();
             let last_blockhash = bank0.last_blockhash();
             progress.insert(bank0.slot(), ForkProgress::new(last_blockhash));
-            let blob = blob_to_insert(&last_blockhash);
-            blocktree.insert_data_blobs(&[blob]).unwrap();
+            let shreds = shred_to_insert(&last_blockhash, bank0.slot());
+            blocktree.insert_shreds(&shreds).unwrap();
             let (res, _tx_count) =
                 ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut progress);
 

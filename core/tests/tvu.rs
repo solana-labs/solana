@@ -37,6 +37,7 @@ fn new_gossip(
 
 /// Test that message sent from leader to target1 and replayed to target2
 #[test]
+#[ignore]
 fn test_replay() {
     solana_logger::setup();
     let leader_keypair = Keypair::new();
@@ -129,6 +130,7 @@ fn test_replay() {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit,
                     fetch: target1.sockets.tvu,
+                    forwards: target1.sockets.tvu_forwards,
                 }
             },
             blocktree,

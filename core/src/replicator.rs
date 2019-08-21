@@ -6,13 +6,14 @@ use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
 use crate::packet::to_shared_blob;
 use crate::recycler::Recycler;
+use crate::repair_service;
 use crate::repair_service::{RepairService, RepairSlotRange, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
+use crate::shred::Shred;
 use crate::storage_stage::NUM_STORAGE_SAMPLES;
-use crate::streamer::{blob_receiver, receiver, responder, BlobReceiver};
+use crate::streamer::{receiver, responder, PacketReceiver};
 use crate::window_service::WindowService;
-use crate::{repair_service, window_service};
 use bincode::deserialize;
 use rand::thread_rng;
 use rand::Rng;
@@ -253,8 +254,19 @@ impl Replicator {
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
             node.sockets.tvu.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
+        let blob_forward_sockets: Vec<Arc<UdpSocket>> = node
+            .sockets
+            .tvu_forwards
+            .into_iter()
+            .map(Arc::new)
+            .collect();
         let (blob_fetch_sender, blob_fetch_receiver) = channel();
-        let fetch_stage = BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, &exit);
+        let fetch_stage = BlobFetchStage::new_multi_socket_packet(
+            blob_sockets,
+            blob_forward_sockets,
+            &blob_fetch_sender,
+            &exit,
+        );
         let (slot_sender, slot_receiver) = channel();
         let request_processor =
             create_request_processor(node.sockets.storage.unwrap(), &exit, slot_receiver);
@@ -414,7 +426,7 @@ impl Replicator {
         node_info: &ContactInfo,
         storage_keypair: &Arc<Keypair>,
         repair_socket: Arc<UdpSocket>,
-        blob_fetch_receiver: BlobReceiver,
+        blob_fetch_receiver: PacketReceiver,
         slot_sender: Sender<u64>,
     ) -> Result<(WindowService)> {
         let slots_per_segment = match Self::get_segment_config(&cluster_info) {
@@ -794,7 +806,13 @@ impl Replicator {
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
         let repair_socket = Arc::new(bind_in_range(FULLNODE_PORT_RANGE).unwrap().1);
-        let t_receiver = blob_receiver(repair_socket.clone(), &exit, s_reader);
+        let t_receiver = receiver(
+            repair_socket.clone(),
+            &exit,
+            s_reader.clone(),
+            Recycler::default(),
+            "replicator_reeciver",
+        );
         let id = cluster_info.read().unwrap().id();
         info!(
             "Sending repair requests from: {} to: {}",
@@ -846,11 +864,16 @@ impl Replicator {
                 }
             }
             let res = r_reader.recv_timeout(Duration::new(1, 0));
-            if let Ok(mut blobs) = res {
+            if let Ok(mut packets) = res {
                 while let Ok(mut more) = r_reader.try_recv() {
-                    blobs.append(&mut more);
+                    packets.packets.append(&mut more.packets);
                 }
-                window_service::process_blobs(&blobs, blocktree)?;
+                let shreds: Vec<Shred> = packets
+                    .packets
+                    .iter()
+                    .filter_map(|p| bincode::deserialize(&p.data).ok())
+                    .collect();
+                blocktree.insert_shreds(&shreds)?;
             }
             // check if all the slots in the segment are complete
             if Self::segment_complete(start_slot, slots_per_segment, blocktree) {

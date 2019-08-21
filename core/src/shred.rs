@@ -6,6 +6,7 @@ use bincode::serialized_size;
 use core::borrow::BorrowMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::packet::PACKET_DATA_SIZE;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::io::{Error as IOError, ErrorKind, Write};
 use std::sync::Arc;
@@ -33,6 +34,17 @@ impl Shred {
         }
     }
 
+    pub fn set_slot(&mut self, slot: u64) {
+        match self {
+            Shred::FirstInSlot(s) => s.header.data_header.common_header.slot = slot,
+            Shred::FirstInFECSet(s)
+            | Shred::Data(s)
+            | Shred::LastInFECSet(s)
+            | Shred::LastInSlot(s) => s.header.common_header.slot = slot,
+            Shred::Coding(s) => s.header.common_header.slot = slot,
+        };
+    }
+
     pub fn index(&self) -> u32 {
         match self {
             Shred::FirstInSlot(s) => s.header.data_header.common_header.index,
@@ -42,6 +54,17 @@ impl Shred {
             | Shred::LastInSlot(s) => s.header.common_header.index,
             Shred::Coding(s) => s.header.common_header.index,
         }
+    }
+
+    pub fn set_index(&mut self, index: u32) {
+        match self {
+            Shred::FirstInSlot(s) => s.header.data_header.common_header.index = index,
+            Shred::FirstInFECSet(s)
+            | Shred::Data(s)
+            | Shred::LastInFECSet(s)
+            | Shred::LastInSlot(s) => s.header.common_header.index = index,
+            Shred::Coding(s) => s.header.common_header.index = index,
+        };
     }
 
     pub fn signature(&self) -> Signature {
@@ -70,6 +93,24 @@ impl Shred {
 
         seed[0..seed_len].copy_from_slice(&sig[(sig.len() - seed_len)..]);
         seed
+    }
+
+    pub fn verify(&self, pubkey: &Pubkey) -> bool {
+        let signed_payload_offset = match self {
+            Shred::FirstInSlot(_)
+            | Shred::FirstInFECSet(_)
+            | Shred::Data(_)
+            | Shred::LastInFECSet(_)
+            | Shred::LastInSlot(_) => CodingShred::overhead(),
+            Shred::Coding(_) => {
+                CodingShred::overhead()
+                    - serialized_size(&CodingShred::empty_shred()).unwrap() as usize
+            }
+        } + bincode::serialized_size(&Signature::default()).unwrap()
+            as usize;
+        let shred = bincode::serialize(&self).unwrap();
+        self.signature()
+            .verify(pubkey.as_ref(), &shred[signed_payload_offset..])
     }
 }
 
@@ -242,7 +283,7 @@ impl ShredCommon for CodingShred {
 pub struct Shredder {
     slot: u64,
     index: u32,
-    parent: Option<u64>,
+    pub parent: Option<u64>,
     fec_rate: f32,
     signer: Arc<Keypair>,
     pub shreds: Vec<Vec<u8>>,
@@ -735,9 +776,6 @@ mod tests {
         // Assert that the new active shred was not populated
         assert_eq!(shredder.active_offset, 0);
 
-        let data_offset = CodingShred::overhead()
-            + bincode::serialized_size(&Signature::default()).unwrap() as usize;
-
         // Test3: Assert that the first shred in slot was created (since we gave a parent to shredder)
         let shred = shredder.shreds.pop().unwrap();
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
@@ -750,9 +788,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
         let seed0 = deserialized_shred.seed();
         // Test that same seed is generated for a given shred
         assert_eq!(seed0, deserialized_shred.seed());
@@ -778,9 +814,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
         // Test that same seed is NOT generated for two different shreds
         assert_ne!(seed0, deserialized_shred.seed());
 
@@ -802,9 +836,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::FirstInFECSet(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         // Test8: Write more data to generate an intermediate data shred
         let offset = shredder.write(&data).unwrap();
@@ -821,9 +853,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 3);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         // Test9: Write some data to shredder
         let data: Vec<u8> = (0..25).collect();
@@ -843,9 +873,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInSlot(_));
         assert_eq!(deserialized_shred.index(), 4);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
     }
 
     #[test]
@@ -872,18 +900,13 @@ mod tests {
         // We should have 2 shreds now (FirstInSlot, and LastInFECSet)
         assert_eq!(shredder.shreds.len(), 2);
 
-        let data_offset = CodingShred::overhead()
-            + bincode::serialized_size(&Signature::default()).unwrap() as usize;
-
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
@@ -891,9 +914,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         // Try shredder when no parent is provided
         let mut shredder = Shredder::new(0x123456789abcdef0, None, 0.0, &keypair, 2)
@@ -920,9 +941,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
     }
 
     #[test]
@@ -951,9 +970,6 @@ mod tests {
 
         shredder.finalize_fec_block();
 
-        let data_offset = CodingShred::overhead()
-            + bincode::serialized_size(&Signature::default()).unwrap() as usize;
-
         // Finalize must have created 1 final data shred and 3 coding shreds
         // assert_eq!(shredder.shreds.len(), 6);
         let shred = shredder.shreds.remove(0);
@@ -962,9 +978,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
@@ -972,9 +986,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
@@ -982,14 +994,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
-
-        let coding_data_offset =
-            (serialized_size(&Shred::Coding(CodingShred::empty_shred())).unwrap()
-                - serialized_size(&CodingShred::empty_shred()).unwrap()
-                + serialized_size(&Signature::default()).unwrap()) as usize as usize;
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
@@ -997,9 +1002,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::Coding(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
@@ -1007,9 +1010,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::Coding(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
@@ -1017,9 +1018,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::Coding(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
-        assert!(deserialized_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[coding_data_offset..]));
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
     }
 
     #[test]
@@ -1089,28 +1088,21 @@ mod tests {
             })
             .collect();
 
-        let data_offset = CodingShred::overhead()
-            + bincode::serialized_size(&Signature::default()).unwrap() as usize;
-
         let mut result = Shredder::deshred(&shreds).unwrap();
         assert!(result.payload.len() >= data.len());
         assert_eq!(result.recovered_data.len(), 2); // Data shreds 1 and 3 were missing
         let recovered_shred = result.recovered_data.remove(0);
-        let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 1);
         assert_eq!(recovered_shred.slot(), slot);
-        assert!(recovered_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+
         let recovered_shred = result.recovered_data.remove(0);
-        let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 3);
         assert_eq!(recovered_shred.slot(), slot);
-        assert!(recovered_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+
         assert_eq!(result.recovered_code.len(), 3); // Coding shreds 5, 7, 9 were missing
         let recovered_shred = result.recovered_code.remove(0);
         if let Shred::Coding(code) = recovered_shred {
@@ -1156,29 +1148,23 @@ mod tests {
         assert!(result.payload.len() >= data.len());
         assert_eq!(result.recovered_data.len(), 3); // Data shreds 0, 2 and 4 were missing
         let recovered_shred = result.recovered_data.remove(0);
-        let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::FirstInSlot(_));
         assert_eq!(recovered_shred.index(), 0);
         assert_eq!(recovered_shred.slot(), slot);
-        assert!(recovered_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+
         let recovered_shred = result.recovered_data.remove(0);
-        let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 2);
         assert_eq!(recovered_shred.slot(), slot);
-        assert!(recovered_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+
         let recovered_shred = result.recovered_data.remove(0);
-        let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::LastInFECSet(_));
         assert_eq!(recovered_shred.index(), 4);
         assert_eq!(recovered_shred.slot(), slot);
-        assert!(recovered_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+
         assert_eq!(result.recovered_code.len(), 2); // Coding shreds 6, 8 were missing
         let recovered_shred = result.recovered_code.remove(0);
         if let Shred::Coding(code) = recovered_shred {
@@ -1239,29 +1225,23 @@ mod tests {
         assert!(result.payload.len() >= data.len());
         assert_eq!(result.recovered_data.len(), 3); // Data shreds 0, 2 and 4 were missing
         let recovered_shred = result.recovered_data.remove(0);
-        let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::FirstInSlot(_));
         assert_eq!(recovered_shred.index(), 0);
         assert_eq!(recovered_shred.slot(), slot);
-        assert!(recovered_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+
         let recovered_shred = result.recovered_data.remove(0);
-        let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 2);
         assert_eq!(recovered_shred.slot(), slot);
-        assert!(recovered_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+
         let recovered_shred = result.recovered_data.remove(0);
-        let shred = bincode::serialize(&recovered_shred).unwrap();
         assert_matches!(recovered_shred, Shred::LastInSlot(_));
         assert_eq!(recovered_shred.index(), 4);
         assert_eq!(recovered_shred.slot(), slot);
-        assert!(recovered_shred
-            .signature()
-            .verify(keypair.pubkey().as_ref(), &shred[data_offset..]));
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+
         assert_eq!(result.recovered_code.len(), 2); // Coding shreds 6, 8 were missing
         let recovered_shred = result.recovered_code.remove(0);
         if let Shred::Coding(code) = recovered_shred {

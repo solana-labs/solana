@@ -42,6 +42,8 @@ pub struct Meta {
     pub addr: [u16; 8],
     pub port: u16,
     pub v6: bool,
+    pub seed: [u8; 32],
+    pub slot: u64,
 }
 
 #[derive(Clone)]
