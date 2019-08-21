@@ -3,9 +3,6 @@
 # Adjusts system settings for optimal fullnode performance
 #
 
-# shellcheck source=scripts/ulimit-n.sh
-source "$(dirname "${BASH_SOURCE[0]}")"/ulimit-n.sh
-
 sysctl_write() {
   declare name=$1
   declare new_value=$2
