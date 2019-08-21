@@ -15,7 +15,7 @@ cuda = []
 [dependencies]
 atty = "0.2.11"
 bincode = "1.1.4"
-bs58 = "0.2.0"
+bs58 = "0.2.4"
 bzip2 = "0.3.3"
 chrono = { version = "0.4.7", features = ["serde"] }
 clap = { version = "2.33.0" }

@@ -14,7 +14,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 bincode = "1.1.4"
-bs58 = "0.2.0"
+bs58 = "0.2.4"
 libc = "0.2.62"
 rand_chacha = "0.1.1"
 rand_core = { version = ">=0.2, <0.4", default-features = false }

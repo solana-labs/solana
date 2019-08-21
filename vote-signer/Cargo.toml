@@ -9,7 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-bs58 = "0.2.0"
+bs58 = "0.2.4"
 clap = "2.33"
 jsonrpc-core = "13.0.0"
 jsonrpc-derive = "13.0.0"

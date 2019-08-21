@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 bincode = "1.1.4"
-bs58 = "0.2.0"
+bs58 = "0.2.4"
 clap = "2.32.0"
 env_logger = "0.6.2"
 itertools = "0.8.0"
