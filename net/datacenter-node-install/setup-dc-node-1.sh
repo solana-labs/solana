@@ -28,7 +28,7 @@ apt install -y build-essential pkg-config clang
 
 "$HERE"/../scripts/install-docker.sh
 
-usermod -aG docker USERNAME
+usermod -aG docker "$USERNAME"
 
 "$HERE"/../scripts/install-certbot.sh
 
