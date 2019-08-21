@@ -27,13 +27,9 @@ apt upgrade -y
 apt install -y build-essential pkg-config clang
 
 "$HERE"/../scripts/install-docker.sh
-
 usermod -aG docker "$USERNAME"
-
 "$HERE"/../scripts/install-certbot.sh
-
 "$HERE"/setup-sudoers.sh
-
 "$HERE"/setup-ssh.sh
 
 # Allow admin user to log in
@@ -44,21 +40,13 @@ cat "$PUBKEY_FILE" > "${BASE_SSH_DIR}/authorized_keys"
 chown "$USERNAME:$USERNAME" "${BASE_SSH_DIR}/.ssh/authorized_keys"
 
 "$HERE"/disable-nouveau.sh
-
 "$HERE"/disable-networkd-wait.sh
-
 "$HERE"/setup-grub.sh
-
 "$HERE"/../scripts/install-earlyoom.sh
-
 "$HERE"/../scripts/install-nodeljs.sh
-
 "$HERE"/../scripts/localtime.sh
-
 "$HERE"/../scripts/install-redis.sh
-
 "$HERE"/../scripts/install-rsync.sh
-
 "$HERE"/../scripts/install-libssl-compatability.sh
 
 # Setup kernel constants
