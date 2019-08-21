@@ -88,7 +88,7 @@
     "@babel/preset-flow": "^7.0.0",
     "@commitlint/config-conventional": "^8.0.0",
     "@commitlint/travis-cli": "^8.0.0",
-    "acorn": "^6.1.1",
+    "acorn": "^7.0.0",
     "babel-eslint": "10.0.2",
     "babel-plugin-module-resolver": "3.2.0",
     "codecov": "^3.0.4",
