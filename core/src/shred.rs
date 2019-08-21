@@ -34,6 +34,17 @@ impl Shred {
         }
     }
 
+    pub fn parent(&self) -> u64 {
+        match self {
+            Shred::FirstInSlot(s) => s.header.data_header.parent,
+            Shred::FirstInFECSet(s)
+            | Shred::Data(s)
+            | Shred::LastInFECSet(s)
+            | Shred::LastInSlot(s) => s.header.parent,
+            Shred::Coding(_) => std::u64::MAX,
+        }
+    }
+
     pub fn set_slot(&mut self, slot: u64) {
         match self {
             Shred::FirstInSlot(s) => s.header.data_header.common_header.slot = slot,
@@ -127,6 +138,7 @@ pub struct ShredCommonHeader {
 pub struct DataShredHeader {
     _reserved: CodingShredHeader,
     pub common_header: ShredCommonHeader,
+    pub parent: u64,
     pub last_in_slot: u8,
 }
 
@@ -284,6 +296,7 @@ pub struct Shredder {
     slot: u64,
     index: u32,
     pub parent: Option<u64>,
+    parent_slot: u64,
     fec_rate: f32,
     signer: Arc<Keypair>,
     pub shreds: Vec<Vec<u8>>,
@@ -301,8 +314,15 @@ impl Write for Shredder {
                     self.parent
                         .take()
                         .map(|parent| {
-                            // If parent slot is provided, assume it's first shred in slot
-                            Shred::FirstInSlot(self.new_first_shred(parent))
+                            self.parent_slot = parent;
+                            // If parent slot is available
+                            if self.index == 0 {
+                                // If index is 0, it's the first shred in slot
+                                Shred::FirstInSlot(self.new_first_shred(parent))
+                            } else {
+                                // Or, it is the first shred in FEC set
+                                Shred::FirstInFECSet(self.new_data_shred())
+                            }
                         })
                         .unwrap_or_else(||
                             // If parent slot is not provided, and since there's no existing shred,
@@ -371,6 +391,7 @@ impl Shredder {
                 slot,
                 index,
                 parent,
+                parent_slot: 0,
                 fec_rate,
                 signer: signer.clone(),
                 ..Shredder::default()
@@ -403,6 +424,7 @@ impl Shredder {
         let mut data_shred = DataShred::default();
         data_shred.header.common_header.slot = self.slot;
         data_shred.header.common_header.index = self.index;
+        data_shred.header.parent = self.parent_slot;
         data_shred
     }
 
@@ -410,6 +432,7 @@ impl Shredder {
     fn new_first_shred(&self, parent: u64) -> FirstDataShred {
         let mut first_shred = FirstDataShred::default();
         first_shred.header.parent = parent;
+        first_shred.header.data_header.parent = parent;
         first_shred.header.data_header.common_header.slot = self.slot;
         first_shred.header.data_header.common_header.index = self.index;
         first_shred

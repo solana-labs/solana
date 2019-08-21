@@ -15,7 +15,7 @@ use solana_sdk::{client::SyncClient, poh_config::PohConfig, timing};
 use std::{collections::HashSet, thread::sleep, time::Duration};
 
 #[test]
-#[ignore]
+#[serial]
 fn test_ledger_cleanup_service() {
     solana_logger::setup();
     error!("test_ledger_cleanup_service");
@@ -69,7 +69,7 @@ fn test_spend_and_verify_all_nodes_1() {
 }
 
 #[test]
-#[ignore]
+#[serial]
 fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_2");
@@ -84,7 +84,7 @@ fn test_spend_and_verify_all_nodes_2() {
 }
 
 #[test]
-#[ignore]
+#[serial]
 fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_3");
