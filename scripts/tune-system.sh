@@ -40,11 +40,6 @@ Linux)
   sysctl_write net.core.wmem_max 161061273
   sysctl_write net.core.wmem_default 161061273
   ;;
-
-Darwin)
-  # Adjusting maxdgram to allow for large UDP packets, see BLOB_SIZE in core/src/packet.rs
-  sysctl_write net.inet.udp.maxdgram 65535
-  ;;
 *)
   ;;
 esac
