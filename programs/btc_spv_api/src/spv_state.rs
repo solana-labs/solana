@@ -1,7 +1,10 @@
-use crate::id;
+use crate::utils::*;
+use crate::header_store::*;
+use std::{error, fmt};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::instruction::{AccountMeta, Instruction};
+use log::*;
 
 
 pub type BitcoinTxHash = [u8;32];
@@ -21,18 +24,19 @@ pub struct BlockHeader {
 
     pub nonce       : u32,
     // Block hash
-    pub digest      : BitcoinTxHash,
+    pub blockhash   : BitcoinTxHash,
 }
 
 impl BlockHeader {
-    pub fn new(header: &[u8;80]) -> BlockHeader {
-        let version    = header[0 .. 4];
+    pub fn new(header: &[u8;80], blockhash: &[u8;32]) -> Result<BlockHeader, SpvError> {
+
+        let version    = header[0 .. 4]; // version is largely useless because of miners messing with the last 2 bytes
         // extract digest from last block
-        let parentHash = header[4 .. 36]; // little endian
+        let parentHash = header[4 .. 36];
         // extract merkle root in internal byte order
         let merkleRoot = header[36 .. 68];
         // timestamp associate with the block
-        let blockTime  = header[68 .. 72];
+        let blockTime  = u32::from_le_bytes(header[68 .. 72]);
         // nbits field is an encoded version of the
         let nbits      = header[72 .. 76];
 
@@ -45,14 +49,32 @@ impl BlockHeader {
             time: blockTime,
             nbits: nbits,
             nonce: nonce,
+            blockhash: blockhash,
+        }
+    }
+
+    pub fn hexnew(header: &str, blockhash: &str) -> Result<BlockHeader, SpvError> {
+        if header.len() != 160 || blockhash.len() != 64 {
+            Err(SpvError::InvalidBlockHeader)
+        }
+        let bhbytes = decode_hex(blockhash)?;
+
+        match decode_hex(header){
+            Ok(header) => {
+                Ok(BlockHeader::new(&header, &bhbytes))
+            }
+            Err(e) => {
+                Err(e)
+            }
         }
     }
 
     pub fn difficulty(mut self) -> u32 {
         // calculates difficulty from nbits
-        
+
     }
 }
+
 
 
 pub type HeaderChain = Vec<BlockHeader>;
@@ -62,7 +84,7 @@ pub type HeaderChain = Vec<BlockHeader>;
 // index 2-n* : the block headers for the confirmation chain
 // (where n is the confirmations value from the proof request)
 
-pub struct ProofEntry    = {
+pub struct ProofEntry {
     // 32 byte merkle hashes
     pub hash: [u8;32],
     // side of the merkle tree entry
@@ -132,7 +154,7 @@ pub enum AccountState {
     // Request Account
     Request(ClientRequestInfo),
     // Verified Proof
-    Verification(Proof),
+    Verification(ProofInfo),
     // Account's userdata is Unallocated
     Unallocated,
     // Invalid
@@ -142,5 +164,44 @@ pub enum AccountState {
 impl Default for AccountState {
     fn default() -> Self {
         AccountState::Unallocated
+    }
+}
+
+///Errors
+
+pub enum SpvError {
+    InvalidBlockHeader,
+
+    HeaderStoreError(err),
+
+    ParseError(err),
+}
+
+impl error::Error for SpvError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+    // temporary measure
+    None
+    }
+}
+
+impl From<HeaderStoreError> for SpvError {
+    fn from(e: HeaderStoreError) -> Self {
+        SpvError::HeaderStoreError(e)
+    }
+}
+
+impl From<DecodeHexError> for SpvError {
+    fn from(e: DecodeHexError) -> Self {
+        SpvError::ParseError(e)
+    }
+}
+
+impl fmt::Display for SpvError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SpvError::InvalidBlockHeader  => "BlockHeader is malformed or does not apply ".fmt(f),
+            SpvError::HeaderStoreError(e) => e.fmt(f),
+            SpvError::ParseError(e) => e.fmt(f),
+        }
     }
 }

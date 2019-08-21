@@ -1,4 +1,8 @@
 pub mod spv_instruction;
+pub mod spv_state;
+pub mod spv_processor;
+pub mod utils;
+pub mod header_store;
 
 pub const BTC_SPV_PROGRAM_ID: [u8; 32] = [
     2, 202, 42, 59, 228, 51, 182, 147, 162, 245, 234, 78, 205, 37, 131, 154, 110, 252, 154, 254,
