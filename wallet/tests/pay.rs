@@ -11,7 +11,7 @@ use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 
 #[cfg(test)]
-use solana::validator::new_validator_for_tests;
+use solana_core::validator::new_validator_for_tests;
 use std::thread::sleep;
 use std::time::Duration;
 

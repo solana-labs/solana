@@ -1,4 +1,5 @@
-use solana::{
+use solana_client::thin_client::{create_client, ThinClient};
+use solana_core::{
     blocktree::create_new_tmp_ledger,
     cluster::Cluster,
     cluster_info::{Node, FULLNODE_PORT_RANGE},
@@ -9,7 +10,6 @@ use solana::{
     service::Service,
     validator::{Validator, ValidatorConfig},
 };
-use solana_client::thin_client::{create_client, ThinClient};
 use solana_sdk::{
     client::SyncClient,
     genesis_block::GenesisBlock,
@@ -623,7 +623,7 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana::storage_stage::SLOTS_PER_TURN_TEST;
+    use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
     use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 
     #[test]

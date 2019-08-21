@@ -5,8 +5,8 @@ use itertools::izip;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana::gen_keys::GenKeys;
 use solana_client::perf_utils::{sample_txs, SampleStats};
+use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
@@ -963,8 +963,8 @@ pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana::gossip_service::{discover_cluster, get_multi_client};
-    use solana::validator::ValidatorConfig;
+    use solana_core::gossip_service::{discover_cluster, get_multi_client};
+    use solana_core::validator::ValidatorConfig;
     use solana_drone::drone::run_local_drone;
     use solana_exchange_api::exchange_processor::process_instruction;
     use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};

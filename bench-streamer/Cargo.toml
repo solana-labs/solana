@@ -9,10 +9,10 @@ homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-solana = { path = "../core", version = "0.18.0-pre2" }
+solana-core = { path = "../core", version = "0.18.0-pre2" }
 solana-logger = { path = "../logger", version = "0.18.0-pre2" }
 solana-netutil = { path = "../utils/netutil", version = "0.18.0-pre2" }
 
 [features]
-cuda = ["solana/cuda"]
+cuda = ["solana-core/cuda"]
 

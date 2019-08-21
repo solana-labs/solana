@@ -1,7 +1,7 @@
 //! A command-line executable for generating the chain's genesis block.
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
-use solana::blocktree::create_new_ledger;
+use solana_core::blocktree::create_new_ledger;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::Builder;

@@ -1,7 +1,7 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
-use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
-use solana::contact_info::ContactInfo;
-use solana::replicator::Replicator;
+use solana_core::cluster_info::{Node, FULLNODE_PORT_RANGE};
+use solana_core::contact_info::ContactInfo;
+use solana_core::replicator::Replicator;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::net::SocketAddr;
 use std::path::PathBuf;

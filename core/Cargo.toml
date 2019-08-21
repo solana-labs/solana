@@ -1,5 +1,5 @@
 [package]
-name = "solana"
+name = "solana-core"
 description = "Blockchain, Rebuilt for Scale"
 version = "0.18.0-pre2"
 documentation = "https://docs.rs/solana"

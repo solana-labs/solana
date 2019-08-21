@@ -1,8 +1,8 @@
-extern crate solana;
+extern crate solana_core;
 
 use log::*;
 use serial_test_derive::serial;
-use solana::{
+use solana_core::{
     blocktree::Blocktree, broadcast_stage::BroadcastStageType, cluster::Cluster,
     gossip_service::discover_cluster, validator::ValidatorConfig,
 };

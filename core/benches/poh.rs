@@ -1,10 +1,10 @@
-// This bench attempts to justify the value of `solana::poh_service::NUM_HASHES_PER_BATCH`
+// This bench attempts to justify the value of `solana_core::poh_service::NUM_HASHES_PER_BATCH`
 
 #![feature(test)]
 extern crate test;
 
-use solana::poh::Poh;
-use solana::poh_service::NUM_HASHES_PER_BATCH;
+use solana_core::poh::Poh;
+use solana_core::poh_service::NUM_HASHES_PER_BATCH;
 use solana_sdk::hash::Hash;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

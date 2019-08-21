@@ -1,21 +1,21 @@
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
 use log::*;
-use solana::banking_stage::create_test_recorder;
-use solana::blocktree::{create_new_tmp_ledger, Blocktree};
-use solana::cluster_info::{ClusterInfo, Node};
-use solana::entry::next_entry_mut;
-use solana::entry::EntrySlice;
-use solana::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
-use solana::gossip_service::GossipService;
-use solana::packet::index_blobs;
-use solana::rpc_subscriptions::RpcSubscriptions;
-use solana::service::Service;
-use solana::storage_stage::StorageState;
-use solana::streamer;
-use solana::tvu::{Sockets, Tvu};
-use solana::validator;
+use solana_core::banking_stage::create_test_recorder;
+use solana_core::blocktree::{create_new_tmp_ledger, Blocktree};
+use solana_core::cluster_info::{ClusterInfo, Node};
+use solana_core::entry::next_entry_mut;
+use solana_core::entry::EntrySlice;
+use solana_core::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
+use solana_core::gossip_service::GossipService;
+use solana_core::packet::index_blobs;
+use solana_core::rpc_subscriptions::RpcSubscriptions;
+use solana_core::service::Service;
+use solana_core::storage_stage::StorageState;
+use solana_core::streamer;
+use solana_core::tvu::{Sockets, Tvu};
+use solana_core::validator;
 use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 use solana_sdk::signature::Signable;
 use solana_sdk::signature::{Keypair, KeypairUtil};
