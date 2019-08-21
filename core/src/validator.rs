@@ -67,9 +67,26 @@ impl Default for ValidatorConfig {
     }
 }
 
+#[derive(Default)]
+pub struct ValidatorExit {
+    exits: Vec<Box<FnOnce() + Send + Sync>>,
+}
+
+impl ValidatorExit {
+    pub fn register_exit(&mut self, exit: Box<FnOnce() -> () + Send + Sync>) {
+        self.exits.push(exit);
+    }
+
+    pub fn exit(self) {
+        for exit in self.exits {
+            exit();
+        }
+    }
+}
+
 pub struct Validator {
     pub id: Pubkey,
-    exit: Arc<AtomicBool>,
+    validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
     gossip_service: GossipService,
@@ -140,6 +157,11 @@ impl Validator {
         let bank = bank_forks[bank_info.bank_slot].clone();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
+        let mut validator_exit = ValidatorExit::default();
+        let exit_ = exit.clone();
+        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
+
         node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
             node.info.clone(),
@@ -162,7 +184,7 @@ impl Validator {
                 config.rpc_config.clone(),
                 bank_forks.clone(),
                 ledger_path,
-                &exit,
+                &validator_exit,
             ))
         };
 
@@ -318,19 +340,21 @@ impl Validator {
             rpc_pubsub_service,
             tpu,
             tvu,
-            exit,
             poh_service,
             poh_recorder,
             ip_echo_server,
+            validator_exit,
         }
     }
 
     // Used for notifying many nodes in parallel to exit
-    pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
+    pub fn exit(&mut self) {
+        if let Some(x) = self.validator_exit.write().unwrap().take() {
+            x.exit()
+        }
     }
 
-    pub fn close(self) -> Result<()> {
+    pub fn close(mut self) -> Result<()> {
         self.exit();
         self.join()
     }
@@ -549,7 +573,7 @@ mod tests {
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
-        let validators: Vec<Validator> = (0..2)
+        let mut validators: Vec<Validator> = (0..2)
             .map(|_| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
@@ -575,7 +599,7 @@ mod tests {
             .collect();
 
         // Each validator can exit in parallel to speed many sequential calls to `join`
-        validators.iter().for_each(|v| v.exit());
+        validators.iter_mut().for_each(|v| v.exit());
         // While join is called sequentially, the above exit call notified all the
         // validators to exit from all their threads
         validators.into_iter().for_each(|validator| {
