@@ -25,6 +25,23 @@ EOF
   exit $exitcode
 }
 
+# https://gist.github.com/cdown/1163649
+urlencode() {
+  s="$1"
+  l=$((${#s} - 1))
+  for i in `seq 0 $l`; do
+    c="${s:$i:1}"
+    case $c in
+      [a-zA-Z0-9.~_-])
+        echo -n "$c"
+        ;;
+      *)
+        printf '%%%02X' "'$c"
+        ;;
+    esac
+  done
+}
+
 loadConfigFile
 
 useEnv=false
@@ -59,6 +76,8 @@ else
   read -rs -p "InfluxDB password for $username: " password
   [[ -n $password ]] || { echo "Password not specified"; exit 1; }
   echo
+
+  password=`urlencode "$password"`
 
   query() {
     echo "$*"
