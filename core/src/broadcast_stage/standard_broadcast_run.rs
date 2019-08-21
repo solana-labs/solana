@@ -88,7 +88,13 @@ impl BroadcastRun for StandardBroadcastRun {
                 )
             } else {
                 trace!("Renew shredder with same parent slot {:?}", parent_slot);
-                Shredder::new(bank.slot(), None, 0.0, keypair, latest_blob_index as u32)
+                Shredder::new(
+                    bank.slot(),
+                    Some(parent_slot),
+                    0.0,
+                    keypair,
+                    latest_blob_index as u32,
+                )
             }
         } else {
             trace!("New shredder with parent slot {:?}", parent_slot);

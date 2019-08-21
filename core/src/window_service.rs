@@ -114,7 +114,7 @@ where
 
     blocktree.insert_shreds(&shreds)?;
 
-    info!(
+    trace!(
         "Elapsed processing time in recv_window(): {}",
         duration_as_ms(&now.elapsed())
     );

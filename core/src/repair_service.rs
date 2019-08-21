@@ -406,7 +406,8 @@ impl Service for RepairService {
 mod test {
     use super::*;
     use crate::blocktree::tests::{
-        make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
+        make_chaining_slot_entries, make_chaining_slot_entries_using_shreds,
+        make_many_slot_entries_using_shreds, make_slot_entries,
     };
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::Node;
@@ -468,21 +469,26 @@ mod test {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             let nth = 3;
-            let num_entries_per_slot = 5 * nth;
             let num_slots = 2;
 
             // Create some blobs
-            let (blobs, _) =
-                make_many_slot_entries(0, num_slots as u64, num_entries_per_slot as u64);
+            let (mut shreds, _) =
+                make_many_slot_entries_using_shreds(0, num_slots as u64, 50 as u64);
+            let num_shreds = shreds.len() as u64;
+            let num_shreds_per_slot = num_shreds / num_slots;
 
             // write every nth blob
-            let blobs_to_write: Vec<_> = blobs.iter().step_by(nth as usize).collect();
-
-            blocktree.write_blobs(blobs_to_write).unwrap();
-
-            let missing_indexes_per_slot: Vec<u64> = (0..num_entries_per_slot / nth - 1)
-                .flat_map(|x| ((nth * x + 1) as u64..(nth * x + nth) as u64))
-                .collect();
+            let mut shreds_to_write = vec![];
+            let mut missing_indexes_per_slot = vec![];
+            for i in (0..num_shreds).rev() {
+                let index = i % num_shreds_per_slot;
+                if index % nth == 0 {
+                    shreds_to_write.insert(0, shreds.remove(i as usize));
+                } else if i < num_shreds_per_slot {
+                    missing_indexes_per_slot.insert(0, index);
+                }
+            }
+            blocktree.insert_shreds(&shreds_to_write).unwrap();
 
             let expected: Vec<RepairType> = (0..num_slots)
                 .flat_map(|slot| {
@@ -541,9 +547,9 @@ mod test {
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
             let num_entries_per_slot = 10;
 
-            let blobs = make_chaining_slot_entries(&slots, num_entries_per_slot);
-            for (slot_blobs, _) in blobs.iter() {
-                blocktree.write_blobs(&slot_blobs[1..]).unwrap();
+            let shreds = make_chaining_slot_entries_using_shreds(&slots, num_entries_per_slot);
+            for (slot_shreds, _) in shreds.iter() {
+                blocktree.insert_shreds(&slot_shreds[1..]).unwrap();
             }
 
             // Iterate through all possible combinations of start..end (inclusive on both

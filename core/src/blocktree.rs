@@ -469,12 +469,7 @@ impl Blocktree {
     ) -> Result<bool> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
-        let parent = if let Shred::FirstInSlot(s) = shred {
-            debug!("got first in slot");
-            s.header.parent
-        } else {
-            std::u64::MAX
-        };
+        let parent = shred.parent();
 
         let last_in_slot = if let Shred::LastInSlot(_) = shred {
             debug!("got last in slot");
@@ -1169,7 +1164,7 @@ impl Blocktree {
         end_index: u64,
         max_missing: usize,
     ) -> Vec<u64> {
-        if let Ok(mut db_iterator) = self.db.cursor::<cf::Data>() {
+        if let Ok(mut db_iterator) = self.db.cursor::<cf::ShredData>() {
             Self::find_missing_indexes(&mut db_iterator, slot, start_index, end_index, max_missing)
         } else {
             vec![]
@@ -1185,11 +1180,6 @@ impl Blocktree {
     ) -> Result<Vec<Entry>> {
         self.get_slot_entries_with_shred_count(slot, blob_start_index)
             .map(|x| x.0)
-    }
-
-    pub fn read_ledger_blobs(&self) -> impl Iterator<Item = Blob> + '_ {
-        let iter = self.db.iter::<cf::Data>(None).unwrap();
-        iter.map(|(_, blob_data)| Blob::new(&blob_data))
     }
 
     pub fn get_slot_entries_with_blob_count(
@@ -2439,28 +2429,6 @@ pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (PathB
     (ledger_path, blockhash)
 }
 
-#[macro_export]
-macro_rules! tmp_copy_blocktree {
-    ($from:expr) => {
-        tmp_copy_blocktree($from, tmp_ledger_name!())
-    };
-}
-
-pub fn tmp_copy_blocktree(from: &Path, name: &str) -> PathBuf {
-    let path = get_tmp_ledger_path(name);
-
-    let blocktree = Blocktree::open(from).unwrap();
-    let blobs = blocktree.read_ledger_blobs();
-    let genesis_block = GenesisBlock::load(from).unwrap();
-
-    Blocktree::destroy(&path).expect("Expected successful database destruction");
-    let blocktree = Blocktree::open(&path).unwrap();
-    blocktree.write_blobs(blobs).unwrap();
-    genesis_block.write(&path).unwrap();
-
-    path
-}
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -3659,15 +3627,17 @@ pub mod tests {
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         // Write entries
-        let gap = 10;
+        let gap: u64 = 10;
         assert!(gap > 3);
         let num_entries = 10;
-        let mut blobs = make_tiny_test_entries(num_entries).to_single_entry_blobs();
-        for (i, b) in blobs.iter_mut().enumerate() {
-            b.set_index(i as u64 * gap);
+        let entries = make_tiny_test_entries(num_entries);
+        let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
+        let num_shreds = shreds.len();
+        for (i, b) in shreds.iter_mut().enumerate() {
+            b.set_index(i as u32 * gap as u32);
             b.set_slot(slot);
         }
-        blocktree.write_blobs(&blobs).unwrap();
+        blocktree.insert_shreds(&shreds).unwrap();
 
         // Index of the first blob is 0
         // Index of the second blob is "gap"
@@ -3711,7 +3681,7 @@ pub mod tests {
             &expected[..expected.len() - 1],
         );
 
-        for i in 0..num_entries as u64 {
+        for i in 0..num_shreds as u64 {
             for j in 0..i {
                 let expected: Vec<u64> = (j..i)
                     .flat_map(|k| {
@@ -3750,16 +3720,17 @@ pub mod tests {
         assert_eq!(blocktree.find_missing_data_indexes(slot, 4, 3, 1), empty);
         assert_eq!(blocktree.find_missing_data_indexes(slot, 1, 2, 0), empty);
 
-        let mut blobs = make_tiny_test_entries(2).to_single_entry_blobs();
+        let entries = make_tiny_test_entries(20);
+        let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
 
         const ONE: u64 = 1;
         const OTHER: u64 = 4;
 
-        blobs[0].set_index(ONE);
-        blobs[1].set_index(OTHER);
+        shreds[0].set_index(ONE as u32);
+        shreds[1].set_index(OTHER as u32);
 
         // Insert one blob at index = first_index
-        blocktree.write_blobs(&blobs).unwrap();
+        blocktree.insert_shreds(&shreds[0..2]).unwrap();
 
         const STARTS: u64 = OTHER * 2;
         const END: u64 = OTHER * 3;
@@ -3789,16 +3760,14 @@ pub mod tests {
 
         // Write entries
         let num_entries = 10;
-        let shared_blobs = make_tiny_test_entries(num_entries).to_single_entry_shared_blobs();
+        let entries = make_tiny_test_entries(num_entries);
+        let shreds = entries_to_test_shreds(entries, slot, 0, true);
+        let num_shreds = shreds.len();
 
-        crate::packet::index_blobs(&shared_blobs, &Pubkey::new_rand(), 0, slot, 0);
-
-        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
-        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-        blocktree.write_blobs(blobs).unwrap();
+        blocktree.insert_shreds(&shreds).unwrap();
 
         let empty: Vec<u64> = vec![];
-        for i in 0..num_entries as u64 {
+        for i in 0..num_shreds as u64 {
             for j in 0..i {
                 assert_eq!(
                     blocktree.find_missing_data_indexes(slot, j, i, (i - j) as usize),
