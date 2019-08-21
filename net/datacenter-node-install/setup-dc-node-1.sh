@@ -11,7 +11,7 @@ else
   cat <<EOF
 Usage: $0 [pubkey_file]
 
-The pubkey_file should be the pubkey that will eb set up to allow the current user
+The pubkey_file should be the pubkey that will be set up to allow the current user
 (assumed to be the machine admin) to log in via ssh
 EOF
   exit 1
