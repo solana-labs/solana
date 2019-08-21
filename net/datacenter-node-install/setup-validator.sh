@@ -5,13 +5,15 @@ if [[ "$EUID" -ne 0 ]]; then
   exit 1
 fi
 
+HERE="$(dirname "$0")"
+
 set -xe
 
-./disable-networkd-wait.sh
+"$HERE"/disable-networkd-wait.sh
 
-./setup-grub.sh
+"$HERE"/setup-grub.sh
 
-./setup-cuda.sh
+"$HERE"/setup-cuda.sh
 
 PASSWORD="$(dd if=/dev/urandom bs=1 count=9 status=none | base64)"
 echo "$PASSWORD"

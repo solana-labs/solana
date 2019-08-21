@@ -18,6 +18,7 @@ EOF
 fi
 
 USERNAME="$(whoami)"
+HERE="$(dirname "$0")"
 
 set -xe
 
@@ -25,39 +26,40 @@ apt update
 apt upgrade -y
 apt install -y build-essential pkg-config clang
 
-../scripts/install-docker.sh
+"$HERE"/../scripts/install-docker.sh
 
 usermod -aG docker USERNAME
 
-../scripts/install-certbot.sh
+"$HERE"/../scripts/install-certbot.sh
 
-./setup-sudoers.sh
+"$HERE"/setup-sudoers.sh
 
-./setup-ssh.sh
+"$HERE"/setup-ssh.sh
 
 # Allow admin user to log in
-mkdir .ssh
-chown "$USERNAME:$USERNAME" .ssh
-cat "$PUBKEY_FILE" > .ssh/authorized_keys
-chown "$USERNAME:$USERNAME" .ssh/authorized_keys
+BASE_SSH_DIR="${HOME}/.ssh"
+mkdir "$BASE_SSH_DIR"
+chown "$USERNAME:$USERNAME" "$BASE_SSH_DIR"
+cat "$PUBKEY_FILE" > "${BASE_SSH_DIR}/authorized_keys"
+chown "$USERNAME:$USERNAME" "${BASE_SSH_DIR}/.ssh/authorized_keys"
 
-./disable-nouveau.sh
+"$HERE"/disable-nouveau.sh
 
-./disable-networkd-wait.sh
+"$HERE"/disable-networkd-wait.sh
 
-./setup-grub.sh
+"$HERE"/setup-grub.sh
 
-../scripts/install-earlyoom.sh
+"$HERE"/../scripts/install-earlyoom.sh
 
-../scripts/install-nodeljs.sh
+"$HERE"/../scripts/install-nodeljs.sh
 
-../scripts/localtime.sh
+"$HERE"/../scripts/localtime.sh
 
-../scripts/install-redis.sh
+"$HERE"/../scripts/install-redis.sh
 
-../scripts/install-rsync.sh
+"$HERE"/../scripts/install-rsync.sh
 
-../scripts/install-libssl-compatability.sh
+"$HERE"/../scripts/install-libssl-compatability.sh
 
 # Setup kernel constants
 cat > /etc/sysctl.d/20-solana-node.conf <<EOF
