@@ -12,7 +12,7 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [-e] [-d] [-c] [username]
+usage: $0 [-e] [-d] [username]
 
 Creates a testnet dev metrics database
 
