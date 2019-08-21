@@ -84,6 +84,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     }
 
     let package = SnapshotPackage::new(
+        bank.slot(),
         snapshot_hard_links_dir,
         account_storage_entries,
         snapshot_package_output_file.as_ref().to_path_buf(),
