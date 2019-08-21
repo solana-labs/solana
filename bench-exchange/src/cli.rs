@@ -1,5 +1,5 @@
 use clap::{crate_description, crate_name, crate_version, value_t, App, Arg, ArgMatches};
-use solana::gen_keys::GenKeys;
+use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::net::SocketAddr;

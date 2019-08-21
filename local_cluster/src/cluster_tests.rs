@@ -1,8 +1,9 @@
+use solana_client::thin_client::create_client;
 /// Cluster independant integration tests
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
-use solana::{
+use solana_core::{
     blocktree::Blocktree,
     cluster_info::FULLNODE_PORT_RANGE,
     consensus::VOTE_THRESHOLD_DEPTH,
@@ -10,7 +11,6 @@ use solana::{
     entry::{Entry, EntrySlice},
     gossip_service::discover_cluster,
 };
-use solana_client::thin_client::create_client;
 use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 use solana_sdk::{
     client::SyncClient,

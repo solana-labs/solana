@@ -1,15 +1,15 @@
 #![feature(test)]
 
-extern crate solana;
+extern crate solana_core;
 extern crate test;
 
 use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
-use solana::packet::to_packets_chunked;
-use solana::service::Service;
-use solana::sigverify_stage::SigVerifyStage;
-use solana::test_tx::test_tx;
+use solana_core::packet::to_packets_chunked;
+use solana_core::service::Service;
+use solana_core::sigverify_stage::SigVerifyStage;
+use solana_core::test_tx::test_tx;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;

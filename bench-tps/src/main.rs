@@ -8,7 +8,7 @@ mod cli;
 use crate::bench::{
     do_bench_tps, generate_and_fund_keypairs, generate_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT,
 };
-use solana::gossip_service::{discover_cluster, get_multi_client};
+use solana_core::gossip_service::{discover_cluster, get_multi_client};
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::HashMap;

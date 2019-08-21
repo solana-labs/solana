@@ -5,7 +5,7 @@ pub mod local_cluster;
 extern crate log;
 
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
 #[macro_use]
 extern crate solana_storage_program;

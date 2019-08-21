@@ -2,21 +2,21 @@
 
 extern crate test;
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
 use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana::banking_stage::{create_test_recorder, BankingStage};
-use solana::blocktree::{get_tmp_ledger_path, Blocktree};
-use solana::cluster_info::ClusterInfo;
-use solana::cluster_info::Node;
-use solana::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-use solana::packet::to_packets_chunked;
-use solana::poh_recorder::WorkingBankEntries;
-use solana::service::Service;
-use solana::test_tx::test_tx;
+use solana_core::banking_stage::{create_test_recorder, BankingStage};
+use solana_core::blocktree::{get_tmp_ledger_path, Blocktree};
+use solana_core::cluster_info::ClusterInfo;
+use solana_core::cluster_info::Node;
+use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+use solana_core::packet::to_packets_chunked;
+use solana_core::poh_recorder::WorkingBankEntries;
+use solana_core::service::Service;
+use solana_core::test_tx::test_tx;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;

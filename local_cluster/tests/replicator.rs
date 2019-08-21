@@ -2,17 +2,17 @@
 extern crate log;
 
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
 use serial_test_derive::serial;
-use solana::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
-use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
-use solana::contact_info::ContactInfo;
-use solana::gossip_service::discover_cluster;
-use solana::replicator::Replicator;
-use solana::storage_stage::SLOTS_PER_TURN_TEST;
-use solana::validator::ValidatorConfig;
 use solana_client::thin_client::create_client;
+use solana_core::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
+use solana_core::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
+use solana_core::contact_info::ContactInfo;
+use solana_core::gossip_service::discover_cluster;
+use solana_core::replicator::Replicator;
+use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
+use solana_core::validator::ValidatorConfig;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::signature::{Keypair, KeypairUtil};

@@ -3,8 +3,8 @@ use solana_metrics;
 use bincode;
 use log::*;
 use rayon::prelude::*;
-use solana::gen_keys::GenKeys;
 use solana_client::perf_utils::{sample_txs, SampleStats};
+use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_program};
 use solana_measure::measure::Measure;
@@ -934,9 +934,9 @@ pub fn generate_and_fund_keypairs<T: Client>(
 mod tests {
 
     use super::*;
-    use solana::cluster_info::FULLNODE_PORT_RANGE;
-    use solana::validator::ValidatorConfig;
     use solana_client::thin_client::create_client;
+    use solana_core::cluster_info::FULLNODE_PORT_RANGE;
+    use solana_core::validator::ValidatorConfig;
     use solana_drone::drone::run_local_drone;
     use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
     use solana_runtime::bank::Bank;
