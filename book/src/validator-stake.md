@@ -23,8 +23,8 @@ to periodically redeem/claim your rewards:
 $ solana-wallet redeem-vote-credits ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json
 ```
 
-The rewards lamports earned are split between your stake account and your vote account according to the
-commission rate you set in your vote account.
+The rewards lamports earned are split between your stake account and the vote account according to the
+commission rate set in the vote account.
 
 Stake can be deactivated by running:
 ```bash
