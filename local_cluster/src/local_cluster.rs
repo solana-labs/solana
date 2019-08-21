@@ -585,7 +585,7 @@ impl Cluster for LocalCluster {
         })
     }
 
-    fn restart_node(&mut self, pubkey: Pubkey) {
+    fn restart_node(&mut self, pubkey: Pubkey, config: &ValidatorConfig) {
         // Shut down the fullnode
         let mut node = self.fullnodes.remove(&pubkey).unwrap();
         node.exit();
@@ -604,8 +604,8 @@ impl Cluster for LocalCluster {
         }
 
         // Restart the node
+        self.fullnode_infos.get_mut(&pubkey).unwrap().config = config.clone();
         let fullnode_info = &self.fullnode_infos[&pubkey].info;
-        let config = &self.fullnode_infos[&pubkey].config;
 
         let restarted_node = Validator::new(
             node,

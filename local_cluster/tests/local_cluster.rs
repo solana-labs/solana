@@ -251,10 +251,11 @@ fn test_restart_node() {
     error!("test_restart_node");
     let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
     let ticks_per_slot = 16;
+    let validator_config = ValidatorConfig::default();
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![3],
         cluster_lamports: 100,
-        validator_configs: vec![ValidatorConfig::default()],
+        validator_configs: vec![validator_config.clone()],
         ticks_per_slot,
         slots_per_epoch,
         ..ClusterConfig::default()
@@ -266,7 +267,7 @@ fn test_restart_node() {
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
-    cluster.restart_node(nodes[0]);
+    cluster.restart_node(nodes[0], &validator_config);
     cluster_tests::sleep_n_epochs(
         0.5,
         &cluster.genesis_block.poh_config,
@@ -318,14 +319,8 @@ fn test_snapshots_restart_validity() {
         snapshot_interval_slots,
     ));
     let num_account_paths = 4;
-    let account_storage_dirs: Vec<TempDir> = (0..num_account_paths)
-        .map(|_| TempDir::new().unwrap())
-        .collect();
-    let account_storage_paths: Vec<_> = account_storage_dirs
-        .iter()
-        .map(|a| a.path().to_str().unwrap().to_string())
-        .collect();
-    let account_storage_paths = AccountsDB::format_paths(account_storage_paths);
+    let (account_storage_dirs, account_storage_paths) = generate_account_paths(num_account_paths);
+    let mut all_account_storage_dirs = vec![account_storage_dirs];
     snapshot_validator_config.account_paths = Some(account_storage_paths);
 
     let config = ClusterConfig {
@@ -369,10 +364,17 @@ fn test_snapshots_restart_validity() {
             sleep(Duration::from_millis(100));
         }
 
+        // Create new account paths since fullnode exit is not guaranteed to cleanup RPC threads,
+        // which may delete the old accounts on exit at any point
+        let (new_account_storage_dirs, new_account_storage_paths) =
+            generate_account_paths(num_account_paths);
+        all_account_storage_dirs.push(new_account_storage_dirs);
+        snapshot_validator_config.account_paths = Some(new_account_storage_paths);
+
         // Restart a node
         trace!("Restarting cluster from snapshot");
         let nodes = cluster.get_node_pubkeys();
-        cluster.restart_node(nodes[0]);
+        cluster.restart_node(nodes[0], &snapshot_validator_config);
 
         // Verify account balances on validator
         trace!("Verifying balances");
@@ -559,4 +561,16 @@ fn run_repairman_catchup(num_repairmen: u64) {
         }
         sleep(Duration::from_secs(1));
     }
+}
+
+fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, String) {
+    let account_storage_dirs: Vec<TempDir> = (0..num_account_paths)
+        .map(|_| TempDir::new().unwrap())
+        .collect();
+    let account_storage_paths: Vec<_> = account_storage_dirs
+        .iter()
+        .map(|a| a.path().to_str().unwrap().to_string())
+        .collect();
+    let account_storage_paths = AccountsDB::format_paths(account_storage_paths);
+    (account_storage_dirs, account_storage_paths)
 }
