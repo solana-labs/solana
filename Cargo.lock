@@ -3846,6 +3846,7 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.9.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-client 0.18.0-pre2",
  "solana-core 0.18.0-pre2",
  "solana-drone 0.18.0-pre2",
  "solana-logger 0.18.0-pre2",

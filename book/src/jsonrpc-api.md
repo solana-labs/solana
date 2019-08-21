@@ -26,6 +26,7 @@ Methods
 * [getBalance](#getbalance)
 * [getClusterNodes](#getclusternodes)
 * [getEpochInfo](#getepochinfo)
+* [getGenesisBlockhash](#getgenesisblockhash)
 * [getLeaderSchedule](#getleaderschedule)
 * [getProgramAccounts](#getprogramaccounts)
 * [getRecentBlockhash](#getrecentblockhash)
@@ -195,6 +196,25 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
+```
+
+---
+### getGenesisBlockhash
+Returns the genesis block hash
+
+##### Parameters:
+None
+
+##### Results:
+* `string` - a Hash as base-58 encoded string
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getGenesisBlockhash"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
 ```
 
 ---

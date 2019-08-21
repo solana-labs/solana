@@ -272,14 +272,6 @@ setup_validator_accounts() {
 
 while true; do
   rpc_url=$($solana_gossip get-rpc-url --entrypoint "$gossip_entrypoint")
-  if new_genesis_block; then
-    # If the genesis block has changed remove the now stale ledger and start all
-    # over again
-    (
-      set -x
-      rm -rf "$ledger_dir"
-    )
-  fi
 
   [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
   [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
@@ -312,7 +304,7 @@ EOF
     exit $?
   fi
 
-  secs_to_next_genesis_poll=5
+  secs_to_next_genesis_poll=60
   while true; do
     if [[ -z $pid ]] || ! kill -0 "$pid"; then
       [[ -z $pid ]] || wait "$pid"
@@ -326,9 +318,13 @@ EOF
       echo "Polling for new genesis block..."
       if new_genesis_block; then
         echo "############## New genesis detected, restarting ##############"
+        (
+          set -x
+          rm -rf "$ledger_dir"
+        )
         break
       fi
-      secs_to_next_genesis_poll=5
+      secs_to_next_genesis_poll=60
     fi
 
   done

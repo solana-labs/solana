@@ -369,7 +369,7 @@ impl RpcClient {
         let blockhash = blockhash.parse().map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetRecentBlockhash parse failure: {:?}", err),
+                format!("GetRecentBlockhash hash parse failure: {:?}", err),
             )
         })?;
         Ok((blockhash, fee_calculator))
@@ -395,6 +395,33 @@ impl RpcClient {
             io::ErrorKind::Other,
             "Unable to get new blockhash, too many retries",
         ))
+    }
+
+    pub fn get_genesis_blockhash(&self) -> io::Result<Hash> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetGenesisBlockhash, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetGenesisBlockhash request failure: {:?}", err),
+                )
+            })?;
+
+        let blockhash = serde_json::from_value::<String>(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetGenesisBlockhash parse failure: {:?}", err),
+            )
+        })?;
+
+        let blockhash = blockhash.parse().map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetGenesisBlockhash hash parse failure: {:?}", err),
+            )
+        })?;
+        Ok(blockhash)
     }
 
     pub fn poll_balance_with_timeout(

@@ -1,6 +1,7 @@
 use bzip2::bufread::BzDecoder;
 use clap::{crate_description, crate_name, crate_version, value_t, App, Arg};
 use log::*;
+use solana_client::rpc_client::RpcClient;
 use solana_core::bank_forks::SnapshotConfig;
 use solana_core::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
@@ -11,6 +12,7 @@ use solana_core::service::Service;
 use solana_core::socketaddr;
 use solana_core::validator::{Validator, ValidatorConfig};
 use solana_netutil::parse_port_range;
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use solana_sdk::timing::Slot;
 use std::fs::{self, File};
@@ -87,7 +89,7 @@ fn initialize_ledger_path(
     gossip_addr: &SocketAddr,
     ledger_path: &Path,
     no_snapshot_fetch: bool,
-) -> Result<(), String> {
+) -> Result<Hash, String> {
     let (nodes, _replicators) = discover(
         &entrypoint.gossip,
         Some(1),
@@ -110,6 +112,10 @@ fn initialize_ledger_path(
             exit(1);
         });
 
+    let genesis_blockhash = RpcClient::new_socket(rpc_addr)
+        .get_genesis_blockhash()
+        .map_err(|err| err.to_string())?;
+
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
 
     download_archive(&rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
@@ -119,7 +125,7 @@ fn initialize_ledger_path(
             .unwrap_or_else(|err| eprintln!("Warning: Unable to fetch snapshot: {:?}", err));
     }
 
-    Ok(())
+    Ok(genesis_blockhash)
 }
 
 fn main() {
@@ -393,7 +399,7 @@ fn main() {
         .map(PathBuf::from);
 
     if let Some(ref entrypoint_addr) = cluster_entrypoint {
-        initialize_ledger_path(
+        let expected_genesis_blockhash = initialize_ledger_path(
             entrypoint_addr,
             &gossip_addr,
             &ledger_path,
@@ -403,6 +409,7 @@ fn main() {
             eprintln!("Failed to download ledger: {}", err);
             exit(1);
         });
+        validator_config.expected_genesis_blockhash = Some(expected_genesis_blockhash);
     } else {
         // Without a cluster entrypoint, ledger_path must already be present
         if !ledger_path.is_dir() {

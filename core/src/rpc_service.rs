@@ -12,6 +12,7 @@ use jsonrpc_http_server::{
     hyper, AccessControlAllowOrigin, DomainsValidation, RequestMiddleware, RequestMiddlewareAction,
     ServerBuilder,
 };
+use solana_sdk::hash::Hash;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
@@ -91,6 +92,7 @@ impl JsonRpcService {
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
         ledger_path: &Path,
+        genesis_blockhash: Hash,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
@@ -118,6 +120,7 @@ impl JsonRpcService {
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor_.clone(),
                         cluster_info: cluster_info.clone(),
+                        genesis_blockhash
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -201,6 +204,7 @@ mod tests {
             JsonRpcConfig::default(),
             bank_forks,
             &PathBuf::from("farf"),
+            Hash::default(),
             &validator_exit,
         );
         let thread = rpc_service.thread_hdl.thread();
