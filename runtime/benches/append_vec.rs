@@ -4,6 +4,7 @@ extern crate test;
 use rand::{thread_rng, Rng};
 use solana_runtime::append_vec::test_utils::{create_test_account, get_append_vec_path};
 use solana_runtime::append_vec::AppendVec;
+use solana_sdk::hash::Hash;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::thread::spawn;
@@ -16,7 +17,10 @@ fn append_vec_append(bencher: &mut Bencher) {
     let vec = AppendVec::new(&path.path, true, 64 * 1024);
     bencher.iter(|| {
         let (meta, account) = create_test_account(0);
-        if vec.append_account(meta, &account).is_none() {
+        if vec
+            .append_account(meta, &account, Hash::default())
+            .is_none()
+        {
             vec.reset();
         }
     });
@@ -27,7 +31,8 @@ fn add_test_accounts(vec: &AppendVec, size: usize) -> Vec<(usize, usize)> {
         .into_iter()
         .filter_map(|sample| {
             let (meta, account) = create_test_account(sample);
-            vec.append_account(meta, &account).map(|pos| (sample, pos))
+            vec.append_account(meta, &account, Hash::default())
+                .map(|pos| (sample, pos))
         })
         .collect()
 }
@@ -71,7 +76,7 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
     spawn(move || loop {
         let sample = indexes1.lock().unwrap().len();
         let (meta, account) = create_test_account(sample);
-        if let Some(pos) = vec1.append_account(meta, &account) {
+        if let Some(pos) = vec1.append_account(meta, &account, Hash::default()) {
             indexes1.lock().unwrap().push((sample, pos))
         } else {
             break;
@@ -116,7 +121,7 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
     bencher.iter(|| {
         let sample: usize = thread_rng().gen_range(0, 256);
         let (meta, account) = create_test_account(sample);
-        if let Some(pos) = vec.append_account(meta, &account) {
+        if let Some(pos) = vec.append_account(meta, &account, Hash::default()) {
             indexes.lock().unwrap().push((sample, pos))
         }
     });
