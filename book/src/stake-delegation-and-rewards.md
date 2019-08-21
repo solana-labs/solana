@@ -211,7 +211,7 @@ correctly.  Voting incorrectly exposes that validator's stakes to
 ### Basics
 
 The network pays rewards from a portion of network [inflation](inflation.md).
-The amount of money available to pay rewards for an epoch is fixed and
+The number of lamports available to pay rewards for an epoch is fixed and
 must be evenly divided among all staked nodes according to their relative stake
 weight and pariticpation.  The weighting unit is called a
 [point](terminology.md#point).
