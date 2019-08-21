@@ -446,12 +446,10 @@ pub fn new_banks_from_blocktree(
     LeaderScheduleCache,
     PohConfig,
 ) {
-    let genesis_block =
-        GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
+    let genesis_block = GenesisBlock::load(blocktree_path).expect("Failed to load genesis block");
 
     let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
-        Blocktree::open_with_signal(blocktree_path)
-            .expect("Expected to successfully open database ledger");
+        Blocktree::open_with_signal(blocktree_path).expect("Failed to open ledger database");
 
     let (bank_forks, bank_forks_info, leader_schedule_cache) = get_bank_forks(
         &genesis_block,
