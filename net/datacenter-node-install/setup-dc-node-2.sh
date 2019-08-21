@@ -13,5 +13,5 @@ set -xe
 
 # setup persistence mode across reboots
 tar -xvf /usr/share/doc/NVIDIA_GLX-1.0/sample/nvidia-persistenced-init.tar.bz2
-sudo "$HERE"/nvidia-persistenced-init/install.sh systemd
+"$HERE"/nvidia-persistenced-init/install.sh systemd
 rm -r nvidia-persistenced-init
