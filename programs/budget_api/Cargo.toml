@@ -15,7 +15,7 @@ log = "0.4.8"
 num-derive = "0.2"
 num-traits = "0.2"
 serde = "1.0.99"
-serde_derive = "1.0.98"
+serde_derive = "1.0.99"
 solana-sdk = { path = "../../sdk", version = "0.18.0-pre2" }
 
 [dev-dependencies]
