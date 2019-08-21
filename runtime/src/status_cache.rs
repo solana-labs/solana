@@ -204,7 +204,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     }
 
     pub fn from_slot_deltas(slot_deltas: &[SlotDelta<T>]) -> Self {
-        // play all deltas back into the the status cache
+        // play all deltas back into the status cache
         let mut me = Self::default();
         me.append(slot_deltas);
         me

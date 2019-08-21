@@ -1894,7 +1894,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to to withdraw from the stake account."),
+                        .help("The number of lamports to withdraw from the stake account."),
                 ),
         )
         .subcommand(
