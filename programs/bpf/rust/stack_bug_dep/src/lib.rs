@@ -4,12 +4,10 @@
 #![allow(unused_attributes)]
 
 extern crate alloc;
-#[cfg(not(test))]
-extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
 use alloc::vec::Vec;
-use solana_sdk_bpf_utils::entrypoint::{SolPubkey};
+use solana_sdk_bpf_utils::entrypoint::SolPubkey;
 
 pub struct InitPollData<'a> {
     pub timeout: u32,
@@ -56,7 +54,7 @@ impl<'a> PollData<'a> {
         assert_eq!(init.timeout, 10);
         Self {
             creator_key,
-            last_block: slot + init.timeout as u64,
+            last_block: slot + u64::from(init.timeout),
             header_len: init.header_len,
             header: init.header,
             option_a: PollOptionData {
