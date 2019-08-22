@@ -23,18 +23,18 @@ pub struct BlockHeader {
 
     pub nonce       : u32,
     // Block hash
-    pub digest      : BitcoinTxHash,
+    pub blockhash   : BitcoinTxHash,
 }
 
 impl BlockHeader {
-    pub fn new(header: &[u8;80]) -> BlockHeader {
-        let version    = header[0 .. 4];
+    pub fn new(header: &[u8;80], blockhash: &[u8;32]) -> Result<BlockHeader, SpvError> {
+        let version    = header[0 .. 4]; // version is largely useless because of miners messing with the last 2 bytes
         // extract digest from last block
-        let parentHash = header[4 .. 36]; // little endian
+        let parentHash = header[4 .. 36];
         // extract merkle root in internal byte order
         let merkleRoot = header[36 .. 68];
         // timestamp associate with the block
-        let blockTime  = header[68 .. 72];
+        let blockTime  = u32::from_le_bytes(header[68 .. 72]);
         // nbits field is an encoded version of the
         let nbits      = header[72 .. 76];
 
@@ -47,14 +47,32 @@ impl BlockHeader {
             time: blockTime,
             nbits: nbits,
             nonce: nonce,
+            blockhash: blockhash,
+        }
+    }
+
+    pub fn hexnew(header: &str, blockhash: &str) -> Result<BlockHeader, SpvError> {
+        if header.len() != 160 || blockhash.len() != 64 {
+            Err(SpvError::InvalidBlockHeader)
+        }
+        let bhbytes = decode_hex(blockhash)?;
+
+        match decode_hex(header){
+            Ok(header) => {
+                Ok(BlockHeader::new(&header, &bhbytes))
+            }
+            Err(e) => {
+                Err(e)
+            }
         }
     }
 
     pub fn difficulty(mut self) -> u32 {
         // calculates difficulty from nbits
-        
+
     }
 }
+
 
 
 pub type HeaderChain = Vec<BlockHeader>;

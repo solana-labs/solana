@@ -11,7 +11,7 @@ enum HeaderStoreError {
     InvalidHeader,
     GroupExists,
     GroupDNE,
-
+    InvalidBlockHeight,
 }
 
 // AccountList is a linked list of groups of blockheaders. It stores sequential blockheaders
@@ -29,30 +29,32 @@ struct HeaderStore {
 }
 
 impl HeaderStore {
-    pub fn getGroup(self, blockHeight: u32) -> Option<Pubkey> {
+    pub fn getGroup(self, blockHeight: u32) -> Result<Pubkey, HeaderStoreError> {
         if blockHeight < self.baseHeight || blockHeight > self.ceiling {
-            None
+            Err(HeaderStoreError::InvalidBlockHeight)
         }
         else {
             let gheight: u32    = (blockheight - self.baseHeight) / self.groupSize as u32;
             let grouppk: Pubkey = self.index[gheight];
-            Some(grouppk)
+            Ok(grouppk)
         }
     }
 
-    pub fn topGroup(self) -> Option<Pubkey> {
+    pub fn topGroup(self) -> Result<Pubkey, HeaderStoreError> {
         if self.index.len() == 0 {
-            None
+            Err(HeaderStoreError::GroupDNE)
         }
         else {
             let grouppk: Pubkey = self.index.last().unwrap();
-            Some(grouppk)
+            Ok(grouppk)
         }
     }
 
     pub fn AppendHeader(mut self, blockheader: &BlockHeader) -> Result<(), SpvError> {
         match self.topGroup() {
-            Some(n) => let group = n;
+            Some(n) => {
+                let group = n;
+            }
             None    => { // HeaderStore is empty need to create first group
 
             }
@@ -62,10 +64,12 @@ impl HeaderStore {
 
     pub fn ReplaceHeader(mut self, blockheader: &BlockHeader, blockheight: u32) -> Result<(), SpvError> {
         match self.getGroup(blockheight) {
-            Some(n) => let group = n;
+            Some(n) => {
+                let group = n;
+            }
             None    => SpvError::InvalidHeader
         }
-
+        // access account data for group
     }
 
     pub fn AppendGroup(mut self, pubkey: Pubkey) -> Result<(), SpvError> {
