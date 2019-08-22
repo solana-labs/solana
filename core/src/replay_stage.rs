@@ -307,11 +307,9 @@ impl ReplayStage {
         );
 
         if let Some(next_leader) = leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent)) {
-            trace!(
+            info!(
                 "{} leader {} at poh slot: {}",
-                my_pubkey,
-                next_leader,
-                poh_slot
+                my_pubkey, next_leader, poh_slot
             );
 
             // I guess I missed my slot

@@ -1662,15 +1662,8 @@ fn handle_recovery(
                     blob.index()
                 );
 
-                let blob_index = blob.index();
-                let blob_slot = blob.slot();
-
-                assert_eq!(blob_slot, slot);
-
-                assert!(
-                    blob_index >= erasure_meta.start_index()
-                        && blob_index < erasure_meta.end_indexes().0
-                );
+                // If this fails, it's a slashing condition.
+                is_recovered_blob_valid(blob, (slot, erasure_meta));
             }
 
             recovered_data.append(&mut data);
@@ -1738,6 +1731,44 @@ fn handle_recovery(
         Ok(Some(new_data))
     } else {
         Ok(None)
+    }
+}
+
+fn is_recovered_blob_valid(
+    blob: &Blob,
+    (expected_slot, erasure_meta): (u64, &ErasureMeta),
+) -> bool {
+    let blob_index = blob.index();
+    let blob_slot = blob.slot();
+
+    let error = {
+        if blob_slot != expected_slot {
+            Some(format!(
+                "Blob slot: {} not equal to the expected erasure meta slot: {}",
+                blob_slot, expected_slot
+            ))
+        } else if blob_index < erasure_meta.start_index() {
+            Some(format!(
+                "Blob index: {} < erasure meta start index: {}",
+                blob_index,
+                erasure_meta.start_index()
+            ))
+        } else if blob_index >= erasure_meta.end_indexes().0 {
+            Some(format!(
+                "Blob index: {} >= erasure meta end index: {}",
+                blob_index,
+                erasure_meta.end_indexes().0
+            ))
+        } else {
+            None
+        }
+    };
+
+    if let Some(msg) = error {
+        datapoint_error!("blocktree_error", ("error", msg, String));
+        false
+    } else {
+        true
     }
 }
 
