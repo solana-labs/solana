@@ -4,6 +4,7 @@ use crate::spv_state::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::instruction::{AccountMeta, Instruction};
+use log::*;
 
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -11,17 +12,17 @@ pub enum SpvInstruction {
     // Client Places request for a matching proof
     // key 0 - Signer
     // key 1 - Account in which to record the Request and proof
-    ClientRequest(ClientRequestInfo);
+    ClientRequest(ClientRequestInfo),
 
     // Used by clients to cancel a pending proof request
     // key 0 - signer
     // key 1 - Request to cancel
-    CancelRequest(BitcoinTxHash);
+    CancelRequest(BitcoinTxHash),
 
     // used to submit a proof matching a posted BitcoinTxHash or for own benefit
     // key 0 - signer
     // key 1 - Request to prove
-    SubmitProof(SubmitProofInfo);
+    SubmitProof(ProofInfo),
 }
 
 
@@ -52,7 +53,7 @@ pub fn cancel_request(
     let account_meta = vec![AccountMeta::new(*owner, true)];
     Instruction::new(
         id(),
-        &SpvInstruction::CancelRequest(BitcoinTxHash),
+        &SpvInstruction::CancelRequest(txHash),
         account_meta,
     )
 }
@@ -66,11 +67,11 @@ pub fn submit_proof(
     let account_meta = vec![AccountMeta::new(*submitter, true)];
     Instruction::new(
         id(),
-        &SpvInstruction::SubmitProof(SubmitProofInfo{
+        &SpvInstruction::SubmitProof(ProofInfo{
             proof,
             headers,
             txhash,
         }),
-        acccount_meta,
+        account_meta,
     )
 }
