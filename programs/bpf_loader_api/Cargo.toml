@@ -16,7 +16,7 @@ log = "0.4.8"
 serde = "1.0.99"
 solana-logger = { path = "../../logger", version = "0.18.0-pre2" }
 solana-sdk = { path = "../../sdk", version = "0.18.0-pre2" }
-solana_rbpf = "=0.1.13"
+solana_rbpf = "=0.1.14"
 
 [lib]
 crate-type = ["lib"]
