@@ -19,13 +19,13 @@ If the account is in the exempt regime, `Account::rent_epoch` is simply pushed t
 
 If the account is non-exempt, the difference between the next epoch and `Account::rent_epoch` is used to calculate the amount of rent owed by this account (via `Rent::due()`).  Any fractional lamports of the calculation are truncated.  Rent due is deducted from `Account::lamports` and `Account::rent_epoch` is updated to the next epoch.  If the amount of rent due is less than one lamport, no changes are made to the account.
 
-Accounts whose balance is insufficient to satisfy their rent due fail to load.
+Accounts whose balance is insufficient to satisfy the rent that would be due simply fail to load.
 
-A percentage of the rent collected is destroyed.  The rest is distributed to validator accounts by stake weight, a la transaction fees, at the end of the slot.
+A percentage of the rent collected is destroyed.  The rest is distributed to validator accounts by stake weight, a la transaction fees, at the end of every slot.
 
 ## Credit only
 
-Credit only accounts are treated as a special case.  They are loaded as if rent were due, but updates to their state may be delayed until the end of the slot.
+Credit only accounts are treated as a special case.  They are loaded as if rent were due, but updates to their state may be delayed until the end of the slot, when credits are paid.
 
 ## Design considerations, others considered
 
