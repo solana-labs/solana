@@ -547,10 +547,8 @@ mod tests {
         let mut account = StorageAccount {
             id: Pubkey::default(),
             account: &mut Account {
-                lamports: 0,
-                data: vec![],
                 owner: id(),
-                executable: false,
+                ..Account::default()
             },
         };
         let segment_index = 0;

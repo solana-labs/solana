@@ -251,6 +251,7 @@ mod tests {
             data: vec![0, 1, 2, 3],
             owner: Pubkey::default(),
             executable: false,
+            rent_epoch: 0,
         };
         let unchanged_account = populated_account.clone();
 

@@ -12,6 +12,7 @@ pub mod loader_utils;
 pub mod locked_accounts_results;
 pub mod message_processor;
 mod native_loader;
+pub mod rent_collector;
 mod serde_utils;
 pub mod stakes;
 pub mod status_cache;

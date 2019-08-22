@@ -30,7 +30,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
-use solana_sdk::account::{Account, LamportCredit};
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -76,9 +76,6 @@ pub struct AccountInfo {
 }
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
-pub type InstructionAccounts = Vec<Account>;
-pub type InstructionCredits = Vec<LamportCredit>;
-pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
 // Each fork has a set of storage entries.
 type ForkStores = HashMap<usize, Arc<AccountStorageEntry>>;

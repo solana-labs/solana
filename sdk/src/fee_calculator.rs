@@ -29,7 +29,7 @@ pub struct FeeCalculator {
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 42;
 pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: usize =
     710_000 * DEFAULT_TICKS_PER_SLOT as usize / DEFAULT_TICKS_PER_SECOND as usize;
-pub const DEFAULT_BURN_PERCENT: u8 = 127;
+pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
 
 impl Default for FeeCalculator {
     fn default() -> Self {

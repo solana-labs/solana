@@ -8,6 +8,7 @@ use solana_sdk::genesis_block::Builder;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::rent::Rent;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use solana_sdk::system_program;
 use solana_sdk::timing;
@@ -59,6 +60,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_target_lamports_per_signature = &FeeCalculator::default()
         .target_lamports_per_signature
         .to_string();
+    let default_lamports_per_byte_year = &Rent::default().lamports_per_byte_year.to_string();
     let default_target_signatures_per_slot = &FeeCalculator::default()
         .target_signatures_per_slot
         .to_string();
@@ -159,6 +161,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help(
                     "The cost in lamports that the cluster will charge for signature \
                      verification when the cluster is operating at target-signatures-per-slot",
+                ),
+        )
+        .arg(
+            Arg::with_name("lamports_per_byte_year")
+                .long("lamports-per-byte-year")
+                .value_name("LAMPORTS")
+                .takes_value(true)
+                .default_value(default_lamports_per_byte_year)
+                .help(
+                    "The cost in lamports that the cluster will charge per byte per year \
+                     for accounts with data.",
                 ),
         )
         .arg(
