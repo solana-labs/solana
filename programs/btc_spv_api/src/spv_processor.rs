@@ -142,10 +142,16 @@ pub fn process_instruction(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{spv_instruction, id};
+    use crate::{spv_instruction, spv_state, utils};
 
-    fn try_submit_request(
-        txHash: BitcoinTxHash,
+    #[test]
+    fn test_parse_header_hex() -> Result<(), SpvError> {
+        let testheader = "010000008a730974ac39042e95f82d719550e224c1a680a8dc9e8df9d007000000000000f50b20e8720a552dd36eb2ebdb7dceec9569e0395c990c1eb8a4292eeda05a931e1fce4e9a110e1a7a58aeb0";
+        let testhash   = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
+        let testhashbytes = decode_hex(&testhash)?;
 
-    )
+        let bh = BlockHeader::hexnew(&testheader, &testhash)?;
+        assert_eq!(bh.blockhash, testhashbytes);
+        Ok(())
+    }
 }
