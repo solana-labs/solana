@@ -1,7 +1,7 @@
-use reqwest;
 use clap;
+use clap::{App, Arg};
+use reqwest;
 use serde::Deserialize;
-use clap::{Arg, App};
 
 // pub type blockHash = [u8; 32];
 pub type BlockHeader = [u8; 80];
@@ -25,7 +25,7 @@ struct JsonBH {
 }
 
 fn GetHeaderJson(hash: &str) -> JsonBH {
-    let qs   = format!("https://www.blockchain.info/rawblock/{}", hash);
+    let qs = format!("https://www.blockchain.info/rawblock/{}", hash);
     let body = reqwest::get(&qs);
     match body {
         Err(e) => panic!("rest request failed {}", e),
@@ -33,27 +33,25 @@ fn GetHeaderJson(hash: &str) -> JsonBH {
             if n.status().is_success() {
                 let jsonbh: JsonBH = n.json().unwrap();
                 jsonbh
-            }
-            else {
+            } else {
                 panic!("request failed");
             }
-         }
+        }
     }
 }
 
 fn GetHeaderRaw(hash: &str) -> String {
-    let qs   = format!("https://blockchain.info/block/{}?format=hex", hash);
+    let qs = format!("https://blockchain.info/block/{}?format=hex", hash);
     let body = reqwest::get(&qs);
     match body {
         Err(e) => panic!("rest request failed {}", e),
         Ok(mut n) => {
-            if n.status().is_success(){
+            if n.status().is_success() {
                 let textbh: String = n.text().unwrap();
                 let hs = &textbh[0..160]; // 160 characters since it's in hex format
                 let header: String = hs.to_string();
                 header
-            }
-            else {
+            } else {
                 panic!("request failed");
             }
         }
@@ -62,11 +60,11 @@ fn GetHeaderRaw(hash: &str) -> String {
 
 fn main() {
     let matches = App::new("header fetch util")
-                        .arg(Arg::with_name("blockhash"))
-                            .help("block hash to get header from")
-                        .get_matches();
+        .arg(Arg::with_name("blockhash"))
+        .help("block hash to get header from")
+        .get_matches();
 
-    let testhash  = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
+    let testhash = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
     let blockhash = matches.value_of("blockhash").unwrap_or(testhash);
     let headerraw = GetHeaderRaw(&blockhash);
     println!("header - {}", headerraw);

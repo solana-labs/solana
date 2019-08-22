@@ -1,9 +1,9 @@
-use serde_derive::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
-use std::{error, fmt};
-use std::collections::HashMap;
-use solana_sdk::account::KeyedAccount;
 use crate::spv_state::*;
+use serde_derive::{Deserialize, Serialize};
+use solana_sdk::account::KeyedAccount;
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
+use std::{error, fmt};
 
 // HeaderStore is a data structure that allows linked list style cheap appends and
 // sequential reads, but also has a "lookup index" to speed up random access
@@ -24,7 +24,7 @@ pub struct HeaderStore {
     // BaseHeight is the height of the first header in the first headerAccount
     pub baseHeight: u32,
     // topHeight is the running last header loaded
-    pub topHeight:  u32,
+    pub topHeight: u32,
     // account that administrates the headerstore and benefits from fees accrued
     pub owner: Pubkey,
 }
@@ -33,8 +33,7 @@ impl HeaderStore {
     pub fn getGroup(self, blockHeight: u32) -> Result<Pubkey, HeaderStoreError> {
         if blockHeight < self.baseHeight || blockHeight > self.topHeight {
             Err(HeaderStoreError::InvalidBlockHeight)
-        }
-        else {
+        } else {
             let gheight = (blockHeight - self.baseHeight) / self.groupSize as u32;
             let grouppk: Pubkey = self.index[gheight as usize];
             Ok(grouppk)
@@ -44,8 +43,7 @@ impl HeaderStore {
     pub fn topGroup(self) -> Result<Pubkey, HeaderStoreError> {
         if self.index.len() == 0 {
             Err(HeaderStoreError::GroupDNE)
-        }
-        else {
+        } else {
             let grouppk: Pubkey = *self.index.last().unwrap();
             Ok(grouppk)
         }
@@ -57,11 +55,11 @@ impl HeaderStore {
                 let group = n;
                 Ok(())
             }
-            Err(E) => { // HeaderStore is empty need to create first group
+            Err(E) => {
+                // HeaderStore is empty need to create first group
                 if HeaderStoreError::GroupDNE == E {
                     Ok(())
-                }
-                else {
+                } else {
                     Err(E)
                 }
                 //todo
@@ -69,11 +67,13 @@ impl HeaderStore {
         }
     }
 
-    pub fn ReplaceHeader(mut self, blockheader: &BlockHeader, blockheight: u32) -> Result<(), HeaderStoreError> {
+    pub fn ReplaceHeader(
+        mut self,
+        blockheader: &BlockHeader,
+        blockheight: u32,
+    ) -> Result<(), HeaderStoreError> {
         match self.getGroup(blockheight) {
-            Err(e)    => {
-                Err(HeaderStoreError::InvalidHeader)
-            }
+            Err(e) => Err(HeaderStoreError::InvalidHeader),
             Ok(n) => {
                 let group = n;
                 Ok(())
@@ -83,11 +83,10 @@ impl HeaderStore {
     }
 
     pub fn AppendGroup(mut self, pubkey: Pubkey) -> Result<(), HeaderStoreError> {
-        if self.index.contains(&pubkey){
+        if self.index.contains(&pubkey) {
             // group to be appended is already in the index
             Err(HeaderStoreError::GroupExists)
-        }
-        else {
+        } else {
             Ok(())
             //insert actual function HeaderStoreError
         }

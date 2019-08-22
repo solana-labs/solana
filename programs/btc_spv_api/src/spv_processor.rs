@@ -1,19 +1,20 @@
 //! Bitcoin SPV proof verifier program
 //! Receive merkle proofs and block headers, validate transaction
-use crate::spv_state::*;
 use crate::spv_instruction::*;
+use crate::spv_state::*;
 use crate::utils::*;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::account::KeyedAccount;
 use log::*;
-
+use solana_sdk::account::KeyedAccount;
+use solana_sdk::instruction::InstructionError;
+use solana_sdk::pubkey::Pubkey;
 
 pub struct SpvProcessor {}
 
 impl SpvProcessor {
-
-    pub fn validateHeaderChain(headers: &HeaderChain, proof_req: &ProofRequest) -> Result<(), InstructionError> {
+    pub fn validateHeaderChain(
+        headers: &HeaderChain,
+        proof_req: &ProofRequest,
+    ) -> Result<(), InstructionError> {
         // disabled for time being
         //not done yet, needs difficulty average/variance checking still
         Ok(())
@@ -26,7 +27,8 @@ impl SpvProcessor {
     }
 
     fn deserialize_proof(data: &[u8]) -> Result<Proof, InstructionError> {
-        let proof_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
+        let proof_state: AccountState =
+            bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Verification(Proof) = proof_state {
             Ok(Proof)
         } else {
@@ -36,7 +38,8 @@ impl SpvProcessor {
     }
 
     fn deserialize_request(data: &[u8]) -> Result<ClientRequestInfo, InstructionError> {
-        let req_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
+        let req_state: AccountState =
+            bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Request(info) = req_state {
             Ok(info)
         } else {
@@ -46,7 +49,8 @@ impl SpvProcessor {
     }
 
     pub fn check_account_unallocated(data: &[u8]) -> Result<(), InstructionError> {
-        let acct_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
+        let acct_state: AccountState =
+            bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Unallocated = acct_state {
             Ok(())
         } else {
@@ -55,24 +59,21 @@ impl SpvProcessor {
         }
     }
 
-
     pub fn do_client_request(
         keyed_accounts: &mut [KeyedAccount],
-        request_info  : &ClientRequestInfo,
+        request_info: &ClientRequestInfo,
     ) -> Result<(), InstructionError> {
         if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
-        const OWNER_INDEX   : usize = 0;
-        const REQUEST_INDEX : usize = 1;
+        const OWNER_INDEX: usize = 0;
+        const REQUEST_INDEX: usize = 1;
 
         // check_account_unallocated(&keyed_accounts[REQUEST_INDEX].account.data)?;
         Ok(()) //placeholder
     }
 
-    pub fn do_cancel_request(
-        keyed_accounts: &mut[KeyedAccount],
-    ) -> Result<(), InstructionError> {
+    pub fn do_cancel_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
         if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
@@ -81,10 +82,9 @@ impl SpvProcessor {
         Ok(()) //placeholder
     }
 
-
     pub fn do_submit_proof(
-        keyed_accounts: &mut[KeyedAccount],
-        proof_info    : &Proof,
+        keyed_accounts: &mut [KeyedAccount],
+        proof_info: &Proof,
     ) -> Result<(), InstructionError> {
         if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
@@ -93,7 +93,6 @@ impl SpvProcessor {
         const PROOF_REQUEST_INDEX: usize = 1;
         Ok(()) //placeholder
     }
-
 }
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -109,13 +108,11 @@ pub fn process_instruction(
 
     trace!("{:?}", command);
 
-    match command{
+    match command {
         SpvInstruction::ClientRequest(client_request_info) => {
             SpvProcessor::do_client_request(keyed_accounts, &client_request_info)
         }
-        SpvInstruction::CancelRequest => {
-            SpvProcessor::do_cancel_request(keyed_accounts)
-        }
+        SpvInstruction::CancelRequest => SpvProcessor::do_cancel_request(keyed_accounts),
         SpvInstruction::SubmitProof(proof_info) => {
             SpvProcessor::do_submit_proof(keyed_accounts, &proof_info)
         }
@@ -130,7 +127,7 @@ mod test {
     #[test]
     fn test_parse_header_hex() -> Result<(), SpvError> {
         let testheader = "010000008a730974ac39042e95f82d719550e224c1a680a8dc9e8df9d007000000000000f50b20e8720a552dd36eb2ebdb7dceec9569e0395c990c1eb8a4292eeda05a931e1fce4e9a110e1a7a58aeb0";
-        let testhash   = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
+        let testhash = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
         let testhashbytes = decode_hex(&testhash)?;
         let mut thb: [u8; 32] = Default::default();
         thb.copy_from_slice(&testhashbytes[..32]);

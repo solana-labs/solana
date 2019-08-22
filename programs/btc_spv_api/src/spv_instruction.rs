@@ -1,11 +1,10 @@
 //! Spv proof Verification Program
 use crate::id;
 use crate::spv_state::*;
-use serde_derive::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::instruction::{AccountMeta, Instruction};
 use log::*;
-
+use serde_derive::{Deserialize, Serialize};
+use solana_sdk::instruction::{AccountMeta, Instruction};
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum SpvInstruction {
@@ -23,22 +22,20 @@ pub enum SpvInstruction {
     // key 0 - signer
     // key 1 - Request to prove
     SubmitProof(Proof),
-
 }
 
-
 pub fn client_request(
-    owner         : &Pubkey,
-    txHash        : BitcoinTxHash,
-    fee           : u64,
-    confirmations : u8,
-    difficulty    : u64,
-    expiration    : Option<u32>,
+    owner: &Pubkey,
+    txHash: BitcoinTxHash,
+    fee: u64,
+    confirmations: u8,
+    difficulty: u64,
+    expiration: Option<u32>,
 ) -> Instruction {
     let account_meta = vec![AccountMeta::new(*owner, true)];
     Instruction::new(
         id(),
-        &SpvInstruction::ClientRequest(ClientRequestInfo{
+        &SpvInstruction::ClientRequest(ClientRequestInfo {
             txHash,
             confirmations,
             fee,
@@ -49,29 +46,28 @@ pub fn client_request(
     )
 }
 
-pub fn cancel_request(
-    owner   : &Pubkey,
-    request : &Pubkey,
-) -> Instruction {
-    let account_meta = vec![AccountMeta::new(*owner, true), AccountMeta::new(*request, false)];
-    Instruction::new(
-        id(),
-        &SpvInstruction::CancelRequest,
-        account_meta,
-    )
+pub fn cancel_request(owner: &Pubkey, request: &Pubkey) -> Instruction {
+    let account_meta = vec![
+        AccountMeta::new(*owner, true),
+        AccountMeta::new(*request, false),
+    ];
+    Instruction::new(id(), &SpvInstruction::CancelRequest, account_meta)
 }
 
 pub fn submit_proof(
-    submitter : &Pubkey,
-    proof     : MerkleProof,
-    headers   : HeaderChain,
+    submitter: &Pubkey,
+    proof: MerkleProof,
+    headers: HeaderChain,
     transaction: Transaction,
-    request   : &Pubkey,
+    request: &Pubkey,
 ) -> Instruction {
-    let account_meta = vec![AccountMeta::new(*submitter, true), AccountMeta::new(*request, false)];
+    let account_meta = vec![
+        AccountMeta::new(*submitter, true),
+        AccountMeta::new(*request, false),
+    ];
     Instruction::new(
         id(),
-        &SpvInstruction::SubmitProof(Proof{
+        &SpvInstruction::SubmitProof(Proof {
             submitter: *submitter,
             proof,
             headers,
