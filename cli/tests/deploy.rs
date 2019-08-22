@@ -1,10 +1,10 @@
 use serde_json::{json, Value};
+use solana_cli::wallet::{process_command, WalletCommand, WalletConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_core::validator::new_validator_for_tests;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::bpf_loader;
-use solana_wallet::wallet::{process_command, WalletCommand, WalletConfig};
 use std::fs::{remove_dir_all, File};
 use std::io::Read;
 use std::path::PathBuf;

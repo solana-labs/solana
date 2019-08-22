@@ -1,7 +1,7 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
-name = "solana-wallet"
+name = "solana-cli"
 description = "Blockchain, Rebuilt for Scale"
 version = "0.18.0-pre2"
 repository = "https://github.com/solana-labs/solana"
@@ -44,3 +44,7 @@ solana-budget-program = { path = "../programs/budget_program", version = "0.18.0
 
 [features]
 cuda = []
+
+[[bin]]
+name = "solana"
+path = "src/main.rs"

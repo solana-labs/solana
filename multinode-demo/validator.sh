@@ -237,7 +237,7 @@ trap 'kill_node_and_exit' INT TERM ERR
 wallet() {
   (
     set -x
-    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" "$@"
+    $solana_cli --keypair "$identity_keypair_path" --url "$rpc_url" "$@"
   )
 }
 

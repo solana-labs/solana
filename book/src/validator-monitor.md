@@ -28,30 +28,30 @@ The vote pubkey for the validator can be found by running:
 $ solana-keygen pubkey ~/validator-vote-keypair.json
 ```
 
-Provide the **vote pubkey** to the `solana-wallet show-vote-account` command to view
+Provide the **vote pubkey** to the `solana show-vote-account` command to view
 the recent voting activity from your validator:
 ```bash
-$ solana-wallet show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
+$ solana show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ```
 
 ## Check Your Balance
 Your lamport balance should decrease by the transaction fee amount as your
 validator submits votes, and increase after serving as the leader:
 ```bash
-$ solana-wallet balance
+$ solana balance
 ```
 
 ## Check Slot Number
 After your validator boots, it may take some time to catch up with the cluster.
-Use the `get-slot` wallet command to view the current slot that the cluster is
+Use the `get-slot` command to view the current slot that the cluster is
 processing:
 ```bash
-$ solana-wallet get-slot
+$ solana get-slot
 ```
 
 The current slot that your validator is processing can then been seen with:
 ```bash
-$ solana-wallet --url http://127.0.0.1:8899 get-slot
+$ solana --url http://127.0.0.1:8899 get-slot
 ```
 
 Until your validator has caught up, it will not be able to vote successfully and

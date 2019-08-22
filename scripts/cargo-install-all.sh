@@ -39,7 +39,7 @@ BIN_CRATES=(
   replicator
   validator
   validator-info
-  wallet
+  cli
   bench-exchange
   bench-tps
 )
