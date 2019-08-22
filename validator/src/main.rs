@@ -50,7 +50,10 @@ fn download_archive(
     println!("Downloading {}...", url);
     let download_start = Instant::now();
 
-    let mut response = reqwest::get(&url).map_err(|err| format!("Unable to get: {:?}", err))?;
+    let mut response = reqwest::get(&url)
+        .and_then(|response| response.error_for_status())
+        .map_err(|err| format!("Unable to get: {:?}", err))?;
+
     let mut file = File::create(&temp_archive_path)
         .map_err(|err| format!("Unable to create {:?}: {:?}", temp_archive_path, err))?;
     std::io::copy(&mut response, &mut file)
