@@ -166,7 +166,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "Error: Execution exceeded maximum number of instructions")]
+    #[should_panic(expected = "Error: Exceeded maximum number of instructions allowed")]
     fn test_non_terminating_program() {
         #[rustfmt::skip]
         let prog = &[
