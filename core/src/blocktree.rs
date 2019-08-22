@@ -2439,6 +2439,7 @@ pub mod tests {
     use rand::thread_rng;
     use rand::Rng;
     use solana_sdk::hash::Hash;
+    use solana_sdk::packet::PACKET_DATA_SIZE;
     use solana_sdk::pubkey::Pubkey;
     use std::cmp::min;
     use std::collections::HashSet;
@@ -2781,22 +2782,22 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     pub fn test_get_slot_entries1() {
         let blocktree_path = get_tmp_ledger_path("test_get_slot_entries1");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let entries = make_tiny_test_entries(100);
-            let mut shreds = entries_to_test_shreds(entries.clone(), 1, 0, false);
-            for (i, b) in shreds.iter_mut().enumerate() {
-                if i < 4 {
-                    b.set_index(i as u32);
-                } else {
-                    b.set_index(8 + i as u32);
-                }
-            }
+            let entries = make_tiny_test_entries(8);
+            let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false);
             blocktree
                 .insert_shreds(&shreds)
+                .expect("Expected successful write of blobs");
+
+            let mut shreds1 = entries_to_test_shreds(entries[4..].to_vec(), 1, 0, false);
+            for (i, b) in shreds1.iter_mut().enumerate() {
+                b.set_index(8 + i as u32);
+            }
+            blocktree
+                .insert_shreds(&shreds1)
                 .expect("Expected successful write of blobs");
 
             assert_eq!(
@@ -2807,6 +2808,8 @@ pub mod tests {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
+    // This test seems to be unnecessary with introduction of data shreds. There are no
+    // guarantees that a particular blob index contains a complete entry
     #[test]
     #[ignore]
     pub fn test_get_slot_entries2() {
@@ -2820,17 +2823,20 @@ pub mod tests {
             for slot in 0..num_slots {
                 let entries = make_tiny_test_entries(slot as usize + 1);
                 let last_entry = entries.last().unwrap().clone();
-                let mut blobs = entries.clone().to_single_entry_blobs();
-                for b in blobs.iter_mut() {
+                let mut shreds =
+                    entries_to_test_shreds(entries, slot, slot.saturating_sub(1), false);
+                for b in shreds.iter_mut() {
                     b.set_index(index);
                     b.set_slot(slot as u64);
                     index += 1;
                 }
                 blocktree
-                    .write_blobs(&blobs)
-                    .expect("Expected successful write of blobs");
+                    .insert_shreds(&shreds)
+                    .expect("Expected successful write of shreds");
                 assert_eq!(
-                    blocktree.get_slot_entries(slot, index - 1, None).unwrap(),
+                    blocktree
+                        .get_slot_entries(slot, u64::from(index - 1), None)
+                        .unwrap(),
                     vec![last_entry],
                 );
             }
@@ -2839,34 +2845,28 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     pub fn test_get_slot_entries3() {
         // Test inserting/fetching blobs which contain multiple entries per blob
         let blocktree_path = get_tmp_ledger_path("test_get_slot_entries3");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 5 as u64;
-            let blobs_per_slot = 5 as u64;
+            let shreds_per_slot = 5 as u64;
             let entry_serialized_size =
                 bincode::serialized_size(&make_tiny_test_entries(1)).unwrap();
             let entries_per_slot =
-                (blobs_per_slot * packet::BLOB_DATA_SIZE as u64) / entry_serialized_size;
+                (shreds_per_slot * PACKET_DATA_SIZE as u64) / entry_serialized_size;
 
             // Write entries
             for slot in 0..num_slots {
-                let mut index = 0;
                 let entries = make_tiny_test_entries(entries_per_slot as usize);
-                let mut blobs = entries.clone().to_blobs();
-                assert_eq!(blobs.len() as u64, blobs_per_slot);
-                for b in blobs.iter_mut() {
-                    b.set_index(index);
-                    b.set_slot(slot as u64);
-                    index += 1;
-                }
+                let shreds =
+                    entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false);
+                assert!(shreds.len() as u64 >= shreds_per_slot);
                 blocktree
-                    .write_blobs(&blobs)
-                    .expect("Expected successful write of blobs");
-                assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), entries,);
+                    .insert_shreds(&shreds)
+                    .expect("Expected successful write of shreds");
+                assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), entries);
             }
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
