@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+HERE="$(dirname "$0")"
+
+source "$HERE"/utils.sh
+
+ensure_env || exit 1
+
 cat <<EOF > /etc/modprobe.d/blacklist-nouveau.conf
 blacklist nouveau
 options nouveau modeset=0

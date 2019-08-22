@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
-if [[ "$EUID" -ne 0 ]]; then
-  echo "Please run as root"
-  exit 1
-fi
+HERE="$(dirname "$0")"
+
+source "$HERE"/utils.sh
+
+ensure_env || exit 1
 
 set -xe
 

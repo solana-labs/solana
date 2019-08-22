@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
-if [[ "$EUID" -ne 0 ]]; then
-  echo "Please run as root"
-  exit 1
-fi
+HERE="$(dirname "$0")"
+
+source "$HERE"/utils.sh
+
+ensure_env || exit 1
+
+exit
 
 if [[ -n "$1" ]]; then
   PUBKEY_FILE="$1"
@@ -17,9 +20,6 @@ EOF
   exit 1
 fi
 
-USERNAME="$(whoami)"
-HERE="$(dirname "$0")"
-
 set -xe
 
 apt update
@@ -27,17 +27,17 @@ apt upgrade -y
 apt install -y build-essential pkg-config clang
 
 "$HERE"/../scripts/install-docker.sh
-usermod -aG docker "$USERNAME"
+usermod -aG docker "$SETUP_USER"
 "$HERE"/../scripts/install-certbot.sh
 "$HERE"/setup-sudoers.sh
 "$HERE"/setup-ssh.sh
 
 # Allow admin user to log in
-BASE_SSH_DIR="${HOME}/.ssh"
+BASE_SSH_DIR="${SETUP_HOME}/.ssh"
 mkdir "$BASE_SSH_DIR"
-chown "$USERNAME:$USERNAME" "$BASE_SSH_DIR"
+chown "$SETUP_USER:$SETUP_USER" "$BASE_SSH_DIR"
 cat "$PUBKEY_FILE" > "${BASE_SSH_DIR}/authorized_keys"
-chown "$USERNAME:$USERNAME" "${BASE_SSH_DIR}/.ssh/authorized_keys"
+chown "$SETUP_USER:$SETUP_USER" "${BASE_SSH_DIR}/.ssh/authorized_keys"
 
 "$HERE"/disable-nouveau.sh
 "$HERE"/disable-networkd-wait.sh
