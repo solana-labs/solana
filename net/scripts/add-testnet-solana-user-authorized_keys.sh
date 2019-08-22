@@ -15,9 +15,9 @@ fi
 # solana-user-authorized_keys.sh defines the public keys for users that should
 # automatically be granted access to ALL testnets
 for key in "${SOLANA_PUBKEYS[@]}"; do
-  echo "$key" >> /solana-authorized_keys
+  echo "$key" >> "${testnetSSHDir}/solana-authorized_keys"
 done
 
 sudo -u solana bash -c "
-  cat /solana-authorized_keys >> /home/solana/.ssh/authorized_keys
+  cat "${testnetSSHDir}/solana-authorized_keys" >> /home/solana/.ssh/authorized_keys
 "
