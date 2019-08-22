@@ -387,8 +387,8 @@ EOF
         set -o pipefail
         for i in $(seq 1 60); do
           set -x
-          cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone" &&
-            cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone" &&
+          cloud_FetchFile "$nodeName" "$nodeIp" "$testnetSSHPrivateKey" "$sshPrivateKey" "$nodeZone" &&
+            cloud_FetchFile "$nodeName" "$nodeIp" "$testnetSSHPrivateKey".pub "$sshPrivateKey.pub" "$nodeZone" &&
               break
           set +x
 
@@ -613,21 +613,22 @@ cat > /etc/motd <<EOM
 $(creationInfo)
 EOM
 
-# Place the generated private key at /solana-id_ecdsa so it's retrievable by anybody
+# Place the generated private key at "$testnetSSHPrivateKey" so it's retrievable by anybody
 # who is able to log into this machine
-cat > /solana-id_ecdsa <<EOK
+cat > "$testnetSSHPrivateKey" <<EOK
 $(cat "$sshPrivateKey")
 EOK
-cat > /solana-id_ecdsa.pub <<EOK
+cat > "$testnetSSHPrivateKey".pub <<EOK
 $(cat "$sshPrivateKey.pub")
 EOK
-chmod 444 /solana-id_ecdsa
+chmod 444 "$testnetSSHPrivateKey"
 
 USER=\$(id -un)
 export DEBIAN_FRONTEND=noninteractive
 $(
   cd "$here"/scripts/
   cat \
+    ../paths.sh \
     disable-background-upgrades.sh \
     create-solana-user.sh \
     solana-user-authorized_keys.sh \
