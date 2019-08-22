@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 pub const NUM_THREADS: u32 = 10;
 
 /// Process a blob: Add blob to the ledger window.
-pub fn process_shreds(shreds: &[Shred], blocktree: &Arc<Blocktree>) -> Result<()> {
+pub fn process_shreds(shreds: Vec<Shred>, blocktree: &Arc<Blocktree>) -> Result<()> {
     blocktree.insert_shreds(shreds)
 }
 
@@ -112,7 +112,7 @@ where
         }?;
     }
 
-    blocktree.insert_shreds(&shreds)?;
+    blocktree.insert_shreds(shreds)?;
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
@@ -287,7 +287,7 @@ mod test {
         let shreds = local_entries_to_shred(original_entries.clone(), &Arc::new(Keypair::new()));
 
         for shred in shreds.into_iter().rev() {
-            process_shreds(&[shred], &blocktree).expect("Expect successful processing of blob");
+            process_shreds(vec![shred], &blocktree).expect("Expect successful processing of blob");
         }
 
         assert_eq!(

@@ -364,6 +364,12 @@ impl Write for Shredder {
 }
 
 #[derive(Default, Debug, PartialEq)]
+pub struct RecoveryResult {
+    pub recovered_data: Vec<Shred>,
+    pub recovered_code: Vec<Shred>,
+}
+
+#[derive(Default, Debug, PartialEq)]
 pub struct DeshredResult {
     pub payload: Vec<u8>,
     pub recovered_data: Vec<Shred>,
@@ -601,39 +607,26 @@ impl Shredder {
         bincode::serialize(&missing_shred).unwrap()
     }
 
-    /// Combines all shreds to recreate the original buffer
-    /// If the shreds include coding shreds, and if not all shreds are present, it tries
-    /// to reconstruct missing shreds using erasure
-    /// Note: The shreds are expected to be sorted
-    /// (lower to higher index, and data shreds before coding shreds)
-    pub fn deshred(shreds: &[Shred]) -> Result<DeshredResult, reed_solomon_erasure::Error> {
-        // If coding is enabled, the last shred must be a coding shred.
-        let (num_data, num_coding, first_index, slot) =
-            if let Shred::Coding(code) = shreds.last().unwrap() {
-                (
-                    code.header.num_data_shreds as usize,
-                    code.header.num_coding_shreds as usize,
-                    code.header.common_header.index as usize - code.header.position as usize,
-                    code.header.common_header.slot,
-                )
-            } else {
-                (shreds.len(), 0, 0, 0)
-            };
-
+    pub fn try_recovery(
+        shreds: &[Shred],
+        num_data: usize,
+        num_coding: usize,
+        first_index: usize,
+        slot: u64,
+    ) -> Result<RecoveryResult, reed_solomon_erasure::Error> {
         let mut recovered_data = vec![];
         let mut recovered_code = vec![];
         let fec_set_size = num_data + num_coding;
-        let (data_shred_bufs, first_shred) = if num_coding > 0 && shreds.len() < fec_set_size {
+        if num_coding > 0 && shreds.len() < fec_set_size {
             let coding_block_offset = CodingShred::overhead();
 
             // Let's try recovering missing shreds using erasure
             let mut present = &mut vec![true; fec_set_size];
-            let mut first_shred_in_slot = false;
             let mut next_expected_index = first_index;
             let mut shred_bufs: Vec<Vec<u8>> = shreds
                 .iter()
                 .flat_map(|shred| {
-                    let (blocks, first_shred, last_index) = Self::fill_in_missing_shreds(
+                    let (blocks, _first_shred, last_index) = Self::fill_in_missing_shreds(
                         shred,
                         num_data,
                         num_coding,
@@ -642,12 +635,13 @@ impl Shredder {
                         next_expected_index,
                         &mut present,
                     );
-                    first_shred_in_slot |= first_shred;
                     next_expected_index = last_index + 1;
                     blocks
                 })
                 .collect();
 
+            // Insert any other missing shreds after the last shred we have received in the
+            // current FEC block
             let mut pending_shreds: Vec<Vec<u8>> = (next_expected_index
                 ..first_index + fec_set_size)
                 .map(|missing| {
@@ -692,8 +686,22 @@ impl Shredder {
                     }
                 }
             });
-            (shred_bufs, first_shred_in_slot)
-        } else {
+        }
+
+        Ok(RecoveryResult {
+            recovered_data,
+            recovered_code,
+        })
+    }
+
+    /// Combines all shreds to recreate the original buffer
+    /// If the shreds include coding shreds, and if not all shreds are present, it tries
+    /// to reconstruct missing shreds using erasure
+    /// Note: The shreds are expected to be sorted
+    /// (lower to higher index, and data shreds before coding shreds)
+    pub fn deshred(shreds: &[Shred]) -> Result<Vec<u8>, reed_solomon_erasure::Error> {
+        let num_data = shreds.len();
+        let (data_shred_bufs, first_shred) = {
             let (first_index, first_shred_in_slot) =
                 Shredder::get_shred_index(shreds.first().unwrap(), num_data);
 
@@ -715,11 +723,11 @@ impl Shredder {
             (shred_bufs, first_shred_in_slot)
         };
 
-        Ok(DeshredResult {
-            payload: Self::reassemble_payload(num_data, data_shred_bufs, first_shred),
-            recovered_data,
-            recovered_code,
-        })
+        Ok(Self::reassemble_payload(
+            num_data,
+            data_shred_bufs,
+            first_shred,
+        ))
     }
 
     fn get_shred_index(shred: &Shred, num_data: usize) -> (usize, bool) {
@@ -1085,20 +1093,34 @@ mod tests {
 
         // Test0: Try recovery/reassembly with only data shreds, but not all data shreds. Hint: should fail
         assert_matches!(
-            Shredder::deshred(&shreds[..4]),
-            Err(reed_solomon_erasure::Error::TooFewDataShards)
+            Shredder::try_recovery(
+                &shreds[..4],
+                expected_shred_count / 2,
+                expected_shred_count / 2,
+                0,
+                slot
+            ),
+            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
 
         // Test1: Try recovery/reassembly with only data shreds. Hint: should work
-        let result = Shredder::deshred(&shreds[..5]).unwrap();
-        assert_ne!(DeshredResult::default(), result);
-        assert!(result.payload.len() >= data.len());
+        let result = Shredder::try_recovery(
+            &shreds[..5],
+            expected_shred_count / 2,
+            expected_shred_count / 2,
+            0,
+            slot,
+        )
+        .unwrap();
+        assert_ne!(RecoveryResult::default(), result);
         assert!(result.recovered_data.is_empty());
-        assert!(result.recovered_code.is_empty());
-        assert_eq!(data[..], result.payload[..data.len()]);
+        assert!(!result.recovered_code.is_empty());
+        let result = Shredder::deshred(&shreds[..5]).unwrap();
+        assert!(result.len() >= data.len());
+        assert_eq!(data[..], result[..data.len()]);
 
         // Test2: Try recovery/reassembly with missing data shreds + coding shreds. Hint: should work
-        let shreds: Vec<Shred> = shredder
+        let mut shreds: Vec<Shred> = shredder
             .shreds
             .iter()
             .enumerate()
@@ -1111,20 +1133,30 @@ mod tests {
             })
             .collect();
 
-        let mut result = Shredder::deshred(&shreds).unwrap();
-        assert!(result.payload.len() >= data.len());
+        let mut result = Shredder::try_recovery(
+            &shreds,
+            expected_shred_count / 2,
+            expected_shred_count / 2,
+            0,
+            slot,
+        )
+        .unwrap();
+        assert_ne!(RecoveryResult::default(), result);
+
         assert_eq!(result.recovered_data.len(), 2); // Data shreds 1 and 3 were missing
         let recovered_shred = result.recovered_data.remove(0);
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 1);
         assert_eq!(recovered_shred.slot(), slot);
         assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(1, recovered_shred);
 
         let recovered_shred = result.recovered_data.remove(0);
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 3);
         assert_eq!(recovered_shred.slot(), slot);
         assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(3, recovered_shred);
 
         assert_eq!(result.recovered_code.len(), 3); // Coding shreds 5, 7, 9 were missing
         let recovered_shred = result.recovered_code.remove(0);
@@ -1151,10 +1183,13 @@ mod tests {
             assert_eq!(code.header.common_header.slot, slot);
             assert_eq!(code.header.common_header.index, 4);
         }
-        assert_eq!(data[..], result.payload[..data.len()]);
+
+        let result = Shredder::deshred(&shreds[..5]).unwrap();
+        assert!(result.len() >= data.len());
+        assert_eq!(data[..], result[..data.len()]);
 
         // Test3: Try recovery/reassembly with 3 missing data shreds + 2 coding shreds. Hint: should work
-        let shreds: Vec<Shred> = shredder
+        let mut shreds: Vec<Shred> = shredder
             .shreds
             .iter()
             .enumerate()
@@ -1167,26 +1202,37 @@ mod tests {
             })
             .collect();
 
-        let mut result = Shredder::deshred(&shreds).unwrap();
-        assert!(result.payload.len() >= data.len());
+        let mut result = Shredder::try_recovery(
+            &shreds,
+            expected_shred_count / 2,
+            expected_shred_count / 2,
+            0,
+            slot,
+        )
+        .unwrap();
+        assert_ne!(RecoveryResult::default(), result);
+
         assert_eq!(result.recovered_data.len(), 3); // Data shreds 0, 2 and 4 were missing
         let recovered_shred = result.recovered_data.remove(0);
         assert_matches!(recovered_shred, Shred::FirstInSlot(_));
         assert_eq!(recovered_shred.index(), 0);
         assert_eq!(recovered_shred.slot(), slot);
         assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(0, recovered_shred);
 
         let recovered_shred = result.recovered_data.remove(0);
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 2);
         assert_eq!(recovered_shred.slot(), slot);
         assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(2, recovered_shred);
 
         let recovered_shred = result.recovered_data.remove(0);
         assert_matches!(recovered_shred, Shred::LastInFECSet(_));
         assert_eq!(recovered_shred.index(), 4);
         assert_eq!(recovered_shred.slot(), slot);
         assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(4, recovered_shred);
 
         assert_eq!(result.recovered_code.len(), 2); // Coding shreds 6, 8 were missing
         let recovered_shred = result.recovered_code.remove(0);
@@ -1205,7 +1251,10 @@ mod tests {
             assert_eq!(code.header.common_header.slot, slot);
             assert_eq!(code.header.common_header.index, 3);
         }
-        assert_eq!(data[..], result.payload[..data.len()]);
+
+        let result = Shredder::deshred(&shreds[..5]).unwrap();
+        assert!(result.len() >= data.len());
+        assert_eq!(data[..], result[..data.len()]);
 
         // Test4: Try recovery/reassembly full slot with 3 missing data shreds + 2 coding shreds. Hint: should work
         let mut shredder =
@@ -1231,7 +1280,7 @@ mod tests {
         let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
         assert_eq!(shredder.shreds.len(), expected_shred_count);
 
-        let shreds: Vec<Shred> = shredder
+        let mut shreds: Vec<Shred> = shredder
             .shreds
             .iter()
             .enumerate()
@@ -1244,26 +1293,37 @@ mod tests {
             })
             .collect();
 
-        let mut result = Shredder::deshred(&shreds).unwrap();
-        assert!(result.payload.len() >= data.len());
+        let mut result = Shredder::try_recovery(
+            &shreds,
+            expected_shred_count / 2,
+            expected_shred_count / 2,
+            0,
+            slot,
+        )
+        .unwrap();
+        assert_ne!(RecoveryResult::default(), result);
+
         assert_eq!(result.recovered_data.len(), 3); // Data shreds 0, 2 and 4 were missing
         let recovered_shred = result.recovered_data.remove(0);
         assert_matches!(recovered_shred, Shred::FirstInSlot(_));
         assert_eq!(recovered_shred.index(), 0);
         assert_eq!(recovered_shred.slot(), slot);
         assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(0, recovered_shred);
 
         let recovered_shred = result.recovered_data.remove(0);
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 2);
         assert_eq!(recovered_shred.slot(), slot);
         assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(2, recovered_shred);
 
         let recovered_shred = result.recovered_data.remove(0);
         assert_matches!(recovered_shred, Shred::LastInSlot(_));
         assert_eq!(recovered_shred.index(), 4);
         assert_eq!(recovered_shred.slot(), slot);
         assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(4, recovered_shred);
 
         assert_eq!(result.recovered_code.len(), 2); // Coding shreds 6, 8 were missing
         let recovered_shred = result.recovered_code.remove(0);
@@ -1282,7 +1342,10 @@ mod tests {
             assert_eq!(code.header.common_header.slot, slot);
             assert_eq!(code.header.common_header.index, 3);
         }
-        assert_eq!(data[..], result.payload[..data.len()]);
+
+        let result = Shredder::deshred(&shreds[..5]).unwrap();
+        assert!(result.len() >= data.len());
+        assert_eq!(data[..], result[..data.len()]);
 
         // Test5: Try recovery/reassembly with 3 missing data shreds + 3 coding shreds. Hint: should fail
         let shreds: Vec<Shred> = shredder
@@ -1301,7 +1364,7 @@ mod tests {
         assert_eq!(shreds.len(), 4);
         assert_matches!(
             Shredder::deshred(&shreds),
-            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
+            Err(reed_solomon_erasure::Error::TooFewDataShards)
         );
     }
 }
