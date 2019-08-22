@@ -184,7 +184,6 @@ default_arg --identity "$identity_keypair_path"
 default_arg --voting-keypair "$voting_keypair_path"
 default_arg --storage-keypair "$storage_keypair_path"
 default_arg --ledger "$ledger_dir"
-#default_arg --snapshot-interval-slots 100
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda

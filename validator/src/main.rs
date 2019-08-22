@@ -1,5 +1,5 @@
 use bzip2::bufread::BzDecoder;
-use clap::{crate_description, crate_name, crate_version, value_t, App, Arg};
+use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use solana_client::rpc_client::RpcClient;
 use solana_core::bank_forks::SnapshotConfig;
@@ -30,7 +30,7 @@ fn port_range_validator(port_range: String) -> Result<(), String> {
     }
 }
 
-fn download_archive(
+fn download_tar_bz2(
     rpc_addr: &SocketAddr,
     archive_name: &str,
     download_path: &Path,
@@ -50,9 +50,21 @@ fn download_archive(
     println!("Downloading {}...", url);
     let download_start = Instant::now();
 
-    let mut response = reqwest::get(&url)
+    let client = reqwest::Client::new();
+    let mut response = client
+        .get(url.as_str())
+        .send()
         .and_then(|response| response.error_for_status())
         .map_err(|err| format!("Unable to get: {:?}", err))?;
+    let download_size = {
+        response
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|content_length| content_length.to_str().ok())
+            .and_then(|content_length| content_length.parse().ok())
+            .unwrap_or(0)
+    };
+    println!("Download size: {} bytes", download_size);
 
     let mut file = File::create(&temp_archive_path)
         .map_err(|err| format!("Unable to create {:?}: {:?}", temp_archive_path, err))?;
@@ -121,11 +133,19 @@ fn initialize_ledger_path(
 
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
 
-    download_archive(&rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
+    download_tar_bz2(&rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
+
     if !no_snapshot_fetch {
-        let _ = fs::remove_file(ledger_path.join("snapshot.tar.bz2"));
-        download_archive(&rpc_addr, "snapshot.tar.bz2", ledger_path, false)
-            .unwrap_or_else(|err| eprintln!("Warning: Unable to fetch snapshot: {:?}", err));
+        let snapshot_package = solana_core::snapshot_utils::get_snapshot_tar_path(ledger_path);
+        fs::remove_file(&snapshot_package)
+            .unwrap_or_else(|err| warn!("error removing {:?}: {}", snapshot_package, err));
+        download_tar_bz2(
+            &rpc_addr,
+            snapshot_package.file_name().unwrap().to_str().unwrap(),
+            snapshot_package.parent().unwrap(),
+            false,
+        )
+        .unwrap_or_else(|err| eprintln!("Warning: Unable to fetch snapshot: {:?}", err));
     }
 
     Ok(genesis_blockhash)
@@ -205,7 +225,7 @@ fn main() {
                 .long("no-snapshot-fetch")
                 .takes_value(false)
                 .requires("entrypoint")
-                .help("Do not attempt to fetch a snapshot from the cluster entrypoint"),
+                .help("Do not attempt to fetch a new snapshot from the cluster entrypoint, start from a local snapshot if present"),
         )
         .arg(
             Arg::with_name("no_voting")
@@ -281,7 +301,8 @@ fn main() {
                 .long("snapshot-interval-slots")
                 .value_name("SNAPSHOT_INTERVAL_SLOTS")
                 .takes_value(true)
-                .help("Number of slots between generating snapshots"),
+                .default_value("100")
+                .help("Number of slots between generating snapshots, 0 to disable snapshots"),
         )
         .arg(
             clap::Arg::with_name("limit_ledger_size")
@@ -362,14 +383,24 @@ fn main() {
             Some(ledger_path.join("accounts").to_str().unwrap().to_string());
     }
 
-    validator_config.snapshot_config = matches.value_of("snapshot_interval_slots").map(|s| {
-        let snapshots_dir = ledger_path.clone().join("snapshot");
-        fs::create_dir_all(&snapshots_dir).expect("Failed to create snapshots directory");
-        SnapshotConfig::new(
-            snapshots_dir,
-            ledger_path.clone(),
-            s.parse::<usize>().unwrap(),
-        )
+    let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", usize);
+    let snapshot_path = ledger_path.clone().join("snapshot");
+    fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
+        eprintln!(
+            "Failed to create snapshots directory {:?}: {}",
+            snapshot_path, err
+        );
+        exit(1);
+    });
+
+    validator_config.snapshot_config = Some(SnapshotConfig {
+        snapshot_interval_slots: if snapshot_interval_slots > 0 {
+            snapshot_interval_slots
+        } else {
+            std::usize::MAX
+        },
+        snapshot_path,
+        snapshot_package_output_path: ledger_path.clone(),
     });
 
     if matches.is_present("limit_ledger_size") {

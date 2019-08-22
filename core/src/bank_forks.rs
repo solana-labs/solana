@@ -16,35 +16,14 @@ use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotConfig {
-    snapshot_path: PathBuf,
-    snapshot_package_output_path: PathBuf,
-    snapshot_interval_slots: usize,
-}
+    // Generate a new snapshot every this many slots
+    pub snapshot_interval_slots: usize,
 
-impl SnapshotConfig {
-    pub fn new(
-        snapshot_path: PathBuf,
-        snapshot_package_output_path: PathBuf,
-        snapshot_interval_slots: usize,
-    ) -> Self {
-        Self {
-            snapshot_path,
-            snapshot_package_output_path,
-            snapshot_interval_slots,
-        }
-    }
+    // Where to store the latest packaged snapshot
+    pub snapshot_package_output_path: PathBuf,
 
-    pub fn snapshot_path(&self) -> &Path {
-        self.snapshot_path.as_path()
-    }
-
-    pub fn snapshot_package_output_path(&self) -> &Path {
-        &self.snapshot_package_output_path.as_path()
-    }
-
-    pub fn snapshot_interval_slots(&self) -> usize {
-        self.snapshot_interval_slots
-    }
+    // Where to place the snapshots for recent slots
+    pub snapshot_path: PathBuf,
 }
 
 pub struct BankForks {
@@ -234,10 +213,7 @@ impl BankForks {
         // Generate a snapshot if snapshots are configured and it's been an appropriate number
         // of banks since the last snapshot
         if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
-            let config = self
-                .snapshot_config
-                .as_ref()
-                .expect("Called package_snapshot without a snapshot configuration");
+            let config = self.snapshot_config.as_ref().unwrap();
             info!("setting snapshot root: {}", root);
             if root - self.slots_since_snapshot[0] >= config.snapshot_interval_slots as u64 {
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
@@ -308,6 +284,7 @@ impl BankForks {
             .cloned()
             .expect("root must exist in BankForks");
         snapshot_utils::add_snapshot(&config.snapshot_path, &bank, slots_since_snapshot)?;
+
         // Package the relevant snapshots
         let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&config.snapshot_path);
 
@@ -835,7 +812,7 @@ mod tests {
         genesis_block_info: GenesisBlockInfo,
     }
 
-    fn setup_snapshot_test(snapshot_interval: usize) -> SnapshotTestConfig {
+    fn setup_snapshot_test(snapshot_interval_slots: usize) -> SnapshotTestConfig {
         let accounts_dir = TempDir::new().unwrap();
         let snapshot_dir = TempDir::new().unwrap();
         let snapshot_output_path = TempDir::new().unwrap();
@@ -847,11 +824,11 @@ mod tests {
         bank0.freeze();
         let mut bank_forks = BankForks::new(0, bank0);
 
-        let snapshot_config = SnapshotConfig::new(
-            PathBuf::from(snapshot_dir.path()),
-            PathBuf::from(snapshot_output_path.path()),
-            snapshot_interval,
-        );
+        let snapshot_config = SnapshotConfig {
+            snapshot_interval_slots,
+            snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
+            snapshot_path: PathBuf::from(snapshot_dir.path()),
+        };
         bank_forks.set_snapshot_config(snapshot_config.clone());
         SnapshotTestConfig {
             accounts_dir,

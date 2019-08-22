@@ -375,22 +375,20 @@ fn get_bank_forks(
     dev_halt_at_slot: Option<Slot>,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) = {
-        let mut result = None;
-        if snapshot_config.is_some() {
-            let snapshot_config = snapshot_config.as_ref().unwrap();
-
-            // Blow away any remnants in the snapshots directory
-            let _ = fs::remove_dir_all(snapshot_config.snapshot_path());
-            fs::create_dir_all(&snapshot_config.snapshot_path())
+        if let Some(snapshot_config) = snapshot_config.as_ref() {
+            info!(
+                "Initializing snapshot path: {:?}",
+                snapshot_config.snapshot_path
+            );
+            let _ = fs::remove_dir_all(&snapshot_config.snapshot_path);
+            fs::create_dir_all(&snapshot_config.snapshot_path)
                 .expect("Couldn't create snapshot directory");
 
-            // Get the path to the tar
             let tar = snapshot_utils::get_snapshot_tar_path(
-                &snapshot_config.snapshot_package_output_path(),
+                &snapshot_config.snapshot_package_output_path,
             );
-
-            // Check that the snapshot tar exists, try to load the snapshot if it does
             if tar.exists() {
+                info!("Loading snapshot package: {:?}", tar);
                 // Fail hard here if snapshot fails to load, don't silently continue
                 let deserialized_bank = snapshot_utils::bank_from_archive(
                     account_paths
@@ -401,33 +399,29 @@ fn get_bank_forks(
                 )
                 .expect("Load from snapshot failed");
 
-                result = Some(
-                    blocktree_processor::process_blocktree_from_root(
-                        blocktree,
-                        Arc::new(deserialized_bank),
-                        verify_ledger,
-                        dev_halt_at_slot,
-                    )
-                    .expect("processing blocktree after loading snapshot failed"),
-                );
-            }
-        }
-
-        // If a snapshot doesn't exist
-        if result.is_none() {
-            result = Some(
-                blocktree_processor::process_blocktree(
-                    &genesis_block,
-                    &blocktree,
-                    account_paths,
+                return blocktree_processor::process_blocktree_from_root(
+                    blocktree,
+                    Arc::new(deserialized_bank),
                     verify_ledger,
                     dev_halt_at_slot,
                 )
-                .expect("process_blocktree failed"),
-            );
+                .expect("processing blocktree after loading snapshot failed");
+            } else {
+                info!("Snapshot package does not exist: {:?}", tar);
+            }
+        } else {
+            info!("Snapshots disabled");
         }
 
-        result.unwrap()
+        info!("Processing ledger from genesis");
+        blocktree_processor::process_blocktree(
+            &genesis_block,
+            &blocktree,
+            account_paths,
+            verify_ledger,
+            dev_halt_at_slot,
+        )
+        .expect("process_blocktree failed")
     };
 
     if snapshot_config.is_some() {
