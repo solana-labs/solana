@@ -76,6 +76,7 @@ fn main() {
             "external_spend",
             "noop",
             "panic",
+            "stack_bug",
             "tick_height",
         ];
         for program in rust_programs.iter() {
