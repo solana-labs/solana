@@ -62,7 +62,7 @@ if [[ ! -r $identity_keypair ]]; then
   $solana_keygen new -o "$identity_keypair"
 
   # TODO: https://github.com/solana-labs/solminer/blob/9cd2289/src/replicator.js#L17-L18
-  $solana_wallet --keypair "$identity_keypair" --url "$rpc_url" \
+  $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
       airdrop 100000
 fi
 identity_pubkey=$($solana_keygen pubkey "$identity_keypair")
@@ -71,7 +71,7 @@ if [[ ! -r $storage_keypair ]]; then
   $solana_keygen new -o "$storage_keypair"
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair")
 
-  $solana_wallet --keypair "$identity_keypair" --url "$rpc_url" \
+  $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
     create-replicator-storage-account "$identity_pubkey" "$storage_pubkey"
 fi
 

@@ -51,7 +51,7 @@
   - [Blockstreamer](blockstreamer.md)
   - [JSON RPC API](jsonrpc-api.md)
   - [JavaScript API](javascript-api.md)
-  - [solana-wallet CLI](wallet.md)
+  - [solana CLI](cli.md)
 
 - [Accepted Design Proposals](proposals.md)
   - [Ledger Replication](ledger-replication-to-implement.md)

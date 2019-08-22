@@ -2,15 +2,15 @@
 When your validator starts, it will have no stake, which means it will be
 ineligible to become leader.
 
-Adding stake can be accomplished by using the `solana-wallet` CLI
+Adding stake can be accomplished by using the `solana` CLI
 
 First create a stake account keypair with `solana-keygen`:
 ```bash
 $ solana-keygen new -o ~/validator-config/stake-keypair.json
 ```
-and use the wallet's `delegate-stake` command to stake your validator with 42 lamports:
+and use the cli's `delegate-stake` command to stake your validator with 42 lamports:
 ```bash
-$ solana-wallet delegate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json 42
+$ solana delegate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json 42
 ```
 
 Note that stakes need to warm up, and warmup increments are applied at Epoch boundaries, so it can take an hour
@@ -28,14 +28,14 @@ commission rate set in the vote account.
 
 Stake can be deactivated by running:
 ```bash
-$ solana-wallet deactivate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json
+$ solana deactivate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json
 ```
 
 The stake will cool down, deactivate over time.  While cooling down, your stake will continue to earn
 rewards.
 
 Note that a stake account may only be used once, so after deactivation, use the
-wallet's `withdraw-stake` command to recover the previously staked lamports.
+cli's `withdraw-stake` command to recover the previously staked lamports.
 
 Be sure and redeem your credits before withdrawing all your lamports.
 Once the account is fully withdrawn, the account is destroyed.

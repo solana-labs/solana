@@ -23,7 +23,7 @@ check_balance_output() {
   exec 42>&1
   attempts=3
   while [[ $attempts -gt 0 ]]; do
-    output=$($solana_wallet "${entrypoint[@]}" balance | tee >(cat - >&42))
+    output=$($solana_cli "${entrypoint[@]}" balance | tee >(cat - >&42))
     if [[ "$output" =~ $expected_output ]]; then
       break
     else
@@ -39,8 +39,8 @@ check_balance_output() {
 
 pay_and_confirm() {
   exec 42>&1
-  signature=$($solana_wallet "${entrypoint[@]}" pay "$@" | tail -c 88 | tee >(cat - >&42))
-  $solana_wallet "${entrypoint[@]}" confirm "$signature"
+  signature=$($solana_cli "${entrypoint[@]}" pay "$@" | tail -c 88 | tee >(cat - >&42))
+  $solana_cli "${entrypoint[@]}" confirm "$signature"
 }
 
 $solana_keygen new -f
@@ -48,7 +48,7 @@ $solana_keygen new -f
 node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
-  output=$($solana_wallet "${entrypoint[@]}" get-transaction-count)
+  output=$($solana_cli "${entrypoint[@]}" get-transaction-count)
   if [[ -n $output ]]; then
     node_readiness=true
     break
@@ -61,11 +61,11 @@ if ! "$node_readiness"; then
   exit 1
 fi
 
-$solana_wallet "${entrypoint[@]}" address
+$solana_cli "${entrypoint[@]}" address
 check_balance_output "0 lamports"
-$solana_wallet "${entrypoint[@]}" airdrop 600
+$solana_cli "${entrypoint[@]}" airdrop 600
 check_balance_output "600 lamports"
-$solana_wallet "${entrypoint[@]}" airdrop 400
+$solana_cli "${entrypoint[@]}" airdrop 400
 check_balance_output "1000 lamports"
 pay_and_confirm $garbage_address 50
 check_balance_output "lamports" # <-- exact number of lamports here depends on the current cluster fees

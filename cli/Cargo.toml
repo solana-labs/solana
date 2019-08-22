@@ -46,5 +46,5 @@ solana-budget-program = { path = "../programs/budget_program", version = "0.18.0
 cuda = []
 
 [[bin]]
-name = "solana-wallet"
+name = "solana"
 path = "src/main.rs"

@@ -1,6 +1,6 @@
-## solana-wallet CLI
+## solana CLI
 
-The [solana crate](https://crates.io/crates/solana) is distributed with a command-line interface tool
+The [solana-cli crate](https://crates.io/crates/solana-cli) provides a command-line interface tool for Solana
 
 ### Examples
 
@@ -8,7 +8,7 @@ The [solana crate](https://crates.io/crates/solana) is distributed with a comman
 
 ```sh
 // Command
-$ solana-wallet address
+$ solana address
 
 // Return
 <PUBKEY>
@@ -18,7 +18,7 @@ $ solana-wallet address
 
 ```sh
 // Command
-$ solana-wallet airdrop 123
+$ solana airdrop 123
 
 // Return
 "Your balance is: 123"
@@ -28,7 +28,7 @@ $ solana-wallet airdrop 123
 
 ```sh
 // Command
-$ solana-wallet balance
+$ solana balance
 
 // Return
 "Your balance is: 123"
@@ -38,7 +38,7 @@ $ solana-wallet balance
 
 ```sh
 // Command
-$ solana-wallet confirm <TX_SIGNATURE>
+$ solana confirm <TX_SIGNATURE>
 
 // Return
 "Confirmed" / "Not found" / "Transaction failed with error <ERR>"
@@ -48,7 +48,7 @@ $ solana-wallet confirm <TX_SIGNATURE>
 
 ```sh
 // Command
-$ solana-wallet deploy <PATH>
+$ solana deploy <PATH>
 
 // Return
 <PROGRAM_ID>
@@ -58,7 +58,7 @@ $ solana-wallet deploy <PATH>
 
 ```sh
 // Command
-$ solana-wallet pay <PUBKEY> 123
+$ solana pay <PUBKEY> 123
 
 // Return
 <TX_SIGNATURE>
@@ -68,7 +68,7 @@ $ solana-wallet pay <PUBKEY> 123
 
 ```sh
 // Command
-$ solana-wallet pay <PUBKEY> 123 \
+$ solana pay <PUBKEY> 123 \
     --after 2018-12-24T23:59:00 --require-timestamp-from <PUBKEY>
 
 // Return
@@ -81,7 +81,7 @@ $ solana-wallet pay <PUBKEY> 123 \
 A third party must send a signature to unlock the lamports.
 ```sh
 // Command
-$ solana-wallet pay <PUBKEY> 123 \
+$ solana pay <PUBKEY> 123 \
     --require-signature-from <PUBKEY>
 
 // Return
@@ -92,7 +92,7 @@ $ solana-wallet pay <PUBKEY> 123 \
 
 ```sh
 // Command
-$ solana-wallet pay <PUBKEY> 123 \
+$ solana pay <PUBKEY> 123 \
     --after 2018-12-24T23:59 --require-timestamp-from <PUBKEY> \
     --require-signature-from <PUBKEY>
 
@@ -104,7 +104,7 @@ $ solana-wallet pay <PUBKEY> 123 \
 
 ```sh
 // Command
-$ solana-wallet pay <PUBKEY> 123 \
+$ solana pay <PUBKEY> 123 \
     --require-signature-from <PUBKEY> \
     --require-signature-from <PUBKEY>
 
@@ -116,7 +116,7 @@ $ solana-wallet pay <PUBKEY> 123 \
 
 ```sh
 // Command
-$ solana-wallet pay <PUBKEY> 123 \
+$ solana pay <PUBKEY> 123 \
     --require-signature-from <PUBKEY> \
     --cancelable
 
@@ -128,7 +128,7 @@ $ solana-wallet pay <PUBKEY> 123 \
 
 ```sh
 // Command
-$ solana-wallet cancel <PROCESS_ID>
+$ solana cancel <PROCESS_ID>
 
 // Return
 <TX_SIGNATURE>
@@ -138,7 +138,7 @@ $ solana-wallet cancel <PROCESS_ID>
 
 ```sh
 // Command
-$ solana-wallet send-signature <PUBKEY> <PROCESS_ID>
+$ solana send-signature <PUBKEY> <PROCESS_ID>
 
 // Return
 <TX_SIGNATURE>
@@ -149,7 +149,7 @@ $ solana-wallet send-signature <PUBKEY> <PROCESS_ID>
 Use the current system time:
 ```sh
 // Command
-$ solana-wallet send-timestamp <PUBKEY> <PROCESS_ID>
+$ solana send-timestamp <PUBKEY> <PROCESS_ID>
 
 // Return
 <TX_SIGNATURE>
@@ -159,7 +159,7 @@ Or specify some other arbitrary timestamp:
 
 ```sh
 // Command
-$ solana-wallet send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
+$ solana send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 
 // Return
 <TX_SIGNATURE>
@@ -168,10 +168,10 @@ $ solana-wallet send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 ### Usage
 
 ```manpage
-solana-wallet 0.12.0
+solana 0.12.0
 
 USAGE:
-    solana-wallet [FLAGS] [OPTIONS] [SUBCOMMAND]
+    solana [FLAGS] [OPTIONS] [SUBCOMMAND]
 
 FLAGS:
     -h, --help       Prints help information
@@ -201,11 +201,11 @@ SUBCOMMANDS:
 ```
 
 ```manpage
-solana-wallet-address
+solana-address
 Get your public key
 
 USAGE:
-    solana-wallet address
+    solana address
 
 FLAGS:
     -h, --help       Prints help information
@@ -213,11 +213,11 @@ FLAGS:
 ```
 
 ```manpage
-solana-wallet-airdrop
+solana-airdrop
 Request a batch of lamports
 
 USAGE:
-    solana-wallet airdrop <NUM>
+    solana airdrop <NUM>
 
 FLAGS:
     -h, --help       Prints help information
@@ -228,11 +228,11 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-balance
+solana-balance
 Get your balance
 
 USAGE:
-    solana-wallet balance
+    solana balance
 
 FLAGS:
     -h, --help       Prints help information
@@ -240,11 +240,11 @@ FLAGS:
 ```
 
 ```manpage
-solana-wallet-cancel
+solana-cancel
 Cancel a transfer
 
 USAGE:
-    solana-wallet cancel <PROCESS_ID>
+    solana cancel <PROCESS_ID>
 
 FLAGS:
     -h, --help       Prints help information
@@ -255,11 +255,11 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-confirm
+solana-confirm
 Confirm transaction by signature
 
 USAGE:
-    solana-wallet confirm <SIGNATURE>
+    solana confirm <SIGNATURE>
 
 FLAGS:
     -h, --help       Prints help information
@@ -270,11 +270,11 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-deploy
+solana-deploy
 Deploy a program
 
 USAGE:
-    solana-wallet deploy <PATH>
+    solana deploy <PATH>
 
 FLAGS:
     -h, --help       Prints help information
@@ -285,11 +285,11 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-fees
+solana-fees
 Display current cluster fees
 
 USAGE:
-    solana-wallet fees
+    solana fees
 
 FLAGS:
     -h, --help       Prints help information
@@ -297,11 +297,11 @@ FLAGS:
 ```
 
 ```manpage
-solana-wallet-get-transaction-count
+solana-get-transaction-count
 Get current transaction count
 
 USAGE:
-    solana-wallet get-transaction-count
+    solana get-transaction-count
 
 FLAGS:
     -h, --help       Prints help information
@@ -309,11 +309,11 @@ FLAGS:
 ```
 
 ```manpage
-solana-wallet-pay
+solana-pay
 Send a payment
 
 USAGE:
-    solana-wallet pay [FLAGS] [OPTIONS] <PUBKEY> <NUM>
+    solana pay [FLAGS] [OPTIONS] <PUBKEY> <NUM>
 
 FLAGS:
         --cancelable
@@ -331,11 +331,11 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-send-signature
+solana-send-signature
 Send a signature to authorize a transfer
 
 USAGE:
-    solana-wallet send-signature <PUBKEY> <PROCESS_ID>
+    solana send-signature <PUBKEY> <PROCESS_ID>
 
 FLAGS:
     -h, --help       Prints help information
@@ -347,11 +347,11 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-send-timestamp
+solana-send-timestamp
 Send a timestamp to unlock a transfer
 
 USAGE:
-    solana-wallet send-timestamp [OPTIONS] <PUBKEY> <PROCESS_ID>
+    solana send-timestamp [OPTIONS] <PUBKEY> <PROCESS_ID>
 
 FLAGS:
     -h, --help       Prints help information
