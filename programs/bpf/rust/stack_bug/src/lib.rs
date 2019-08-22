@@ -9,14 +9,13 @@ extern crate alloc;
 extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
-use alloc::vec::Vec;
-use solana_sdk_bpf_utils::info;
-use solana_sdk_bpf_utils::entrypoint;
-use solana_sdk_bpf_utils::entrypoint::{SolKeyedAccount, SolClusterInfo};
 use solana_bpf_rust_stack_bug_dep::{InitPollData, PollData};
+use solana_sdk_bpf_utils::entrypoint;
+use solana_sdk_bpf_utils::entrypoint::{SolClusterInfo, SolKeyedAccount};
+use solana_sdk_bpf_utils::info;
 
 entrypoint!(process_instruction);
-fn process_instruction(ka: &mut [SolKeyedAccount], _info: &SolClusterInfo, _data: &[u8]) -> bool {
+fn process_instruction(_ka: &mut [SolKeyedAccount], _info: &SolClusterInfo, _data: &[u8]) -> bool {
     let header = vec![1u8; 6];
     let option_a = vec![1u8; 1];
     let option_b = vec![1u8; 1];
