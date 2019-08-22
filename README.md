@@ -78,7 +78,7 @@ $ source $HOME/.cargo/env
 $ rustup component add rustfmt
 ```
 
-If your rustc version is lower than 1.34.0, please update it:
+If your rustc version is lower than 1.36.0, please update it:
 
 ```bash
 $ rustup update
