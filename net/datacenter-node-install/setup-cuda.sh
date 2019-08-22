@@ -2,6 +2,7 @@
 
 HERE="$(dirname "$0")"
 
+# shellcheck source=utils.sh
 source "$HERE"/utils.sh
 
 ensure_env || exit 1

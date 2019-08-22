@@ -6,8 +6,8 @@ ensure_env() {
   RC=false
   [ $EUID -eq 0 ] && [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ] && RC=true
   if $RC; then
-    SETUP_USER="$SUDO_USER"
-    SETUP_HOME="$HOME"
+    export SETUP_USER="$SUDO_USER"
+    export SETUP_HOME="$HOME"
   else
     echo "Please run \"$0\" via sudo as a normal user"
   fi
