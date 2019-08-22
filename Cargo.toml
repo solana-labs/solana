@@ -53,7 +53,7 @@ members = [
     "utils/netutil",
     "utils/fixed_buf",
     "vote-signer",
-    "wallet",
+    "cli",
 ]
 
 exclude = [
