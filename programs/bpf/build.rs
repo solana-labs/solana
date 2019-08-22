@@ -76,7 +76,8 @@ fn main() {
             "external_spend",
             "noop",
             "panic",
-            "stack_bug",
+            // ISSUE: https://github.com/solana-labs/solana/issues/5602
+            // "stack_bug",
             "tick_height",
         ];
         for program in rust_programs.iter() {

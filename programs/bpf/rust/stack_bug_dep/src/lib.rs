@@ -9,11 +9,10 @@ extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
 
 use alloc::vec::Vec;
-use solana_sdk_bpf_utils::info;
 use solana_sdk_bpf_utils::entrypoint::{SolPubkey};
 
 pub struct InitPollData<'a> {
-    pub timeout: u32, // block height
+    pub timeout: u32,
     pub header_len: u32,
     pub header: &'a [u8],
     pub option_a_len: u32,
@@ -37,21 +36,16 @@ impl<'a> PollData<'a> {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        info!(self.length(), self.header_len, self.option_a.length(), 0, 0);
         let mut bytes = Vec::with_capacity(self.length());
         bytes.extend_from_slice(self.creator_key);
         bytes.extend_from_slice(&self.last_block.to_be_bytes());
         bytes.extend_from_slice(&self.header_len.to_be_bytes());
         bytes.extend_from_slice(self.header);
-        info!("option_a to_bytes");
         bytes.extend(self.option_a.to_bytes().into_iter());
-        info!("option_b to_bytes");
         bytes.extend(self.option_b.to_bytes().into_iter());
-        info!("return poll data");
         bytes
     }
 
-    // TODO error checking
     pub fn init(
         init: InitPollData<'a>,
         creator_key: &'a SolPubkey,
@@ -60,8 +54,6 @@ impl<'a> PollData<'a> {
         slot: u64,
     ) -> Self {
         assert_eq!(init.timeout, 10);
-        assert_eq!(init.option_a_len, 1);
-        assert_eq!(init.option_b_len, 1);
         Self {
             creator_key,
             last_block: slot + init.timeout as u64,
@@ -99,11 +91,8 @@ impl<'a> PollOptionData<'a> {
         let mut bytes = Vec::with_capacity(self.length());
         bytes.extend_from_slice(&self.text_len.to_be_bytes());
         bytes.extend_from_slice(self.text);
-        info!("tally_key to_bytes");
         bytes.extend_from_slice(self.tally_key);
-        info!("quantity to_bytes");
         bytes.extend_from_slice(&self.quantity.to_be_bytes());
-        info!("return option data");
         bytes
     }
 }
