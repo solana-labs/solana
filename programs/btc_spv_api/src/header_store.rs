@@ -50,10 +50,6 @@ impl HeaderStore {
         }
     }
 
-    pub fn groupExists(self, group: Pubkey){
-
-    }
-
     pub fn AppendHeader(mut self, blockheader: &BlockHeader) -> Result<(), SpvError> {
         match self.topGroup() {
             Some(n) => let group = n;
