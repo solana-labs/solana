@@ -29,7 +29,7 @@ EOF
 urlencode() {
   s="$1"
   l=$((${#s} - 1))
-  for i in `seq 0 $l`; do
+  for i in $(seq 0 $l); do
     c="${s:$i:1}"
     case $c in
       [a-zA-Z0-9.~_-])
@@ -77,7 +77,7 @@ else
   [[ -n $password ]] || { echo "Password not specified"; exit 1; }
   echo
 
-  password=`urlencode "$password"`
+  password="$(urlencode "$password")"
 
   query() {
     echo "$*"
