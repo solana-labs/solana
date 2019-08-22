@@ -56,7 +56,7 @@ test-stable-perf)
 
   # BPF program tests
   _ make -C programs/bpf/c tests
-  _ export RUST_LOG=solana=info,solana_rbpf=trace; cargo +"$rust_stable" test \
+  _ cargo +"$rust_stable" test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust
 

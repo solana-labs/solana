@@ -38,13 +38,13 @@ mod bpf {
 
             let programs = [
                 ("bpf_to_bpf", true),
-                // ("multiple_static", true),
-                // ("noop", true),
-                // ("noop++", true),
-                // ("panic", false),
-                // ("relative_call", true),
-                // ("struct_pass", true),
-                // ("struct_ret", true),
+                ("multiple_static", true),
+                ("noop", true),
+                ("noop++", true),
+                ("panic", false),
+                ("relative_call", true),
+                ("struct_pass", true),
+                ("struct_ret", true),
             ];
             for program in programs.iter() {
                 println!("Test program: {:?}", program.0);
