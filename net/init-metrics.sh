@@ -60,6 +60,8 @@ else
   [[ -n $password ]] || { echo "Password not specified"; exit 1; }
   echo
 
+  password="$(urlencode "$password")"
+
   query() {
     echo "$*"
     curl -XPOST \
