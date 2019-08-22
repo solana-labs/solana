@@ -91,6 +91,7 @@ fn test_replay() {
     let tvu_addr = target1.info.tvu;
 
     let (
+        _genesis_blockhash,
         bank_forks,
         _bank_forks_info,
         blocktree,
@@ -98,7 +99,7 @@ fn test_replay() {
         completed_slots_receiver,
         leader_schedule_cache,
         _,
-    ) = validator::new_banks_from_blocktree(&blocktree_path, None, None, true, None);
+    ) = validator::new_banks_from_blocktree(None, &blocktree_path, None, None, true, None);
     let working_bank = bank_forks.working_bank();
     assert_eq!(
         working_bank.get_balance(&mint_keypair.pubkey()),

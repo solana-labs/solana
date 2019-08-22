@@ -14,6 +14,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::{self, Transaction};
@@ -213,6 +214,7 @@ fn verify_signature(input: &str) -> Result<Signature> {
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
     pub cluster_info: Arc<RwLock<ClusterInfo>>,
+    pub genesis_blockhash: Hash,
 }
 impl Metadata for Meta {}
 
@@ -297,6 +299,9 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(&self, _: Self::Metadata) -> Result<RpcEpochInfo>;
+
+    #[rpc(meta, name = "getGenesisBlockhash")]
+    fn get_genesis_blockhash(&self, _: Self::Metadata) -> Result<String>;
 
     #[rpc(meta, name = "getLeaderSchedule")]
     fn get_leader_schedule(&self, _: Self::Metadata) -> Result<Option<Vec<String>>>;
@@ -446,6 +451,11 @@ impl RpcSol for RpcSolImpl {
             slot_index,
             slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
         })
+    }
+
+    fn get_genesis_blockhash(&self, meta: Self::Metadata) -> Result<String> {
+        debug!("get_genesis_blockhash rpc request received");
+        Ok(meta.genesis_blockhash.to_string())
     }
 
     fn get_leader_schedule(&self, meta: Self::Metadata) -> Result<Option<Vec<String>>> {
@@ -718,6 +728,7 @@ pub mod tests {
         let meta = Meta {
             request_processor,
             cluster_info,
+            genesis_blockhash: Hash::default(),
         };
         (io, meta, bank, blockhash, alice, leader_pubkey)
     }
@@ -1060,6 +1071,7 @@ pub mod tests {
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
                 ContactInfo::default(),
             ))),
+            genesis_blockhash: Hash::default(),
         };
 
         let req =

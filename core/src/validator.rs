@@ -22,6 +22,7 @@ use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
 use solana_metrics::datapoint_info;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -38,6 +39,7 @@ use std::thread::Result;
 pub struct ValidatorConfig {
     pub dev_sigverify_disabled: bool,
     pub dev_halt_at_slot: Option<Slot>,
+    pub expected_genesis_blockhash: Option<Hash>,
     pub voting_disabled: bool,
     pub blockstream_unix_socket: Option<PathBuf>,
     pub storage_slots_per_turn: u64,
@@ -54,6 +56,7 @@ impl Default for ValidatorConfig {
         Self {
             dev_sigverify_disabled: false,
             dev_halt_at_slot: None,
+            expected_genesis_blockhash: None,
             voting_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
@@ -136,6 +139,7 @@ impl Validator {
 
         info!("creating bank...");
         let (
+            genesis_blockhash,
             bank_forks,
             bank_forks_info,
             blocktree,
@@ -144,6 +148,7 @@ impl Validator {
             leader_schedule_cache,
             poh_config,
         ) = new_banks_from_blocktree(
+            config.expected_genesis_blockhash,
             ledger_path,
             config.account_paths.clone(),
             config.snapshot_config.clone(),
@@ -184,6 +189,7 @@ impl Validator {
                 config.rpc_config.clone(),
                 bank_forks.clone(),
                 ledger_path,
+                genesis_blockhash,
                 &validator_exit,
             ))
         };
@@ -471,12 +477,14 @@ fn adjust_ulimit_nofile() {
 }
 
 pub fn new_banks_from_blocktree(
+    expected_genesis_blockhash: Option<Hash>,
     blocktree_path: &Path,
     account_paths: Option<String>,
     snapshot_config: Option<SnapshotConfig>,
     verify_ledger: bool,
     dev_halt_at_slot: Option<Slot>,
 ) -> (
+    Hash,
     BankForks,
     Vec<BankForksInfo>,
     Blocktree,
@@ -486,6 +494,16 @@ pub fn new_banks_from_blocktree(
     PohConfig,
 ) {
     let genesis_block = GenesisBlock::load(blocktree_path).expect("Failed to load genesis block");
+    let genesis_blockhash = genesis_block.hash();
+
+    if let Some(expected_genesis_blockhash) = expected_genesis_blockhash {
+        if genesis_blockhash != expected_genesis_blockhash {
+            panic!(
+                "Genesis blockhash mismatch: expected {} but local genesis blockhash is {}",
+                expected_genesis_blockhash, genesis_blockhash,
+            );
+        }
+    }
 
     adjust_ulimit_nofile();
 
@@ -502,6 +520,7 @@ pub fn new_banks_from_blocktree(
     );
 
     (
+        genesis_blockhash,
         bank_forks,
         bank_forks_info,
         blocktree,
