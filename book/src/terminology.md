@@ -58,6 +58,10 @@ with a ledger interpretation that matches the leader's.
 
 A gossip network connecting all [nodes](#node) of a [cluster](#cluster).
 
+#### credit
+
+See [vote credit](#vote-credit).
+
 #### data plane
 
 A multicast network used to efficiently validate [entries](#entry) and gain
@@ -193,6 +197,10 @@ The number of [fullnodes](#fullnode) participating in a [cluster](#cluster).
 
 See [Proof of History](#proof-of-history).
 
+#### point
+
+A weighted [credit](#credit) in a rewards regime.  In the validator (rewards regime)[staking-rewards.md], the number of points owed to a stake during redemption is the product of the [vote credits](#vote-credit) earned and the number of lamports staked.
+
 #### program
 
 The code that interprets [instructions](#instruction).
@@ -276,6 +284,11 @@ hash values and a bit which says if this hash is valid or fake.
 
 The number of keys and samples that a validator can verify each storage epoch.
 
+#### sysvar
+
+A synthetic [account](#account) provided by the runtime to allow programs to
+access network state such as current tick height, rewards [points](#point) values, etc.
+
 #### thin client
 
 A type of [client](#client) that trusts it is communicating with a valid
@@ -323,3 +336,8 @@ that it ran, which can then be verified in less time than it took to produce.
 #### vote
 
 See [ledger vote](#ledger-vote).
+
+#### vote credit
+
+A reward tally for validators.  A vote credit is awarded to a validator in its
+vote account when the validator reaches a [root](#root).

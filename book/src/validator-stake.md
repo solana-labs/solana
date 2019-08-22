@@ -13,12 +13,29 @@ and use the wallet's `delegate-stake` command to stake your validator with 42 la
 $ solana-wallet delegate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json 42
 ```
 
-Note that stake changes are applied at Epoch boundaries so it can take an hour
-or more for the change to take effect.
+Note that stakes need to warm up, and warmup increments are applied at Epoch boundaries, so it can take an hour
+or more for the change to fully take effect.
 
-Stake can be deactivate by running:
+Assuming your node is voting, now you're up and running and generating validator rewards.  You'll want
+to periodically redeem/claim your rewards:
+
+```bash
+$ solana-wallet redeem-vote-credits ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json
+```
+
+The rewards lamports earned are split between your stake account and the vote account according to the
+commission rate set in the vote account.
+
+Stake can be deactivated by running:
 ```bash
 $ solana-wallet deactivate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json
 ```
+
+The stake will cool down, deactivate over time.  While cooling down, your stake will continue to earn
+rewards.
+
 Note that a stake account may only be used once, so after deactivation, use the
 wallet's `withdraw-stake` command to recover the previously staked lamports.
+
+Be sure and redeem your credits before withdrawing all your lamports.
+Once the account is fully withdrawn, the account is destroyed.

@@ -131,7 +131,9 @@ stake account lamports.
 
 * `account[1]` - R - The VoteState instance.
 
-* `account[2]` - R - syscall::current account, carries information about current Bank epoch
+* `account[2]` - R - sysvar::current account, carries information about current Bank epoch
+
+* `account[3]` - R - stake_api::Config accoount, carries warmup, cooldown, and slashing configuration
 
 ### StakeInstruction::RedeemVoteCredits
 
@@ -146,10 +148,11 @@ lamport, rewards paid are proportional to the number of lamports staked.
 * `account[0]` - RW - The StakeState::Stake instance that is redeeming rewards.
 * `account[1]` - R - The VoteState instance, must be the same as `StakeState::voter_pubkey`
 * `account[2]` - RW - The StakeState::RewardsPool instance that will fulfill the request (picked at random).
-* `account[3]` - R - syscall::rewards account from the Bank that carries point value.
+* `account[3]` - R - sysvar::rewards account from the Bank that carries point value.
+* `account[4]` - R - sysvar::stake_history account from the Bank that carries stake warmup/cooldown history
 
 Reward is paid out for the difference between `VoteState::credits` to
-`StakeState::Stake::credits_observed`, multiplied by `syscall::rewards::Rewards::validator_point_value`.
+`StakeState::Stake::credits_observed`, multiplied by `sysvar::rewards::Rewards::validator_point_value`.
 `StakeState::Stake::credits_observed` is updated to`VoteState::credits`.  The commission is deposited into the Vote account token
 balance, and the reward is deposited to the Stake account token balance.
 
@@ -167,7 +170,8 @@ stake_state.credits_observed = vote_state.credits;
 A staker may wish to withdraw from the network.  To do so he must first deactivate his stake, and wait for cool down.
 
 * `account[0]` - RW - The StakeState::Stake instance that is deactivating, the transaction must be signed by this key.
-* `account[1]` - R - syscall::current account from the Bank that carries current epoch
+* `account[1]` - R - The VoteState instance to which this stake is delegated, required in case of slashing
+* `account[2]` - R - sysvar::current account from the Bank that carries current epoch
 
 StakeState::Stake::deactivated is set to the current epoch + cool down.  The account's stake will ramp down to zero by
 that epoch, and Account::lamports will be available for withdrawal.
@@ -178,7 +182,8 @@ Lamports build up over time in a Stake account and any excess over activated sta
 
 * `account[0]` - RW - The StakeState::Stake from which to withdraw, the transaction must be signed by this key.
 * `account[1]` - RW - Account that should be credited with the withdrawn lamports.
-* `account[2]` - R - syscall::current account from the Bank that carries current epoch, to calculate stake.
+* `account[2]` - R - sysvar::current account from the Bank that carries current epoch, to calculate stake.
+* `account[3]` - R - sysvar::stake_history account from the Bank that carries stake warmup/cooldown history
 
 
 ## Benefits of the design
@@ -195,3 +200,106 @@ stake.
 ## Example Callflow
 
 <img alt="Passive Staking Callflow" src="img/passive-staking-callflow.svg" class="center"/>
+
+## Staking Rewards
+
+The specific mechanics and rules of the validator rewards regime is outlined
+here.  Rewards are earned by delegating stake to a validator that is voting
+correctly.  Voting incorrectly exposes that validator's stakes to
+[slashing](staking-and-rewardsg.md).
+
+### Basics
+
+The network pays rewards from a portion of network [inflation](inflation.md).
+The number of lamports available to pay rewards for an epoch is fixed and
+must be evenly divided among all staked nodes according to their relative stake
+weight and pariticpation.  The weighting unit is called a
+[point](terminology.md#point).
+
+Rewards for an epoch are not available until the end of that epoch.
+
+At the end of each epoch, the total number of points earned during the epoch is
+summed and used to divide the rewards portion of epoch inflation to arrive at a
+point value.  This value is recorded in the bank in a
+[sysvar](terminology.md#sysvar) that maps epochs to point values.
+
+During redemption, the stake program counts the points earned by the stake for
+each epoch, multiplies that by the epoch's point value, and transfers lamports in
+that amount from a rewards account into the stake and vote accounts according to
+the vote account's commission setting.
+
+### Economics
+
+Point value for an epoch depends on aggregate network participation.  If participation
+in an epoch drops off, point values are higher for those that do participate.
+
+### Earning credits
+
+Validators earn one vote credit for every correct vote that exceeds maximum
+lockout, i.e. every time the validator's vote account retires a slot from its
+lockout list, making that vote a root for the node.
+
+Stakers who have delegated to that validator earn points in proportion to their
+stake.  Points earned is the product of vote credits and stake.
+
+### Stake warmup, cooldown, withdrawal
+
+Stakes, once delegated, do not become effective immediately.  They must first
+pass through a warm up period.  During this period some portion of the stake is
+considered "effective", the rest is considered "activating". Changes occur on
+epoch boundaries.
+
+The stake program limits the rate of change to total network stake, reflected
+in the stake program's `config::warmup_rate` (typically 15% per epoch).
+
+The amount of stake that can be warmed up each epoch is a function of the
+previous epoch's total effective stake, total activating stake, and the stake
+program's configured warmup rate.
+
+Cooldown works the same way.  Once a stake is deactivated, some part of it
+is considered "effective", and also "deactivating".  As the stake cools
+down, it continues to earn rewards and be exposed to slashing, but it also
+becomes available for withdrawal.
+
+Bootstrap stakes are not subject to warmup.
+
+Rewards are paid against the "effective" portion of the stake for that epoch.
+
+#### Warmup example
+
+Consider the situation of a single stake of 1,000 activated at epoch N, with
+network warmup rate of 20%, and a quiescent total network stake at epoch N of 2,000.
+
+At epoch N+1, the amount available to be activated for the network is 400 (20%
+of 200), and at epoch N, this example stake is the only stake activating, and so
+is entitled to all of the warmup room available.
+
+
+|epoch | effective | activating | total effective | total activating|
+|------|----------:|-----------:|----------------:|----------------:|
+|N-1   |           |            |  2,000          |  0              |
+|N     |  0        | 1,000      |  2,000          |  1,000          |
+|N+1   |  400      | 600        |  2,400          |  600            |
+|N+2   |  880      | 120        |  2,880          |  120            |
+|N+3   |  1000     | 0          |  3,000          |  0              |
+
+
+Were 2 stakes (X and Y) to activate at epoch N, they would be awarded a portion of the 20%
+in proportion to their stakes.  At each epoch effective and activating for each stake is
+a function of the previous epoch's state.
+
+|epoch | X eff     | X act      | Y eff     | Y act      | total effective | total activating|
+|------|----------:|-----------:|----------:|-----------:|----------------:|----------------:|
+|N-1   |           |            |           |            |  2,000          |  0              |
+|N     |  0        | 1,000      |  0        | 200        |  2,000          |  1,200          |
+|N+1   |  320      | 680        |  80       | 120        |  2,400          |    800          |
+|N+2   |  728      | 272        |  152      | 48         |  2,880          |    320          |
+|N+3   |  1000     | 0          |  200      | 0          |  3,200          |      0          |
+
+
+### Withdrawal
+
+As rewards are earned lamports can be withdrawn from a stake account.  Only
+lamports in excess of effective+activating stake may be withdrawn at any time.
+This means that during warmup, effectively no stake can be withdrawn.  During
+cooldown, any tokens in excess of effective stake may be withdrawn (activating == 0);
