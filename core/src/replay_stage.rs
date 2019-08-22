@@ -959,7 +959,7 @@ mod test {
         let res = check_dead_fork(|blockhash, slot| {
             let bad_hash = hash(&[2; 30]);
             let entry = entry::next_entry(
-                // User wrong blockhash so that the the entry causes an entry verification failure
+                // User wrong blockhash so that the entry causes an entry verification failure
                 &bad_hash,
                 1,
                 vec![system_transaction::create_user_account(

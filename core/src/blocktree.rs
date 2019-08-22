@@ -1910,7 +1910,7 @@ fn handle_chaining_for_slot(
     // If this is a newly inserted slot, then we know the children of this slot were not previously
     // connected to the trunk of the ledger. Thus if slot.is_connected is now true, we need to
     // update all child slots with `is_connected` = true because these children are also now newly
-    // connected to to trunk of the the ledger
+    // connected to trunk of the ledger
     let should_propagate_is_connected =
         is_newly_completed_slot(&RefCell::borrow(&*meta), meta_backup)
             && RefCell::borrow(&*meta).is_connected;
