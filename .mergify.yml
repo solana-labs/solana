@@ -43,3 +43,35 @@ pull_request_rules:
       backport:
         branches:
           - v0.18
+  - name: v0.19 backport
+    conditions:
+      - base=master
+      - label=v0.19
+    actions:
+      backport:
+        branches:
+          - v0.19
+  - name: v0.20 backport
+    conditions:
+      - base=master
+      - label=v0.20
+    actions:
+      backport:
+        branches:
+          - v0.20
+  - name: v0.21 backport
+    conditions:
+      - base=master
+      - label=v0.21
+    actions:
+      backport:
+        branches:
+          - v0.21
+  - name: v0.22 backport
+    conditions:
+      - base=master
+      - label=v0.22
+    actions:
+      backport:
+        branches:
+          - v0.22
