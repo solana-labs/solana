@@ -3,7 +3,7 @@
 extern crate test;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_rbpf::EbpfVmRaw;
+use solana_rbpf::EbpfVm;
 use std::env;
 use std::fs::File;
 use std::io::Error;
@@ -44,7 +44,7 @@ const ARMSTRONG_EXPECTED: u64 = 5;
 #[bench]
 fn bench_program_load_elf(bencher: &mut Bencher) {
     let elf = load_elf().unwrap();
-    let mut vm = EbpfVmRaw::new(None).unwrap();
+    let mut vm = EbpfVm::new(None).unwrap();
     vm.set_verifier(empty_check).unwrap();
 
     bencher.iter(|| {
@@ -55,7 +55,7 @@ fn bench_program_load_elf(bencher: &mut Bencher) {
 #[bench]
 fn bench_program_verify(bencher: &mut Bencher) {
     let elf = load_elf().unwrap();
-    let mut vm = EbpfVmRaw::new(None).unwrap();
+    let mut vm = EbpfVm::new(None).unwrap();
     vm.set_verifier(empty_check).unwrap();
     vm.set_elf(&elf).unwrap();
 
@@ -101,28 +101,29 @@ fn bench_program_alu(bencher: &mut Bencher) {
     println!("  {:?} MIPS", mips);
     println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_interpreted_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
 
-    println!("JIT to native:");
-    vm.jit_compile().unwrap();
-    unsafe {
-        assert_eq!(
-            1, /*true*/
-            vm.execute_program_jit(&mut inner_iter).unwrap()
-        );
-    }
-    assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
-    assert_eq!(
-        ARMSTRONG_EXPECTED,
-        LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
-    );
+    // JIT disabled until address translation support is added
+    // println!("JIT to native:");
+    // vm.jit_compile().unwrap();
+    // unsafe {
+    //     assert_eq!(
+    //         1, /*true*/
+    //         vm.execute_program_jit(&mut inner_iter).unwrap()
+    //     );
+    // }
+    // assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
+    // assert_eq!(
+    //     ARMSTRONG_EXPECTED,
+    //     LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
+    // );
 
-    bencher.iter(|| unsafe {
-        vm.execute_program_jit(&mut inner_iter).unwrap();
-    });
-    let summary = bencher.bench(|_bencher| {}).unwrap();
-    println!("  {:?} instructions", instructions);
-    println!("  {:?} ns/iter median", summary.median as u64);
-    assert!(0f64 != summary.median);
-    let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
-    println!("  {:?} MIPS", mips);
-    println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
+    // bencher.iter(|| unsafe {
+    //     vm.execute_program_jit(&mut inner_iter).unwrap();
+    // });
+    // let summary = bencher.bench(|_bencher| {}).unwrap();
+    // println!("  {:?} instructions", instructions);
+    // println!("  {:?} ns/iter median", summary.median as u64);
+    // assert!(0f64 != summary.median);
+    // let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
+    // println!("  {:?} MIPS", mips);
+    // println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
 }
