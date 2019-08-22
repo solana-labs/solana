@@ -1,9 +1,10 @@
-use crate::id;
 use crate::utils::*;
-use std::{error}
+use crate::header_store::*;
+use std::{error, fmt};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::instruction::{AccountMeta, Instruction};
+use log::*;
 
 
 pub type BitcoinTxHash = [u8;32];
@@ -28,6 +29,7 @@ pub struct BlockHeader {
 
 impl BlockHeader {
     pub fn new(header: &[u8;80], blockhash: &[u8;32]) -> Result<BlockHeader, SpvError> {
+
         let version    = header[0 .. 4]; // version is largely useless because of miners messing with the last 2 bytes
         // extract digest from last block
         let parentHash = header[4 .. 36];
@@ -82,7 +84,7 @@ pub type HeaderChain = Vec<BlockHeader>;
 // index 2-n* : the block headers for the confirmation chain
 // (where n is the confirmations value from the proof request)
 
-pub struct ProofEntry    = {
+pub struct ProofEntry {
     // 32 byte merkle hashes
     pub hash: [u8;32],
     // side of the merkle tree entry
@@ -152,7 +154,7 @@ pub enum AccountState {
     // Request Account
     Request(ClientRequestInfo),
     // Verified Proof
-    Verification(Proof),
+    Verification(ProofInfo),
     // Account's userdata is Unallocated
     Unallocated,
     // Invalid
@@ -179,6 +181,7 @@ impl error::Error for SpvError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
     // temporary measure
     None
+    }
 }
 
 impl From<HeaderStoreError> for SpvError {
@@ -193,8 +196,8 @@ impl From<DecodeHexError> for SpvError {
     }
 }
 
-impl fmt:Display for SpvError {
-    fn fmt(&self, f: &mut fmt:Formatter) -> fmt::Result {
+impl fmt::Display for SpvError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SpvError::InvalidBlockHeader  => "BlockHeader is malformed or does not apply ".fmt(f),
             SpvError::HeaderStoreError(e) => e.fmt(f),
