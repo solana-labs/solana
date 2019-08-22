@@ -2,7 +2,7 @@
 
 HERE="$(dirname "$0")"
 
-# shellcheck source=utils.sh
+# shellcheck source=net/datacenter-node-install/utils.sh
 source "$HERE"/utils.sh
 
 ensure_env || exit 1
