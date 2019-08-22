@@ -3,16 +3,25 @@ extern crate solana_core;
 use log::*;
 use serial_test_derive::serial;
 use solana_core::{
-    blocktree::Blocktree, broadcast_stage::BroadcastStageType, cluster::Cluster,
-    gossip_service::discover_cluster, validator::ValidatorConfig,
+    bank_forks::SnapshotConfig, blocktree::Blocktree, broadcast_stage::BroadcastStageType,
+    cluster::Cluster, gossip_service::discover_cluster, snapshot_utils, validator::ValidatorConfig,
 };
 use solana_local_cluster::{
     cluster_tests,
     local_cluster::{ClusterConfig, LocalCluster},
 };
-use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH};
+use solana_runtime::{
+    accounts_db::AccountsDB,
+    epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
+};
 use solana_sdk::{client::SyncClient, poh_config::PohConfig, timing};
-use std::{collections::HashSet, thread::sleep, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    thread::sleep,
+    time::Duration,
+};
+use tempfile::TempDir;
 
 #[test]
 #[serial]
@@ -232,7 +241,7 @@ fn test_forwarding() {
         .unwrap();
 
     // Confirm that transactions were forwarded to and processed by the leader.
-    cluster_tests::send_many_transactions(&validator_info, &cluster.funding_keypair, 20);
+    cluster_tests::send_many_transactions(&validator_info, &cluster.funding_keypair, 10, 20);
 }
 
 #[test]
@@ -242,10 +251,11 @@ fn test_restart_node() {
     error!("test_restart_node");
     let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
     let ticks_per_slot = 16;
+    let validator_config = ValidatorConfig::default();
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![3],
         cluster_lamports: 100,
-        validator_configs: vec![ValidatorConfig::default()],
+        validator_configs: vec![validator_config.clone()],
         ticks_per_slot,
         slots_per_epoch,
         ..ClusterConfig::default()
@@ -257,14 +267,19 @@ fn test_restart_node() {
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
-    cluster.restart_node(nodes[0]);
+    cluster.restart_node(nodes[0], &validator_config);
     cluster_tests::sleep_n_epochs(
         0.5,
         &cluster.genesis_block.poh_config,
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
-    cluster_tests::send_many_transactions(&cluster.entry_point_info, &cluster.funding_keypair, 1);
+    cluster_tests::send_many_transactions(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        10,
+        1,
+    );
 }
 
 #[test]
@@ -280,6 +295,100 @@ fn test_listener_startup() {
     let cluster = LocalCluster::new(&config);
     let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
     assert_eq!(cluster_nodes.len(), 4);
+}
+
+#[test]
+#[serial]
+fn test_snapshots_restart_validity() {
+    let temp_dir = TempDir::new().unwrap();
+    let snapshot_path = temp_dir.path().join("bank_states");
+    let snapshot_package_output_path = temp_dir.path().join("tar");
+    let snapshot_interval_slots = 25;
+
+    // Create the snapshot directories
+    fs::create_dir_all(&snapshot_path).expect("Failed to create snapshots bank state directory");
+    fs::create_dir_all(&snapshot_package_output_path)
+        .expect("Failed to create snapshots tar directory");
+
+    // Set up the cluster with 1 snapshotting validator
+    let mut snapshot_validator_config = ValidatorConfig::default();
+    snapshot_validator_config.rpc_config.enable_fullnode_exit = true;
+    snapshot_validator_config.snapshot_config = Some(SnapshotConfig::new(
+        snapshot_path,
+        snapshot_package_output_path.clone(),
+        snapshot_interval_slots,
+    ));
+    let num_account_paths = 4;
+    let (account_storage_dirs, account_storage_paths) = generate_account_paths(num_account_paths);
+    let mut all_account_storage_dirs = vec![account_storage_dirs];
+    snapshot_validator_config.account_paths = Some(account_storage_paths);
+
+    let config = ClusterConfig {
+        node_stakes: vec![10000],
+        cluster_lamports: 100000,
+        validator_configs: vec![snapshot_validator_config.clone()],
+        ..ClusterConfig::default()
+    };
+
+    // Create and reboot the node from snapshot `num_runs` times
+    let num_runs = 3;
+    let mut expected_balances = HashMap::new();
+    let mut cluster = LocalCluster::new(&config);
+    for _ in 0..num_runs {
+        // Push transactions to one of the nodes and confirm that transactions were
+        // forwarded to and processed.
+        trace!("Sending transactions");
+        let new_balances = cluster_tests::send_many_transactions(
+            &cluster.entry_point_info,
+            &cluster.funding_keypair,
+            10,
+            10,
+        );
+
+        expected_balances.extend(new_balances);
+
+        // Get slot after which this was generated
+        let client = cluster
+            .get_validator_client(&cluster.entry_point_info.id)
+            .unwrap();
+        let last_slot = client.get_slot().expect("Couldn't get slot");
+
+        // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
+        // must include the transactions just pushed
+        let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
+        trace!("Waiting for tar to be generated");
+        loop {
+            if tar.exists() && snapshot_utils::bank_slot_from_archive(&tar).unwrap() >= last_slot {
+                break;
+            }
+            sleep(Duration::from_millis(100));
+        }
+
+        // Create new account paths since fullnode exit is not guaranteed to cleanup RPC threads,
+        // which may delete the old accounts on exit at any point
+        let (new_account_storage_dirs, new_account_storage_paths) =
+            generate_account_paths(num_account_paths);
+        all_account_storage_dirs.push(new_account_storage_dirs);
+        snapshot_validator_config.account_paths = Some(new_account_storage_paths);
+
+        // Restart a node
+        trace!("Restarting cluster from snapshot");
+        let nodes = cluster.get_node_pubkeys();
+        cluster.restart_node(nodes[0], &snapshot_validator_config);
+
+        // Verify account balances on validator
+        trace!("Verifying balances");
+        cluster_tests::verify_balances(expected_balances.clone(), &cluster.entry_point_info);
+
+        // Check that we can still push transactions
+        trace!("Spending and verifying");
+        cluster_tests::spend_and_verify_all_nodes(
+            &cluster.entry_point_info,
+            &cluster.funding_keypair,
+            1,
+            HashSet::new(),
+        );
+    }
 }
 
 #[allow(unused_attributes)]
@@ -452,4 +561,16 @@ fn run_repairman_catchup(num_repairmen: u64) {
         }
         sleep(Duration::from_secs(1));
     }
+}
+
+fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, String) {
+    let account_storage_dirs: Vec<TempDir> = (0..num_account_paths)
+        .map(|_| TempDir::new().unwrap())
+        .collect();
+    let account_storage_paths: Vec<_> = account_storage_dirs
+        .iter()
+        .map(|a| a.path().to_str().unwrap().to_string())
+        .collect();
+    let account_storage_paths = AccountsDB::format_paths(account_storage_paths);
+    (account_storage_dirs, account_storage_paths)
 }

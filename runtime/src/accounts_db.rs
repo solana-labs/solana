@@ -427,13 +427,10 @@ impl AccountsDB {
         }
     }
 
-    pub fn paths(&self) -> String {
-        let paths: Vec<String> = self
-            .paths
-            .read()
-            .unwrap()
+    pub fn format_paths<P: AsRef<Path>>(paths: Vec<P>) -> String {
+        let paths: Vec<String> = paths
             .iter()
-            .map(|p| p.to_str().unwrap().to_owned())
+            .map(|p| p.as_ref().to_str().unwrap().to_owned())
             .collect();
         paths.join(",")
     }
@@ -1417,7 +1414,11 @@ pub mod tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(None);
-        let local_paths = daccounts.paths();
+
+        let local_paths = {
+            let paths = daccounts.paths.read().unwrap();
+            AccountsDB::format_paths(paths.to_vec())
+        };
         let copied_accounts = TempDir::new().unwrap();
         // Simulate obtaining a copy of the AppendVecs from a tarball
         copy_append_vecs(&accounts, copied_accounts.path()).unwrap();

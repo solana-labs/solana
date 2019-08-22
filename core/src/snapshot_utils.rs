@@ -14,6 +14,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
 use tar::Archive;
+use tempfile::TempDir;
 
 const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 
@@ -57,8 +58,6 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_file: P,
     snapshot_path: Q,
 ) -> Result<SnapshotPackage> {
-    let slot = bank.slot();
-
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
 
@@ -73,7 +72,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     // Create a snapshot package
     info!(
         "Snapshot for bank: {} has {} account storage entries",
-        slot,
+        bank.slot(),
         account_storage_entries.len()
     );
 
@@ -170,6 +169,20 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: u64, snapshot_path: P) -> Result<()
     // Remove the snapshot directory for this slot
     fs::remove_dir_all(slot_snapshot_dir)?;
     Ok(())
+}
+
+pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<u64> {
+    let tempdir = TempDir::new()?;
+    untar_snapshot_in(&snapshot_tar, &tempdir)?;
+    let unpacked_snapshots_dir = tempdir.path().join(TAR_SNAPSHOTS_DIR);
+    let snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
+    let last_root_paths = snapshot_paths
+        .last()
+        .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
+    let file = File::open(&last_root_paths.snapshot_file_path)?;
+    let mut stream = BufReader::new(file);
+    let bank: Bank = deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()))?;
+    Ok(bank.slot())
 }
 
 pub fn bank_from_archive<P: AsRef<Path>>(

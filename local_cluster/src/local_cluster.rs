@@ -585,19 +585,28 @@ impl Cluster for LocalCluster {
         })
     }
 
-    fn restart_node(&mut self, pubkey: Pubkey) {
+    fn restart_node(&mut self, pubkey: Pubkey, config: &ValidatorConfig) {
         // Shut down the fullnode
         let mut node = self.fullnodes.remove(&pubkey).unwrap();
         node.exit();
         node.join().unwrap();
 
-        // Restart the node
-        let fullnode_info = &self.fullnode_infos[&pubkey].info;
-        let config = &self.fullnode_infos[&pubkey].config;
-        let node = Node::new_localhost_with_pubkey(&fullnode_info.keypair.pubkey());
+        // Update the stored ContactInfo for this node
+        let node_pubkey = &self.fullnode_infos[&pubkey].info.keypair.pubkey();
+        let node = Node::new_localhost_with_pubkey(&node_pubkey);
+        self.fullnode_infos
+            .get_mut(&pubkey)
+            .unwrap()
+            .info
+            .contact_info = node.info.clone();
         if pubkey == self.entry_point_info.id {
             self.entry_point_info = node.info.clone();
         }
+
+        // Restart the node
+        self.fullnode_infos.get_mut(&pubkey).unwrap().config = config.clone();
+        let fullnode_info = &self.fullnode_infos[&pubkey].info;
+
         let restarted_node = Validator::new(
             node,
             &fullnode_info.keypair,
