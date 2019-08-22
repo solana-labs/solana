@@ -8,7 +8,7 @@ edition = "2018"
 reqwest="0.9.19"
 clap="2.33.0"
 serde_derive="1.0.98"
-serde="1.0.98"
+serde="1.0.99"
 
 [[bin]]
 name = "blockheaders"
