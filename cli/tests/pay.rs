@@ -4,7 +4,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::KeypairUtil;
-use solana_wallet::wallet::{
+use solana_cli::wallet::{
     process_command, request_and_confirm_airdrop, WalletCommand, WalletConfig,
 };
 use std::fs::remove_dir_all;
