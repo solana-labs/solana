@@ -46,7 +46,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
 
-static ENCRYPTED_FILENAME: &'static str = "ledger.enc";
+static ENCRYPTED_FILENAME: &str = "ledger.enc";
 
 #[derive(Serialize, Deserialize)]
 pub enum ReplicatorRequest {
