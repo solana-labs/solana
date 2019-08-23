@@ -350,30 +350,28 @@ impl Blocktree {
                 let mut available_shreds = vec![];
                 (set_index..set_index + erasure_meta.config.num_data() as u64).for_each(|i| {
                     if index.data().is_present(i) {
-                        prev_inserted_datas
-                            .remove(&(slot, i))
-                            .or_else(|| {
-                                let data = data_cf
-                                    .get_bytes((slot, i))
-                                    .unwrap()
-                                    .expect("erasure_meta must have no false positives");
-                                bincode::deserialize(&data).ok()
-                            })
-                            .map(|shred| available_shreds.push(shred));
+                        if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
+                            let data = data_cf
+                                .get_bytes((slot, i))
+                                .unwrap()
+                                .expect("erasure_meta must have no false positives");
+                            bincode::deserialize(&data).ok()
+                        }) {
+                            available_shreds.push(shred);
+                        }
                     }
                 });
                 (set_index..set_index + erasure_meta.config.num_coding() as u64).for_each(|i| {
                     if index.coding().is_present(i) {
-                        prev_inserted_codes
-                            .remove(&(slot, i))
-                            .or_else(|| {
-                                let code = code_cf
-                                    .get_bytes((slot, i))
-                                    .unwrap()
-                                    .expect("erasure_meta must have no false positives");
-                                bincode::deserialize(&code).ok()
-                            })
-                            .map(|shred| available_shreds.push(shred));
+                        if let Some(shred) = prev_inserted_codes.remove(&(slot, i)).or_else(|| {
+                            let code = code_cf
+                                .get_bytes((slot, i))
+                                .unwrap()
+                                .expect("erasure_meta must have no false positives");
+                            bincode::deserialize(&code).ok()
+                        }) {
+                            available_shreds.push(shred);
+                        }
                     }
                 });
                 if let Ok(mut result) = Shredder::try_recovery(
@@ -420,7 +418,8 @@ impl Blocktree {
                 if inserted.is_ok() {
                     // This gives the index of first coding shred in this FEC block
                     // So, all coding shreds in a given FEC block will have the same set index
-                    let set_index = shred_index.saturating_sub(coding_shred.header.position as u64);
+                    let set_index =
+                        shred_index.saturating_sub(u64::from(coding_shred.header.position));
                     let erasure_config = ErasureConfig::new(
                         coding_shred.header.num_data_shreds as usize,
                         coding_shred.header.num_coding_shreds as usize,
