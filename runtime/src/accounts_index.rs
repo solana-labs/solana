@@ -115,9 +115,9 @@ impl<T: Clone> AccountsIndex<T> {
             );
             fork_vec.retain(|(fork, _)| !Self::can_purge(max_root, *fork));
 
-            return None;
+            None
         } else {
-            return Some(account_info);
+            Some(account_info)
         }
     }
 

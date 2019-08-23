@@ -72,11 +72,11 @@ impl Default for ValidatorConfig {
 
 #[derive(Default)]
 pub struct ValidatorExit {
-    exits: Vec<Box<FnOnce() + Send + Sync>>,
+    exits: Vec<Box<dyn FnOnce() + Send + Sync>>,
 }
 
 impl ValidatorExit {
-    pub fn register_exit(&mut self, exit: Box<FnOnce() -> () + Send + Sync>) {
+    pub fn register_exit(&mut self, exit: Box<dyn FnOnce() -> () + Send + Sync>) {
         self.exits.push(exit);
     }
 

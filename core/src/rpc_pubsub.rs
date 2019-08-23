@@ -11,6 +11,7 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction;
 use std::sync::{atomic, Arc};
 
+#[allow(clippy::needless_return)] // TODO remove me when rpc is updated?
 #[rpc(server)]
 pub trait RpcSolPubSub {
     type Metadata;

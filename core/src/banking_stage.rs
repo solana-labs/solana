@@ -198,6 +198,7 @@ impl BankingStage {
             if processed < verified_txs_len {
                 let next_leader = poh_recorder.lock().unwrap().next_slot_leader();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
+                #[allow(clippy::while_let_on_iterator)]
                 while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
                         &bank,
@@ -849,6 +850,7 @@ impl BankingStage {
             if processed < verified_txs_len {
                 let next_leader = poh.lock().unwrap().next_slot_leader();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
+                #[allow(clippy::while_let_on_iterator)]
                 while let Some((msgs, vers)) = mms_iter.next() {
                     let packet_indexes = Self::generate_packet_indexes(vers);
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
