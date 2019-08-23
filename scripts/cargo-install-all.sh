@@ -17,6 +17,9 @@ fi
 
 installDir="$(mkdir -p "$1"; cd "$1"; pwd)"
 cargoFeatures="$2"
+buildProfile="$3"
+[ -n "$buildProfile" ] && binTargetDir="release" || binTargetDir="debug"
+
 echo "Install location: $installDir"
 
 cd "$(dirname "$0")"/..
@@ -26,7 +29,7 @@ SECONDS=0
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  cargo $rust_version build --all --release --features="$cargoFeatures"
+  cargo $rust_version build --all $buildProfile --features="$cargoFeatures"
 )
 
 BIN_CRATES=(
@@ -53,7 +56,7 @@ for crate in "${BIN_CRATES[@]}"; do
 done
 
 for dir in programs/*; do
-  for program in echo target/release/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do
+  for program in echo target/$binTargetDir/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do
     if [[ -f $program ]]; then
       mkdir -p "$installDir/bin/deps"
       rm -f "$installDir/bin/deps/$(basename "$program")"
