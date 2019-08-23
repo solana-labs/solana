@@ -32,8 +32,8 @@ case $testName in
 test-stable)
   echo "Executing $testName"
 
-  # _ cargo +"$rust_stable" build --all ${V:+--verbose}
-  # _ cargo +"$rust_stable" test --all ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" build --all ${V:+--verbose}
+  _ cargo +"$rust_stable" test --all ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"
@@ -56,40 +56,39 @@ test-stable-perf)
 
   # BPF program tests
   _ make -C programs/bpf/c tests
-  # _ export RUST_LOG=solana_rbpf=trace
   _ cargo +"$rust_stable" test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust
 
-  # # Run root package tests with these features
-  # ROOT_FEATURES=
-  # if [[ $(uname) = Linux ]]; then
-  #   # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a
-  #   # lengthy and unexpected delay the first time CUDA is involved when the driver
-  #   # is not yet loaded.
-  #   sudo --non-interactive ./net/scripts/enable-nvidia-persistence-mode.sh
+  # Run root package tests with these features
+  ROOT_FEATURES=
+  if [[ $(uname) = Linux ]]; then
+    # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a
+    # lengthy and unexpected delay the first time CUDA is involved when the driver
+    # is not yet loaded.
+    sudo --non-interactive ./net/scripts/enable-nvidia-persistence-mode.sh
 
-  #   rm -rf target/perf-libs
-  #   ./fetch-perf-libs.sh
-  #   # shellcheck source=/dev/null
-  #   source ./target/perf-libs/env.sh
-  #   ROOT_FEATURES=cuda
-  # fi
+    rm -rf target/perf-libs
+    ./fetch-perf-libs.sh
+    # shellcheck source=/dev/null
+    source ./target/perf-libs/env.sh
+    ROOT_FEATURES=cuda
+  fi
 
-  # # Run root package library tests
-  # _ cargo +"$rust_stable" build --all ${V:+--verbose} --features="$ROOT_FEATURES"
-  # _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
+  # Run root package library tests
+  _ cargo +"$rust_stable" build --all ${V:+--verbose} --features="$ROOT_FEATURES"
+  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
   ;;
 *)
   echo "Error: Unknown test: $testName"
   ;;
 esac
 
-# # Assumes target/debug is populated. Ensure last build command
-# # leaves target/debug in the state intended for localnet-sanity
-# echo --- ci/localnet-sanity.sh
-# (
-#   set -x
-#   export PATH=$PWD/target/debug:$PATH
-#   USE_INSTALL=1 ci/localnet-sanity.sh -x
-# )
+# Assumes target/debug is populated. Ensure last build command
+# leaves target/debug in the state intended for localnet-sanity
+echo --- ci/localnet-sanity.sh
+(
+  set -x
+  export PATH=$PWD/target/debug:$PATH
+  USE_INSTALL=1 ci/localnet-sanity.sh -x
+)
