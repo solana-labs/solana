@@ -1,6 +1,6 @@
 use bzip2::bufread::BzDecoder;
 use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg};
-use console::Emoji;
+use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use solana_client::rpc_client::RpcClient;
@@ -488,10 +488,20 @@ fn main() {
         let (signer_service, signer_addr) = LocalVoteSignerService::new(dynamic_port_range);
         (Some(signer_service), signer_addr)
     };
+
     let init_complete_file = matches.value_of("init_complete_file");
+    let verify_ledger = !matches.is_present("skip_ledger_verify");
     validator_config.blockstream_unix_socket = matches
         .value_of("blockstream_unix_socket")
         .map(PathBuf::from);
+
+    println!(
+        "{} version {} (branch={}, commit={})",
+        style(crate_name!()).bold(),
+        crate_version!(),
+        option_env!("CI_BRANCH").unwrap_or("unknown"),
+        option_env!("CI_COMMIT").unwrap_or("unknown")
+    );
 
     if let Some(ref entrypoint_addr) = cluster_entrypoint {
         let expected_genesis_blockhash = initialize_ledger_path(
@@ -526,8 +536,6 @@ fn main() {
         node.info.rpc = SocketAddr::new(gossip_addr.ip(), port_number);
         node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
     };
-
-    let verify_ledger = !matches.is_present("skip_ledger_verify");
 
     let validator = Validator::new(
         node,
