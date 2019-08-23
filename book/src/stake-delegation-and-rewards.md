@@ -206,14 +206,14 @@ stake.
 The specific mechanics and rules of the validator rewards regime is outlined
 here.  Rewards are earned by delegating stake to a validator that is voting
 correctly.  Voting incorrectly exposes that validator's stakes to
-[slashing](staking-and-rewardsg.md).
+[slashing](staking-and-rewards.md).
 
 ### Basics
 
 The network pays rewards from a portion of network [inflation](inflation.md).
 The number of lamports available to pay rewards for an epoch is fixed and
 must be evenly divided among all staked nodes according to their relative stake
-weight and pariticpation.  The weighting unit is called a
+weight and participation.  The weighting unit is called a
 [point](terminology.md#point).
 
 Rewards for an epoch are not available until the end of that epoch.
