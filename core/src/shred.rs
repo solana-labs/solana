@@ -680,9 +680,15 @@ impl Shredder {
                         } else {
                             shred
                         };
-                        recovered_data.push(shred)
+                        if shred.slot() == slot && shred.index() as usize >= first_index {
+                            recovered_data.push(shred)
+                        }
                     } else {
-                        recovered_code.push(shred)
+                        if shred.slot() == slot
+                            && (shred.index() as usize) < first_index + num_coding
+                        {
+                            recovered_code.push(shred)
+                        }
                     }
                 }
             });

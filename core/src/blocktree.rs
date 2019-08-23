@@ -2848,7 +2848,7 @@ pub mod tests {
                 b.set_index(8 + i as u32);
             }
             blocktree
-                .insert_shreds(&shreds1)
+                .insert_shreds(shreds1)
                 .expect("Expected successful write of blobs");
 
             assert_eq!(
@@ -2882,7 +2882,7 @@ pub mod tests {
                     index += 1;
                 }
                 blocktree
-                    .insert_shreds(&shreds)
+                    .insert_shreds(shreds)
                     .expect("Expected successful write of shreds");
                 assert_eq!(
                     blocktree
@@ -2915,7 +2915,7 @@ pub mod tests {
                     entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false);
                 assert!(shreds.len() as u64 >= shreds_per_slot);
                 blocktree
-                    .insert_shreds(&shreds)
+                    .insert_shreds(shreds)
                     .expect("Expected successful write of shreds");
                 assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), entries);
             }
