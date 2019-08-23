@@ -39,6 +39,7 @@ Operate a configured testnet
                                         (ignored if -s or -S is specified)
    -r                                 - Reuse existing node/ledger configuration from a
                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
+   -d / --debug                       - Build/deploy the testnet with debug binaries
    -D /path/to/programs               - Deploy custom programs from this location
    -c clientType=numClients=extraArgs - Number of clientTypes to start.  This options can be specified
                                         more than once.  Defaults to bench-tps for all clients if not
