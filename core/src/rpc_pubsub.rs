@@ -429,7 +429,8 @@ mod tests {
                    "owner": budget_program_id,
                    "lamports": 51,
                    "data": expected_data,
-                    "executable": executable,
+                   "executable": executable,
+                   "rent_epoch": 0,
                },
                "subscription": 0,
            }
@@ -574,6 +575,7 @@ mod tests {
                    "lamports": 100,
                    "data": [],
                    "executable": false,
+                   "rent_epoch": 0,
                },
                "subscription": 0,
            }
