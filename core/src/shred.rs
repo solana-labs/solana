@@ -659,39 +659,48 @@ impl Shredder {
                 .collect();
             session.decode_blocks(&mut blocks, &present)?;
 
-            present.iter().enumerate().for_each(|(index, was_present)| {
-                if !was_present {
-                    let shred: Shred = bincode::deserialize(&shred_bufs[index]).unwrap();
-                    if index < first_index + num_data {
-                        // Check if the last recovered data shred is also last in Slot.
-                        // If so, it needs to be morphed into the correct type
-                        let shred = if let Shred::Data(s) = shred {
-                            if s.header.last_in_slot == 1 {
-                                Shred::LastInSlot(s)
-                            } else {
-                                Shred::Data(s)
+            present
+                .iter()
+                .enumerate()
+                .for_each(|(position, was_present)| {
+                    if !was_present {
+                        let shred: Shred = bincode::deserialize(&shred_bufs[position]).unwrap();
+                        let shred_index = shred.index() as usize;
+                        // Valid shred must be in the same slot as the original shreds
+                        if shred.slot() == slot {
+                            // Data shreds are "positioned" at the start of the iterator. First num_data
+                            // shreds are expected to be the data shreds.
+                            if position < num_data
+                                && (first_index..first_index + num_data).contains(&shred_index)
+                            {
+                                // Also, a valid data shred must be indexed between first_index and first+num_data index
+
+                                // Check if the last recovered data shred is also last in Slot.
+                                // If so, it needs to be morphed into the correct type
+                                let shred = if let Shred::Data(s) = shred {
+                                    if s.header.last_in_slot == 1 {
+                                        Shred::LastInSlot(s)
+                                    } else {
+                                        Shred::Data(s)
+                                    }
+                                } else if let Shred::LastInFECSet(s) = shred {
+                                    if s.header.last_in_slot == 1 {
+                                        Shred::LastInSlot(s)
+                                    } else {
+                                        Shred::LastInFECSet(s)
+                                    }
+                                } else {
+                                    shred
+                                };
+                                recovered_data.push(shred)
+                            } else if (first_index..first_index + num_coding).contains(&shred_index)
+                            {
+                                // A valid coding shred must be indexed between first_index and first+num_coding index
+                                recovered_code.push(shred)
                             }
-                        } else if let Shred::LastInFECSet(s) = shred {
-                            if s.header.last_in_slot == 1 {
-                                Shred::LastInSlot(s)
-                            } else {
-                                Shred::LastInFECSet(s)
-                            }
-                        } else {
-                            shred
-                        };
-                        if shred.slot() == slot && shred.index() as usize >= first_index {
-                            recovered_data.push(shred)
-                        }
-                    } else {
-                        if shred.slot() == slot
-                            && (shred.index() as usize) < first_index + num_coding
-                        {
-                            recovered_code.push(shred)
                         }
                     }
-                }
-            });
+                });
         }
 
         Ok(RecoveryResult {
