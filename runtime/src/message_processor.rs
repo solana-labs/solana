@@ -498,6 +498,26 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_instruction_rent_epoch() {
+        let alice_program_id = Pubkey::new_rand();
+        let pre = Account::new(0, 0, &alice_program_id);
+        let mut post = Account::new(0, 0, &alice_program_id);
+
+        assert_eq!(
+            verify_instruction(false, &system_program::id(), &pre, &post),
+            Ok(()),
+            "nothing changed!"
+        );
+
+        post.rent_epoch += 1;
+        assert_eq!(
+            verify_instruction(false, &system_program::id(), &pre, &post),
+            Err(InstructionError::RentEpochModified),
+            "no one touches rent_epoch"
+        );
+    }
+
+    #[test]
     fn test_verify_instruction_credit_only() {
         let alice_program_id = Pubkey::new_rand();
         let pre = Account::new(42, 0, &alice_program_id);
