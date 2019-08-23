@@ -313,11 +313,11 @@ fn test_snapshots_restart_validity() {
     // Set up the cluster with 1 snapshotting validator
     let mut snapshot_validator_config = ValidatorConfig::default();
     snapshot_validator_config.rpc_config.enable_fullnode_exit = true;
-    snapshot_validator_config.snapshot_config = Some(SnapshotConfig::new(
-        snapshot_path,
-        snapshot_package_output_path.clone(),
+    snapshot_validator_config.snapshot_config = Some(SnapshotConfig {
         snapshot_interval_slots,
-    ));
+        snapshot_package_output_path: snapshot_package_output_path.clone(),
+        snapshot_path,
+    });
     let num_account_paths = 4;
     let (account_storage_dirs, account_storage_paths) = generate_account_paths(num_account_paths);
     let mut all_account_storage_dirs = vec![account_storage_dirs];

@@ -1,5 +1,7 @@
 use bzip2::bufread::BzDecoder;
-use clap::{crate_description, crate_name, crate_version, value_t, App, Arg};
+use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg};
+use console::Emoji;
+use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use solana_client::rpc_client::RpcClient;
 use solana_core::bank_forks::SnapshotConfig;
@@ -16,6 +18,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use solana_sdk::timing::Slot;
 use std::fs::{self, File};
+use std::io::{self, Read};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process::exit;
@@ -30,7 +33,19 @@ fn port_range_validator(port_range: String) -> Result<(), String> {
     }
 }
 
-fn download_archive(
+static TRUCK: Emoji = Emoji("🚚 ", "");
+static SPARKLE: Emoji = Emoji("✨ ", "");
+
+/// Creates a new process bar for processing that will take an unknown amount of time
+fn new_spinner_progress_bar() -> ProgressBar {
+    let progress_bar = ProgressBar::new(42);
+    progress_bar
+        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
+    progress_bar.enable_steady_tick(100);
+    progress_bar
+}
+
+fn download_tar_bz2(
     rpc_addr: &SocketAddr,
     archive_name: &str,
     download_path: &Path,
@@ -47,19 +62,72 @@ fn download_archive(
     };
 
     let url = format!("http://{}/{}", rpc_addr, archive_name);
-    println!("Downloading {}...", url);
     let download_start = Instant::now();
 
-    let mut response = reqwest::get(&url).map_err(|err| format!("Unable to get: {:?}", err))?;
+    let progress_bar = new_spinner_progress_bar();
+    progress_bar.set_message(&format!("{}Downloading {}...", TRUCK, url));
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url.as_str())
+        .send()
+        .and_then(|response| response.error_for_status())
+        .map_err(|err| format!("Unable to get: {:?}", err))?;
+    let download_size = {
+        response
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|content_length| content_length.to_str().ok())
+            .and_then(|content_length| content_length.parse().ok())
+            .unwrap_or(0)
+    };
+    progress_bar.set_length(download_size);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template(&format!(
+                "{}{}Downloading {} {}",
+                "{spinner:.green} ",
+                TRUCK,
+                url,
+                "[{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})"
+            ))
+            .progress_chars("=> "),
+    );
+
+    struct DownloadProgress<R> {
+        progress_bar: ProgressBar,
+        response: R,
+    }
+
+    impl<R: Read> Read for DownloadProgress<R> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.response.read(buf).map(|n| {
+                self.progress_bar.inc(n as u64);
+                n
+            })
+        }
+    }
+
+    let mut source = DownloadProgress {
+        progress_bar,
+        response,
+    };
+
     let mut file = File::create(&temp_archive_path)
         .map_err(|err| format!("Unable to create {:?}: {:?}", temp_archive_path, err))?;
-    std::io::copy(&mut response, &mut file)
+    std::io::copy(&mut source, &mut file)
         .map_err(|err| format!("Unable to write {:?}: {:?}", temp_archive_path, err))?;
 
+    source.progress_bar.finish_and_clear();
     println!(
-        "Downloaded {} in {:?}",
-        archive_name,
-        Instant::now().duration_since(download_start)
+        "  {}{}",
+        SPARKLE,
+        format!(
+            "Downloaded {} ({} bytes) in {:?}",
+            url,
+            download_size,
+            Instant::now().duration_since(download_start),
+        )
     );
 
     if extract {
@@ -112,17 +180,33 @@ fn initialize_ledger_path(
             exit(1);
         });
 
-    let genesis_blockhash = RpcClient::new_socket(rpc_addr)
+    let client = RpcClient::new_socket(rpc_addr);
+    let genesis_blockhash = client
         .get_genesis_blockhash()
         .map_err(|err| err.to_string())?;
 
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
 
-    download_archive(&rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
+    download_tar_bz2(&rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
+
     if !no_snapshot_fetch {
-        let _ = fs::remove_file(ledger_path.join("snapshot.tar.bz2"));
-        download_archive(&rpc_addr, "snapshot.tar.bz2", ledger_path, false)
-            .unwrap_or_else(|err| eprintln!("Warning: Unable to fetch snapshot: {:?}", err));
+        let snapshot_package = solana_core::snapshot_utils::get_snapshot_tar_path(ledger_path);
+        if snapshot_package.exists() {
+            fs::remove_file(&snapshot_package)
+                .unwrap_or_else(|err| warn!("error removing {:?}: {}", snapshot_package, err));
+        }
+        download_tar_bz2(
+            &rpc_addr,
+            snapshot_package.file_name().unwrap().to_str().unwrap(),
+            snapshot_package.parent().unwrap(),
+            false,
+        )
+        .unwrap_or_else(|err| eprintln!("Warning: Unable to fetch snapshot: {:?}", err));
+    }
+
+    match client.get_slot() {
+        Ok(slot) => info!("Entrypoint currently at slot {}", slot),
+        Err(err) => warn!("Failed to get_slot from entrypoint: {}", err),
     }
 
     Ok(genesis_blockhash)
@@ -202,7 +286,7 @@ fn main() {
                 .long("no-snapshot-fetch")
                 .takes_value(false)
                 .requires("entrypoint")
-                .help("Do not attempt to fetch a snapshot from the cluster entrypoint"),
+                .help("Do not attempt to fetch a new snapshot from the cluster entrypoint, start from a local snapshot if present"),
         )
         .arg(
             Arg::with_name("no_voting")
@@ -278,7 +362,8 @@ fn main() {
                 .long("snapshot-interval-slots")
                 .value_name("SNAPSHOT_INTERVAL_SLOTS")
                 .takes_value(true)
-                .help("Number of slots between generating snapshots"),
+                .default_value("100")
+                .help("Number of slots between generating snapshots, 0 to disable snapshots"),
         )
         .arg(
             clap::Arg::with_name("limit_ledger_size")
@@ -359,14 +444,24 @@ fn main() {
             Some(ledger_path.join("accounts").to_str().unwrap().to_string());
     }
 
-    validator_config.snapshot_config = matches.value_of("snapshot_interval_slots").map(|s| {
-        let snapshots_dir = ledger_path.clone().join("snapshot");
-        fs::create_dir_all(&snapshots_dir).expect("Failed to create snapshots directory");
-        SnapshotConfig::new(
-            snapshots_dir,
-            ledger_path.clone(),
-            s.parse::<usize>().unwrap(),
-        )
+    let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", usize);
+    let snapshot_path = ledger_path.clone().join("snapshot");
+    fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
+        eprintln!(
+            "Failed to create snapshots directory {:?}: {}",
+            snapshot_path, err
+        );
+        exit(1);
+    });
+
+    validator_config.snapshot_config = Some(SnapshotConfig {
+        snapshot_interval_slots: if snapshot_interval_slots > 0 {
+            snapshot_interval_slots
+        } else {
+            std::usize::MAX
+        },
+        snapshot_path,
+        snapshot_package_output_path: ledger_path.clone(),
     });
 
     if matches.is_present("limit_ledger_size") {

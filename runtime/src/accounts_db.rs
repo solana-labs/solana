@@ -457,6 +457,8 @@ impl AccountsDB {
                     let path_index = thread_rng().gen_range(0, local_account_paths.len());
                     let local_dir = &local_account_paths[path_index];
 
+                    std::fs::create_dir_all(local_dir).expect("Create directory failed");
+
                     // Move the corresponding AppendVec from the snapshot into the directory pointed
                     // at by `local_dir`
                     let append_vec_relative_path =
@@ -465,8 +467,13 @@ impl AccountsDB {
                         append_vecs_path.as_ref().join(&append_vec_relative_path);
                     let mut copy_options = CopyOptions::new();
                     copy_options.overwrite = true;
-                    fs_extra::move_items(&vec![append_vec_abs_path], &local_dir, &copy_options)
-                        .map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
+                    fs_extra::move_items(&vec![&append_vec_abs_path], &local_dir, &copy_options)
+                        .map_err(|e| {
+                            AccountsDB::get_io_error(&format!(
+                                "Unable to move {:?} to {:?}: {}",
+                                append_vec_abs_path, local_dir, e
+                            ))
+                        })?;
 
                     // Notify the AppendVec of the new file location
                     let local_path = local_dir.join(append_vec_relative_path);
