@@ -17,8 +17,13 @@ fi
 
 installDir="$(mkdir -p "$1"; cd "$1"; pwd)"
 cargoFeatures="$2"
+
 buildProfile="$3"
-[ -n "$buildProfile" ] && binTargetDir="release" || binTargetDir="debug"
+if [[ -n "$buildProfile" ]]; then
+  binTargetDir="release"
+else
+  binTargetDir="debug"
+fi
 
 echo "Install location: $installDir"
 
