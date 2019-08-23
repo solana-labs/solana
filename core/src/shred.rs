@@ -561,9 +561,15 @@ impl Shredder {
     ) -> (Vec<Vec<u8>>, bool, usize) {
         let (index, mut first_shred_in_slot) = Self::get_shred_index(shred, num_data);
 
+        // The index of current shred must be within the range of shreds that are being
+        // recovered
+        if !(first_index..first_index + num_data + num_coding).contains(&index) {
+            return (vec![], false, index);
+        }
+
         let mut missing_blocks: Vec<Vec<u8>> = (expected_index..index)
             .map(|missing| {
-                present[missing] = false;
+                present[missing.saturating_sub(first_index)] = false;
                 // If index 0 shred is missing, then first shred in slot will also be recovered
                 first_shred_in_slot |= missing == 0;
                 Shredder::new_empty_missing_shred(num_data, num_coding, slot, first_index, missing)
@@ -645,11 +651,15 @@ impl Shredder {
             let mut pending_shreds: Vec<Vec<u8>> = (next_expected_index
                 ..first_index + fec_set_size)
                 .map(|missing| {
-                    present[missing] = false;
+                    present[missing.saturating_sub(first_index)] = false;
                     Self::new_empty_missing_shred(num_data, num_coding, slot, first_index, missing)
                 })
                 .collect();
             shred_bufs.append(&mut pending_shreds);
+
+            if shred_bufs.len() != fec_set_size {
+                Err(reed_solomon_erasure::Error::TooFewShardsPresent)?;
+            }
 
             let session = Session::new(num_data, num_coding).unwrap();
 
@@ -1380,6 +1390,132 @@ mod tests {
         assert_matches!(
             Shredder::deshred(&shreds),
             Err(reed_solomon_erasure::Error::TooFewDataShards)
+        );
+
+        // Test6: Try recovery/reassembly with non zero index full slot with 3 missing data shreds + 2 coding shreds. Hint: should work
+        let mut shredder =
+            Shredder::new(slot, Some(5), 1.0, &keypair, 25).expect("Failed in creating shredder");
+
+        let mut offset = shredder.write(&data).unwrap();
+        let approx_shred_payload_size = offset;
+        offset += shredder.write(&data[offset..]).unwrap();
+        offset += shredder.write(&data[offset..]).unwrap();
+        offset += shredder.write(&data[offset..]).unwrap();
+        offset += shredder.write(&data[offset..]).unwrap();
+
+        // We should have some shreds now
+        assert_eq!(
+            shredder.shreds.len(),
+            data.len() / approx_shred_payload_size
+        );
+        assert_eq!(offset, data.len());
+
+        shredder.finalize_slot();
+
+        // We should have 10 shreds now (one additional final shred, and equal number of coding shreds)
+        let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
+        assert_eq!(shredder.shreds.len(), expected_shred_count);
+
+        let mut shreds: Vec<Shred> = shredder
+            .shreds
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| {
+                if i % 2 != 0 {
+                    Some(bincode::deserialize(s).unwrap())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut result = Shredder::try_recovery(
+            &shreds,
+            expected_shred_count / 2,
+            expected_shred_count / 2,
+            25,
+            slot,
+        )
+        .unwrap();
+        assert_ne!(RecoveryResult::default(), result);
+
+        assert_eq!(result.recovered_data.len(), 3); // Data shreds 0, 2 and 4 were missing
+        let recovered_shred = result.recovered_data.remove(0);
+        assert_matches!(recovered_shred, Shred::Data(_));
+        assert_eq!(recovered_shred.index(), 25);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(0, recovered_shred);
+
+        let recovered_shred = result.recovered_data.remove(0);
+        assert_matches!(recovered_shred, Shred::Data(_));
+        assert_eq!(recovered_shred.index(), 27);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(2, recovered_shred);
+
+        let recovered_shred = result.recovered_data.remove(0);
+        assert_matches!(recovered_shred, Shred::LastInSlot(_));
+        assert_eq!(recovered_shred.index(), 29);
+        assert_eq!(recovered_shred.slot(), slot);
+        assert!(recovered_shred.verify(&keypair.pubkey()));
+        shreds.insert(4, recovered_shred);
+
+        assert_eq!(result.recovered_code.len(), 2); // Coding shreds 6, 8 were missing
+        let recovered_shred = result.recovered_code.remove(0);
+        if let Shred::Coding(code) = recovered_shred {
+            assert_eq!(code.header.num_data_shreds, 5);
+            assert_eq!(code.header.num_coding_shreds, 5);
+            assert_eq!(code.header.position, 1);
+            assert_eq!(code.header.common_header.slot, slot);
+            assert_eq!(code.header.common_header.index, 26);
+        }
+        let recovered_shred = result.recovered_code.remove(0);
+        if let Shred::Coding(code) = recovered_shred {
+            assert_eq!(code.header.num_data_shreds, 5);
+            assert_eq!(code.header.num_coding_shreds, 5);
+            assert_eq!(code.header.position, 3);
+            assert_eq!(code.header.common_header.slot, slot);
+            assert_eq!(code.header.common_header.index, 28);
+        }
+
+        let result = Shredder::deshred(&shreds[..5]).unwrap();
+        assert!(result.len() >= data.len());
+        assert_eq!(data[..], result[..data.len()]);
+
+        // Test7: Try recovery/reassembly with incorrect slot. Hint: does not recover any shreds
+        let result = Shredder::try_recovery(
+            &shreds,
+            expected_shred_count / 2,
+            expected_shred_count / 2,
+            25,
+            slot + 1,
+        )
+        .unwrap();
+        assert!(result.recovered_data.is_empty());
+
+        // Test8: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
+        assert_matches!(
+            Shredder::try_recovery(
+                &shreds,
+                expected_shred_count / 2,
+                expected_shred_count / 2,
+                15,
+                slot,
+            ),
+            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
+        );
+
+        // Test9: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
+        assert_matches!(
+            Shredder::try_recovery(
+                &shreds,
+                expected_shred_count / 2,
+                expected_shred_count / 2,
+                35,
+                slot,
+            ),
+            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
     }
 }
