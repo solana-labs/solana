@@ -56,10 +56,10 @@ test-stable-perf)
 
   # BPF program tests
   _ make -C programs/bpf/c tests
-  _ export RUST_LOG=solana_rbpf=trace
+  # _ export RUST_LOG=solana_rbpf=trace
   _ cargo +"$rust_stable" test \
     --manifest-path programs/bpf/Cargo.toml \
-    --no-default-features --features=bpf_c,bpf_rust -- --nocapture test_program_bpf
+    --no-default-features --features=bpf_c,bpf_rust
 
   # # Run root package tests with these features
   # ROOT_FEATURES=
