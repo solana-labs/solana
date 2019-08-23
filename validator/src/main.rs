@@ -1,5 +1,7 @@
 use bzip2::bufread::BzDecoder;
 use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg};
+use console::Emoji;
+use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use solana_client::rpc_client::RpcClient;
 use solana_core::bank_forks::SnapshotConfig;
@@ -16,6 +18,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use solana_sdk::timing::Slot;
 use std::fs::{self, File};
+use std::io::{self, Read};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process::exit;
@@ -28,6 +31,18 @@ fn port_range_validator(port_range: String) -> Result<(), String> {
     } else {
         Err("Invalid port range".to_string())
     }
+}
+
+static TRUCK: Emoji = Emoji("🚚 ", "");
+static SPARKLE: Emoji = Emoji("✨ ", "");
+
+/// Creates a new process bar for processing that will take an unknown amount of time
+fn new_spinner_progress_bar() -> ProgressBar {
+    let progress_bar = ProgressBar::new(42);
+    progress_bar
+        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
+    progress_bar.enable_steady_tick(100);
+    progress_bar
 }
 
 fn download_tar_bz2(
@@ -47,11 +62,13 @@ fn download_tar_bz2(
     };
 
     let url = format!("http://{}/{}", rpc_addr, archive_name);
-    println!("Downloading {}...", url);
     let download_start = Instant::now();
 
+    let progress_bar = new_spinner_progress_bar();
+    progress_bar.set_message(&format!("{}Downloading {}...", TRUCK, url));
+
     let client = reqwest::Client::new();
-    let mut response = client
+    let response = client
         .get(url.as_str())
         .send()
         .and_then(|response| response.error_for_status())
@@ -64,17 +81,53 @@ fn download_tar_bz2(
             .and_then(|content_length| content_length.parse().ok())
             .unwrap_or(0)
     };
-    println!("Download size: {} bytes", download_size);
+    progress_bar.set_length(download_size);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template(&format!(
+                "{}{}Downloading {} {}",
+                "{spinner:.green} ",
+                TRUCK,
+                url,
+                "[{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})"
+            ))
+            .progress_chars("=> "),
+    );
+
+    struct DownloadProgress<R> {
+        progress_bar: ProgressBar,
+        response: R,
+    }
+
+    impl<R: Read> Read for DownloadProgress<R> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.response.read(buf).map(|n| {
+                self.progress_bar.inc(n as u64);
+                n
+            })
+        }
+    }
+
+    let mut source = DownloadProgress {
+        progress_bar,
+        response,
+    };
 
     let mut file = File::create(&temp_archive_path)
         .map_err(|err| format!("Unable to create {:?}: {:?}", temp_archive_path, err))?;
-    std::io::copy(&mut response, &mut file)
+    std::io::copy(&mut source, &mut file)
         .map_err(|err| format!("Unable to write {:?}: {:?}", temp_archive_path, err))?;
 
+    source.progress_bar.finish_and_clear();
     println!(
-        "Downloaded {} in {:?}",
-        archive_name,
-        Instant::now().duration_since(download_start)
+        "  {}{}",
+        SPARKLE,
+        format!(
+            "Downloaded {} ({} bytes) in {:?}",
+            url,
+            download_size,
+            Instant::now().duration_since(download_start),
+        )
     );
 
     if extract {
@@ -137,8 +190,10 @@ fn initialize_ledger_path(
 
     if !no_snapshot_fetch {
         let snapshot_package = solana_core::snapshot_utils::get_snapshot_tar_path(ledger_path);
-        fs::remove_file(&snapshot_package)
-            .unwrap_or_else(|err| warn!("error removing {:?}: {}", snapshot_package, err));
+        if snapshot_package.exists() {
+            fs::remove_file(&snapshot_package)
+                .unwrap_or_else(|err| warn!("error removing {:?}: {}", snapshot_package, err));
+        }
         download_tar_bz2(
             &rpc_addr,
             snapshot_package.file_name().unwrap().to_str().unwrap(),
