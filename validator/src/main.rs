@@ -180,7 +180,8 @@ fn initialize_ledger_path(
             exit(1);
         });
 
-    let genesis_blockhash = RpcClient::new_socket(rpc_addr)
+    let client = RpcClient::new_socket(rpc_addr);
+    let genesis_blockhash = client
         .get_genesis_blockhash()
         .map_err(|err| err.to_string())?;
 
@@ -201,6 +202,11 @@ fn initialize_ledger_path(
             false,
         )
         .unwrap_or_else(|err| eprintln!("Warning: Unable to fetch snapshot: {:?}", err));
+    }
+
+    match client.get_slot() {
+        Ok(slot) => info!("Entrypoint currently at slot {}", slot),
+        Err(err) => warn!("Failed to get_slot from entrypoint: {}", err),
     }
 
     Ok(genesis_blockhash)
