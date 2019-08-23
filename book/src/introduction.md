@@ -109,8 +109,7 @@ organization that launched it.
 
 A sol is the name of Solana's native token, which can be passed to nodes in a
 Solana cluster in exchange for running an on-chain program or validating its
-output. The Solana protocol defines that only 1 billion sols will ever exist,
-but that the system may perform micropayments of fractional sols, and that a sol
+output. The system may perform micropayments of fractional sols and a sol
 may be split as many as 34 times. The fractional sol is called a *lamport*. It
 is named in honor of Solana's biggest technical influence, [Leslie
 Lamport](https://en.wikipedia.org/wiki/Leslie_Lamport). A lamport has a value
