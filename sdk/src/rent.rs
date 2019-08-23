@@ -68,7 +68,13 @@ mod tests {
     fn test_due() {
         let rent = Rent::default();
 
-        assert_eq!(rent.due(0, 1, 1.0), (DEFAULT_LAMPORTS_PER_BYTE_YEAR, false));
+        assert_eq!(
+            rent.due(0, 1, 1.0),
+            (
+                DEFAULT_LAMPORTS_PER_BYTE_YEAR,
+                DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
+            )
+        );
         assert_eq!(
             rent.due(
                 DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64,
