@@ -760,7 +760,7 @@ mod tests {
                 lamports: 1,
                 data: bincode::serialize(&LibraAccountState::create_unallocated()).unwrap(),
                 owner: id(),
-                executable: false,
+                ..Account::default()
             };
             Self::new(key, account)
         }
@@ -768,9 +768,8 @@ mod tests {
         pub fn create_genesis(amount: u64) -> Self {
             let account = Account {
                 lamports: 1,
-                data: vec![],
                 owner: id(),
-                executable: false,
+                ..Account::default()
             };
             let mut genesis = Self::new(Pubkey::default(), account);
             genesis.account.data =

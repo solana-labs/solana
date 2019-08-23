@@ -46,8 +46,7 @@ impl Account {
             lamports,
             data: vec![0u8; space],
             owner: *owner,
-            executable: false,
-            rent_epoch: 0,
+            ..Account::default()
         }
     }
 
@@ -61,8 +60,7 @@ impl Account {
             lamports,
             data,
             owner: *owner,
-            executable: false,
-            rent_epoch: 0,
+            ..Account::default()
         })
     }
 
