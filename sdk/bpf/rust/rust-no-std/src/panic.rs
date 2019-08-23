@@ -5,7 +5,7 @@ use core::ptr;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    // Message is ignored for now to avoid incurring formatting program size overhead
+    // Message is ignored for now to avoid incurring formatting overhead
     match info.location() {
         Some(location) => {
             let mut file: [u8; 128] = [0; 128];
@@ -18,14 +18,15 @@ fn panic(info: &PanicInfo) -> ! {
             unsafe {
                 sol_panic_(
                     file.as_ptr(),
+                    file.len() as u64,
                     u64::from(location.line()),
                     u64::from(location.column()),
                 );
             }
         }
-        None => unsafe { sol_panic_(ptr::null(), 0, 0) },
+        None => unsafe { sol_panic_(ptr::null(), 0, 0, 0) },
     }
 }
 extern "C" {
-    pub fn sol_panic_(file: *const u8, line: u64, column: u64) -> !;
+    pub fn sol_panic_(file: *const u8, len: u64, line: u64, column: u64) -> !;
 }

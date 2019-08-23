@@ -1,6 +1,5 @@
 pub mod alloc;
 pub mod allocator_bump;
-pub mod allocator_system;
 pub mod bpf_verifier;
 pub mod helpers;
 
@@ -14,10 +13,9 @@ macro_rules! solana_bpf_loader {
     };
 }
 
-use alloc::Alloc;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use log::*;
-use solana_rbpf::{EbpfVmRaw, MemoryRegion};
+use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -26,8 +24,8 @@ use std::io::prelude::*;
 use std::io::Error;
 use std::mem;
 
-pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
-    let mut vm = EbpfVmRaw::new(None)?;
+pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm, MemoryRegion), Error> {
+    let mut vm = EbpfVm::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
     vm.set_max_instruction_count(36000)?;
     vm.set_elf(&prog)?;
@@ -168,7 +166,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "Error: Execution exceeded maximum number of instructions")]
+    #[should_panic(expected = "Error: Exceeded maximum number of instructions allowed")]
     fn test_non_terminating_program() {
         #[rustfmt::skip]
         let prog = &[
@@ -178,7 +176,7 @@ mod tests {
         ];
         let input = &mut [0x00];
 
-        let mut vm = EbpfVmRaw::new(None).unwrap();
+        let mut vm = EbpfVm::new(None).unwrap();
         vm.set_verifier(bpf_verifier::check).unwrap();
         vm.set_max_instruction_count(10).unwrap();
         vm.set_program(prog).unwrap();
