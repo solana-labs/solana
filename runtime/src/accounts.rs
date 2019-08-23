@@ -1,11 +1,9 @@
-use crate::accounts_db::{
-    AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters, InstructionAccounts,
-    InstructionCredits, InstructionLoaders,
-};
+use crate::accounts_db::{AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters};
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
+use crate::rent_collector::RentCollector;
 use bincode::serialize;
 use log::*;
 use rayon::slice::ParallelSliceMut;
@@ -46,6 +44,12 @@ pub struct Accounts {
     credit_only_account_locks: Arc<RwLock<Option<HashMap<Pubkey, CreditOnlyLock>>>>,
 }
 
+// for the load instructions
+pub type TransactionAccounts = Vec<Account>;
+pub type TransactionCredits = Vec<u64>;
+pub type TransactionRents = Vec<u64>;
+pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
+
 impl Accounts {
     pub fn new(paths: Option<String>) -> Self {
         let accounts_db = Arc::new(AccountsDB::new(paths));
@@ -82,7 +86,8 @@ impl Accounts {
         tx: &Transaction,
         fee: u64,
         error_counters: &mut ErrorCounters,
-    ) -> Result<(Vec<Account>, InstructionCredits)> {
+        rent_collector: &RentCollector,
+    ) -> Result<(TransactionAccounts, TransactionCredits, TransactionRents)> {
         // Copy all the accounts
         let message = tx.message();
         if tx.signatures.is_empty() && fee != 0 {
@@ -96,30 +101,35 @@ impl Accounts {
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let mut called_accounts: Vec<Account> = vec![];
-            let mut credits: InstructionCredits = vec![];
-            for key in message.account_keys.iter() {
-                if !message.program_ids().contains(&key) {
-                    called_accounts.push(
-                        AccountsDB::load(storage, ancestors, accounts_index, key)
-                            .map(|(account, _)| account)
-                            .unwrap_or_default(),
-                    );
-                    credits.push(0);
-                }
+            let mut accounts: TransactionAccounts = vec![];
+            let mut credits: TransactionCredits = vec![];
+            let mut rents: TransactionRents = vec![];
+            for key in message
+                .account_keys
+                .iter()
+                .filter(|key| !message.program_ids().contains(&key))
+            {
+                let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
+                    .and_then(|(account, _)| rent_collector.update(account))
+                    .unwrap_or_default();
+
+                accounts.push(account);
+                credits.push(0);
+                rents.push(rent);
             }
-            if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
+
+            if accounts.is_empty() || accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
-            } else if called_accounts[0].owner != system_program::id() {
+            } else if accounts[0].owner != system_program::id() {
                 error_counters.invalid_account_for_fee += 1;
                 Err(TransactionError::InvalidAccountForFee)
-            } else if called_accounts[0].lamports < fee {
+            } else if accounts[0].lamports < fee {
                 error_counters.insufficient_funds += 1;
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
-                called_accounts[0].lamports -= fee;
-                Ok((called_accounts, credits))
+                accounts[0].lamports -= fee;
+                Ok((accounts, credits, rents))
             }
         }
     }
@@ -174,7 +184,7 @@ impl Accounts {
         accounts_index: &AccountsIndex<AccountInfo>,
         tx: &Transaction,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<Vec<(Pubkey, Account)>>> {
+    ) -> Result<TransactionLoaders> {
         let message = tx.message();
         message
             .instructions
@@ -203,7 +213,15 @@ impl Accounts {
         lock_results: Vec<Result<()>>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
+        rent_collector: &RentCollector,
+    ) -> Vec<
+        Result<(
+            TransactionAccounts,
+            TransactionLoaders,
+            TransactionCredits,
+            TransactionRents,
+        )>,
+    > {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
@@ -217,13 +235,14 @@ impl Accounts {
                         .ok_or(TransactionError::BlockhashNotFound)?;
 
                     let fee = fee_calculator.calculate_fee(tx.message());
-                    let (accounts, credits) = Self::load_tx_accounts(
+                    let (accounts, credits, rents) = Self::load_tx_accounts(
                         &storage,
                         ancestors,
                         &accounts_index,
                         tx,
                         fee,
                         error_counters,
+                        rent_collector,
                     )?;
                     let loaders = Self::load_loaders(
                         &storage,
@@ -232,7 +251,7 @@ impl Accounts {
                         tx,
                         error_counters,
                     )?;
-                    Ok((accounts, loaders, credits))
+                    Ok((accounts, loaders, credits, rents))
                 }
                 (_, Err(e)) => Err(e),
             })
@@ -503,7 +522,12 @@ impl Accounts {
         fork: Fork,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+        loaded: &mut [Result<(
+            TransactionAccounts,
+            TransactionLoaders,
+            TransactionCredits,
+            TransactionRents,
+        )>],
     ) {
         let accounts_to_store = self.collect_accounts_to_store(txs, res, loaded);
         self.accounts_db.store(fork, &accounts_to_store);
@@ -578,7 +602,12 @@ impl Accounts {
         &self,
         txs: &'a [Transaction],
         res: &'a [Result<()>],
-        loaded: &'a mut [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+        loaded: &'a mut [Result<(
+            TransactionAccounts,
+            TransactionLoaders,
+            TransactionCredits,
+            TransactionRents,
+        )>],
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::new();
         for (i, raccs) in loaded.iter_mut().enumerate() {
@@ -651,7 +680,14 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
+    ) -> Vec<
+        Result<(
+            TransactionAccounts,
+            TransactionLoaders,
+            TransactionCredits,
+            TransactionRents,
+        )>,
+    > {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(None);
@@ -660,8 +696,15 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let res =
-            accounts.load_accounts(&ancestors, &[tx], vec![Ok(())], &hash_queue, error_counters);
+        let rent_collector = RentCollector::default();
+        let res = accounts.load_accounts(
+            &ancestors,
+            &[tx],
+            vec![Ok(())],
+            &hash_queue,
+            error_counters,
+            &rent_collector,
+        );
         res
     }
 
@@ -669,7 +712,14 @@ mod tests {
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
+    ) -> Vec<
+        Result<(
+            TransactionAccounts,
+            TransactionLoaders,
+            TransactionCredits,
+            TransactionRents,
+        )>,
+    > {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
@@ -825,10 +875,12 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = Account::new(1, 1, &Pubkey::default());
+        let mut account = Account::new(1, 1, &Pubkey::default());
+        account.rent_epoch = 1;
         accounts.push((key0, account));
 
-        let account = Account::new(2, 1, &Pubkey::default());
+        let mut account = Account::new(2, 1, &Pubkey::default());
+        account.rent_epoch = 1;
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -845,13 +897,18 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((instruction_accounts, instruction_loaders, instruction_credits)) => {
-                assert_eq!(instruction_accounts.len(), 2);
-                assert_eq!(instruction_accounts[0], accounts[0].1);
-                assert_eq!(instruction_loaders.len(), 1);
-                assert_eq!(instruction_loaders[0].len(), 0);
-                assert_eq!(instruction_credits.len(), 2);
-                assert_eq!(instruction_credits, &vec![0, 0]);
+            Ok((
+                transaction_accounts,
+                transaction_loaders,
+                transaction_credits,
+                _transaction_rents,
+            )) => {
+                assert_eq!(transaction_accounts.len(), 2);
+                assert_eq!(transaction_accounts[0], accounts[0].1);
+                assert_eq!(transaction_loaders.len(), 1);
+                assert_eq!(transaction_loaders[0].len(), 0);
+                assert_eq!(transaction_credits.len(), 2);
+                assert_eq!(transaction_credits, &vec![0, 0]);
             }
             Err(e) => Err(e).unwrap(),
         }
@@ -996,21 +1053,25 @@ mod tests {
         let key2 = Pubkey::new(&[6u8; 32]);
         let key3 = Pubkey::new(&[7u8; 32]);
 
-        let account = Account::new(1, 1, &Pubkey::default());
+        let mut account = Account::new(1, 1, &Pubkey::default());
+        account.rent_epoch = 1;
         accounts.push((key0, account));
 
         let mut account = Account::new(40, 1, &Pubkey::default());
         account.executable = true;
+        account.rent_epoch = 1;
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
         let mut account = Account::new(41, 1, &Pubkey::default());
         account.executable = true;
+        account.rent_epoch = 1;
         account.owner = key1;
         accounts.push((key2, account));
 
         let mut account = Account::new(42, 1, &Pubkey::default());
         account.executable = true;
+        account.rent_epoch = 1;
         account.owner = key2;
         accounts.push((key3, account));
 
@@ -1031,15 +1092,20 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((instruction_accounts, instruction_loaders, instruction_credits)) => {
-                assert_eq!(instruction_accounts.len(), 1);
-                assert_eq!(instruction_accounts[0], accounts[0].1);
-                assert_eq!(instruction_loaders.len(), 2);
-                assert_eq!(instruction_loaders[0].len(), 1);
-                assert_eq!(instruction_loaders[1].len(), 2);
-                assert_eq!(instruction_credits.len(), 1);
-                assert_eq!(instruction_credits, &vec![0]);
-                for loaders in instruction_loaders.iter() {
+            Ok((
+                transaction_accounts,
+                transaction_loaders,
+                transaction_credits,
+                _transaction_rents,
+            )) => {
+                assert_eq!(transaction_accounts.len(), 1);
+                assert_eq!(transaction_accounts[0], accounts[0].1);
+                assert_eq!(transaction_loaders.len(), 2);
+                assert_eq!(transaction_loaders[0].len(), 1);
+                assert_eq!(transaction_loaders[1].len(), 2);
+                assert_eq!(transaction_credits.len(), 1);
+                assert_eq!(transaction_credits, &vec![0]);
+                for loaders in transaction_loaders.iter() {
                     for (i, accounts_subset) in loaders.iter().enumerate() {
                         // +1 to skip first not loader account
                         assert_eq![accounts_subset.1, accounts[i + 1].1];
@@ -1475,22 +1541,26 @@ mod tests {
         let account1 = Account::new(2, 0, &Pubkey::default());
         let account2 = Account::new(3, 0, &Pubkey::default());
 
-        let instruction_accounts0 = vec![account0, account2.clone()];
-        let instruction_loaders0 = vec![];
-        let instruction_credits0 = vec![0, 2];
+        let transaction_accounts0 = vec![account0, account2.clone()];
+        let transaction_loaders0 = vec![];
+        let transaction_credits0 = vec![0, 2];
+        let transaction_rents0 = vec![0, 0];
         let loaded0 = Ok((
-            instruction_accounts0,
-            instruction_loaders0,
-            instruction_credits0,
+            transaction_accounts0,
+            transaction_loaders0,
+            transaction_credits0,
+            transaction_rents0,
         ));
 
-        let instruction_accounts1 = vec![account1, account2.clone()];
-        let instruction_loaders1 = vec![];
-        let instruction_credits1 = vec![0, 3];
+        let transaction_accounts1 = vec![account1, account2.clone()];
+        let transaction_loaders1 = vec![];
+        let transaction_credits1 = vec![0, 3];
+        let transaction_rents1 = vec![0, 0];
         let loaded1 = Ok((
-            instruction_accounts1,
-            instruction_loaders1,
-            instruction_credits1,
+            transaction_accounts1,
+            transaction_loaders1,
+            transaction_credits1,
+            transaction_rents1,
         ));
 
         let mut loaded = vec![loaded0, loaded1];

@@ -871,7 +871,8 @@ pub mod tests {
                 "owner": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
                 "lamports": 20,
                 "data": [],
-                "executable": false
+                "executable": false,
+                "rent_epoch": 0
             },
             "id":1}
         "#;
@@ -903,7 +904,8 @@ pub mod tests {
                     "owner": {:?},
                     "lamports": 20,
                     "data": [],
-                    "executable": false
+                    "executable": false,
+                    "rent_epoch": 0
                 }}]],
                 "id":1}}
             "#,

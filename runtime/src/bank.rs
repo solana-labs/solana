@@ -2,23 +2,26 @@
 //! programs. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use crate::accounts::Accounts;
-use crate::accounts_db::{
-    AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters, InstructionAccounts,
-    InstructionCredits, InstructionLoaders,
+use crate::{
+    accounts::{
+        Accounts, TransactionAccounts, TransactionCredits, TransactionLoaders, TransactionRents,
+    },
+    accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
+    accounts_index::Fork,
+    blockhash_queue::BlockhashQueue,
+    epoch_schedule::EpochSchedule,
+    locked_accounts_results::LockedAccountsResults,
+    message_processor::{MessageProcessor, ProcessInstruction},
+    rent_collector::RentCollector,
+    serde_utils::{
+        deserialize_atomicbool, deserialize_atomicusize, serialize_atomicbool,
+        serialize_atomicusize,
+    },
+    stakes::Stakes,
+    status_cache::{SlotDelta, StatusCache},
+    storage_utils,
+    storage_utils::StorageAccounts,
 };
-use crate::accounts_index::Fork;
-use crate::blockhash_queue::BlockhashQueue;
-use crate::epoch_schedule::EpochSchedule;
-use crate::locked_accounts_results::LockedAccountsResults;
-use crate::message_processor::{MessageProcessor, ProcessInstruction};
-use crate::serde_utils::{
-    deserialize_atomicbool, deserialize_atomicusize, serialize_atomicbool, serialize_atomicusize,
-};
-use crate::stakes::Stakes;
-use crate::status_cache::{SlotDelta, StatusCache};
-use crate::storage_utils;
-use crate::storage_utils::StorageAccounts;
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use log::*;
@@ -197,8 +200,11 @@ pub struct Bank {
     /// The number of slots per Storage segment
     slots_per_segment: u64,
 
-    /// Bank fork (i.e. slot, i.e. block)
-    slot: u64,
+    /// Bank slot (i.e. block)
+    slot: Slot,
+
+    /// Bank epoch
+    epoch: Epoch,
 
     /// Bank height in term of banks
     bank_height: u64,
@@ -213,6 +219,9 @@ pub struct Bank {
 
     /// Latest transaction fees for transactions processed by this bank
     fee_calculator: FeeCalculator,
+
+    /// latest rent collector, knows the epoch
+    rent_collector: RentCollector,
 
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
@@ -282,17 +291,22 @@ impl Bank {
         let src = StatusCacheRc {
             status_cache: parent.src.status_cache.clone(),
         };
+        let epoch_schedule = parent.epoch_schedule;
+        let epoch = epoch_schedule.get_epoch(slot);
+
         let mut new = Bank {
             rc,
             src,
+            slot,
+            epoch,
             blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
 
             // TODO: clean this up, soo much special-case copying...
             ticks_per_slot: parent.ticks_per_slot,
             slots_per_segment: parent.slots_per_segment,
             slots_per_year: parent.slots_per_year,
-            epoch_schedule: parent.epoch_schedule,
-            slot,
+            epoch_schedule,
+            rent_collector: parent.rent_collector.clone_with_epoch(epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot - 1,
             bank_height: parent.bank_height + 1,
             fee_calculator: FeeCalculator::new_derived(
@@ -300,15 +314,15 @@ impl Bank {
                 parent.signature_count(),
             ),
             capitalization: AtomicUsize::new(parent.capitalization() as usize),
-            inflation: parent.inflation.clone(),
+            inflation: parent.inflation,
             transaction_count: AtomicUsize::new(parent.transaction_count() as usize),
-            stakes: RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(0)),
+            stakes: RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(epoch)),
+            epoch_stakes: parent.epoch_stakes.clone(),
             storage_accounts: RwLock::new(parent.storage_accounts.read().unwrap().clone()),
             parent_hash: parent.hash(),
             collector_id: *collector_id,
             collector_fees: AtomicUsize::new(0),
             ancestors: HashMap::new(),
-            epoch_stakes: HashMap::new(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
             tick_height: AtomicUsize::new(parent.tick_height.load(Ordering::Relaxed)),
@@ -316,28 +330,21 @@ impl Bank {
             message_processor: MessageProcessor::default(),
         };
 
-        {
-            *new.stakes.write().unwrap() =
-                parent.stakes.read().unwrap().clone_with_epoch(new.epoch());
-        }
-
         datapoint_info!(
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
             ("bank_height", new.bank_height, i64)
         );
 
-        new.epoch_stakes = {
-            let mut epoch_stakes = parent.epoch_stakes.clone();
-            let epoch = new.get_stakers_epoch(new.slot);
-            // update epoch_vote_states cache
-            //  if my parent didn't populate for this epoch, we've
-            //  crossed a boundary
-            if epoch_stakes.get(&epoch).is_none() {
-                epoch_stakes.insert(epoch, new.stakes.read().unwrap().clone());
-            }
-            epoch_stakes
-        };
+        let stakers_epoch = epoch_schedule.get_stakers_epoch(slot);
+        // update epoch_stakes cache
+        //  if my parent didn't populate for this staker's epoch, we've
+        //  crossed a boundary
+        if new.epoch_stakes.get(&stakers_epoch).is_none() {
+            new.epoch_stakes
+                .insert(stakers_epoch, new.stakes.read().unwrap().clone());
+        }
+
         new.ancestors.insert(new.slot(), 0);
         new.parents().iter().enumerate().for_each(|(i, p)| {
             new.ancestors.insert(p.slot(), i + 1);
@@ -375,7 +382,7 @@ impl Bank {
     }
 
     pub fn epoch(&self) -> u64 {
-        self.epoch_schedule.get_epoch(self.slot)
+        self.epoch
     }
 
     pub fn freeze_lock(&self) -> RwLockReadGuard<Hash> {
@@ -611,7 +618,7 @@ impl Bank {
             genesis_block.epoch_warmup,
         );
 
-        self.inflation = genesis_block.inflation.clone();
+        self.inflation = genesis_block.inflation;
 
         // Add additional native programs specified in the genesis block
         for (name, program_id) in &genesis_block.native_instruction_processors {
@@ -781,13 +788,21 @@ impl Bank {
         txs: &[Transaction],
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
+    ) -> Vec<
+        Result<(
+            TransactionAccounts,
+            TransactionLoaders,
+            TransactionCredits,
+            TransactionRents,
+        )>,
+    > {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
             results,
             &self.blockhash_queue.read().unwrap(),
             error_counters,
+            &self.rent_collector,
         )
     }
     fn check_refs(
@@ -932,7 +947,14 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> (
-        Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
+        Vec<
+            Result<(
+                TransactionAccounts,
+                TransactionLoaders,
+                TransactionCredits,
+                TransactionRents,
+            )>,
+        >,
         Vec<Result<()>>,
         Vec<usize>,
         usize,
@@ -970,7 +992,7 @@ impl Bank {
             .zip(txs.iter())
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders, ref mut credits)) => {
+                Ok((ref mut accounts, ref mut loaders, ref mut credits, ref mut _rents)) => {
                     signature_count += tx.message().header.num_required_signatures as usize;
                     self.message_processor
                         .process_message(tx.message(), loaders, accounts, credits)
@@ -1061,9 +1083,10 @@ impl Bank {
         &self,
         txs: &[Transaction],
         loaded_accounts: &mut [Result<(
-            InstructionAccounts,
-            InstructionLoaders,
-            InstructionCredits,
+            TransactionAccounts,
+            TransactionLoaders,
+            TransactionCredits,
+            TransactionRents,
         )>],
         executed: &[Result<()>],
         tx_count: usize,
@@ -1332,7 +1355,12 @@ impl Bank {
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+        loaded: &[Result<(
+            TransactionAccounts,
+            TransactionLoaders,
+            TransactionCredits,
+            TransactionRents,
+        )>],
     ) {
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
