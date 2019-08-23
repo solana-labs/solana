@@ -247,11 +247,8 @@ mod tests {
 
         let populated_key = Pubkey::new_rand();
         let mut populated_account = Account {
-            lamports: 0,
             data: vec![0, 1, 2, 3],
-            owner: Pubkey::default(),
-            executable: false,
-            rent_epoch: 0,
+            ..Account::default()
         };
         let unchanged_account = populated_account.clone();
 
