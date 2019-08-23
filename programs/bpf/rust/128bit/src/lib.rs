@@ -27,6 +27,9 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     // ISSUE: https://github.com/solana-labs/solana/issues/5600
     // assert_eq!(u128::from(1u32.to_be()), 1);
 
+    // ISSUE: https://github.com/solana-labs/solana/issues/5619
+    // solana_bpf_rust_128bit_dep::two_thirds(10);
+
     let x = u64::max_value();
     assert_eq!(u128::from(x) + u128::from(x), 36_893_488_147_419_103_230);
 
