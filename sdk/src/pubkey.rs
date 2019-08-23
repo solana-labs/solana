@@ -122,11 +122,9 @@ macro_rules! solana_name_id(
         #[cfg(test)]
         #[test]
         fn test_name_id() {
-            // un-comment me to see what the id should look like, given a name
-            //  if id().to_string() != $name {
-            //      panic!("id for `{}` should be `{:?}`", $name, $crate::pubkey::bs58::decode($name).into_vec().unwrap());
-            //  }
-            assert_eq!(id().to_string(), $name)
+            if id().to_string() != $name {
+                panic!("id for `{}` should be `{:?}`", $name, $crate::pubkey::bs58::decode($name).into_vec().unwrap());
+            }
         }
     )
 );
