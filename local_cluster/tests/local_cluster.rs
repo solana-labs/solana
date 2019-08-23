@@ -163,7 +163,6 @@ fn test_fullnode_exit_2() {
 #[allow(unused_attributes)]
 #[test]
 #[serial]
-#[ignore]
 fn test_leader_failure_4() {
     solana_logger::setup();
     error!("test_leader_failure_4");
@@ -486,7 +485,6 @@ fn test_snapshots_restart_validity() {
 #[allow(unused_attributes)]
 #[test]
 #[serial]
-#[ignore]
 fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
@@ -494,7 +492,6 @@ fn test_fail_entry_verification_leader() {
 #[allow(unused_attributes)]
 #[test]
 #[serial]
-#[ignore]
 fn test_bad_blob_size_leader() {
     test_faulty_node(BroadcastStageType::BroadcastBadBlobSizes);
 }
