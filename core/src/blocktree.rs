@@ -39,6 +39,8 @@ use solana_sdk::timing::Slot;
 mod db;
 mod meta;
 mod rooted_slot_iterator;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signable;
 
 macro_rules! db_imports {
     { $mod:ident, $db:ident, $db_path:expr } => {
@@ -1639,14 +1641,12 @@ fn handle_recovery(
     writebatch: &mut WriteBatch,
     erasure_config: &ErasureConfig,
 ) -> Result<Option<Vec<Blob>>> {
-    use solana_sdk::signature::Signable;
-
     let (mut recovered_data, mut recovered_coding) = (vec![], vec![]);
 
     for (&(slot, _), erasure_meta) in erasure_metas.iter() {
         let index = index_working_set.get_mut(&slot).expect("Index");
 
-        if let Some((mut data, coding)) = try_erasure_recover(
+        if let Some((mut data, coding, leader_pubkey)) = try_erasure_recover(
             db,
             &erasure_meta,
             index,
@@ -1662,8 +1662,8 @@ fn handle_recovery(
                     blob.index()
                 );
 
-                // If this fails, it's a slashing condition.
-                is_recovered_blob_valid(blob, (slot, erasure_meta));
+                // TODO: If this fails, it's a slashing condition.
+                is_recovered_blob_valid(blob, slot, &leader_pubkey, erasure_meta);
             }
 
             recovered_data.append(&mut data);
@@ -1736,36 +1736,35 @@ fn handle_recovery(
 
 fn is_recovered_blob_valid(
     blob: &Blob,
-    (expected_slot, erasure_meta): (u64, &ErasureMeta),
+    expected_slot: u64,
+    expected_leader: &Pubkey,
+    erasure_meta: &ErasureMeta,
 ) -> bool {
     let blob_index = blob.index();
     let blob_slot = blob.slot();
-
     let error = {
         if blob_slot != expected_slot {
-            Some(format!(
-                "Blob slot: {} not equal to the expected erasure meta slot: {}",
-                blob_slot, expected_slot
-            ))
+            Some(format!("!= expected slot: {}", expected_slot))
         } else if blob_index < erasure_meta.start_index() {
             Some(format!(
-                "Blob index: {} < erasure meta start index: {}",
-                blob_index,
+                "< erasure meta start index: {}",
                 erasure_meta.start_index()
             ))
         } else if blob_index >= erasure_meta.end_indexes().0 {
             Some(format!(
-                "Blob index: {} >= erasure meta end index: {}",
-                blob_index,
+                ">= erasure meta end index: {}",
                 erasure_meta.end_indexes().0
             ))
+        } else if !blob.verify() {
+            Some("failed signature verification".to_string())
         } else {
             None
         }
     };
 
     if let Some(msg) = error {
-        datapoint_error!("blocktree_error", ("error", msg, String));
+        let error_msg = format!("Blob (slot: {}, index: {}) {}", blob_slot, blob_index, msg);
+        datapoint_error!("blocktree_error", ("error", error_msg, String));
         false
     } else {
         true
@@ -1781,7 +1780,7 @@ fn try_erasure_recover(
     prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
     prev_inserted_coding: &HashMap<(u64, u64), Blob>,
     erasure_config: &ErasureConfig,
-) -> Result<Option<(Vec<Blob>, Vec<Blob>)>> {
+) -> Result<Option<(Vec<Blob>, Vec<Blob>, Pubkey)>> {
     let set_index = erasure_meta.set_index;
     let start_index = erasure_meta.start_index();
     let (data_end_index, coding_end_idx) = erasure_meta.end_indexes();
@@ -1812,7 +1811,7 @@ fn try_erasure_recover(
             );
 
             match erasure_result {
-                Ok((data, coding)) => {
+                Ok((data, coding, leader_pubkey)) => {
                     let recovered = data.len() + coding.len();
 
                     assert_eq!(
@@ -1832,7 +1831,7 @@ fn try_erasure_recover(
                         slot, set_index, recovered
                     );
 
-                    Some((data, coding))
+                    Some((data, coding, leader_pubkey))
                 }
                 Err(Error::ErasureError(e)) => {
                     submit_metrics(true, format!("error: {}", e));
@@ -1883,7 +1882,7 @@ fn recover(
     prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
     prev_inserted_coding: &HashMap<(u64, u64), Blob>,
     erasure_config: &ErasureConfig,
-) -> Result<(Vec<Blob>, Vec<Blob>)> {
+) -> Result<(Vec<Blob>, Vec<Blob>, Pubkey)> {
     let start_idx = erasure_meta.start_index();
     let size = erasure_meta.size();
     let data_cf = db.column::<cf::Data>();
@@ -1924,6 +1923,7 @@ fn recover(
         }
     }
 
+    let mut leader_pubkey = None;
     for i in start_idx..coding_end_idx {
         if index.coding().is_present(i) {
             trace!("[recover] present coding blob at {}", i);
@@ -1937,7 +1937,9 @@ fn recover(
                     Blob::new(&bytes)
                 }
             };
-
+            if leader_pubkey.is_none() {
+                leader_pubkey = Some(blob.id());
+            }
             blobs.push(blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size].to_vec());
         } else {
             trace!("[recover] absent coding blob at {}", i);
@@ -1955,7 +1957,7 @@ fn recover(
         slot, start_idx, data_end_idx
     );
 
-    Ok((recovered_data, recovered_coding))
+    Ok((recovered_data, recovered_coding, leader_pubkey.unwrap()))
 }
 
 fn deserialize_blobs<I>(blob_datas: &[I]) -> bincode::Result<Vec<Entry>>
