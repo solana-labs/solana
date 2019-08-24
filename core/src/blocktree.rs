@@ -1,7 +1,6 @@
 //! The `block_tree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-use crate::broadcast_stage::broadcast_utils::entries_to_shreds;
 use crate::entry::Entry;
 use crate::erasure::{ErasureConfig, Session};
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
@@ -37,6 +36,7 @@ use std::sync::{Arc, RwLock};
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
 use solana_sdk::timing::Slot;
+use std::io::Write;
 
 mod db;
 mod meta;
@@ -759,12 +759,15 @@ impl Blocktree {
                 remaining_ticks_in_slot -= 1;
             }
 
-            entries_to_shreds(
-                vec![entry.borrow().clone()],
-                ticks_per_slot - remaining_ticks_in_slot,
-                ticks_per_slot,
-                &mut shredder,
-            );
+            let data = bincode::serialize(&vec![entry.borrow().clone()]).unwrap();
+            shredder
+                .write_all(&data)
+                .expect("Expect to shred all entries");
+            if remaining_ticks_in_slot == 0 {
+                shredder.finalize_slot();
+            } else {
+                shredder.finalize_fec_block();
+            }
         }
 
         if is_full_slot && remaining_ticks_in_slot != 0 {
@@ -2420,7 +2423,11 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     let mut shredder = Shredder::new(0, Some(0), 0.0, &Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
     let last_hash = entries.last().unwrap().hash;
-    entries_to_shreds(entries, ticks_per_slot, ticks_per_slot, &mut shredder);
+    let data = bincode::serialize(&entries).unwrap();
+    shredder
+        .write_all(&data)
+        .expect("Expect to shred all entries");
+    shredder.finalize_slot();
     let shreds: Vec<Shred> = shredder
         .shreds
         .iter()
@@ -4762,14 +4769,15 @@ pub mod tests {
         )
         .expect("Failed to create entry shredder");
 
-        let last_tick = 0;
-        let bank_max_tick = if is_full_slot {
-            last_tick
+        let data = bincode::serialize(&entries).unwrap();
+        shredder
+            .write_all(&data)
+            .expect("Expect to shred all entries");
+        if is_full_slot {
+            shredder.finalize_slot();
         } else {
-            last_tick + 1
-        };
-
-        entries_to_shreds(entries, last_tick, bank_max_tick, &mut shredder);
+            shredder.finalize_fec_block();
+        }
 
         let shreds: Vec<Shred> = shredder
             .shreds

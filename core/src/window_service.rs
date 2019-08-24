@@ -249,7 +249,6 @@ mod test {
     use super::*;
     use crate::bank_forks::BankForks;
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
-    use crate::broadcast_stage::broadcast_utils::entries_to_shreds;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::{make_consecutive_blobs, make_tiny_test_entries, Entry};
     use crate::genesis_utils::create_genesis_block_with_leader;
@@ -261,6 +260,7 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
+    use std::io::Write;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -270,7 +270,11 @@ mod test {
     fn local_entries_to_shred(entries: Vec<Entry>, keypair: &Arc<Keypair>) -> Vec<Shred> {
         let mut shredder =
             Shredder::new(0, Some(0), 0.0, keypair, 0).expect("Failed to create entry shredder");
-        entries_to_shreds(entries, 0, 0, &mut shredder);
+        let data = bincode::serialize(&entries).unwrap();
+        shredder
+            .write_all(&data)
+            .expect("Expect to shred all entries");
+        shredder.finalize_slot();
         shredder
             .shreds
             .iter()

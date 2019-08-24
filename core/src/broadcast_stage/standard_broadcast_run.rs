@@ -2,6 +2,7 @@ use super::broadcast_utils;
 use super::*;
 use crate::shred::Shred;
 use solana_sdk::timing::duration_as_ms;
+use std::io::Write;
 
 #[derive(Default)]
 struct BroadcastStats {
@@ -77,10 +78,12 @@ impl BroadcastRun for StandardBroadcastRun {
         let parent_slot = bank.parent().unwrap().slot();
         let mut all_shreds = vec![];
         let mut all_seeds = vec![];
+        let num_ventries = receive_results.ventries.len();
         receive_results
             .ventries
             .into_iter()
-            .for_each(|entries_tuple| {
+            .enumerate()
+            .for_each(|(i, entries_tuple)| {
                 let (entries, _): (Vec<_>, Vec<_>) = entries_tuple.into_iter().unzip();
                 //entries
                 let mut shredder = Shredder::new(
@@ -92,12 +95,16 @@ impl BroadcastRun for StandardBroadcastRun {
                 )
                 .expect("Expected to create a new shredder");
 
-                broadcast_utils::entries_to_shreds(
-                    entries,
-                    last_tick,
-                    bank.max_tick_height(),
-                    &mut shredder,
-                );
+                let data = bincode::serialize(&entries).unwrap();
+                shredder
+                    .write_all(&data)
+                    .expect("Expect to shred all entries");
+
+                if i == num_ventries && last_tick == bank.max_tick_height() {
+                    shredder.finalize_slot();
+                } else {
+                    shredder.finalize_fec_block();
+                }
 
                 let shreds: Vec<Shred> = shredder
                     .shreds
