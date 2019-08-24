@@ -29,16 +29,23 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
             .find(|x| self.blocktree.is_root(**x))
             .cloned();
 
-        rooted_slot.map(|rooted_slot| {
-            let slot_meta = self
-                .blocktree
-                .meta(rooted_slot)
-                .expect("Database failure, couldnt fetch SlotMeta")
-                .expect("SlotMeta in iterator didn't exist");
+        rooted_slot
+            .map(|rooted_slot| {
+                let slot_meta = self
+                    .blocktree
+                    .meta(rooted_slot)
+                    .expect("Database failure, couldnt fetch SlotMeta");
 
-            self.next_slots = slot_meta.next_slots.clone();
-            (rooted_slot, slot_meta)
-        })
+                if slot_meta.is_none() {
+                    warn!("Rooted SlotMeta was deleted in between checking is_root and fetch");
+                }
+
+                slot_meta.map(|slot_meta| {
+                    self.next_slots = slot_meta.next_slots.clone();
+                    (rooted_slot, slot_meta)
+                })
+            })
+            .unwrap_or(None)
     }
 }
 
