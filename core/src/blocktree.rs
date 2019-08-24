@@ -36,7 +36,6 @@ use std::sync::{Arc, RwLock};
 
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
-use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::timing::Slot;
 
 mod db;
@@ -351,11 +350,15 @@ impl Blocktree {
                 (set_index..set_index + erasure_meta.config.num_data() as u64).for_each(|i| {
                     if index.data().is_present(i) {
                         if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
-                            let data = data_cf
+                            let some_data = data_cf
                                 .get_bytes((slot, i))
-                                .unwrap()
-                                .expect("erasure_meta must have no false positives");
-                            bincode::deserialize(&data).ok()
+                                .expect("Database failure, could not fetch data shred");
+                            if let Some(data) = some_data {
+                                bincode::deserialize(&data).ok()
+                            } else {
+                                warn!("Data shred deleted while reading for recovery");
+                                None
+                            }
                         }) {
                             available_shreds.push(shred);
                         }
@@ -364,11 +367,15 @@ impl Blocktree {
                 (set_index..set_index + erasure_meta.config.num_coding() as u64).for_each(|i| {
                     if index.coding().is_present(i) {
                         if let Some(shred) = prev_inserted_codes.remove(&(slot, i)).or_else(|| {
-                            let code = code_cf
+                            let some_code = code_cf
                                 .get_bytes((slot, i))
-                                .unwrap()
-                                .expect("erasure_meta must have no false positives");
-                            bincode::deserialize(&code).ok()
+                                .expect("Database failure, could not fetch code shred");
+                            if let Some(code) = some_code {
+                                bincode::deserialize(&code).ok()
+                            } else {
+                                warn!("Code shred deleted while reading for recovery");
+                                None
+                            }
                         }) {
                             available_shreds.push(shred);
                         }
@@ -403,7 +410,7 @@ impl Blocktree {
             let slot = shred.slot();
             let shred_index = u64::from(shred.index());
 
-            let index = index_working_set.entry(slot).or_insert_with(|| {
+            let index_meta = index_working_set.entry(slot).or_insert_with(|| {
                 self.index_cf
                     .get(slot)
                     .unwrap()
@@ -411,59 +418,32 @@ impl Blocktree {
             });
 
             if let Shred::Coding(coding_shred) = &shred {
-                let serialized_shred = bincode::serialize(&shred).unwrap();
-                let inserted =
-                    write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &serialized_shred);
+                // This gives the index of first coding shred in this FEC block
+                // So, all coding shreds in a given FEC block will have the same set index
+                let pos = u64::from(coding_shred.header.position);
+                if shred_index >= pos {
+                    let set_index = shred_index - pos;
 
-                if inserted.is_ok() {
-                    // This gives the index of first coding shred in this FEC block
-                    // So, all coding shreds in a given FEC block will have the same set index
-                    let set_index =
-                        shred_index.saturating_sub(u64::from(coding_shred.header.position));
-                    let erasure_config = ErasureConfig::new(
+                    self.insert_coding_shred(
+                        set_index,
                         coding_shred.header.num_data_shreds as usize,
                         coding_shred.header.num_coding_shreds as usize,
-                    );
-
-                    let erasure_meta =
-                        erasure_metas.entry((slot, set_index)).or_insert_with(|| {
-                            self.erasure_meta_cf
-                                .get((slot, set_index))
-                                .expect("Expect database get to succeed")
-                                .unwrap_or_else(|| ErasureMeta::new(set_index, &erasure_config))
-                        });
-
-                    if erasure_config != erasure_meta.config {
-                        // ToDo: This is a potential slashing condition
-                        warn!("Received multiple erasure configs for the same erasure set!!!");
-                        warn!(
-                            "Stored config: {:#?}, new config: {:#?}",
-                            erasure_meta.config, erasure_config
-                        );
-                    }
-
-                    erasure_meta.set_size(PACKET_DATA_SIZE);
-                    index.coding_mut().set_present(shred_index, true);
-
-                    // `or_insert_with` used to prevent stack overflow
-                    just_inserted_coding_shreds
-                        .entry((slot, shred_index))
-                        .or_insert_with(|| shred);
+                        &mut just_inserted_coding_shreds,
+                        &mut erasure_metas,
+                        index_meta,
+                        shred,
+                        &mut write_batch,
+                    )
                 }
             } else {
-                let inserted = Blocktree::insert_data_shred(
+                let _ = Blocktree::insert_data_shred(
                     db,
-                    &just_inserted_data_shreds,
+                    &mut just_inserted_data_shreds,
                     &mut slot_meta_working_set,
                     &mut index_working_set,
-                    &shred,
+                    shred,
                     &mut write_batch,
-                )
-                .unwrap_or(false);
-
-                if inserted {
-                    just_inserted_data_shreds.insert((slot, shred_index), shred);
-                }
+                );
             }
         });
 
@@ -475,11 +455,10 @@ impl Blocktree {
             &mut just_inserted_coding_shreds,
         );
 
-        let just_inserted_data_shreds = HashMap::new();
-        recovered_data.iter().for_each(|shred| {
+        recovered_data.into_iter().for_each(|shred| {
             let _ = Blocktree::insert_data_shred(
                 db,
-                &just_inserted_data_shreds,
+                &mut just_inserted_data_shreds,
                 &mut slot_meta_working_set,
                 &mut index_working_set,
                 shred,
@@ -518,12 +497,57 @@ impl Blocktree {
         Ok(())
     }
 
+    fn insert_coding_shred(
+        &self,
+        set_index: u64,
+        num_data: usize,
+        num_coding: usize,
+        prev_inserted_coding_shreds: &mut HashMap<(u64, u64), Shred>,
+        erasure_metas: &mut HashMap<(u64, u64), ErasureMeta>,
+        index_meta: &mut Index,
+        shred: Shred,
+        write_batch: &mut WriteBatch,
+    ) -> () {
+        let slot = shred.slot();
+        let shred_index = u64::from(shred.index());
+
+        let erasure_config = ErasureConfig::new(num_data, num_coding);
+
+        let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
+            self.erasure_meta_cf
+                .get((slot, set_index))
+                .expect("Expect database get to succeed")
+                .unwrap_or_else(|| ErasureMeta::new(set_index, &erasure_config))
+        });
+
+        if erasure_config != erasure_meta.config {
+            // ToDo: This is a potential slashing condition
+            warn!("Received multiple erasure configs for the same erasure set!!!");
+            warn!(
+                "Stored config: {:#?}, new config: {:#?}",
+                erasure_meta.config, erasure_config
+            );
+        }
+
+        let serialized_shred = bincode::serialize(&shred).unwrap();
+        let inserted =
+            write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &serialized_shred);
+        if inserted.is_ok() {
+            index_meta.coding_mut().set_present(shred_index, true);
+
+            // `or_insert_with` used to prevent stack overflow
+            prev_inserted_coding_shreds
+                .entry((slot, shred_index))
+                .or_insert_with(|| shred);
+        }
+    }
+
     fn insert_data_shred(
         db: &Database,
-        prev_inserted_data_shreds: &HashMap<(u64, u64), Shred>,
+        prev_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
         mut slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
         index_working_set: &mut HashMap<u64, Index>,
-        shred: &Shred,
+        shred: Shred,
         write_batch: &mut WriteBatch,
     ) -> Result<bool> {
         let slot = shred.slot();
@@ -554,7 +578,7 @@ impl Blocktree {
         };
 
         if !prev_inserted_data_shreds.contains_key(&(slot, index))
-            && should_insert(slot_meta, index as u64, slot, last_in_slot, check_data_cf)
+            && should_insert(slot_meta, index, slot, last_in_slot, check_data_cf)
         {
             let new_consumed = if slot_meta.consumed == index {
                 let mut current_index = index + 1;
@@ -571,7 +595,7 @@ impl Blocktree {
                 slot_meta.consumed
             };
 
-            let serialized_shred = bincode::serialize(shred).unwrap();
+            let serialized_shred = bincode::serialize(&shred).unwrap();
             write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
 
             update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
@@ -581,6 +605,7 @@ impl Blocktree {
                 .data_mut()
                 .set_present(index, true);
             trace!("inserted shred into slot {:?} and index {:?}", slot, index);
+            prev_inserted_data_shreds.insert((slot, index), shred);
             Ok(true)
         } else {
             debug!("didn't insert shred");
