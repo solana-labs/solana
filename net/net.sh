@@ -39,6 +39,7 @@ Operate a configured testnet
                                         (ignored if -s or -S is specified)
    -r                                 - Reuse existing node/ledger configuration from a
                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
+   -d / --debug                       - Build/deploy the testnet with debug binaries
    -D /path/to/programs               - Deploy custom programs from this location
    -c clientType=numClients=extraArgs - Number of clientTypes to start.  This options can be specified
                                         more than once.  Defaults to bench-tps for all clients if not
@@ -122,6 +123,8 @@ internalNodesLamports=
 maybeNoSnapshot=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
+buildProfile="--release"
+debugBuild=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -164,6 +167,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-airdrop ]]; then
       maybeDisableAirdrops="$1"
       shift 1
+    elif [[ $1 = --debug ]]; then
+      debugBuild=true
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -173,7 +179,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:c:Fn:i:" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -255,11 +261,16 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:" opt "${shortArgs[@]}"; do
   i)
     nodeAddress=$OPTARG
     ;;
+  d)
+    debugBuild=true
+    ;;
   *)
     usage "Error: unhandled option: $opt"
     ;;
   esac
 done
+
+$debugBuild && buildProfile=""
 
 loadConfigFile
 
@@ -317,7 +328,7 @@ build() {
     fi
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf \"$cargoFeatures\"
+      scripts/cargo-install-all.sh farf \"$cargoFeatures\" \"$buildProfile\"
       if [[ -n \"$customPrograms\" ]]; then
         scripts/cargo-install-custom-programs.sh farf $customPrograms
       fi
