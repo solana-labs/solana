@@ -420,13 +420,14 @@ impl ReplayStage {
             let mut rooted_banks = root_bank.parents();
             rooted_banks.push(root_bank);
             let rooted_slots: Vec<_> = rooted_banks.iter().map(|bank| bank.slot()).collect();
+            // Call leader schedule_cache.set_root() before blocktree.set_root() because
+            // bank_forks.root is consumed by repair_service to update gossip, so we don't want to
+            // get blobs for repair on gossip before we update leader schedule, otherwise they may
+            // get dropped.
+            leader_schedule_cache.set_root(rooted_banks.last().unwrap());
             blocktree
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
-            // Set root first in leader schedule_cache before bank_forks because bank_forks.root
-            // is consumed by repair_service to update gossip, so we don't want to get blobs for
-            // repair on gossip before we update leader schedule, otherwise they may get dropped.
-            leader_schedule_cache.set_root(rooted_banks.last().unwrap());
             bank_forks
                 .write()
                 .unwrap()

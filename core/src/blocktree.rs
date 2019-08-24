@@ -4949,10 +4949,8 @@ pub mod tests {
         let mut slots_blobs_and_entries = vec![];
         for (i, slot) in chain.iter().enumerate() {
             let parent_slot = {
-                if *slot == 0 {
+                if *slot == 0 || i == 0 {
                     0
-                } else if i == 0 {
-                    std::u64::MAX
                 } else {
                     chain[i - 1]
                 }

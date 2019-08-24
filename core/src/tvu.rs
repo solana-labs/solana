@@ -224,7 +224,7 @@ impl Service for Tvu {
 pub mod tests {
     use super::*;
     use crate::banking_stage::create_test_recorder;
-    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_runtime::bank::Bank;
@@ -247,7 +247,7 @@ pub mod tests {
         cluster_info1.insert_info(leader.info.clone());
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
-        let blocktree_path = get_tmp_ledger_path!();
+        let (blocktree_path, _) = create_new_tmp_ledger!(&genesis_block);
         let (blocktree, l_receiver, completed_slots_receiver) =
             Blocktree::open_with_signal(&blocktree_path)
                 .expect("Expected to successfully open ledger");
