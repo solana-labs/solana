@@ -82,7 +82,7 @@ impl BroadcastRun for StandardBroadcastRun {
                 Shredder::new(
                     bank.slot(),
                     Some(parent_slot),
-                    0.0,
+                    1.0,
                     keypair,
                     latest_blob_index as u32,
                 )
@@ -91,7 +91,7 @@ impl BroadcastRun for StandardBroadcastRun {
                 Shredder::new(
                     bank.slot(),
                     Some(parent_slot),
-                    0.0,
+                    1.0,
                     keypair,
                     latest_blob_index as u32,
                 )
@@ -102,7 +102,7 @@ impl BroadcastRun for StandardBroadcastRun {
             Shredder::new(
                 bank.slot(),
                 Some(parent_slot),
-                0.0,
+                1.0,
                 keypair,
                 latest_blob_index as u32,
             )

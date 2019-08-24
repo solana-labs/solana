@@ -507,7 +507,7 @@ impl Blocktree {
         index_meta: &mut Index,
         shred: Shred,
         write_batch: &mut WriteBatch,
-    ) -> () {
+    ) {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
 
