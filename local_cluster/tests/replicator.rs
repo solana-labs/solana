@@ -131,7 +131,7 @@ fn test_replicator_startup_ledger_hang() {
     info!("starting replicator test");
     let mut validator_config = ValidatorConfig::default();
     validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
-    let cluster = LocalCluster::new_with_equal_stakes(2, 10_000, 100);;
+    let cluster = LocalCluster::new_with_equal_stakes(2, 10_000, 100);
 
     info!("starting replicator node");
     let bad_keys = Arc::new(Keypair::new());

@@ -408,7 +408,7 @@ mod test {
             )
             .into_iter()
             .rev()
-            .collect();;
+            .collect();
             s_responder.send(msgs).expect("send");
             t_responder
         };

@@ -146,7 +146,7 @@ fn bench_read_random(bench: &mut Bencher) {
 }
 
 fn setup(test_name: &str) -> PathBuf {
-    let dir = Path::new("kvstore-bench").join(test_name);;
+    let dir = Path::new("kvstore-bench").join(test_name);
 
     let _ig = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
