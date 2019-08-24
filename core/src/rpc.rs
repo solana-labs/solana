@@ -554,7 +554,7 @@ impl RpcSol for RpcSolImpl {
             .map_err(|err| {
                 info!("request_airdrop_transaction failed: {:?}", err);
                 Error::internal_error()
-            })?;;
+            })?;
 
         let data = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);

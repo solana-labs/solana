@@ -2809,7 +2809,7 @@ mod tests {
         let mut reader = BufReader::new(&buf[rdr.position() as usize..]);
 
         // Create a new set of directories for this bank's accounts
-        let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();;
+        let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
         dbank.set_bank_rc(
             &BankRc::new(dbank_paths.clone(), 0, dbank.slot()),
             &StatusCacheRc::default(),

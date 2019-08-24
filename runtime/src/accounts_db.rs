@@ -1345,9 +1345,9 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
-        assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());;
+        assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());
         accounts.purge_fork(0);
-        assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_none());;
+        assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_none());
     }
 
     #[test]
