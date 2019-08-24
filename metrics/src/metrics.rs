@@ -187,12 +187,18 @@ impl InfluxDbMetricsWriter {
         }
     }
 
-    fn build_client() -> Result<influxdb::Client, env::VarError> {
-        let (host, db, username, password) = get_env_settings()?;
+    fn build_client() -> Result<influxdb::Client, String> {
+        let config = get_metrics_config().map_err(|err| {
+            info!("metrics disabled: {}", err);
+            err
+        })?;
 
-        debug!("InfluxDB host={} db={} username={}", host, db, username);
-        let mut client = influxdb::Client::new_with_option(host, db, None)
-            .set_authentication(username, password);
+        info!(
+            "metrics configuration: host={} db={} username={}",
+            config.host, config.db, config.username
+        );
+        let mut client = influxdb::Client::new_with_option(config.host, config.db, None)
+            .set_authentication(config.username, config.password);
 
         client.set_read_timeout(1 /*second*/);
         client.set_write_timeout(1 /*second*/);
@@ -451,18 +457,57 @@ pub fn submit_counter(point: CounterPoint, level: log::Level, bucket: u64) {
     agent.submit_counter(point, level, bucket);
 }
 
-fn get_env_settings() -> Result<(String, String, String, String), env::VarError> {
-    let host =
-        env::var("INFLUX_HOST").unwrap_or_else(|_| "https://metrics.solana.com:8086".to_string());
-    let db = env::var("INFLUX_DATABASE")?.to_string();
-    let username = env::var("INFLUX_USERNAME")?.to_string();
-    let password = env::var("INFLUX_PASSWORD")?.to_string();
-    Ok((host, db, username, password))
+#[derive(Debug, Default)]
+struct MetricsConfig {
+    pub host: String,
+    pub db: String,
+    pub username: String,
+    pub password: String,
+}
+
+impl MetricsConfig {
+    fn complete(&self) -> bool {
+        !(self.host.is_empty()
+            || self.db.is_empty()
+            || self.username.is_empty()
+            || self.password.is_empty())
+    }
+}
+
+fn get_metrics_config() -> Result<MetricsConfig, String> {
+    let mut config = MetricsConfig::default();
+
+    let config_var = env::var("SOLANA_METRICS_CONFIG")
+        .map_err(|err| format!("SOLANA_METRICS_CONFIG: {}", err))?
+        .to_string();
+
+    for pair in config_var.split(',') {
+        let nv: Vec<_> = pair.split('=').collect();
+        if nv.len() != 2 {
+            return Err(format!("SOLANA_METRICS_CONFIG is invalid: '{}'", pair));
+        }
+        let v = nv[1].to_string();
+        match nv[0] {
+            "host" => config.host = v,
+            "db" => config.db = v,
+            "u" => config.username = v,
+            "p" => config.password = v,
+            _ => return Err(format!("SOLANA_METRICS_CONFIG is invalid: '{}'", pair)),
+        }
+    }
+
+    if !config.complete() {
+        return Err("SOLANA_METRICS_CONFIG is incomplete".to_string());
+    }
+    Ok(config)
 }
 
 pub fn query(q: &str) -> Result<String, String> {
-    let (host, _db, username, password) = get_env_settings().map_err(|err| err.to_string())?;
-    let query = format!("{}/query?u={}&p={}&q={}", &host, &username, &password, &q);
+    let config = get_metrics_config().map_err(|err| err.to_string())?;
+    let query = format!(
+        "{}/query?u={}&p={}&q={}",
+        &config.host, &config.username, &config.password, &q
+    );
 
     let response = reqwest::get(query.as_str())
         .map_err(|err| err.to_string())?
