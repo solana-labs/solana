@@ -100,31 +100,29 @@ pub(super) fn entries_to_blobs(
 }
 
 pub fn entries_to_shreds(
-    ventries: Vec<Vec<Entry>>,
+    entries: Vec<Entry>,
     last_tick: u64,
     bank_max_tick: u64,
     shredder: &mut Shredder,
 ) {
-    ventries.iter().enumerate().for_each(|(i, entries)| {
-        let data = bincode::serialize(entries).unwrap();
-        let mut offset = 0;
-        while offset < data.len() {
-            offset += shredder.write(&data[offset..]).unwrap();
-        }
-        //        bincode::serialize_into(&shredder, &entries).unwrap();
-        trace!(
-            "Shredded {:?} entries into {:?} shreds",
-            entries.len(),
-            shredder.shreds.len()
-        );
-        if i + 1 == ventries.len() && last_tick == bank_max_tick {
-            debug!("Finalized slot for the shreds");
-            shredder.finalize_slot();
-        } else {
-            debug!("Finalized fec block for the shreds");
-            shredder.finalize_fec_block();
-        }
-    })
+    let data = bincode::serialize(&entries).unwrap();
+    let mut offset = 0;
+    while offset < data.len() {
+        offset += shredder.write(&data[offset..]).unwrap();
+    }
+    //        bincode::serialize_into(&shredder, &entries).unwrap();
+    trace!(
+        "Shredded {:?} entries into {:?} shreds",
+        entries.len(),
+        shredder.shreds.len()
+    );
+    if last_tick == bank_max_tick {
+        debug!("Finalized slot for the shreds");
+        shredder.finalize_slot();
+    } else {
+        debug!("Finalized fec block for the shreds");
+        shredder.finalize_fec_block();
+    }
 }
 
 pub(super) fn generate_data_blobs(

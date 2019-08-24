@@ -294,7 +294,7 @@ impl ShredCommon for CodingShred {
 #[derive(Default, Debug)]
 pub struct Shredder {
     slot: u64,
-    index: u32,
+    pub index: u32,
     pub parent: Option<u64>,
     parent_slot: u64,
     fec_rate: f32,

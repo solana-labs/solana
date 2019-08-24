@@ -270,7 +270,7 @@ mod test {
     fn local_entries_to_shred(entries: Vec<Entry>, keypair: &Arc<Keypair>) -> Vec<Shred> {
         let mut shredder =
             Shredder::new(0, Some(0), 0.0, keypair, 0).expect("Failed to create entry shredder");
-        entries_to_shreds(vec![entries], 0, 0, &mut shredder);
+        entries_to_shreds(entries, 0, 0, &mut shredder);
         shredder
             .shreds
             .iter()

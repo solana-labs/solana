@@ -51,7 +51,7 @@ impl StandardBroadcastRun {
 impl BroadcastRun for StandardBroadcastRun {
     fn run(
         &mut self,
-        broadcast: &mut Broadcast,
+        _broadcast: &mut Broadcast,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
@@ -68,73 +68,52 @@ impl BroadcastRun for StandardBroadcastRun {
         // 2) Convert entries to blobs + generate coding blobs
         let to_blobs_start = Instant::now();
         let keypair = &cluster_info.read().unwrap().keypair.clone();
-        let latest_blob_index = blocktree
+        let mut latest_blob_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
         let parent_slot = bank.parent().unwrap().slot();
-        let shredder = if let Some(slot) = broadcast.parent_slot {
-            if slot != parent_slot {
-                trace!("Renew shredder with parent slot {:?}", parent_slot);
-                broadcast.parent_slot = Some(parent_slot);
-                Shredder::new(
-                    bank.slot(),
-                    Some(parent_slot),
-                    1.0,
-                    keypair,
-                    latest_blob_index as u32,
-                )
-            } else {
-                trace!("Renew shredder with same parent slot {:?}", parent_slot);
-                Shredder::new(
-                    bank.slot(),
-                    Some(parent_slot),
-                    1.0,
-                    keypair,
-                    latest_blob_index as u32,
-                )
-            }
-        } else {
-            trace!("New shredder with parent slot {:?}", parent_slot);
-            broadcast.parent_slot = Some(parent_slot);
-            Shredder::new(
-                bank.slot(),
-                Some(parent_slot),
-                1.0,
-                keypair,
-                latest_blob_index as u32,
-            )
-        };
-        let mut shredder = shredder.expect("Expected to create a new shredder");
-
-        let ventries = receive_results
+        let mut all_shreds = vec![];
+        let mut all_seeds = vec![];
+        receive_results
             .ventries
             .into_iter()
-            .map(|entries_tuple| {
+            .for_each(|entries_tuple| {
                 let (entries, _): (Vec<_>, Vec<_>) = entries_tuple.into_iter().unzip();
-                entries
-            })
-            .collect();
-        broadcast_utils::entries_to_shreds(
-            ventries,
-            last_tick,
-            bank.max_tick_height(),
-            &mut shredder,
-        );
+                //entries
+                let mut shredder = Shredder::new(
+                    bank.slot(),
+                    Some(parent_slot),
+                    1.0,
+                    keypair,
+                    latest_blob_index as u32,
+                )
+                .expect("Expected to create a new shredder");
 
-        let shreds: Vec<Shred> = shredder
-            .shreds
-            .iter()
-            .map(|s| bincode::deserialize(s).unwrap())
-            .collect();
+                broadcast_utils::entries_to_shreds(
+                    entries,
+                    last_tick,
+                    bank.max_tick_height(),
+                    &mut shredder,
+                );
 
-        let seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
-        trace!("Inserting {:?} shreds in blocktree", shreds.len());
-        blocktree
-            .insert_shreds(shreds)
-            .expect("Failed to insert shreds in blocktree");
+                let shreds: Vec<Shred> = shredder
+                    .shreds
+                    .iter()
+                    .map(|s| bincode::deserialize(s).unwrap())
+                    .collect();
+
+                let mut seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
+                trace!("Inserting {:?} shreds in blocktree", shreds.len());
+                blocktree
+                    .insert_shreds(shreds)
+                    .expect("Failed to insert shreds in blocktree");
+                latest_blob_index = shredder.index as u64;
+                all_shreds.append(&mut shredder.shreds);
+                all_seeds.append(&mut seeds);
+            });
 
         let to_blobs_elapsed = to_blobs_start.elapsed();
 
@@ -143,15 +122,15 @@ impl BroadcastRun for StandardBroadcastRun {
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        trace!("Broadcasting {:?} shreds", shredder.shreds.len());
+        trace!("Broadcasting {:?} shreds", all_shreds.len());
         cluster_info.read().unwrap().broadcast_shreds(
             sock,
-            &shredder.shreds,
-            &seeds,
+            &all_shreds,
+            &all_seeds,
             stakes.as_ref(),
         )?;
 
-        inc_new_counter_debug!("streamer-broadcast-sent", shredder.shreds.len());
+        inc_new_counter_debug!("streamer-broadcast-sent", all_shreds.len());
 
         let broadcast_elapsed = broadcast_start.elapsed();
         self.update_broadcast_stats(

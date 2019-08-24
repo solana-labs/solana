@@ -760,7 +760,7 @@ impl Blocktree {
             }
 
             entries_to_shreds(
-                vec![vec![entry.borrow().clone()]],
+                vec![entry.borrow().clone()],
                 ticks_per_slot - remaining_ticks_in_slot,
                 ticks_per_slot,
                 &mut shredder,
@@ -2420,7 +2420,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     let mut shredder = Shredder::new(0, Some(0), 0.0, &Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
     let last_hash = entries.last().unwrap().hash;
-    entries_to_shreds(vec![entries], ticks_per_slot, ticks_per_slot, &mut shredder);
+    entries_to_shreds(entries, ticks_per_slot, ticks_per_slot, &mut shredder);
     let shreds: Vec<Shred> = shredder
         .shreds
         .iter()
@@ -4769,7 +4769,7 @@ pub mod tests {
             last_tick + 1
         };
 
-        entries_to_shreds(vec![entries], last_tick, bank_max_tick, &mut shredder);
+        entries_to_shreds(entries, last_tick, bank_max_tick, &mut shredder);
 
         let shreds: Vec<Shred> = shredder
             .shreds

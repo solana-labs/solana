@@ -108,7 +108,6 @@ trait BroadcastRun {
 
 struct Broadcast {
     coding_generator: CodingGenerator,
-    parent_slot: Option<u64>,
     thread_pool: ThreadPool,
 }
 
@@ -148,7 +147,6 @@ impl BroadcastStage {
 
         let mut broadcast = Broadcast {
             coding_generator,
-            parent_slot: None,
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
                 .build()
