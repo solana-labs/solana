@@ -110,7 +110,7 @@ impl BroadcastRun for StandardBroadcastRun {
                 blocktree
                     .insert_shreds(shreds)
                     .expect("Failed to insert shreds in blocktree");
-                latest_blob_index = shredder.index as u64;
+                latest_blob_index = u64::from(shredder.index);
                 all_shreds.append(&mut shredder.shreds);
                 all_seeds.append(&mut seeds);
             });
