@@ -764,7 +764,7 @@ pub fn fund_keys(client: &dyn Client, source: &Keypair, dests: &[Arc<Keypair>], 
                     retries += 1;
                     debug!("  Retry {:?}", retries);
                     if retries >= 10 {
-                        error!("  Too many retries, give up");
+                        error!("fund_keys: Too many retries ({}), give up", retries);
                         exit(1);
                     }
                 }
@@ -843,7 +843,10 @@ pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], acco
                     retries += 1;
                     debug!("  Retry {:?}", retries);
                     if retries >= 20 {
-                        error!("  Too many retries, give up");
+                        error!(
+                            "create_token_accounts: Too many retries ({}), give up",
+                            retries
+                        );
                         exit(1);
                     }
                 }
@@ -953,7 +956,7 @@ pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypa
         debug!("  Retry...");
         tries += 1;
         if tries > 50 {
-            error!("Too many retries, give up");
+            error!("airdrop_lamports: Too many retries ({}), give up", tries);
             exit(1);
         }
         sleep(Duration::from_secs(2));
