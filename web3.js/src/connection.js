@@ -136,6 +136,7 @@ const AccountInfoResult = struct({
   owner: 'array',
   lamports: 'number',
   data: 'array',
+  rent_epoch: 'number?',
 });
 
 /**
