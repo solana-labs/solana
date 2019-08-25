@@ -246,7 +246,7 @@ local|tar|skip)
       fi
 
       export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
-      npm install @solana/blockexplorer@1
+      npm install @solana/blockexplorer@1.41.0
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
 
       # Confirm the blockexplorer is accessible
