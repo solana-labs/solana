@@ -81,8 +81,6 @@ fn test_spend_and_verify_all_nodes_1() {
 
 #[test]
 #[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_2");
@@ -98,8 +96,6 @@ fn test_spend_and_verify_all_nodes_2() {
 
 #[test]
 #[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_3");
@@ -136,7 +132,6 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
 #[test]
 #[serial]
 #[should_panic]
-#[ignore]
 fn test_fullnode_exit_default_config_should_panic() {
     solana_logger::setup();
     error!("test_fullnode_exit_default_config_should_panic");
@@ -147,8 +142,6 @@ fn test_fullnode_exit_default_config_should_panic() {
 
 #[test]
 #[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_fullnode_exit_2() {
     solana_logger::setup();
     error!("test_fullnode_exit_2");
@@ -192,8 +185,6 @@ fn test_leader_failure_4() {
 }
 #[test]
 #[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     error!("test_two_unbalanced_stakes");
