@@ -51,6 +51,7 @@ declare module '@solana/web3.js' {
     owner: PublicKey,
     lamports: number,
     data: Buffer,
+    rent_epoch: number | null,
   };
 
   declare export type ContactInfo = {
