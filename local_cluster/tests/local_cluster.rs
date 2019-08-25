@@ -66,8 +66,6 @@ fn test_ledger_cleanup_service() {
 
 #[test]
 #[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_1");
