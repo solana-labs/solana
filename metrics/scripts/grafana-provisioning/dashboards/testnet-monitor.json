@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 851,
-  "iteration": 1565991401072,
+  "id": 883,
+  "iteration": 1566852798488,
   "links": [
     {
       "asDropdown": true,
@@ -2516,7 +2516,7 @@
         "x": 12,
         "y": 24
       },
-      "id": 23,
+      "id": 61,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2569,7 +2569,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"one\") FROM \"$testnet\".\"autogen\".\"panic\" WHERE $timeFilter",
+          "query": "SELECT SUM(\"points_lost\") FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
@@ -2591,7 +2591,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Total Panics",
+      "title": "Lost Datapoints",
       "type": "singlestat",
       "valueFontSize": "80%",
       "valueMaps": [
@@ -2840,7 +2840,7 @@
       "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
-        "h": 6,
+        "h": 3,
         "w": 8,
         "x": 0,
         "y": 26
@@ -2852,7 +2852,7 @@
         "current": false,
         "max": false,
         "min": false,
-        "rightSide": false,
+        "rightSide": true,
         "show": true,
         "total": false,
         "values": false
@@ -2888,7 +2888,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MEAN(\"points_written\") as \"Mean points written\" FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter GROUP BY time(5s) fill(null)\n",
+          "query": "SELECT MEAN(\"points_written\") as \"mean\" FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter GROUP BY time(5s) fill(null)\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -2925,7 +2925,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MAX(\"points_written\") as \"Max points written\" FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter GROUP BY time(5s) fill(null)\n",
+          "query": "SELECT MAX(\"points_written\") as \"max\" FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter GROUP BY time(5s) fill(null)\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -3256,6 +3256,162 @@
           "max": null,
           "min": null,
           "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 3,
+        "w": 8,
+        "x": 0,
+        "y": 29
+      },
+      "id": 62,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT MEAN(\"count\") as \"mean\" FROM \"$testnet\".\"autogen\".\"open-files\" WHERE $timeFilter GROUP BY time(5s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT MAX(\"count\") as \"max\" FROM \"$testnet\".\"autogen\".\"open-files\" WHERE $timeFilter GROUP BY time(5s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Open Files per node",
+      "tooltip": {
+        "shared": true,
+        "sort": 1,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": 0,
+          "format": "short",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": "0.2",
+          "show": true
+        },
+        {
+          "decimals": null,
+          "format": "short",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
         }
       ],
       "yaxis": {
@@ -8173,10 +8329,6 @@
       },
       {
         "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
         "datasource": "$datasource",
         "hide": 0,
         "includeAll": true,
@@ -8228,5 +8380,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 3
+  "version": 1
 }
