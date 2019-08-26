@@ -116,13 +116,14 @@ impl BroadcastRun for StandardBroadcastRun {
                     .iter()
                     .map(|s| bincode::deserialize(s).unwrap())
                     .collect();
+                let num_shreds = shreds.len() as u64;
 
                 let mut seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
                 trace!("Inserting {:?} shreds in blocktree", shreds.len());
                 blocktree
                     .insert_shreds(shreds)
                     .expect("Failed to insert shreds in blocktree");
-                latest_blob_index += shreds.len() as u64;
+                latest_blob_index += num_shreds;
                 all_shreds.append(&mut shredder.shreds);
                 all_seeds.append(&mut seeds);
             });
