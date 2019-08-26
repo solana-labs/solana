@@ -1,9 +1,13 @@
-use crate::Alloc;
+use crate::alloc;
+use alloc::Alloc;
 use libc::c_char;
 use log::*;
-use solana_rbpf::{EbpfVmRaw, MemoryRegion};
+use solana_rbpf::{
+    ebpf::{HelperContext, MM_HEAP_START},
+    memory_region::{translate_addr, MemoryRegion},
+    EbpfVm,
+};
 use std::alloc::Layout;
-use std::any::Any;
 use std::ffi::CStr;
 use std::io::{Error, ErrorKind};
 use std::mem;
@@ -13,126 +17,66 @@ use std::str::from_utf8;
 /// Program heap allocators are intended to allocate/free from a given
 /// chunk of memory.  The specific allocator implementation is
 /// selectable at build-time.
-/// Enable only one of the following BPFAllocator implementations.
+/// Only one allocator is currently supported
 
 /// Simple bump allocator, never frees
 use crate::allocator_bump::BPFAllocator;
-
-/// Use the system heap (test purposes only).  This allocator relies on the system heap
-/// and there is no mechanism to check read-write access privileges
-/// at the moment.  Therefor you must disable memory bounds checking
-// use allocator_system::BPFAllocator;
 
 /// Default program heap size, allocators
 /// are expected to enforce this
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
-pub fn register_helpers(vm: &mut EbpfVmRaw) -> Result<(MemoryRegion), Error> {
-    vm.register_helper_ex("abort", Some(helper_abort_verify), helper_abort, None)?;
-    vm.register_helper_ex(
-        "sol_panic",
-        Some(helper_sol_panic_verify),
-        helper_sol_panic,
-        None,
-    )?;
-    vm.register_helper_ex(
-        "sol_panic_",
-        Some(helper_sol_panic_verify),
-        helper_sol_panic,
-        None,
-    )?;
-    vm.register_helper_ex("sol_log", Some(helper_sol_log_verify), helper_sol_log, None)?;
-    vm.register_helper_ex(
-        "sol_log_",
-        Some(helper_sol_log_verify_),
-        helper_sol_log_,
-        None,
-    )?;
-    vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64, None)?;
-    vm.register_helper_ex("sol_log_64_", None, helper_sol_log_u64, None)?;
+pub fn register_helpers(vm: &mut EbpfVm) -> Result<(MemoryRegion), Error> {
+    vm.register_helper_ex("abort", helper_abort, None)?;
+    vm.register_helper_ex("sol_panic", helper_sol_panic, None)?;
+    vm.register_helper_ex("sol_panic_", helper_sol_panic, None)?;
+    vm.register_helper_ex("sol_log", helper_sol_log, None)?;
+    vm.register_helper_ex("sol_log_", helper_sol_log, None)?;
+    vm.register_helper_ex("sol_log_64", helper_sol_log_u64, None)?;
+    vm.register_helper_ex("sol_log_64_", helper_sol_log_u64, None)?;
 
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
-    let heap_region = MemoryRegion::new_from_slice(&heap);
-    let context = Box::new(BPFAllocator::new(heap));
-    vm.register_helper_ex(
-        "sol_alloc_free_",
-        None,
-        helper_sol_alloc_free,
-        Some(context),
-    )?;
+    let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
+    let context = Box::new(BPFAllocator::new(heap, MM_HEAP_START));
+    vm.register_helper_ex("sol_alloc_free_", helper_sol_alloc_free, Some(context))?;
 
     Ok(heap_region)
 }
 
-/// Verifies a string passed out of the program
-fn verify_string(addr: u64, ro_regions: &[MemoryRegion]) -> Result<(()), Error> {
-    for region in ro_regions.iter() {
-        if region.addr <= addr && (addr as u64) < region.addr + region.len {
-            let c_buf: *const c_char = addr as *const c_char;
-            let max_size = region.addr + region.len - addr;
-            unsafe {
-                for i in 0..max_size {
-                    if std::ptr::read(c_buf.offset(i as isize)) == 0 {
-                        return Ok(());
-                    }
-                }
-            }
-            return Err(Error::new(ErrorKind::Other, "Error, Unterminated string"));
-        }
-    }
-    Err(Error::new(
-        ErrorKind::Other,
-        "Error: Load segfault, bad string pointer",
-    ))
-}
-
-type Context = Option<Box<dyn Any + 'static>>;
-
 /// Abort helper functions, called when the BPF program calls `abort()`
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
-pub fn helper_abort_verify(
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _context: &mut Context,
-    _ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<(()), Error> {
-    Err(Error::new(
-        ErrorKind::Other,
-        "Error: BPF program called abort()!",
-    ))
-}
 pub fn helper_abort(
     _arg1: u64,
     _arg2: u64,
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Context,
-) -> u64 {
-    // Never called because its verify function always returns an error
-    0
+    _context: &mut HelperContext,
+    _ro_regions: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
+) -> Result<(u64), Error> {
+    Err(Error::new(
+        ErrorKind::Other,
+        "Error: BPF program called abort()!",
+    ))
 }
 
 /// Panic helper functions, called when the BPF program calls 'sol_panic_()`
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
-pub fn helper_sol_panic_verify(
+pub fn helper_sol_panic(
     file: u64,
+    len: u64,
     line: u64,
     column: u64,
-    _arg4: u64,
     _arg5: u64,
-    _context: &mut Context,
+    _context: &mut HelperContext,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<(()), Error> {
-    if verify_string(file, ro_regions).is_ok() {
-        let c_buf: *const c_char = file as *const c_char;
+) -> Result<(u64), Error> {
+    if let Ok(host_addr) = translate_addr(file, len as usize, "Load", 0, ro_regions) {
+        let c_buf: *const c_char = host_addr as *const c_char;
         let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
         if let Ok(slice) = c_str.to_str() {
             return Err(Error::new(
@@ -146,94 +90,51 @@ pub fn helper_sol_panic_verify(
     }
     Err(Error::new(ErrorKind::Other, "Error: BPF program Panicked"))
 }
-pub fn helper_sol_panic(
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _context: &mut Context,
-) -> u64 {
-    // Never called because its verify function always returns an error
-    0
-}
 
-/// Logging helper functions, called when the BPF program calls `sol_log_()` or
-/// `sol_log_64_()`.
-pub fn helper_sol_log_verify(
-    addr: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _context: &mut Context,
-    ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<(()), Error> {
-    verify_string(addr, ro_regions)
-}
 pub fn helper_sol_log(
-    addr: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _context: &mut Context,
-) -> u64 {
-    let c_buf: *const c_char = addr as *const c_char;
-    let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
-    match c_str.to_str() {
-        Ok(slice) => info!("info!: {:?}", slice),
-        Err(e) => warn!("Error: Cannot print invalid string: {}", e),
-    };
-    0
-}
-pub fn helper_sol_log_verify_(
     addr: u64,
     len: u64,
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Context,
+    _context: &mut HelperContext,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<(()), Error> {
-    for region in ro_regions.iter() {
-        if region.addr <= addr && (addr as u64) + len <= region.addr + region.len {
-            return Ok(());
+) -> Result<(u64), Error> {
+    let host_addr = translate_addr(addr, len as usize, "Load", 0, ro_regions)?;
+    let c_buf: *const c_char = host_addr as *const c_char;
+    unsafe {
+        for i in 0..len {
+            let c = std::ptr::read(c_buf.offset(i as isize));
+            if i == len - 1 || c == 0 {
+                let message =
+                    from_utf8(from_raw_parts(host_addr as *const u8, len as usize)).unwrap();
+                println!("info!: {}", message);
+                return Ok(0);
+            }
         }
     }
     Err(Error::new(
         ErrorKind::Other,
-        "Error: Load segfault, bad string pointer",
+        "Error: Unterminated string logged",
     ))
 }
-pub fn helper_sol_log_(
-    addr: u64,
-    len: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _context: &mut Context,
-) -> u64 {
-    let ptr: *const u8 = addr as *const u8;
-    let message = unsafe { from_utf8(from_raw_parts(ptr, len as usize)).unwrap() };
-    info!("info: {:?}", message);
-    0
-}
+
 pub fn helper_sol_log_u64(
     arg1: u64,
     arg2: u64,
     arg3: u64,
     arg4: u64,
     arg5: u64,
-    _context: &mut Context,
-) -> u64 {
+    _context: &mut HelperContext,
+    _ro_regions: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
+) -> Result<(u64), Error> {
     info!(
         "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
         arg1, arg2, arg3, arg4, arg5
     );
-    0
+    Ok(0)
 }
 
 /// Dynamic memory allocation helper called when the BPF program calls
@@ -244,24 +145,26 @@ pub fn helper_sol_log_u64(
 /// to the VM to use for enforcement.
 pub fn helper_sol_alloc_free(
     size: u64,
-    free_ptr: u64,
+    free_addr: u64,
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    context: &mut Context,
-) -> u64 {
+    context: &mut HelperContext,
+    _ro_regions: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
+) -> Result<(u64), Error> {
     if let Some(context) = context {
         if let Some(allocator) = context.downcast_mut::<BPFAllocator>() {
             return {
                 let layout = Layout::from_size_align(size as usize, mem::align_of::<u8>()).unwrap();
-                if free_ptr == 0 {
+                if free_addr == 0 {
                     match allocator.alloc(layout) {
-                        Ok(ptr) => ptr as u64,
-                        Err(_) => 0,
+                        Ok(addr) => Ok(addr as u64),
+                        Err(_) => Ok(0),
                     }
                 } else {
-                    allocator.dealloc(free_ptr as *mut u8, layout);
-                    0
+                    allocator.dealloc(free_addr, layout);
+                    Ok(0)
                 }
             };
         };

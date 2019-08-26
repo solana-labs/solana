@@ -1,6 +1,6 @@
 [package]
 name = "solana-keygen"
-version = "0.18.0-pre1"
+version = "0.18.0-pre2"
 description = "Solana key generation utility"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -15,7 +15,7 @@ cuda = []
 [dependencies]
 clap = "2.33"
 dirs = "2.0.2"
-solana-sdk = { path = "../sdk", version = "0.18.0-pre1" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre2" }
 
 [[bin]]
 name = "solana-keygen"

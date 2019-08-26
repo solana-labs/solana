@@ -184,7 +184,6 @@ default_arg --identity "$identity_keypair_path"
 default_arg --voting-keypair "$voting_keypair_path"
 default_arg --storage-keypair "$storage_keypair_path"
 default_arg --ledger "$ledger_dir"
-#default_arg --snapshot-interval-slots 100
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
@@ -237,7 +236,7 @@ trap 'kill_node_and_exit' INT TERM ERR
 wallet() {
   (
     set -x
-    $solana_wallet --keypair "$identity_keypair_path" --url "$rpc_url" "$@"
+    $solana_cli --keypair "$identity_keypair_path" --url "$rpc_url" "$@"
   )
 }
 
@@ -272,14 +271,6 @@ setup_validator_accounts() {
 
 while true; do
   rpc_url=$($solana_gossip get-rpc-url --entrypoint "$gossip_entrypoint")
-  if new_genesis_block; then
-    # If the genesis block has changed remove the now stale ledger and start all
-    # over again
-    (
-      set -x
-      rm -rf "$ledger_dir"
-    )
-  fi
 
   [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
   [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
@@ -312,7 +303,7 @@ EOF
     exit $?
   fi
 
-  secs_to_next_genesis_poll=5
+  secs_to_next_genesis_poll=60
   while true; do
     if [[ -z $pid ]] || ! kill -0 "$pid"; then
       [[ -z $pid ]] || wait "$pid"
@@ -326,9 +317,13 @@ EOF
       echo "Polling for new genesis block..."
       if new_genesis_block; then
         echo "############## New genesis detected, restarting ##############"
+        (
+          set -x
+          rm -rf "$ledger_dir"
+        )
         break
       fi
-      secs_to_next_genesis_poll=5
+      secs_to_next_genesis_poll=60
     fi
 
   done

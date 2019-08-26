@@ -9,12 +9,10 @@ use crate::erasure::{CodingGenerator, ErasureConfig};
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
+use crate::shred::Shredder;
 use crate::staking_utils;
 use rayon::ThreadPool;
-use solana_metrics::{
-    datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
-};
-use solana_sdk::timing::duration_as_ms;
+use solana_metrics::{datapoint, inc_new_counter_error, inc_new_counter_info};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -24,7 +22,7 @@ use std::time::Instant;
 
 mod broadcast_bad_blob_sizes;
 mod broadcast_fake_blobs_run;
-mod broadcast_utils;
+pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
 
@@ -110,6 +108,7 @@ trait BroadcastRun {
 
 struct Broadcast {
     coding_generator: CodingGenerator,
+    parent_slot: Option<u64>,
     thread_pool: ThreadPool,
 }
 
@@ -149,6 +148,7 @@ impl BroadcastStage {
 
         let mut broadcast = Broadcast {
             coding_generator,
+            parent_slot: None,
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
                 .build()
@@ -298,6 +298,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_broadcast_ledger() {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path("test_broadcast_ledger");
@@ -312,18 +313,22 @@ mod test {
                 &ledger_path,
                 entry_receiver,
             );
-            let bank = broadcast_service.bank.clone();
-            let start_tick_height = bank.tick_height();
-            let max_tick_height = bank.max_tick_height();
-            let ticks_per_slot = bank.ticks_per_slot();
+            let start_tick_height;
+            let max_tick_height;
+            let ticks_per_slot;
+            {
+                let bank = broadcast_service.bank.clone();
+                start_tick_height = bank.tick_height();
+                max_tick_height = bank.max_tick_height();
+                ticks_per_slot = bank.ticks_per_slot();
 
-            let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
-            for (i, tick) in ticks.into_iter().enumerate() {
-                entry_sender
-                    .send((bank.clone(), vec![(tick, i as u64 + 1)]))
-                    .expect("Expect successful send to broadcast service");
+                let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
+                for (i, tick) in ticks.into_iter().enumerate() {
+                    entry_sender
+                        .send((bank.clone(), vec![(tick, i as u64 + 1)]))
+                        .expect("Expect successful send to broadcast service");
+                }
             }
-
             sleep(Duration::from_millis(2000));
 
             trace!(
@@ -338,7 +343,7 @@ mod test {
             for i in 0..max_tick_height - start_tick_height {
                 let slot = (start_tick_height + i + 1) / ticks_per_slot;
 
-                let result = blocktree.get_data_blob(slot, blob_index).unwrap();
+                let result = blocktree.get_data_shred_as_blob(slot, blob_index).unwrap();
 
                 blob_index += 1;
                 result.expect("expect blob presence");

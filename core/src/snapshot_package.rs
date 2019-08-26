@@ -1,5 +1,6 @@
 use crate::result::{Error, Result};
 use crate::service::Service;
+use solana_measure::measure::Measure;
 use solana_runtime::accounts_db::AccountStorageEntry;
 use std::fs;
 use std::io::{Error as IOError, ErrorKind};
@@ -19,6 +20,7 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 
 pub struct SnapshotPackage {
+    root: u64,
     snapshot_links: TempDir,
     storage_entries: Vec<Arc<AccountStorageEntry>>,
     tar_output_file: PathBuf,
@@ -26,11 +28,13 @@ pub struct SnapshotPackage {
 
 impl SnapshotPackage {
     pub fn new(
+        root: u64,
         snapshot_links: TempDir,
         storage_entries: Vec<Arc<AccountStorageEntry>>,
         tar_output_file: PathBuf,
     ) -> Self {
         Self {
+            root,
             snapshot_links,
             storage_entries,
             tar_output_file,
@@ -66,6 +70,11 @@ impl SnapshotPackagerService {
     }
 
     pub fn package_snapshots(snapshot_package: &SnapshotPackage) -> Result<()> {
+        info!(
+            "Generating snapshot tarball for root {}",
+            snapshot_package.root
+        );
+        let mut timer = Measure::start("snapshot_package-package_snapshots");
         let tar_dir = snapshot_package
             .tar_output_file
             .parent()
@@ -125,6 +134,12 @@ impl SnapshotPackagerService {
         // can fetch this newly packaged snapshot
         let _ = fs::remove_file(&snapshot_package.tar_output_file);
         fs::hard_link(&temp_tar_path, &snapshot_package.tar_output_file)?;
+        timer.stop();
+        info!(
+            "Successfully created tarball for root: {}, elapsed ms: {}",
+            snapshot_package.root,
+            timer.as_ms()
+        );
         Ok(())
     }
 
@@ -162,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_package_snapshots() {
-        // Create temprorary placeholder directory for all test files
+        // Create temporary placeholder directory for all test files
         let temp_dir = TempDir::new().unwrap();
         let accounts_dir = temp_dir.path().join("accounts");
         let snapshots_dir = temp_dir.path().join("snapshots");
@@ -202,6 +217,7 @@ mod tests {
         // Create a packageable snapshot
         let output_tar_path = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
         let snapshot_package = SnapshotPackage::new(
+            5,
             link_snapshots_dir,
             storage_entries.clone(),
             output_tar_path.clone(),

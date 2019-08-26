@@ -1,4 +1,5 @@
-use solana::{
+use solana_client::thin_client::{create_client, ThinClient};
+use solana_core::{
     blocktree::create_new_tmp_ledger,
     cluster::Cluster,
     cluster_info::{Node, FULLNODE_PORT_RANGE},
@@ -9,7 +10,6 @@ use solana::{
     service::Service,
     validator::{Validator, ValidatorConfig},
 };
-use solana_client::thin_client::{create_client, ThinClient};
 use solana_sdk::{
     client::SyncClient,
     genesis_block::GenesisBlock,
@@ -257,8 +257,8 @@ impl LocalCluster {
         cluster
     }
 
-    pub fn exit(&self) {
-        for node in self.fullnodes.values() {
+    pub fn exit(&mut self) {
+        for node in self.fullnodes.values_mut() {
             node.exit();
         }
     }
@@ -585,19 +585,28 @@ impl Cluster for LocalCluster {
         })
     }
 
-    fn restart_node(&mut self, pubkey: Pubkey) {
+    fn restart_node(&mut self, pubkey: Pubkey, config: &ValidatorConfig) {
         // Shut down the fullnode
-        let node = self.fullnodes.remove(&pubkey).unwrap();
+        let mut node = self.fullnodes.remove(&pubkey).unwrap();
         node.exit();
         node.join().unwrap();
 
-        // Restart the node
-        let fullnode_info = &self.fullnode_infos[&pubkey].info;
-        let config = &self.fullnode_infos[&pubkey].config;
-        let node = Node::new_localhost_with_pubkey(&fullnode_info.keypair.pubkey());
+        // Update the stored ContactInfo for this node
+        let node_pubkey = &self.fullnode_infos[&pubkey].info.keypair.pubkey();
+        let node = Node::new_localhost_with_pubkey(&node_pubkey);
+        self.fullnode_infos
+            .get_mut(&pubkey)
+            .unwrap()
+            .info
+            .contact_info = node.info.clone();
         if pubkey == self.entry_point_info.id {
             self.entry_point_info = node.info.clone();
         }
+
+        // Restart the node
+        self.fullnode_infos.get_mut(&pubkey).unwrap().config = config.clone();
+        let fullnode_info = &self.fullnode_infos[&pubkey].info;
+
         let restarted_node = Validator::new(
             node,
             &fullnode_info.keypair,
@@ -623,7 +632,7 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana::storage_stage::SLOTS_PER_TURN_TEST;
+    use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
     use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 
     #[test]

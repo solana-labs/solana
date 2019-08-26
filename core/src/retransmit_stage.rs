@@ -8,7 +8,7 @@ use crate::repair_service::RepairStrategy;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
-use crate::streamer::BlobReceiver;
+use crate::streamer::PacketReceiver;
 use crate::window_service::{should_retransmit_and_persist, WindowService};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -27,37 +27,36 @@ fn retransmit(
     bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
-    r: &BlobReceiver,
+    r: &PacketReceiver,
     sock: &UdpSocket,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
-    let mut blobs = r.recv_timeout(timer)?;
+    let mut packets = r.recv_timeout(timer)?;
     while let Ok(mut nq) = r.try_recv() {
-        blobs.append(&mut nq);
+        packets.packets.append(&mut nq.packets);
     }
 
-    datapoint_info!("retransmit-stage", ("count", blobs.len(), i64));
+    datapoint_info!("retransmit-stage", ("count", packets.packets.len(), i64));
 
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     let mut peers_len = 0;
-    for blob in &blobs {
+    for packet in &packets.packets {
         let (my_index, mut peers) = cluster_info.read().unwrap().shuffle_peers_and_index(
             staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch).as_ref(),
-            ChaChaRng::from_seed(blob.read().unwrap().seed()),
+            ChaChaRng::from_seed(packet.meta.seed),
         );
         peers_len = cmp::max(peers_len, peers.len());
         peers.remove(my_index);
 
         let (neighbors, children) = compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, peers);
 
-        let leader = leader_schedule_cache
-            .slot_leader_at(blob.read().unwrap().slot(), Some(r_bank.as_ref()));
-        if blob.read().unwrap().meta.forward {
-            ClusterInfo::retransmit_to(&cluster_info, &neighbors, blob, leader, sock, true)?;
-            ClusterInfo::retransmit_to(&cluster_info, &children, blob, leader, sock, false)?;
+        let leader = leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
+        if !packet.meta.forward {
+            ClusterInfo::retransmit_to(&cluster_info, &neighbors, packet, leader, sock, true)?;
+            ClusterInfo::retransmit_to(&cluster_info, &children, packet, leader, sock, false)?;
         } else {
-            ClusterInfo::retransmit_to(&cluster_info, &children, blob, leader, sock, true)?;
+            ClusterInfo::retransmit_to(&cluster_info, &children, packet, leader, sock, true)?;
         }
     }
     datapoint_info!("cluster_info-num_nodes", ("count", peers_len, i64));
@@ -77,7 +76,7 @@ fn retransmitter(
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
-    r: BlobReceiver,
+    r: PacketReceiver,
 ) -> JoinHandle<()> {
     let bank_forks = bank_forks.clone();
     let leader_schedule_cache = leader_schedule_cache.clone();
@@ -122,7 +121,7 @@ impl RetransmitStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
-        fetch_stage_receiver: BlobReceiver,
+        fetch_stage_receiver: PacketReceiver,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,

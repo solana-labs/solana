@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 /// CrdsValue that is replicated across the cluster
+#[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum CrdsValue {
     /// * Merge Strategy - Latest wallclock is picked

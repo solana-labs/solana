@@ -30,7 +30,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
-use solana_sdk::account::{Account, LamportCredit};
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -76,9 +76,6 @@ pub struct AccountInfo {
 }
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
-pub type InstructionAccounts = Vec<Account>;
-pub type InstructionCredits = Vec<LamportCredit>;
-pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
 // Each fork has a set of storage entries.
 type ForkStores = HashMap<usize, Arc<AccountStorageEntry>>;
@@ -427,13 +424,10 @@ impl AccountsDB {
         }
     }
 
-    pub fn paths(&self) -> String {
-        let paths: Vec<String> = self
-            .paths
-            .read()
-            .unwrap()
+    pub fn format_paths<P: AsRef<Path>>(paths: Vec<P>) -> String {
+        let paths: Vec<String> = paths
             .iter()
-            .map(|p| p.to_str().unwrap().to_owned())
+            .map(|p| p.as_ref().to_str().unwrap().to_owned())
             .collect();
         paths.join(",")
     }
@@ -460,6 +454,8 @@ impl AccountsDB {
                     let path_index = thread_rng().gen_range(0, local_account_paths.len());
                     let local_dir = &local_account_paths[path_index];
 
+                    std::fs::create_dir_all(local_dir).expect("Create directory failed");
+
                     // Move the corresponding AppendVec from the snapshot into the directory pointed
                     // at by `local_dir`
                     let append_vec_relative_path =
@@ -468,8 +464,13 @@ impl AccountsDB {
                         append_vecs_path.as_ref().join(&append_vec_relative_path);
                     let mut copy_options = CopyOptions::new();
                     copy_options.overwrite = true;
-                    fs_extra::move_items(&vec![append_vec_abs_path], &local_dir, &copy_options)
-                        .map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
+                    fs_extra::move_items(&vec![&append_vec_abs_path], &local_dir, &copy_options)
+                        .map_err(|e| {
+                            AccountsDB::get_io_error(&format!(
+                                "Unable to move {:?} to {:?}: {}",
+                                append_vec_abs_path, local_dir, e
+                            ))
+                        })?;
 
                     // Notify the AppendVec of the new file location
                     let local_path = local_dir.join(append_vec_relative_path);
@@ -1344,9 +1345,9 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
-        assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());;
+        assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());
         accounts.purge_fork(0);
-        assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_none());;
+        assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_none());
     }
 
     #[test]
@@ -1417,7 +1418,11 @@ pub mod tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(None);
-        let local_paths = daccounts.paths();
+
+        let local_paths = {
+            let paths = daccounts.paths.read().unwrap();
+            AccountsDB::format_paths(paths.to_vec())
+        };
         let copied_accounts = TempDir::new().unwrap();
         // Simulate obtaining a copy of the AppendVecs from a tarball
         copy_append_vecs(&accounts, copied_accounts.path()).unwrap();

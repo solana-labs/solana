@@ -1,8 +1,7 @@
 use bincode::{deserialize_from, serialize_into, serialized_size};
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{account::Account, pubkey::Pubkey, Epoch};
 use std::fmt;
 use std::fs::{create_dir_all, remove_file, OpenOptions};
 use std::io;
@@ -38,6 +37,8 @@ pub struct AccountBalance {
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
 }
 
 /// References to Memory Mapped memory
@@ -57,6 +58,7 @@ impl<'a> StoredAccount<'a> {
             lamports: self.balance.lamports,
             owner: self.balance.owner,
             executable: self.balance.executable,
+            rent_epoch: self.balance.rent_epoch,
             data: self.data.to_vec(),
         }
     }
@@ -281,6 +283,7 @@ impl AppendVec {
                 lamports: account.lamports,
                 owner: account.owner,
                 executable: account.executable,
+                rent_epoch: account.rent_epoch,
             };
             let balance_ptr = &balance as *const AccountBalance;
             let data_len = storage_meta.data_len as usize;

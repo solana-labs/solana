@@ -27,34 +27,34 @@ commands in the following pages.
 If you are bootstrapping with `solana-install`, you can specify the release tag or named channel to install to match your desired testnet.
 
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.5/install/solana-install-init.sh | sh -s - 0.17.2
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s - 0.18.0
 ```
 
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.5/install/solana-install-init.sh | sh -s - beta
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s - beta
 ```
 
 Similarly, you can add this argument to the `solana-install` command if you've built the program from source:
 ```bash
-$ solana-install init 0.17.2
+$ solana-install init 0.18.0
 ```
 
 If you are downloading pre-compiled binaries or building from source, simply choose the release matching your desired testnet.
 
 ### Validator Commands
-Solana CLI tools like solana-wallet and solana-validator-info point at
+Solana CLI tools like solana and solana-validator-info point at
 testnet.solana.com by default. Include a `--url` argument to point at a
 different testnet. For instance:
 ```bash
-$ solana-wallet --url http://beta.testnet.solana.com:8899 balance
+$ solana --url http://beta.testnet.solana.com:8899 balance
 ```
 
-Solana-wallet includes `get` and `set` configuration commands to automatically
+The solana cli includes `get` and `set` configuration commands to automatically
 set the `--url` argument for future wallet commands.
 For example:
 ```bash
-$ solana-wallet set --url http://beta.testnet.solana.com:8899
-$ solana-wallet balance # Same result as command above
+$ solana set --url http://beta.testnet.solana.com:8899
+$ solana balance # Same result as command above
 ```
 (You can always override the set configuration by explicitly passing the `--url`
 argument with a command.)

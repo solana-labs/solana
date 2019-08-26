@@ -26,6 +26,7 @@ use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 pub const FALSE_RATE: f64 = 0.1f64;
+pub const KEYS: f64 = 8f64;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct CrdsFilter {
@@ -37,13 +38,9 @@ pub struct CrdsFilter {
 impl CrdsFilter {
     pub fn new_rand(num_items: usize, max_bytes: usize) -> Self {
         let max_bits = (max_bytes * 8) as f64;
-        let num_keys = Bloom::<Hash>::num_keys(max_bits, num_items as f64);
-        let max_items = Self::max_items(max_bits, FALSE_RATE, num_keys);
+        let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
         let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
-        let keys = (0..num_keys as u64)
-            .map(|_| rand::thread_rng().gen())
-            .collect();
-        let filter = Bloom::new(max_bits as usize, keys);
+        let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
         let seed: u64 = rand::thread_rng().gen_range(0, 2u64.pow(mask_bits));
         let mask = Self::compute_mask(seed, mask_bits);
         CrdsFilter {
@@ -55,8 +52,7 @@ impl CrdsFilter {
     // generates a vec of filters that together hold a complete set of Hashes
     pub fn new_complete_set(num_items: usize, max_bytes: usize) -> Vec<Self> {
         let max_bits = (max_bytes * 8) as f64;
-        let num_keys = Bloom::<Hash>::num_keys(max_bits, num_items as f64);
-        let max_items = Self::max_items(max_bits, FALSE_RATE, num_keys);
+        let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
         let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
         // for each possible mask combination, generate a new filter.
         let mut filters = vec![];
@@ -598,7 +594,6 @@ mod test {
             run_test_mask(i);
         }
     }
-
     fn run_test_mask(mask_bits: u32) {
         let masks: Vec<_> = (0..2u64.pow(mask_bits))
             .into_iter()

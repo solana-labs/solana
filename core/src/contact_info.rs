@@ -20,6 +20,8 @@ pub struct ContactInfo {
     pub gossip: SocketAddr,
     /// address to connect to for replication
     pub tvu: SocketAddr,
+    /// address to forward blobs to
+    pub tvu_forwards: SocketAddr,
     /// transactions address
     pub tpu: SocketAddr,
     /// address to forward unprocessed transactions to
@@ -77,6 +79,7 @@ impl Default for ContactInfo {
             id: Pubkey::default(),
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
+            tvu_forwards: socketaddr_any!(),
             tpu: socketaddr_any!(),
             tpu_forwards: socketaddr_any!(),
             storage_addr: socketaddr_any!(),
@@ -89,10 +92,12 @@ impl Default for ContactInfo {
 }
 
 impl ContactInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: &Pubkey,
         gossip: SocketAddr,
         tvu: SocketAddr,
+        tvu_forwards: SocketAddr,
         tpu: SocketAddr,
         tpu_forwards: SocketAddr,
         storage_addr: SocketAddr,
@@ -105,6 +110,7 @@ impl ContactInfo {
             signature: Signature::default(),
             gossip,
             tvu,
+            tvu_forwards,
             tpu,
             tpu_forwards,
             storage_addr,
@@ -124,6 +130,7 @@ impl ContactInfo {
             socketaddr!("127.0.0.1:1238"),
             socketaddr!("127.0.0.1:1239"),
             socketaddr!("127.0.0.1:1240"),
+            socketaddr!("127.0.0.1:1241"),
             now,
         )
     }
@@ -135,6 +142,7 @@ impl ContactInfo {
         assert!(addr.ip().is_multicast());
         Self::new(
             &Pubkey::new_rand(),
+            addr,
             addr,
             addr,
             addr,
@@ -158,12 +166,14 @@ impl ContactInfo {
         let gossip_addr = next_port(&bind_addr, 1);
         let tvu_addr = next_port(&bind_addr, 2);
         let tpu_forwards_addr = next_port(&bind_addr, 3);
+        let tvu_forwards_addr = next_port(&bind_addr, 4);
         let rpc_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         Self::new(
             pubkey,
             gossip_addr,
             tvu_addr,
+            tvu_forwards_addr,
             tpu_addr,
             tpu_forwards_addr,
             "0.0.0.0:0".parse().unwrap(),
@@ -185,6 +195,7 @@ impl ContactInfo {
         Self::new(
             &Pubkey::default(),
             *gossip_addr,
+            daddr,
             daddr,
             daddr,
             daddr,

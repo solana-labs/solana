@@ -1,4 +1,4 @@
-use crate::timing::DEFAULT_NUM_TICKS_PER_SECOND;
+use crate::timing::DEFAULT_TICKS_PER_SECOND;
 use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -24,6 +24,6 @@ impl PohConfig {
 
 impl Default for PohConfig {
     fn default() -> Self {
-        Self::new_sleep(Duration::from_millis(1000 / DEFAULT_NUM_TICKS_PER_SECOND))
+        Self::new_sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND))
     }
 }

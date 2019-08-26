@@ -1,7 +1,7 @@
 
 [package]
 name = "solana-sdk-bpf-utils"
-version = "0.18.0-pre1"
+version = "0.18.0-pre2"
 description = "Solana BPF SDK Rust Utils"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"

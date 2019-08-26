@@ -95,15 +95,15 @@ fi
 
 if ((airdrops_enabled)); then
   declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
-  $solana_wallet "${common_args[@]}" airdrop $((stake_lamports+fees))
+  $solana_cli "${common_args[@]}" airdrop $((stake_lamports+fees))
 fi
 
 $solana_keygen new -o "$stake_keypair_path"
 
 set -x
-$solana_wallet "${common_args[@]}" \
+$solana_cli "${common_args[@]}" \
   show-vote-account "$vote_keypair_path"
-$solana_wallet "${common_args[@]}" \
+$solana_cli "${common_args[@]}" \
   delegate-stake $maybe_force "$stake_keypair_path" "$vote_keypair_path" "$stake_lamports"
-$solana_wallet "${common_args[@]}" show-stake-account "$stake_keypair_path"
+$solana_cli "${common_args[@]}" show-stake-account "$stake_keypair_path"
 

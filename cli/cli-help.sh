@@ -3,11 +3,11 @@ set -e
 
 cd "$(dirname "$0")"/..
 
-cargo build --package solana-wallet
+cargo build --package solana-cli
 export PATH=$PWD/target/debug:$PATH
 
 echo "\`\`\`manpage"
-solana-wallet --help
+solana --help
 echo "\`\`\`"
 echo ""
 
@@ -15,7 +15,7 @@ commands=(address airdrop balance cancel confirm deploy fees get-transaction-cou
 
 for x in "${commands[@]}"; do
     echo "\`\`\`manpage"
-    solana-wallet "${x}" --help
+    solana "${x}" --help
     echo "\`\`\`"
     echo ""
 done

@@ -1,6 +1,6 @@
 //! configuration for network inflation
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Copy)]
 pub struct Inflation {
     /// Initial inflation percentage, from time=0
     pub initial: f64,

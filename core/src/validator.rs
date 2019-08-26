@@ -22,6 +22,7 @@ use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
 use solana_metrics::datapoint_info;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -38,6 +39,7 @@ use std::thread::Result;
 pub struct ValidatorConfig {
     pub dev_sigverify_disabled: bool,
     pub dev_halt_at_slot: Option<Slot>,
+    pub expected_genesis_blockhash: Option<Hash>,
     pub voting_disabled: bool,
     pub blockstream_unix_socket: Option<PathBuf>,
     pub storage_slots_per_turn: u64,
@@ -54,6 +56,7 @@ impl Default for ValidatorConfig {
         Self {
             dev_sigverify_disabled: false,
             dev_halt_at_slot: None,
+            expected_genesis_blockhash: None,
             voting_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
@@ -67,9 +70,26 @@ impl Default for ValidatorConfig {
     }
 }
 
+#[derive(Default)]
+pub struct ValidatorExit {
+    exits: Vec<Box<dyn FnOnce() + Send + Sync>>,
+}
+
+impl ValidatorExit {
+    pub fn register_exit(&mut self, exit: Box<dyn FnOnce() -> () + Send + Sync>) {
+        self.exits.push(exit);
+    }
+
+    pub fn exit(self) {
+        for exit in self.exits {
+            exit();
+        }
+    }
+}
+
 pub struct Validator {
     pub id: Pubkey,
-    exit: Arc<AtomicBool>,
+    validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
     gossip_service: GossipService,
@@ -119,6 +139,7 @@ impl Validator {
 
         info!("creating bank...");
         let (
+            genesis_blockhash,
             bank_forks,
             bank_forks_info,
             blocktree,
@@ -127,6 +148,7 @@ impl Validator {
             leader_schedule_cache,
             poh_config,
         ) = new_banks_from_blocktree(
+            config.expected_genesis_blockhash,
             ledger_path,
             config.account_paths.clone(),
             config.snapshot_config.clone(),
@@ -139,6 +161,11 @@ impl Validator {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
+
+        let mut validator_exit = ValidatorExit::default();
+        let exit_ = exit.clone();
+        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
         node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
@@ -162,7 +189,8 @@ impl Validator {
                 config.rpc_config.clone(),
                 bank_forks.clone(),
                 ledger_path,
-                &exit,
+                genesis_blockhash,
+                &validator_exit,
             ))
         };
 
@@ -259,6 +287,12 @@ impl Validator {
                 .iter()
                 .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
                 .collect(),
+            forwards: node
+                .sockets
+                .tvu_forwards
+                .iter()
+                .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
+                .collect(),
         };
 
         let voting_keypair = if config.voting_disabled {
@@ -312,19 +346,21 @@ impl Validator {
             rpc_pubsub_service,
             tpu,
             tvu,
-            exit,
             poh_service,
             poh_recorder,
             ip_echo_server,
+            validator_exit,
         }
     }
 
     // Used for notifying many nodes in parallel to exit
-    pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
+    pub fn exit(&mut self) {
+        if let Some(x) = self.validator_exit.write().unwrap().take() {
+            x.exit()
+        }
     }
 
-    pub fn close(self) -> Result<()> {
+    pub fn close(mut self) -> Result<()> {
         self.exit();
         self.join()
     }
@@ -339,22 +375,20 @@ fn get_bank_forks(
     dev_halt_at_slot: Option<Slot>,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) = {
-        let mut result = None;
-        if snapshot_config.is_some() {
-            let snapshot_config = snapshot_config.as_ref().unwrap();
-
-            // Blow away any remnants in the snapshots directory
-            let _ = fs::remove_dir_all(snapshot_config.snapshot_path());
-            fs::create_dir_all(&snapshot_config.snapshot_path())
+        if let Some(snapshot_config) = snapshot_config.as_ref() {
+            info!(
+                "Initializing snapshot path: {:?}",
+                snapshot_config.snapshot_path
+            );
+            let _ = fs::remove_dir_all(&snapshot_config.snapshot_path);
+            fs::create_dir_all(&snapshot_config.snapshot_path)
                 .expect("Couldn't create snapshot directory");
 
-            // Get the path to the tar
             let tar = snapshot_utils::get_snapshot_tar_path(
-                &snapshot_config.snapshot_package_output_path(),
+                &snapshot_config.snapshot_package_output_path,
             );
-
-            // Check that the snapshot tar exists, try to load the snapshot if it does
             if tar.exists() {
+                info!("Loading snapshot package: {:?}", tar);
                 // Fail hard here if snapshot fails to load, don't silently continue
                 let deserialized_bank = snapshot_utils::bank_from_archive(
                     account_paths
@@ -365,33 +399,29 @@ fn get_bank_forks(
                 )
                 .expect("Load from snapshot failed");
 
-                result = Some(
-                    blocktree_processor::process_blocktree_from_root(
-                        blocktree,
-                        Arc::new(deserialized_bank),
-                        verify_ledger,
-                        dev_halt_at_slot,
-                    )
-                    .expect("processing blocktree after loading snapshot failed"),
-                );
-            }
-        }
-
-        // If a snapshot doesn't exist
-        if result.is_none() {
-            result = Some(
-                blocktree_processor::process_blocktree(
-                    &genesis_block,
-                    &blocktree,
-                    account_paths,
+                return blocktree_processor::process_blocktree_from_root(
+                    blocktree,
+                    Arc::new(deserialized_bank),
                     verify_ledger,
                     dev_halt_at_slot,
                 )
-                .expect("process_blocktree failed"),
-            );
+                .expect("processing blocktree after loading snapshot failed");
+            } else {
+                info!("Snapshot package does not exist: {:?}", tar);
+            }
+        } else {
+            info!("Snapshots disabled");
         }
 
-        result.unwrap()
+        info!("Processing ledger from genesis");
+        blocktree_processor::process_blocktree(
+            &genesis_block,
+            &blocktree,
+            account_paths,
+            verify_ledger,
+            dev_halt_at_slot,
+        )
+        .expect("process_blocktree failed")
     };
 
     if snapshot_config.is_some() {
@@ -401,13 +431,54 @@ fn get_bank_forks(
     (bank_forks, bank_forks_info, leader_schedule_cache)
 }
 
+#[cfg(not(unix))]
+fn adjust_ulimit_nofile() {}
+
+#[cfg(unix)]
+fn adjust_ulimit_nofile() {
+    // Rocks DB likes to have many open files.  The default open file descriptor limit is
+    // usually not enough
+    let desired_nofile = 65000;
+
+    fn get_nofile() -> libc::rlimit {
+        let mut nofile = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut nofile) } != 0 {
+            warn!("getrlimit(RLIMIT_NOFILE) failed");
+        }
+        nofile
+    }
+
+    let mut nofile = get_nofile();
+    if nofile.rlim_cur < desired_nofile {
+        nofile.rlim_cur = desired_nofile;
+        if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &nofile) } != 0 {
+            error!(
+                "Unable to increase the maximum open file descriptor limit to {}",
+                desired_nofile
+            );
+
+            if cfg!(target_os = "macos") {
+                error!("On mac OS you may need to run |sudo launchctl limit maxfiles 65536 200000| first");
+            }
+        }
+
+        nofile = get_nofile();
+    }
+    info!("Maximum open file descriptors: {}", nofile.rlim_cur);
+}
+
 pub fn new_banks_from_blocktree(
+    expected_genesis_blockhash: Option<Hash>,
     blocktree_path: &Path,
     account_paths: Option<String>,
     snapshot_config: Option<SnapshotConfig>,
     verify_ledger: bool,
     dev_halt_at_slot: Option<Slot>,
 ) -> (
+    Hash,
     BankForks,
     Vec<BankForksInfo>,
     Blocktree,
@@ -416,12 +487,22 @@ pub fn new_banks_from_blocktree(
     LeaderScheduleCache,
     PohConfig,
 ) {
-    let genesis_block =
-        GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
+    let genesis_block = GenesisBlock::load(blocktree_path).expect("Failed to load genesis block");
+    let genesis_blockhash = genesis_block.hash();
+
+    if let Some(expected_genesis_blockhash) = expected_genesis_blockhash {
+        if genesis_blockhash != expected_genesis_blockhash {
+            panic!(
+                "Genesis blockhash mismatch: expected {} but local genesis blockhash is {}",
+                expected_genesis_blockhash, genesis_blockhash,
+            );
+        }
+    }
+
+    adjust_ulimit_nofile();
 
     let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
-        Blocktree::open_with_signal(blocktree_path)
-            .expect("Expected to successfully open database ledger");
+        Blocktree::open_with_signal(blocktree_path).expect("Failed to open ledger database");
 
     let (bank_forks, bank_forks_info, leader_schedule_cache) = get_bank_forks(
         &genesis_block,
@@ -433,6 +514,7 @@ pub fn new_banks_from_blocktree(
     );
 
     (
+        genesis_blockhash,
         bank_forks,
         bank_forks_info,
         blocktree,
@@ -543,7 +625,7 @@ mod tests {
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
-        let validators: Vec<Validator> = (0..2)
+        let mut validators: Vec<Validator> = (0..2)
             .map(|_| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
@@ -569,7 +651,7 @@ mod tests {
             .collect();
 
         // Each validator can exit in parallel to speed many sequential calls to `join`
-        validators.iter().for_each(|v| v.exit());
+        validators.iter_mut().for_each(|v| v.exit());
         // While join is called sequentially, the above exit call notified all the
         // validators to exit from all their threads
         validators.into_iter().for_each(|validator| {

@@ -53,8 +53,7 @@ software.
 
 ##### Linux and mac OS
 ```bash
-$ export SOLANA_RELEASE=v0.16.0  # skip this line to install the latest release
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.0/install/solana-install-init.sh | sh -s
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s
 ```
 
 Alternatively build the `solana-install` program from source and run the
@@ -130,10 +129,10 @@ $ export STORAGE_IDENTITY=$(solana-keygen pubkey storage-keypair.json)
 ```
 Then set up the storage accounts for your replicator by running:
 ```bash
-$ solana-wallet --keypair replicator-keypair.json airdrop 100000
-$ solana-wallet --keypair replicator-keypair.json create-replicator-storage-account $REPLICATOR_IDENTITY $STORAGE_IDENTITY
+$ solana --keypair replicator-keypair.json airdrop 100000
+$ solana --keypair replicator-keypair.json create-replicator-storage-account $REPLICATOR_IDENTITY $STORAGE_IDENTITY
 ```
-Note: Every time the testnet restarts, run the wallet steps to setup the replicator accounts again.
+Note: Every time the testnet restarts, run the steps to setup the replicator accounts again.
 
 To start the replicator:
 ```bash
@@ -147,8 +146,8 @@ gossip network by running:
 $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
-Provide the **storage account pubkey** to the `solana-wallet show-storage-account` command to view
+Provide the **storage account pubkey** to the `solana show-storage-account` command to view
 the recent mining activity from your replicator:
 ```bash
-$ solana-wallet --keypair storage-keypair.json show-storage-account $STORAGE_IDENTITY
+$ solana --keypair storage-keypair.json show-storage-account $STORAGE_IDENTITY
 ```

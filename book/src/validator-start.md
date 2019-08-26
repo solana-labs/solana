@@ -22,10 +22,10 @@ for more detail on cluster activity.
 Sanity check that you are able to interact with the cluster by receiving a small
 airdrop of lamports from the testnet drone:
 ```bash
-$ solana-wallet set --url http://testnet.solana.com:8899
-$ solana-wallet get
-$ solana-wallet airdrop 123
-$ solana-wallet balance
+$ solana set --url http://testnet.solana.com:8899
+$ solana get
+$ solana airdrop 123
+$ solana balance
 ```
 
 Also try running following command to join the gossip network and view all the
@@ -42,17 +42,17 @@ $ solana-keygen new -o ~/validator-keypair.json
 ```
 
 ### Wallet Configuration
-You can set solana-wallet configuration to use your validator keypair for all
+You can set solana configuration to use your validator keypair for all
 following commands:
 ```bash
-$ solana-wallet set --keypair ~/validator-keypair.json
+$ solana set --keypair ~/validator-keypair.json
 ```
 
-**All following solana-wallet commands assume you have set `--keypair` config to
+**All following solana commands assume you have set `--keypair` config to
 **your validator identity keypair.**
 If you haven't, you will need to add the `--keypair` argument to each command, like:
 ```bash
-$ solana-wallet --keypair ~/validator-keypair.json airdrop 1000
+$ solana --keypair ~/validator-keypair.json airdrop 1000
 ```
 (You can always override the set configuration by explicitly passing the
 `--keypair` argument with a command.)
@@ -60,14 +60,14 @@ $ solana-wallet --keypair ~/validator-keypair.json airdrop 1000
 ### Validator Start
 Airdrop yourself some lamports to get started:
 ```bash
-$ solana-wallet airdrop 1000
+$ solana airdrop 1000
 ```
 
 Your validator will need a vote account.  Create it now with the following
 commands:
 ```bash
 $ solana-keygen new -o ~/validator-vote-keypair.json
-$ solana-wallet create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json 1
+$ solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json 1
 ```
 
 Then use one of the following commands, depending on your installation

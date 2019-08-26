@@ -1,9 +1,9 @@
 use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
+use solana_cli::config::{self, Config};
+use solana_cli::display::println_name_value;
+use solana_cli::wallet::{app, parse_command, process_command, WalletConfig, WalletError};
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
-use solana_wallet::config::{self, Config};
-use solana_wallet::display::println_name_value;
-use solana_wallet::wallet::{app, parse_command, process_command, WalletConfig, WalletError};
 use std::error;
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {

@@ -4,13 +4,13 @@ use rand;
 extern crate test;
 
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
-use solana::blocktree::{get_tmp_ledger_path, Blocktree};
-use solana::entry::{make_large_test_entries, make_tiny_test_entries, EntrySlice};
-use solana::packet::{Blob, BLOB_HEADER_SIZE};
+use solana_core::blocktree::{get_tmp_ledger_path, Blocktree};
+use solana_core::entry::{make_large_test_entries, make_tiny_test_entries, EntrySlice};
+use solana_core::packet::{Blob, BLOB_HEADER_SIZE};
 use std::path::Path;
 use test::Bencher;
 
@@ -111,7 +111,7 @@ fn bench_read_sequential(bench: &mut Bencher) {
         // Generate random starting point in the range [0, total_blobs - 1], read num_reads blobs sequentially
         let start_index = rng.gen_range(0, num_small_blobs + num_large_blobs);
         for i in start_index..start_index + num_reads {
-            let _ = blocktree.get_data_blob(slot, i as u64 % total_blobs);
+            let _ = blocktree.get_data_shred_as_blob(slot, i as u64 % total_blobs);
         }
     });
 
@@ -142,7 +142,7 @@ fn bench_read_random(bench: &mut Bencher) {
         .collect();
     bench.iter(move || {
         for i in indexes.iter() {
-            let _ = blocktree.get_data_blob(slot, *i as u64);
+            let _ = blocktree.get_data_shred_as_blob(slot, *i as u64);
         }
     });
 

@@ -1,15 +1,15 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
 use clap::{
     crate_description, crate_name, crate_version, value_t_or_exit, App, AppSettings, Arg,
     SubCommand,
 };
-use solana::contact_info::ContactInfo;
-use solana::gossip_service::discover;
 use solana_client::rpc_client::RpcClient;
+use solana_core::contact_info::ContactInfo;
+use solana_core::gossip_service::discover;
 use solana_sdk::pubkey::Pubkey;
 use std::error;
 use std::net::SocketAddr;

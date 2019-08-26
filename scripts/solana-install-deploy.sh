@@ -72,10 +72,10 @@ PATH="$SOLANA_ROOT"/target/debug:$PATH
 
 set -x
 # shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair
-balance=$(solana-wallet $maybeKeypair --url "$URL" balance)
+balance=$(solana $maybeKeypair --url "$URL" balance)
 if [[ $balance = "0 lamports" ]]; then
   # shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair
-  solana-wallet $maybeKeypair --url "$URL" airdrop 42
+  solana $maybeKeypair --url "$URL" airdrop 42
 fi
 
 # shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair

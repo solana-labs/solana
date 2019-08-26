@@ -26,7 +26,11 @@ fi
 if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
   solana_program() {
     declare program="$1"
-    printf "solana-%s" "$program"
+    if [[ -z $program ]]; then
+      printf "solana"
+    else
+      printf "solana-%s" "$program"
+    fi
   }
 else
   solana_program() {
@@ -36,14 +40,23 @@ else
       program=${BASH_REMATCH[1]}
       features+="cuda"
     fi
-    if [[ -r "$SOLANA_ROOT/$program"/Cargo.toml ]]; then
-      maybe_package="--package solana-$program"
+
+    declare crate="$program"
+    if [[ -z $program ]]; then
+      crate="cli"
+      program="solana"
+    else
+      program="solana-$program"
+    fi
+
+    if [[ -r "$SOLANA_ROOT/$crate"/Cargo.toml ]]; then
+      maybe_package="--package solana-$crate"
     fi
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
     fi
-    declare manifest_path="--manifest-path=$SOLANA_ROOT/$program/Cargo.toml"
-    printf "cargo run $manifest_path $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
+    declare manifest_path="--manifest-path=$SOLANA_ROOT/$crate/Cargo.toml"
+    printf "cargo run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program" "$features"
   }
 fi
 
@@ -55,7 +68,7 @@ solana_genesis=$(solana_program genesis)
 solana_gossip=$(solana_program gossip)
 solana_keygen=$(solana_program keygen)
 solana_ledger_tool=$(solana_program ledger-tool)
-solana_wallet=$(solana_program wallet)
+solana_cli=$(solana_program)
 solana_replicator=$(solana_program replicator)
 
 export RUST_BACKTRACE=1

@@ -12,7 +12,7 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [-e] [-d] [-c] [username]
+usage: $0 [-e] [-d] [username]
 
 Creates a testnet dev metrics database
 
@@ -59,6 +59,8 @@ else
   read -rs -p "InfluxDB password for $username: " password
   [[ -n $password ]] || { echo "Password not specified"; exit 1; }
   echo
+
+  password="$(urlencode "$password")"
 
   query() {
     echo "$*"

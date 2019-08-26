@@ -2,12 +2,12 @@
 extern crate log;
 
 use rayon::iter::*;
-use solana::cluster_info::{ClusterInfo, Node};
-use solana::gossip_service::GossipService;
+use solana_core::cluster_info::{ClusterInfo, Node};
+use solana_core::gossip_service::GossipService;
 
-use solana::packet::{Blob, SharedBlob};
-use solana::result;
-use solana::service::Service;
+use solana_core::packet::Packet;
+use solana_core::result;
+use solana_core::service::Service;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
@@ -174,16 +174,16 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
         sleep(Duration::new(1, 0));
     }
     assert!(done);
-    let b = SharedBlob::default();
-    b.write().unwrap().meta.size = 10;
+    let mut p = Packet::default();
+    p.meta.size = 10;
     let peers = c1.read().unwrap().retransmit_peers();
-    ClusterInfo::retransmit_to(&c1, &peers, &b, None, &tn1, false)?;
+    ClusterInfo::retransmit_to(&c1, &peers, &p, None, &tn1, false)?;
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {
-            let mut b = Blob::default();
+            let mut p = Packet::default();
             s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
-            let res = s.recv_from(&mut b.data);
+            let res = s.recv_from(&mut p.data);
             res.is_err() //true if failed to receive the retransmit packet
         })
         .collect();

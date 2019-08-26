@@ -3,9 +3,6 @@
 # Adjusts system settings for optimal fullnode performance
 #
 
-# shellcheck source=scripts/ulimit-n.sh
-source "$(dirname "${BASH_SOURCE[0]}")"/ulimit-n.sh
-
 sysctl_write() {
   declare name=$1
   declare new_value=$2
@@ -39,11 +36,6 @@ Linux)
   sysctl_write net.core.rmem_default 161061273
   sysctl_write net.core.wmem_max 161061273
   sysctl_write net.core.wmem_default 161061273
-  ;;
-
-Darwin)
-  # Adjusting maxdgram to allow for large UDP packets, see BLOB_SIZE in core/src/packet.rs
-  sysctl_write net.inet.udp.maxdgram 65535
   ;;
 *)
   ;;

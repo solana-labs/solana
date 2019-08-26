@@ -3,13 +3,13 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-vote-signer"
 description = "Solana Vote Signing Service"
-version = "0.18.0-pre1"
+version = "0.18.0-pre2"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-bs58 = "0.2.0"
+bs58 = "0.2.4"
 clap = "2.33"
 jsonrpc-core = "13.0.0"
 jsonrpc-derive = "13.0.0"
@@ -17,8 +17,8 @@ jsonrpc-http-server = "13.0.0"
 log = "0.4.8"
 serde = "1.0.99"
 serde_json = "1.0.40"
-solana-metrics = { path = "../metrics", version = "0.18.0-pre1" }
-solana-sdk = { path = "../sdk", version = "0.18.0-pre1" }
+solana-metrics = { path = "../metrics", version = "0.18.0-pre2" }
+solana-sdk = { path = "../sdk", version = "0.18.0-pre2" }
 
 [lib]
 crate-type = ["lib"]

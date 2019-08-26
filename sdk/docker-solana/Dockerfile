@@ -1,4 +1,4 @@
-FROM debian:stretch
+FROM debian:buster
 
 # JSON RPC port
 EXPOSE 8899/tcp
