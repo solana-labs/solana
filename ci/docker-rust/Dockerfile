@@ -19,6 +19,7 @@ RUN set -x \
       lcov \
       libclang-common-7-dev \
       mscgen \
+      net-tools \
       rsync \
       sudo \
       golang \
