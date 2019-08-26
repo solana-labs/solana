@@ -8,6 +8,10 @@ pub fn work(x: u128, y: u128) -> u128 {
     x + y
 }
 
+pub fn two_thirds(x: u128) -> u128 {
+    2 * x / 3
+}
+
 #[cfg(test)]
 mod test {
     extern crate std;
