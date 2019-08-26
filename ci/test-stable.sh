@@ -86,6 +86,12 @@ esac
 
 # Assumes target/debug is populated. Ensure last build command
 # leaves target/debug in the state intended for localnet-sanity
+echo --- ps
+ps aux
+echo --- lsof
+lsof || true
+echo --- netstat
+netstat -n --protocol=ip --all
 echo --- ci/localnet-sanity.sh
 (
   set -x
