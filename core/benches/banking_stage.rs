@@ -17,6 +17,9 @@ use solana_core::packet::to_packets_chunked;
 use solana_core::poh_recorder::WorkingBankEntries;
 use solana_core::service::Service;
 use solana_core::test_tx::test_tx;
+use solana_core::entry::next_hash;
+use solana_core::entry::Entry;
+use solana_core::blocktree_processor::process_entries;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -263,4 +266,87 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 #[bench]
 fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     bench_banking(bencher, TransactionType::Programs);
+}
+
+fn bench_process_entry(randomize_txs: bool) {
+    // entropy multiplier should be big enough to provide sufficient entropy
+    // but small enough to not take too much time while executing the test.
+    let entropy_multiplier: usize = 25;
+    let initial_lamports = 100;
+
+    // number of accounts need to be in multiple of 4 for correct
+    // execution of the test.
+    let num_accounts = entropy_multiplier * 4;
+    let GenesisBlockInfo {
+        genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block((num_accounts + 1) as u64 * initial_lamports);
+
+    let bank = Bank::new(&genesis_block);
+
+    let mut keypairs: Vec<Keypair> = vec![];
+
+    for _ in 0..num_accounts {
+        let keypair = Keypair::new();
+        let create_account_tx = system_transaction::create_user_account(
+            &mint_keypair,
+            &keypair.pubkey(),
+            0,
+            bank.last_blockhash(),
+        );
+        assert_eq!(bank.process_transaction(&create_account_tx), Ok(()));
+        bank.transfer(initial_lamports, &mint_keypair, &keypair.pubkey()).unwrap();
+        keypairs.push(keypair);
+    }
+
+    let mut tx_vector: Vec<Transaction> = vec![];
+    let mut i = 0;
+
+    loop {
+        if i >= num_accounts {
+            break;
+        }
+
+        tx_vector.append(&mut vec![
+            system_transaction::transfer(
+                &keypairs[i + 1],
+                &keypairs[i].pubkey(),
+                initial_lamports,
+                bank.last_blockhash(),
+            ),
+            system_transaction::transfer(
+                &keypairs[i + 3],
+                &keypairs[i + 2].pubkey(),
+                initial_lamports,
+                bank.last_blockhash(),
+            ),
+        ]);
+
+        i = i + 4;
+    }
+
+    // Transfer lamports to each other
+    let entry = Entry {
+        num_hashes: 1,
+        hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
+        transactions: tx_vector,
+    };
+    process_entries(&bank, &vec![entry], randomize_txs).unwrap();
+}
+
+#[bench]
+fn bench_transaction_processing_without_order_shuffling(bencher: &mut Bencher) {
+    let vec: Vec<usize> = (0..100_usize).collect();
+    bencher.iter(|| {
+        bench_process_entry(false);
+    });
+}
+
+#[bench]
+fn bench_transaction_processing_with_order_shuffling(bencher: &mut Bencher) {
+    let vec: Vec<usize> = (0..100_usize).collect();
+    bencher.iter(|| {
+        bench_process_entry(true);
+    });
 }
