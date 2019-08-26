@@ -89,7 +89,7 @@
     "@commitlint/config-conventional": "^8.0.0",
     "@commitlint/travis-cli": "^8.0.0",
     "acorn": "^7.0.0",
-    "babel-eslint": "10.0.2",
+    "babel-eslint": "10.0.3",
     "babel-plugin-module-resolver": "3.2.0",
     "codecov": "^3.0.4",
     "cross-env": "5.2.0",
