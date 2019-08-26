@@ -41,3 +41,6 @@ tempfile = "3.1.0"
 [lib]
 crate-type = ["lib"]
 name = "solana_runtime"
+
+[dev-dependencies]
+solana-noop-program = { path = "../programs/noop_program", version = "0.19.0-pre0" }

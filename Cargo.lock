@@ -3702,6 +3702,7 @@ dependencies = [
  "solana-logger 0.19.0-pre0",
  "solana-measure 0.19.0-pre0",
  "solana-metrics 0.19.0-pre0",
+ "solana-noop-program 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
  "solana-stake-api 0.19.0-pre0",
  "solana-stake-program 0.19.0-pre0",
