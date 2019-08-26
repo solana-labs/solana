@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-ledger-tool"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.18.0-pre2"
+version = "0.19.0-pre0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -15,10 +15,10 @@ serde = "1.0.99"
 serde_derive = "1.0.99"
 serde_json = "1.0.40"
 serde_yaml = "0.8.9"
-solana-core = { path = "../core", version = "0.18.0-pre2" }
-solana-logger = { path = "../logger", version = "0.18.0-pre2" }
-solana-runtime = { path = "../runtime", version = "0.18.0-pre2" }
-solana-sdk = { path = "../sdk", version = "0.18.0-pre2" }
+solana-core = { path = "../core", version = "0.19.0-pre0" }
+solana-logger = { path = "../logger", version = "0.19.0-pre0" }
+solana-runtime = { path = "../runtime", version = "0.19.0-pre0" }
+solana-sdk = { path = "../sdk", version = "0.19.0-pre0" }
 
 [dev-dependencies]
 assert_cmd = "0.11"
