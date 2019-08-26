@@ -439,7 +439,12 @@ where
                 }
             };
             if let Err(e) = batch.delete::<C>(index) {
-                error!("Error: {:?} while adding delete to batch {:?}", e, C::NAME)
+                error!(
+                    "Error: {:?} while adding delete from_slot {:?} to batch {:?}",
+                    e,
+                    from,
+                    C::NAME
+                )
             }
         }
         Ok(end)
