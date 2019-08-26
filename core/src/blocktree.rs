@@ -435,15 +435,16 @@ impl Blocktree {
                         &mut write_batch,
                     )
                 }
-            } else {
-                let _ = Blocktree::insert_data_shred(
-                    db,
-                    &mut just_inserted_data_shreds,
-                    &mut slot_meta_working_set,
-                    &mut index_working_set,
-                    shred,
-                    &mut write_batch,
-                );
+            } else if Blocktree::insert_data_shred(
+                db,
+                &mut slot_meta_working_set,
+                &mut index_working_set,
+                &shred,
+                &mut write_batch,
+            )
+            .unwrap_or(false)
+            {
+                just_inserted_data_shreds.insert((slot, shred_index), shred);
             }
         });
 
@@ -458,10 +459,9 @@ impl Blocktree {
         recovered_data.into_iter().for_each(|shred| {
             let _ = Blocktree::insert_data_shred(
                 db,
-                &mut just_inserted_data_shreds,
                 &mut slot_meta_working_set,
                 &mut index_working_set,
-                shred,
+                &shred,
                 &mut write_batch,
             );
         });
@@ -544,10 +544,9 @@ impl Blocktree {
 
     fn insert_data_shred(
         db: &Database,
-        prev_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
         mut slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
         index_working_set: &mut HashMap<u64, Index>,
-        shred: Shred,
+        shred: &Shred,
         write_batch: &mut WriteBatch,
     ) -> Result<bool> {
         let slot = shred.slot();
@@ -577,17 +576,18 @@ impl Blocktree {
                 .unwrap_or(false)
         };
 
-        if !prev_inserted_data_shreds.contains_key(&(slot, index))
+        let index_meta = index_working_set
+            .get_mut(&slot)
+            .expect("Index must be present for all data blobs")
+            .data_mut();
+
+        if !index_meta.is_present(index)
             && should_insert(slot_meta, index, slot, last_in_slot, check_data_cf)
         {
             let new_consumed = if slot_meta.consumed == index {
                 let mut current_index = index + 1;
 
-                while prev_inserted_data_shreds
-                    .get(&(slot, current_index))
-                    .is_some()
-                    || check_data_cf(slot, current_index)
-                {
+                while index_meta.is_present(current_index) || check_data_cf(slot, current_index) {
                     current_index += 1;
                 }
                 current_index
@@ -595,17 +595,12 @@ impl Blocktree {
                 slot_meta.consumed
             };
 
-            let serialized_shred = bincode::serialize(&shred).unwrap();
+            let serialized_shred = bincode::serialize(shred).unwrap();
             write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
 
             update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
-            index_working_set
-                .get_mut(&slot)
-                .expect("Index must be present for all data blobs")
-                .data_mut()
-                .set_present(index, true);
+            index_meta.set_present(index, true);
             trace!("inserted shred into slot {:?} and index {:?}", slot, index);
-            prev_inserted_data_shreds.insert((slot, index), shred);
             Ok(true)
         } else {
             debug!("didn't insert shred");
