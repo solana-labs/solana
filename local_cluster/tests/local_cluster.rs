@@ -286,8 +286,6 @@ fn test_restart_node() {
 
 #[test]
 #[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_listener_startup() {
     let config = ClusterConfig {
         node_stakes: vec![100; 1],
