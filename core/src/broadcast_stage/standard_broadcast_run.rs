@@ -75,7 +75,11 @@ impl BroadcastRun for StandardBroadcastRun {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        let parent_slot = bank.parent().unwrap().slot();
+        let parent_slot = if let Some(parent_bank) = bank.parent() {
+            parent_bank.slot()
+        } else {
+            0
+        };
         let mut all_shreds = vec![];
         let mut all_seeds = vec![];
         let num_ventries = receive_results.ventries.len();
@@ -96,9 +100,10 @@ impl BroadcastRun for StandardBroadcastRun {
                 .expect("Expected to create a new shredder");
 
                 let data = bincode::serialize(&entries).unwrap();
-                shredder
-                    .write_all(&data)
-                    .expect("Expect to shred all entries");
+                let mut offset = 0;
+                while offset < data.len() {
+                    offset += shredder.write(&data[offset..]).unwrap();
+                }
 
                 if i == num_ventries && last_tick == bank.max_tick_height() {
                     shredder.finalize_slot();
@@ -117,7 +122,7 @@ impl BroadcastRun for StandardBroadcastRun {
                 blocktree
                     .insert_shreds(shreds)
                     .expect("Failed to insert shreds in blocktree");
-                latest_blob_index = u64::from(shredder.index);
+                latest_blob_index += u64::from(shreds.len());
                 all_shreds.append(&mut shredder.shreds);
                 all_seeds.append(&mut seeds);
             });

@@ -271,9 +271,10 @@ mod test {
         let mut shredder =
             Shredder::new(0, Some(0), 0.0, keypair, 0).expect("Failed to create entry shredder");
         let data = bincode::serialize(&entries).unwrap();
-        shredder
-            .write_all(&data)
-            .expect("Expect to shred all entries");
+        let mut offset = 0;
+        while offset < data.len() {
+            offset += shredder.write(&data[offset..]).unwrap();
+        }
         shredder.finalize_slot();
         shredder
             .shreds

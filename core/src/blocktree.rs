@@ -760,9 +760,10 @@ impl Blocktree {
             }
 
             let data = bincode::serialize(&vec![entry.borrow().clone()]).unwrap();
-            shredder
-                .write_all(&data)
-                .expect("Expect to shred all entries");
+            let mut offset = 0;
+            while offset < data.len() {
+                offset += shredder.write(&data[offset..]).unwrap();
+            }
             if remaining_ticks_in_slot == 0 {
                 shredder.finalize_slot();
             } else {
@@ -2424,9 +2425,10 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
         .expect("Failed to create entry shredder");
     let last_hash = entries.last().unwrap().hash;
     let data = bincode::serialize(&entries).unwrap();
-    shredder
-        .write_all(&data)
-        .expect("Expect to shred all entries");
+    let mut offset = 0;
+    while offset < data.len() {
+        offset += shredder.write(&data[offset..]).unwrap();
+    }
     shredder.finalize_slot();
     let shreds: Vec<Shred> = shredder
         .shreds
@@ -4770,9 +4772,10 @@ pub mod tests {
         .expect("Failed to create entry shredder");
 
         let data = bincode::serialize(&entries).unwrap();
-        shredder
-            .write_all(&data)
-            .expect("Expect to shred all entries");
+        let mut offset = 0;
+        while offset < data.len() {
+            offset += shredder.write(&data[offset..]).unwrap();
+        }
         if is_full_slot {
             shredder.finalize_slot();
         } else {

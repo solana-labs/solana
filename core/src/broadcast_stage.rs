@@ -296,7 +296,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_broadcast_ledger() {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path("test_broadcast_ledger");
@@ -314,12 +313,13 @@ mod test {
             let start_tick_height;
             let max_tick_height;
             let ticks_per_slot;
+            let slot;
             {
                 let bank = broadcast_service.bank.clone();
                 start_tick_height = bank.tick_height();
                 max_tick_height = bank.max_tick_height();
                 ticks_per_slot = bank.ticks_per_slot();
-
+                slot = bank.slot();
                 let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
                 for (i, tick) in ticks.into_iter().enumerate() {
                     entry_sender
@@ -337,15 +337,10 @@ mod test {
             );
 
             let blocktree = broadcast_service.blocktree;
-            let mut blob_index = 0;
-            for i in 0..max_tick_height - start_tick_height {
-                let slot = (start_tick_height + i + 1) / ticks_per_slot;
-
-                let result = blocktree.get_data_shred_as_blob(slot, blob_index).unwrap();
-
-                blob_index += 1;
-                result.expect("expect blob presence");
-            }
+            let (entries, _) = blocktree
+                .get_slot_entries_with_shred_count(slot, 0)
+                .expect("Expect entries to be present");
+            assert_eq!(entries.len(), max_tick_height as usize);
 
             drop(entry_sender);
             broadcast_service
