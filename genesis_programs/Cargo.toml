@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.19.0-pre0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.19.0-pre0" }
-solana-budget-api= { path = "../programs/budget_api", version = "0.18.0-pre0" }
+solana-budget-api = { path = "../programs/budget_api", version = "0.19.0-pre0" }
 solana-budget-program = { path = "../programs/budget_program", version = "0.19.0-pre0" }
 solana-config-api = { path = "../programs/config_api", version = "0.19.0-pre0" }
 solana-config-program = { path = "../programs/config_program", version = "0.19.0-pre0" }
