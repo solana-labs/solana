@@ -3,7 +3,6 @@
 #![no_std]
 
 extern crate solana_sdk_bpf_utils;
-use core::convert::TryFrom;
 
 pub fn work(x: u128, y: u128) -> u128 {
     x + y
