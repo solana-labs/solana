@@ -301,8 +301,6 @@ fn test_listener_startup() {
 
 #[test]
 #[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_snapshots_restart_validity() {
     let temp_dir = TempDir::new().unwrap();
     let snapshot_path = temp_dir.path().join("bank_states");
