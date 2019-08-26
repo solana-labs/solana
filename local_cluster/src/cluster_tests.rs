@@ -58,9 +58,9 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
         let mut transaction =
             system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
-        let sigResult =
+        let sig_result =
             client.retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 5, confs);
-        match sigResult {
+        match sig_result {
             Err(e) => {
                 error!("retry failed with error: {}, moving on to next node", e);
             },
