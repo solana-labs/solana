@@ -2,6 +2,7 @@
 //! programs. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+use crate::transaction_utils::OrderedIterator;
 use crate::{
     accounts::{
         Accounts, TransactionAccounts, TransactionCredits, TransactionLoaders, TransactionRents,
@@ -22,7 +23,6 @@ use crate::{
     storage_utils,
     storage_utils::StorageAccounts,
 };
-use crate::transaction_utils::OrderedIterator;
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use log::*;
