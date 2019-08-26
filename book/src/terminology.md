@@ -58,6 +58,13 @@ with a ledger interpretation that matches the leader's.
 
 A gossip network connecting all [nodes](#node) of a [cluster](#cluster).
 
+#### cooldown period
+
+Some number of epochs after stake has been deactivated while it progressively
+becomes available for withdrawal. During this period, the stake is considered to
+be "deactivating". More info about:
+[warmup and cooldown](stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+
 #### credit
 
 See [vote credit](#vote-credit).
@@ -199,7 +206,7 @@ See [Proof of History](#proof-of-history).
 
 #### point
 
-A weighted [credit](#credit) in a rewards regime.  In the validator (rewards regime)[staking-rewards.md], the number of points owed to a stake during redemption is the product of the [vote credits](#vote-credit) earned and the number of lamports staked.
+A weighted [credit](#credit) in a rewards regime.  In the validator [rewards regime](staking-rewards.md), the number of points owed to a stake during redemption is the product of the [vote credits](#vote-credit) earned and the number of lamports staked.
 
 #### program
 
@@ -341,3 +348,10 @@ See [ledger vote](#ledger-vote).
 
 A reward tally for validators.  A vote credit is awarded to a validator in its
 vote account when the validator reaches a [root](#root).
+
+#### warmup period
+
+Some number of epochs after stake has been delegated while it progressively
+becomes effective. During this period, the stake is considered to be
+"activating". More info about:
+[warmup and cooldown](stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
