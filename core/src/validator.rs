@@ -370,65 +370,56 @@ fn get_bank_forks(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     account_paths: Option<String>,
-    snapshot_config: Option<SnapshotConfig>,
+    snapshot_config: Option<&SnapshotConfig>,
     verify_ledger: bool,
     dev_halt_at_slot: Option<Slot>,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
-    let (mut bank_forks, bank_forks_info, leader_schedule_cache) = {
-        if let Some(snapshot_config) = snapshot_config.as_ref() {
-            info!(
-                "Initializing snapshot path: {:?}",
-                snapshot_config.snapshot_path
-            );
-            let _ = fs::remove_dir_all(&snapshot_config.snapshot_path);
-            fs::create_dir_all(&snapshot_config.snapshot_path)
-                .expect("Couldn't create snapshot directory");
+    if let Some(snapshot_config) = snapshot_config.as_ref() {
+        info!(
+            "Initializing snapshot path: {:?}",
+            snapshot_config.snapshot_path
+        );
+        let _ = fs::remove_dir_all(&snapshot_config.snapshot_path);
+        fs::create_dir_all(&snapshot_config.snapshot_path)
+            .expect("Couldn't create snapshot directory");
 
-            let tar = snapshot_utils::get_snapshot_tar_path(
-                &snapshot_config.snapshot_package_output_path,
-            );
-            if tar.exists() {
-                info!("Loading snapshot package: {:?}", tar);
-                // Fail hard here if snapshot fails to load, don't silently continue
-                let deserialized_bank = snapshot_utils::bank_from_archive(
-                    account_paths
-                        .clone()
-                        .expect("Account paths not present when booting from snapshot"),
-                    snapshot_config,
-                    &tar,
-                )
-                .expect("Load from snapshot failed");
+        let tar =
+            snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path);
+        if tar.exists() {
+            info!("Loading snapshot package: {:?}", tar);
+            // Fail hard here if snapshot fails to load, don't silently continue
+            let deserialized_bank = snapshot_utils::bank_from_archive(
+                account_paths
+                    .clone()
+                    .expect("Account paths not present when booting from snapshot"),
+                snapshot_config,
+                &tar,
+            )
+            .expect("Load from snapshot failed");
 
-                return blocktree_processor::process_blocktree_from_root(
-                    blocktree,
-                    Arc::new(deserialized_bank),
-                    verify_ledger,
-                    dev_halt_at_slot,
-                )
-                .expect("processing blocktree after loading snapshot failed");
-            } else {
-                info!("Snapshot package does not exist: {:?}", tar);
-            }
+            return blocktree_processor::process_blocktree_from_root(
+                blocktree,
+                Arc::new(deserialized_bank),
+                verify_ledger,
+                dev_halt_at_slot,
+            )
+            .expect("processing blocktree after loading snapshot failed");
         } else {
-            info!("Snapshots disabled");
+            info!("Snapshot package does not exist: {:?}", tar);
         }
-
-        info!("Processing ledger from genesis");
-        blocktree_processor::process_blocktree(
-            &genesis_block,
-            &blocktree,
-            account_paths,
-            verify_ledger,
-            dev_halt_at_slot,
-        )
-        .expect("process_blocktree failed")
-    };
-
-    if snapshot_config.is_some() {
-        bank_forks.set_snapshot_config(snapshot_config.unwrap());
+    } else {
+        info!("Snapshots disabled");
     }
 
-    (bank_forks, bank_forks_info, leader_schedule_cache)
+    info!("Processing ledger from genesis");
+    blocktree_processor::process_blocktree(
+        &genesis_block,
+        &blocktree,
+        account_paths,
+        verify_ledger,
+        dev_halt_at_slot,
+    )
+    .expect("process_blocktree failed")
 }
 
 #[cfg(not(unix))]
@@ -504,14 +495,18 @@ pub fn new_banks_from_blocktree(
     let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
         Blocktree::open_with_signal(blocktree_path).expect("Failed to open ledger database");
 
-    let (bank_forks, bank_forks_info, leader_schedule_cache) = get_bank_forks(
+    let (mut bank_forks, bank_forks_info, leader_schedule_cache) = get_bank_forks(
         &genesis_block,
         &blocktree,
         account_paths,
-        snapshot_config,
+        snapshot_config.as_ref(),
         verify_ledger,
         dev_halt_at_slot,
     );
+
+    if snapshot_config.is_some() {
+        bank_forks.set_snapshot_config(snapshot_config.unwrap());
+    }
 
     (
         genesis_blockhash,
