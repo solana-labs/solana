@@ -25,6 +25,8 @@ use tempfile::TempDir;
 
 #[test]
 #[serial]
+#[allow(unused_attributes)]
+#[ignore]
 fn test_ledger_cleanup_service() {
     solana_logger::setup();
     error!("test_ledger_cleanup_service");
