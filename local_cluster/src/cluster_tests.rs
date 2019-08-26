@@ -58,16 +58,22 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
         let mut transaction =
             system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
-        let sig = client
-            .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 5, confs)
-            .unwrap();
-        for validator in &cluster_nodes {
-            if ignore_nodes.contains(&validator.id) {
-                continue;
+        let sigResult =
+            client.retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 5, confs);
+        match sigResult {
+            Err(e) => {
+                error!("retry failed with error: {}, moving on to next node", e);
+            },
+            Ok(sig) => {
+                for validator in &cluster_nodes {
+                    if ignore_nodes.contains(&validator.id) {
+                        continue;
+                    }
+                    let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
+                    client.poll_for_signature_confirmation(&sig, confs).unwrap();
+                }
             }
-            let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
-            client.poll_for_signature_confirmation(&sig, confs).unwrap();
-        }
+        };
     }
 }
 
