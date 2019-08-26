@@ -300,10 +300,11 @@ fn test_listener_startup() {
 #[test]
 #[serial]
 fn test_snapshots_restart_validity() {
+    solana_logger::setup();
     let temp_dir = TempDir::new().unwrap();
     let snapshot_path = temp_dir.path().join("bank_states");
     let snapshot_package_output_path = temp_dir.path().join("tar");
-    let snapshot_interval_slots = 25;
+    let snapshot_interval_slots = 10;
 
     // Create the snapshot directories
     fs::create_dir_all(&snapshot_path).expect("Failed to create snapshots bank state directory");
@@ -334,7 +335,8 @@ fn test_snapshots_restart_validity() {
     let num_runs = 3;
     let mut expected_balances = HashMap::new();
     let mut cluster = LocalCluster::new(&config);
-    for _ in 0..num_runs {
+    for i in 1..num_runs {
+        info!("run {}", i);
         // Push transactions to one of the nodes and confirm that transactions were
         // forwarded to and processed.
         trace!("Sending transactions");
@@ -356,12 +358,20 @@ fn test_snapshots_restart_validity() {
         // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
         // must include the transactions just pushed
         let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
-        trace!("Waiting for tar to be generated");
+        trace!(
+            "Waiting for snapshot tar to be generated with slot > {}",
+            last_slot
+        );
         loop {
-            if tar.exists() && snapshot_utils::bank_slot_from_archive(&tar).unwrap() >= last_slot {
-                break;
+            if tar.exists() {
+                trace!("snapshot tar exists");
+                let slot = snapshot_utils::bank_slot_from_archive(&tar).unwrap();
+                if slot >= last_slot {
+                    break;
+                }
+                trace!("snapshot tar slot {} < last_slot {}", slot, last_slot);
             }
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(5000));
         }
 
         // Create new account paths since fullnode exit is not guaranteed to cleanup RPC threads,
