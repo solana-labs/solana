@@ -214,7 +214,9 @@ impl ThinClient {
             serialize_into(&mut wr, &transaction)
                 .expect("serialize Transaction in pub fn transfer_signed");
             // resend the same transaction until the transaction has no chance of succeeding
+            error!("Tries: {}", x);
             while now.elapsed().as_secs() < wait_time as u64 {
+                error!("wait time: {}", wait_time);
                 if num_confirmed == 0 {
                     // Send the transaction if there has been no confirmation (e.g. the first time)
                     self.transactions_socket
