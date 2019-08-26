@@ -752,7 +752,7 @@ stopNode() {
       PS4=\"$PS4\"
       set -x
       ! tmux list-sessions || tmux kill-session
-      for pid in solana/{net-stats,oom-monitor}.pid; do
+      for pid in solana/{net-stats,fd-monitor,oom-monitor}.pid; do
         pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
         if [[ -n \$pgid ]]; then
           sudo kill -- -\$pgid
