@@ -105,7 +105,7 @@ impl BroadcastRun for StandardBroadcastRun {
                     offset += shredder.write(&data[offset..]).unwrap();
                 }
 
-                if i == num_ventries && last_tick == bank.max_tick_height() {
+                if i == (num_ventries - 1) && last_tick == bank.max_tick_height() {
                     shredder.finalize_slot();
                 } else {
                     shredder.finalize_fec_block();
@@ -116,14 +116,13 @@ impl BroadcastRun for StandardBroadcastRun {
                     .iter()
                     .map(|s| bincode::deserialize(s).unwrap())
                     .collect();
-                let num_shreds = shreds.len() as u64;
 
                 let mut seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
                 trace!("Inserting {:?} shreds in blocktree", shreds.len());
                 blocktree
                     .insert_shreds(shreds)
                     .expect("Failed to insert shreds in blocktree");
-                latest_blob_index += num_shreds;
+                latest_blob_index = u64::from(shredder.index);
                 all_shreds.append(&mut shredder.shreds);
                 all_seeds.append(&mut seeds);
             });
