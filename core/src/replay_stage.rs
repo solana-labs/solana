@@ -1018,7 +1018,7 @@ mod test {
             let last_blockhash = bank0.last_blockhash();
             progress.insert(bank0.slot(), ForkProgress::new(last_blockhash));
             let shreds = shred_to_insert(&last_blockhash, bank0.slot());
-            blocktree.insert_shreds(&shreds).unwrap();
+            blocktree.insert_shreds(shreds).unwrap();
             let (res, _tx_count) =
                 ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut progress);
 
