@@ -999,8 +999,15 @@ impl ClusterInfo {
             .name("solana-gossip".to_string())
             .spawn(move || {
                 let mut last_push = timestamp();
+                let mut last_contact_info_trace = timestamp();
                 loop {
                     let start = timestamp();
+                    if start - last_contact_info_trace > 10000 {
+                        // Log contact info every 10 seconds
+                        info!("{}", obj.read().unwrap().contact_info_trace());
+                        last_contact_info_trace = start;
+                    }
+
                     let stakes: HashMap<_, _> = match bank_forks {
                         Some(ref bank_forks) => {
                             staking_utils::staked_nodes(&bank_forks.read().unwrap().working_bank())
