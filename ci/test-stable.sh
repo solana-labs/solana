@@ -84,6 +84,14 @@ test-stable-perf)
   ;;
 esac
 
+
+## DEBUG to help track down ci/localnet-sanity.sh instability
+echo --- ps
+ps aux
+echo --- netstat
+netstat -n --protocol=ip --all
+## END DEBUG
+
 # Assumes target/debug is populated. Ensure last build command
 # leaves target/debug in the state intended for localnet-sanity
 echo --- ci/localnet-sanity.sh
