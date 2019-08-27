@@ -312,8 +312,6 @@ fn simulate_process_entries(
 }
 
 fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
-    let vec: Vec<usize> = (0..100_usize).collect();
-
     // entropy multiplier should be big enough to provide sufficient entropy
     // but small enough to not take too much time while executing the test.
     let entropy_multiplier: usize = 25;
