@@ -873,7 +873,7 @@ impl Replicator {
                     .iter()
                     .filter_map(|p| bincode::deserialize(&p.data).ok())
                     .collect();
-                blocktree.insert_shreds(&shreds)?;
+                blocktree.insert_shreds(shreds)?;
             }
             // check if all the slots in the segment are complete
             if Self::segment_complete(start_slot, slots_per_segment, blocktree) {

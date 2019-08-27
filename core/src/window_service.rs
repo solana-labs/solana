@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 pub const NUM_THREADS: u32 = 10;
 
 /// Process a blob: Add blob to the ledger window.
-pub fn process_shreds(shreds: &[Shred], blocktree: &Arc<Blocktree>) -> Result<()> {
+pub fn process_shreds(shreds: Vec<Shred>, blocktree: &Arc<Blocktree>) -> Result<()> {
     blocktree.insert_shreds(shreds)
 }
 
@@ -112,7 +112,7 @@ where
         }?;
     }
 
-    blocktree.insert_shreds(&shreds)?;
+    blocktree.insert_shreds(shreds)?;
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
@@ -249,7 +249,6 @@ mod test {
     use super::*;
     use crate::bank_forks::BankForks;
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
-    use crate::broadcast_stage::broadcast_utils::entries_to_shreds;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::{make_consecutive_blobs, make_tiny_test_entries, Entry};
     use crate::genesis_utils::create_genesis_block_with_leader;
@@ -261,6 +260,7 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
+    use std::io::Write;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -270,7 +270,12 @@ mod test {
     fn local_entries_to_shred(entries: Vec<Entry>, keypair: &Arc<Keypair>) -> Vec<Shred> {
         let mut shredder =
             Shredder::new(0, Some(0), 0.0, keypair, 0).expect("Failed to create entry shredder");
-        entries_to_shreds(vec![entries], 0, 0, &mut shredder);
+        let data = bincode::serialize(&entries).unwrap();
+        let mut offset = 0;
+        while offset < data.len() {
+            offset += shredder.write(&data[offset..]).unwrap();
+        }
+        shredder.finalize_slot();
         shredder
             .shreds
             .iter()
@@ -287,7 +292,7 @@ mod test {
         let shreds = local_entries_to_shred(original_entries.clone(), &Arc::new(Keypair::new()));
 
         for shred in shreds.into_iter().rev() {
-            process_shreds(&[shred], &blocktree).expect("Expect successful processing of blob");
+            process_shreds(vec![shred], &blocktree).expect("Expect successful processing of blob");
         }
 
         assert_eq!(
