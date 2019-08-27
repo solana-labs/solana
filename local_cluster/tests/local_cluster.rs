@@ -15,6 +15,7 @@ use solana_runtime::{
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
 };
 use solana_sdk::{client::SyncClient, poh_config::PohConfig, timing};
+use std::path::PathBuf;
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -299,37 +300,116 @@ fn test_listener_startup() {
     assert_eq!(cluster_nodes.len(), 4);
 }
 
+#[allow(unused_attributes)]
 #[test]
 #[serial]
-fn test_snapshots_restart_validity() {
-    solana_logger::setup();
-    let temp_dir = TempDir::new().unwrap();
-    let snapshot_path = temp_dir.path().join("bank_states");
-    let snapshot_package_output_path = temp_dir.path().join("tar");
+#[ignore]
+fn test_snapshots_blocktree_floor() {
+    // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
-
-    // Create the snapshot directories
-    fs::create_dir_all(&snapshot_path).expect("Failed to create snapshots bank state directory");
-    fs::create_dir_all(&snapshot_package_output_path)
-        .expect("Failed to create snapshots tar directory");
-
-    // Set up the cluster with 1 snapshotting validator
-    let mut snapshot_validator_config = ValidatorConfig::default();
-    snapshot_validator_config.rpc_config.enable_fullnode_exit = true;
-    snapshot_validator_config.snapshot_config = Some(SnapshotConfig {
-        snapshot_interval_slots,
-        snapshot_package_output_path: snapshot_package_output_path.clone(),
-        snapshot_path,
-    });
     let num_account_paths = 4;
-    let (account_storage_dirs, account_storage_paths) = generate_account_paths(num_account_paths);
-    let mut all_account_storage_dirs = vec![account_storage_dirs];
-    snapshot_validator_config.account_paths = Some(account_storage_paths);
+
+    let leader_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+    let validator_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+
+    let snapshot_package_output_path = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .snapshot_package_output_path;
 
     let config = ClusterConfig {
         node_stakes: vec![10000],
         cluster_lamports: 100000,
-        validator_configs: vec![snapshot_validator_config.clone()],
+        validator_configs: vec![leader_snapshot_test_config.validator_config.clone()],
+        ..ClusterConfig::default()
+    };
+
+    let mut cluster = LocalCluster::new(&config);
+
+    trace!("Waiting for snapshot tar to be generated with slot",);
+
+    let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
+    loop {
+        if tar.exists() {
+            trace!("snapshot tar exists");
+            break;
+        }
+        sleep(Duration::from_millis(5000));
+    }
+
+    // Copy tar to validator's snapshot output directory
+    let validator_tar_path =
+        snapshot_utils::get_snapshot_tar_path(&validator_snapshot_test_config.snapshot_output_path);
+    fs::hard_link(tar, &validator_tar_path).unwrap();
+    let slot_floor = snapshot_utils::bank_slot_from_archive(&validator_tar_path).unwrap();
+
+    // Start up a new node from a snapshot, wait for it to catchup with the leader
+    let validator_stake = 5;
+    cluster.add_validator(
+        &validator_snapshot_test_config.validator_config,
+        validator_stake,
+    );
+    let all_pubkeys = cluster.get_node_pubkeys();
+    let validator_id = all_pubkeys
+        .into_iter()
+        .find(|x| *x != cluster.entry_point_info.id)
+        .unwrap();
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+    let mut current_slot = 0;
+
+    // Make sure this validator can get repaired past the first few warmup epochs
+    let target_slot = slot_floor + 40;
+    while current_slot <= target_slot {
+        trace!("current_slot: {}", current_slot);
+        if let Ok(slot) = validator_client.get_slot() {
+            current_slot = slot;
+        } else {
+            continue;
+        }
+        sleep(Duration::from_secs(1));
+    }
+
+    // Check the validator ledger doesn't contain any slots < slot_floor
+    cluster.close_preserve_ledgers();
+    let validator_ledger_path = &cluster.fullnode_infos[&validator_id];
+    let blocktree = Blocktree::open(&validator_ledger_path.info.ledger_path).unwrap();
+
+    // Skip the zeroth slot in blocktree that the ledger is initialized with
+    let (first_slot, _) = blocktree.slot_meta_iterator(1).unwrap().next().unwrap();
+    assert_eq!(first_slot, slot_floor);
+}
+
+#[test]
+#[serial]
+fn test_snapshots_restart_validity() {
+    solana_logger::setup();
+    let snapshot_interval_slots = 10;
+    let num_account_paths = 4;
+    let mut snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+    let snapshot_package_output_path = &snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .snapshot_package_output_path;
+
+    // Set up the cluster with 1 snapshotting validator
+    let mut all_account_storage_dirs = vec![vec![]];
+
+    std::mem::swap(
+        &mut all_account_storage_dirs[0],
+        &mut snapshot_test_config.account_storage_dirs,
+    );
+
+    let config = ClusterConfig {
+        node_stakes: vec![10000],
+        cluster_lamports: 100000,
+        validator_configs: vec![snapshot_test_config.validator_config.clone()],
         ..ClusterConfig::default()
     };
 
@@ -381,12 +461,12 @@ fn test_snapshots_restart_validity() {
         let (new_account_storage_dirs, new_account_storage_paths) =
             generate_account_paths(num_account_paths);
         all_account_storage_dirs.push(new_account_storage_dirs);
-        snapshot_validator_config.account_paths = Some(new_account_storage_paths);
+        snapshot_test_config.validator_config.account_paths = Some(new_account_storage_paths);
 
         // Restart a node
         trace!("Restarting cluster from snapshot");
         let nodes = cluster.get_node_pubkeys();
-        cluster.restart_node(nodes[0], &snapshot_validator_config);
+        cluster.restart_node(nodes[0], &snapshot_test_config.validator_config);
 
         // Verify account balances on validator
         trace!("Verifying balances");
@@ -585,4 +665,41 @@ fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, String) {
         .collect();
     let account_storage_paths = AccountsDB::format_paths(account_storage_paths);
     (account_storage_dirs, account_storage_paths)
+}
+
+struct SnapshotValidatorConfig {
+    _snapshot_dir: TempDir,
+    snapshot_output_path: TempDir,
+    account_storage_dirs: Vec<TempDir>,
+    validator_config: ValidatorConfig,
+}
+
+fn setup_snapshot_validator_config(
+    snapshot_interval_slots: usize,
+    num_account_paths: usize,
+) -> SnapshotValidatorConfig {
+    // Create the snapshot config
+    let snapshot_dir = TempDir::new().unwrap();
+    let snapshot_output_path = TempDir::new().unwrap();
+    let snapshot_config = SnapshotConfig {
+        snapshot_interval_slots,
+        snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
+        snapshot_path: PathBuf::from(snapshot_dir.path()),
+    };
+
+    // Create the account paths
+    let (account_storage_dirs, account_storage_paths) = generate_account_paths(num_account_paths);
+
+    // Create the validator config
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.rpc_config.enable_fullnode_exit = true;
+    validator_config.snapshot_config = Some(snapshot_config);
+    validator_config.account_paths = Some(account_storage_paths);
+
+    SnapshotValidatorConfig {
+        _snapshot_dir: snapshot_dir,
+        snapshot_output_path,
+        account_storage_dirs,
+        validator_config,
+    }
 }
