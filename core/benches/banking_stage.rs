@@ -280,8 +280,8 @@ fn simulate_process_entries(
 ) {
     let bank = Bank::new(genesis_block);
 
-    for i in 0..num_accounts {
-        bank.transfer(initial_lamports, mint_keypair, &keypairs[i].pubkey())
+    for i in 0..(num_accounts / 2) {
+        bank.transfer(initial_lamports, mint_keypair, &keypairs[i * 2].pubkey())
             .unwrap();
     }
 
