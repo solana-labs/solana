@@ -269,7 +269,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     bench_banking(bencher, TransactionType::Programs);
 }
 
-fn bench_process_entry(
+fn simulate_process_entries(
     randomize_txs: bool,
     mint_keypair: &Keypair,
     mut tx_vector: Vec<Transaction>,
@@ -311,8 +311,7 @@ fn bench_process_entry(
     process_entries(&bank, &vec![entry], randomize_txs).unwrap();
 }
 
-#[bench]
-fn bench_transaction_processing_without_order_shuffling(bencher: &mut Bencher) {
+fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
     let vec: Vec<usize> = (0..100_usize).collect();
 
     // entropy multiplier should be big enough to provide sufficient entropy
@@ -338,8 +337,8 @@ fn bench_transaction_processing_without_order_shuffling(bencher: &mut Bencher) {
     }
 
     bencher.iter(|| {
-        bench_process_entry(
-            false,
+        simulate_process_entries(
+            randomize_txs,
             &mint_keypair,
             tx_vector.clone(),
             &genesis_block,
@@ -348,4 +347,14 @@ fn bench_transaction_processing_without_order_shuffling(bencher: &mut Bencher) {
             num_accounts,
         );
     });
+}
+
+#[bench]
+fn bench_process_entries_without_order_shuffeling(bencher: &mut Bencher) {
+    bench_process_entries(false, bencher);
+}
+
+#[bench]
+fn bench_process_entries_with_order_shuffeling(bencher: &mut Bencher) {
+    bench_process_entries(true, bencher);
 }
