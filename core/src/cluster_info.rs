@@ -1004,7 +1004,7 @@ impl ClusterInfo {
                     let start = timestamp();
                     if start - last_contact_info_trace > 10000 {
                         // Log contact info every 10 seconds
-                        info!("{}", obj.read().unwrap().contact_info_trace());
+                        info!("\n{}", obj.read().unwrap().contact_info_trace());
                         last_contact_info_trace = start;
                     }
 
