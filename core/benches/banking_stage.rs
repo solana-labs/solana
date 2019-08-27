@@ -21,6 +21,7 @@ use solana_core::poh_recorder::WorkingBankEntries;
 use solana_core::service::Service;
 use solana_core::test_tx::test_tx;
 use solana_runtime::bank::Bank;
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
@@ -36,7 +37,6 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
-use solana_sdk::genesis_block::GenesisBlock;
 
 fn check_txs(receiver: &Arc<Receiver<WorkingBankEntries>>, ref_tx_count: usize) {
     let mut total = 0;
@@ -269,7 +269,15 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     bench_banking(bencher, TransactionType::Programs);
 }
 
-fn bench_process_entry(randomize_txs: bool, mint_keypair: &Keypair, mut tx_vector: Vec<Transaction>, genesis_block: &GenesisBlock, keypairs: &Vec<Keypair>, initial_lamports: u64, num_accounts: usize) {
+fn bench_process_entry(
+    randomize_txs: bool,
+    mint_keypair: &Keypair,
+    mut tx_vector: Vec<Transaction>,
+    genesis_block: &GenesisBlock,
+    keypairs: &Vec<Keypair>,
+    initial_lamports: u64,
+    num_accounts: usize,
+) {
     let bank = Bank::new(genesis_block);
 
     for i in 0..num_accounts {
@@ -284,12 +292,11 @@ fn bench_process_entry(randomize_txs: bool, mint_keypair: &Keypair, mut tx_vecto
             break;
         }
 
-        tx_vector.push(
-            system_transaction::transfer(
-                &keypairs[i],
-                &keypairs[i + 1].pubkey(),
-                initial_lamports,
-                bank.last_blockhash(),
+        tx_vector.push(system_transaction::transfer(
+            &keypairs[i],
+            &keypairs[i + 1].pubkey(),
+            initial_lamports,
+            bank.last_blockhash(),
         ));
 
         i = i + 2;
@@ -308,7 +315,7 @@ fn bench_process_entry(randomize_txs: bool, mint_keypair: &Keypair, mut tx_vecto
 fn bench_transaction_processing_without_order_shuffling(bencher: &mut Bencher) {
     let vec: Vec<usize> = (0..100_usize).collect();
 
-     // entropy multiplier should be big enough to provide sufficient entropy
+    // entropy multiplier should be big enough to provide sufficient entropy
     // but small enough to not take too much time while executing the test.
     let entropy_multiplier: usize = 25;
     let initial_lamports = 100;
@@ -323,7 +330,7 @@ fn bench_transaction_processing_without_order_shuffling(bencher: &mut Bencher) {
     } = create_genesis_block((num_accounts + 1) as u64 * initial_lamports);
 
     let mut keypairs: Vec<Keypair> = vec![];
-    let tx_vector: Vec<Transaction> = Vec::with_capacity(num_accounts/2);
+    let tx_vector: Vec<Transaction> = Vec::with_capacity(num_accounts / 2);
 
     for _ in 0..num_accounts {
         let keypair = Keypair::new();
@@ -331,6 +338,14 @@ fn bench_transaction_processing_without_order_shuffling(bencher: &mut Bencher) {
     }
 
     bencher.iter(|| {
-        bench_process_entry(false, &mint_keypair, tx_vector.clone(), &genesis_block, &keypairs, initial_lamports, num_accounts);
+        bench_process_entry(
+            false,
+            &mint_keypair,
+            tx_vector.clone(),
+            &genesis_block,
+            &keypairs,
+            initial_lamports,
+            num_accounts,
+        );
     });
 }
