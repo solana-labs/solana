@@ -1269,13 +1269,8 @@ pub mod tests {
         }
 
         let mut tx_vector: Vec<Transaction> = vec![];
-        let mut i = 0;
 
-        loop {
-            if i >= num_accounts {
-                break;
-            }
-
+        for i in (0..num_accounts).step_by(4) {
             tx_vector.append(&mut vec![
                 system_transaction::transfer(
                     &keypairs[i + 1],
@@ -1290,8 +1285,6 @@ pub mod tests {
                     bank.last_blockhash(),
                 ),
             ]);
-
-            i = i + 4;
         }
 
         // Transfer lamports to each other

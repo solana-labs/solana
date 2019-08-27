@@ -285,21 +285,13 @@ fn simulate_process_entries(
             .unwrap();
     }
 
-    let mut i = 0;
-
-    loop {
-        if i >= num_accounts {
-            break;
-        }
-
+    for i in (0..num_acounts).step_by(2) {
         tx_vector.push(system_transaction::transfer(
             &keypairs[i],
             &keypairs[i + 1].pubkey(),
             initial_lamports,
             bank.last_blockhash(),
         ));
-
-        i = i + 2;
     }
 
     // Transfer lamports to each other
