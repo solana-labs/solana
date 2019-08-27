@@ -36,6 +36,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
+use solana_sdk::genesis_block::GenesisBlock;
 
 fn check_txs(receiver: &Arc<Receiver<WorkingBankEntries>>, ref_tx_count: usize) {
     let mut total = 0;
@@ -268,40 +269,14 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     bench_banking(bencher, TransactionType::Programs);
 }
 
-fn bench_process_entry(randomize_txs: bool) {
-    // entropy multiplier should be big enough to provide sufficient entropy
-    // but small enough to not take too much time while executing the test.
-    let entropy_multiplier: usize = 25;
-    let initial_lamports = 100;
+fn bench_process_entry(randomize_txs: bool, mint_keypair: &Keypair, mut tx_vector: Vec<Transaction>, genesis_block: &GenesisBlock, keypairs: &Vec<Keypair>, initial_lamports: u64, num_accounts: usize) {
+    let bank = Bank::new(genesis_block);
 
-    // number of accounts need to be in multiple of 4 for correct
-    // execution of the test.
-    let num_accounts = entropy_multiplier * 4;
-    let GenesisBlockInfo {
-        genesis_block,
-        mint_keypair,
-        ..
-    } = create_genesis_block((num_accounts + 1) as u64 * initial_lamports);
-
-    let bank = Bank::new(&genesis_block);
-
-    let mut keypairs: Vec<Keypair> = vec![];
-
-    for _ in 0..num_accounts {
-        let keypair = Keypair::new();
-        let create_account_tx = system_transaction::create_user_account(
-            &mint_keypair,
-            &keypair.pubkey(),
-            0,
-            bank.last_blockhash(),
-        );
-        assert_eq!(bank.process_transaction(&create_account_tx), Ok(()));
-        bank.transfer(initial_lamports, &mint_keypair, &keypair.pubkey())
+    for i in 0..num_accounts {
+        bank.transfer(initial_lamports, mint_keypair, &keypairs[i].pubkey())
             .unwrap();
-        keypairs.push(keypair);
     }
 
-    let mut tx_vector: Vec<Transaction> = vec![];
     let mut i = 0;
 
     loop {
@@ -309,22 +284,15 @@ fn bench_process_entry(randomize_txs: bool) {
             break;
         }
 
-        tx_vector.append(&mut vec![
+        tx_vector.push(
             system_transaction::transfer(
-                &keypairs[i + 1],
-                &keypairs[i].pubkey(),
+                &keypairs[i],
+                &keypairs[i + 1].pubkey(),
                 initial_lamports,
                 bank.last_blockhash(),
-            ),
-            system_transaction::transfer(
-                &keypairs[i + 3],
-                &keypairs[i + 2].pubkey(),
-                initial_lamports,
-                bank.last_blockhash(),
-            ),
-        ]);
+        ));
 
-        i = i + 4;
+        i = i + 2;
     }
 
     // Transfer lamports to each other
@@ -339,15 +307,30 @@ fn bench_process_entry(randomize_txs: bool) {
 #[bench]
 fn bench_transaction_processing_without_order_shuffling(bencher: &mut Bencher) {
     let vec: Vec<usize> = (0..100_usize).collect();
-    bencher.iter(|| {
-        bench_process_entry(false);
-    });
-}
 
-#[bench]
-fn bench_transaction_processing_with_order_shuffling(bencher: &mut Bencher) {
-    let vec: Vec<usize> = (0..100_usize).collect();
+     // entropy multiplier should be big enough to provide sufficient entropy
+    // but small enough to not take too much time while executing the test.
+    let entropy_multiplier: usize = 25;
+    let initial_lamports = 100;
+
+    // number of accounts need to be in multiple of 4 for correct
+    // execution of the test.
+    let num_accounts = entropy_multiplier * 4;
+    let GenesisBlockInfo {
+        genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block((num_accounts + 1) as u64 * initial_lamports);
+
+    let mut keypairs: Vec<Keypair> = vec![];
+    let tx_vector: Vec<Transaction> = Vec::with_capacity(num_accounts/2);
+
+    for _ in 0..num_accounts {
+        let keypair = Keypair::new();
+        keypairs.push(keypair);
+    }
+
     bencher.iter(|| {
-        bench_process_entry(true);
+        bench_process_entry(false, &mint_keypair, tx_vector.clone(), &genesis_block, &keypairs, initial_lamports, num_accounts);
     });
 }
