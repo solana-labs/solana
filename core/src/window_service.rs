@@ -106,10 +106,8 @@ where
     );
 
     if !packets.packets.is_empty() {
-        match retransmit.send(packets) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        }?;
+        // Ignore the send error, as the retransmit is optional (e.g. replicators don't retransmit)
+        let _ = retransmit.send(packets);
     }
 
     blocktree.insert_shreds(shreds)?;
