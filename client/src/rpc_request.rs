@@ -10,6 +10,7 @@ pub enum RpcRequest {
     GetBalance,
     GetClusterNodes,
     GetGenesisBlockhash,
+    GetInflation,
     GetNumBlocksSinceSignatureConfirmation,
     GetProgramAccounts,
     GetRecentBlockhash,
@@ -40,6 +41,7 @@ impl RpcRequest {
             RpcRequest::GetBalance => "getBalance",
             RpcRequest::GetClusterNodes => "getClusterNodes",
             RpcRequest::GetGenesisBlockhash => "getGenesisBlockhash",
+            RpcRequest::GetInflation => "getInflation",
             RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
                 "getNumBlocksSinceSignatureConfirmation"
             }
@@ -109,6 +111,10 @@ mod tests {
         let test_request = RpcRequest::GetBalance;
         let request = test_request.build_request_json(1, Some(addr));
         assert_eq!(request["method"], "getBalance");
+
+        let test_request = RpcRequest::GetInflation;
+        let request = test_request.build_request_json(1, None);
+        assert_eq!(request["method"], "getInflation");
 
         let test_request = RpcRequest::GetRecentBlockhash;
         let request = test_request.build_request_json(1, None);

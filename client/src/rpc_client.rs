@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
+use solana_sdk::inflation::Inflation;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{KeypairUtil, Signature};
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
@@ -90,6 +91,25 @@ impl RpcClient {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetSlot parse failure: {}", err),
+            )
+        })
+    }
+
+    pub fn get_inflation(&self) -> io::Result<Inflation> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetInflation, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetInflation request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetInflation parse failure: {}", err),
             )
         })
     }
