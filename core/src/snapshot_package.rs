@@ -1,6 +1,7 @@
 use crate::result::{Error, Result};
 use crate::service::Service;
 use solana_measure::measure::Measure;
+use solana_metrics::datapoint_info;
 use solana_runtime::accounts_db::AccountStorageEntry;
 use std::fs;
 use std::io::{Error as IOError, ErrorKind};
@@ -133,12 +134,21 @@ impl SnapshotPackagerService {
         // Once everything is successful, overwrite the previous tarball so that other validators
         // can fetch this newly packaged snapshot
         let _ = fs::remove_file(&snapshot_package.tar_output_file);
+        let metadata = fs::metadata(&temp_tar_path)?;
         fs::hard_link(&temp_tar_path, &snapshot_package.tar_output_file)?;
+
         timer.stop();
         info!(
-            "Successfully created tarball for root: {}, elapsed ms: {}",
+            "Successfully created tarball. slot: {}, elapsed ms: {}, size={}",
             snapshot_package.root,
-            timer.as_ms()
+            timer.as_ms(),
+            metadata.len()
+        );
+        datapoint_info!(
+            "snapshot-package",
+            ("slot", snapshot_package.root, i64),
+            ("duration_ms", timer.as_ms(), i64),
+            ("size", metadata.len(), i64)
         );
         Ok(())
     }
