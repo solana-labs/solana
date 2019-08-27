@@ -234,116 +234,48 @@ impl Blocktree {
 
     // Returns whether or not all iterators have reached their end
     fn run_purge_batch(&self, from_slot: Slot, batch_end: Slot) -> Result<bool> {
-        let mut end = true;
         let from_slot = Some(from_slot);
         let batch_end = Some(batch_end);
+
         unsafe {
             let mut batch_processor = self.db.batch_processor();
             let mut write_batch = batch_processor
                 .batch()
                 .expect("Database Error: Failed to get write batch");
-            end &= match self
+            let end = self
                 .meta_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
-            {
-                Ok(finished) => finished,
-                Err(e) => {
-                    error!(
-                        "Error: {:?} while deleting meta_cf for slot {:?}",
-                        e, from_slot
-                    );
-                    false
-                }
-            };
-            end &= match self
-                .data_cf
-                .delete_slot(&mut write_batch, from_slot, batch_end)
-            {
-                Ok(finished) => finished,
-                Err(e) => {
-                    error!(
-                        "Error: {:?} while deleting meta_cf for slot {:?}",
-                        e, from_slot
-                    );
-                    false
-                }
-            };
-            end &= match self
-                .erasure_meta_cf
-                .delete_slot(&mut write_batch, from_slot, batch_end)
-            {
-                Ok(finished) => finished,
-                Err(e) => {
-                    error!(
-                        "Error: {:?} while deleting meta_cf for slot {:?}",
-                        e, from_slot
-                    );
-                    false
-                }
-            };
-            end &= match self
-                .erasure_cf
-                .delete_slot(&mut write_batch, from_slot, batch_end)
-            {
-                Ok(finished) => finished,
-                Err(e) => {
-                    error!(
-                        "Error: {:?} while deleting meta_cf for slot {:?}",
-                        e, from_slot
-                    );
-                    false
-                }
-            };
-            end &= match self
-                .orphans_cf
-                .delete_slot(&mut write_batch, from_slot, batch_end)
-            {
-                Ok(finished) => finished,
-                Err(e) => {
-                    error!(
-                        "Error: {:?} while deleting meta_cf for slot {:?}",
-                        e, from_slot
-                    );
-                    false
-                }
-            };
-            end &= match self
-                .index_cf
-                .delete_slot(&mut write_batch, from_slot, batch_end)
-            {
-                Ok(finished) => finished,
-                Err(e) => {
-                    error!(
-                        "Error: {:?} while deleting meta_cf for slot {:?}",
-                        e, from_slot
-                    );
-                    false
-                }
-            };
-            end &= match self
-                .dead_slots_cf
-                .delete_slot(&mut write_batch, from_slot, batch_end)
-            {
-                Ok(finished) => finished,
-                Err(e) => {
-                    error!(
-                        "Error: {:?} while deleting meta_cf for slot {:?}",
-                        e, from_slot
-                    );
-                    false
-                }
-            };
-            let roots_cf = self.db.column::<cf::Root>();
-            end &= match roots_cf.delete_slot(&mut write_batch, from_slot, batch_end) {
-                Ok(finished) => finished,
-                Err(e) => {
-                    error!(
-                        "Error: {:?} while deleting meta_cf for slot {:?}",
-                        e, from_slot
-                    );
-                    false
-                }
-            };
+                .unwrap_or(false)
+                && self
+                    .data_cf
+                    .delete_slot(&mut write_batch, from_slot, batch_end)
+                    .unwrap_or(false)
+                && self
+                    .erasure_meta_cf
+                    .delete_slot(&mut write_batch, from_slot, batch_end)
+                    .unwrap_or(false)
+                && self
+                    .erasure_cf
+                    .delete_slot(&mut write_batch, from_slot, batch_end)
+                    .unwrap_or(false)
+                && self
+                    .orphans_cf
+                    .delete_slot(&mut write_batch, from_slot, batch_end)
+                    .unwrap_or(false)
+                && self
+                    .index_cf
+                    .delete_slot(&mut write_batch, from_slot, batch_end)
+                    .unwrap_or(false)
+                && self
+                    .dead_slots_cf
+                    .delete_slot(&mut write_batch, from_slot, batch_end)
+                    .unwrap_or(false)
+                && self
+                    .db
+                    .column::<cf::Root>()
+                    .delete_slot(&mut write_batch, from_slot, batch_end)
+                    .unwrap_or(false);
+
             if let Err(e) = batch_processor.write(write_batch) {
                 error!(
                     "Error: {:?} while submitting write batch for slot {:?} retrying...",
