@@ -25,8 +25,6 @@ use tempfile::TempDir;
 
 #[test]
 #[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_ledger_cleanup_service() {
     solana_logger::setup();
     error!("test_ledger_cleanup_service");
@@ -411,10 +409,8 @@ fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
 
-#[allow(unused_attributes)]
 #[test]
 #[serial]
-#[ignore]
 fn test_bad_blob_size_leader() {
     test_faulty_node(BroadcastStageType::BroadcastBadBlobSizes);
 }
