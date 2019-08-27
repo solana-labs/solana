@@ -1,0 +1,1346 @@
+-rwxr-xr-x  2 jack  staff  24304 Aug 26 1224 ./target/bpfel-unknown-unknown/release/solana_bpf_rust_stack_bug.so
+ELF Header
+  Magic   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
+  Class                             ELF64
+  Data                              2's complement, little endian
+  Version                           1 (current)
+  OS/ABI                            UNIX - System V
+  ABI Version                       0
+  Type                              DYN (Shared object file)
+  Machine                           Linux BPF
+  Version                           0x1
+  Entry point address               0x428
+  Start of program headers          64 (bytes into file)
+  Start of section headers          23216 (bytes into file)
+  Flags                             0x0
+  Size of this header               64 (bytes)
+  Size of program headers           56 (bytes)
+  Number of program headers         3
+  Size of section headers           64 (bytes)
+  Number of section headers         17
+  Section header string table index 15
+
+Section Headers
+  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        00000000000000e8 0000e8 001980 00  AX  0   0  8
+  [ 2] .rodata           PROGBITS        0000000000001a68 001a68 0001d0 00   A  0   0  8
+  [ 3] .eh_frame         PROGBITS        0000000000001c38 001c38 00009c 00   A  0   0  8
+  [ 4] .dynamic          DYNAMIC         0000000000001cd8 001cd8 0000d0 10  WA  7   0  8
+  [ 5] .data.rel.ro      PROGBITS        0000000000001da8 001da8 0000c0 00  WA  0   0  8
+  [ 6] .dynsym           DYNSYM          0000000000001e68 001e68 000090 18   A  7   1  8
+  [ 7] .dynstr           STRTAB          0000000000001ef8 001ef8 000036 00   A  0   0  1
+  [ 8] .gnu.hash         GNU_HASH        0000000000001f30 001f30 000020 00   A  6   0  8
+  [ 9] .rel.dyn          REL             0000000000001f50 001f50 0002f0 10   A  6   0  8
+  [10] .hash             HASH            0000000000002240 002240 000038 04   A  6   0  4
+  [11] .BTF              PROGBITS        0000000000000000 002278 0005c3 00      0   0  1
+  [12] .BTF.ext          PROGBITS        0000000000000000 00283b 000760 00      0   0  1
+  [13] .comment          PROGBITS        0000000000000000 002f9b 000064 01  MS  0   0  1
+  [14] .symtab           SYMTAB          0000000000000000 003000 0011d0 18     16 185  8
+  [15] .shstrtab         STRTAB          0000000000000000 0041d0 000089 00      0   0  1
+  [16] .strtab           STRTAB          0000000000000000 004259 001854 00      0   0  1
+Key to Flags
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  p (processor specific)
+
+There are no section groups in this file.
+
+Program Headers
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  LOAD           0x0000e8 0x00000000000000e8 0x00000000000000e8 0x001980 0x001980 R E 0x1000
+  LOAD           0x001a68 0x0000000000001a68 0x0000000000001a68 0x00026c 0x00026c R   0x1000
+  DYNAMIC        0x001cd8 0x0000000000001cd8 0x0000000000001cd8 0x0005a0 0x0005a0 RW  0x8
+
+ Section to Segment mapping
+  Segment Sections...
+   00     .text 
+   01     .rodata .eh_frame 
+   02     .dynamic .data.rel.ro .dynsym .dynstr .gnu.hash .rel.dyn .hash 
+
+Dynamic section at offset 0x1cd8 contains 13 entries
+  Tag        Type                         Name/Value
+ 0x000000000000001e (FLAGS)              TEXTREL
+ 0x0000000000000011 (REL)                0x1f50
+ 0x0000000000000012 (RELSZ)              752 (bytes)
+ 0x0000000000000013 (RELENT)             16 (bytes)
+ 0x000000006ffffffa (RELCOUNT)           27
+ 0x0000000000000006 (SYMTAB)             0x1e68
+ 0x000000000000000b (SYMENT)             24 (bytes)
+ 0x0000000000000005 (STRTAB)             0x1ef8
+ 0x000000000000000a (STRSZ)              54 (bytes)
+ 0x0000000000000016 (TEXTREL)            0x0
+ 0x000000006ffffef5 (GNU_HASH)           0x1f30
+ 0x0000000000000004 (HASH)               0x2240
+ 0x0000000000000000 (NULL)               0x0
+
+Relocation section '.rel.dyn' at offset 0x1f50 contains 47 entries
+    Offset             Info             Type               Symbol's Value  Symbol's Name
+0000000000000640  0000000000000008 unrecognized 8      
+0000000000000828  0000000000000008 unrecognized 8      
+0000000000001da8  0000000000000008 unrecognized 8      
+0000000000001db8  0000000000000008 unrecognized 8      
+0000000000000880  0000000000000008 unrecognized 8      
+00000000000008b8  0000000000000008 unrecognized 8      
+00000000000008f8  0000000000000008 unrecognized 8      
+0000000000000928  0000000000000008 unrecognized 8      
+0000000000000a78  0000000000000008 unrecognized 8      
+0000000000000a98  0000000000000008 unrecognized 8      
+0000000000001dd0  0000000000000008 unrecognized 8      
+0000000000001de0  0000000000000008 unrecognized 8      
+0000000000001238  0000000000000008 unrecognized 8      
+0000000000001df8  0000000000000008 unrecognized 8      
+0000000000001e08  0000000000000008 unrecognized 8      
+0000000000001340  0000000000000008 unrecognized 8      
+0000000000001e20  0000000000000008 unrecognized 8      
+0000000000001e30  0000000000000008 unrecognized 8      
+00000000000013c8  0000000000000008 unrecognized 8      
+00000000000014b0  0000000000000008 unrecognized 8      
+00000000000014c8  0000000000000008 unrecognized 8      
+0000000000001e48  0000000000000008 unrecognized 8      
+0000000000001e60  0000000000000008 unrecognized 8      
+0000000000001c58  0000000000000008 unrecognized 8      
+0000000000001c78  0000000000000008 unrecognized 8      
+0000000000001c98  0000000000000008 unrecognized 8      
+0000000000001cb8  0000000000000008 unrecognized 8      
+0000000000000180  000000010000000a unrecognized a       0000000000000000 abort
+0000000000000840  000000010000000a unrecognized a       0000000000000000 abort
+0000000000000ab0  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001050  000000010000000a unrecognized a       0000000000000000 abort
+00000000000011e8  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001250  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001358  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001368  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001460  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001540  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001770  000000010000000a unrecognized a       0000000000000000 abort
+00000000000017a0  000000010000000a unrecognized a       0000000000000000 abort
+0000000000000960  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+00000000000009d0  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000a28  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000a50  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000a68  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000ab8  000000030000000a unrecognized a       0000000000000000 sol_log_
+0000000000001768  000000040000000a unrecognized a       0000000000000000 sol_panic_
+0000000000001798  000000040000000a unrecognized a       0000000000000000 sol_panic_
+
+The decoding of unwind sections for machine type Linux BPF is not currently supported.
+
+Symbol table '.dynsym' contains 6 entries
+   Num    Value          Size Type    Bind   Vis      Ndx Name
+     0 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND abort
+     2 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_alloc_free_
+     3 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_log_
+     4 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_panic_
+     5 0000000000000428   648 FUNC    GLOBAL DEFAULT    1 entrypoint
+
+Symbol table '.symtab' contains 190 entries
+   Num    Value          Size Type    Bind   Vis      Ndx Name
+     0 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.0
+     2 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.1
+     3 0000000000000140     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_3
+     4 0000000000000168     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_4
+     5 0000000000000188     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_5
+     6 0000000000000200     0 NOTYPE  LOCAL  DEFAULT    1 LBB3_2
+     7 0000000000000238     0 NOTYPE  LOCAL  DEFAULT    1 LBB4_2
+     8 00000000000000e8   192 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::allocate_in
+     9 00000000000001a8    24 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::ptr
+    10 00000000000001c0    24 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::ptr
+    11 00000000000001d8    48 FUNC    LOCAL  HIDDEN     1 <alloc::raw_vec::RawVec<T,A> as core::ops::drop::Drop>::drop
+    12 0000000000000208    56 FUNC    LOCAL  HIDDEN     1 <alloc::raw_vec::RawVec<T,A> as core::ops::drop::Drop>::drop
+    13 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.2
+    14 00000000000002c0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    15 0000000000000378     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_3
+    16 0000000000000240   328 FUNC    LOCAL  HIDDEN     1 alloc::vec::from_elem
+    17 0000000000000388    16 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::drop::Drop>::drop
+    18 0000000000000398    16 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::drop::Drop>::drop
+    19 00000000000003a8    64 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::deref::Deref>::deref
+    20 00000000000003e8    64 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::deref::DerefMut>::deref_mut
+    21 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.3
+    22 0000000000001a68     7 OBJECT  LOCAL  DEFAULT    2 .L__unnamed_1
+    23 0000000000000468     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    24 00000000000006a0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_3
+    25 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.4
+    26 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.5
+    27 00000000000006b0    16 FUNC    LOCAL  HIDDEN     1 core::ptr::Unique<T>::as_ptr
+    28 00000000000006c0    16 FUNC    LOCAL  HIDDEN     1 core::ptr::Unique<T>::as_ptr
+    29 00000000000006b0    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::Into<U>>::into
+    30 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS 4r6s02q6q1j1vh1t
+    31 00000000000006d0     0 NOTYPE  LOCAL  DEFAULT    1 
+    32 0000000000000710     0 NOTYPE  LOCAL  DEFAULT    1 
+    33 0000000000000768     0 NOTYPE  LOCAL  DEFAULT    1 
+    34 00000000000007d8     0 NOTYPE  LOCAL  DEFAULT    1 
+    35 00000000000006d0    64 FUNC    LOCAL  DEFAULT    1 __rust_alloc
+    36 00000000000007d8    64 FUNC    LOCAL  DEFAULT    1 __rust_alloc_zeroed
+    37 0000000000000710    88 FUNC    LOCAL  DEFAULT    1 __rust_dealloc
+    38 0000000000000768   112 FUNC    LOCAL  DEFAULT    1 __rust_realloc
+    39 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug_dep.dkqajoc3-cgu.0
+    40 0000000000001a6f    14 OBJECT  LOCAL  DEFAULT    2 .Lanon.eef84cd731200ae7754bfc18cb898243.0
+    41 0000000000001a7d    78 OBJECT  LOCAL  DEFAULT    2 .Lanon.eef84cd731200ae7754bfc18cb898243.1
+    42 0000000000001da8    40 OBJECT  LOCAL  DEFAULT    5 .Lanon.eef84cd731200ae7754bfc18cb898243.2
+    43 0000000000000848     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    44 0000000000000818    88 FUNC    LOCAL  DEFAULT    1 solana_bpf_rust_stack_bug_dep::PollData::init
+    45 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.0
+    46 0000000000000870    48 FUNC    LOCAL  HIDDEN     1 __rg_alloc
+    47 0000000000000918    48 FUNC    LOCAL  HIDDEN     1 __rg_alloc_zeroed
+    48 00000000000008a0    56 FUNC    LOCAL  HIDDEN     1 __rg_dealloc
+    49 00000000000008d8    64 FUNC    LOCAL  HIDDEN     1 __rg_realloc
+    50 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.3
+    51 0000000000001acb    19 OBJECT  LOCAL  DEFAULT    2 .Lanon.4b44eb2bd99a05a3e9f541194b4156ce.0
+    52 0000000000001ade    14 OBJECT  LOCAL  DEFAULT    2 .Lanon.4b44eb2bd99a05a3e9f541194b4156ce.1
+    53 0000000000001aec    77 OBJECT  LOCAL  DEFAULT    2 .Lanon.4b44eb2bd99a05a3e9f541194b4156ce.2
+    54 0000000000001dd0    40 OBJECT  LOCAL  DEFAULT    5 .Lanon.4b44eb2bd99a05a3e9f541194b4156ce.3
+    55 0000000000000998     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    56 00000000000009f8     0 NOTYPE  LOCAL  DEFAULT    1 LBB1_3
+    57 0000000000000a30     0 NOTYPE  LOCAL  DEFAULT    1 LBB1_4
+    58 0000000000000948    96 FUNC    LOCAL  HIDDEN     1 core::alloc::GlobalAlloc::alloc_zeroed
+    59 00000000000009a8   152 FUNC    LOCAL  HIDDEN     1 core::alloc::GlobalAlloc::realloc
+    60 0000000000000a40    32 FUNC    LOCAL  DEFAULT    1 <solana_sdk_bpf_no_std::allocator::Allocator as core::alloc::GlobalAlloc>::alloc
+    61 0000000000000a60    24 FUNC    LOCAL  DEFAULT    1 <solana_sdk_bpf_no_std::allocator::Allocator as core::alloc::GlobalAlloc>::dealloc
+    62 0000000000000a78    64 FUNC    LOCAL  DEFAULT    1 rust_oom
+    63 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.4
+    64 0000000000001b39     0 OBJECT  LOCAL  HIDDEN     2 solana_sdk_bpf_no_std::A
+    65 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.1
+    66 0000000000000ab8    16 FUNC    LOCAL  DEFAULT    1 solana_sdk_bpf_utils::log::sol_log
+    67 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.5
+    68 0000000000000e90     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_10
+    69 0000000000000b90     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    70 0000000000000bc0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_4
+    71 0000000000000c08     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_7
+    72 0000000000000ca0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_9
+    73 0000000000000ac8  1192 FUNC    LOCAL  DEFAULT    1 solana_sdk_bpf_utils::entrypoint::deserialize
+    74 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.0
+    75 0000000000000f70    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::TryFrom<U>>::try_from
+    76 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.3
+    77 0000000000001b39    97 OBJECT  LOCAL  DEFAULT    2 .Lanon.c1fe0383b2769cba189f7c1615d65f68.0
+    78 0000000000001b9a    40 OBJECT  LOCAL  DEFAULT    2 .Lanon.c1fe0383b2769cba189f7c1615d65f68.1
+    79 0000000000001df8    40 OBJECT  LOCAL  DEFAULT    5 .Lanon.c1fe0383b2769cba189f7c1615d65f68.2
+    80 00000000000010f0     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_11
+    81 0000000000001140     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_13
+    82 0000000000001148     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_14
+    83 0000000000001218     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_15
+    84 0000000000001158     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_16
+    85 00000000000011b0     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_19
+    86 00000000000011d0     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_20
+    87 0000000000001048     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_21
+    88 0000000000001238     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_22
+    89 00000000000011f0     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_23
+    90 0000000000001210     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_24
+    91 0000000000001018     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_3
+    92 0000000000001058     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_5
+    93 00000000000010c8     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_7
+    94 00000000000010e0     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_9
+    95 0000000000000f80    48 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T>::new
+    96 0000000000000fb0    24 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::ptr
+    97 0000000000000fc8   656 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::reserve
+    98 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.4
+    99 0000000000001258    40 FUNC    LOCAL  HIDDEN     1 core::alloc::size_align
+   100 0000000000001280     8 FUNC    LOCAL  HIDDEN     1 <T as core::convert::From<T>>::from
+   101 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.2
+   102 0000000000001288    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::From<T>>::from
+   103 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.6
+   104 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.7
+   105 0000000000001298    16 FUNC    LOCAL  HIDDEN     1 core::ptr::Unique<T>::empty
+   106 00000000000012a8    16 FUNC    LOCAL  HIDDEN     1 core::ptr::Unique<T>::as_ptr
+   107 00000000000012b8    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::Into<U>>::into
+   108 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.8
+   109 00000000000012c8    32 FUNC    LOCAL  HIDDEN     1 alloc::vec::Vec<T>::reserve
+   110 00000000000012e8    64 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::deref::DerefMut>::deref_mut
+   111 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.9
+   112 0000000000001328    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   113 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.0
+   114 0000000000001bc2    97 OBJECT  LOCAL  DEFAULT    2 .Lanon.bc2955098a9d04e6dd0d8b2f5db8a1e2.1
+   115 0000000000001c23    17 OBJECT  LOCAL  DEFAULT    2 .Lanon.bc2955098a9d04e6dd0d8b2f5db8a1e2.5
+   116 0000000000001e20    40 OBJECT  LOCAL  DEFAULT    5 .Lanon.bc2955098a9d04e6dd0d8b2f5db8a1e2.6
+   117 0000000000001340    32 FUNC    LOCAL  DEFAULT    1 alloc::raw_vec::capacity_overflow
+   118 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.10
+   119 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.11
+   120 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.12
+   121 0000000000001360    16 FUNC    LOCAL  DEFAULT    1 alloc::alloc::handle_alloc_error
+   122 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.1
+   123 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.13
+   124 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.15
+   125 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.2
+   126 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.4
+   127 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.5
+   128 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.6
+   129 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.7
+   130 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.8
+   131 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.9
+   132 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.14
+   133 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.0
+   134 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.11
+   135 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.10
+   136 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.12
+   137 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.14
+   138 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.15
+   139 0000000000001370    24 FUNC    LOCAL  HIDDEN     1 core::any::TypeId::of
+   140 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.3
+   141 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.4
+   142 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.5
+   143 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.6
+   144 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.7
+   145 0000000000001c38     0 OBJECT  LOCAL  DEFAULT    2 .Lanon.d2c507571793faf348f10b5ea6057a9f.0
+   146 0000000000001e48    32 OBJECT  LOCAL  DEFAULT    5 .Lanon.d2c507571793faf348f10b5ea6057a9f.1
+   147 0000000000001388     8 FUNC    LOCAL  DEFAULT    1 core::ptr::real_drop_in_place
+   148 0000000000001468   224 FUNC    LOCAL  DEFAULT    1 core::panicking::panic_fmt
+   149 0000000000001390   216 FUNC    LOCAL  DEFAULT    1 core::panicking::panic
+   150 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.2
+   151 0000000000001698     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_4
+   152 0000000000001778     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_6
+   153 00000000000016f8     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_7
+   154 0000000000001548   608 FUNC    LOCAL  DEFAULT    1 rust_begin_unwind
+   155 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.1
+   156 00000000000017a8    40 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Enumerate<I>::new
+   157 00000000000017d0    56 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   158 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.9
+   159 0000000000001808    16 FUNC    LOCAL  HIDDEN     1 <T as core::any::Any>::type_id
+   160 0000000000001830    40 FUNC    LOCAL  DEFAULT    1 core::panic::Location::internal_constructor
+   161 0000000000001858    40 FUNC    LOCAL  DEFAULT    1 core::panic::Location::file
+   162 0000000000001880    16 FUNC    LOCAL  DEFAULT    1 core::panic::Location::line
+   163 0000000000001890    16 FUNC    LOCAL  DEFAULT    1 core::panic::Location::column
+   164 0000000000001818    24 FUNC    LOCAL  DEFAULT    1 core::panic::PanicInfo::location
+   165 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.2
+   166 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.0
+   167 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.12
+   168 00000000000018b8     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+   169 00000000000018f0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_3
+   170 0000000000001910     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_2
+   171 0000000000001938     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_3
+   172 00000000000018f8    72 FUNC    LOCAL  HIDDEN     1 memset
+   173 00000000000018a0    88 FUNC    LOCAL  HIDDEN     1 memcpy
+   174 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.13
+   175 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.3
+   176 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.15
+   177 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.1
+   178 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.5
+   179 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.8
+   180 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS muloti4.c
+   181 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS divti3.c
+   182 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS multi3.c
+   183 0000000000001940   296 FUNC    LOCAL  HIDDEN     1 __multi3
+   184 0000000000001cd8     0 NOTYPE  LOCAL  HIDDEN     4 _DYNAMIC
+   185 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND abort
+   186 0000000000000428   648 FUNC    GLOBAL DEFAULT    1 entrypoint
+   187 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_alloc_free_
+   188 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_log_
+   189 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_panic_
+
+Histogram for bucket list length (total of 6 buckets)
+ Length  Number     % of total  Coverage
+      0  2          ( 33.3%)
+      1  3          ( 50.0%)     60.0%
+      2  1          ( 16.7%)    100.0%
+
+Histogram for `.gnu.hash' bucket list length (total of 1 bucket)
+ Length  Number     % of total  Coverage
+      0  0          (  0.0%)
+      1  1          (100.0%)    100.0%
+
+No version information found in this file.
+
+./target/bpfel-unknown-unknown/release/solana_bpf_rust_stack_bug.so	file format ELF64-BPF
+
+Disassembly of section .text
+alloc::raw_vec::RawVec<T,A>::allocate_in
+      29	bf 26 00 00 00 00 00 00 	r6 = r2
+      30	bf 17 00 00 00 00 00 00 	r7 = r1
+      31	b7 01 00 00 01 00 00 00 	r1 = 0x1
+      32	15 06 10 00 00 00 00 00 	if r6 == 0x0 goto +0x10 <LBB0_5>
+      33	15 03 06 00 00 00 00 00 	if r3 == 0x0 goto +0x6 <LBB0_3>
+      34	bf 61 00 00 00 00 00 00 	r1 = r6
+      35	b7 02 00 00 01 00 00 00 	r2 = 0x1
+      36	85 10 00 00 d6 00 00 00 	call 0xd6
+      37	bf 01 00 00 00 00 00 00 	r1 = r0
+      38	55 01 0a 00 00 00 00 00 	if r1 != 0x0 goto +0xa <LBB0_5>
+      39	05 00 05 00 00 00 00 00 	goto +0x5 <LBB0_4>
+
+LBB0_3
+      40	bf 61 00 00 00 00 00 00 	r1 = r6
+      41	b7 02 00 00 01 00 00 00 	r2 = 0x1
+      42	85 10 00 00 af 00 00 00 	call 0xaf
+      43	bf 01 00 00 00 00 00 00 	r1 = r0
+      44	55 01 04 00 00 00 00 00 	if r1 != 0x0 goto +0x4 <LBB0_5>
+
+LBB0_4
+      45	bf 61 00 00 00 00 00 00 	r1 = r6
+      46	b7 02 00 00 01 00 00 00 	r2 = 0x1
+      47	85 10 00 00 3c 02 00 00 	call 0x23c
+      48	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB0_5
+      49	85 10 00 00 a4 00 00 00 	call 0xa4
+      50	7b 67 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r6
+      51	7b 07 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r0
+      52	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T,A>::ptr
+      53	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+      54	85 10 00 00 9f 00 00 00 	call 0x9f
+      55	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T,A>::ptr
+      56	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+      57	85 10 00 00 9e 00 00 00 	call 0x9e
+      58	95 00 00 00 00 00 00 00 	exit
+
+<alloc::raw_vec::RawVec<T,A> as core::ops::drop::Drop>::drop
+      59	79 12 08 00 00 00 00 00 	r2 = *(u64 *)(r1 + 0x8)
+      60	15 02 03 00 00 00 00 00 	if r2 == 0x0 goto +0x3 <LBB3_2>
+      61	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+      62	b7 03 00 00 01 00 00 00 	r3 = 0x1
+      63	85 10 00 00 a2 00 00 00 	call 0xa2
+
+LBB3_2
+      64	95 00 00 00 00 00 00 00 	exit
+
+<alloc::raw_vec::RawVec<T,A> as core::ops::drop::Drop>::drop
+      65	79 12 08 00 00 00 00 00 	r2 = *(u64 *)(r1 + 0x8)
+      66	15 02 04 00 00 00 00 00 	if r2 == 0x0 goto +0x4 <LBB4_2>
+      67	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+      68	27 02 00 00 30 00 00 00 	r2 *= 0x30
+      69	b7 03 00 00 08 00 00 00 	r3 = 0x8
+      70	85 10 00 00 9b 00 00 00 	call 0x9b
+
+LBB4_2
+      71	95 00 00 00 00 00 00 00 	exit
+
+alloc::vec::from_elem
+      72	bf 37 00 00 00 00 00 00 	r7 = r3
+      73	bf 28 00 00 00 00 00 00 	r8 = r2
+      74	bf 16 00 00 00 00 00 00 	r6 = r1
+      75	bf 81 00 00 00 00 00 00 	r1 = r8
+      76	57 01 00 00 ff 00 00 00 	r1 &= 0xff
+      77	55 01 0a 00 00 00 00 00 	if r1 != 0x0 goto +0xa <LBB0_2>
+      78	bf a1 00 00 00 00 00 00 	r1 = r10
+      79	07 01 00 00 c8 ff ff ff 	r1 += -0x38
+      80	bf 72 00 00 00 00 00 00 	r2 = r7
+      81	b7 03 00 00 01 00 00 00 	r3 = 0x1
+      82	85 10 00 00 ca ff ff ff 	call -0x36
+      83	79 a1 c8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x38)
+      84	79 a2 d0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x30)
+      85	7b 76 10 00 00 00 00 00 	*(u64 *)(r6 + 0x10) = r7
+      86	7b 26 08 00 00 00 00 00 	*(u64 *)(r6 + 0x8) = r2
+      87	05 00 17 00 00 00 00 00 	goto +0x17 <LBB0_3>
+
+LBB0_2
+      88	bf a1 00 00 00 00 00 00 	r1 = r10
+      89	07 01 00 00 d8 ff ff ff 	r1 += -0x28
+      90	b7 09 00 00 00 00 00 00 	r9 = 0x0
+      91	bf 72 00 00 00 00 00 00 	r2 = r7
+      92	b7 03 00 00 00 00 00 00 	r3 = 0x0
+      93	85 10 00 00 bf ff ff ff 	call -0x41
+      94	7b 9a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r9
+      95	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+      96	7b 1a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r1
+      97	79 a1 d8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x28)
+      98	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+      99	bf a1 00 00 00 00 00 00 	r1 = r10
+     100	07 01 00 00 e8 ff ff ff 	r1 += -0x18
+     101	85 10 00 00 cf ff ff ff 	call -0x31
+     102	bf 01 00 00 00 00 00 00 	r1 = r0
+     103	bf 82 00 00 00 00 00 00 	r2 = r8
+     104	bf 73 00 00 00 00 00 00 	r3 = r7
+     105	85 10 00 00 b5 02 00 00 	call 0x2b5
+     106	7b 7a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r7
+     107	7b 76 10 00 00 00 00 00 	*(u64 *)(r6 + 0x10) = r7
+     108	79 a1 f0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x10)
+     109	7b 16 08 00 00 00 00 00 	*(u64 *)(r6 + 0x8) = r1
+     110	79 a1 e8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x18)
+
+LBB0_3
+     111	7b 16 00 00 00 00 00 00 	*(u64 *)(r6 + 0x0) = r1
+     112	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::drop::Drop>::drop
+     113	85 10 00 00 c3 ff ff ff 	call -0x3d
+     114	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::drop::Drop>::drop
+     115	85 10 00 00 c4 ff ff ff 	call -0x3c
+     116	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::deref::Deref>::deref
+     117	bf 26 00 00 00 00 00 00 	r6 = r2
+     118	bf 17 00 00 00 00 00 00 	r7 = r1
+     119	bf 61 00 00 00 00 00 00 	r1 = r6
+     120	85 10 00 00 bc ff ff ff 	call -0x44
+     121	7b 07 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r0
+     122	79 61 10 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x10)
+     123	7b 17 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r1
+     124	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::deref::DerefMut>::deref_mut
+     125	bf 26 00 00 00 00 00 00 	r6 = r2
+     126	bf 17 00 00 00 00 00 00 	r7 = r1
+     127	bf 61 00 00 00 00 00 00 	r1 = r6
+     128	85 10 00 00 b7 ff ff ff 	call -0x49
+     129	7b 07 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r0
+     130	79 61 10 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x10)
+     131	7b 17 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r1
+     132	95 00 00 00 00 00 00 00 	exit
+
+entrypoint
+     133	bf 12 00 00 00 00 00 00 	r2 = r1
+     134	bf a1 00 00 00 00 00 00 	r1 = r10
+     135	07 01 00 00 28 ff ff ff 	r1 += -0xd8
+     136	85 10 00 00 d0 00 00 00 	call 0xd0
+     137	79 a1 28 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xd8)
+     138	55 01 02 00 00 00 00 00 	if r1 != 0x0 goto +0x2 <LBB0_2>
+     139	b7 06 00 00 00 00 00 00 	r6 = 0x0
+     140	05 00 47 00 00 00 00 00 	goto +0x47 <LBB0_3>
+
+LBB0_2
+     141	79 a1 38 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xc8)
+     142	7b 1a 68 ff 00 00 00 00 	*(u64 *)(r10 - 0x98) = r1
+     143	79 a1 30 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xd0)
+     144	7b 1a 60 ff 00 00 00 00 	*(u64 *)(r10 - 0xa0) = r1
+     145	79 a1 28 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xd8)
+     146	7b 1a 58 ff 00 00 00 00 	*(u64 *)(r10 - 0xa8) = r1
+     147	bf a1 00 00 00 00 00 00 	r1 = r10
+     148	07 01 00 00 18 ff ff ff 	r1 += -0xe8
+     149	bf a7 00 00 00 00 00 00 	r7 = r10
+     150	07 07 00 00 58 ff ff ff 	r7 += -0xa8
+     151	bf 72 00 00 00 00 00 00 	r2 = r7
+     152	85 10 00 00 e4 ff ff ff 	call -0x1c
+     153	bf a8 00 00 00 00 00 00 	r8 = r10
+     154	07 08 00 00 70 ff ff ff 	r8 += -0x90
+     155	b7 06 00 00 01 00 00 00 	r6 = 0x1
+     156	bf 81 00 00 00 00 00 00 	r1 = r8
+     157	b7 02 00 00 01 00 00 00 	r2 = 0x1
+     158	b7 03 00 00 06 00 00 00 	r3 = 0x6
+     159	85 10 00 00 a8 ff ff ff 	call -0x58
+     160	bf a1 00 00 00 00 00 00 	r1 = r10
+     161	07 01 00 00 08 ff ff ff 	r1 += -0xf8
+     162	bf 82 00 00 00 00 00 00 	r2 = r8
+     163	85 10 00 00 d1 ff ff ff 	call -0x2f
+     164	79 a1 08 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xf8)
+     165	79 a2 10 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0xf0)
+     166	18 03 00 00 01 01 01 01 00 00 00 00 01 01 01 01 	r3 = 0x101010101010101 ll
+     168	7b 3a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r3
+     169	7b 3a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r3
+     170	7b 3a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r3
+     171	7b 3a 88 ff 00 00 00 00 	*(u64 *)(r10 - 0x78) = r3
+     172	7b 3a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r3
+     173	7b 3a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r3
+     174	7b 3a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r3
+     175	7b 3a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r3
+     176	7b 3a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r3
+     177	7b 3a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r3
+     178	7b 3a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r3
+     179	7b 3a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r3
+     180	18 03 00 00 0a 00 00 00 00 00 00 00 06 00 00 00 	r3 = 0x60000000a ll
+     182	7b 3a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r3
+     183	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     184	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+     185	bf a1 00 00 00 00 00 00 	r1 = r10
+     186	07 01 00 00 c8 ff ff ff 	r1 += -0x38
+     187	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     188	b7 01 00 00 88 13 00 00 	r1 = 0x1388
+     189	7b 1a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r1
+     190	bf a5 00 00 00 00 00 00 	r5 = r10
+     191	bf a1 00 00 00 00 00 00 	r1 = r10
+     192	07 01 00 00 f8 fe ff ff 	r1 += -0x108
+     193	bf a2 00 00 00 00 00 00 	r2 = r10
+     194	07 02 00 00 e8 ff ff ff 	r2 += -0x18
+     195	bf a3 00 00 00 00 00 00 	r3 = r10
+     196	07 03 00 00 88 ff ff ff 	r3 += -0x78
+     197	bf a4 00 00 00 00 00 00 	r4 = r10
+     198	07 04 00 00 a8 ff ff ff 	r4 += -0x58
+     199	85 10 00 00 3b 00 00 00 	call 0x3b
+     200	18 01 00 00 68 1a 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1a68 ll
+     202	b7 02 00 00 07 00 00 00 	r2 = 0x7
+     203	85 10 00 00 8b 00 00 00 	call 0x8b
+     204	bf 81 00 00 00 00 00 00 	r1 = r8
+     205	85 10 00 00 a3 ff ff ff 	call -0x5d
+     206	bf 81 00 00 00 00 00 00 	r1 = r8
+     207	85 10 00 00 6b ff ff ff 	call -0x95
+     208	bf 71 00 00 00 00 00 00 	r1 = r7
+     209	85 10 00 00 a1 ff ff ff 	call -0x5f
+     210	bf 71 00 00 00 00 00 00 	r1 = r7
+     211	85 10 00 00 6d ff ff ff 	call -0x93
+
+LBB0_3
+     212	bf 60 00 00 00 00 00 00 	r0 = r6
+     213	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::Into<U>>::into
+     214	bf 10 00 00 00 00 00 00 	r0 = r1
+     215	95 00 00 00 00 00 00 00 	exit
+
+core::ptr::Unique<T>::as_ptr
+     216	bf 10 00 00 00 00 00 00 	r0 = r1
+     217	95 00 00 00 00 00 00 00 	exit
+
+__rust_alloc
+     218	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     219	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     220	85 10 00 00 31 00 00 00 	call 0x31
+     221	79 a1 f0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x10)
+     222	79 a2 f8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x8)
+     223	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+     224	7b 2a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r2
+     225	95 00 00 00 00 00 00 00 	exit
+
+__rust_dealloc
+     226	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     227	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     228	7b 3a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r3
+     229	85 10 00 00 2e 00 00 00 	call 0x2e
+     230	79 a1 e8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x18)
+     231	79 a2 f0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x10)
+     232	79 a3 f8 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x8)
+     233	7b 1a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r1
+     234	7b 2a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r2
+     235	7b 3a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r3
+     236	95 00 00 00 00 00 00 00 	exit
+
+__rust_realloc
+     237	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     238	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     239	7b 3a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r3
+     240	7b 4a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r4
+     241	85 10 00 00 29 00 00 00 	call 0x29
+     242	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+     243	79 a2 e8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x18)
+     244	79 a3 f0 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x10)
+     245	79 a4 f8 ff 00 00 00 00 	r4 = *(u64 *)(r10 - 0x8)
+     246	7b 1a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r1
+     247	7b 2a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r2
+     248	7b 3a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r3
+     249	7b 4a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r4
+     250	95 00 00 00 00 00 00 00 	exit
+
+__rust_alloc_zeroed
+     251	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     252	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     253	85 10 00 00 25 00 00 00 	call 0x25
+     254	79 a1 f0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x10)
+     255	79 a2 f8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x8)
+     256	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+     257	7b 2a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r2
+     258	95 00 00 00 00 00 00 00 	exit
+
+solana_bpf_rust_stack_bug_dep::PollData::init
+     259	61 22 10 00 00 00 00 00 	r2 = *(u32 *)(r2 + 0x10)
+     260	15 02 04 00 0a 00 00 00 	if r2 == 0xa goto +0x4 <LBB0_2>
+     261	18 01 00 00 a8 1d 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1da8 ll
+     263	85 10 00 00 6a 01 00 00 	call 0x16a
+     264	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB0_2
+     265	79 52 f0 ff 00 00 00 00 	r2 = *(u64 *)(r5 - 0x10)
+     266	7b 31 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r3
+     267	07 02 00 00 0a 00 00 00 	r2 += 0xa
+     268	7b 21 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r2
+     269	95 00 00 00 00 00 00 00 	exit
+
+__rg_alloc
+     270	bf 23 00 00 00 00 00 00 	r3 = r2
+     271	bf 12 00 00 00 00 00 00 	r2 = r1
+     272	18 01 00 00 39 1b 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1b39 ll
+     274	85 10 00 00 35 00 00 00 	call 0x35
+     275	95 00 00 00 00 00 00 00 	exit
+
+__rg_dealloc
+     276	bf 34 00 00 00 00 00 00 	r4 = r3
+     277	bf 23 00 00 00 00 00 00 	r3 = r2
+     278	bf 12 00 00 00 00 00 00 	r2 = r1
+     279	18 01 00 00 39 1b 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1b39 ll
+     281	85 10 00 00 32 00 00 00 	call 0x32
+     282	95 00 00 00 00 00 00 00 	exit
+
+__rg_realloc
+     283	bf 45 00 00 00 00 00 00 	r5 = r4
+     284	bf 34 00 00 00 00 00 00 	r4 = r3
+     285	bf 23 00 00 00 00 00 00 	r3 = r2
+     286	bf 12 00 00 00 00 00 00 	r2 = r1
+     287	18 01 00 00 39 1b 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1b39 ll
+     289	85 10 00 00 13 00 00 00 	call 0x13
+     290	95 00 00 00 00 00 00 00 	exit
+
+__rg_alloc_zeroed
+     291	bf 23 00 00 00 00 00 00 	r3 = r2
+     292	bf 12 00 00 00 00 00 00 	r2 = r1
+     293	18 01 00 00 39 1b 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1b39 ll
+     295	85 10 00 00 01 00 00 00 	call 0x1
+     296	95 00 00 00 00 00 00 00 	exit
+
+core::alloc::GlobalAlloc::alloc_zeroed
+     297	bf 26 00 00 00 00 00 00 	r6 = r2
+     298	bf 61 00 00 00 00 00 00 	r1 = r6
+     299	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     300	85 10 00 00 ff ff ff ff 	call -0x1
+     301	bf 07 00 00 00 00 00 00 	r7 = r0
+     302	15 07 04 00 00 00 00 00 	if r7 == 0x0 goto +0x4 <LBB0_2>
+     303	bf 71 00 00 00 00 00 00 	r1 = r7
+     304	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     305	bf 63 00 00 00 00 00 00 	r3 = r6
+     306	85 10 00 00 ec 01 00 00 	call 0x1ec
+
+LBB0_2
+     307	bf 70 00 00 00 00 00 00 	r0 = r7
+     308	95 00 00 00 00 00 00 00 	exit
+
+core::alloc::GlobalAlloc::realloc
+     309	bf 59 00 00 00 00 00 00 	r9 = r5
+     310	bf 37 00 00 00 00 00 00 	r7 = r3
+     311	bf 26 00 00 00 00 00 00 	r6 = r2
+     312	bf 91 00 00 00 00 00 00 	r1 = r9
+     313	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     314	85 10 00 00 ff ff ff ff 	call -0x1
+     315	bf 08 00 00 00 00 00 00 	r8 = r0
+     316	15 08 09 00 00 00 00 00 	if r8 == 0x0 goto +0x9 <LBB1_4>
+     317	2d 97 01 00 00 00 00 00 	if r7 > r9 goto +0x1 <LBB1_3>
+     318	bf 79 00 00 00 00 00 00 	r9 = r7
+
+LBB1_3
+     319	bf 81 00 00 00 00 00 00 	r1 = r8
+     320	bf 62 00 00 00 00 00 00 	r2 = r6
+     321	bf 93 00 00 00 00 00 00 	r3 = r9
+     322	85 10 00 00 d1 01 00 00 	call 0x1d1
+     323	bf 71 00 00 00 00 00 00 	r1 = r7
+     324	bf 62 00 00 00 00 00 00 	r2 = r6
+     325	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB1_4
+     326	bf 80 00 00 00 00 00 00 	r0 = r8
+     327	95 00 00 00 00 00 00 00 	exit
+
+<solana_sdk_bpf_no_std::allocator::Allocator as core::alloc::GlobalAlloc>::alloc
+     328	bf 21 00 00 00 00 00 00 	r1 = r2
+     329	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     330	85 10 00 00 ff ff ff ff 	call -0x1
+     331	95 00 00 00 00 00 00 00 	exit
+
+<solana_sdk_bpf_no_std::allocator::Allocator as core::alloc::GlobalAlloc>::dealloc
+     332	bf 31 00 00 00 00 00 00 	r1 = r3
+     333	85 10 00 00 ff ff ff ff 	call -0x1
+     334	95 00 00 00 00 00 00 00 	exit
+
+rust_oom
+     335	18 01 00 00 cb 1a 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1acb ll
+     337	b7 02 00 00 13 00 00 00 	r2 = 0x13
+     338	85 10 00 00 04 00 00 00 	call 0x4
+     339	18 01 00 00 d0 1d 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1dd0 ll
+     341	85 10 00 00 1c 01 00 00 	call 0x11c
+     342	85 10 00 00 ff ff ff ff 	call -0x1
+
+solana_sdk_bpf_utils::log::sol_log
+     343	85 10 00 00 ff ff ff ff 	call -0x1
+     344	95 00 00 00 00 00 00 00 	exit
+
+solana_sdk_bpf_utils::entrypoint::deserialize
+     345	bf 29 00 00 00 00 00 00 	r9 = r2
+     346	7b 1a 50 ff 00 00 00 00 	*(u64 *)(r10 - 0xb0) = r1
+     347	79 96 00 00 00 00 00 00 	r6 = *(u64 *)(r9 + 0x0)
+     348	bf a1 00 00 00 00 00 00 	r1 = r10
+     349	07 01 00 00 a8 ff ff ff 	r1 += -0x58
+     350	85 10 00 00 91 00 00 00 	call 0x91
+     351	79 a1 b0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x50)
+     352	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+     353	79 a1 a8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x58)
+     354	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+     355	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     356	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     357	bf a1 00 00 00 00 00 00 	r1 = r10
+     358	07 01 00 00 98 ff ff ff 	r1 += -0x68
+     359	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     360	bf 63 00 00 00 00 00 00 	r3 = r6
+     361	85 10 00 00 fb 00 00 00 	call 0xfb
+     362	b7 07 00 00 08 00 00 00 	r7 = 0x8
+     363	79 a1 a0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x60)
+     364	79 a6 98 ff 00 00 00 00 	r6 = *(u64 *)(r10 - 0x68)
+     365	7b 1a 60 ff 00 00 00 00 	*(u64 *)(r10 - 0xa0) = r1
+     366	3d 16 63 00 00 00 00 00 	if r6 >= r1 goto +0x63 <LBB0_10>
+     367	b7 07 00 00 08 00 00 00 	r7 = 0x8
+     368	bf 68 00 00 00 00 00 00 	r8 = r6
+     369	7b 9a 58 ff 00 00 00 00 	*(u64 *)(r10 - 0xa8) = r9
+
+LBB0_2
+     370	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     371	85 10 00 00 7a 00 00 00 	call 0x7a
+     372	0f 08 00 00 00 00 00 00 	r8 += r0
+     373	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     374	2d 86 01 00 00 00 00 00 	if r6 > r8 goto +0x1 <LBB0_4>
+     375	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB0_4
+     376	57 01 00 00 01 00 00 00 	r1 &= 0x1
+     377	55 01 58 00 00 00 00 00 	if r1 != 0x0 goto +0x58 <LBB0_10>
+     378	7b 8a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r8
+     379	bf 96 00 00 00 00 00 00 	r6 = r9
+     380	0f 76 00 00 00 00 00 00 	r6 += r7
+     381	79 61 00 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x0)
+     382	b7 02 00 00 01 00 00 00 	r2 = 0x1
+     383	55 01 01 00 00 00 00 00 	if r1 != 0x0 goto +0x1 <LBB0_7>
+     384	b7 02 00 00 00 00 00 00 	r2 = 0x0
+
+LBB0_7
+     385	7b 2a 78 ff 00 00 00 00 	*(u64 *)(r10 - 0x88) = r2
+     386	07 07 00 00 38 00 00 00 	r7 += 0x38
+     387	bf 91 00 00 00 00 00 00 	r1 = r9
+     388	0f 71 00 00 00 00 00 00 	r1 += r7
+     389	7b 1a 70 ff 00 00 00 00 	*(u64 *)(r10 - 0x90) = r1
+     390	79 68 30 00 00 00 00 00 	r8 = *(u64 *)(r6 + 0x30)
+     391	7b 8a 68 ff 00 00 00 00 	*(u64 *)(r10 - 0x98) = r8
+     392	0f 78 00 00 00 00 00 00 	r8 += r7
+     393	bf 67 00 00 00 00 00 00 	r7 = r6
+     394	07 07 00 00 28 00 00 00 	r7 += 0x28
+     395	07 06 00 00 08 00 00 00 	r6 += 0x8
+     396	0f 89 00 00 00 00 00 00 	r9 += r8
+     397	79 a1 c0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x40)
+     398	79 a2 c8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x38)
+     399	5d 12 04 00 00 00 00 00 	if r2 != r1 goto +0x4 <LBB0_9>
+     400	bf a1 00 00 00 00 00 00 	r1 = r10
+     401	07 01 00 00 b8 ff ff ff 	r1 += -0x48
+     402	b7 02 00 00 01 00 00 00 	r2 = 0x1
+     403	85 10 00 00 c5 00 00 00 	call 0xc5
+
+LBB0_9
+     404	07 08 00 00 20 00 00 00 	r8 += 0x20
+     405	bf a1 00 00 00 00 00 00 	r1 = r10
+     406	07 01 00 00 88 ff ff ff 	r1 += -0x78
+     407	bf a2 00 00 00 00 00 00 	r2 = r10
+     408	07 02 00 00 b8 ff ff ff 	r2 += -0x48
+     409	85 10 00 00 c3 00 00 00 	call 0xc3
+     410	79 a1 88 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x78)
+     411	79 a2 c8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x38)
+     412	71 a3 d5 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x2b)
+     413	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+     414	71 a4 d4 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x2c)
+     415	4f 43 00 00 00 00 00 00 	r3 |= r4
+     416	71 a4 d6 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x2a)
+     417	73 4a ee ff 00 00 00 00 	*(u8 *)(r10 - 0x12) = r4
+     418	6b 3a ec ff 00 00 00 00 	*(u16 *)(r10 - 0x14) = r3
+     419	71 a3 d1 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x2f)
+     420	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+     421	71 a4 d0 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x30)
+     422	4f 43 00 00 00 00 00 00 	r3 |= r4
+     423	71 a4 d3 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x2d)
+     424	67 04 00 00 08 00 00 00 	r4 <<= 0x8
+     425	71 a5 d2 ff 00 00 00 00 	r5 = *(u8 *)(r10 - 0x2e)
+     426	4f 54 00 00 00 00 00 00 	r4 |= r5
+     427	67 04 00 00 10 00 00 00 	r4 <<= 0x10
+     428	4f 34 00 00 00 00 00 00 	r4 |= r3
+     429	63 4a e8 ff 00 00 00 00 	*(u32 *)(r10 - 0x18) = r4
+     430	27 02 00 00 30 00 00 00 	r2 *= 0x30
+     431	0f 21 00 00 00 00 00 00 	r1 += r2
+     432	79 a2 78 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x88)
+     433	73 21 28 00 00 00 00 00 	*(u8 *)(r1 + 0x28) = r2
+     434	7b 91 20 00 00 00 00 00 	*(u64 *)(r1 + 0x20) = r9
+     435	79 a2 68 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x98)
+     436	7b 21 18 00 00 00 00 00 	*(u64 *)(r1 + 0x18) = r2
+     437	79 a2 70 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x90)
+     438	7b 21 10 00 00 00 00 00 	*(u64 *)(r1 + 0x10) = r2
+     439	7b 71 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r7
+     440	7b 61 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r6
+     441	71 a2 ee ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x12)
+     442	73 21 2f 00 00 00 00 00 	*(u8 *)(r1 + 0x2f) = r2
+     443	69 a2 ec ff 00 00 00 00 	r2 = *(u16 *)(r10 - 0x14)
+     444	73 21 2d 00 00 00 00 00 	*(u8 *)(r1 + 0x2d) = r2
+     445	77 02 00 00 08 00 00 00 	r2 >>= 0x8
+     446	73 21 2e 00 00 00 00 00 	*(u8 *)(r1 + 0x2e) = r2
+     447	61 a2 e8 ff 00 00 00 00 	r2 = *(u32 *)(r10 - 0x18)
+     448	bf 23 00 00 00 00 00 00 	r3 = r2
+     449	77 03 00 00 18 00 00 00 	r3 >>= 0x18
+     450	73 31 2c 00 00 00 00 00 	*(u8 *)(r1 + 0x2c) = r3
+     451	bf 23 00 00 00 00 00 00 	r3 = r2
+     452	77 03 00 00 10 00 00 00 	r3 >>= 0x10
+     453	73 31 2b 00 00 00 00 00 	*(u8 *)(r1 + 0x2b) = r3
+     454	73 21 29 00 00 00 00 00 	*(u8 *)(r1 + 0x29) = r2
+     455	77 02 00 00 08 00 00 00 	r2 >>= 0x8
+     456	73 21 2a 00 00 00 00 00 	*(u8 *)(r1 + 0x2a) = r2
+     457	79 a1 c8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x38)
+     458	07 01 00 00 01 00 00 00 	r1 += 0x1
+     459	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     460	bf 87 00 00 00 00 00 00 	r7 = r8
+     461	79 a8 80 ff 00 00 00 00 	r8 = *(u64 *)(r10 - 0x80)
+     462	bf 86 00 00 00 00 00 00 	r6 = r8
+     463	79 a9 58 ff 00 00 00 00 	r9 = *(u64 *)(r10 - 0xa8)
+     464	79 a1 60 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xa0)
+     465	2d 81 a0 ff 00 00 00 00 	if r1 > r8 goto -0x60 <LBB0_2>
+
+LBB0_10
+     466	bf 91 00 00 00 00 00 00 	r1 = r9
+     467	0f 71 00 00 00 00 00 00 	r1 += r7
+     468	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+     469	79 a2 b8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x48)
+     470	7b 2a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r2
+     471	7b 2a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r2
+     472	79 a2 c0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x40)
+     473	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     474	7b 2a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r2
+     475	79 a2 c8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x38)
+     476	7b 2a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r2
+     477	7b 2a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r2
+     478	79 a2 e0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x20)
+     479	79 a3 50 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0xb0)
+     480	7b 23 10 00 00 00 00 00 	*(u64 *)(r3 + 0x10) = r2
+     481	79 a2 d8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x28)
+     482	7b 23 08 00 00 00 00 00 	*(u64 *)(r3 + 0x8) = r2
+     483	79 a2 d0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x30)
+     484	7b 23 00 00 00 00 00 00 	*(u64 *)(r3 + 0x0) = r2
+     485	07 07 00 00 08 00 00 00 	r7 += 0x8
+     486	bf 92 00 00 00 00 00 00 	r2 = r9
+     487	0f 72 00 00 00 00 00 00 	r2 += r7
+     488	7b 23 20 00 00 00 00 00 	*(u64 *)(r3 + 0x20) = r2
+     489	7b 13 28 00 00 00 00 00 	*(u64 *)(r3 + 0x28) = r1
+     490	0f 71 00 00 00 00 00 00 	r1 += r7
+     491	0f 19 00 00 00 00 00 00 	r9 += r1
+     492	7b 93 18 00 00 00 00 00 	*(u64 *)(r3 + 0x18) = r9
+     493	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::TryFrom<U>>::try_from
+     494	bf 10 00 00 00 00 00 00 	r0 = r1
+     495	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T>::new
+     496	bf 16 00 00 00 00 00 00 	r6 = r1
+     497	85 10 00 00 61 00 00 00 	call 0x61
+     498	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     499	7b 16 08 00 00 00 00 00 	*(u64 *)(r6 + 0x8) = r1
+     500	7b 06 00 00 00 00 00 00 	*(u64 *)(r6 + 0x0) = r0
+     501	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T,A>::ptr
+     502	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+     503	85 10 00 00 5d 00 00 00 	call 0x5d
+     504	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T,A>::reserve
+     505	bf 16 00 00 00 00 00 00 	r6 = r1
+     506	79 67 08 00 00 00 00 00 	r7 = *(u64 *)(r6 + 0x8)
+     507	bf 71 00 00 00 00 00 00 	r1 = r7
+     508	1f 21 00 00 00 00 00 00 	r1 -= r2
+     509	3d 31 44 00 00 00 00 00 	if r1 >= r3 goto +0x44 <LBB2_24>
+     510	bf 29 00 00 00 00 00 00 	r9 = r2
+     511	0f 39 00 00 00 00 00 00 	r9 += r3
+     512	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     513	2d 92 01 00 00 00 00 00 	if r2 > r9 goto +0x1 <LBB2_3>
+     514	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB2_3
+     515	55 01 07 00 01 00 00 00 	if r1 != 0x1 goto +0x7 <LBB2_5>
+     516	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     517	85 10 00 00 4b 00 00 00 	call 0x4b
+     518	bf 01 00 00 00 00 00 00 	r1 = r0
+     519	85 10 00 00 49 00 00 00 	call 0x49
+     520	55 00 3e 00 00 00 00 00 	if r0 != 0x0 goto +0x3e <LBB2_22>
+
+LBB2_21
+     521	85 10 00 00 5e 00 00 00 	call 0x5e
+     522	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB2_5
+     523	bf a1 00 00 00 00 00 00 	r1 = r10
+     524	07 01 00 00 f0 ff ff ff 	r1 += -0x10
+     525	85 10 00 00 3d 00 00 00 	call 0x3d
+     526	79 a8 f8 ff 00 00 00 00 	r8 = *(u64 *)(r10 - 0x8)
+     527	79 a3 f0 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x10)
+     528	bf 32 00 00 00 00 00 00 	r2 = r3
+     529	0f 82 00 00 00 00 00 00 	r2 += r8
+     530	07 02 00 00 ff ff ff ff 	r2 += -0x1
+     531	bf 81 00 00 00 00 00 00 	r1 = r8
+     532	87 01 00 00 00 00 00 00 	r1 = -r1
+     533	5f 12 00 00 00 00 00 00 	r2 &= r1
+     534	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     535	2d 23 01 00 00 00 00 00 	if r3 > r2 goto +0x1 <LBB2_7>
+     536	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB2_7
+     537	67 07 00 00 01 00 00 00 	r7 <<= 0x1
+     538	2d 97 01 00 00 00 00 00 	if r7 > r9 goto +0x1 <LBB2_9>
+     539	bf 97 00 00 00 00 00 00 	r7 = r9
+
+LBB2_9
+     540	55 01 01 00 01 00 00 00 	if r1 != 0x1 goto +0x1 <LBB2_11>
+     541	05 00 0b 00 00 00 00 00 	goto +0xb <LBB2_14>
+
+LBB2_11
+     542	bf a1 00 00 00 00 00 00 	r1 = r10
+     543	07 01 00 00 e0 ff ff ff 	r1 += -0x20
+     544	b7 03 00 00 00 00 00 00 	r3 = 0x0
+     545	bf 74 00 00 00 00 00 00 	r4 = r7
+     546	b7 05 00 00 00 00 00 00 	r5 = 0x0
+     547	85 10 00 00 04 01 00 00 	call 0x104
+     548	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     549	79 a2 e8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x18)
+     550	55 02 01 00 00 00 00 00 	if r2 != 0x0 goto +0x1 <LBB2_13>
+     551	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB2_13
+     552	55 01 02 00 01 00 00 00 	if r1 != 0x1 goto +0x2 <LBB2_16>
+
+LBB2_14
+     553	85 10 00 00 26 00 00 00 	call 0x26
+     554	05 00 18 00 00 00 00 00 	goto +0x18 <LBB2_15>
+
+LBB2_16
+     555	15 08 17 00 00 00 00 00 	if r8 == 0x0 goto +0x17 <LBB2_15>
+     556	79 a9 e0 ff 00 00 00 00 	r9 = *(u64 *)(r10 - 0x20)
+     557	79 62 08 00 00 00 00 00 	r2 = *(u64 *)(r6 + 0x8)
+     558	15 02 07 00 00 00 00 00 	if r2 == 0x0 goto +0x7 <LBB2_19>
+     559	79 61 00 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x0)
+     560	27 02 00 00 30 00 00 00 	r2 *= 0x30
+     561	b7 03 00 00 08 00 00 00 	r3 = 0x8
+     562	bf 94 00 00 00 00 00 00 	r4 = r9
+     563	85 10 00 00 b9 fe ff ff 	call -0x147
+     564	55 00 09 00 00 00 00 00 	if r0 != 0x0 goto +0x9 <LBB2_23>
+     565	05 00 04 00 00 00 00 00 	goto +0x4 <LBB2_20>
+
+LBB2_19
+     566	bf 91 00 00 00 00 00 00 	r1 = r9
+     567	bf 82 00 00 00 00 00 00 	r2 = r8
+     568	85 10 00 00 a1 fe ff ff 	call -0x15f
+     569	55 00 04 00 00 00 00 00 	if r0 != 0x0 goto +0x4 <LBB2_23>
+
+LBB2_20
+     570	bf 91 00 00 00 00 00 00 	r1 = r9
+     571	bf 82 00 00 00 00 00 00 	r2 = r8
+     572	85 10 00 00 2f 00 00 00 	call 0x2f
+     573	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB2_23
+     574	bf 01 00 00 00 00 00 00 	r1 = r0
+     575	85 10 00 00 17 00 00 00 	call 0x17
+     576	7b 76 08 00 00 00 00 00 	*(u64 *)(r6 + 0x8) = r7
+     577	7b 06 00 00 00 00 00 00 	*(u64 *)(r6 + 0x0) = r0
+
+LBB2_24
+     578	95 00 00 00 00 00 00 00 	exit
+
+LBB2_15
+     579	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     580	85 10 00 00 0c 00 00 00 	call 0xc
+     581	55 00 01 00 00 00 00 00 	if r0 != 0x0 goto +0x1 <LBB2_22>
+     582	05 00 c2 ff 00 00 00 00 	goto -0x3e <LBB2_21>
+
+LBB2_22
+     583	18 01 00 00 f8 1d 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1df8 ll
+     585	85 10 00 00 28 00 00 00 	call 0x28
+     586	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::alloc::size_align
+     587	b7 02 00 00 08 00 00 00 	r2 = 0x8
+     588	7b 21 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r2
+     589	b7 02 00 00 30 00 00 00 	r2 = 0x30
+     590	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     591	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::From<T>>::from
+     592	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::From<T>>::from
+     593	bf 10 00 00 00 00 00 00 	r0 = r1
+     594	95 00 00 00 00 00 00 00 	exit
+
+core::ptr::Unique<T>::empty
+     595	b7 00 00 00 08 00 00 00 	r0 = 0x8
+     596	95 00 00 00 00 00 00 00 	exit
+
+core::ptr::Unique<T>::as_ptr
+     597	bf 10 00 00 00 00 00 00 	r0 = r1
+     598	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::Into<U>>::into
+     599	bf 10 00 00 00 00 00 00 	r0 = r1
+     600	95 00 00 00 00 00 00 00 	exit
+
+alloc::vec::Vec<T>::reserve
+     601	bf 23 00 00 00 00 00 00 	r3 = r2
+     602	79 12 10 00 00 00 00 00 	r2 = *(u64 *)(r1 + 0x10)
+     603	85 10 00 00 9d ff ff ff 	call -0x63
+     604	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::deref::DerefMut>::deref_mut
+     605	bf 26 00 00 00 00 00 00 	r6 = r2
+     606	bf 17 00 00 00 00 00 00 	r7 = r1
+     607	bf 61 00 00 00 00 00 00 	r1 = r6
+     608	85 10 00 00 95 ff ff ff 	call -0x6b
+     609	7b 07 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r0
+     610	79 61 10 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x10)
+     611	7b 17 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r1
+     612	95 00 00 00 00 00 00 00 	exit
+
+<I as core::iter::traits::collect::IntoIterator>::into_iter
+     613	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+     614	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     615	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::capacity_overflow
+     616	18 01 00 00 20 1e 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1e20 ll
+     618	85 10 00 00 07 00 00 00 	call 0x7
+     619	85 10 00 00 ff ff ff ff 	call -0x1
+
+alloc::alloc::handle_alloc_error
+     620	85 10 00 00 e2 fe ff ff 	call -0x11e
+     621	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::any::TypeId::of
+     622	18 00 00 00 93 aa a2 c1 00 00 00 00 86 1d 02 04 	r0 = 0x4021d86c1a2aa93 ll
+     624	95 00 00 00 00 00 00 00 	exit
+
+core::ptr::real_drop_in_place
+     625	95 00 00 00 00 00 00 00 	exit
+
+core::panicking::panic
+     626	79 12 10 00 00 00 00 00 	r2 = *(u64 *)(r1 + 0x10)
+     627	79 13 18 00 00 00 00 00 	r3 = *(u64 *)(r1 + 0x18)
+     628	79 14 20 00 00 00 00 00 	r4 = *(u64 *)(r1 + 0x20)
+     629	79 15 00 00 00 00 00 00 	r5 = *(u64 *)(r1 + 0x0)
+     630	79 11 08 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x8)
+     631	7b 1a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r1
+     632	7b 5a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r5
+     633	18 01 00 00 38 1c 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1c38 ll
+     635	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     636	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     637	7b 1a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r1
+     638	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+     639	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     640	7b 1a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r1
+     641	bf a1 00 00 00 00 00 00 	r1 = r10
+     642	07 01 00 00 d8 ff ff ff 	r1 += -0x28
+     643	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+     644	7b 4a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r4
+     645	7b 3a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r3
+     646	7b 2a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r2
+     647	bf a1 00 00 00 00 00 00 	r1 = r10
+     648	07 01 00 00 a8 ff ff ff 	r1 += -0x58
+     649	bf a2 00 00 00 00 00 00 	r2 = r10
+     650	07 02 00 00 e8 ff ff ff 	r2 += -0x18
+     651	85 10 00 00 01 00 00 00 	call 0x1
+     652	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::panicking::panic_fmt
+     653	bf 16 00 00 00 00 00 00 	r6 = r1
+     654	61 25 14 00 00 00 00 00 	r5 = *(u32 *)(r2 + 0x14)
+     655	61 24 10 00 00 00 00 00 	r4 = *(u32 *)(r2 + 0x10)
+     656	79 23 08 00 00 00 00 00 	r3 = *(u64 *)(r2 + 0x8)
+     657	79 22 00 00 00 00 00 00 	r2 = *(u64 *)(r2 + 0x0)
+     658	bf a1 00 00 00 00 00 00 	r1 = r10
+     659	07 01 00 00 d0 ff ff ff 	r1 += -0x30
+     660	85 10 00 00 71 00 00 00 	call 0x71
+     661	7b 6a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r6
+     662	18 01 00 00 48 1e 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1e48 ll
+     664	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+     665	18 01 00 00 38 1c 00 00 00 00 00 00 00 00 00 00 	r1 = 0x1c38 ll
+     667	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+     668	79 a1 d0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x30)
+     669	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+     670	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+     671	79 a1 d8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x28)
+     672	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+     673	7b 1a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r1
+     674	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+     675	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     676	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     677	bf a1 00 00 00 00 00 00 	r1 = r10
+     678	07 01 00 00 a0 ff ff ff 	r1 += -0x60
+     679	85 10 00 00 01 00 00 00 	call 0x1
+     680	85 10 00 00 ff ff ff ff 	call -0x1
+
+rust_begin_unwind
+     681	85 10 00 00 59 00 00 00 	call 0x59
+     682	bf 06 00 00 00 00 00 00 	r6 = r0
+     683	15 06 43 00 00 00 00 00 	if r6 == 0x0 goto +0x43 <LBB0_6>
+     684	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     685	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     686	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+     687	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+     688	7b 1a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r1
+     689	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+     690	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+     691	7b 1a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r1
+     692	7b 1a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r1
+     693	7b 1a 88 ff 00 00 00 00 	*(u64 *)(r10 - 0x78) = r1
+     694	7b 1a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r1
+     695	7b 1a 78 ff 00 00 00 00 	*(u64 *)(r10 - 0x88) = r1
+     696	7b 1a 70 ff 00 00 00 00 	*(u64 *)(r10 - 0x90) = r1
+     697	7b 1a 68 ff 00 00 00 00 	*(u64 *)(r10 - 0x98) = r1
+     698	7b 1a 60 ff 00 00 00 00 	*(u64 *)(r10 - 0xa0) = r1
+     699	7b 1a 58 ff 00 00 00 00 	*(u64 *)(r10 - 0xa8) = r1
+     700	7b 1a 50 ff 00 00 00 00 	*(u64 *)(r10 - 0xb0) = r1
+     701	bf a1 00 00 00 00 00 00 	r1 = r10
+     702	07 01 00 00 40 ff ff ff 	r1 += -0xc0
+     703	bf 62 00 00 00 00 00 00 	r2 = r6
+     704	85 10 00 00 4a 00 00 00 	call 0x4a
+     705	79 a1 48 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xb8)
+     706	79 a2 40 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0xc0)
+     707	bf 23 00 00 00 00 00 00 	r3 = r2
+     708	0f 13 00 00 00 00 00 00 	r3 += r1
+     709	bf a7 00 00 00 00 00 00 	r7 = r10
+     710	07 07 00 00 e8 ff ff ff 	r7 += -0x18
+     711	bf 71 00 00 00 00 00 00 	r1 = r7
+     712	85 10 00 00 2c 00 00 00 	call 0x2c
+     713	bf a1 00 00 00 00 00 00 	r1 = r10
+     714	07 01 00 00 d0 ff ff ff 	r1 += -0x30
+     715	bf 72 00 00 00 00 00 00 	r2 = r7
+     716	85 10 00 00 2d 00 00 00 	call 0x2d
+     717	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+     718	25 01 10 00 7f 00 00 00 	if r1 > 0x7f goto +0x10 <LBB0_7>
+     719	79 a2 d8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x28)
+     720	79 a3 d0 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x30)
+     721	1d 23 0d 00 00 00 00 00 	if r3 == r2 goto +0xd <LBB0_7>
+     722	07 02 00 00 ff ff ff ff 	r2 += -0x1
+
+LBB0_4
+     723	bf 34 00 00 00 00 00 00 	r4 = r3
+     724	bf a3 00 00 00 00 00 00 	r3 = r10
+     725	07 03 00 00 50 ff ff ff 	r3 += -0xb0
+     726	0f 13 00 00 00 00 00 00 	r3 += r1
+     727	71 45 00 00 00 00 00 00 	r5 = *(u8 *)(r4 + 0x0)
+     728	73 53 00 00 00 00 00 00 	*(u8 *)(r3 + 0x0) = r5
+     729	25 01 05 00 7e 00 00 00 	if r1 > 0x7e goto +0x5 <LBB0_7>
+     730	bf 43 00 00 00 00 00 00 	r3 = r4
+     731	07 03 00 00 01 00 00 00 	r3 += 0x1
+     732	07 01 00 00 01 00 00 00 	r1 += 0x1
+     733	1d 42 01 00 00 00 00 00 	if r2 == r4 goto +0x1 <LBB0_7>
+     734	05 00 f4 ff 00 00 00 00 	goto -0xc <LBB0_4>
+
+LBB0_7
+     735	bf 61 00 00 00 00 00 00 	r1 = r6
+     736	85 10 00 00 2f 00 00 00 	call 0x2f
+     737	bf 07 00 00 00 00 00 00 	r7 = r0
+     738	bf 61 00 00 00 00 00 00 	r1 = r6
+     739	85 10 00 00 2e 00 00 00 	call 0x2e
+     740	67 07 00 00 20 00 00 00 	r7 <<= 0x20
+     741	77 07 00 00 20 00 00 00 	r7 >>= 0x20
+     742	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+     743	77 00 00 00 20 00 00 00 	r0 >>= 0x20
+     744	bf a1 00 00 00 00 00 00 	r1 = r10
+     745	07 01 00 00 50 ff ff ff 	r1 += -0xb0
+     746	b7 02 00 00 80 00 00 00 	r2 = 0x80
+     747	bf 73 00 00 00 00 00 00 	r3 = r7
+     748	bf 04 00 00 00 00 00 00 	r4 = r0
+     749	85 10 00 00 ff ff ff ff 	call -0x1
+     750	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB0_6
+     751	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     752	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     753	b7 03 00 00 00 00 00 00 	r3 = 0x0
+     754	b7 04 00 00 00 00 00 00 	r4 = 0x0
+     755	85 10 00 00 ff ff ff ff 	call -0x1
+     756	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::iter::adapters::Enumerate<I>::new
+     757	b7 04 00 00 00 00 00 00 	r4 = 0x0
+     758	7b 41 10 00 00 00 00 00 	*(u64 *)(r1 + 0x10) = r4
+     759	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+     760	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     761	95 00 00 00 00 00 00 00 	exit
+
+<I as core::iter::traits::collect::IntoIterator>::into_iter
+     762	79 23 10 00 00 00 00 00 	r3 = *(u64 *)(r2 + 0x10)
+     763	7b 31 10 00 00 00 00 00 	*(u64 *)(r1 + 0x10) = r3
+     764	79 23 08 00 00 00 00 00 	r3 = *(u64 *)(r2 + 0x8)
+     765	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+     766	79 22 00 00 00 00 00 00 	r2 = *(u64 *)(r2 + 0x0)
+     767	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     768	95 00 00 00 00 00 00 00 	exit
+
+<T as core::any::Any>::type_id
+     769	85 10 00 00 6c ff ff ff 	call -0x94
+     770	95 00 00 00 00 00 00 00 	exit
+
+core::panic::PanicInfo::location
+     771	bf 10 00 00 00 00 00 00 	r0 = r1
+     772	07 00 00 00 18 00 00 00 	r0 += 0x18
+     773	95 00 00 00 00 00 00 00 	exit
+
+core::panic::Location::internal_constructor
+     774	63 51 14 00 00 00 00 00 	*(u32 *)(r1 + 0x14) = r5
+     775	63 41 10 00 00 00 00 00 	*(u32 *)(r1 + 0x10) = r4
+     776	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+     777	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     778	95 00 00 00 00 00 00 00 	exit
+
+core::panic::Location::file
+     779	79 23 08 00 00 00 00 00 	r3 = *(u64 *)(r2 + 0x8)
+     780	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+     781	79 22 00 00 00 00 00 00 	r2 = *(u64 *)(r2 + 0x0)
+     782	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     783	95 00 00 00 00 00 00 00 	exit
+
+core::panic::Location::line
+     784	61 10 10 00 00 00 00 00 	r0 = *(u32 *)(r1 + 0x10)
+     785	95 00 00 00 00 00 00 00 	exit
+
+core::panic::Location::column
+     786	61 10 14 00 00 00 00 00 	r0 = *(u32 *)(r1 + 0x14)
+     787	95 00 00 00 00 00 00 00 	exit
+
+memcpy
+     788	bf 10 00 00 00 00 00 00 	r0 = r1
+     789	15 03 08 00 00 00 00 00 	if r3 == 0x0 goto +0x8 <LBB0_3>
+     790	bf 01 00 00 00 00 00 00 	r1 = r0
+
+LBB0_2
+     791	71 24 00 00 00 00 00 00 	r4 = *(u8 *)(r2 + 0x0)
+     792	73 41 00 00 00 00 00 00 	*(u8 *)(r1 + 0x0) = r4
+     793	07 01 00 00 01 00 00 00 	r1 += 0x1
+     794	07 02 00 00 01 00 00 00 	r2 += 0x1
+     795	07 03 00 00 ff ff ff ff 	r3 += -0x1
+     796	15 03 01 00 00 00 00 00 	if r3 == 0x0 goto +0x1 <LBB0_3>
+     797	05 00 f9 ff 00 00 00 00 	goto -0x7 <LBB0_2>
+
+LBB0_3
+     798	95 00 00 00 00 00 00 00 	exit
+
+memset
+     799	bf 10 00 00 00 00 00 00 	r0 = r1
+     800	15 03 06 00 00 00 00 00 	if r3 == 0x0 goto +0x6 <LBB2_3>
+     801	bf 01 00 00 00 00 00 00 	r1 = r0
+
+LBB2_2
+     802	73 21 00 00 00 00 00 00 	*(u8 *)(r1 + 0x0) = r2
+     803	07 01 00 00 01 00 00 00 	r1 += 0x1
+     804	07 03 00 00 ff ff ff ff 	r3 += -0x1
+     805	15 03 01 00 00 00 00 00 	if r3 == 0x0 goto +0x1 <LBB2_3>
+     806	05 00 fb ff 00 00 00 00 	goto -0x5 <LBB2_2>
+
+LBB2_3
+     807	95 00 00 00 00 00 00 00 	exit
+
+__multi3
+     808	2f 43 00 00 00 00 00 00 	r3 *= r4
+     809	2f 25 00 00 00 00 00 00 	r5 *= r2
+     810	0f 35 00 00 00 00 00 00 	r5 += r3
+     811	bf 20 00 00 00 00 00 00 	r0 = r2
+     812	77 00 00 00 20 00 00 00 	r0 >>= 0x20
+     813	bf 43 00 00 00 00 00 00 	r3 = r4
+     814	77 03 00 00 20 00 00 00 	r3 >>= 0x20
+     815	bf 36 00 00 00 00 00 00 	r6 = r3
+     816	2f 06 00 00 00 00 00 00 	r6 *= r0
+     817	0f 65 00 00 00 00 00 00 	r5 += r6
+     818	67 04 00 00 20 00 00 00 	r4 <<= 0x20
+     819	77 04 00 00 20 00 00 00 	r4 >>= 0x20
+     820	bf 46 00 00 00 00 00 00 	r6 = r4
+     821	2f 06 00 00 00 00 00 00 	r6 *= r0
+     822	67 02 00 00 20 00 00 00 	r2 <<= 0x20
+     823	77 02 00 00 20 00 00 00 	r2 >>= 0x20
+     824	2f 24 00 00 00 00 00 00 	r4 *= r2
+     825	bf 40 00 00 00 00 00 00 	r0 = r4
+     826	77 00 00 00 20 00 00 00 	r0 >>= 0x20
+     827	0f 60 00 00 00 00 00 00 	r0 += r6
+     828	bf 06 00 00 00 00 00 00 	r6 = r0
+     829	77 06 00 00 20 00 00 00 	r6 >>= 0x20
+     830	0f 65 00 00 00 00 00 00 	r5 += r6
+     831	2f 23 00 00 00 00 00 00 	r3 *= r2
+     832	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+     833	77 00 00 00 20 00 00 00 	r0 >>= 0x20
+     834	0f 30 00 00 00 00 00 00 	r0 += r3
+     835	bf 02 00 00 00 00 00 00 	r2 = r0
+     836	77 02 00 00 20 00 00 00 	r2 >>= 0x20
+     837	0f 25 00 00 00 00 00 00 	r5 += r2
+     838	7b 51 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r5
+     839	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+     840	67 04 00 00 20 00 00 00 	r4 <<= 0x20
+     841	77 04 00 00 20 00 00 00 	r4 >>= 0x20
+     842	4f 40 00 00 00 00 00 00 	r0 |= r4
+     843	7b 01 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r0
+     844	95 00 00 00 00 00 00 00 	exit

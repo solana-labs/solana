@@ -25,7 +25,8 @@ export AR="$bpf_sdk/dependencies/llvm-native/bin/llvm-ar"
 
 # Use the SDK's version of Rust to build for BPF
 export RUSTUP_TOOLCHAIN=bpf
-export RUSTFLAGS="
+export RUSTFLAGS=" \
+    --emit=llvm-ir \
     -C lto=no \
     -C opt-level=2 \
     -C link-arg=-z -C link-arg=notext \

@@ -1,0 +1,3545 @@
+-rwxr-xr-x  2 jack  staff  48584 Aug 26 1214 ./target/bpfel-unknown-unknown/release/solana_bpf_rust_stack_bug.so
+ELF Header
+  Magic   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
+  Class                             ELF64
+  Data                              2's complement, little endian
+  Version                           1 (current)
+  OS/ABI                            UNIX - System V
+  ABI Version                       0
+  Type                              DYN (Shared object file)
+  Machine                           Linux BPF
+  Version                           0x1
+  Entry point address               0x428
+  Start of program headers          64 (bytes into file)
+  Start of section headers          47496 (bytes into file)
+  Flags                             0x0
+  Size of this header               64 (bytes)
+  Size of program headers           56 (bytes)
+  Number of program headers         3
+  Size of section headers           64 (bytes)
+  Number of section headers         17
+  Section header string table index 15
+
+Section Headers
+  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        00000000000000e8 0000e8 0055b0 00  AX  0   0  8
+  [ 2] .rodata           PROGBITS        0000000000005698 005698 000350 00  AM  0   0  8
+  [ 3] .eh_frame         PROGBITS        00000000000059e8 0059e8 00009c 00   A  0   0  8
+  [ 4] .dynamic          DYNAMIC         0000000000005a88 005a88 0000d0 10  WA  7   0  8
+  [ 5] .data.rel.ro      PROGBITS        0000000000005b58 005b58 000120 00  WA  0   0  8
+  [ 6] .dynsym           DYNSYM          0000000000005c78 005c78 0000a8 18   A  7   1  8
+  [ 7] .dynstr           STRTAB          0000000000005d20 005d20 000042 00   A  0   0  1
+  [ 8] .gnu.hash         GNU_HASH        0000000000005d68 005d68 000020 00   A  6   0  8
+  [ 9] .rel.dyn          REL             0000000000005d88 005d88 000450 10   A  6   0  8
+  [10] .hash             HASH            00000000000061d8 0061d8 000040 04   A  6   0  4
+  [11] .BTF              PROGBITS        0000000000000000 006218 0005dc 00      0   0  1
+  [12] .BTF.ext          PROGBITS        0000000000000000 0067f4 000780 00      0   0  1
+  [13] .comment          PROGBITS        0000000000000000 006f74 000064 01  MS  0   0  1
+  [14] .symtab           SYMTAB          0000000000000000 006fd8 001cf8 18     16 303  8
+  [15] .shstrtab         STRTAB          0000000000000000 008cd0 000089 00      0   0  1
+  [16] .strtab           STRTAB          0000000000000000 008d59 002c2d 00      0   0  1
+Key to Flags
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  p (processor specific)
+
+There are no section groups in this file.
+
+Program Headers
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  LOAD           0x0000e8 0x00000000000000e8 0x00000000000000e8 0x0055b0 0x0055b0 R E 0x1000
+  LOAD           0x005698 0x0000000000005698 0x0000000000005698 0x0003ec 0x0003ec R   0x1000
+  DYNAMIC        0x005a88 0x0000000000005a88 0x0000000000005a88 0x000790 0x000790 RW  0x8
+
+ Section to Segment mapping
+  Segment Sections...
+   00     .text 
+   01     .rodata .eh_frame 
+   02     .dynamic .data.rel.ro .dynsym .dynstr .gnu.hash .rel.dyn .hash 
+
+Dynamic section at offset 0x5a88 contains 13 entries
+  Tag        Type                         Name/Value
+ 0x000000000000001e (FLAGS)              TEXTREL
+ 0x0000000000000011 (REL)                0x5d88
+ 0x0000000000000012 (RELSZ)              1104 (bytes)
+ 0x0000000000000013 (RELENT)             16 (bytes)
+ 0x000000006ffffffa (RELCOUNT)           45
+ 0x0000000000000006 (SYMTAB)             0x5c78
+ 0x000000000000000b (SYMENT)             24 (bytes)
+ 0x0000000000000005 (STRTAB)             0x5d20
+ 0x000000000000000a (STRSZ)              66 (bytes)
+ 0x0000000000000016 (TEXTREL)            0x0
+ 0x000000006ffffef5 (GNU_HASH)           0x5d68
+ 0x0000000000000004 (HASH)               0x61d8
+ 0x0000000000000000 (NULL)               0x0
+
+Relocation section '.rel.dyn' at offset 0x5d88 contains 69 entries
+    Offset             Info             Type               Symbol's Value  Symbol's Name
+0000000000000620  0000000000000008 unrecognized 8      
+0000000000000868  0000000000000008 unrecognized 8      
+00000000000008a0  0000000000000008 unrecognized 8      
+00000000000008e8  0000000000000008 unrecognized 8      
+0000000000000958  0000000000000008 unrecognized 8      
+00000000000009a0  0000000000000008 unrecognized 8      
+0000000000005b58  0000000000000008 unrecognized 8      
+0000000000005b68  0000000000000008 unrecognized 8      
+0000000000005b78  0000000000000008 unrecognized 8      
+0000000000005b88  0000000000000008 unrecognized 8      
+0000000000000ab0  0000000000000008 unrecognized 8      
+0000000000000ae8  0000000000000008 unrecognized 8      
+0000000000000b28  0000000000000008 unrecognized 8      
+0000000000000b58  0000000000000008 unrecognized 8      
+0000000000000ca8  0000000000000008 unrecognized 8      
+0000000000000cc8  0000000000000008 unrecognized 8      
+0000000000005ba0  0000000000000008 unrecognized 8      
+0000000000005bb0  0000000000000008 unrecognized 8      
+0000000000001478  0000000000000008 unrecognized 8      
+0000000000005bc8  0000000000000008 unrecognized 8      
+0000000000005bd8  0000000000000008 unrecognized 8      
+0000000000001580  0000000000000008 unrecognized 8      
+0000000000005bf0  0000000000000008 unrecognized 8      
+0000000000005c00  0000000000000008 unrecognized 8      
+00000000000028f0  0000000000000008 unrecognized 8      
+0000000000003c58  0000000000000008 unrecognized 8      
+0000000000005c18  0000000000000008 unrecognized 8      
+0000000000003d28  0000000000000008 unrecognized 8      
+0000000000003d70  0000000000000008 unrecognized 8      
+0000000000003dd8  0000000000000008 unrecognized 8      
+0000000000003e20  0000000000000008 unrecognized 8      
+0000000000005c20  0000000000000008 unrecognized 8      
+0000000000005c30  0000000000000008 unrecognized 8      
+0000000000005c40  0000000000000008 unrecognized 8      
+0000000000004878  0000000000000008 unrecognized 8      
+0000000000004960  0000000000000008 unrecognized 8      
+0000000000004978  0000000000000008 unrecognized 8      
+0000000000004e18  0000000000000008 unrecognized 8      
+00000000000050c8  0000000000000008 unrecognized 8      
+0000000000005c58  0000000000000008 unrecognized 8      
+0000000000005c70  0000000000000008 unrecognized 8      
+0000000000005a08  0000000000000008 unrecognized 8      
+0000000000005a28  0000000000000008 unrecognized 8      
+0000000000005a48  0000000000000008 unrecognized 8      
+0000000000005a68  0000000000000008 unrecognized 8      
+0000000000000180  000000010000000a unrecognized a       0000000000000000 abort
+00000000000009b8  000000010000000a unrecognized a       0000000000000000 abort
+0000000000000ce0  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001290  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001428  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001490  000000010000000a unrecognized a       0000000000000000 abort
+0000000000001598  000000010000000a unrecognized a       0000000000000000 abort
+00000000000015a8  000000010000000a unrecognized a       0000000000000000 abort
+0000000000002898  000000010000000a unrecognized a       0000000000000000 abort
+0000000000003c00  000000010000000a unrecognized a       0000000000000000 abort
+0000000000003e38  000000010000000a unrecognized a       0000000000000000 abort
+0000000000004910  000000010000000a unrecognized a       0000000000000000 abort
+00000000000049f0  000000010000000a unrecognized a       0000000000000000 abort
+0000000000005388  000000010000000a unrecognized a       0000000000000000 abort
+00000000000053b8  000000010000000a unrecognized a       0000000000000000 abort
+0000000000000b90  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000c00  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000c58  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000c80  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000c98  000000020000000a unrecognized a       0000000000000000 sol_alloc_free_
+0000000000000ce8  000000030000000a unrecognized a       0000000000000000 sol_log_
+0000000000000cf8  000000040000000a unrecognized a       0000000000000000 sol_log_64_
+0000000000005380  000000050000000a unrecognized a       0000000000000000 sol_panic_
+00000000000053b0  000000050000000a unrecognized a       0000000000000000 sol_panic_
+
+The decoding of unwind sections for machine type Linux BPF is not currently supported.
+
+Symbol table '.dynsym' contains 7 entries
+   Num    Value          Size Type    Bind   Vis      Ndx Name
+     0 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND abort
+     2 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_alloc_free_
+     3 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_log_
+     4 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_log_64_
+     5 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_panic_
+     6 0000000000000428   616 FUNC    GLOBAL DEFAULT    1 entrypoint
+
+Symbol table '.symtab' contains 309 entries
+   Num    Value          Size Type    Bind   Vis      Ndx Name
+     0 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.0
+     2 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.1
+     3 0000000000000140     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_3
+     4 0000000000000168     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_4
+     5 0000000000000188     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_5
+     6 0000000000000200     0 NOTYPE  LOCAL  DEFAULT    1 LBB3_2
+     7 0000000000000238     0 NOTYPE  LOCAL  DEFAULT    1 LBB4_2
+     8 00000000000000e8   192 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::allocate_in
+     9 00000000000001a8    24 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::ptr
+    10 00000000000001c0    24 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::ptr
+    11 00000000000001d8    48 FUNC    LOCAL  HIDDEN     1 <alloc::raw_vec::RawVec<T,A> as core::ops::drop::Drop>::drop
+    12 0000000000000208    56 FUNC    LOCAL  HIDDEN     1 <alloc::raw_vec::RawVec<T,A> as core::ops::drop::Drop>::drop
+    13 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.2
+    14 00000000000002c0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    15 0000000000000378     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_3
+    16 0000000000000240   328 FUNC    LOCAL  HIDDEN     1 alloc::vec::from_elem
+    17 0000000000000388    16 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::drop::Drop>::drop
+    18 0000000000000398    16 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::drop::Drop>::drop
+    19 00000000000003a8    64 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::deref::Deref>::deref
+    20 00000000000003e8    64 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::deref::DerefMut>::deref_mut
+    21 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.3
+    22 000000000000569c     7 OBJECT  LOCAL  DEFAULT    2 .L__unnamed_1
+    23 0000000000000468     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    24 0000000000000688     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_3
+    25 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.4
+    26 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug.dlav1q6k-cgu.5
+    27 0000000000000690    16 FUNC    LOCAL  HIDDEN     1 core::ptr::Unique<T>::as_ptr
+    28 00000000000006a0    16 FUNC    LOCAL  HIDDEN     1 core::ptr::Unique<T>::as_ptr
+    29 0000000000000690    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::Into<U>>::into
+    30 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS 4r6s02q6q1j1vh1t
+    31 00000000000006b0     0 NOTYPE  LOCAL  DEFAULT    1 
+    32 00000000000006f0     0 NOTYPE  LOCAL  DEFAULT    1 
+    33 0000000000000748     0 NOTYPE  LOCAL  DEFAULT    1 
+    34 00000000000007b8     0 NOTYPE  LOCAL  DEFAULT    1 
+    35 00000000000006b0    64 FUNC    LOCAL  DEFAULT    1 __rust_alloc
+    36 00000000000007b8    64 FUNC    LOCAL  DEFAULT    1 __rust_alloc_zeroed
+    37 00000000000006f0    88 FUNC    LOCAL  DEFAULT    1 __rust_dealloc
+    38 0000000000000748   112 FUNC    LOCAL  DEFAULT    1 __rust_realloc
+    39 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug_dep.dkqajoc3-cgu.1
+    40 00000000000056a3    45 OBJECT  LOCAL  DEFAULT    2 .Lanon.57dd769ed5d9c23908f686a736adb435.1
+    41 00000000000056d0    12 OBJECT  LOCAL  DEFAULT    2 .Lanon.57dd769ed5d9c23908f686a736adb435.2
+    42 00000000000056dc     1 OBJECT  LOCAL  DEFAULT    2 .Lanon.57dd769ed5d9c23908f686a736adb435.3
+    43 0000000000005b58    48 OBJECT  LOCAL  DEFAULT    5 .Lanon.57dd769ed5d9c23908f686a736adb435.4
+    44 00000000000056dd    78 OBJECT  LOCAL  DEFAULT    2 .Lanon.57dd769ed5d9c23908f686a736adb435.5
+    45 0000000000005b88    24 OBJECT  LOCAL  DEFAULT    5 .Lanon.57dd769ed5d9c23908f686a736adb435.6
+    46 00000000000009c0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    47 00000000000007f8   496 FUNC    LOCAL  DEFAULT    1 solana_bpf_rust_stack_bug_dep::PollData::init
+    48 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_bpf_rust_stack_bug_dep.dkqajoc3-cgu.0
+    49 0000000000000a30     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    50 0000000000000a68     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_4
+    51 0000000000000a80     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_5
+    52 00000000000009e8   160 FUNC    LOCAL  HIDDEN     1 <&T as core::fmt::Debug>::fmt
+    53 0000000000000a88    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+    54 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.0
+    55 0000000000000aa0    48 FUNC    LOCAL  HIDDEN     1 __rg_alloc
+    56 0000000000000b48    48 FUNC    LOCAL  HIDDEN     1 __rg_alloc_zeroed
+    57 0000000000000ad0    56 FUNC    LOCAL  HIDDEN     1 __rg_dealloc
+    58 0000000000000b08    64 FUNC    LOCAL  HIDDEN     1 __rg_realloc
+    59 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.3
+    60 000000000000572b    19 OBJECT  LOCAL  DEFAULT    2 .Lanon.4b44eb2bd99a05a3e9f541194b4156ce.0
+    61 000000000000573e    14 OBJECT  LOCAL  DEFAULT    2 .Lanon.4b44eb2bd99a05a3e9f541194b4156ce.1
+    62 000000000000574c    77 OBJECT  LOCAL  DEFAULT    2 .Lanon.4b44eb2bd99a05a3e9f541194b4156ce.2
+    63 0000000000005ba0    40 OBJECT  LOCAL  DEFAULT    5 .Lanon.4b44eb2bd99a05a3e9f541194b4156ce.3
+    64 0000000000000bc8     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    65 0000000000000c28     0 NOTYPE  LOCAL  DEFAULT    1 LBB1_3
+    66 0000000000000c60     0 NOTYPE  LOCAL  DEFAULT    1 LBB1_4
+    67 0000000000000b78    96 FUNC    LOCAL  HIDDEN     1 core::alloc::GlobalAlloc::alloc_zeroed
+    68 0000000000000bd8   152 FUNC    LOCAL  HIDDEN     1 core::alloc::GlobalAlloc::realloc
+    69 0000000000000c70    32 FUNC    LOCAL  DEFAULT    1 <solana_sdk_bpf_no_std::allocator::Allocator as core::alloc::GlobalAlloc>::alloc
+    70 0000000000000c90    24 FUNC    LOCAL  DEFAULT    1 <solana_sdk_bpf_no_std::allocator::Allocator as core::alloc::GlobalAlloc>::dealloc
+    71 0000000000000ca8    64 FUNC    LOCAL  DEFAULT    1 rust_oom
+    72 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.4
+    73 0000000000005799     0 OBJECT  LOCAL  HIDDEN     2 solana_sdk_bpf_no_std::A
+    74 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.1
+    75 0000000000000cf8    16 FUNC    LOCAL  DEFAULT    1 solana_sdk_bpf_utils::log::sol_log_64
+    76 0000000000000ce8    16 FUNC    LOCAL  DEFAULT    1 solana_sdk_bpf_utils::log::sol_log
+    77 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.5
+    78 00000000000010d0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_10
+    79 0000000000000dd0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+    80 0000000000000e00     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_4
+    81 0000000000000e48     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_7
+    82 0000000000000ee0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_9
+    83 0000000000000d08  1192 FUNC    LOCAL  DEFAULT    1 solana_sdk_bpf_utils::entrypoint::deserialize
+    84 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.0
+    85 00000000000011b0    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::TryFrom<U>>::try_from
+    86 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.3
+    87 0000000000005799    97 OBJECT  LOCAL  DEFAULT    2 .Lanon.c1fe0383b2769cba189f7c1615d65f68.0
+    88 00000000000057fa    40 OBJECT  LOCAL  DEFAULT    2 .Lanon.c1fe0383b2769cba189f7c1615d65f68.1
+    89 0000000000005bc8    40 OBJECT  LOCAL  DEFAULT    5 .Lanon.c1fe0383b2769cba189f7c1615d65f68.2
+    90 0000000000001330     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_11
+    91 0000000000001380     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_13
+    92 0000000000001388     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_14
+    93 0000000000001458     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_15
+    94 0000000000001398     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_16
+    95 00000000000013f0     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_19
+    96 0000000000001410     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_20
+    97 0000000000001288     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_21
+    98 0000000000001478     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_22
+    99 0000000000001430     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_23
+   100 0000000000001450     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_24
+   101 0000000000001258     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_3
+   102 0000000000001298     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_5
+   103 0000000000001308     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_7
+   104 0000000000001320     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_9
+   105 00000000000011c0    48 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T>::new
+   106 00000000000011f0    24 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::ptr
+   107 0000000000001208   656 FUNC    LOCAL  HIDDEN     1 alloc::raw_vec::RawVec<T,A>::reserve
+   108 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.4
+   109 0000000000001498    40 FUNC    LOCAL  HIDDEN     1 core::alloc::size_align
+   110 00000000000014c0     8 FUNC    LOCAL  HIDDEN     1 <T as core::convert::From<T>>::from
+   111 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.2
+   112 00000000000014c8    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::From<T>>::from
+   113 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.6
+   114 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.7
+   115 00000000000014d8    16 FUNC    LOCAL  HIDDEN     1 core::ptr::Unique<T>::empty
+   116 00000000000014e8    16 FUNC    LOCAL  HIDDEN     1 core::ptr::Unique<T>::as_ptr
+   117 00000000000014f8    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::Into<U>>::into
+   118 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.8
+   119 0000000000001508    32 FUNC    LOCAL  HIDDEN     1 alloc::vec::Vec<T>::reserve
+   120 0000000000001528    64 FUNC    LOCAL  HIDDEN     1 <alloc::vec::Vec<T> as core::ops::deref::DerefMut>::deref_mut
+   121 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_utils.25s3gc9m-cgu.9
+   122 0000000000001568    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   123 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.0
+   124 0000000000005822    97 OBJECT  LOCAL  DEFAULT    2 .Lanon.bc2955098a9d04e6dd0d8b2f5db8a1e2.1
+   125 0000000000005883    17 OBJECT  LOCAL  DEFAULT    2 .Lanon.bc2955098a9d04e6dd0d8b2f5db8a1e2.5
+   126 0000000000005bf0    40 OBJECT  LOCAL  DEFAULT    5 .Lanon.bc2955098a9d04e6dd0d8b2f5db8a1e2.6
+   127 0000000000001580    32 FUNC    LOCAL  DEFAULT    1 alloc::raw_vec::capacity_overflow
+   128 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.10
+   129 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.11
+   130 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.12
+   131 00000000000015a0    16 FUNC    LOCAL  DEFAULT    1 alloc::alloc::handle_alloc_error
+   132 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.1
+   133 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.13
+   134 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.15
+   135 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.2
+   136 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.4
+   137 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.5
+   138 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.6
+   139 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.7
+   140 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.8
+   141 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.9
+   142 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS alloc.cwo8ayyh-cgu.14
+   143 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.0
+   144 0000000000005894     2 OBJECT  LOCAL  DEFAULT    2 .Lanon.0b79d0c89bcdd32a4909438d813f1a78.0
+   145 0000000000005896   200 OBJECT  LOCAL  DEFAULT    2 .Lanon.0b79d0c89bcdd32a4909438d813f1a78.3
+   146 0000000000003b60     0 NOTYPE  LOCAL  DEFAULT    1 LBB15_1
+   147 0000000000003ba0     0 NOTYPE  LOCAL  DEFAULT    1 LBB15_4
+   148 0000000000003bd8     0 NOTYPE  LOCAL  DEFAULT    1 LBB15_5
+   149 0000000000003c08     0 NOTYPE  LOCAL  DEFAULT    1 LBB15_7
+   150 00000000000027f8     0 NOTYPE  LOCAL  DEFAULT    1 LBB3_1
+   151 0000000000002838     0 NOTYPE  LOCAL  DEFAULT    1 LBB3_4
+   152 0000000000002870     0 NOTYPE  LOCAL  DEFAULT    1 LBB3_5
+   153 00000000000028a0     0 NOTYPE  LOCAL  DEFAULT    1 LBB3_7
+   154 00000000000015b0  4968 FUNC    LOCAL  DEFAULT    1 core::fmt::num::GenericRadix::fmt_int
+   155 0000000000002918  4968 FUNC    LOCAL  DEFAULT    1 core::fmt::num::GenericRadix::fmt_int
+   156 0000000000003ca0    24 FUNC    LOCAL  DEFAULT    1 core::fmt::num::<impl core::fmt::LowerHex for u32>::fmt
+   157 0000000000003cb8    24 FUNC    LOCAL  DEFAULT    1 core::fmt::num::<impl core::fmt::UpperHex for u32>::fmt
+   158 0000000000003c80    16 FUNC    LOCAL  DEFAULT    1 <i64 as core::fmt::num::Int>::to_u64
+   159 0000000000003c90    16 FUNC    LOCAL  DEFAULT    1 <u32 as core::fmt::num::Int>::to_u64
+   160 0000000000003c80    16 FUNC    LOCAL  DEFAULT    1 <u64 as core::fmt::num::Int>::to_u64
+   161 0000000000003c80    16 FUNC    LOCAL  DEFAULT    1 <isize as core::fmt::num::Int>::to_u64
+   162 0000000000003c80    16 FUNC    LOCAL  DEFAULT    1 <usize as core::fmt::num::Int>::to_u64
+   163 0000000000005c18     8 OBJECT  LOCAL  HIDDEN     5 core::fmt::num::DEC_DIGITS_LUT
+   164 0000000000003ca0    24 FUNC    LOCAL  DEFAULT    1 core::fmt::num::<impl core::fmt::LowerHex for i32>::fmt
+   165 0000000000003cb8    24 FUNC    LOCAL  DEFAULT    1 core::fmt::num::<impl core::fmt::UpperHex for i32>::fmt
+   166 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.11
+   167 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.10
+   168 0000000000003cd0    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::From<T>>::from
+   169 0000000000003cd0    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::From<T>>::from
+   170 0000000000003cd0    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::TryFrom<U>>::try_from
+   171 0000000000003cd0    16 FUNC    LOCAL  HIDDEN     1 <T as core::convert::TryInto<U>>::try_into
+   172 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.12
+   173 000000000000595e    98 OBJECT  LOCAL  DEFAULT    2 .Lanon.a1d6b31b5f86b4825360cebd73bafc47.22
+   174 00000000000059c0    22 OBJECT  LOCAL  DEFAULT    2 .Lanon.a1d6b31b5f86b4825360cebd73bafc47.28
+   175 00000000000059d6    13 OBJECT  LOCAL  DEFAULT    2 .Lanon.a1d6b31b5f86b4825360cebd73bafc47.29
+   176 0000000000005c20    32 OBJECT  LOCAL  DEFAULT    5 .Lanon.a1d6b31b5f86b4825360cebd73bafc47.30
+   177 0000000000005c40    24 OBJECT  LOCAL  DEFAULT    5 .Lanon.a1d6b31b5f86b4825360cebd73bafc47.31
+   178 0000000000003cf8   328 FUNC    LOCAL  DEFAULT    1 core::slice::slice_index_order_fail
+   179 0000000000003ce0    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   180 0000000000003ce0    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   181 0000000000003ce0    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   182 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.14
+   183 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.15
+   184 0000000000003e40    24 FUNC    LOCAL  HIDDEN     1 core::any::TypeId::of
+   185 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.3
+   186 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.4
+   187 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Rev<T>::new
+   188 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   189 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Cloned<I>::new
+   190 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Cloned<I>::new
+   191 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Rev<T>::new
+   192 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Rev<T>::new
+   193 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Rev<T>::new
+   194 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Rev<T>::new
+   195 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   196 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   197 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   198 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Rev<T>::new
+   199 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Rev<T>::new
+   200 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Rev<T>::new
+   201 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Map<I,F>::new
+   202 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Map<I,F>::new
+   203 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Map<I,F>::new
+   204 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   205 0000000000003e58    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   206 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.5
+   207 0000000000003fc0     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_10
+   208 0000000000003fd8     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_11
+   209 0000000000004000     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_12
+   210 0000000000004080     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_13
+   211 00000000000040c8     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_16
+   212 00000000000041c8     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_19
+   213 0000000000003ee0     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_2
+   214 00000000000041f0     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_20
+   215 0000000000004230     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_21
+   216 0000000000004278     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_24
+   217 00000000000046c8     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_26
+   218 00000000000046e8     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_27
+   219 00000000000046f8     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_28
+   220 0000000000004720     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_29
+   221 0000000000004018     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_30
+   222 0000000000004120     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_33
+   223 0000000000004178     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_36
+   224 0000000000004460     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_39
+   225 0000000000003f10     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_4
+   226 0000000000004488     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_40
+   227 00000000000044c8     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_41
+   228 0000000000004510     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_44
+   229 0000000000004568     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_46
+   230 0000000000004618     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_48
+   231 0000000000003f18     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_5
+   232 0000000000004670     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_51
+   233 00000000000042d0     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_53
+   234 00000000000043b0     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_56
+   235 0000000000004408     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_59
+   236 0000000000003f98     0 NOTYPE  LOCAL  DEFAULT    1 LBB16_8
+   237 00000000000047a8     0 NOTYPE  LOCAL  DEFAULT    1 LBB17_2
+   238 00000000000047b0     0 NOTYPE  LOCAL  DEFAULT    1 LBB17_3
+   239 0000000000004738   192 FUNC    LOCAL  DEFAULT    1 core::fmt::Formatter::pad_integral::write_prefix
+   240 00000000000047f8    32 FUNC    LOCAL  DEFAULT    1 core::fmt::Formatter::debug_lower_hex
+   241 0000000000004818    32 FUNC    LOCAL  DEFAULT    1 core::fmt::Formatter::debug_upper_hex
+   242 0000000000003e88  2224 FUNC    LOCAL  DEFAULT    1 core::fmt::Formatter::pad_integral
+   243 0000000000003e70    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+   244 0000000000003e70    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+   245 0000000000003e70    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+   246 0000000000003e70    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+   247 0000000000003e70    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+   248 0000000000003e70    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+   249 0000000000003e70    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+   250 0000000000003e70    24 FUNC    LOCAL  HIDDEN     1 core::fmt::ArgumentV1::new
+   251 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.6
+   252 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.7
+   253 00000000000059e8     0 OBJECT  LOCAL  DEFAULT    2 .Lanon.d2c507571793faf348f10b5ea6057a9f.0
+   254 0000000000005c58    32 OBJECT  LOCAL  DEFAULT    5 .Lanon.d2c507571793faf348f10b5ea6057a9f.1
+   255 0000000000004e48     0 NOTYPE  LOCAL  DEFAULT    1 LBB56_2
+   256 0000000000004f40     0 NOTYPE  LOCAL  DEFAULT    1 LBB56_4
+   257 0000000000004f50     0 NOTYPE  LOCAL  DEFAULT    1 LBB56_5
+   258 0000000000004fe8     0 NOTYPE  LOCAL  DEFAULT    1 LBB56_6
+   259 0000000000005028     0 NOTYPE  LOCAL  DEFAULT    1 LBB56_8
+   260 0000000000005078     0 NOTYPE  LOCAL  DEFAULT    1 LBB56_9
+   261 00000000000049f8  1784 FUNC    LOCAL  DEFAULT    1 core::fmt::num::imp::fmt_u64
+   262 0000000000004838     8 FUNC    LOCAL  DEFAULT    1 core::ptr::real_drop_in_place
+   263 0000000000004918   224 FUNC    LOCAL  DEFAULT    1 core::panicking::panic_fmt
+   264 00000000000050f0    56 FUNC    LOCAL  DEFAULT    1 core::fmt::num::imp::<impl core::fmt::Display for u32>::fmt
+   265 0000000000004840   216 FUNC    LOCAL  DEFAULT    1 core::panicking::panic
+   266 0000000000005128    56 FUNC    LOCAL  DEFAULT    1 core::fmt::num::imp::<impl core::fmt::Display for usize>::fmt
+   267 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.2
+   268 00000000000052b0     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_4
+   269 0000000000005390     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_6
+   270 0000000000005310     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_7
+   271 0000000000005160   608 FUNC    LOCAL  DEFAULT    1 rust_begin_unwind
+   272 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS solana_sdk_bpf_no_std.1djg8yi9-cgu.1
+   273 00000000000053c0    40 FUNC    LOCAL  HIDDEN     1 core::iter::adapters::Enumerate<I>::new
+   274 00000000000053e8    56 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   275 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.9
+   276 00000000000054b8    24 FUNC    LOCAL  HIDDEN     1 <I as core::iter::traits::collect::IntoIterator>::into_iter
+   277 0000000000005420    16 FUNC    LOCAL  HIDDEN     1 <T as core::any::Any>::type_id
+   278 0000000000005448    40 FUNC    LOCAL  DEFAULT    1 core::panic::Location::internal_constructor
+   279 0000000000005470    40 FUNC    LOCAL  DEFAULT    1 core::panic::Location::file
+   280 0000000000005498    16 FUNC    LOCAL  DEFAULT    1 core::panic::Location::line
+   281 00000000000054a8    16 FUNC    LOCAL  DEFAULT    1 core::panic::Location::column
+   282 0000000000005430    24 FUNC    LOCAL  DEFAULT    1 core::panic::PanicInfo::location
+   283 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS core.7z0j1dxd-cgu.2
+   284 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.0
+   285 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.12
+   286 00000000000054e8     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_2
+   287 0000000000005520     0 NOTYPE  LOCAL  DEFAULT    1 LBB0_3
+   288 0000000000005540     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_2
+   289 0000000000005568     0 NOTYPE  LOCAL  DEFAULT    1 LBB2_3
+   290 0000000000005528    72 FUNC    LOCAL  HIDDEN     1 memset
+   291 00000000000054d0    88 FUNC    LOCAL  HIDDEN     1 memcpy
+   292 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.13
+   293 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.3
+   294 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.15
+   295 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.1
+   296 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.5
+   297 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS compiler_builtins.egvfq4yl-cgu.8
+   298 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS muloti4.c
+   299 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS divti3.c
+   300 0000000000000000     0 FILE    LOCAL  DEFAULT  ABS multi3.c
+   301 0000000000005570   296 FUNC    LOCAL  HIDDEN     1 __multi3
+   302 0000000000005a88     0 NOTYPE  LOCAL  HIDDEN     4 _DYNAMIC
+   303 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND abort
+   304 0000000000000428   616 FUNC    GLOBAL DEFAULT    1 entrypoint
+   305 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_alloc_free_
+   306 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_log_
+   307 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_log_64_
+   308 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND sol_panic_
+
+Histogram for bucket list length (total of 7 buckets)
+ Length  Number     % of total  Coverage
+      0  3          ( 42.9%)
+      1  3          ( 42.9%)     50.0%
+      2  0          (  0.0%)     50.0%
+      3  1          ( 14.3%)    100.0%
+
+Histogram for `.gnu.hash' bucket list length (total of 1 bucket)
+ Length  Number     % of total  Coverage
+      0  0          (  0.0%)
+      1  1          (100.0%)    100.0%
+
+No version information found in this file.
+
+./target/bpfel-unknown-unknown/release/solana_bpf_rust_stack_bug.so	file format ELF64-BPF
+
+Disassembly of section .text
+alloc::raw_vec::RawVec<T,A>::allocate_in
+      29	bf 26 00 00 00 00 00 00 	r6 = r2
+      30	bf 17 00 00 00 00 00 00 	r7 = r1
+      31	b7 01 00 00 01 00 00 00 	r1 = 0x1
+      32	15 06 10 00 00 00 00 00 	if r6 == 0x0 goto +0x10 <LBB0_5>
+      33	15 03 06 00 00 00 00 00 	if r3 == 0x0 goto +0x6 <LBB0_3>
+      34	bf 61 00 00 00 00 00 00 	r1 = r6
+      35	b7 02 00 00 01 00 00 00 	r2 = 0x1
+      36	85 10 00 00 d2 00 00 00 	call 0xd2
+      37	bf 01 00 00 00 00 00 00 	r1 = r0
+      38	55 01 0a 00 00 00 00 00 	if r1 != 0x0 goto +0xa <LBB0_5>
+      39	05 00 05 00 00 00 00 00 	goto +0x5 <LBB0_4>
+
+LBB0_3
+      40	bf 61 00 00 00 00 00 00 	r1 = r6
+      41	b7 02 00 00 01 00 00 00 	r2 = 0x1
+      42	85 10 00 00 ab 00 00 00 	call 0xab
+      43	bf 01 00 00 00 00 00 00 	r1 = r0
+      44	55 01 04 00 00 00 00 00 	if r1 != 0x0 goto +0x4 <LBB0_5>
+
+LBB0_4
+      45	bf 61 00 00 00 00 00 00 	r1 = r6
+      46	b7 02 00 00 01 00 00 00 	r2 = 0x1
+      47	85 10 00 00 84 02 00 00 	call 0x284
+      48	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB0_5
+      49	85 10 00 00 a0 00 00 00 	call 0xa0
+      50	7b 67 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r6
+      51	7b 07 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r0
+      52	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T,A>::ptr
+      53	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+      54	85 10 00 00 9b 00 00 00 	call 0x9b
+      55	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T,A>::ptr
+      56	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+      57	85 10 00 00 9a 00 00 00 	call 0x9a
+      58	95 00 00 00 00 00 00 00 	exit
+
+<alloc::raw_vec::RawVec<T,A> as core::ops::drop::Drop>::drop
+      59	79 12 08 00 00 00 00 00 	r2 = *(u64 *)(r1 + 0x8)
+      60	15 02 03 00 00 00 00 00 	if r2 == 0x0 goto +0x3 <LBB3_2>
+      61	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+      62	b7 03 00 00 01 00 00 00 	r3 = 0x1
+      63	85 10 00 00 9e 00 00 00 	call 0x9e
+
+LBB3_2
+      64	95 00 00 00 00 00 00 00 	exit
+
+<alloc::raw_vec::RawVec<T,A> as core::ops::drop::Drop>::drop
+      65	79 12 08 00 00 00 00 00 	r2 = *(u64 *)(r1 + 0x8)
+      66	15 02 04 00 00 00 00 00 	if r2 == 0x0 goto +0x4 <LBB4_2>
+      67	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+      68	27 02 00 00 30 00 00 00 	r2 *= 0x30
+      69	b7 03 00 00 08 00 00 00 	r3 = 0x8
+      70	85 10 00 00 97 00 00 00 	call 0x97
+
+LBB4_2
+      71	95 00 00 00 00 00 00 00 	exit
+
+alloc::vec::from_elem
+      72	bf 37 00 00 00 00 00 00 	r7 = r3
+      73	bf 28 00 00 00 00 00 00 	r8 = r2
+      74	bf 16 00 00 00 00 00 00 	r6 = r1
+      75	bf 81 00 00 00 00 00 00 	r1 = r8
+      76	57 01 00 00 ff 00 00 00 	r1 &= 0xff
+      77	55 01 0a 00 00 00 00 00 	if r1 != 0x0 goto +0xa <LBB0_2>
+      78	bf a1 00 00 00 00 00 00 	r1 = r10
+      79	07 01 00 00 c8 ff ff ff 	r1 += -0x38
+      80	bf 72 00 00 00 00 00 00 	r2 = r7
+      81	b7 03 00 00 01 00 00 00 	r3 = 0x1
+      82	85 10 00 00 ca ff ff ff 	call -0x36
+      83	79 a1 c8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x38)
+      84	79 a2 d0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x30)
+      85	7b 76 10 00 00 00 00 00 	*(u64 *)(r6 + 0x10) = r7
+      86	7b 26 08 00 00 00 00 00 	*(u64 *)(r6 + 0x8) = r2
+      87	05 00 17 00 00 00 00 00 	goto +0x17 <LBB0_3>
+
+LBB0_2
+      88	bf a1 00 00 00 00 00 00 	r1 = r10
+      89	07 01 00 00 d8 ff ff ff 	r1 += -0x28
+      90	b7 09 00 00 00 00 00 00 	r9 = 0x0
+      91	bf 72 00 00 00 00 00 00 	r2 = r7
+      92	b7 03 00 00 00 00 00 00 	r3 = 0x0
+      93	85 10 00 00 bf ff ff ff 	call -0x41
+      94	7b 9a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r9
+      95	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+      96	7b 1a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r1
+      97	79 a1 d8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x28)
+      98	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+      99	bf a1 00 00 00 00 00 00 	r1 = r10
+     100	07 01 00 00 e8 ff ff ff 	r1 += -0x18
+     101	85 10 00 00 cf ff ff ff 	call -0x31
+     102	bf 01 00 00 00 00 00 00 	r1 = r0
+     103	bf 82 00 00 00 00 00 00 	r2 = r8
+     104	bf 73 00 00 00 00 00 00 	r3 = r7
+     105	85 10 00 00 3b 0a 00 00 	call 0xa3b
+     106	7b 7a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r7
+     107	7b 76 10 00 00 00 00 00 	*(u64 *)(r6 + 0x10) = r7
+     108	79 a1 f0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x10)
+     109	7b 16 08 00 00 00 00 00 	*(u64 *)(r6 + 0x8) = r1
+     110	79 a1 e8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x18)
+
+LBB0_3
+     111	7b 16 00 00 00 00 00 00 	*(u64 *)(r6 + 0x0) = r1
+     112	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::drop::Drop>::drop
+     113	85 10 00 00 c3 ff ff ff 	call -0x3d
+     114	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::drop::Drop>::drop
+     115	85 10 00 00 c4 ff ff ff 	call -0x3c
+     116	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::deref::Deref>::deref
+     117	bf 26 00 00 00 00 00 00 	r6 = r2
+     118	bf 17 00 00 00 00 00 00 	r7 = r1
+     119	bf 61 00 00 00 00 00 00 	r1 = r6
+     120	85 10 00 00 bc ff ff ff 	call -0x44
+     121	7b 07 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r0
+     122	79 61 10 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x10)
+     123	7b 17 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r1
+     124	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::deref::DerefMut>::deref_mut
+     125	bf 26 00 00 00 00 00 00 	r6 = r2
+     126	bf 17 00 00 00 00 00 00 	r7 = r1
+     127	bf 61 00 00 00 00 00 00 	r1 = r6
+     128	85 10 00 00 b7 ff ff ff 	call -0x49
+     129	7b 07 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r0
+     130	79 61 10 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x10)
+     131	7b 17 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r1
+     132	95 00 00 00 00 00 00 00 	exit
+
+entrypoint
+     133	bf 12 00 00 00 00 00 00 	r2 = r1
+     134	bf a1 00 00 00 00 00 00 	r1 = r10
+     135	07 01 00 00 48 ff ff ff 	r1 += -0xb8
+     136	85 10 00 00 18 01 00 00 	call 0x118
+     137	79 a1 48 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xb8)
+     138	55 01 02 00 00 00 00 00 	if r1 != 0x0 goto +0x2 <LBB0_2>
+     139	b7 00 00 00 00 00 00 00 	r0 = 0x0
+     140	05 00 44 00 00 00 00 00 	goto +0x44 <LBB0_3>
+
+LBB0_2
+     141	79 a1 58 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xa8)
+     142	7b 1a 88 ff 00 00 00 00 	*(u64 *)(r10 - 0x78) = r1
+     143	79 a1 50 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xb0)
+     144	7b 1a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r1
+     145	79 a1 48 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xb8)
+     146	7b 1a 78 ff 00 00 00 00 	*(u64 *)(r10 - 0x88) = r1
+     147	bf a1 00 00 00 00 00 00 	r1 = r10
+     148	07 01 00 00 38 ff ff ff 	r1 += -0xc8
+     149	bf a7 00 00 00 00 00 00 	r7 = r10
+     150	07 07 00 00 78 ff ff ff 	r7 += -0x88
+     151	bf 72 00 00 00 00 00 00 	r2 = r7
+     152	85 10 00 00 e4 ff ff ff 	call -0x1c
+     153	bf a8 00 00 00 00 00 00 	r8 = r10
+     154	07 08 00 00 90 ff ff ff 	r8 += -0x70
+     155	bf 81 00 00 00 00 00 00 	r1 = r8
+     156	b7 02 00 00 01 00 00 00 	r2 = 0x1
+     157	b7 03 00 00 06 00 00 00 	r3 = 0x6
+     158	85 10 00 00 a9 ff ff ff 	call -0x57
+     159	bf a1 00 00 00 00 00 00 	r1 = r10
+     160	07 01 00 00 28 ff ff ff 	r1 += -0xd8
+     161	bf 82 00 00 00 00 00 00 	r2 = r8
+     162	85 10 00 00 d2 ff ff ff 	call -0x2e
+     163	79 a9 28 ff 00 00 00 00 	r9 = *(u64 *)(r10 - 0xd8)
+     164	79 a6 30 ff 00 00 00 00 	r6 = *(u64 *)(r10 - 0xd0)
+     165	18 01 00 00 01 01 01 01 00 00 00 00 01 01 01 01 	r1 = 0x101010101010101 ll
+     167	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+     168	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+     169	7b 1a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r1
+     170	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+     171	7b 1a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r1
+     172	7b 1a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r1
+     173	7b 1a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r1
+     174	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     175	b7 01 00 00 0a 00 00 00 	r1 = 0xa
+     176	b7 02 00 00 06 00 00 00 	r2 = 0x6
+     177	b7 03 00 00 88 13 00 00 	r3 = 0x1388
+     178	b7 04 00 00 00 00 00 00 	r4 = 0x0
+     179	b7 05 00 00 00 00 00 00 	r5 = 0x0
+     180	85 10 00 00 ea 00 00 00 	call 0xea
+     181	18 01 00 00 0a 00 00 00 00 00 00 00 06 00 00 00 	r1 = 0x60000000a ll
+     183	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     184	7b 6a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r6
+     185	7b 9a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r9
+     186	bf a1 00 00 00 00 00 00 	r1 = r10
+     187	07 01 00 00 18 ff ff ff 	r1 += -0xe8
+     188	bf a2 00 00 00 00 00 00 	r2 = r10
+     189	07 02 00 00 e8 ff ff ff 	r2 += -0x18
+     190	bf a3 00 00 00 00 00 00 	r3 = r10
+     191	07 03 00 00 a8 ff ff ff 	r3 += -0x58
+     192	bf a4 00 00 00 00 00 00 	r4 = r10
+     193	07 04 00 00 c8 ff ff ff 	r4 += -0x38
+     194	b7 05 00 00 88 13 00 00 	r5 = 0x1388
+     195	85 10 00 00 3b 00 00 00 	call 0x3b
+     196	18 01 00 00 9c 56 00 00 00 00 00 00 00 00 00 00 	r1 = 0x569c ll
+     198	b7 02 00 00 07 00 00 00 	r2 = 0x7
+     199	85 10 00 00 d5 00 00 00 	call 0xd5
+     200	bf 81 00 00 00 00 00 00 	r1 = r8
+     201	85 10 00 00 a7 ff ff ff 	call -0x59
+     202	bf 81 00 00 00 00 00 00 	r1 = r8
+     203	85 10 00 00 6f ff ff ff 	call -0x91
+     204	bf 71 00 00 00 00 00 00 	r1 = r7
+     205	85 10 00 00 a5 ff ff ff 	call -0x5b
+     206	bf 71 00 00 00 00 00 00 	r1 = r7
+     207	85 10 00 00 71 ff ff ff 	call -0x8f
+     208	b7 00 00 00 01 00 00 00 	r0 = 0x1
+
+LBB0_3
+     209	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::Into<U>>::into
+     210	bf 10 00 00 00 00 00 00 	r0 = r1
+     211	95 00 00 00 00 00 00 00 	exit
+
+core::ptr::Unique<T>::as_ptr
+     212	bf 10 00 00 00 00 00 00 	r0 = r1
+     213	95 00 00 00 00 00 00 00 	exit
+
+__rust_alloc
+     214	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     215	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     216	85 10 00 00 7b 00 00 00 	call 0x7b
+     217	79 a1 f0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x10)
+     218	79 a2 f8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x8)
+     219	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+     220	7b 2a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r2
+     221	95 00 00 00 00 00 00 00 	exit
+
+__rust_dealloc
+     222	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     223	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     224	7b 3a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r3
+     225	85 10 00 00 78 00 00 00 	call 0x78
+     226	79 a1 e8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x18)
+     227	79 a2 f0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x10)
+     228	79 a3 f8 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x8)
+     229	7b 1a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r1
+     230	7b 2a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r2
+     231	7b 3a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r3
+     232	95 00 00 00 00 00 00 00 	exit
+
+__rust_realloc
+     233	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     234	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     235	7b 3a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r3
+     236	7b 4a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r4
+     237	85 10 00 00 73 00 00 00 	call 0x73
+     238	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+     239	79 a2 e8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x18)
+     240	79 a3 f0 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x10)
+     241	79 a4 f8 ff 00 00 00 00 	r4 = *(u64 *)(r10 - 0x8)
+     242	7b 1a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r1
+     243	7b 2a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r2
+     244	7b 3a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r3
+     245	7b 4a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r4
+     246	95 00 00 00 00 00 00 00 	exit
+
+__rust_alloc_zeroed
+     247	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     248	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     249	85 10 00 00 6f 00 00 00 	call 0x6f
+     250	79 a1 f0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x10)
+     251	79 a2 f8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x8)
+     252	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+     253	7b 2a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r2
+     254	95 00 00 00 00 00 00 00 	exit
+
+solana_bpf_rust_stack_bug_dep::PollData::init
+     255	bf 56 00 00 00 00 00 00 	r6 = r5
+     256	7b 3a 78 ff 00 00 00 00 	*(u64 *)(r10 - 0x88) = r3
+     257	bf 28 00 00 00 00 00 00 	r8 = r2
+     258	bf 17 00 00 00 00 00 00 	r7 = r1
+     259	61 82 14 00 00 00 00 00 	r2 = *(u32 *)(r8 + 0x14)
+     260	61 89 10 00 00 00 00 00 	r9 = *(u32 *)(r8 + 0x10)
+     261	bf 91 00 00 00 00 00 00 	r1 = r9
+     262	bf 63 00 00 00 00 00 00 	r3 = r6
+     263	b7 04 00 00 00 00 00 00 	r4 = 0x0
+     264	b7 05 00 00 00 00 00 00 	r5 = 0x0
+     265	85 10 00 00 95 00 00 00 	call 0x95
+     266	15 09 2d 00 0a 00 00 00 	if r9 == 0xa goto +0x2d <LBB0_2>
+     267	07 08 00 00 10 00 00 00 	r8 += 0x10
+     268	7b 8a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r8
+     269	18 01 00 00 98 56 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5698 ll
+     271	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+     272	bf a1 00 00 00 00 00 00 	r1 = r10
+     273	07 01 00 00 90 ff ff ff 	r1 += -0x70
+     274	bf a2 00 00 00 00 00 00 	r2 = r10
+     275	07 02 00 00 f0 ff ff ff 	r2 += -0x10
+     276	18 03 00 00 e8 09 00 00 00 00 00 00 00 00 00 00 	r3 = 0x9e8 ll
+     278	85 10 00 00 3a 00 00 00 	call 0x3a
+     279	79 a6 90 ff 00 00 00 00 	r6 = *(u64 *)(r10 - 0x70)
+     280	79 a7 98 ff 00 00 00 00 	r7 = *(u64 *)(r10 - 0x68)
+     281	bf a1 00 00 00 00 00 00 	r1 = r10
+     282	07 01 00 00 80 ff ff ff 	r1 += -0x80
+     283	bf a2 00 00 00 00 00 00 	r2 = r10
+     284	07 02 00 00 f8 ff ff ff 	r2 += -0x8
+     285	18 03 00 00 e8 09 00 00 00 00 00 00 00 00 00 00 	r3 = 0x9e8 ll
+     287	85 10 00 00 31 00 00 00 	call 0x31
+     288	7b 7a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r7
+     289	7b 6a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r6
+     290	b7 01 00 00 02 00 00 00 	r1 = 0x2
+     291	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     292	bf a1 00 00 00 00 00 00 	r1 = r10
+     293	07 01 00 00 d0 ff ff ff 	r1 += -0x30
+     294	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+     295	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     296	7b 1a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r1
+     297	b7 01 00 00 03 00 00 00 	r1 = 0x3
+     298	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+     299	18 01 00 00 58 5b 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5b58 ll
+     301	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+     302	79 a1 88 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x78)
+     303	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+     304	79 a1 80 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x80)
+     305	7b 1a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r1
+     306	bf a1 00 00 00 00 00 00 	r1 = r10
+     307	07 01 00 00 a0 ff ff ff 	r1 += -0x60
+     308	18 02 00 00 88 5b 00 00 00 00 00 00 00 00 00 00 	r2 = 0x5b88 ll
+     310	85 10 00 00 ec 07 00 00 	call 0x7ec
+     311	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB0_2
+     312	79 a1 78 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x88)
+     313	7b 17 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r1
+     314	07 06 00 00 0a 00 00 00 	r6 += 0xa
+     315	7b 67 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r6
+     316	95 00 00 00 00 00 00 00 	exit
+
+<&T as core::fmt::Debug>::fmt
+     317	bf 26 00 00 00 00 00 00 	r6 = r2
+     318	79 17 00 00 00 00 00 00 	r7 = *(u64 *)(r1 + 0x0)
+     319	bf 61 00 00 00 00 00 00 	r1 = r6
+     320	85 10 00 00 be 07 00 00 	call 0x7be
+     321	15 00 04 00 00 00 00 00 	if r0 == 0x0 goto +0x4 <LBB0_2>
+     322	bf 71 00 00 00 00 00 00 	r1 = r7
+     323	bf 62 00 00 00 00 00 00 	r2 = r6
+     324	85 10 00 00 4f 06 00 00 	call 0x64f
+     325	05 00 0a 00 00 00 00 00 	goto +0xa <LBB0_5>
+
+LBB0_2
+     326	bf 61 00 00 00 00 00 00 	r1 = r6
+     327	85 10 00 00 bb 07 00 00 	call 0x7bb
+     328	15 00 04 00 00 00 00 00 	if r0 == 0x0 goto +0x4 <LBB0_4>
+     329	bf 71 00 00 00 00 00 00 	r1 = r7
+     330	bf 62 00 00 00 00 00 00 	r2 = r6
+     331	85 10 00 00 4b 06 00 00 	call 0x64b
+     332	05 00 03 00 00 00 00 00 	goto +0x3 <LBB0_5>
+
+LBB0_4
+     333	bf 71 00 00 00 00 00 00 	r1 = r7
+     334	bf 62 00 00 00 00 00 00 	r2 = r6
+     335	85 10 00 00 ce 08 00 00 	call 0x8ce
+
+LBB0_5
+     336	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::ArgumentV1::new
+     337	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+     338	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     339	95 00 00 00 00 00 00 00 	exit
+
+__rg_alloc
+     340	bf 23 00 00 00 00 00 00 	r3 = r2
+     341	bf 12 00 00 00 00 00 00 	r2 = r1
+     342	18 01 00 00 99 57 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5799 ll
+     344	85 10 00 00 35 00 00 00 	call 0x35
+     345	95 00 00 00 00 00 00 00 	exit
+
+__rg_dealloc
+     346	bf 34 00 00 00 00 00 00 	r4 = r3
+     347	bf 23 00 00 00 00 00 00 	r3 = r2
+     348	bf 12 00 00 00 00 00 00 	r2 = r1
+     349	18 01 00 00 99 57 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5799 ll
+     351	85 10 00 00 32 00 00 00 	call 0x32
+     352	95 00 00 00 00 00 00 00 	exit
+
+__rg_realloc
+     353	bf 45 00 00 00 00 00 00 	r5 = r4
+     354	bf 34 00 00 00 00 00 00 	r4 = r3
+     355	bf 23 00 00 00 00 00 00 	r3 = r2
+     356	bf 12 00 00 00 00 00 00 	r2 = r1
+     357	18 01 00 00 99 57 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5799 ll
+     359	85 10 00 00 13 00 00 00 	call 0x13
+     360	95 00 00 00 00 00 00 00 	exit
+
+__rg_alloc_zeroed
+     361	bf 23 00 00 00 00 00 00 	r3 = r2
+     362	bf 12 00 00 00 00 00 00 	r2 = r1
+     363	18 01 00 00 99 57 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5799 ll
+     365	85 10 00 00 01 00 00 00 	call 0x1
+     366	95 00 00 00 00 00 00 00 	exit
+
+core::alloc::GlobalAlloc::alloc_zeroed
+     367	bf 26 00 00 00 00 00 00 	r6 = r2
+     368	bf 61 00 00 00 00 00 00 	r1 = r6
+     369	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     370	85 10 00 00 ff ff ff ff 	call -0x1
+     371	bf 07 00 00 00 00 00 00 	r7 = r0
+     372	15 07 04 00 00 00 00 00 	if r7 == 0x0 goto +0x4 <LBB0_2>
+     373	bf 71 00 00 00 00 00 00 	r1 = r7
+     374	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     375	bf 63 00 00 00 00 00 00 	r3 = r6
+     376	85 10 00 00 2c 09 00 00 	call 0x92c
+
+LBB0_2
+     377	bf 70 00 00 00 00 00 00 	r0 = r7
+     378	95 00 00 00 00 00 00 00 	exit
+
+core::alloc::GlobalAlloc::realloc
+     379	bf 59 00 00 00 00 00 00 	r9 = r5
+     380	bf 37 00 00 00 00 00 00 	r7 = r3
+     381	bf 26 00 00 00 00 00 00 	r6 = r2
+     382	bf 91 00 00 00 00 00 00 	r1 = r9
+     383	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     384	85 10 00 00 ff ff ff ff 	call -0x1
+     385	bf 08 00 00 00 00 00 00 	r8 = r0
+     386	15 08 09 00 00 00 00 00 	if r8 == 0x0 goto +0x9 <LBB1_4>
+     387	2d 97 01 00 00 00 00 00 	if r7 > r9 goto +0x1 <LBB1_3>
+     388	bf 79 00 00 00 00 00 00 	r9 = r7
+
+LBB1_3
+     389	bf 81 00 00 00 00 00 00 	r1 = r8
+     390	bf 62 00 00 00 00 00 00 	r2 = r6
+     391	bf 93 00 00 00 00 00 00 	r3 = r9
+     392	85 10 00 00 11 09 00 00 	call 0x911
+     393	bf 71 00 00 00 00 00 00 	r1 = r7
+     394	bf 62 00 00 00 00 00 00 	r2 = r6
+     395	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB1_4
+     396	bf 80 00 00 00 00 00 00 	r0 = r8
+     397	95 00 00 00 00 00 00 00 	exit
+
+<solana_sdk_bpf_no_std::allocator::Allocator as core::alloc::GlobalAlloc>::alloc
+     398	bf 21 00 00 00 00 00 00 	r1 = r2
+     399	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     400	85 10 00 00 ff ff ff ff 	call -0x1
+     401	95 00 00 00 00 00 00 00 	exit
+
+<solana_sdk_bpf_no_std::allocator::Allocator as core::alloc::GlobalAlloc>::dealloc
+     402	bf 31 00 00 00 00 00 00 	r1 = r3
+     403	85 10 00 00 ff ff ff ff 	call -0x1
+     404	95 00 00 00 00 00 00 00 	exit
+
+rust_oom
+     405	18 01 00 00 2b 57 00 00 00 00 00 00 00 00 00 00 	r1 = 0x572b ll
+     407	b7 02 00 00 13 00 00 00 	r2 = 0x13
+     408	85 10 00 00 04 00 00 00 	call 0x4
+     409	18 01 00 00 a0 5b 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5ba0 ll
+     411	85 10 00 00 6c 07 00 00 	call 0x76c
+     412	85 10 00 00 ff ff ff ff 	call -0x1
+
+solana_sdk_bpf_utils::log::sol_log
+     413	85 10 00 00 ff ff ff ff 	call -0x1
+     414	95 00 00 00 00 00 00 00 	exit
+
+solana_sdk_bpf_utils::log::sol_log_64
+     415	85 10 00 00 ff ff ff ff 	call -0x1
+     416	95 00 00 00 00 00 00 00 	exit
+
+solana_sdk_bpf_utils::entrypoint::deserialize
+     417	bf 29 00 00 00 00 00 00 	r9 = r2
+     418	7b 1a 50 ff 00 00 00 00 	*(u64 *)(r10 - 0xb0) = r1
+     419	79 96 00 00 00 00 00 00 	r6 = *(u64 *)(r9 + 0x0)
+     420	bf a1 00 00 00 00 00 00 	r1 = r10
+     421	07 01 00 00 a8 ff ff ff 	r1 += -0x58
+     422	85 10 00 00 91 00 00 00 	call 0x91
+     423	79 a1 b0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x50)
+     424	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+     425	79 a1 a8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x58)
+     426	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+     427	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     428	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     429	bf a1 00 00 00 00 00 00 	r1 = r10
+     430	07 01 00 00 98 ff ff ff 	r1 += -0x68
+     431	b7 02 00 00 00 00 00 00 	r2 = 0x0
+     432	bf 63 00 00 00 00 00 00 	r3 = r6
+     433	85 10 00 00 fb 00 00 00 	call 0xfb
+     434	b7 07 00 00 08 00 00 00 	r7 = 0x8
+     435	79 a1 a0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x60)
+     436	79 a6 98 ff 00 00 00 00 	r6 = *(u64 *)(r10 - 0x68)
+     437	7b 1a 60 ff 00 00 00 00 	*(u64 *)(r10 - 0xa0) = r1
+     438	3d 16 63 00 00 00 00 00 	if r6 >= r1 goto +0x63 <LBB0_10>
+     439	b7 07 00 00 08 00 00 00 	r7 = 0x8
+     440	bf 68 00 00 00 00 00 00 	r8 = r6
+     441	7b 9a 58 ff 00 00 00 00 	*(u64 *)(r10 - 0xa8) = r9
+
+LBB0_2
+     442	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     443	85 10 00 00 7a 00 00 00 	call 0x7a
+     444	0f 08 00 00 00 00 00 00 	r8 += r0
+     445	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     446	2d 86 01 00 00 00 00 00 	if r6 > r8 goto +0x1 <LBB0_4>
+     447	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB0_4
+     448	57 01 00 00 01 00 00 00 	r1 &= 0x1
+     449	55 01 58 00 00 00 00 00 	if r1 != 0x0 goto +0x58 <LBB0_10>
+     450	7b 8a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r8
+     451	bf 96 00 00 00 00 00 00 	r6 = r9
+     452	0f 76 00 00 00 00 00 00 	r6 += r7
+     453	79 61 00 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x0)
+     454	b7 02 00 00 01 00 00 00 	r2 = 0x1
+     455	55 01 01 00 00 00 00 00 	if r1 != 0x0 goto +0x1 <LBB0_7>
+     456	b7 02 00 00 00 00 00 00 	r2 = 0x0
+
+LBB0_7
+     457	7b 2a 78 ff 00 00 00 00 	*(u64 *)(r10 - 0x88) = r2
+     458	07 07 00 00 38 00 00 00 	r7 += 0x38
+     459	bf 91 00 00 00 00 00 00 	r1 = r9
+     460	0f 71 00 00 00 00 00 00 	r1 += r7
+     461	7b 1a 70 ff 00 00 00 00 	*(u64 *)(r10 - 0x90) = r1
+     462	79 68 30 00 00 00 00 00 	r8 = *(u64 *)(r6 + 0x30)
+     463	7b 8a 68 ff 00 00 00 00 	*(u64 *)(r10 - 0x98) = r8
+     464	0f 78 00 00 00 00 00 00 	r8 += r7
+     465	bf 67 00 00 00 00 00 00 	r7 = r6
+     466	07 07 00 00 28 00 00 00 	r7 += 0x28
+     467	07 06 00 00 08 00 00 00 	r6 += 0x8
+     468	0f 89 00 00 00 00 00 00 	r9 += r8
+     469	79 a1 c0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x40)
+     470	79 a2 c8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x38)
+     471	5d 12 04 00 00 00 00 00 	if r2 != r1 goto +0x4 <LBB0_9>
+     472	bf a1 00 00 00 00 00 00 	r1 = r10
+     473	07 01 00 00 b8 ff ff ff 	r1 += -0x48
+     474	b7 02 00 00 01 00 00 00 	r2 = 0x1
+     475	85 10 00 00 c5 00 00 00 	call 0xc5
+
+LBB0_9
+     476	07 08 00 00 20 00 00 00 	r8 += 0x20
+     477	bf a1 00 00 00 00 00 00 	r1 = r10
+     478	07 01 00 00 88 ff ff ff 	r1 += -0x78
+     479	bf a2 00 00 00 00 00 00 	r2 = r10
+     480	07 02 00 00 b8 ff ff ff 	r2 += -0x48
+     481	85 10 00 00 c3 00 00 00 	call 0xc3
+     482	79 a1 88 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x78)
+     483	79 a2 c8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x38)
+     484	71 a3 d5 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x2b)
+     485	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+     486	71 a4 d4 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x2c)
+     487	4f 43 00 00 00 00 00 00 	r3 |= r4
+     488	71 a4 d6 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x2a)
+     489	73 4a ee ff 00 00 00 00 	*(u8 *)(r10 - 0x12) = r4
+     490	6b 3a ec ff 00 00 00 00 	*(u16 *)(r10 - 0x14) = r3
+     491	71 a3 d1 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x2f)
+     492	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+     493	71 a4 d0 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x30)
+     494	4f 43 00 00 00 00 00 00 	r3 |= r4
+     495	71 a4 d3 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x2d)
+     496	67 04 00 00 08 00 00 00 	r4 <<= 0x8
+     497	71 a5 d2 ff 00 00 00 00 	r5 = *(u8 *)(r10 - 0x2e)
+     498	4f 54 00 00 00 00 00 00 	r4 |= r5
+     499	67 04 00 00 10 00 00 00 	r4 <<= 0x10
+     500	4f 34 00 00 00 00 00 00 	r4 |= r3
+     501	63 4a e8 ff 00 00 00 00 	*(u32 *)(r10 - 0x18) = r4
+     502	27 02 00 00 30 00 00 00 	r2 *= 0x30
+     503	0f 21 00 00 00 00 00 00 	r1 += r2
+     504	79 a2 78 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x88)
+     505	73 21 28 00 00 00 00 00 	*(u8 *)(r1 + 0x28) = r2
+     506	7b 91 20 00 00 00 00 00 	*(u64 *)(r1 + 0x20) = r9
+     507	79 a2 68 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x98)
+     508	7b 21 18 00 00 00 00 00 	*(u64 *)(r1 + 0x18) = r2
+     509	79 a2 70 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x90)
+     510	7b 21 10 00 00 00 00 00 	*(u64 *)(r1 + 0x10) = r2
+     511	7b 71 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r7
+     512	7b 61 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r6
+     513	71 a2 ee ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x12)
+     514	73 21 2f 00 00 00 00 00 	*(u8 *)(r1 + 0x2f) = r2
+     515	69 a2 ec ff 00 00 00 00 	r2 = *(u16 *)(r10 - 0x14)
+     516	73 21 2d 00 00 00 00 00 	*(u8 *)(r1 + 0x2d) = r2
+     517	77 02 00 00 08 00 00 00 	r2 >>= 0x8
+     518	73 21 2e 00 00 00 00 00 	*(u8 *)(r1 + 0x2e) = r2
+     519	61 a2 e8 ff 00 00 00 00 	r2 = *(u32 *)(r10 - 0x18)
+     520	bf 23 00 00 00 00 00 00 	r3 = r2
+     521	77 03 00 00 18 00 00 00 	r3 >>= 0x18
+     522	73 31 2c 00 00 00 00 00 	*(u8 *)(r1 + 0x2c) = r3
+     523	bf 23 00 00 00 00 00 00 	r3 = r2
+     524	77 03 00 00 10 00 00 00 	r3 >>= 0x10
+     525	73 31 2b 00 00 00 00 00 	*(u8 *)(r1 + 0x2b) = r3
+     526	73 21 29 00 00 00 00 00 	*(u8 *)(r1 + 0x29) = r2
+     527	77 02 00 00 08 00 00 00 	r2 >>= 0x8
+     528	73 21 2a 00 00 00 00 00 	*(u8 *)(r1 + 0x2a) = r2
+     529	79 a1 c8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x38)
+     530	07 01 00 00 01 00 00 00 	r1 += 0x1
+     531	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+     532	bf 87 00 00 00 00 00 00 	r7 = r8
+     533	79 a8 80 ff 00 00 00 00 	r8 = *(u64 *)(r10 - 0x80)
+     534	bf 86 00 00 00 00 00 00 	r6 = r8
+     535	79 a9 58 ff 00 00 00 00 	r9 = *(u64 *)(r10 - 0xa8)
+     536	79 a1 60 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xa0)
+     537	2d 81 a0 ff 00 00 00 00 	if r1 > r8 goto -0x60 <LBB0_2>
+
+LBB0_10
+     538	bf 91 00 00 00 00 00 00 	r1 = r9
+     539	0f 71 00 00 00 00 00 00 	r1 += r7
+     540	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+     541	79 a2 b8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x48)
+     542	7b 2a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r2
+     543	7b 2a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r2
+     544	79 a2 c0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x40)
+     545	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+     546	7b 2a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r2
+     547	79 a2 c8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x38)
+     548	7b 2a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r2
+     549	7b 2a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r2
+     550	79 a2 e0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x20)
+     551	79 a3 50 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0xb0)
+     552	7b 23 10 00 00 00 00 00 	*(u64 *)(r3 + 0x10) = r2
+     553	79 a2 d8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x28)
+     554	7b 23 08 00 00 00 00 00 	*(u64 *)(r3 + 0x8) = r2
+     555	79 a2 d0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x30)
+     556	7b 23 00 00 00 00 00 00 	*(u64 *)(r3 + 0x0) = r2
+     557	07 07 00 00 08 00 00 00 	r7 += 0x8
+     558	bf 92 00 00 00 00 00 00 	r2 = r9
+     559	0f 72 00 00 00 00 00 00 	r2 += r7
+     560	7b 23 20 00 00 00 00 00 	*(u64 *)(r3 + 0x20) = r2
+     561	7b 13 28 00 00 00 00 00 	*(u64 *)(r3 + 0x28) = r1
+     562	0f 71 00 00 00 00 00 00 	r1 += r7
+     563	0f 19 00 00 00 00 00 00 	r9 += r1
+     564	7b 93 18 00 00 00 00 00 	*(u64 *)(r3 + 0x18) = r9
+     565	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::TryFrom<U>>::try_from
+     566	bf 10 00 00 00 00 00 00 	r0 = r1
+     567	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T>::new
+     568	bf 16 00 00 00 00 00 00 	r6 = r1
+     569	85 10 00 00 61 00 00 00 	call 0x61
+     570	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     571	7b 16 08 00 00 00 00 00 	*(u64 *)(r6 + 0x8) = r1
+     572	7b 06 00 00 00 00 00 00 	*(u64 *)(r6 + 0x0) = r0
+     573	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T,A>::ptr
+     574	79 11 00 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x0)
+     575	85 10 00 00 5d 00 00 00 	call 0x5d
+     576	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::RawVec<T,A>::reserve
+     577	bf 16 00 00 00 00 00 00 	r6 = r1
+     578	79 67 08 00 00 00 00 00 	r7 = *(u64 *)(r6 + 0x8)
+     579	bf 71 00 00 00 00 00 00 	r1 = r7
+     580	1f 21 00 00 00 00 00 00 	r1 -= r2
+     581	3d 31 44 00 00 00 00 00 	if r1 >= r3 goto +0x44 <LBB2_24>
+     582	bf 29 00 00 00 00 00 00 	r9 = r2
+     583	0f 39 00 00 00 00 00 00 	r9 += r3
+     584	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     585	2d 92 01 00 00 00 00 00 	if r2 > r9 goto +0x1 <LBB2_3>
+     586	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB2_3
+     587	55 01 07 00 01 00 00 00 	if r1 != 0x1 goto +0x7 <LBB2_5>
+     588	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     589	85 10 00 00 4b 00 00 00 	call 0x4b
+     590	bf 01 00 00 00 00 00 00 	r1 = r0
+     591	85 10 00 00 49 00 00 00 	call 0x49
+     592	55 00 3e 00 00 00 00 00 	if r0 != 0x0 goto +0x3e <LBB2_22>
+
+LBB2_21
+     593	85 10 00 00 5e 00 00 00 	call 0x5e
+     594	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB2_5
+     595	bf a1 00 00 00 00 00 00 	r1 = r10
+     596	07 01 00 00 f0 ff ff ff 	r1 += -0x10
+     597	85 10 00 00 3d 00 00 00 	call 0x3d
+     598	79 a8 f8 ff 00 00 00 00 	r8 = *(u64 *)(r10 - 0x8)
+     599	79 a3 f0 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x10)
+     600	bf 32 00 00 00 00 00 00 	r2 = r3
+     601	0f 82 00 00 00 00 00 00 	r2 += r8
+     602	07 02 00 00 ff ff ff ff 	r2 += -0x1
+     603	bf 81 00 00 00 00 00 00 	r1 = r8
+     604	87 01 00 00 00 00 00 00 	r1 = -r1
+     605	5f 12 00 00 00 00 00 00 	r2 &= r1
+     606	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     607	2d 23 01 00 00 00 00 00 	if r3 > r2 goto +0x1 <LBB2_7>
+     608	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB2_7
+     609	67 07 00 00 01 00 00 00 	r7 <<= 0x1
+     610	2d 97 01 00 00 00 00 00 	if r7 > r9 goto +0x1 <LBB2_9>
+     611	bf 97 00 00 00 00 00 00 	r7 = r9
+
+LBB2_9
+     612	55 01 01 00 01 00 00 00 	if r1 != 0x1 goto +0x1 <LBB2_11>
+     613	05 00 0b 00 00 00 00 00 	goto +0xb <LBB2_14>
+
+LBB2_11
+     614	bf a1 00 00 00 00 00 00 	r1 = r10
+     615	07 01 00 00 e0 ff ff ff 	r1 += -0x20
+     616	b7 03 00 00 00 00 00 00 	r3 = 0x0
+     617	bf 74 00 00 00 00 00 00 	r4 = r7
+     618	b7 05 00 00 00 00 00 00 	r5 = 0x0
+     619	85 10 00 00 42 08 00 00 	call 0x842
+     620	b7 01 00 00 01 00 00 00 	r1 = 0x1
+     621	79 a2 e8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x18)
+     622	55 02 01 00 00 00 00 00 	if r2 != 0x0 goto +0x1 <LBB2_13>
+     623	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB2_13
+     624	55 01 02 00 01 00 00 00 	if r1 != 0x1 goto +0x2 <LBB2_16>
+
+LBB2_14
+     625	85 10 00 00 26 00 00 00 	call 0x26
+     626	05 00 18 00 00 00 00 00 	goto +0x18 <LBB2_15>
+
+LBB2_16
+     627	15 08 17 00 00 00 00 00 	if r8 == 0x0 goto +0x17 <LBB2_15>
+     628	79 a9 e0 ff 00 00 00 00 	r9 = *(u64 *)(r10 - 0x20)
+     629	79 62 08 00 00 00 00 00 	r2 = *(u64 *)(r6 + 0x8)
+     630	15 02 07 00 00 00 00 00 	if r2 == 0x0 goto +0x7 <LBB2_19>
+     631	79 61 00 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x0)
+     632	27 02 00 00 30 00 00 00 	r2 *= 0x30
+     633	b7 03 00 00 08 00 00 00 	r3 = 0x8
+     634	bf 94 00 00 00 00 00 00 	r4 = r9
+     635	85 10 00 00 6d fe ff ff 	call -0x193
+     636	55 00 09 00 00 00 00 00 	if r0 != 0x0 goto +0x9 <LBB2_23>
+     637	05 00 04 00 00 00 00 00 	goto +0x4 <LBB2_20>
+
+LBB2_19
+     638	bf 91 00 00 00 00 00 00 	r1 = r9
+     639	bf 82 00 00 00 00 00 00 	r2 = r8
+     640	85 10 00 00 55 fe ff ff 	call -0x1ab
+     641	55 00 04 00 00 00 00 00 	if r0 != 0x0 goto +0x4 <LBB2_23>
+
+LBB2_20
+     642	bf 91 00 00 00 00 00 00 	r1 = r9
+     643	bf 82 00 00 00 00 00 00 	r2 = r8
+     644	85 10 00 00 2f 00 00 00 	call 0x2f
+     645	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB2_23
+     646	bf 01 00 00 00 00 00 00 	r1 = r0
+     647	85 10 00 00 17 00 00 00 	call 0x17
+     648	7b 76 08 00 00 00 00 00 	*(u64 *)(r6 + 0x8) = r7
+     649	7b 06 00 00 00 00 00 00 	*(u64 *)(r6 + 0x0) = r0
+
+LBB2_24
+     650	95 00 00 00 00 00 00 00 	exit
+
+LBB2_15
+     651	b7 01 00 00 00 00 00 00 	r1 = 0x0
+     652	85 10 00 00 0c 00 00 00 	call 0xc
+     653	55 00 01 00 00 00 00 00 	if r0 != 0x0 goto +0x1 <LBB2_22>
+     654	05 00 c2 ff 00 00 00 00 	goto -0x3e <LBB2_21>
+
+LBB2_22
+     655	18 01 00 00 c8 5b 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5bc8 ll
+     657	85 10 00 00 76 06 00 00 	call 0x676
+     658	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::alloc::size_align
+     659	b7 02 00 00 08 00 00 00 	r2 = 0x8
+     660	7b 21 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r2
+     661	b7 02 00 00 30 00 00 00 	r2 = 0x30
+     662	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     663	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::From<T>>::from
+     664	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::From<T>>::from
+     665	bf 10 00 00 00 00 00 00 	r0 = r1
+     666	95 00 00 00 00 00 00 00 	exit
+
+core::ptr::Unique<T>::empty
+     667	b7 00 00 00 08 00 00 00 	r0 = 0x8
+     668	95 00 00 00 00 00 00 00 	exit
+
+core::ptr::Unique<T>::as_ptr
+     669	bf 10 00 00 00 00 00 00 	r0 = r1
+     670	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::Into<U>>::into
+     671	bf 10 00 00 00 00 00 00 	r0 = r1
+     672	95 00 00 00 00 00 00 00 	exit
+
+alloc::vec::Vec<T>::reserve
+     673	bf 23 00 00 00 00 00 00 	r3 = r2
+     674	79 12 10 00 00 00 00 00 	r2 = *(u64 *)(r1 + 0x10)
+     675	85 10 00 00 9d ff ff ff 	call -0x63
+     676	95 00 00 00 00 00 00 00 	exit
+
+<alloc::vec::Vec<T> as core::ops::deref::DerefMut>::deref_mut
+     677	bf 26 00 00 00 00 00 00 	r6 = r2
+     678	bf 17 00 00 00 00 00 00 	r7 = r1
+     679	bf 61 00 00 00 00 00 00 	r1 = r6
+     680	85 10 00 00 95 ff ff ff 	call -0x6b
+     681	7b 07 00 00 00 00 00 00 	*(u64 *)(r7 + 0x0) = r0
+     682	79 61 10 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x10)
+     683	7b 17 08 00 00 00 00 00 	*(u64 *)(r7 + 0x8) = r1
+     684	95 00 00 00 00 00 00 00 	exit
+
+<I as core::iter::traits::collect::IntoIterator>::into_iter
+     685	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+     686	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+     687	95 00 00 00 00 00 00 00 	exit
+
+alloc::raw_vec::capacity_overflow
+     688	18 01 00 00 f0 5b 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5bf0 ll
+     690	85 10 00 00 55 06 00 00 	call 0x655
+     691	85 10 00 00 ff ff ff ff 	call -0x1
+
+alloc::alloc::handle_alloc_error
+     692	85 10 00 00 e0 fe ff ff 	call -0x120
+     693	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::fmt::num::GenericRadix::fmt_int
+     694	7b 2a 98 fd 00 00 00 00 	*(u64 *)(r10 - 0x268) = r2
+     695	bf 17 00 00 00 00 00 00 	r7 = r1
+     696	71 a2 3f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xc1)
+     697	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     698	71 a1 3e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc2)
+     699	4f 12 00 00 00 00 00 00 	r2 |= r1
+     700	7b 2a 58 fe 00 00 00 00 	*(u64 *)(r10 - 0x1a8) = r2
+     701	71 a2 7f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x81)
+     702	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     703	71 a1 7e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x82)
+     704	4f 12 00 00 00 00 00 00 	r2 |= r1
+     705	7b 2a 50 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b0) = r2
+     706	71 a2 0f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xf1)
+     707	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     708	71 a1 0e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf2)
+     709	4f 12 00 00 00 00 00 00 	r2 |= r1
+     710	7b 2a 40 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c0) = r2
+     711	71 a2 17 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xe9)
+     712	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     713	71 a1 16 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xea)
+     714	4f 12 00 00 00 00 00 00 	r2 |= r1
+     715	7b 2a 28 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d8) = r2
+     716	71 a2 5f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa1)
+     717	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     718	71 a1 5e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa2)
+     719	4f 12 00 00 00 00 00 00 	r2 |= r1
+     720	7b 2a 18 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e8) = r2
+     721	71 a2 27 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xd9)
+     722	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     723	71 a1 26 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xda)
+     724	4f 12 00 00 00 00 00 00 	r2 |= r1
+     725	7b 2a 48 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b8) = r2
+     726	71 a2 2f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xd1)
+     727	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     728	71 a1 2e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd2)
+     729	4f 12 00 00 00 00 00 00 	r2 |= r1
+     730	7b 2a 30 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d0) = r2
+     731	71 a2 37 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xc9)
+     732	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     733	71 a1 36 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xca)
+     734	4f 12 00 00 00 00 00 00 	r2 |= r1
+     735	7b 2a 20 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e0) = r2
+     736	71 a2 6b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x95)
+     737	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     738	71 a1 6a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x96)
+     739	4f 12 00 00 00 00 00 00 	r2 |= r1
+     740	7b 2a 10 fe 00 00 00 00 	*(u64 *)(r10 - 0x1f0) = r2
+     741	71 a2 47 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb9)
+     742	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     743	71 a1 46 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xba)
+     744	4f 12 00 00 00 00 00 00 	r2 |= r1
+     745	7b 2a 38 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c8) = r2
+     746	71 a2 4f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb1)
+     747	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     748	71 a1 4e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb2)
+     749	4f 12 00 00 00 00 00 00 	r2 |= r1
+     750	7b 2a f8 fd 00 00 00 00 	*(u64 *)(r10 - 0x208) = r2
+     751	71 a2 57 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa9)
+     752	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     753	71 a1 56 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xaa)
+     754	4f 12 00 00 00 00 00 00 	r2 |= r1
+     755	7b 2a d8 fd 00 00 00 00 	*(u64 *)(r10 - 0x228) = r2
+     756	71 a2 5b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa5)
+     757	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     758	71 a1 5a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa6)
+     759	4f 12 00 00 00 00 00 00 	r2 |= r1
+     760	7b 2a 08 fe 00 00 00 00 	*(u64 *)(r10 - 0x1f8) = r2
+     761	71 a2 67 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x99)
+     762	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     763	71 a1 66 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x9a)
+     764	4f 12 00 00 00 00 00 00 	r2 |= r1
+     765	7b 2a 90 fd 00 00 00 00 	*(u64 *)(r10 - 0x270) = r2
+     766	71 a2 63 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x9d)
+     767	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     768	71 a1 62 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x9e)
+     769	4f 12 00 00 00 00 00 00 	r2 |= r1
+     770	7b 2a e0 fd 00 00 00 00 	*(u64 *)(r10 - 0x220) = r2
+     771	71 a2 6f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x91)
+     772	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     773	71 a1 6e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x92)
+     774	4f 12 00 00 00 00 00 00 	r2 |= r1
+     775	7b 2a c0 fd 00 00 00 00 	*(u64 *)(r10 - 0x240) = r2
+     776	71 a2 3b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xc5)
+     777	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     778	71 a1 3a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc6)
+     779	4f 12 00 00 00 00 00 00 	r2 |= r1
+     780	7b 2a 00 fe 00 00 00 00 	*(u64 *)(r10 - 0x200) = r2
+     781	71 a2 43 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xbd)
+     782	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     783	71 a1 42 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xbe)
+     784	4f 12 00 00 00 00 00 00 	r2 |= r1
+     785	7b 2a e8 fd 00 00 00 00 	*(u64 *)(r10 - 0x218) = r2
+     786	71 a2 4b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb5)
+     787	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     788	71 a1 4a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb6)
+     789	4f 12 00 00 00 00 00 00 	r2 |= r1
+     790	7b 2a c8 fd 00 00 00 00 	*(u64 *)(r10 - 0x238) = r2
+     791	71 a2 53 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xad)
+     792	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     793	71 a1 52 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xae)
+     794	4f 12 00 00 00 00 00 00 	r2 |= r1
+     795	7b 2a b0 fd 00 00 00 00 	*(u64 *)(r10 - 0x250) = r2
+     796	71 a2 1b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xe5)
+     797	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     798	71 a1 1a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xe6)
+     799	4f 12 00 00 00 00 00 00 	r2 |= r1
+     800	7b 2a f0 fd 00 00 00 00 	*(u64 *)(r10 - 0x210) = r2
+     801	71 a2 23 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xdd)
+     802	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     803	71 a1 22 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xde)
+     804	4f 12 00 00 00 00 00 00 	r2 |= r1
+     805	7b 2a d0 fd 00 00 00 00 	*(u64 *)(r10 - 0x230) = r2
+     806	71 a2 2b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xd5)
+     807	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     808	71 a1 2a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd6)
+     809	4f 12 00 00 00 00 00 00 	r2 |= r1
+     810	7b 2a b8 fd 00 00 00 00 	*(u64 *)(r10 - 0x248) = r2
+     811	71 a2 33 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xcd)
+     812	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     813	71 a1 32 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xce)
+     814	4f 12 00 00 00 00 00 00 	r2 |= r1
+     815	7b 2a a8 fd 00 00 00 00 	*(u64 *)(r10 - 0x258) = r2
+     816	71 a2 73 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x8d)
+     817	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     818	71 a1 72 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x8e)
+     819	4f 12 00 00 00 00 00 00 	r2 |= r1
+     820	7b 2a 88 fd 00 00 00 00 	*(u64 *)(r10 - 0x278) = r2
+     821	71 a2 7b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x85)
+     822	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     823	71 a1 7a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x86)
+     824	4f 12 00 00 00 00 00 00 	r2 |= r1
+     825	7b 2a 80 fd 00 00 00 00 	*(u64 *)(r10 - 0x280) = r2
+     826	71 a2 0b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xf5)
+     827	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     828	71 a1 0a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf6)
+     829	4f 12 00 00 00 00 00 00 	r2 |= r1
+     830	7b 2a 78 fd 00 00 00 00 	*(u64 *)(r10 - 0x288) = r2
+     831	71 a2 13 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xed)
+     832	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     833	71 a1 12 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xee)
+     834	4f 12 00 00 00 00 00 00 	r2 |= r1
+     835	7b 2a a0 fd 00 00 00 00 	*(u64 *)(r10 - 0x260) = r2
+     836	71 a2 71 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x8f)
+     837	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     838	71 a1 70 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x90)
+     839	4f 12 00 00 00 00 00 00 	r2 |= r1
+     840	7b 2a 70 fd 00 00 00 00 	*(u64 *)(r10 - 0x290) = r2
+     841	71 a2 79 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x87)
+     842	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     843	71 a1 78 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x88)
+     844	4f 12 00 00 00 00 00 00 	r2 |= r1
+     845	7b 2a 68 fd 00 00 00 00 	*(u64 *)(r10 - 0x298) = r2
+     846	71 a2 09 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xf7)
+     847	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     848	71 a1 08 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf8)
+     849	4f 12 00 00 00 00 00 00 	r2 |= r1
+     850	7b 2a 60 fd 00 00 00 00 	*(u64 *)(r10 - 0x2a0) = r2
+     851	71 a2 11 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xef)
+     852	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     853	71 a1 10 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf0)
+     854	4f 12 00 00 00 00 00 00 	r2 |= r1
+     855	7b 2a 58 fd 00 00 00 00 	*(u64 *)(r10 - 0x2a8) = r2
+     856	71 a2 19 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xe7)
+     857	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     858	71 a1 18 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xe8)
+     859	4f 12 00 00 00 00 00 00 	r2 |= r1
+     860	7b 2a 50 fd 00 00 00 00 	*(u64 *)(r10 - 0x2b0) = r2
+     861	71 a2 21 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xdf)
+     862	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     863	71 a1 20 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xe0)
+     864	4f 12 00 00 00 00 00 00 	r2 |= r1
+     865	7b 2a 48 fd 00 00 00 00 	*(u64 *)(r10 - 0x2b8) = r2
+     866	71 a2 29 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xd7)
+     867	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     868	71 a1 28 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd8)
+     869	4f 12 00 00 00 00 00 00 	r2 |= r1
+     870	7b 2a 40 fd 00 00 00 00 	*(u64 *)(r10 - 0x2c0) = r2
+     871	71 a2 31 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xcf)
+     872	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     873	71 a1 30 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd0)
+     874	4f 12 00 00 00 00 00 00 	r2 |= r1
+     875	7b 2a 38 fd 00 00 00 00 	*(u64 *)(r10 - 0x2c8) = r2
+     876	71 a2 39 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xc7)
+     877	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     878	71 a1 38 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc8)
+     879	4f 12 00 00 00 00 00 00 	r2 |= r1
+     880	7b 2a 30 fd 00 00 00 00 	*(u64 *)(r10 - 0x2d0) = r2
+     881	71 a2 41 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xbf)
+     882	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     883	71 a1 40 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc0)
+     884	4f 12 00 00 00 00 00 00 	r2 |= r1
+     885	7b 2a 28 fd 00 00 00 00 	*(u64 *)(r10 - 0x2d8) = r2
+     886	71 a2 49 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb7)
+     887	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     888	71 a1 48 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb8)
+     889	4f 12 00 00 00 00 00 00 	r2 |= r1
+     890	7b 2a 20 fd 00 00 00 00 	*(u64 *)(r10 - 0x2e0) = r2
+     891	71 a2 51 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xaf)
+     892	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     893	71 a1 50 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb0)
+     894	4f 12 00 00 00 00 00 00 	r2 |= r1
+     895	7b 2a 18 fd 00 00 00 00 	*(u64 *)(r10 - 0x2e8) = r2
+     896	71 a2 59 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa7)
+     897	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     898	71 a1 58 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa8)
+     899	4f 12 00 00 00 00 00 00 	r2 |= r1
+     900	7b 2a 10 fd 00 00 00 00 	*(u64 *)(r10 - 0x2f0) = r2
+     901	71 a2 65 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x9b)
+     902	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     903	71 a1 64 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x9c)
+     904	4f 12 00 00 00 00 00 00 	r2 |= r1
+     905	7b 2a 08 fd 00 00 00 00 	*(u64 *)(r10 - 0x2f8) = r2
+     906	71 a2 61 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x9f)
+     907	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     908	71 a1 60 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa0)
+     909	4f 12 00 00 00 00 00 00 	r2 |= r1
+     910	7b 2a 00 fd 00 00 00 00 	*(u64 *)(r10 - 0x300) = r2
+     911	71 a2 6d ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x93)
+     912	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     913	71 a1 6c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x94)
+     914	4f 12 00 00 00 00 00 00 	r2 |= r1
+     915	7b 2a f8 fc 00 00 00 00 	*(u64 *)(r10 - 0x308) = r2
+     916	71 a2 69 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x97)
+     917	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     918	71 a1 68 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x98)
+     919	4f 12 00 00 00 00 00 00 	r2 |= r1
+     920	7b 2a f0 fc 00 00 00 00 	*(u64 *)(r10 - 0x310) = r2
+     921	71 a2 45 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xbb)
+     922	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     923	71 a1 44 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xbc)
+     924	4f 12 00 00 00 00 00 00 	r2 |= r1
+     925	7b 2a e8 fc 00 00 00 00 	*(u64 *)(r10 - 0x318) = r2
+     926	71 a2 4d ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb3)
+     927	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     928	71 a1 4c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb4)
+     929	4f 12 00 00 00 00 00 00 	r2 |= r1
+     930	7b 2a e0 fc 00 00 00 00 	*(u64 *)(r10 - 0x320) = r2
+     931	71 a2 55 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xab)
+     932	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     933	71 a1 54 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xac)
+     934	4f 12 00 00 00 00 00 00 	r2 |= r1
+     935	7b 2a d8 fc 00 00 00 00 	*(u64 *)(r10 - 0x328) = r2
+     936	71 a2 5d ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa3)
+     937	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     938	71 a1 5c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa4)
+     939	4f 12 00 00 00 00 00 00 	r2 |= r1
+     940	7b 2a d0 fc 00 00 00 00 	*(u64 *)(r10 - 0x330) = r2
+     941	71 a2 25 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xdb)
+     942	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     943	71 a1 24 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xdc)
+     944	4f 12 00 00 00 00 00 00 	r2 |= r1
+     945	7b 2a c8 fc 00 00 00 00 	*(u64 *)(r10 - 0x338) = r2
+     946	71 a8 2d ff 00 00 00 00 	r8 = *(u8 *)(r10 - 0xd3)
+     947	67 08 00 00 08 00 00 00 	r8 <<= 0x8
+     948	71 a1 2c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd4)
+     949	4f 18 00 00 00 00 00 00 	r8 |= r1
+     950	71 a0 35 ff 00 00 00 00 	r0 = *(u8 *)(r10 - 0xcb)
+     951	67 00 00 00 08 00 00 00 	r0 <<= 0x8
+     952	71 a1 34 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xcc)
+     953	4f 10 00 00 00 00 00 00 	r0 |= r1
+     954	71 a5 3d ff 00 00 00 00 	r5 = *(u8 *)(r10 - 0xc3)
+     955	67 05 00 00 08 00 00 00 	r5 <<= 0x8
+     956	71 a1 3c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc4)
+     957	4f 15 00 00 00 00 00 00 	r5 |= r1
+     958	71 a4 7d ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x83)
+     959	67 04 00 00 08 00 00 00 	r4 <<= 0x8
+     960	71 a1 7c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x84)
+     961	4f 14 00 00 00 00 00 00 	r4 |= r1
+     962	71 a3 0d ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0xf3)
+     963	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+     964	71 a1 0c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf4)
+     965	4f 13 00 00 00 00 00 00 	r3 |= r1
+     966	71 a2 15 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xeb)
+     967	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+     968	71 a6 14 ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0xec)
+     969	4f 62 00 00 00 00 00 00 	r2 |= r6
+     970	71 a1 1d ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xe3)
+     971	67 01 00 00 08 00 00 00 	r1 <<= 0x8
+     972	71 a6 1c ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0xe4)
+     973	4f 61 00 00 00 00 00 00 	r1 |= r6
+     974	71 a6 1f ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0xe1)
+     975	67 06 00 00 08 00 00 00 	r6 <<= 0x8
+     976	71 a9 1e ff 00 00 00 00 	r9 = *(u8 *)(r10 - 0xe2)
+     977	4f 96 00 00 00 00 00 00 	r6 |= r9
+     978	67 06 00 00 10 00 00 00 	r6 <<= 0x10
+     979	4f 16 00 00 00 00 00 00 	r6 |= r1
+     980	79 a1 28 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1d8)
+     981	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+     982	4f 21 00 00 00 00 00 00 	r1 |= r2
+     983	7b 1a 28 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d8) = r1
+     984	79 a1 40 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1c0)
+     985	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+     986	4f 31 00 00 00 00 00 00 	r1 |= r3
+     987	7b 1a 40 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c0) = r1
+     988	79 a1 50 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1b0)
+     989	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+     990	4f 41 00 00 00 00 00 00 	r1 |= r4
+     991	7b 1a 50 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b0) = r1
+     992	79 a1 58 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1a8)
+     993	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+     994	4f 51 00 00 00 00 00 00 	r1 |= r5
+     995	7b 1a 58 fe 00 00 00 00 	*(u64 *)(r10 - 0x1a8) = r1
+     996	79 a1 20 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1e0)
+     997	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+     998	4f 01 00 00 00 00 00 00 	r1 |= r0
+     999	7b 1a 20 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e0) = r1
+    1000	79 a1 30 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1d0)
+    1001	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1002	4f 81 00 00 00 00 00 00 	r1 |= r8
+    1003	7b 1a 30 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d0) = r1
+    1004	79 a1 48 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1b8)
+    1005	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1006	79 a2 c8 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x338)
+    1007	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1008	7b 1a 48 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b8) = r1
+    1009	79 a1 18 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1e8)
+    1010	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1011	79 a2 d0 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x330)
+    1012	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1013	7b 1a 18 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e8) = r1
+    1014	79 a1 d8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x228)
+    1015	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1016	79 a2 d8 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x328)
+    1017	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1018	7b 1a d8 fd 00 00 00 00 	*(u64 *)(r10 - 0x228) = r1
+    1019	79 a8 f8 fd 00 00 00 00 	r8 = *(u64 *)(r10 - 0x208)
+    1020	67 08 00 00 10 00 00 00 	r8 <<= 0x10
+    1021	79 a1 e0 fc 00 00 00 00 	r1 = *(u64 *)(r10 - 0x320)
+    1022	4f 18 00 00 00 00 00 00 	r8 |= r1
+    1023	79 a1 38 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1c8)
+    1024	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1025	79 a2 e8 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x318)
+    1026	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1027	7b 1a 38 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c8) = r1
+    1028	79 a1 10 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1f0)
+    1029	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1030	79 a2 f0 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x310)
+    1031	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1032	7b 1a 10 fe 00 00 00 00 	*(u64 *)(r10 - 0x1f0) = r1
+    1033	79 a2 c0 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x240)
+    1034	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1035	79 a1 f8 fc 00 00 00 00 	r1 = *(u64 *)(r10 - 0x308)
+    1036	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1037	7b 2a c0 fd 00 00 00 00 	*(u64 *)(r10 - 0x240) = r2
+    1038	79 a1 e0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x220)
+    1039	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1040	79 a2 00 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x300)
+    1041	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1042	7b 1a e0 fd 00 00 00 00 	*(u64 *)(r10 - 0x220) = r1
+    1043	79 a5 90 fd 00 00 00 00 	r5 = *(u64 *)(r10 - 0x270)
+    1044	67 05 00 00 10 00 00 00 	r5 <<= 0x10
+    1045	79 a1 08 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2f8)
+    1046	4f 15 00 00 00 00 00 00 	r5 |= r1
+    1047	79 a2 08 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1f8)
+    1048	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1049	79 a1 10 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2f0)
+    1050	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1051	7b 2a 08 fe 00 00 00 00 	*(u64 *)(r10 - 0x1f8) = r2
+    1052	79 a1 b0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x250)
+    1053	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1054	79 a2 18 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2e8)
+    1055	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1056	7b 1a b0 fd 00 00 00 00 	*(u64 *)(r10 - 0x250) = r1
+    1057	79 a1 c8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x238)
+    1058	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1059	79 a2 20 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2e0)
+    1060	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1061	7b 1a c8 fd 00 00 00 00 	*(u64 *)(r10 - 0x238) = r1
+    1062	79 a1 e8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x218)
+    1063	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1064	79 a2 28 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2d8)
+    1065	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1066	7b 1a e8 fd 00 00 00 00 	*(u64 *)(r10 - 0x218) = r1
+    1067	79 a2 00 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x200)
+    1068	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1069	79 a1 30 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2d0)
+    1070	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1071	7b 2a 00 fe 00 00 00 00 	*(u64 *)(r10 - 0x200) = r2
+    1072	79 a1 a8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x258)
+    1073	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1074	79 a2 38 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2c8)
+    1075	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1076	7b 1a a8 fd 00 00 00 00 	*(u64 *)(r10 - 0x258) = r1
+    1077	79 a1 b8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x248)
+    1078	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1079	79 a2 40 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2c0)
+    1080	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1081	7b 1a b8 fd 00 00 00 00 	*(u64 *)(r10 - 0x248) = r1
+    1082	79 a1 d0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x230)
+    1083	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1084	79 a2 48 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2b8)
+    1085	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1086	7b 1a d0 fd 00 00 00 00 	*(u64 *)(r10 - 0x230) = r1
+    1087	79 a2 f0 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x210)
+    1088	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1089	79 a1 50 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2b0)
+    1090	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1091	7b 2a f0 fd 00 00 00 00 	*(u64 *)(r10 - 0x210) = r2
+    1092	79 a1 a0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x260)
+    1093	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1094	79 a2 58 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2a8)
+    1095	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1096	7b 1a a0 fd 00 00 00 00 	*(u64 *)(r10 - 0x260) = r1
+    1097	79 a9 78 fd 00 00 00 00 	r9 = *(u64 *)(r10 - 0x288)
+    1098	67 09 00 00 10 00 00 00 	r9 <<= 0x10
+    1099	79 a1 60 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2a0)
+    1100	4f 19 00 00 00 00 00 00 	r9 |= r1
+    1101	79 a4 80 fd 00 00 00 00 	r4 = *(u64 *)(r10 - 0x280)
+    1102	67 04 00 00 10 00 00 00 	r4 <<= 0x10
+    1103	79 a1 68 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x298)
+    1104	4f 14 00 00 00 00 00 00 	r4 |= r1
+    1105	79 a1 88 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x278)
+    1106	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1107	79 a2 70 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x290)
+    1108	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1109	bf 10 00 00 00 00 00 00 	r0 = r1
+    1110	71 a1 75 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x8b)
+    1111	67 01 00 00 08 00 00 00 	r1 <<= 0x8
+    1112	71 a2 74 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x8c)
+    1113	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1114	71 a2 77 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x89)
+    1115	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1116	71 a3 76 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x8a)
+    1117	4f 32 00 00 00 00 00 00 	r2 |= r3
+    1118	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1119	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1120	67 02 00 00 20 00 00 00 	r2 <<= 0x20
+    1121	4f 02 00 00 00 00 00 00 	r2 |= r0
+    1122	79 a1 50 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1b0)
+    1123	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1124	4f 41 00 00 00 00 00 00 	r1 |= r4
+    1125	7b 1a 50 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b0) = r1
+    1126	79 a1 40 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1c0)
+    1127	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1128	4f 91 00 00 00 00 00 00 	r1 |= r9
+    1129	7b 1a 40 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c0) = r1
+    1130	79 a1 28 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1d8)
+    1131	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1132	79 a3 a0 fd 00 00 00 00 	r3 = *(u64 *)(r10 - 0x260)
+    1133	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1134	7b 1a 28 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d8) = r1
+    1135	67 06 00 00 20 00 00 00 	r6 <<= 0x20
+    1136	79 a1 f0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x210)
+    1137	4f 16 00 00 00 00 00 00 	r6 |= r1
+    1138	79 a1 48 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1b8)
+    1139	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1140	79 a3 d0 fd 00 00 00 00 	r3 = *(u64 *)(r10 - 0x230)
+    1141	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1142	7b 1a 48 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b8) = r1
+    1143	79 a1 30 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1d0)
+    1144	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1145	79 a3 b8 fd 00 00 00 00 	r3 = *(u64 *)(r10 - 0x248)
+    1146	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1147	7b 1a 30 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d0) = r1
+    1148	79 a3 20 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1e0)
+    1149	67 03 00 00 20 00 00 00 	r3 <<= 0x20
+    1150	79 a1 a8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x258)
+    1151	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1152	7b 3a 20 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e0) = r3
+    1153	79 a3 58 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1a8)
+    1154	67 03 00 00 20 00 00 00 	r3 <<= 0x20
+    1155	79 a1 00 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x200)
+    1156	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1157	7b 3a 58 fe 00 00 00 00 	*(u64 *)(r10 - 0x1a8) = r3
+    1158	79 a1 38 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1c8)
+    1159	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1160	79 a3 e8 fd 00 00 00 00 	r3 = *(u64 *)(r10 - 0x218)
+    1161	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1162	7b 1a 38 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c8) = r1
+    1163	67 08 00 00 20 00 00 00 	r8 <<= 0x20
+    1164	79 a1 c8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x238)
+    1165	4f 18 00 00 00 00 00 00 	r8 |= r1
+    1166	7b 8a f8 fd 00 00 00 00 	*(u64 *)(r10 - 0x208) = r8
+    1167	79 a9 d8 fd 00 00 00 00 	r9 = *(u64 *)(r10 - 0x228)
+    1168	67 09 00 00 20 00 00 00 	r9 <<= 0x20
+    1169	79 a1 b0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x250)
+    1170	4f 19 00 00 00 00 00 00 	r9 |= r1
+    1171	79 a8 18 fe 00 00 00 00 	r8 = *(u64 *)(r10 - 0x1e8)
+    1172	67 08 00 00 20 00 00 00 	r8 <<= 0x20
+    1173	79 a3 08 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1f8)
+    1174	4f 38 00 00 00 00 00 00 	r8 |= r3
+    1175	bf 50 00 00 00 00 00 00 	r0 = r5
+    1176	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+    1177	79 a1 e0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x220)
+    1178	4f 10 00 00 00 00 00 00 	r0 |= r1
+    1179	79 a5 c0 fd 00 00 00 00 	r5 = *(u64 *)(r10 - 0x240)
+    1180	67 05 00 00 20 00 00 00 	r5 <<= 0x20
+    1181	79 a3 10 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1f0)
+    1182	4f 35 00 00 00 00 00 00 	r5 |= r3
+    1183	71 a3 01 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0xff)
+    1184	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    1185	71 a1 00 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x100)
+    1186	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1187	71 a1 03 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xfd)
+    1188	67 01 00 00 08 00 00 00 	r1 <<= 0x8
+    1189	71 a4 02 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0xfe)
+    1190	4f 41 00 00 00 00 00 00 	r1 |= r4
+    1191	79 a4 50 fe 00 00 00 00 	r4 = *(u64 *)(r10 - 0x1b0)
+    1192	7b 4a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r4
+    1193	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+    1194	7b 5a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r5
+    1195	7b 0a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r0
+    1196	7b 8a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r8
+    1197	7b 9a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r9
+    1198	79 a2 f8 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x208)
+    1199	7b 2a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r2
+    1200	79 a2 38 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1c8)
+    1201	7b 2a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r2
+    1202	79 a2 58 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1a8)
+    1203	7b 2a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r2
+    1204	79 a2 20 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1e0)
+    1205	7b 2a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r2
+    1206	79 a2 30 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1d0)
+    1207	7b 2a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r2
+    1208	79 a2 48 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1b8)
+    1209	7b 2a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r2
+    1210	7b 6a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r6
+    1211	79 a2 28 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1d8)
+    1212	7b 2a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r2
+    1213	79 a2 40 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1c0)
+    1214	7b 2a 88 ff 00 00 00 00 	*(u64 *)(r10 - 0x78) = r2
+    1215	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1216	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1217	71 a2 05 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xfb)
+    1218	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1219	71 a3 04 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0xfc)
+    1220	4f 32 00 00 00 00 00 00 	r2 |= r3
+    1221	71 a3 07 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0xf9)
+    1222	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    1223	71 a4 06 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0xfa)
+    1224	4f 43 00 00 00 00 00 00 	r3 |= r4
+    1225	67 03 00 00 10 00 00 00 	r3 <<= 0x10
+    1226	4f 23 00 00 00 00 00 00 	r3 |= r2
+    1227	67 03 00 00 20 00 00 00 	r3 <<= 0x20
+    1228	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1229	7b 3a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r3
+    1230	79 a1 f8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x8)
+    1231	7b 1a f8 fe 00 00 00 00 	*(u64 *)(r10 - 0x108) = r1
+    1232	79 a1 f0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x10)
+    1233	7b 1a f0 fe 00 00 00 00 	*(u64 *)(r10 - 0x110) = r1
+    1234	79 a1 e8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x18)
+    1235	7b 1a e8 fe 00 00 00 00 	*(u64 *)(r10 - 0x118) = r1
+    1236	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+    1237	7b 1a e0 fe 00 00 00 00 	*(u64 *)(r10 - 0x120) = r1
+    1238	79 a1 d8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x28)
+    1239	7b 1a d8 fe 00 00 00 00 	*(u64 *)(r10 - 0x128) = r1
+    1240	79 a1 d0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x30)
+    1241	7b 1a d0 fe 00 00 00 00 	*(u64 *)(r10 - 0x130) = r1
+    1242	79 a1 c8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x38)
+    1243	7b 1a c8 fe 00 00 00 00 	*(u64 *)(r10 - 0x138) = r1
+    1244	79 a1 c0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x40)
+    1245	7b 1a c0 fe 00 00 00 00 	*(u64 *)(r10 - 0x140) = r1
+    1246	79 a1 b8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x48)
+    1247	7b 1a b8 fe 00 00 00 00 	*(u64 *)(r10 - 0x148) = r1
+    1248	79 a1 b0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x50)
+    1249	7b 1a b0 fe 00 00 00 00 	*(u64 *)(r10 - 0x150) = r1
+    1250	79 a1 a8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x58)
+    1251	7b 1a a8 fe 00 00 00 00 	*(u64 *)(r10 - 0x158) = r1
+    1252	79 a1 a0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x60)
+    1253	7b 1a a0 fe 00 00 00 00 	*(u64 *)(r10 - 0x160) = r1
+    1254	79 a1 98 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x68)
+    1255	7b 1a 98 fe 00 00 00 00 	*(u64 *)(r10 - 0x168) = r1
+    1256	79 a1 90 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x70)
+    1257	7b 1a 90 fe 00 00 00 00 	*(u64 *)(r10 - 0x170) = r1
+    1258	79 a1 88 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x78)
+    1259	7b 1a 88 fe 00 00 00 00 	*(u64 *)(r10 - 0x178) = r1
+    1260	79 a1 80 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x80)
+    1261	7b 1a 80 fe 00 00 00 00 	*(u64 *)(r10 - 0x180) = r1
+    1262	bf a1 00 00 00 00 00 00 	r1 = r10
+    1263	07 01 00 00 70 fe ff ff 	r1 += -0x190
+    1264	bf a2 00 00 00 00 00 00 	r2 = r10
+    1265	07 02 00 00 80 fe ff ff 	r2 += -0x180
+    1266	bf a3 00 00 00 00 00 00 	r3 = r10
+    1267	07 03 00 00 00 ff ff ff 	r3 += -0x100
+    1268	85 10 00 00 d6 02 00 00 	call 0x2d6
+    1269	79 a3 78 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x188)
+    1270	79 a2 70 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x190)
+    1271	bf a1 00 00 00 00 00 00 	r1 = r10
+    1272	07 01 00 00 60 fe ff ff 	r1 += -0x1a0
+    1273	85 10 00 00 d1 02 00 00 	call 0x2d1
+    1274	b7 01 00 00 00 00 00 00 	r1 = 0x0
+    1275	79 a2 68 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x198)
+    1276	79 a3 60 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1a0)
+    1277	1f 23 00 00 00 00 00 00 	r3 -= r2
+    1278	b7 04 00 00 0a 00 00 00 	r4 = 0xa
+
+LBB3_1
+    1279	1d 13 0e 00 00 00 00 00 	if r3 == r1 goto +0xe <LBB3_5>
+    1280	bf 75 00 00 00 00 00 00 	r5 = r7
+    1281	57 05 00 00 0f 00 00 00 	r5 &= 0xf
+    1282	bf 50 00 00 00 00 00 00 	r0 = r5
+    1283	47 00 00 00 30 00 00 00 	r0 |= 0x30
+    1284	2d 54 02 00 00 00 00 00 	if r4 > r5 goto +0x2 <LBB3_4>
+    1285	07 05 00 00 37 00 00 00 	r5 += 0x37
+    1286	bf 50 00 00 00 00 00 00 	r0 = r5
+
+LBB3_4
+    1287	bf 25 00 00 00 00 00 00 	r5 = r2
+    1288	0f 15 00 00 00 00 00 00 	r5 += r1
+    1289	73 05 ff ff 00 00 00 00 	*(u8 *)(r5 - 0x1) = r0
+    1290	07 01 00 00 ff ff ff ff 	r1 += -0x1
+    1291	77 07 00 00 04 00 00 00 	r7 >>= 0x4
+    1292	57 07 00 00 ff ff ff 0f 	r7 &= 0xfffffff
+    1293	55 07 f1 ff 00 00 00 00 	if r7 != 0x0 goto -0xf <LBB3_1>
+
+LBB3_5
+    1294	07 01 00 00 80 00 00 00 	r1 += 0x80
+    1295	b7 02 00 00 81 00 00 00 	r2 = 0x81
+    1296	2d 12 03 00 00 00 00 00 	if r2 > r1 goto +0x3 <LBB3_7>
+    1297	b7 02 00 00 80 00 00 00 	r2 = 0x80
+    1298	85 10 00 00 8c 02 00 00 	call 0x28c
+    1299	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB3_7
+    1300	bf a2 00 00 00 00 00 00 	r2 = r10
+    1301	07 02 00 00 80 fe ff ff 	r2 += -0x180
+    1302	0f 12 00 00 00 00 00 00 	r2 += r1
+    1303	7b 2a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r2
+    1304	b7 02 00 00 80 00 00 00 	r2 = 0x80
+    1305	1f 12 00 00 00 00 00 00 	r2 -= r1
+    1306	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+    1307	bf a5 00 00 00 00 00 00 	r5 = r10
+    1308	79 a1 98 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x268)
+    1309	b7 02 00 00 01 00 00 00 	r2 = 0x1
+    1310	18 03 00 00 94 58 00 00 00 00 00 00 00 00 00 00 	r3 = 0x5894 ll
+    1312	b7 04 00 00 02 00 00 00 	r4 = 0x2
+    1313	85 10 00 00 af 02 00 00 	call 0x2af
+    1314	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::num::GenericRadix::fmt_int
+    1315	7b 2a 98 fd 00 00 00 00 	*(u64 *)(r10 - 0x268) = r2
+    1316	bf 17 00 00 00 00 00 00 	r7 = r1
+    1317	71 a2 3f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xc1)
+    1318	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1319	71 a1 3e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc2)
+    1320	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1321	7b 2a 58 fe 00 00 00 00 	*(u64 *)(r10 - 0x1a8) = r2
+    1322	71 a2 7f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x81)
+    1323	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1324	71 a1 7e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x82)
+    1325	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1326	7b 2a 50 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b0) = r2
+    1327	71 a2 0f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xf1)
+    1328	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1329	71 a1 0e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf2)
+    1330	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1331	7b 2a 40 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c0) = r2
+    1332	71 a2 17 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xe9)
+    1333	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1334	71 a1 16 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xea)
+    1335	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1336	7b 2a 28 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d8) = r2
+    1337	71 a2 5f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa1)
+    1338	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1339	71 a1 5e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa2)
+    1340	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1341	7b 2a 18 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e8) = r2
+    1342	71 a2 27 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xd9)
+    1343	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1344	71 a1 26 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xda)
+    1345	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1346	7b 2a 48 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b8) = r2
+    1347	71 a2 2f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xd1)
+    1348	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1349	71 a1 2e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd2)
+    1350	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1351	7b 2a 30 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d0) = r2
+    1352	71 a2 37 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xc9)
+    1353	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1354	71 a1 36 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xca)
+    1355	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1356	7b 2a 20 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e0) = r2
+    1357	71 a2 6b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x95)
+    1358	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1359	71 a1 6a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x96)
+    1360	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1361	7b 2a 10 fe 00 00 00 00 	*(u64 *)(r10 - 0x1f0) = r2
+    1362	71 a2 47 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb9)
+    1363	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1364	71 a1 46 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xba)
+    1365	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1366	7b 2a 38 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c8) = r2
+    1367	71 a2 4f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb1)
+    1368	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1369	71 a1 4e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb2)
+    1370	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1371	7b 2a f8 fd 00 00 00 00 	*(u64 *)(r10 - 0x208) = r2
+    1372	71 a2 57 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa9)
+    1373	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1374	71 a1 56 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xaa)
+    1375	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1376	7b 2a d8 fd 00 00 00 00 	*(u64 *)(r10 - 0x228) = r2
+    1377	71 a2 5b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa5)
+    1378	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1379	71 a1 5a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa6)
+    1380	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1381	7b 2a 08 fe 00 00 00 00 	*(u64 *)(r10 - 0x1f8) = r2
+    1382	71 a2 67 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x99)
+    1383	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1384	71 a1 66 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x9a)
+    1385	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1386	7b 2a 90 fd 00 00 00 00 	*(u64 *)(r10 - 0x270) = r2
+    1387	71 a2 63 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x9d)
+    1388	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1389	71 a1 62 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x9e)
+    1390	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1391	7b 2a e0 fd 00 00 00 00 	*(u64 *)(r10 - 0x220) = r2
+    1392	71 a2 6f ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x91)
+    1393	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1394	71 a1 6e ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x92)
+    1395	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1396	7b 2a c0 fd 00 00 00 00 	*(u64 *)(r10 - 0x240) = r2
+    1397	71 a2 3b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xc5)
+    1398	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1399	71 a1 3a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc6)
+    1400	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1401	7b 2a 00 fe 00 00 00 00 	*(u64 *)(r10 - 0x200) = r2
+    1402	71 a2 43 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xbd)
+    1403	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1404	71 a1 42 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xbe)
+    1405	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1406	7b 2a e8 fd 00 00 00 00 	*(u64 *)(r10 - 0x218) = r2
+    1407	71 a2 4b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb5)
+    1408	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1409	71 a1 4a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb6)
+    1410	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1411	7b 2a c8 fd 00 00 00 00 	*(u64 *)(r10 - 0x238) = r2
+    1412	71 a2 53 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xad)
+    1413	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1414	71 a1 52 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xae)
+    1415	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1416	7b 2a b0 fd 00 00 00 00 	*(u64 *)(r10 - 0x250) = r2
+    1417	71 a2 1b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xe5)
+    1418	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1419	71 a1 1a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xe6)
+    1420	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1421	7b 2a f0 fd 00 00 00 00 	*(u64 *)(r10 - 0x210) = r2
+    1422	71 a2 23 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xdd)
+    1423	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1424	71 a1 22 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xde)
+    1425	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1426	7b 2a d0 fd 00 00 00 00 	*(u64 *)(r10 - 0x230) = r2
+    1427	71 a2 2b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xd5)
+    1428	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1429	71 a1 2a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd6)
+    1430	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1431	7b 2a b8 fd 00 00 00 00 	*(u64 *)(r10 - 0x248) = r2
+    1432	71 a2 33 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xcd)
+    1433	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1434	71 a1 32 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xce)
+    1435	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1436	7b 2a a8 fd 00 00 00 00 	*(u64 *)(r10 - 0x258) = r2
+    1437	71 a2 73 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x8d)
+    1438	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1439	71 a1 72 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x8e)
+    1440	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1441	7b 2a 88 fd 00 00 00 00 	*(u64 *)(r10 - 0x278) = r2
+    1442	71 a2 7b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x85)
+    1443	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1444	71 a1 7a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x86)
+    1445	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1446	7b 2a 80 fd 00 00 00 00 	*(u64 *)(r10 - 0x280) = r2
+    1447	71 a2 0b ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xf5)
+    1448	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1449	71 a1 0a ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf6)
+    1450	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1451	7b 2a 78 fd 00 00 00 00 	*(u64 *)(r10 - 0x288) = r2
+    1452	71 a2 13 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xed)
+    1453	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1454	71 a1 12 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xee)
+    1455	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1456	7b 2a a0 fd 00 00 00 00 	*(u64 *)(r10 - 0x260) = r2
+    1457	71 a2 71 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x8f)
+    1458	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1459	71 a1 70 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x90)
+    1460	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1461	7b 2a 70 fd 00 00 00 00 	*(u64 *)(r10 - 0x290) = r2
+    1462	71 a2 79 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x87)
+    1463	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1464	71 a1 78 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x88)
+    1465	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1466	7b 2a 68 fd 00 00 00 00 	*(u64 *)(r10 - 0x298) = r2
+    1467	71 a2 09 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xf7)
+    1468	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1469	71 a1 08 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf8)
+    1470	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1471	7b 2a 60 fd 00 00 00 00 	*(u64 *)(r10 - 0x2a0) = r2
+    1472	71 a2 11 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xef)
+    1473	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1474	71 a1 10 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf0)
+    1475	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1476	7b 2a 58 fd 00 00 00 00 	*(u64 *)(r10 - 0x2a8) = r2
+    1477	71 a2 19 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xe7)
+    1478	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1479	71 a1 18 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xe8)
+    1480	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1481	7b 2a 50 fd 00 00 00 00 	*(u64 *)(r10 - 0x2b0) = r2
+    1482	71 a2 21 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xdf)
+    1483	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1484	71 a1 20 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xe0)
+    1485	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1486	7b 2a 48 fd 00 00 00 00 	*(u64 *)(r10 - 0x2b8) = r2
+    1487	71 a2 29 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xd7)
+    1488	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1489	71 a1 28 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd8)
+    1490	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1491	7b 2a 40 fd 00 00 00 00 	*(u64 *)(r10 - 0x2c0) = r2
+    1492	71 a2 31 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xcf)
+    1493	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1494	71 a1 30 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd0)
+    1495	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1496	7b 2a 38 fd 00 00 00 00 	*(u64 *)(r10 - 0x2c8) = r2
+    1497	71 a2 39 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xc7)
+    1498	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1499	71 a1 38 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc8)
+    1500	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1501	7b 2a 30 fd 00 00 00 00 	*(u64 *)(r10 - 0x2d0) = r2
+    1502	71 a2 41 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xbf)
+    1503	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1504	71 a1 40 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc0)
+    1505	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1506	7b 2a 28 fd 00 00 00 00 	*(u64 *)(r10 - 0x2d8) = r2
+    1507	71 a2 49 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb7)
+    1508	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1509	71 a1 48 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb8)
+    1510	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1511	7b 2a 20 fd 00 00 00 00 	*(u64 *)(r10 - 0x2e0) = r2
+    1512	71 a2 51 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xaf)
+    1513	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1514	71 a1 50 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb0)
+    1515	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1516	7b 2a 18 fd 00 00 00 00 	*(u64 *)(r10 - 0x2e8) = r2
+    1517	71 a2 59 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa7)
+    1518	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1519	71 a1 58 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa8)
+    1520	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1521	7b 2a 10 fd 00 00 00 00 	*(u64 *)(r10 - 0x2f0) = r2
+    1522	71 a2 65 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x9b)
+    1523	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1524	71 a1 64 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x9c)
+    1525	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1526	7b 2a 08 fd 00 00 00 00 	*(u64 *)(r10 - 0x2f8) = r2
+    1527	71 a2 61 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x9f)
+    1528	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1529	71 a1 60 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa0)
+    1530	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1531	7b 2a 00 fd 00 00 00 00 	*(u64 *)(r10 - 0x300) = r2
+    1532	71 a2 6d ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x93)
+    1533	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1534	71 a1 6c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x94)
+    1535	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1536	7b 2a f8 fc 00 00 00 00 	*(u64 *)(r10 - 0x308) = r2
+    1537	71 a2 69 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x97)
+    1538	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1539	71 a1 68 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x98)
+    1540	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1541	7b 2a f0 fc 00 00 00 00 	*(u64 *)(r10 - 0x310) = r2
+    1542	71 a2 45 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xbb)
+    1543	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1544	71 a1 44 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xbc)
+    1545	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1546	7b 2a e8 fc 00 00 00 00 	*(u64 *)(r10 - 0x318) = r2
+    1547	71 a2 4d ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xb3)
+    1548	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1549	71 a1 4c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xb4)
+    1550	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1551	7b 2a e0 fc 00 00 00 00 	*(u64 *)(r10 - 0x320) = r2
+    1552	71 a2 55 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xab)
+    1553	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1554	71 a1 54 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xac)
+    1555	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1556	7b 2a d8 fc 00 00 00 00 	*(u64 *)(r10 - 0x328) = r2
+    1557	71 a2 5d ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xa3)
+    1558	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1559	71 a1 5c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xa4)
+    1560	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1561	7b 2a d0 fc 00 00 00 00 	*(u64 *)(r10 - 0x330) = r2
+    1562	71 a2 25 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xdb)
+    1563	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1564	71 a1 24 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xdc)
+    1565	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1566	7b 2a c8 fc 00 00 00 00 	*(u64 *)(r10 - 0x338) = r2
+    1567	71 a8 2d ff 00 00 00 00 	r8 = *(u8 *)(r10 - 0xd3)
+    1568	67 08 00 00 08 00 00 00 	r8 <<= 0x8
+    1569	71 a1 2c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xd4)
+    1570	4f 18 00 00 00 00 00 00 	r8 |= r1
+    1571	71 a0 35 ff 00 00 00 00 	r0 = *(u8 *)(r10 - 0xcb)
+    1572	67 00 00 00 08 00 00 00 	r0 <<= 0x8
+    1573	71 a1 34 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xcc)
+    1574	4f 10 00 00 00 00 00 00 	r0 |= r1
+    1575	71 a5 3d ff 00 00 00 00 	r5 = *(u8 *)(r10 - 0xc3)
+    1576	67 05 00 00 08 00 00 00 	r5 <<= 0x8
+    1577	71 a1 3c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xc4)
+    1578	4f 15 00 00 00 00 00 00 	r5 |= r1
+    1579	71 a4 7d ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x83)
+    1580	67 04 00 00 08 00 00 00 	r4 <<= 0x8
+    1581	71 a1 7c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x84)
+    1582	4f 14 00 00 00 00 00 00 	r4 |= r1
+    1583	71 a3 0d ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0xf3)
+    1584	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    1585	71 a1 0c ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xf4)
+    1586	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1587	71 a2 15 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xeb)
+    1588	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1589	71 a6 14 ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0xec)
+    1590	4f 62 00 00 00 00 00 00 	r2 |= r6
+    1591	71 a1 1d ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xe3)
+    1592	67 01 00 00 08 00 00 00 	r1 <<= 0x8
+    1593	71 a6 1c ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0xe4)
+    1594	4f 61 00 00 00 00 00 00 	r1 |= r6
+    1595	71 a6 1f ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0xe1)
+    1596	67 06 00 00 08 00 00 00 	r6 <<= 0x8
+    1597	71 a9 1e ff 00 00 00 00 	r9 = *(u8 *)(r10 - 0xe2)
+    1598	4f 96 00 00 00 00 00 00 	r6 |= r9
+    1599	67 06 00 00 10 00 00 00 	r6 <<= 0x10
+    1600	4f 16 00 00 00 00 00 00 	r6 |= r1
+    1601	79 a1 28 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1d8)
+    1602	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1603	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1604	7b 1a 28 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d8) = r1
+    1605	79 a1 40 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1c0)
+    1606	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1607	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1608	7b 1a 40 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c0) = r1
+    1609	79 a1 50 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1b0)
+    1610	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1611	4f 41 00 00 00 00 00 00 	r1 |= r4
+    1612	7b 1a 50 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b0) = r1
+    1613	79 a1 58 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1a8)
+    1614	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1615	4f 51 00 00 00 00 00 00 	r1 |= r5
+    1616	7b 1a 58 fe 00 00 00 00 	*(u64 *)(r10 - 0x1a8) = r1
+    1617	79 a1 20 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1e0)
+    1618	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1619	4f 01 00 00 00 00 00 00 	r1 |= r0
+    1620	7b 1a 20 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e0) = r1
+    1621	79 a1 30 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1d0)
+    1622	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1623	4f 81 00 00 00 00 00 00 	r1 |= r8
+    1624	7b 1a 30 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d0) = r1
+    1625	79 a1 48 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1b8)
+    1626	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1627	79 a2 c8 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x338)
+    1628	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1629	7b 1a 48 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b8) = r1
+    1630	79 a1 18 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1e8)
+    1631	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1632	79 a2 d0 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x330)
+    1633	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1634	7b 1a 18 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e8) = r1
+    1635	79 a1 d8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x228)
+    1636	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1637	79 a2 d8 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x328)
+    1638	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1639	7b 1a d8 fd 00 00 00 00 	*(u64 *)(r10 - 0x228) = r1
+    1640	79 a8 f8 fd 00 00 00 00 	r8 = *(u64 *)(r10 - 0x208)
+    1641	67 08 00 00 10 00 00 00 	r8 <<= 0x10
+    1642	79 a1 e0 fc 00 00 00 00 	r1 = *(u64 *)(r10 - 0x320)
+    1643	4f 18 00 00 00 00 00 00 	r8 |= r1
+    1644	79 a1 38 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1c8)
+    1645	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1646	79 a2 e8 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x318)
+    1647	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1648	7b 1a 38 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c8) = r1
+    1649	79 a1 10 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1f0)
+    1650	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1651	79 a2 f0 fc 00 00 00 00 	r2 = *(u64 *)(r10 - 0x310)
+    1652	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1653	7b 1a 10 fe 00 00 00 00 	*(u64 *)(r10 - 0x1f0) = r1
+    1654	79 a2 c0 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x240)
+    1655	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1656	79 a1 f8 fc 00 00 00 00 	r1 = *(u64 *)(r10 - 0x308)
+    1657	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1658	7b 2a c0 fd 00 00 00 00 	*(u64 *)(r10 - 0x240) = r2
+    1659	79 a1 e0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x220)
+    1660	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1661	79 a2 00 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x300)
+    1662	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1663	7b 1a e0 fd 00 00 00 00 	*(u64 *)(r10 - 0x220) = r1
+    1664	79 a5 90 fd 00 00 00 00 	r5 = *(u64 *)(r10 - 0x270)
+    1665	67 05 00 00 10 00 00 00 	r5 <<= 0x10
+    1666	79 a1 08 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2f8)
+    1667	4f 15 00 00 00 00 00 00 	r5 |= r1
+    1668	79 a2 08 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1f8)
+    1669	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1670	79 a1 10 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2f0)
+    1671	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1672	7b 2a 08 fe 00 00 00 00 	*(u64 *)(r10 - 0x1f8) = r2
+    1673	79 a1 b0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x250)
+    1674	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1675	79 a2 18 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2e8)
+    1676	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1677	7b 1a b0 fd 00 00 00 00 	*(u64 *)(r10 - 0x250) = r1
+    1678	79 a1 c8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x238)
+    1679	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1680	79 a2 20 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2e0)
+    1681	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1682	7b 1a c8 fd 00 00 00 00 	*(u64 *)(r10 - 0x238) = r1
+    1683	79 a1 e8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x218)
+    1684	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1685	79 a2 28 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2d8)
+    1686	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1687	7b 1a e8 fd 00 00 00 00 	*(u64 *)(r10 - 0x218) = r1
+    1688	79 a2 00 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x200)
+    1689	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1690	79 a1 30 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2d0)
+    1691	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1692	7b 2a 00 fe 00 00 00 00 	*(u64 *)(r10 - 0x200) = r2
+    1693	79 a1 a8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x258)
+    1694	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1695	79 a2 38 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2c8)
+    1696	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1697	7b 1a a8 fd 00 00 00 00 	*(u64 *)(r10 - 0x258) = r1
+    1698	79 a1 b8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x248)
+    1699	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1700	79 a2 40 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2c0)
+    1701	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1702	7b 1a b8 fd 00 00 00 00 	*(u64 *)(r10 - 0x248) = r1
+    1703	79 a1 d0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x230)
+    1704	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1705	79 a2 48 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2b8)
+    1706	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1707	7b 1a d0 fd 00 00 00 00 	*(u64 *)(r10 - 0x230) = r1
+    1708	79 a2 f0 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x210)
+    1709	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1710	79 a1 50 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2b0)
+    1711	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1712	7b 2a f0 fd 00 00 00 00 	*(u64 *)(r10 - 0x210) = r2
+    1713	79 a1 a0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x260)
+    1714	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1715	79 a2 58 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x2a8)
+    1716	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1717	7b 1a a0 fd 00 00 00 00 	*(u64 *)(r10 - 0x260) = r1
+    1718	79 a9 78 fd 00 00 00 00 	r9 = *(u64 *)(r10 - 0x288)
+    1719	67 09 00 00 10 00 00 00 	r9 <<= 0x10
+    1720	79 a1 60 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x2a0)
+    1721	4f 19 00 00 00 00 00 00 	r9 |= r1
+    1722	79 a4 80 fd 00 00 00 00 	r4 = *(u64 *)(r10 - 0x280)
+    1723	67 04 00 00 10 00 00 00 	r4 <<= 0x10
+    1724	79 a1 68 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x298)
+    1725	4f 14 00 00 00 00 00 00 	r4 |= r1
+    1726	79 a1 88 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x278)
+    1727	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1728	79 a2 70 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x290)
+    1729	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1730	bf 10 00 00 00 00 00 00 	r0 = r1
+    1731	71 a1 75 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x8b)
+    1732	67 01 00 00 08 00 00 00 	r1 <<= 0x8
+    1733	71 a2 74 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x8c)
+    1734	4f 21 00 00 00 00 00 00 	r1 |= r2
+    1735	71 a2 77 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x89)
+    1736	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1737	71 a3 76 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x8a)
+    1738	4f 32 00 00 00 00 00 00 	r2 |= r3
+    1739	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    1740	4f 12 00 00 00 00 00 00 	r2 |= r1
+    1741	67 02 00 00 20 00 00 00 	r2 <<= 0x20
+    1742	4f 02 00 00 00 00 00 00 	r2 |= r0
+    1743	79 a1 50 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1b0)
+    1744	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1745	4f 41 00 00 00 00 00 00 	r1 |= r4
+    1746	7b 1a 50 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b0) = r1
+    1747	79 a1 40 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1c0)
+    1748	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1749	4f 91 00 00 00 00 00 00 	r1 |= r9
+    1750	7b 1a 40 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c0) = r1
+    1751	79 a1 28 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1d8)
+    1752	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1753	79 a3 a0 fd 00 00 00 00 	r3 = *(u64 *)(r10 - 0x260)
+    1754	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1755	7b 1a 28 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d8) = r1
+    1756	67 06 00 00 20 00 00 00 	r6 <<= 0x20
+    1757	79 a1 f0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x210)
+    1758	4f 16 00 00 00 00 00 00 	r6 |= r1
+    1759	79 a1 48 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1b8)
+    1760	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1761	79 a3 d0 fd 00 00 00 00 	r3 = *(u64 *)(r10 - 0x230)
+    1762	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1763	7b 1a 48 fe 00 00 00 00 	*(u64 *)(r10 - 0x1b8) = r1
+    1764	79 a1 30 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1d0)
+    1765	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1766	79 a3 b8 fd 00 00 00 00 	r3 = *(u64 *)(r10 - 0x248)
+    1767	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1768	7b 1a 30 fe 00 00 00 00 	*(u64 *)(r10 - 0x1d0) = r1
+    1769	79 a3 20 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1e0)
+    1770	67 03 00 00 20 00 00 00 	r3 <<= 0x20
+    1771	79 a1 a8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x258)
+    1772	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1773	7b 3a 20 fe 00 00 00 00 	*(u64 *)(r10 - 0x1e0) = r3
+    1774	79 a3 58 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1a8)
+    1775	67 03 00 00 20 00 00 00 	r3 <<= 0x20
+    1776	79 a1 00 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x200)
+    1777	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1778	7b 3a 58 fe 00 00 00 00 	*(u64 *)(r10 - 0x1a8) = r3
+    1779	79 a1 38 fe 00 00 00 00 	r1 = *(u64 *)(r10 - 0x1c8)
+    1780	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    1781	79 a3 e8 fd 00 00 00 00 	r3 = *(u64 *)(r10 - 0x218)
+    1782	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1783	7b 1a 38 fe 00 00 00 00 	*(u64 *)(r10 - 0x1c8) = r1
+    1784	67 08 00 00 20 00 00 00 	r8 <<= 0x20
+    1785	79 a1 c8 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x238)
+    1786	4f 18 00 00 00 00 00 00 	r8 |= r1
+    1787	7b 8a f8 fd 00 00 00 00 	*(u64 *)(r10 - 0x208) = r8
+    1788	79 a9 d8 fd 00 00 00 00 	r9 = *(u64 *)(r10 - 0x228)
+    1789	67 09 00 00 20 00 00 00 	r9 <<= 0x20
+    1790	79 a1 b0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x250)
+    1791	4f 19 00 00 00 00 00 00 	r9 |= r1
+    1792	79 a8 18 fe 00 00 00 00 	r8 = *(u64 *)(r10 - 0x1e8)
+    1793	67 08 00 00 20 00 00 00 	r8 <<= 0x20
+    1794	79 a3 08 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1f8)
+    1795	4f 38 00 00 00 00 00 00 	r8 |= r3
+    1796	bf 50 00 00 00 00 00 00 	r0 = r5
+    1797	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+    1798	79 a1 e0 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x220)
+    1799	4f 10 00 00 00 00 00 00 	r0 |= r1
+    1800	79 a5 c0 fd 00 00 00 00 	r5 = *(u64 *)(r10 - 0x240)
+    1801	67 05 00 00 20 00 00 00 	r5 <<= 0x20
+    1802	79 a3 10 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1f0)
+    1803	4f 35 00 00 00 00 00 00 	r5 |= r3
+    1804	71 a3 01 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0xff)
+    1805	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    1806	71 a1 00 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0x100)
+    1807	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1808	71 a1 03 ff 00 00 00 00 	r1 = *(u8 *)(r10 - 0xfd)
+    1809	67 01 00 00 08 00 00 00 	r1 <<= 0x8
+    1810	71 a4 02 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0xfe)
+    1811	4f 41 00 00 00 00 00 00 	r1 |= r4
+    1812	79 a4 50 fe 00 00 00 00 	r4 = *(u64 *)(r10 - 0x1b0)
+    1813	7b 4a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r4
+    1814	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+    1815	7b 5a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r5
+    1816	7b 0a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r0
+    1817	7b 8a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r8
+    1818	7b 9a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r9
+    1819	79 a2 f8 fd 00 00 00 00 	r2 = *(u64 *)(r10 - 0x208)
+    1820	7b 2a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r2
+    1821	79 a2 38 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1c8)
+    1822	7b 2a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r2
+    1823	79 a2 58 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1a8)
+    1824	7b 2a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r2
+    1825	79 a2 20 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1e0)
+    1826	7b 2a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r2
+    1827	79 a2 30 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1d0)
+    1828	7b 2a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r2
+    1829	79 a2 48 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1b8)
+    1830	7b 2a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r2
+    1831	7b 6a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r6
+    1832	79 a2 28 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1d8)
+    1833	7b 2a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r2
+    1834	79 a2 40 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x1c0)
+    1835	7b 2a 88 ff 00 00 00 00 	*(u64 *)(r10 - 0x78) = r2
+    1836	67 01 00 00 10 00 00 00 	r1 <<= 0x10
+    1837	4f 31 00 00 00 00 00 00 	r1 |= r3
+    1838	71 a2 05 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0xfb)
+    1839	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    1840	71 a3 04 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0xfc)
+    1841	4f 32 00 00 00 00 00 00 	r2 |= r3
+    1842	71 a3 07 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0xf9)
+    1843	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    1844	71 a4 06 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0xfa)
+    1845	4f 43 00 00 00 00 00 00 	r3 |= r4
+    1846	67 03 00 00 10 00 00 00 	r3 <<= 0x10
+    1847	4f 23 00 00 00 00 00 00 	r3 |= r2
+    1848	67 03 00 00 20 00 00 00 	r3 <<= 0x20
+    1849	4f 13 00 00 00 00 00 00 	r3 |= r1
+    1850	7b 3a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r3
+    1851	79 a1 f8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x8)
+    1852	7b 1a f8 fe 00 00 00 00 	*(u64 *)(r10 - 0x108) = r1
+    1853	79 a1 f0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x10)
+    1854	7b 1a f0 fe 00 00 00 00 	*(u64 *)(r10 - 0x110) = r1
+    1855	79 a1 e8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x18)
+    1856	7b 1a e8 fe 00 00 00 00 	*(u64 *)(r10 - 0x118) = r1
+    1857	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+    1858	7b 1a e0 fe 00 00 00 00 	*(u64 *)(r10 - 0x120) = r1
+    1859	79 a1 d8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x28)
+    1860	7b 1a d8 fe 00 00 00 00 	*(u64 *)(r10 - 0x128) = r1
+    1861	79 a1 d0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x30)
+    1862	7b 1a d0 fe 00 00 00 00 	*(u64 *)(r10 - 0x130) = r1
+    1863	79 a1 c8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x38)
+    1864	7b 1a c8 fe 00 00 00 00 	*(u64 *)(r10 - 0x138) = r1
+    1865	79 a1 c0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x40)
+    1866	7b 1a c0 fe 00 00 00 00 	*(u64 *)(r10 - 0x140) = r1
+    1867	79 a1 b8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x48)
+    1868	7b 1a b8 fe 00 00 00 00 	*(u64 *)(r10 - 0x148) = r1
+    1869	79 a1 b0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x50)
+    1870	7b 1a b0 fe 00 00 00 00 	*(u64 *)(r10 - 0x150) = r1
+    1871	79 a1 a8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x58)
+    1872	7b 1a a8 fe 00 00 00 00 	*(u64 *)(r10 - 0x158) = r1
+    1873	79 a1 a0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x60)
+    1874	7b 1a a0 fe 00 00 00 00 	*(u64 *)(r10 - 0x160) = r1
+    1875	79 a1 98 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x68)
+    1876	7b 1a 98 fe 00 00 00 00 	*(u64 *)(r10 - 0x168) = r1
+    1877	79 a1 90 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x70)
+    1878	7b 1a 90 fe 00 00 00 00 	*(u64 *)(r10 - 0x170) = r1
+    1879	79 a1 88 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x78)
+    1880	7b 1a 88 fe 00 00 00 00 	*(u64 *)(r10 - 0x178) = r1
+    1881	79 a1 80 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x80)
+    1882	7b 1a 80 fe 00 00 00 00 	*(u64 *)(r10 - 0x180) = r1
+    1883	bf a1 00 00 00 00 00 00 	r1 = r10
+    1884	07 01 00 00 70 fe ff ff 	r1 += -0x190
+    1885	bf a2 00 00 00 00 00 00 	r2 = r10
+    1886	07 02 00 00 80 fe ff ff 	r2 += -0x180
+    1887	bf a3 00 00 00 00 00 00 	r3 = r10
+    1888	07 03 00 00 00 ff ff ff 	r3 += -0x100
+    1889	85 10 00 00 69 00 00 00 	call 0x69
+    1890	79 a3 78 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x188)
+    1891	79 a2 70 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x190)
+    1892	bf a1 00 00 00 00 00 00 	r1 = r10
+    1893	07 01 00 00 60 fe ff ff 	r1 += -0x1a0
+    1894	85 10 00 00 64 00 00 00 	call 0x64
+    1895	b7 01 00 00 00 00 00 00 	r1 = 0x0
+    1896	79 a2 68 fe 00 00 00 00 	r2 = *(u64 *)(r10 - 0x198)
+    1897	79 a3 60 fe 00 00 00 00 	r3 = *(u64 *)(r10 - 0x1a0)
+    1898	1f 23 00 00 00 00 00 00 	r3 -= r2
+    1899	b7 04 00 00 0a 00 00 00 	r4 = 0xa
+
+LBB15_1
+    1900	1d 13 0e 00 00 00 00 00 	if r3 == r1 goto +0xe <LBB15_5>
+    1901	bf 75 00 00 00 00 00 00 	r5 = r7
+    1902	57 05 00 00 0f 00 00 00 	r5 &= 0xf
+    1903	bf 50 00 00 00 00 00 00 	r0 = r5
+    1904	47 00 00 00 30 00 00 00 	r0 |= 0x30
+    1905	2d 54 02 00 00 00 00 00 	if r4 > r5 goto +0x2 <LBB15_4>
+    1906	07 05 00 00 57 00 00 00 	r5 += 0x57
+    1907	bf 50 00 00 00 00 00 00 	r0 = r5
+
+LBB15_4
+    1908	bf 25 00 00 00 00 00 00 	r5 = r2
+    1909	0f 15 00 00 00 00 00 00 	r5 += r1
+    1910	73 05 ff ff 00 00 00 00 	*(u8 *)(r5 - 0x1) = r0
+    1911	07 01 00 00 ff ff ff ff 	r1 += -0x1
+    1912	77 07 00 00 04 00 00 00 	r7 >>= 0x4
+    1913	57 07 00 00 ff ff ff 0f 	r7 &= 0xfffffff
+    1914	55 07 f1 ff 00 00 00 00 	if r7 != 0x0 goto -0xf <LBB15_1>
+
+LBB15_5
+    1915	07 01 00 00 80 00 00 00 	r1 += 0x80
+    1916	b7 02 00 00 81 00 00 00 	r2 = 0x81
+    1917	2d 12 03 00 00 00 00 00 	if r2 > r1 goto +0x3 <LBB15_7>
+    1918	b7 02 00 00 80 00 00 00 	r2 = 0x80
+    1919	85 10 00 00 1f 00 00 00 	call 0x1f
+    1920	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB15_7
+    1921	bf a2 00 00 00 00 00 00 	r2 = r10
+    1922	07 02 00 00 80 fe ff ff 	r2 += -0x180
+    1923	0f 12 00 00 00 00 00 00 	r2 += r1
+    1924	7b 2a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r2
+    1925	b7 02 00 00 80 00 00 00 	r2 = 0x80
+    1926	1f 12 00 00 00 00 00 00 	r2 -= r1
+    1927	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+    1928	bf a5 00 00 00 00 00 00 	r5 = r10
+    1929	79 a1 98 fd 00 00 00 00 	r1 = *(u64 *)(r10 - 0x268)
+    1930	b7 02 00 00 01 00 00 00 	r2 = 0x1
+    1931	18 03 00 00 94 58 00 00 00 00 00 00 00 00 00 00 	r3 = 0x5894 ll
+    1933	b7 04 00 00 02 00 00 00 	r4 = 0x2
+    1934	85 10 00 00 42 00 00 00 	call 0x42
+    1935	95 00 00 00 00 00 00 00 	exit
+
+<usize as core::fmt::num::Int>::to_u64
+    1936	79 10 00 00 00 00 00 00 	r0 = *(u64 *)(r1 + 0x0)
+    1937	95 00 00 00 00 00 00 00 	exit
+
+<u32 as core::fmt::num::Int>::to_u64
+    1938	61 10 00 00 00 00 00 00 	r0 = *(u32 *)(r1 + 0x0)
+    1939	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::num::<impl core::fmt::LowerHex for u32>::fmt
+    1940	61 11 00 00 00 00 00 00 	r1 = *(u32 *)(r1 + 0x0)
+    1941	85 10 00 00 8d fd ff ff 	call -0x273
+    1942	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::num::<impl core::fmt::UpperHex for u32>::fmt
+    1943	61 11 00 00 00 00 00 00 	r1 = *(u32 *)(r1 + 0x0)
+    1944	85 10 00 00 1d fb ff ff 	call -0x4e3
+    1945	95 00 00 00 00 00 00 00 	exit
+
+<T as core::convert::TryInto<U>>::try_into
+    1946	bf 10 00 00 00 00 00 00 	r0 = r1
+    1947	95 00 00 00 00 00 00 00 	exit
+
+<I as core::iter::traits::collect::IntoIterator>::into_iter
+    1948	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+    1949	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+    1950	95 00 00 00 00 00 00 00 	exit
+
+core::slice::slice_index_order_fail
+    1951	7b 2a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r2
+    1952	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+    1953	bf a1 00 00 00 00 00 00 	r1 = r10
+    1954	07 01 00 00 90 ff ff ff 	r1 += -0x70
+    1955	bf a2 00 00 00 00 00 00 	r2 = r10
+    1956	07 02 00 00 a0 ff ff ff 	r2 += -0x60
+    1957	18 03 00 00 28 51 00 00 00 00 00 00 00 00 00 00 	r3 = 0x5128 ll
+    1959	85 10 00 00 26 00 00 00 	call 0x26
+    1960	79 a6 90 ff 00 00 00 00 	r6 = *(u64 *)(r10 - 0x70)
+    1961	79 a7 98 ff 00 00 00 00 	r7 = *(u64 *)(r10 - 0x68)
+    1962	bf a1 00 00 00 00 00 00 	r1 = r10
+    1963	07 01 00 00 80 ff ff ff 	r1 += -0x80
+    1964	bf a2 00 00 00 00 00 00 	r2 = r10
+    1965	07 02 00 00 a8 ff ff ff 	r2 += -0x58
+    1966	18 03 00 00 28 51 00 00 00 00 00 00 00 00 00 00 	r3 = 0x5128 ll
+    1968	85 10 00 00 1d 00 00 00 	call 0x1d
+    1969	7b 7a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r7
+    1970	7b 6a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r6
+    1971	bf a1 00 00 00 00 00 00 	r1 = r10
+    1972	07 01 00 00 e0 ff ff ff 	r1 += -0x20
+    1973	7b 1a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r1
+    1974	b7 01 00 00 00 00 00 00 	r1 = 0x0
+    1975	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+    1976	b7 01 00 00 02 00 00 00 	r1 = 0x2
+    1977	7b 1a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r1
+    1978	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+    1979	18 01 00 00 20 5c 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5c20 ll
+    1981	7b 1a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r1
+    1982	79 a1 88 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x78)
+    1983	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+    1984	79 a1 80 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x80)
+    1985	7b 1a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r1
+    1986	bf a1 00 00 00 00 00 00 	r1 = r10
+    1987	07 01 00 00 b0 ff ff ff 	r1 += -0x50
+    1988	18 02 00 00 40 5c 00 00 00 00 00 00 00 00 00 00 	r2 = 0x5c40 ll
+    1990	85 10 00 00 5c 01 00 00 	call 0x15c
+    1991	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::any::TypeId::of
+    1992	18 00 00 00 93 aa a2 c1 00 00 00 00 86 1d 02 04 	r0 = 0x4021d86c1a2aa93 ll
+    1994	95 00 00 00 00 00 00 00 	exit
+
+<I as core::iter::traits::collect::IntoIterator>::into_iter
+    1995	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+    1996	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+    1997	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::ArgumentV1::new
+    1998	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+    1999	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+    2000	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::Formatter::pad_integral
+    2001	bf 38 00 00 00 00 00 00 	r8 = r3
+    2002	bf 16 00 00 00 00 00 00 	r6 = r1
+    2003	79 57 f0 ff 00 00 00 00 	r7 = *(u64 *)(r5 - 0x10)
+    2004	79 51 f8 ff 00 00 00 00 	r1 = *(u64 *)(r5 - 0x8)
+    2005	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+    2006	55 02 05 00 00 00 00 00 	if r2 != 0x0 goto +0x5 <LBB16_2>
+    2007	b7 02 00 00 2d 00 00 00 	r2 = 0x2d
+    2008	61 61 50 00 00 00 00 00 	r1 = *(u32 *)(r6 + 0x50)
+    2009	bf 79 00 00 00 00 00 00 	r9 = r7
+    2010	07 09 00 00 01 00 00 00 	r9 += 0x1
+    2011	05 00 07 00 00 00 00 00 	goto +0x7 <LBB16_5>
+
+LBB16_2
+    2012	61 61 50 00 00 00 00 00 	r1 = *(u32 *)(r6 + 0x50)
+    2013	bf 19 00 00 00 00 00 00 	r9 = r1
+    2014	57 09 00 00 01 00 00 00 	r9 &= 0x1
+    2015	b7 02 00 00 00 00 11 00 	r2 = 0x110000
+    2016	15 09 01 00 00 00 00 00 	if r9 == 0x0 goto +0x1 <LBB16_4>
+    2017	b7 02 00 00 2b 00 00 00 	r2 = 0x2b
+
+LBB16_4
+    2018	0f 79 00 00 00 00 00 00 	r9 += r7
+
+LBB16_5
+    2019	b7 03 00 00 00 00 00 00 	r3 = 0x0
+    2020	57 01 00 00 04 00 00 00 	r1 &= 0x4
+    2021	15 01 1a 00 00 00 00 00 	if r1 == 0x0 goto +0x1a <LBB16_12>
+    2022	7b 2a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r2
+    2023	bf 83 00 00 00 00 00 00 	r3 = r8
+    2024	7b 4a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r4
+    2025	0f 43 00 00 00 00 00 00 	r3 += r4
+    2026	bf a1 00 00 00 00 00 00 	r1 = r10
+    2027	07 01 00 00 f0 ff ff ff 	r1 += -0x10
+    2028	bf 82 00 00 00 00 00 00 	r2 = r8
+    2029	85 10 00 00 ae ff ff ff 	call -0x52
+    2030	b7 01 00 00 00 00 00 00 	r1 = 0x0
+    2031	79 a2 f8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x8)
+    2032	79 a3 f0 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x10)
+    2033	1d 23 09 00 00 00 00 00 	if r3 == r2 goto +0x9 <LBB16_11>
+    2034	b7 01 00 00 00 00 00 00 	r1 = 0x0
+
+LBB16_8
+    2035	71 35 00 00 00 00 00 00 	r5 = *(u8 *)(r3 + 0x0)
+    2036	57 05 00 00 c0 00 00 00 	r5 &= 0xc0
+    2037	b7 04 00 00 01 00 00 00 	r4 = 0x1
+    2038	15 05 01 00 80 00 00 00 	if r5 == 0x80 goto +0x1 <LBB16_10>
+    2039	b7 04 00 00 00 00 00 00 	r4 = 0x0
+
+LBB16_10
+    2040	0f 41 00 00 00 00 00 00 	r1 += r4
+    2041	07 03 00 00 01 00 00 00 	r3 += 0x1
+    2042	5d 32 f8 ff 00 00 00 00 	if r2 != r3 goto -0x8 <LBB16_8>
+
+LBB16_11
+    2043	79 a4 98 ff 00 00 00 00 	r4 = *(u64 *)(r10 - 0x68)
+    2044	0f 49 00 00 00 00 00 00 	r9 += r4
+    2045	1f 19 00 00 00 00 00 00 	r9 -= r1
+    2046	bf 83 00 00 00 00 00 00 	r3 = r8
+    2047	79 a2 90 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x70)
+
+LBB16_12
+    2048	79 61 00 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x0)
+    2049	15 01 01 00 01 00 00 00 	if r1 == 0x1 goto +0x1 <LBB16_30>
+    2050	05 00 d6 00 00 00 00 00 	goto +0xd6 <LBB16_26>
+
+LBB16_30
+    2051	7b 7a 88 ff 00 00 00 00 	*(u64 *)(r10 - 0x78) = r7
+    2052	79 67 08 00 00 00 00 00 	r7 = *(u64 *)(r6 + 0x8)
+    2053	2d 97 0a 00 00 00 00 00 	if r7 > r9 goto +0xa <LBB16_13>
+    2054	bf 61 00 00 00 00 00 00 	r1 = r6
+    2055	85 10 00 00 df 00 00 00 	call 0xdf
+    2056	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2057	55 00 d3 00 00 00 00 00 	if r0 != 0x0 goto +0xd3 <LBB16_27>
+    2058	79 61 20 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x20)
+    2059	79 62 28 00 00 00 00 00 	r2 = *(u64 *)(r6 + 0x28)
+    2060	79 24 18 00 00 00 00 00 	r4 = *(u64 *)(r2 + 0x18)
+    2061	79 a2 a0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x60)
+    2062	79 a3 88 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x78)
+    2063	05 00 d4 00 00 00 00 00 	goto +0xd4 <LBB16_29>
+
+LBB16_13
+    2064	71 61 50 00 00 00 00 00 	r1 = *(u8 *)(r6 + 0x50)
+    2065	57 01 00 00 08 00 00 00 	r1 &= 0x8
+    2066	55 01 11 00 00 00 00 00 	if r1 != 0x0 goto +0x11 <LBB16_33>
+    2067	7b 3a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r3
+    2068	7b 2a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r2
+    2069	71 62 58 00 00 00 00 00 	r2 = *(u8 *)(r6 + 0x58)
+    2070	b7 01 00 00 01 00 00 00 	r1 = 0x1
+    2071	15 02 01 00 03 00 00 00 	if r2 == 0x3 goto +0x1 <LBB16_16>
+    2072	bf 21 00 00 00 00 00 00 	r1 = r2
+
+LBB16_16
+    2073	7b 4a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r4
+    2074	1f 97 00 00 00 00 00 00 	r7 -= r9
+    2075	b7 03 00 00 00 00 00 00 	r3 = 0x0
+    2076	bf 12 00 00 00 00 00 00 	r2 = r1
+    2077	57 02 00 00 03 00 00 00 	r2 &= 0x3
+    2078	bf 74 00 00 00 00 00 00 	r4 = r7
+    2079	15 02 1e 00 00 00 00 00 	if r2 == 0x0 goto +0x1e <LBB16_20>
+    2080	15 01 18 00 02 00 00 00 	if r1 == 0x2 goto +0x18 <LBB16_19>
+    2081	b7 04 00 00 00 00 00 00 	r4 = 0x0
+    2082	bf 73 00 00 00 00 00 00 	r3 = r7
+    2083	05 00 1a 00 00 00 00 00 	goto +0x1a <LBB16_20>
+
+LBB16_33
+    2084	b7 01 00 00 30 00 00 00 	r1 = 0x30
+    2085	63 16 54 00 00 00 00 00 	*(u32 *)(r6 + 0x54) = r1
+    2086	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2087	73 86 58 00 00 00 00 00 	*(u8 *)(r6 + 0x58) = r8
+    2088	bf 61 00 00 00 00 00 00 	r1 = r6
+    2089	85 10 00 00 bd 00 00 00 	call 0xbd
+    2090	55 00 b2 00 00 00 00 00 	if r0 != 0x0 goto +0xb2 <LBB16_27>
+    2091	71 62 58 00 00 00 00 00 	r2 = *(u8 *)(r6 + 0x58)
+    2092	b7 01 00 00 01 00 00 00 	r1 = 0x1
+    2093	15 02 01 00 03 00 00 00 	if r2 == 0x3 goto +0x1 <LBB16_36>
+    2094	bf 21 00 00 00 00 00 00 	r1 = r2
+
+LBB16_36
+    2095	1f 97 00 00 00 00 00 00 	r7 -= r9
+    2096	b7 03 00 00 00 00 00 00 	r3 = 0x0
+    2097	bf 12 00 00 00 00 00 00 	r2 = r1
+    2098	57 02 00 00 03 00 00 00 	r2 &= 0x3
+    2099	bf 74 00 00 00 00 00 00 	r4 = r7
+    2100	15 02 5c 00 00 00 00 00 	if r2 == 0x0 goto +0x5c <LBB16_40>
+    2101	15 01 56 00 02 00 00 00 	if r1 == 0x2 goto +0x56 <LBB16_39>
+    2102	b7 04 00 00 00 00 00 00 	r4 = 0x0
+    2103	bf 73 00 00 00 00 00 00 	r3 = r7
+    2104	05 00 58 00 00 00 00 00 	goto +0x58 <LBB16_40>
+
+LBB16_19
+    2105	bf 73 00 00 00 00 00 00 	r3 = r7
+    2106	77 03 00 00 01 00 00 00 	r3 >>= 0x1
+    2107	07 07 00 00 01 00 00 00 	r7 += 0x1
+    2108	77 07 00 00 01 00 00 00 	r7 >>= 0x1
+    2109	bf 74 00 00 00 00 00 00 	r4 = r7
+
+LBB16_20
+    2110	7b 4a 78 ff 00 00 00 00 	*(u64 *)(r10 - 0x88) = r4
+    2111	bf a1 00 00 00 00 00 00 	r1 = r10
+    2112	07 01 00 00 c0 ff ff ff 	r1 += -0x40
+    2113	b7 02 00 00 00 00 00 00 	r2 = 0x0
+    2114	85 10 00 00 54 02 00 00 	call 0x254
+    2115	79 a1 c8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x38)
+    2116	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+    2117	79 a9 c0 ff 00 00 00 00 	r9 = *(u64 *)(r10 - 0x40)
+
+LBB16_21
+    2118	79 a1 a8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x58)
+    2119	3d 19 12 00 00 00 00 00 	if r9 >= r1 goto +0x12 <LBB16_53>
+    2120	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2121	b7 01 00 00 01 00 00 00 	r1 = 0x1
+    2122	85 10 00 00 4f ff ff ff 	call -0xb1
+    2123	bf 97 00 00 00 00 00 00 	r7 = r9
+    2124	0f 07 00 00 00 00 00 00 	r7 += r0
+    2125	2d 79 01 00 00 00 00 00 	if r9 > r7 goto +0x1 <LBB16_24>
+    2126	b7 08 00 00 00 00 00 00 	r8 = 0x0
+
+LBB16_24
+    2127	57 08 00 00 01 00 00 00 	r8 &= 0x1
+    2128	55 08 09 00 00 00 00 00 	if r8 != 0x0 goto +0x9 <LBB16_53>
+    2129	61 62 54 00 00 00 00 00 	r2 = *(u32 *)(r6 + 0x54)
+    2130	79 61 20 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x20)
+    2131	79 63 28 00 00 00 00 00 	r3 = *(u64 *)(r6 + 0x28)
+    2132	79 33 20 00 00 00 00 00 	r3 = *(u64 *)(r3 + 0x20)
+    2133	8d 00 00 00 03 00 00 00 	callx 0x3
+    2134	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2135	bf 79 00 00 00 00 00 00 	r9 = r7
+    2136	55 00 84 00 00 00 00 00 	if r0 != 0x0 goto +0x84 <LBB16_27>
+    2137	05 00 ec ff 00 00 00 00 	goto -0x14 <LBB16_21>
+
+LBB16_53
+    2138	61 61 54 00 00 00 00 00 	r1 = *(u32 *)(r6 + 0x54)
+    2139	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+    2140	bf 61 00 00 00 00 00 00 	r1 = r6
+    2141	79 a2 90 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x70)
+    2142	79 a3 80 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x80)
+    2143	79 a4 98 ff 00 00 00 00 	r4 = *(u64 *)(r10 - 0x68)
+    2144	85 10 00 00 86 00 00 00 	call 0x86
+    2145	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2146	55 00 7a 00 00 00 00 00 	if r0 != 0x0 goto +0x7a <LBB16_27>
+    2147	79 61 20 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x20)
+    2148	79 62 28 00 00 00 00 00 	r2 = *(u64 *)(r6 + 0x28)
+    2149	79 24 18 00 00 00 00 00 	r4 = *(u64 *)(r2 + 0x18)
+    2150	79 a2 a0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x60)
+    2151	79 a3 88 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x78)
+    2152	8d 00 00 00 04 00 00 00 	callx 0x4
+    2153	55 00 73 00 00 00 00 00 	if r0 != 0x0 goto +0x73 <LBB16_27>
+    2154	79 61 28 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x28)
+    2155	7b 1a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r1
+    2156	79 61 20 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x20)
+    2157	7b 1a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r1
+    2158	bf a1 00 00 00 00 00 00 	r1 = r10
+    2159	07 01 00 00 b0 ff ff ff 	r1 += -0x50
+    2160	b7 02 00 00 00 00 00 00 	r2 = 0x0
+    2161	79 a3 78 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x88)
+    2162	85 10 00 00 24 02 00 00 	call 0x224
+    2163	79 a1 b8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x48)
+    2164	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+    2165	79 a7 b0 ff 00 00 00 00 	r7 = *(u64 *)(r10 - 0x50)
+
+LBB16_56
+    2166	b7 08 00 00 00 00 00 00 	r8 = 0x0
+    2167	79 a1 a0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x60)
+    2168	3d 17 64 00 00 00 00 00 	if r7 >= r1 goto +0x64 <LBB16_27>
+    2169	b7 09 00 00 01 00 00 00 	r9 = 0x1
+    2170	b7 01 00 00 01 00 00 00 	r1 = 0x1
+    2171	85 10 00 00 1e ff ff ff 	call -0xe2
+    2172	bf 76 00 00 00 00 00 00 	r6 = r7
+    2173	0f 06 00 00 00 00 00 00 	r6 += r0
+    2174	b7 08 00 00 00 00 00 00 	r8 = 0x0
+    2175	2d 67 01 00 00 00 00 00 	if r7 > r6 goto +0x1 <LBB16_59>
+    2176	b7 09 00 00 00 00 00 00 	r9 = 0x0
+
+LBB16_59
+    2177	57 09 00 00 01 00 00 00 	r9 &= 0x1
+    2178	55 09 5a 00 00 00 00 00 	if r9 != 0x0 goto +0x5a <LBB16_27>
+    2179	79 a1 98 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x68)
+    2180	79 13 20 00 00 00 00 00 	r3 = *(u64 *)(r1 + 0x20)
+    2181	79 a1 90 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x70)
+    2182	79 a2 a8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x58)
+    2183	8d 00 00 00 03 00 00 00 	callx 0x3
+    2184	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2185	bf 67 00 00 00 00 00 00 	r7 = r6
+    2186	55 00 52 00 00 00 00 00 	if r0 != 0x0 goto +0x52 <LBB16_27>
+    2187	05 00 ea ff 00 00 00 00 	goto -0x16 <LBB16_56>
+
+LBB16_39
+    2188	bf 73 00 00 00 00 00 00 	r3 = r7
+    2189	77 03 00 00 01 00 00 00 	r3 >>= 0x1
+    2190	07 07 00 00 01 00 00 00 	r7 += 0x1
+    2191	77 07 00 00 01 00 00 00 	r7 >>= 0x1
+    2192	bf 74 00 00 00 00 00 00 	r4 = r7
+
+LBB16_40
+    2193	7b 4a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r4
+    2194	bf a1 00 00 00 00 00 00 	r1 = r10
+    2195	07 01 00 00 e0 ff ff ff 	r1 += -0x20
+    2196	b7 02 00 00 00 00 00 00 	r2 = 0x0
+    2197	85 10 00 00 01 02 00 00 	call 0x201
+    2198	79 a1 e8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x18)
+    2199	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+    2200	79 a9 e0 ff 00 00 00 00 	r9 = *(u64 *)(r10 - 0x20)
+
+LBB16_41
+    2201	79 a1 a8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x58)
+    2202	3d 19 12 00 00 00 00 00 	if r9 >= r1 goto +0x12 <LBB16_46>
+    2203	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2204	b7 01 00 00 01 00 00 00 	r1 = 0x1
+    2205	85 10 00 00 fc fe ff ff 	call -0x104
+    2206	bf 97 00 00 00 00 00 00 	r7 = r9
+    2207	0f 07 00 00 00 00 00 00 	r7 += r0
+    2208	2d 79 01 00 00 00 00 00 	if r9 > r7 goto +0x1 <LBB16_44>
+    2209	b7 08 00 00 00 00 00 00 	r8 = 0x0
+
+LBB16_44
+    2210	57 08 00 00 01 00 00 00 	r8 &= 0x1
+    2211	55 08 09 00 00 00 00 00 	if r8 != 0x0 goto +0x9 <LBB16_46>
+    2212	61 62 54 00 00 00 00 00 	r2 = *(u32 *)(r6 + 0x54)
+    2213	79 61 20 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x20)
+    2214	79 63 28 00 00 00 00 00 	r3 = *(u64 *)(r6 + 0x28)
+    2215	79 33 20 00 00 00 00 00 	r3 = *(u64 *)(r3 + 0x20)
+    2216	8d 00 00 00 03 00 00 00 	callx 0x3
+    2217	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2218	bf 79 00 00 00 00 00 00 	r9 = r7
+    2219	55 00 31 00 00 00 00 00 	if r0 != 0x0 goto +0x31 <LBB16_27>
+    2220	05 00 ec ff 00 00 00 00 	goto -0x14 <LBB16_41>
+
+LBB16_46
+    2221	61 61 54 00 00 00 00 00 	r1 = *(u32 *)(r6 + 0x54)
+    2222	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+    2223	79 61 20 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x20)
+    2224	79 62 28 00 00 00 00 00 	r2 = *(u64 *)(r6 + 0x28)
+    2225	79 24 18 00 00 00 00 00 	r4 = *(u64 *)(r2 + 0x18)
+    2226	79 a2 a0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x60)
+    2227	79 a3 88 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x78)
+    2228	8d 00 00 00 04 00 00 00 	callx 0x4
+    2229	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2230	55 00 26 00 00 00 00 00 	if r0 != 0x0 goto +0x26 <LBB16_27>
+    2231	79 61 28 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x28)
+    2232	7b 1a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r1
+    2233	79 61 20 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x20)
+    2234	7b 1a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r1
+    2235	bf a1 00 00 00 00 00 00 	r1 = r10
+    2236	07 01 00 00 d0 ff ff ff 	r1 += -0x30
+    2237	b7 02 00 00 00 00 00 00 	r2 = 0x0
+    2238	79 a3 80 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x80)
+    2239	85 10 00 00 d7 01 00 00 	call 0x1d7
+    2240	79 a1 d8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x28)
+    2241	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+    2242	79 a7 d0 ff 00 00 00 00 	r7 = *(u64 *)(r10 - 0x30)
+
+LBB16_48
+    2243	b7 08 00 00 00 00 00 00 	r8 = 0x0
+    2244	79 a1 a0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x60)
+    2245	3d 17 17 00 00 00 00 00 	if r7 >= r1 goto +0x17 <LBB16_27>
+    2246	b7 09 00 00 01 00 00 00 	r9 = 0x1
+    2247	b7 01 00 00 01 00 00 00 	r1 = 0x1
+    2248	85 10 00 00 d1 fe ff ff 	call -0x12f
+    2249	bf 76 00 00 00 00 00 00 	r6 = r7
+    2250	0f 06 00 00 00 00 00 00 	r6 += r0
+    2251	b7 08 00 00 00 00 00 00 	r8 = 0x0
+    2252	2d 67 01 00 00 00 00 00 	if r7 > r6 goto +0x1 <LBB16_51>
+    2253	b7 09 00 00 00 00 00 00 	r9 = 0x0
+
+LBB16_51
+    2254	57 09 00 00 01 00 00 00 	r9 &= 0x1
+    2255	55 09 0d 00 00 00 00 00 	if r9 != 0x0 goto +0xd <LBB16_27>
+    2256	79 a1 98 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x68)
+    2257	79 13 20 00 00 00 00 00 	r3 = *(u64 *)(r1 + 0x20)
+    2258	79 a1 90 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x70)
+    2259	79 a2 a8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x58)
+    2260	8d 00 00 00 03 00 00 00 	callx 0x3
+    2261	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2262	bf 67 00 00 00 00 00 00 	r7 = r6
+    2263	55 00 05 00 00 00 00 00 	if r0 != 0x0 goto +0x5 <LBB16_27>
+    2264	05 00 ea ff 00 00 00 00 	goto -0x16 <LBB16_48>
+
+LBB16_26
+    2265	bf 61 00 00 00 00 00 00 	r1 = r6
+    2266	85 10 00 00 0c 00 00 00 	call 0xc
+    2267	b7 08 00 00 01 00 00 00 	r8 = 0x1
+    2268	15 00 02 00 00 00 00 00 	if r0 == 0x0 goto +0x2 <LBB16_28>
+
+LBB16_27
+    2269	bf 80 00 00 00 00 00 00 	r0 = r8
+    2270	95 00 00 00 00 00 00 00 	exit
+
+LBB16_28
+    2271	79 61 20 00 00 00 00 00 	r1 = *(u64 *)(r6 + 0x20)
+    2272	79 62 28 00 00 00 00 00 	r2 = *(u64 *)(r6 + 0x28)
+    2273	79 24 18 00 00 00 00 00 	r4 = *(u64 *)(r2 + 0x18)
+    2274	79 a2 a0 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x60)
+    2275	bf 73 00 00 00 00 00 00 	r3 = r7
+
+LBB16_29
+    2276	8d 00 00 00 04 00 00 00 	callx 0x4
+    2277	bf 08 00 00 00 00 00 00 	r8 = r0
+    2278	05 00 f6 ff 00 00 00 00 	goto -0xa <LBB16_27>
+
+core::fmt::Formatter::pad_integral::write_prefix
+    2279	bf 46 00 00 00 00 00 00 	r6 = r4
+    2280	bf 37 00 00 00 00 00 00 	r7 = r3
+    2281	bf 18 00 00 00 00 00 00 	r8 = r1
+    2282	bf 21 00 00 00 00 00 00 	r1 = r2
+    2283	67 01 00 00 20 00 00 00 	r1 <<= 0x20
+    2284	77 01 00 00 20 00 00 00 	r1 >>= 0x20
+    2285	15 01 08 00 00 00 11 00 	if r1 == 0x110000 goto +0x8 <LBB17_3>
+    2286	79 81 20 00 00 00 00 00 	r1 = *(u64 *)(r8 + 0x20)
+    2287	79 83 28 00 00 00 00 00 	r3 = *(u64 *)(r8 + 0x28)
+    2288	79 33 20 00 00 00 00 00 	r3 = *(u64 *)(r3 + 0x20)
+    2289	8d 00 00 00 03 00 00 00 	callx 0x3
+    2290	bf 01 00 00 00 00 00 00 	r1 = r0
+    2291	b7 00 00 00 01 00 00 00 	r0 = 0x1
+    2292	15 01 01 00 00 00 00 00 	if r1 == 0x0 goto +0x1 <LBB17_3>
+
+LBB17_2
+    2293	95 00 00 00 00 00 00 00 	exit
+
+LBB17_3
+    2294	b7 00 00 00 00 00 00 00 	r0 = 0x0
+    2295	15 07 fd ff 00 00 00 00 	if r7 == 0x0 goto -0x3 <LBB17_2>
+    2296	79 81 20 00 00 00 00 00 	r1 = *(u64 *)(r8 + 0x20)
+    2297	79 82 28 00 00 00 00 00 	r2 = *(u64 *)(r8 + 0x28)
+    2298	79 24 18 00 00 00 00 00 	r4 = *(u64 *)(r2 + 0x18)
+    2299	bf 72 00 00 00 00 00 00 	r2 = r7
+    2300	bf 63 00 00 00 00 00 00 	r3 = r6
+    2301	8d 00 00 00 04 00 00 00 	callx 0x4
+    2302	05 00 f6 ff 00 00 00 00 	goto -0xa <LBB17_2>
+
+core::fmt::Formatter::debug_lower_hex
+    2303	71 10 50 00 00 00 00 00 	r0 = *(u8 *)(r1 + 0x50)
+    2304	57 00 00 00 10 00 00 00 	r0 &= 0x10
+    2305	77 00 00 00 04 00 00 00 	r0 >>= 0x4
+    2306	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::Formatter::debug_upper_hex
+    2307	71 10 50 00 00 00 00 00 	r0 = *(u8 *)(r1 + 0x50)
+    2308	57 00 00 00 20 00 00 00 	r0 &= 0x20
+    2309	77 00 00 00 05 00 00 00 	r0 >>= 0x5
+    2310	95 00 00 00 00 00 00 00 	exit
+
+core::ptr::real_drop_in_place
+    2311	95 00 00 00 00 00 00 00 	exit
+
+core::panicking::panic
+    2312	79 12 10 00 00 00 00 00 	r2 = *(u64 *)(r1 + 0x10)
+    2313	79 13 18 00 00 00 00 00 	r3 = *(u64 *)(r1 + 0x18)
+    2314	79 14 20 00 00 00 00 00 	r4 = *(u64 *)(r1 + 0x20)
+    2315	79 15 00 00 00 00 00 00 	r5 = *(u64 *)(r1 + 0x0)
+    2316	79 11 08 00 00 00 00 00 	r1 = *(u64 *)(r1 + 0x8)
+    2317	7b 1a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r1
+    2318	7b 5a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r5
+    2319	18 01 00 00 e8 59 00 00 00 00 00 00 00 00 00 00 	r1 = 0x59e8 ll
+    2321	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+    2322	b7 01 00 00 00 00 00 00 	r1 = 0x0
+    2323	7b 1a d0 ff 00 00 00 00 	*(u64 *)(r10 - 0x30) = r1
+    2324	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+    2325	b7 01 00 00 01 00 00 00 	r1 = 0x1
+    2326	7b 1a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r1
+    2327	bf a1 00 00 00 00 00 00 	r1 = r10
+    2328	07 01 00 00 d8 ff ff ff 	r1 += -0x28
+    2329	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+    2330	7b 4a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r4
+    2331	7b 3a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r3
+    2332	7b 2a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r2
+    2333	bf a1 00 00 00 00 00 00 	r1 = r10
+    2334	07 01 00 00 a8 ff ff ff 	r1 += -0x58
+    2335	bf a2 00 00 00 00 00 00 	r2 = r10
+    2336	07 02 00 00 e8 ff ff ff 	r2 += -0x18
+    2337	85 10 00 00 01 00 00 00 	call 0x1
+    2338	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::panicking::panic_fmt
+    2339	bf 16 00 00 00 00 00 00 	r6 = r1
+    2340	61 25 14 00 00 00 00 00 	r5 = *(u32 *)(r2 + 0x14)
+    2341	61 24 10 00 00 00 00 00 	r4 = *(u32 *)(r2 + 0x10)
+    2342	79 23 08 00 00 00 00 00 	r3 = *(u64 *)(r2 + 0x8)
+    2343	79 22 00 00 00 00 00 00 	r2 = *(u64 *)(r2 + 0x0)
+    2344	bf a1 00 00 00 00 00 00 	r1 = r10
+    2345	07 01 00 00 d0 ff ff ff 	r1 += -0x30
+    2346	85 10 00 00 5e 01 00 00 	call 0x15e
+    2347	7b 6a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r6
+    2348	18 01 00 00 58 5c 00 00 00 00 00 00 00 00 00 00 	r1 = 0x5c58 ll
+    2350	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+    2351	18 01 00 00 e8 59 00 00 00 00 00 00 00 00 00 00 	r1 = 0x59e8 ll
+    2353	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+    2354	79 a1 d0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x30)
+    2355	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+    2356	7b 1a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r1
+    2357	79 a1 d8 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x28)
+    2358	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+    2359	7b 1a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r1
+    2360	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+    2361	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+    2362	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+    2363	bf a1 00 00 00 00 00 00 	r1 = r10
+    2364	07 01 00 00 a0 ff ff ff 	r1 += -0x60
+    2365	85 10 00 00 ee 00 00 00 	call 0xee
+    2366	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::fmt::num::imp::fmt_u64
+    2367	7b 3a 78 ff 00 00 00 00 	*(u64 *)(r10 - 0x88) = r3
+    2368	7b 2a 70 ff 00 00 00 00 	*(u64 *)(r10 - 0x90) = r2
+    2369	71 a3 c8 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x38)
+    2370	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    2371	71 a2 c7 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x39)
+    2372	4f 23 00 00 00 00 00 00 	r3 |= r2
+    2373	7b 3a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r3
+    2374	71 a3 c4 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x3c)
+    2375	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    2376	71 a2 c3 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x3d)
+    2377	4f 23 00 00 00 00 00 00 	r3 |= r2
+    2378	7b 3a 68 ff 00 00 00 00 	*(u64 *)(r10 - 0x98) = r3
+    2379	71 a9 c0 ff 00 00 00 00 	r9 = *(u8 *)(r10 - 0x40)
+    2380	67 09 00 00 08 00 00 00 	r9 <<= 0x8
+    2381	71 a2 bf ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x41)
+    2382	4f 29 00 00 00 00 00 00 	r9 |= r2
+    2383	71 a7 bc ff 00 00 00 00 	r7 = *(u8 *)(r10 - 0x44)
+    2384	67 07 00 00 08 00 00 00 	r7 <<= 0x8
+    2385	71 a2 bb ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x45)
+    2386	4f 27 00 00 00 00 00 00 	r7 |= r2
+    2387	71 a0 b8 ff 00 00 00 00 	r0 = *(u8 *)(r10 - 0x48)
+    2388	67 00 00 00 08 00 00 00 	r0 <<= 0x8
+    2389	71 a2 b7 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x49)
+    2390	4f 20 00 00 00 00 00 00 	r0 |= r2
+    2391	71 a3 c6 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x3a)
+    2392	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    2393	71 a2 c5 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x3b)
+    2394	4f 23 00 00 00 00 00 00 	r3 |= r2
+    2395	7b 3a 60 ff 00 00 00 00 	*(u64 *)(r10 - 0xa0) = r3
+    2396	71 a3 c2 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x3e)
+    2397	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    2398	71 a2 c1 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x3f)
+    2399	4f 23 00 00 00 00 00 00 	r3 |= r2
+    2400	7b 3a 58 ff 00 00 00 00 	*(u64 *)(r10 - 0xa8) = r3
+    2401	71 a6 be ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0x42)
+    2402	67 06 00 00 08 00 00 00 	r6 <<= 0x8
+    2403	71 a2 bd ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x43)
+    2404	4f 26 00 00 00 00 00 00 	r6 |= r2
+    2405	71 a5 ba ff 00 00 00 00 	r5 = *(u8 *)(r10 - 0x46)
+    2406	67 05 00 00 08 00 00 00 	r5 <<= 0x8
+    2407	71 a2 b9 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x47)
+    2408	4f 25 00 00 00 00 00 00 	r5 |= r2
+    2409	71 a4 b6 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x4a)
+    2410	67 04 00 00 08 00 00 00 	r4 <<= 0x8
+    2411	71 a3 b5 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x4b)
+    2412	4f 34 00 00 00 00 00 00 	r4 |= r3
+    2413	71 a2 b2 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x4e)
+    2414	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    2415	71 a3 b1 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x4f)
+    2416	4f 32 00 00 00 00 00 00 	r2 |= r3
+    2417	71 a3 b4 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x4c)
+    2418	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    2419	71 a8 b3 ff 00 00 00 00 	r8 = *(u8 *)(r10 - 0x4d)
+    2420	4f 83 00 00 00 00 00 00 	r3 |= r8
+    2421	67 03 00 00 10 00 00 00 	r3 <<= 0x10
+    2422	4f 23 00 00 00 00 00 00 	r3 |= r2
+    2423	67 00 00 00 10 00 00 00 	r0 <<= 0x10
+    2424	4f 40 00 00 00 00 00 00 	r0 |= r4
+    2425	67 07 00 00 10 00 00 00 	r7 <<= 0x10
+    2426	4f 57 00 00 00 00 00 00 	r7 |= r5
+    2427	67 09 00 00 10 00 00 00 	r9 <<= 0x10
+    2428	4f 69 00 00 00 00 00 00 	r9 |= r6
+    2429	79 a2 68 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x98)
+    2430	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    2431	79 a4 58 ff 00 00 00 00 	r4 = *(u64 *)(r10 - 0xa8)
+    2432	4f 42 00 00 00 00 00 00 	r2 |= r4
+    2433	bf 25 00 00 00 00 00 00 	r5 = r2
+    2434	79 a2 80 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x80)
+    2435	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    2436	79 a4 60 ff 00 00 00 00 	r4 = *(u64 *)(r10 - 0xa0)
+    2437	4f 42 00 00 00 00 00 00 	r2 |= r4
+    2438	bf 26 00 00 00 00 00 00 	r6 = r2
+    2439	71 a2 d2 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x2e)
+    2440	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    2441	71 a4 d1 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x2f)
+    2442	4f 42 00 00 00 00 00 00 	r2 |= r4
+    2443	71 a8 d4 ff 00 00 00 00 	r8 = *(u8 *)(r10 - 0x2c)
+    2444	67 08 00 00 08 00 00 00 	r8 <<= 0x8
+    2445	71 a4 d3 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x2d)
+    2446	4f 48 00 00 00 00 00 00 	r8 |= r4
+    2447	67 06 00 00 20 00 00 00 	r6 <<= 0x20
+    2448	4f 56 00 00 00 00 00 00 	r6 |= r5
+    2449	7b 6a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r6
+    2450	67 09 00 00 20 00 00 00 	r9 <<= 0x20
+    2451	4f 79 00 00 00 00 00 00 	r9 |= r7
+    2452	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+    2453	4f 30 00 00 00 00 00 00 	r0 |= r3
+    2454	67 08 00 00 10 00 00 00 	r8 <<= 0x10
+    2455	4f 28 00 00 00 00 00 00 	r8 |= r2
+    2456	71 a3 d6 ff 00 00 00 00 	r3 = *(u8 *)(r10 - 0x2a)
+    2457	67 03 00 00 08 00 00 00 	r3 <<= 0x8
+    2458	71 a2 d5 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x2b)
+    2459	4f 23 00 00 00 00 00 00 	r3 |= r2
+    2460	71 a4 ce ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x32)
+    2461	67 04 00 00 08 00 00 00 	r4 <<= 0x8
+    2462	71 a2 cd ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x33)
+    2463	4f 24 00 00 00 00 00 00 	r4 |= r2
+    2464	71 a2 d0 ff 00 00 00 00 	r2 = *(u8 *)(r10 - 0x30)
+    2465	67 02 00 00 08 00 00 00 	r2 <<= 0x8
+    2466	71 a5 cf ff 00 00 00 00 	r5 = *(u8 *)(r10 - 0x31)
+    2467	4f 52 00 00 00 00 00 00 	r2 |= r5
+    2468	71 a5 ca ff 00 00 00 00 	r5 = *(u8 *)(r10 - 0x36)
+    2469	67 05 00 00 08 00 00 00 	r5 <<= 0x8
+    2470	71 a6 c9 ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0x37)
+    2471	4f 65 00 00 00 00 00 00 	r5 |= r6
+    2472	71 a6 cc ff 00 00 00 00 	r6 = *(u8 *)(r10 - 0x34)
+    2473	67 06 00 00 08 00 00 00 	r6 <<= 0x8
+    2474	71 a7 cb ff 00 00 00 00 	r7 = *(u8 *)(r10 - 0x35)
+    2475	4f 76 00 00 00 00 00 00 	r6 |= r7
+    2476	67 06 00 00 10 00 00 00 	r6 <<= 0x10
+    2477	4f 56 00 00 00 00 00 00 	r6 |= r5
+    2478	67 02 00 00 10 00 00 00 	r2 <<= 0x10
+    2479	4f 42 00 00 00 00 00 00 	r2 |= r4
+    2480	71 a4 d7 ff 00 00 00 00 	r4 = *(u8 *)(r10 - 0x29)
+    2481	73 4a fe ff 00 00 00 00 	*(u8 *)(r10 - 0x2) = r4
+    2482	73 4a ae ff 00 00 00 00 	*(u8 *)(r10 - 0x52) = r4
+    2483	6b 3a fc ff 00 00 00 00 	*(u16 *)(r10 - 0x4) = r3
+    2484	6b 3a ac ff 00 00 00 00 	*(u16 *)(r10 - 0x54) = r3
+    2485	63 8a f8 ff 00 00 00 00 	*(u32 *)(r10 - 0x8) = r8
+    2486	63 8a a8 ff 00 00 00 00 	*(u32 *)(r10 - 0x58) = r8
+    2487	7b 0a 88 ff 00 00 00 00 	*(u64 *)(r10 - 0x78) = r0
+    2488	7b 0a d8 ff 00 00 00 00 	*(u64 *)(r10 - 0x28) = r0
+    2489	7b 9a e0 ff 00 00 00 00 	*(u64 *)(r10 - 0x20) = r9
+    2490	7b 9a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r9
+    2491	79 a3 80 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x80)
+    2492	7b 3a e8 ff 00 00 00 00 	*(u64 *)(r10 - 0x18) = r3
+    2493	7b 3a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r3
+    2494	67 02 00 00 20 00 00 00 	r2 <<= 0x20
+    2495	4f 62 00 00 00 00 00 00 	r2 |= r6
+    2496	7b 2a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r2
+    2497	7b 2a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r2
+    2498	b7 04 00 00 27 00 00 00 	r4 = 0x27
+    2499	18 02 00 00 18 5c 00 00 00 00 00 00 00 00 00 00 	r2 = 0x5c18 ll
+    2501	79 25 00 00 00 00 00 00 	r5 = *(u64 *)(r2 + 0x0)
+    2502	b7 02 00 00 10 27 00 00 	r2 = 0x2710
+    2503	2d 12 20 00 00 00 00 00 	if r2 > r1 goto +0x20 <LBB56_4>
+    2504	b7 04 00 00 00 00 00 00 	r4 = 0x0
+
+LBB56_2
+    2505	bf 12 00 00 00 00 00 00 	r2 = r1
+    2506	bf a3 00 00 00 00 00 00 	r3 = r10
+    2507	07 03 00 00 88 ff ff ff 	r3 += -0x78
+    2508	0f 43 00 00 00 00 00 00 	r3 += r4
+    2509	37 01 00 00 10 27 00 00 	r1 /= 0x2710
+    2510	bf 10 00 00 00 00 00 00 	r0 = r1
+    2511	27 00 00 00 10 27 00 00 	r0 *= 0x2710
+    2512	bf 26 00 00 00 00 00 00 	r6 = r2
+    2513	1f 06 00 00 00 00 00 00 	r6 -= r0
+    2514	bf 60 00 00 00 00 00 00 	r0 = r6
+    2515	37 00 00 00 64 00 00 00 	r0 /= 0x64
+    2516	bf 07 00 00 00 00 00 00 	r7 = r0
+    2517	67 07 00 00 01 00 00 00 	r7 <<= 0x1
+    2518	bf 58 00 00 00 00 00 00 	r8 = r5
+    2519	0f 78 00 00 00 00 00 00 	r8 += r7
+    2520	71 87 00 00 00 00 00 00 	r7 = *(u8 *)(r8 + 0x0)
+    2521	71 88 01 00 00 00 00 00 	r8 = *(u8 *)(r8 + 0x1)
+    2522	73 83 24 00 00 00 00 00 	*(u8 *)(r3 + 0x24) = r8
+    2523	73 73 23 00 00 00 00 00 	*(u8 *)(r3 + 0x23) = r7
+    2524	27 00 00 00 64 00 00 00 	r0 *= 0x64
+    2525	1f 06 00 00 00 00 00 00 	r6 -= r0
+    2526	67 06 00 00 01 00 00 00 	r6 <<= 0x1
+    2527	bf 50 00 00 00 00 00 00 	r0 = r5
+    2528	0f 60 00 00 00 00 00 00 	r0 += r6
+    2529	71 06 00 00 00 00 00 00 	r6 = *(u8 *)(r0 + 0x0)
+    2530	71 00 01 00 00 00 00 00 	r0 = *(u8 *)(r0 + 0x1)
+    2531	73 03 26 00 00 00 00 00 	*(u8 *)(r3 + 0x26) = r0
+    2532	73 63 25 00 00 00 00 00 	*(u8 *)(r3 + 0x25) = r6
+    2533	07 04 00 00 fc ff ff ff 	r4 += -0x4
+    2534	25 02 e2 ff ff e0 f5 05 	if r2 > 0x5f5e0ff goto -0x1e <LBB56_2>
+    2535	07 04 00 00 27 00 00 00 	r4 += 0x27
+
+LBB56_4
+    2536	65 01 01 00 63 00 00 00 	if r1 s> 0x63 goto +0x1 <LBB56_5>
+    2537	05 00 13 00 00 00 00 00 	goto +0x13 <LBB56_6>
+
+LBB56_5
+    2538	bf 12 00 00 00 00 00 00 	r2 = r1
+    2539	57 02 00 00 ff ff 00 00 	r2 &= 0xffff
+    2540	37 02 00 00 64 00 00 00 	r2 /= 0x64
+    2541	bf 23 00 00 00 00 00 00 	r3 = r2
+    2542	27 03 00 00 64 00 00 00 	r3 *= 0x64
+    2543	1f 31 00 00 00 00 00 00 	r1 -= r3
+    2544	57 01 00 00 ff ff 00 00 	r1 &= 0xffff
+    2545	67 01 00 00 01 00 00 00 	r1 <<= 0x1
+    2546	bf 53 00 00 00 00 00 00 	r3 = r5
+    2547	0f 13 00 00 00 00 00 00 	r3 += r1
+    2548	07 04 00 00 fe ff ff ff 	r4 += -0x2
+    2549	bf a1 00 00 00 00 00 00 	r1 = r10
+    2550	07 01 00 00 88 ff ff ff 	r1 += -0x78
+    2551	0f 41 00 00 00 00 00 00 	r1 += r4
+    2552	71 30 00 00 00 00 00 00 	r0 = *(u8 *)(r3 + 0x0)
+    2553	71 33 01 00 00 00 00 00 	r3 = *(u8 *)(r3 + 0x1)
+    2554	73 31 01 00 00 00 00 00 	*(u8 *)(r1 + 0x1) = r3
+    2555	73 01 00 00 00 00 00 00 	*(u8 *)(r1 + 0x0) = r0
+    2556	bf 21 00 00 00 00 00 00 	r1 = r2
+
+LBB56_6
+    2557	65 01 07 00 09 00 00 00 	if r1 s> 0x9 goto +0x7 <LBB56_8>
+    2558	07 04 00 00 ff ff ff ff 	r4 += -0x1
+    2559	bf a2 00 00 00 00 00 00 	r2 = r10
+    2560	07 02 00 00 88 ff ff ff 	r2 += -0x78
+    2561	0f 42 00 00 00 00 00 00 	r2 += r4
+    2562	07 01 00 00 30 00 00 00 	r1 += 0x30
+    2563	73 12 00 00 00 00 00 00 	*(u8 *)(r2 + 0x0) = r1
+    2564	05 00 0a 00 00 00 00 00 	goto +0xa <LBB56_9>
+
+LBB56_8
+    2565	67 01 00 00 01 00 00 00 	r1 <<= 0x1
+    2566	0f 15 00 00 00 00 00 00 	r5 += r1
+    2567	07 04 00 00 fe ff ff ff 	r4 += -0x2
+    2568	bf a1 00 00 00 00 00 00 	r1 = r10
+    2569	07 01 00 00 88 ff ff ff 	r1 += -0x78
+    2570	0f 41 00 00 00 00 00 00 	r1 += r4
+    2571	71 52 00 00 00 00 00 00 	r2 = *(u8 *)(r5 + 0x0)
+    2572	71 53 01 00 00 00 00 00 	r3 = *(u8 *)(r5 + 0x1)
+    2573	73 31 01 00 00 00 00 00 	*(u8 *)(r1 + 0x1) = r3
+    2574	73 21 00 00 00 00 00 00 	*(u8 *)(r1 + 0x0) = r2
+
+LBB56_9
+    2575	bf a1 00 00 00 00 00 00 	r1 = r10
+    2576	07 01 00 00 88 ff ff ff 	r1 += -0x78
+    2577	0f 41 00 00 00 00 00 00 	r1 += r4
+    2578	7b 1a f8 ff 00 00 00 00 	*(u64 *)(r10 - 0x8) = r1
+    2579	b7 01 00 00 27 00 00 00 	r1 = 0x27
+    2580	1f 41 00 00 00 00 00 00 	r1 -= r4
+    2581	7b 1a f0 ff 00 00 00 00 	*(u64 *)(r10 - 0x10) = r1
+    2582	bf a5 00 00 00 00 00 00 	r5 = r10
+    2583	79 a1 78 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x88)
+    2584	79 a2 70 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x90)
+    2585	18 03 00 00 e8 59 00 00 00 00 00 00 00 00 00 00 	r3 = 0x59e8 ll
+    2587	b7 04 00 00 00 00 00 00 	r4 = 0x0
+    2588	85 10 00 00 b4 fd ff ff 	call -0x24c
+    2589	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::num::imp::<impl core::fmt::Display for u32>::fmt
+    2590	bf 26 00 00 00 00 00 00 	r6 = r2
+    2591	85 10 00 00 72 fd ff ff 	call -0x28e
+    2592	bf 01 00 00 00 00 00 00 	r1 = r0
+    2593	b7 02 00 00 01 00 00 00 	r2 = 0x1
+    2594	bf 63 00 00 00 00 00 00 	r3 = r6
+    2595	85 10 00 00 1b ff ff ff 	call -0xe5
+    2596	95 00 00 00 00 00 00 00 	exit
+
+core::fmt::num::imp::<impl core::fmt::Display for usize>::fmt
+    2597	bf 26 00 00 00 00 00 00 	r6 = r2
+    2598	85 10 00 00 69 fd ff ff 	call -0x297
+    2599	bf 01 00 00 00 00 00 00 	r1 = r0
+    2600	b7 02 00 00 01 00 00 00 	r2 = 0x1
+    2601	bf 63 00 00 00 00 00 00 	r3 = r6
+    2602	85 10 00 00 14 ff ff ff 	call -0xec
+    2603	95 00 00 00 00 00 00 00 	exit
+
+rust_begin_unwind
+    2604	85 10 00 00 59 00 00 00 	call 0x59
+    2605	bf 06 00 00 00 00 00 00 	r6 = r0
+    2606	15 06 43 00 00 00 00 00 	if r6 == 0x0 goto +0x43 <LBB0_6>
+    2607	b7 01 00 00 00 00 00 00 	r1 = 0x0
+    2608	7b 1a c8 ff 00 00 00 00 	*(u64 *)(r10 - 0x38) = r1
+    2609	7b 1a c0 ff 00 00 00 00 	*(u64 *)(r10 - 0x40) = r1
+    2610	7b 1a b8 ff 00 00 00 00 	*(u64 *)(r10 - 0x48) = r1
+    2611	7b 1a b0 ff 00 00 00 00 	*(u64 *)(r10 - 0x50) = r1
+    2612	7b 1a a8 ff 00 00 00 00 	*(u64 *)(r10 - 0x58) = r1
+    2613	7b 1a a0 ff 00 00 00 00 	*(u64 *)(r10 - 0x60) = r1
+    2614	7b 1a 98 ff 00 00 00 00 	*(u64 *)(r10 - 0x68) = r1
+    2615	7b 1a 90 ff 00 00 00 00 	*(u64 *)(r10 - 0x70) = r1
+    2616	7b 1a 88 ff 00 00 00 00 	*(u64 *)(r10 - 0x78) = r1
+    2617	7b 1a 80 ff 00 00 00 00 	*(u64 *)(r10 - 0x80) = r1
+    2618	7b 1a 78 ff 00 00 00 00 	*(u64 *)(r10 - 0x88) = r1
+    2619	7b 1a 70 ff 00 00 00 00 	*(u64 *)(r10 - 0x90) = r1
+    2620	7b 1a 68 ff 00 00 00 00 	*(u64 *)(r10 - 0x98) = r1
+    2621	7b 1a 60 ff 00 00 00 00 	*(u64 *)(r10 - 0xa0) = r1
+    2622	7b 1a 58 ff 00 00 00 00 	*(u64 *)(r10 - 0xa8) = r1
+    2623	7b 1a 50 ff 00 00 00 00 	*(u64 *)(r10 - 0xb0) = r1
+    2624	bf a1 00 00 00 00 00 00 	r1 = r10
+    2625	07 01 00 00 40 ff ff ff 	r1 += -0xc0
+    2626	bf 62 00 00 00 00 00 00 	r2 = r6
+    2627	85 10 00 00 4a 00 00 00 	call 0x4a
+    2628	79 a1 48 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0xb8)
+    2629	79 a2 40 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0xc0)
+    2630	bf 23 00 00 00 00 00 00 	r3 = r2
+    2631	0f 13 00 00 00 00 00 00 	r3 += r1
+    2632	bf a7 00 00 00 00 00 00 	r7 = r10
+    2633	07 07 00 00 e8 ff ff ff 	r7 += -0x18
+    2634	bf 71 00 00 00 00 00 00 	r1 = r7
+    2635	85 10 00 00 2c 00 00 00 	call 0x2c
+    2636	bf a1 00 00 00 00 00 00 	r1 = r10
+    2637	07 01 00 00 d0 ff ff ff 	r1 += -0x30
+    2638	bf 72 00 00 00 00 00 00 	r2 = r7
+    2639	85 10 00 00 2d 00 00 00 	call 0x2d
+    2640	79 a1 e0 ff 00 00 00 00 	r1 = *(u64 *)(r10 - 0x20)
+    2641	25 01 10 00 7f 00 00 00 	if r1 > 0x7f goto +0x10 <LBB0_7>
+    2642	79 a2 d8 ff 00 00 00 00 	r2 = *(u64 *)(r10 - 0x28)
+    2643	79 a3 d0 ff 00 00 00 00 	r3 = *(u64 *)(r10 - 0x30)
+    2644	1d 23 0d 00 00 00 00 00 	if r3 == r2 goto +0xd <LBB0_7>
+    2645	07 02 00 00 ff ff ff ff 	r2 += -0x1
+
+LBB0_4
+    2646	bf 34 00 00 00 00 00 00 	r4 = r3
+    2647	bf a3 00 00 00 00 00 00 	r3 = r10
+    2648	07 03 00 00 50 ff ff ff 	r3 += -0xb0
+    2649	0f 13 00 00 00 00 00 00 	r3 += r1
+    2650	71 45 00 00 00 00 00 00 	r5 = *(u8 *)(r4 + 0x0)
+    2651	73 53 00 00 00 00 00 00 	*(u8 *)(r3 + 0x0) = r5
+    2652	25 01 05 00 7e 00 00 00 	if r1 > 0x7e goto +0x5 <LBB0_7>
+    2653	bf 43 00 00 00 00 00 00 	r3 = r4
+    2654	07 03 00 00 01 00 00 00 	r3 += 0x1
+    2655	07 01 00 00 01 00 00 00 	r1 += 0x1
+    2656	1d 42 01 00 00 00 00 00 	if r2 == r4 goto +0x1 <LBB0_7>
+    2657	05 00 f4 ff 00 00 00 00 	goto -0xc <LBB0_4>
+
+LBB0_7
+    2658	bf 61 00 00 00 00 00 00 	r1 = r6
+    2659	85 10 00 00 2f 00 00 00 	call 0x2f
+    2660	bf 07 00 00 00 00 00 00 	r7 = r0
+    2661	bf 61 00 00 00 00 00 00 	r1 = r6
+    2662	85 10 00 00 2e 00 00 00 	call 0x2e
+    2663	67 07 00 00 20 00 00 00 	r7 <<= 0x20
+    2664	77 07 00 00 20 00 00 00 	r7 >>= 0x20
+    2665	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+    2666	77 00 00 00 20 00 00 00 	r0 >>= 0x20
+    2667	bf a1 00 00 00 00 00 00 	r1 = r10
+    2668	07 01 00 00 50 ff ff ff 	r1 += -0xb0
+    2669	b7 02 00 00 80 00 00 00 	r2 = 0x80
+    2670	bf 73 00 00 00 00 00 00 	r3 = r7
+    2671	bf 04 00 00 00 00 00 00 	r4 = r0
+    2672	85 10 00 00 ff ff ff ff 	call -0x1
+    2673	85 10 00 00 ff ff ff ff 	call -0x1
+
+LBB0_6
+    2674	b7 01 00 00 00 00 00 00 	r1 = 0x0
+    2675	b7 02 00 00 00 00 00 00 	r2 = 0x0
+    2676	b7 03 00 00 00 00 00 00 	r3 = 0x0
+    2677	b7 04 00 00 00 00 00 00 	r4 = 0x0
+    2678	85 10 00 00 ff ff ff ff 	call -0x1
+    2679	85 10 00 00 ff ff ff ff 	call -0x1
+
+core::iter::adapters::Enumerate<I>::new
+    2680	b7 04 00 00 00 00 00 00 	r4 = 0x0
+    2681	7b 41 10 00 00 00 00 00 	*(u64 *)(r1 + 0x10) = r4
+    2682	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+    2683	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+    2684	95 00 00 00 00 00 00 00 	exit
+
+<I as core::iter::traits::collect::IntoIterator>::into_iter
+    2685	79 23 10 00 00 00 00 00 	r3 = *(u64 *)(r2 + 0x10)
+    2686	7b 31 10 00 00 00 00 00 	*(u64 *)(r1 + 0x10) = r3
+    2687	79 23 08 00 00 00 00 00 	r3 = *(u64 *)(r2 + 0x8)
+    2688	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+    2689	79 22 00 00 00 00 00 00 	r2 = *(u64 *)(r2 + 0x0)
+    2690	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+    2691	95 00 00 00 00 00 00 00 	exit
+
+<T as core::any::Any>::type_id
+    2692	85 10 00 00 43 fd ff ff 	call -0x2bd
+    2693	95 00 00 00 00 00 00 00 	exit
+
+core::panic::PanicInfo::location
+    2694	bf 10 00 00 00 00 00 00 	r0 = r1
+    2695	07 00 00 00 18 00 00 00 	r0 += 0x18
+    2696	95 00 00 00 00 00 00 00 	exit
+
+core::panic::Location::internal_constructor
+    2697	63 51 14 00 00 00 00 00 	*(u32 *)(r1 + 0x14) = r5
+    2698	63 41 10 00 00 00 00 00 	*(u32 *)(r1 + 0x10) = r4
+    2699	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+    2700	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+    2701	95 00 00 00 00 00 00 00 	exit
+
+core::panic::Location::file
+    2702	79 23 08 00 00 00 00 00 	r3 = *(u64 *)(r2 + 0x8)
+    2703	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+    2704	79 22 00 00 00 00 00 00 	r2 = *(u64 *)(r2 + 0x0)
+    2705	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+    2706	95 00 00 00 00 00 00 00 	exit
+
+core::panic::Location::line
+    2707	61 10 10 00 00 00 00 00 	r0 = *(u32 *)(r1 + 0x10)
+    2708	95 00 00 00 00 00 00 00 	exit
+
+core::panic::Location::column
+    2709	61 10 14 00 00 00 00 00 	r0 = *(u32 *)(r1 + 0x14)
+    2710	95 00 00 00 00 00 00 00 	exit
+
+<I as core::iter::traits::collect::IntoIterator>::into_iter
+    2711	7b 31 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r3
+    2712	7b 21 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r2
+    2713	95 00 00 00 00 00 00 00 	exit
+
+memcpy
+    2714	bf 10 00 00 00 00 00 00 	r0 = r1
+    2715	15 03 08 00 00 00 00 00 	if r3 == 0x0 goto +0x8 <LBB0_3>
+    2716	bf 01 00 00 00 00 00 00 	r1 = r0
+
+LBB0_2
+    2717	71 24 00 00 00 00 00 00 	r4 = *(u8 *)(r2 + 0x0)
+    2718	73 41 00 00 00 00 00 00 	*(u8 *)(r1 + 0x0) = r4
+    2719	07 01 00 00 01 00 00 00 	r1 += 0x1
+    2720	07 02 00 00 01 00 00 00 	r2 += 0x1
+    2721	07 03 00 00 ff ff ff ff 	r3 += -0x1
+    2722	15 03 01 00 00 00 00 00 	if r3 == 0x0 goto +0x1 <LBB0_3>
+    2723	05 00 f9 ff 00 00 00 00 	goto -0x7 <LBB0_2>
+
+LBB0_3
+    2724	95 00 00 00 00 00 00 00 	exit
+
+memset
+    2725	bf 10 00 00 00 00 00 00 	r0 = r1
+    2726	15 03 06 00 00 00 00 00 	if r3 == 0x0 goto +0x6 <LBB2_3>
+    2727	bf 01 00 00 00 00 00 00 	r1 = r0
+
+LBB2_2
+    2728	73 21 00 00 00 00 00 00 	*(u8 *)(r1 + 0x0) = r2
+    2729	07 01 00 00 01 00 00 00 	r1 += 0x1
+    2730	07 03 00 00 ff ff ff ff 	r3 += -0x1
+    2731	15 03 01 00 00 00 00 00 	if r3 == 0x0 goto +0x1 <LBB2_3>
+    2732	05 00 fb ff 00 00 00 00 	goto -0x5 <LBB2_2>
+
+LBB2_3
+    2733	95 00 00 00 00 00 00 00 	exit
+
+__multi3
+    2734	2f 43 00 00 00 00 00 00 	r3 *= r4
+    2735	2f 25 00 00 00 00 00 00 	r5 *= r2
+    2736	0f 35 00 00 00 00 00 00 	r5 += r3
+    2737	bf 20 00 00 00 00 00 00 	r0 = r2
+    2738	77 00 00 00 20 00 00 00 	r0 >>= 0x20
+    2739	bf 43 00 00 00 00 00 00 	r3 = r4
+    2740	77 03 00 00 20 00 00 00 	r3 >>= 0x20
+    2741	bf 36 00 00 00 00 00 00 	r6 = r3
+    2742	2f 06 00 00 00 00 00 00 	r6 *= r0
+    2743	0f 65 00 00 00 00 00 00 	r5 += r6
+    2744	67 04 00 00 20 00 00 00 	r4 <<= 0x20
+    2745	77 04 00 00 20 00 00 00 	r4 >>= 0x20
+    2746	bf 46 00 00 00 00 00 00 	r6 = r4
+    2747	2f 06 00 00 00 00 00 00 	r6 *= r0
+    2748	67 02 00 00 20 00 00 00 	r2 <<= 0x20
+    2749	77 02 00 00 20 00 00 00 	r2 >>= 0x20
+    2750	2f 24 00 00 00 00 00 00 	r4 *= r2
+    2751	bf 40 00 00 00 00 00 00 	r0 = r4
+    2752	77 00 00 00 20 00 00 00 	r0 >>= 0x20
+    2753	0f 60 00 00 00 00 00 00 	r0 += r6
+    2754	bf 06 00 00 00 00 00 00 	r6 = r0
+    2755	77 06 00 00 20 00 00 00 	r6 >>= 0x20
+    2756	0f 65 00 00 00 00 00 00 	r5 += r6
+    2757	2f 23 00 00 00 00 00 00 	r3 *= r2
+    2758	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+    2759	77 00 00 00 20 00 00 00 	r0 >>= 0x20
+    2760	0f 30 00 00 00 00 00 00 	r0 += r3
+    2761	bf 02 00 00 00 00 00 00 	r2 = r0
+    2762	77 02 00 00 20 00 00 00 	r2 >>= 0x20
+    2763	0f 25 00 00 00 00 00 00 	r5 += r2
+    2764	7b 51 08 00 00 00 00 00 	*(u64 *)(r1 + 0x8) = r5
+    2765	67 00 00 00 20 00 00 00 	r0 <<= 0x20
+    2766	67 04 00 00 20 00 00 00 	r4 <<= 0x20
+    2767	77 04 00 00 20 00 00 00 	r4 >>= 0x20
+    2768	4f 40 00 00 00 00 00 00 	r0 |= r4
+    2769	7b 01 00 00 00 00 00 00 	*(u64 *)(r1 + 0x0) = r0
+    2770	95 00 00 00 00 00 00 00 	exit
