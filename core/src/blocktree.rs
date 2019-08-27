@@ -317,7 +317,7 @@ impl Blocktree {
     fn try_shred_recovery(
         db: &Database,
         erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
-        index_working_set: &HashMap<u64, Index>,
+        index_working_set: &HashMap<u64, (Index, bool)>,
         prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
         prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
     ) -> Vec<Shred> {
@@ -341,7 +341,7 @@ impl Blocktree {
                 );
             };
 
-            let index = index_working_set.get(&slot).expect("Index");
+            let (index, _) = index_working_set.get(&slot).expect("Index");
             match erasure_meta.status(&index) {
                 ErasureMetaStatus::CanRecover => {
                     // Find shreds for this erasure set and try recovery
@@ -426,41 +426,67 @@ impl Blocktree {
             let slot = shred.slot();
             let shred_index = u64::from(shred.index());
 
-            let index_meta = index_working_set.entry(slot).or_insert_with(|| {
-                self.index_cf
-                    .get(slot)
-                    .unwrap()
-                    .unwrap_or_else(|| Index::new(slot))
+            let (index_meta, is_index_dirty) = index_working_set.entry(slot).or_insert_with(|| {
+                (
+                    self.index_cf
+                        .get(slot)
+                        .unwrap()
+                        .unwrap_or_else(|| Index::new(slot)),
+                    false,
+                )
             });
 
             if let Shred::Coding(coding_shred) = &shred {
                 // This gives the index of first coding shred in this FEC block
                 // So, all coding shreds in a given FEC block will have the same set index
-                let pos = u64::from(coding_shred.header.position);
-                if shred_index >= pos {
-                    let set_index = shred_index - pos;
-
-                    self.insert_coding_shred(
-                        set_index,
-                        coding_shred.header.num_data_shreds as usize,
-                        coding_shred.header.num_coding_shreds as usize,
-                        &mut just_inserted_coding_shreds,
-                        &mut erasure_metas,
-                        index_meta,
-                        shred,
-                        &mut write_batch,
-                    )
-                }
-            } else if self
-                .insert_data_shred(
-                    &mut slot_meta_working_set,
-                    &mut index_working_set,
+                if Blocktree::should_insert_coding_shred(
                     &shred,
-                    &mut write_batch,
-                )
-                .unwrap_or(false)
-            {
-                just_inserted_data_shreds.insert((slot, shred_index), shred);
+                    index_meta.coding(),
+                    coding_shred.header.num_coding_shreds,
+                    &self.last_root,
+                ) {
+                    if self
+                        .insert_coding_shred(
+                            coding_shred.header.num_data_shreds as usize,
+                            coding_shred.header.num_coding_shreds as usize,
+                            &mut erasure_metas,
+                            index_meta,
+                            &shred,
+                            &mut write_batch,
+                        )
+                        .is_ok()
+                    {
+                        *is_index_dirty = true;
+                        // `or_insert_with` used to prevent stack overflow
+                        // TODO: remove this
+                        just_inserted_coding_shreds
+                            .entry((slot, shred_index))
+                            .or_insert_with(|| shred);
+                    }
+                }
+            } else {
+                let entry =
+                    get_slot_meta_entry(&self.db, &mut slot_meta_working_set, slot, shred.parent());
+                let mut slot_meta = &mut entry.0.borrow_mut();
+                if Blocktree::should_insert_data_shred(
+                    &shred,
+                    slot_meta,
+                    index_meta.data(),
+                    &self.last_root,
+                ) {
+                    if self
+                        .insert_data_shred(
+                            &mut slot_meta,
+                            index_meta.data_mut(),
+                            &shred,
+                            &mut write_batch,
+                        )
+                        .is_ok()
+                    {
+                        *is_index_dirty = true;
+                        just_inserted_data_shreds.insert((slot, shred_index), shred);
+                    }
+                }
             }
         });
 
@@ -473,18 +499,32 @@ impl Blocktree {
         );
 
         recovered_data.into_iter().for_each(|shred| {
-            let _ = self.insert_data_shred(
+            // We know the index_meta must exist in index_working_set at this point because some
+            // shred was inserted for the slot, so the index_meta must have been inserted into
+            // the index_working_set
+            let (index_meta, is_dirty) = index_working_set
+                .get_mut(&shred.slot())
+                .expect("Index must be present for all data blobs");
+            let entry = get_slot_meta_entry(
+                &self.db,
                 &mut slot_meta_working_set,
-                &mut index_working_set,
+                shred.slot(),
+                shred.parent(),
+            );
+            let mut slot_meta = &mut entry.0.borrow_mut();
+            let _ = self.insert_data_shred(
+                &mut slot_meta,
+                index_meta.data_mut(),
                 &shred,
                 &mut write_batch,
             );
+            *is_dirty = true;
         });
 
         // Handle chaining for the working set
         handle_chaining(&self.db, &mut write_batch, &slot_meta_working_set)?;
 
-        let (should_signal, newly_completed_slots) = prepare_signals(
+        let (should_signal, newly_completed_slots) = commit_slot_meta_working_set(
             &slot_meta_working_set,
             &self.completed_slots_senders,
             &mut write_batch,
@@ -494,8 +534,10 @@ impl Blocktree {
             write_batch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
         }
 
-        for (&slot, index) in index_working_set.iter() {
-            write_batch.put::<cf::Index>(slot, index)?;
+        for (&slot, (index, is_dirty)) in index_working_set.iter() {
+            if *is_dirty {
+                write_batch.put::<cf::Index>(slot, index)?;
+            }
         }
 
         batch_processor.write(write_batch)?;
@@ -516,20 +558,66 @@ impl Blocktree {
         Ok(())
     }
 
+    fn should_insert_coding_shred(
+        shred: &Shred,
+        coding_index: &CodingIndex,
+        num_coding: u16,
+        last_root: &RwLock<u64>,
+    ) -> bool {
+        let slot = shred.slot();
+        let shred_index = shred.index();
+
+        let pos = {
+            if let Shred::Coding(coding_shred) = &shred {
+                coding_shred.header.position as u32
+            } else {
+                panic!("should_insert_coding_shred called with non-coding shred")
+            }
+        };
+
+        if shred_index < pos {
+            return false;
+        }
+
+        let set_index = shred_index - pos;
+        if num_coding == 0 {
+            false
+        } else if pos >= num_coding as u32 {
+            false
+        } else if std::u32::MAX - set_index < pos || set_index + pos != shred_index {
+            false
+        } else if coding_index.is_present(shred_index as u64) {
+            false
+        } else if slot <= *last_root.read().unwrap() {
+            false
+        } else {
+            true
+        }
+    }
+
     fn insert_coding_shred(
         &self,
-        set_index: u64,
         num_data: usize,
         num_coding: usize,
-        prev_inserted_coding_shreds: &mut HashMap<(u64, u64), Shred>,
         erasure_metas: &mut HashMap<(u64, u64), ErasureMeta>,
         index_meta: &mut Index,
-        shred: Shred,
+        shred: &Shred,
         write_batch: &mut WriteBatch,
-    ) {
+    ) -> Result<()> {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
+        let pos = {
+            if let Shred::Coding(coding_shred) = &shred {
+                coding_shred.header.position as u64
+            } else {
+                panic!("insert_coding_shred called with non-coding shred")
+            }
+        };
 
+        // Assert guaranteed by integrity checks on the shred that happen before
+        // `insert_coding_shred` is called
+        assert!(shred_index >= pos);
+        let set_index = shred_index - pos;
         let erasure_config = ErasureConfig::new(num_data, num_coding);
 
         let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
@@ -548,26 +636,109 @@ impl Blocktree {
             );
         }
 
-        let serialized_shred = bincode::serialize(&shred).unwrap();
-        let inserted =
-            write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &serialized_shred);
-        if inserted.is_ok() {
-            index_meta.coding_mut().set_present(shred_index, true);
+        let serialized_shred = bincode::serialize(shred).unwrap();
 
-            // `or_insert_with` used to prevent stack overflow
-            prev_inserted_coding_shreds
-                .entry((slot, shred_index))
-                .or_insert_with(|| shred);
+        // Commit step: commit all changes to the mutable structures at once, or none at all.
+        // We don't want only a subset of these changes going through.
+        write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &serialized_shred)?;
+        index_meta.coding_mut().set_present(shred_index, true);
+
+        Ok(())
+    }
+
+    fn should_insert_data_shred(
+        shred: &Shred,
+        slot_meta: &SlotMeta,
+        data_index: &DataIndex,
+        last_root: &RwLock<u64>,
+    ) -> bool {
+        let shred_index = shred.index() as u64;
+        let slot = shred.slot();
+        let last_in_slot = if let Shred::LastInSlot(_) = shred {
+            debug!("got last in slot");
+            true
+        } else {
+            false
+        };
+
+        // Check that the data shred doesn't already exist in blocktree
+        if shred_index < slot_meta.consumed || data_index.is_present(shred_index) {
+            return false;
         }
+
+        // Check that we do not receive shred_index >= than the last_index
+        // for the slot
+        let last_index = slot_meta.last_index;
+        if shred_index >= last_index {
+            datapoint_error!(
+                "blocktree_error",
+                (
+                    "error",
+                    format!(
+                        "Received index {} >= slot.last_index {}",
+                        shred_index, last_index
+                    ),
+                    String
+                )
+            );
+            return false;
+        }
+        // Check that we do not receive a blob with "last_index" true, but shred_index
+        // less than our current received
+        if last_in_slot && shred_index < slot_meta.received {
+            datapoint_error!(
+                "blocktree_error",
+                (
+                    "error",
+                    format!(
+                        "Received shred_index {} < slot.received {}",
+                        shred_index, slot_meta.received
+                    ),
+                    String
+                )
+            );
+            return false;
+        }
+
+        let last_root = *last_root.read().unwrap();
+        if !is_valid_write_to_slot_0(slot, slot_meta.parent_slot, last_root) {
+            // Check that the parent_slot < slot
+            if slot_meta.parent_slot >= slot {
+                datapoint_error!(
+                    "blocktree_error",
+                    (
+                        "error",
+                        format!(
+                            "Received blob with parent_slot {} >= slot {}",
+                            slot_meta.parent_slot, slot
+                        ),
+                        String
+                    )
+                );
+                return false;
+            }
+
+            // Check that the blob is for a slot that is past the root
+            if slot <= last_root {
+                return false;
+            }
+
+            // Ignore blobs that chain to slots before the last root
+            if slot_meta.parent_slot < last_root {
+                return false;
+            }
+        }
+
+        true
     }
 
     fn insert_data_shred(
         &self,
-        mut slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
-        index_working_set: &mut HashMap<u64, Index>,
+        slot_meta: &mut SlotMeta,
+        data_index: &mut DataIndex,
         shred: &Shred,
         write_batch: &mut WriteBatch,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
         let parent = shred.parent();
@@ -579,9 +750,6 @@ impl Blocktree {
             false
         };
 
-        let entry = get_slot_meta_entry(&self.db, &mut slot_meta_working_set, slot, parent);
-
-        let slot_meta = &mut entry.0.borrow_mut();
         if is_orphan(slot_meta) {
             slot_meta.parent_slot = parent;
         }
@@ -595,45 +763,26 @@ impl Blocktree {
                 .unwrap_or(false)
         };
 
-        let index_meta = index_working_set
-            .get_mut(&slot)
-            .expect("Index must be present for all data shreds")
-            .data_mut();
+        let new_consumed = if slot_meta.consumed == index {
+            let mut current_index = index + 1;
 
-        if !index_meta.is_present(index)
-            && should_insert(
-                slot_meta,
-                index,
-                slot,
-                last_in_slot,
-                check_data_cf,
-                *self.last_root.read().unwrap(),
-            )
-        {
-            let new_consumed = if slot_meta.consumed == index {
-                let mut current_index = index + 1;
-
-                while index_meta.is_present(current_index) || check_data_cf(slot, current_index) {
-                    current_index += 1;
-                }
-                current_index
-            } else {
-                slot_meta.consumed
-            };
-
-            let serialized_shred = bincode::serialize(shred).unwrap();
-
-            // Commit step: commit all changes to the mutable structures at once, or none at all.
-            // We don't want only a subset of these changes going through.
-            write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
-            update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
-            index_meta.set_present(index, true);
-            trace!("inserted shred into slot {:?} and index {:?}", slot, index);
-            Ok(true)
+            while data_index.is_present(current_index) || check_data_cf(slot, current_index) {
+                current_index += 1;
+            }
+            current_index
         } else {
-            debug!("didn't insert shred");
-            Ok(false)
-        }
+            slot_meta.consumed
+        };
+
+        let serialized_shred = bincode::serialize(shred).unwrap();
+
+        // Commit step: commit all changes to the mutable structures at once, or none at all.
+        // We don't want only a subset of these changes going through.
+        write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
+        update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
+        data_index.set_present(index, true);
+        trace!("inserted shred into slot {:?} and index {:?}", slot, index);
+        Ok(())
     }
 
     pub fn get_data_shred(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
@@ -1132,6 +1281,7 @@ where
     if index < slot_meta.consumed || db_check(slot, index) {
         return false;
     }
+
     // Check that we do not receive index >= than the last_index
     // for the slot
     let last_index = slot_meta.last_index;
@@ -1239,7 +1389,7 @@ fn send_signals(
     Ok(())
 }
 
-fn prepare_signals(
+fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
     completed_slots_senders: &[SyncSender<Vec<u64>>],
     write_batch: &mut WriteBatch,
