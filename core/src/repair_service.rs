@@ -1,6 +1,5 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing blobs in the ledger and sends repair requests for those blobs
-
 use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use crate::cluster_info::ClusterInfo;
@@ -111,12 +110,10 @@ impl RepairService {
         let id = cluster_info.read().unwrap().id();
         let mut current_root = 0;
         if let RepairStrategy::RepairAll {
-            ref bank_forks,
-            ref epoch_schedule,
-            ..
+            ref epoch_schedule, ..
         } = repair_strategy
         {
-            current_root = bank_forks.read().unwrap().root();
+            current_root = blocktree.last_root();
             Self::initialize_epoch_slots(
                 id,
                 blocktree,
@@ -143,11 +140,10 @@ impl RepairService {
                     }
 
                     RepairStrategy::RepairAll {
-                        ref bank_forks,
                         ref completed_slots_receiver,
                         ..
                     } => {
-                        let new_root = bank_forks.read().unwrap().root();
+                        let new_root = blocktree.last_root();
                         Self::update_epoch_slots(
                             id,
                             new_root,
@@ -239,7 +235,8 @@ impl RepairService {
         // TODO: Incorporate gossip to determine priorities for repair?
 
         // Try to resolve orphans in blocktree
-        let orphans = blocktree.get_orphans(Some(MAX_ORPHANS));
+        let mut orphans = blocktree.get_orphans(Some(MAX_ORPHANS));
+        orphans.retain(|x| *x > root);
 
         Self::generate_repairs_for_orphans(&orphans[..], &mut repairs);
         Ok(repairs)
@@ -430,11 +427,7 @@ mod test {
             blocktree.write_blobs(&blobs).unwrap();
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
-                vec![
-                    RepairType::HighestBlob(0, 0),
-                    RepairType::Orphan(0),
-                    RepairType::Orphan(2)
-                ]
+                vec![RepairType::HighestBlob(0, 0), RepairType::Orphan(2)]
             );
         }
 
@@ -456,7 +449,7 @@ mod test {
             // Check that repair tries to patch the empty slot
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
-                vec![RepairType::HighestBlob(0, 0), RepairType::Orphan(0)]
+                vec![RepairType::HighestBlob(0, 0)]
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
