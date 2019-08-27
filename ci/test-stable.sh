@@ -31,9 +31,10 @@ testName=$(basename "$0" .sh)
 case $testName in
 test-stable)
   echo "Executing $testName"
-
+  export RUST_LOG=solana=info
   _ cargo +"$rust_stable" build --all ${V:+--verbose}
-  _ cargo +"$rust_stable" test --all ${V:+--verbose} -- --nocapture
+#  _ cargo +"$rust_stable" test --test local_cluster test_ledger_cleanup_service ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --test local_cluster test_bad_blob_size_leader ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"

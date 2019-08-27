@@ -231,7 +231,7 @@ pub struct Bank {
     inflation: Inflation,
 
     /// cache of vote_account and stake_account state for this fork
-    stakes: RwLock<Stakes>,
+    pub stakes: RwLock<Stakes>,
 
     /// cache of validator and replicator storage accounts for this fork
     storage_accounts: RwLock<StorageAccounts>,

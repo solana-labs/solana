@@ -22,7 +22,7 @@ use solana_sdk::{
     timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
     transaction::Transaction,
 };
-use solana_stake_api::{config as stake_config, stake_instruction, stake_state::StakeState};
+use solana_stake_api::{stake_instruction, stake_state::StakeState};
 use solana_storage_api::{storage_contract, storage_instruction};
 use solana_vote_api::{vote_instruction, vote_state::VoteState};
 use std::{
@@ -170,17 +170,17 @@ impl LocalCluster {
         ));
 
         // override staking config
-        genesis_block.accounts.push((
-            stake_config::id(),
-            stake_config::create_account(
-                1,
-                &stake_config::Config {
-                    warmup_rate: 1_000_000_000.0f64,
-                    cooldown_rate: 1_000_000_000.0f64,
-                    slash_penalty: std::u8::MAX,
-                },
-            ),
-        ));
+        //        genesis_block.accounts.push((
+        //            stake_config::id(),
+        //            stake_config::create_account(
+        //                1,
+        //                &stake_config::Config {
+        //                    warmup_rate: 1_000_000_000.0f64,
+        //                    cooldown_rate: 1_000_000_000.0f64,
+        //                    slash_penalty: std::u8::MAX,
+        //                },
+        //            ),
+        //        ));
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_contact_info = leader_node.info.clone();

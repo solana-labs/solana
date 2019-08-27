@@ -78,9 +78,9 @@ where
     while let Ok(mut more_packets) = r.try_recv() {
         packets.packets.append(&mut more_packets.packets)
     }
-    let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", packets.packets.len());
 
+    let now = Instant::now();
     let (shreds, packets): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
             .packets
@@ -104,6 +104,14 @@ where
     });
     let packets = Packets::new(packets);
 
+    if now.elapsed().as_millis() > 10 {
+        println!(
+            "shred filter took {:?}ms for {:?} packets",
+            now.elapsed().as_millis(),
+            packets.packets.len()
+        );
+    }
+
     trace!("{:?} shreds from packets", shreds.len());
 
     trace!(
@@ -117,6 +125,12 @@ where
         let _ = retransmit.send(packets);
     }
 
+    info!(
+        "{:?} , I am {:?} trying to insert {:?} shreds",
+        thread::current().id(),
+        my_pubkey,
+        shreds.len()
+    );
     blocktree.insert_shreds(shreds)?;
 
     trace!(
@@ -194,7 +208,7 @@ impl WindowService {
                 trace!("{}: RECV_WINDOW started", id);
                 let mut now = Instant::now();
                 let thread_pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .num_threads(1)
                     .build()
                     .unwrap();
                 loop {

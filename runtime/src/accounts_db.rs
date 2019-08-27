@@ -39,7 +39,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-use sys_info;
 use tempfile::TempDir;
 
 pub const DEFAULT_FILE_SIZE: u64 = 4 * 1024 * 1024;
@@ -370,7 +369,7 @@ pub struct AccountsDB {
 
 impl Default for AccountsDB {
     fn default() -> Self {
-        let num_threads = sys_info::cpu_num().unwrap_or(DEFAULT_NUM_THREADS) as usize;
+        let num_threads = 1;
 
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),

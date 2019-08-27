@@ -148,7 +148,7 @@ impl BroadcastStage {
         let mut broadcast = Broadcast {
             coding_generator,
             thread_pool: rayon::ThreadPoolBuilder::new()
-                .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                .num_threads(1)
                 .build()
                 .unwrap(),
         };

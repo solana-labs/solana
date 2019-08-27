@@ -29,7 +29,7 @@ pub const NUM_THREADS: u32 = 10;
 use std::cell::RefCell;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .num_threads(1)
                     .build()
                     .unwrap()));
 

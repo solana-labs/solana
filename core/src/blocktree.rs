@@ -25,13 +25,13 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 
 use std::borrow::{Borrow, Cow};
 use std::cell::RefCell;
-use std::cmp;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
+use std::{cmp, thread};
 
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
@@ -652,7 +652,12 @@ impl Blocktree {
             write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
             update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
             index_meta.set_present(index, true);
-            trace!("inserted shred into slot {:?} and index {:?}", slot, index);
+            info!(
+                "{:?} inserted shred into slot {:?} and index {:?}",
+                thread::current().id(),
+                slot,
+                index
+            );
             Ok(true)
         } else {
             debug!("didn't insert shred");

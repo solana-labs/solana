@@ -417,7 +417,7 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// all peers that have a valid tvu port.
+    /// all validator peers that have a valid tvu port.
     pub fn tvu_peers(&self) -> Vec<ContactInfo> {
         let me = self.my_data().id;
         self.gossip
@@ -426,6 +426,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .filter(|x| !ClusterInfo::is_replicator(&x))
             .filter(|x| x.id != me)
             .cloned()
             .collect()
@@ -740,11 +741,15 @@ impl ClusterInfo {
         stakes: Option<&HashMap<Pubkey, u64>>,
     ) -> Result<()> {
         let mut last_err = Ok(());
-        let mut broadcast_table_len = 0;
         shreds.iter().zip(seeds).for_each(|(shred, seed)| {
             let broadcast_table = self.sorted_tvu_peers(stakes, ChaChaRng::from_seed(*seed));
-            broadcast_table_len = cmp::max(broadcast_table_len, broadcast_table.len());
-
+            //            let broadcast_table = self.tvu_peers();
+            //            broadcast_table.iter().for_each(|ci| {
+            //                if let Err(e) = s.send_to(shred, &ci.tvu) {
+            //                    trace!("{}: broadcast result {:?}", self.id(), e);
+            //                    last_err = Err(e);
+            //                }
+            //            });
             if !broadcast_table.is_empty() {
                 if let Err(e) = s.send_to(shred, &broadcast_table[0].tvu) {
                     trace!("{}: broadcast result {:?}", self.id(), e);

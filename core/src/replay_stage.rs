@@ -21,6 +21,7 @@ use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::{self, duration_as_ms};
 use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction;
+use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
@@ -284,7 +285,7 @@ impl ReplayStage {
             trace!("{} poh_recorder hasn't reached_leader_tick", my_pubkey);
             return;
         }
-        trace!("{} reached_leader_tick", my_pubkey,);
+        info!("{} reached_leader_tick for {:?}", my_pubkey, poh_slot);
 
         let parent = bank_forks
             .read()
@@ -434,7 +435,7 @@ impl ReplayStage {
                 .unwrap()
                 .set_root(new_root, snapshot_package_sender);
             Self::handle_new_root(&bank_forks, progress);
-            trace!("new root {}", new_root);
+            info!("new root {}", new_root);
             if let Err(e) = root_bank_sender.send(rooted_banks) {
                 trace!("root_bank_sender failed: {:?}", e);
                 Err(e)?;
@@ -609,7 +610,21 @@ impl ReplayStage {
                 let vote_threshold =
                     tower.check_vote_stake_threshold(b.slot(), &stake_lockouts, *total_staked);
                 Self::confirm_forks(tower, &stake_lockouts, *total_staked, progress, bank_forks);
-                debug!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
+                if !vote_threshold {
+                    info!(
+                        "bank vote_threshold: {} {:#?}",
+                        b.slot(),
+                        b.stakes.read().unwrap().history()
+                    );
+                    info!(
+                        "vote accounts for current bank {:?}",
+                        b.vote_accounts()
+                            .iter()
+                            .map(|(_, (_, account))| VoteState::from(&account).unwrap_or_default())
+                            .collect::<Vec<_>>()
+                    );
+                }
+
                 vote_threshold
             })
             .map(|(b, (stake_lockouts, total_staked))| {
@@ -743,7 +758,7 @@ impl ReplayStage {
         slot_full_senders: &[Sender<(u64, Pubkey)>],
     ) {
         bank.freeze();
-        info!("bank frozen {}", bank.slot());
+        info!("{:?} bank frozen {}", my_pubkey, bank.slot());
         slot_full_senders.iter().for_each(|sender| {
             if let Err(e) = sender.send((bank.slot(), *bank.collector_id())) {
                 trace!("{} slot_full alert failed: {:?}", my_pubkey, e);
