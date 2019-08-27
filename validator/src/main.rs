@@ -9,7 +9,6 @@ use solana_core::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
 use solana_core::gossip_service::discover;
 use solana_core::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
-use solana_core::local_vote_signer_service::LocalVoteSignerService;
 use solana_core::service::Service;
 use solana_core::socketaddr;
 use solana_core::validator::{Validator, ValidatorConfig};
@@ -332,6 +331,7 @@ fn main() {
                 .long("vote-signer-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
+                .hidden(true) // Don't document this argument to discourage its use
                 .help("Rendezvous with the vote signer at this RPC end point"),
         )
         .arg(
@@ -477,17 +477,23 @@ fn main() {
 
         ContactInfo::new_gossip_entry_point(&entrypoint_addr)
     });
-    let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer_addr")
-    {
-        (
-            None,
-            signer_addr.to_string().parse().expect("Signer IP Address"),
-        )
-    } else {
-        // Run a local vote signer if a vote signer service address was not provided
-        let (signer_service, signer_addr) = LocalVoteSignerService::new(dynamic_port_range);
-        (Some(signer_service), signer_addr)
-    };
+
+    if matches.value_of("signer_addr").is_some() {
+        warn!("--vote-signer-address ignored");
+        /*
+        let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer_addr")
+        {
+            (
+                None,
+                signer_addr.to_string().parse().expect("Signer IP Address"),
+            )
+        } else {
+            // Run a local vote signer if a vote signer service address was not provided
+            let (signer_service, signer_addr) = solana_core::local_vote_signer_service::LocalVoteSignerService::new(dynamic_port_range);
+            (Some(signer_service), signer_addr)
+        };
+        */
+    }
 
     let init_complete_file = matches.value_of("init_complete_file");
     let verify_ledger = !matches.is_present("skip_ledger_verify");
