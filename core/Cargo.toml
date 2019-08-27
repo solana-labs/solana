@@ -90,7 +90,7 @@ default-features = false
 features = ["lz4"]
 
 [dev-dependencies]
-hex-literal = "0.2.0"
+hex-literal = "0.2.1"
 matches = "0.1.6"
 serial_test = "0.2.0"
 serial_test_derive = "0.2.0"
