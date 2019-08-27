@@ -488,7 +488,7 @@ mod test {
                     missing_indexes_per_slot.insert(0, index);
                 }
             }
-            blocktree.insert_shreds(&shreds_to_write).unwrap();
+            blocktree.insert_shreds(shreds_to_write).unwrap();
 
             let expected: Vec<RepairType> = (0..num_slots)
                 .flat_map(|slot| {
@@ -548,8 +548,9 @@ mod test {
             let num_entries_per_slot = 10;
 
             let shreds = make_chaining_slot_entries_using_shreds(&slots, num_entries_per_slot);
-            for (slot_shreds, _) in shreds.iter() {
-                blocktree.insert_shreds(&slot_shreds[1..]).unwrap();
+            for (mut slot_shreds, _) in shreds.into_iter() {
+                slot_shreds.remove(0);
+                blocktree.insert_shreds(slot_shreds).unwrap();
             }
 
             // Iterate through all possible combinations of start..end (inclusive on both

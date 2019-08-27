@@ -277,7 +277,7 @@ impl ErasureMeta {
     }
 
     pub fn start_index(&self) -> u64 {
-        self.set_index * self.config.num_data() as u64
+        self.set_index
     }
 
     /// returns a tuple of (data_end, coding_end)
