@@ -51,7 +51,7 @@ members = [
     "upload-perf",
     "validator-info",
     "utils/netutil",
-    "utils/fixed_buf",
+    "utils/fixed-buf",
     "vote-signer",
     "cli",
 ]
