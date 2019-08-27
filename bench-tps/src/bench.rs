@@ -767,12 +767,13 @@ fn fund_move_keys<T: Client>(
     client.send_message(&[funding_key], tx.message).unwrap();
     let mut balance = 0;
     for _ in 0..20 {
-        balance = client.get_balance(&funding_keys[0].pubkey()).unwrap();
-        if balance > 0 {
-            break;
-        } else {
-            sleep(Duration::from_millis(100));
+        if let Ok(balance_) = client.get_balance(&funding_keys[0].pubkey()) {
+            if balance_ > 0 {
+                balance = balance_;
+                break;
+            }
         }
+        sleep(Duration::from_millis(100));
     }
     assert!(balance > 0);
     info!("funded multiple funding accounts.. {:?}", balance);
