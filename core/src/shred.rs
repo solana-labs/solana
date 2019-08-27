@@ -231,7 +231,7 @@ impl ShredCommon for FirstDataShred {
     fn write_at(&mut self, offset: usize, buf: &[u8]) -> (usize, usize) {
         let mut capacity = self.payload.len().saturating_sub(offset);
         let slice_len = cmp::min(capacity, buf.len());
-        capacity = capacity - slice_len;
+        capacity -= slice_len;
         if slice_len > 0 {
             self.payload[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
         }
@@ -255,7 +255,7 @@ impl ShredCommon for DataShred {
     fn write_at(&mut self, offset: usize, buf: &[u8]) -> (usize, usize) {
         let mut capacity = self.payload.len().saturating_sub(offset);
         let slice_len = cmp::min(capacity, buf.len());
-        capacity = capacity - slice_len;
+        capacity -= slice_len;
         if slice_len > 0 {
             self.payload[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
         }
@@ -279,7 +279,7 @@ impl ShredCommon for CodingShred {
     fn write_at(&mut self, offset: usize, buf: &[u8]) -> (usize, usize) {
         let mut capacity = self.header.payload.len().saturating_sub(offset);
         let slice_len = cmp::min(capacity, buf.len());
-        capacity = capacity - slice_len;
+        capacity -= slice_len;
         if slice_len > 0 {
             self.header.payload[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
         }
