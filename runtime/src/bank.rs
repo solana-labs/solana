@@ -1326,6 +1326,11 @@ impl Bank {
         self.tick_height.load(Ordering::Relaxed) as u64
     }
 
+    /// Return the inflation parameters of the Bank
+    pub fn inflation(&self) -> Inflation {
+        self.inflation
+    }
+
     /// Return the total capititalization of the Bank
     pub fn capitalization(&self) -> u64 {
         // capitalization is using an AtomicUSize because AtomicU64 is not yet a stable API.

@@ -15,6 +15,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
+use solana_sdk::inflation::Inflation;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::{self, Transaction};
@@ -79,6 +80,10 @@ impl JsonRpcRequestProcessor {
             .into_iter()
             .map(|(pubkey, account)| (pubkey.to_string(), account))
             .collect())
+    }
+
+    pub fn get_inflation(&self) -> Result<Inflation> {
+        Ok(self.bank().inflation())
     }
 
     pub fn get_balance(&self, pubkey: &Pubkey) -> u64 {
@@ -291,6 +296,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(&self, _: Self::Metadata, _: String) -> Result<Vec<(String, Account)>>;
 
+    #[rpc(meta, name = "getInflation")]
+    fn get_inflation(&self, _: Self::Metadata) -> Result<Inflation>;
+
     #[rpc(meta, name = "getBalance")]
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
@@ -407,6 +415,16 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_program_accounts(&program_id)
+    }
+
+    fn get_inflation(&self, meta: Self::Metadata) -> Result<Inflation> {
+        debug!("get_inflation rpc request received");
+        Ok(meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_inflation()
+            .unwrap())
     }
 
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<u64> {
@@ -852,6 +870,28 @@ pub mod tests {
             panic!("Expected single response");
         };
         assert!(supply >= TEST_MINT_LAMPORTS);
+    }
+
+    #[test]
+    fn test_rpc_get_inflation() {
+        let bob_pubkey = Pubkey::new_rand();
+        let (io, meta, bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getInflation"}}"#);
+        let rep = io.handle_request_sync(&req, meta);
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+        let inflation: Inflation = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        assert_eq!(inflation, bank.inflation());
     }
 
     #[test]
