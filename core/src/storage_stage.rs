@@ -690,7 +690,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_storage_stage_process_banks() {
         solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
