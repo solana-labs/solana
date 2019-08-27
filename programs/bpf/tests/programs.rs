@@ -89,7 +89,7 @@ mod bpf {
             solana_logger::setup();
 
             let programs = [
-                // ("solana_bpf_rust_128bit", true),
+                ("solana_bpf_rust_128bit", true),
                 // ("solana_bpf_rust_alloc", true),
                 // ("solana_bpf_rust_dep_crate", true),
                 // ("solana_bpf_rust_iter", true),
@@ -98,8 +98,7 @@ mod bpf {
                 // ("solana_bpf_rust_noop", true),
                 // ("solana_bpf_rust_panic", false),
                 // ("solana_bpf_rust_pass_ownership", true),
-                // ISSUE: https://github.com/solana-labs/solana/issues/5602
-                ("solana_bpf_rust_stack_bug", true),
+                // ("solana_bpf_rust_stack_bug", true),
             ];
             for program in programs.iter() {
                 let filename = create_bpf_path(program.0);

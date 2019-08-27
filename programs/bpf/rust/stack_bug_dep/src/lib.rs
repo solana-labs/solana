@@ -6,7 +6,11 @@
 extern crate solana_sdk_bpf_utils;
 
 pub struct Data<'a> {
-    pub five: u32,
+    pub tone: u64,
+    pub ttwo: u64,
+    pub tthree: u64,
+    pub tfour: u64,
+    pub tfive: u32,
     pub array: &'a [u8],
 }
 
@@ -21,9 +25,12 @@ impl<'a> TestDep {
         _three: u64,
         _four: u64,
         five: u64,
+        _six: u64,
+        _seven: u64,
+        _eight: u64,
     ) -> Self  {
         Self {
-            ten: data.five + five as u32,
+            ten: data.tfive + five as u32 - 20,
         }
     }
 }
