@@ -32,7 +32,6 @@ mod bpf {
         use solana_sdk::signature::KeypairUtil;
         use std::io::Read;
 
-        #[ignore]
         #[test]
         fn test_program_bpf_c() {
             solana_logger::setup();
