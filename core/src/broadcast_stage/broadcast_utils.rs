@@ -1,13 +1,9 @@
 use crate::entry::Entry;
-use crate::entry::EntrySlice;
-use crate::erasure::CodingGenerator;
-use crate::packet::{self, SharedBlob};
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::Result;
-use rayon::prelude::*;
-use rayon::ThreadPool;
+use crate::shred::{Shred, Shredder};
 use solana_runtime::bank::Bank;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signable};
+use solana_sdk::signature::Keypair;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -38,7 +34,7 @@ impl ReceiveResults {
     }
 }
 
-pub(super) fn recv_slot_blobs(receiver: &Receiver<WorkingBankEntries>) -> Result<ReceiveResults> {
+pub(super) fn recv_slot_shreds(receiver: &Receiver<WorkingBankEntries>) -> Result<ReceiveResults> {
     let timer = Duration::new(1, 0);
     let (mut bank, entries) = receiver.recv_timeout(timer)?;
     let recv_start = Instant::now();
@@ -74,83 +70,52 @@ pub(super) fn recv_slot_blobs(receiver: &Receiver<WorkingBankEntries>) -> Result
     Ok(receive_results)
 }
 
-pub(super) fn entries_to_blobs(
+pub(super) fn entries_to_shreds(
     ventries: Vec<Vec<(Entry, u64)>>,
-    thread_pool: &ThreadPool,
-    latest_blob_index: u64,
+    slot: u64,
     last_tick: u64,
-    bank: &Bank,
-    keypair: &Keypair,
-    coding_generator: &mut CodingGenerator,
-) -> (Vec<SharedBlob>, Vec<SharedBlob>) {
-    let blobs = generate_data_blobs(
-        ventries,
-        thread_pool,
-        latest_blob_index,
-        last_tick,
-        &bank,
-        &keypair,
-    );
+    bank_max_tick: u64,
+    keypair: &Arc<Keypair>,
+    mut latest_shred_index: u64,
+    parent_slot: u64,
+) -> (Vec<Shred>, Vec<Vec<u8>>, u64) {
+    let mut all_shred_bufs = vec![];
+    let mut all_shreds = vec![];
+    let num_ventries = ventries.len();
+    ventries
+        .into_iter()
+        .enumerate()
+        .for_each(|(i, entries_tuple)| {
+            let (entries, _): (Vec<_>, Vec<_>) = entries_tuple.into_iter().unzip();
+            //entries
+            let mut shredder = Shredder::new(
+                slot,
+                Some(parent_slot),
+                1.0,
+                keypair,
+                latest_shred_index as u32,
+            )
+            .expect("Expected to create a new shredder");
 
-    let coding = generate_coding_blobs(&blobs, &thread_pool, coding_generator, &keypair);
+            bincode::serialize_into(&mut shredder, &entries)
+                .expect("Expect to write all entries to shreds");
 
-    (blobs, coding)
-}
+            if i == (num_ventries - 1) && last_tick == bank_max_tick {
+                shredder.finalize_slot();
+            } else {
+                shredder.finalize_fec_block();
+            }
 
-pub(super) fn generate_data_blobs(
-    ventries: Vec<Vec<(Entry, u64)>>,
-    thread_pool: &ThreadPool,
-    latest_blob_index: u64,
-    last_tick: u64,
-    bank: &Bank,
-    keypair: &Keypair,
-) -> Vec<SharedBlob> {
-    let blobs: Vec<SharedBlob> = thread_pool.install(|| {
-        ventries
-            .into_par_iter()
-            .map(|p| {
-                let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
-                entries.to_shared_blobs()
-            })
-            .flatten()
-            .collect()
-    });
+            let mut shreds: Vec<Shred> = shredder
+                .shreds
+                .iter()
+                .map(|s| bincode::deserialize(s).unwrap())
+                .collect();
 
-    packet::index_blobs(
-        &blobs,
-        &keypair.pubkey(),
-        latest_blob_index,
-        bank.slot(),
-        bank.parent().map_or(0, |parent| parent.slot()),
-    );
-
-    if last_tick == bank.max_tick_height() {
-        blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
-    }
-
-    // Make sure not to modify the blob header or data after signing it here
-    thread_pool.install(|| {
-        blobs.par_iter().for_each(|b| {
-            b.write().unwrap().sign(keypair);
-        })
-    });
-
-    blobs
-}
-
-pub(super) fn generate_coding_blobs(
-    blobs: &[SharedBlob],
-    thread_pool: &ThreadPool,
-    coding_generator: &mut CodingGenerator,
-    keypair: &Keypair,
-) -> Vec<SharedBlob> {
-    let coding = coding_generator.next(&blobs);
-
-    thread_pool.install(|| {
-        coding.par_iter().for_each(|c| {
-            c.write().unwrap().sign(keypair);
-        })
-    });
-
-    coding
+            trace!("Inserting {:?} shreds in blocktree", shreds.len());
+            latest_shred_index = u64::from(shredder.index);
+            all_shreds.append(&mut shreds);
+            all_shred_bufs.append(&mut shredder.shreds);
+        });
+    (all_shreds, all_shred_bufs, latest_shred_index)
 }

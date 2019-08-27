@@ -1,17 +1,14 @@
 //! A stage to broadcast data from a leader node to validators
-use self::broadcast_bad_blob_sizes::BroadcastBadBlobSizes;
 use self::broadcast_fake_blobs_run::BroadcastFakeBlobsRun;
 use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun;
 use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
-use crate::erasure::{CodingGenerator, ErasureConfig};
+use crate::erasure::ErasureConfig;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::shred::Shredder;
 use crate::staking_utils;
-use rayon::ThreadPool;
 use solana_metrics::{datapoint, inc_new_counter_error, inc_new_counter_info};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,7 +17,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
-mod broadcast_bad_blob_sizes;
 mod broadcast_fake_blobs_run;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
@@ -38,7 +34,6 @@ pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
     BroadcastFakeBlobs,
-    BroadcastBadBlobSizes,
 }
 
 impl BroadcastStageType {
@@ -81,16 +76,6 @@ impl BroadcastStageType {
                 BroadcastFakeBlobsRun::new(0),
                 erasure_config,
             ),
-
-            BroadcastStageType::BroadcastBadBlobSizes => BroadcastStage::new(
-                sock,
-                cluster_info,
-                receiver,
-                exit_sender,
-                blocktree,
-                BroadcastBadBlobSizes::new(),
-                erasure_config,
-            ),
         }
     }
 }
@@ -98,17 +83,11 @@ impl BroadcastStageType {
 trait BroadcastRun {
     fn run(
         &mut self,
-        broadcast: &mut Broadcast,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()>;
-}
-
-struct Broadcast {
-    coding_generator: CodingGenerator,
-    thread_pool: ThreadPool,
 }
 
 // Implement a destructor for the BroadcastStage thread to signal it exited
@@ -141,22 +120,9 @@ impl BroadcastStage {
         receiver: &Receiver<WorkingBankEntries>,
         blocktree: &Arc<Blocktree>,
         mut broadcast_stage_run: impl BroadcastRun,
-        erasure_config: &ErasureConfig,
     ) -> BroadcastStageReturnType {
-        let coding_generator = CodingGenerator::new_from_config(erasure_config);
-
-        let mut broadcast = Broadcast {
-            coding_generator,
-            thread_pool: rayon::ThreadPoolBuilder::new()
-                .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
-                .build()
-                .unwrap(),
-        };
-
         loop {
-            if let Err(e) =
-                broadcast_stage_run.run(&mut broadcast, &cluster_info, receiver, sock, blocktree)
-            {
+            if let Err(e) = broadcast_stage_run.run(&cluster_info, receiver, sock, blocktree) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastStageReturnType::ChannelDisconnected;
@@ -195,11 +161,10 @@ impl BroadcastStage {
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static,
-        erasure_config: &ErasureConfig,
+        _erasure_config: &ErasureConfig,
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
-        let erasure_config = *erasure_config;
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -210,7 +175,6 @@ impl BroadcastStage {
                     &receiver,
                     &blocktree,
                     broadcast_stage_run,
-                    &erasure_config,
                 )
             })
             .unwrap();

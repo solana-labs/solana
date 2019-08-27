@@ -343,7 +343,7 @@ impl Write for Shredder {
             .unwrap();
 
         let written = self.active_offset;
-        let (slice_len, left_capacity) = match current_shred.borrow_mut() {
+        let (slice_len, capacity) = match current_shred.borrow_mut() {
             Shred::FirstInSlot(s) => s.write_at(written, buf),
             Shred::FirstInFECSet(s)
             | Shred::Data(s)
@@ -352,7 +352,7 @@ impl Write for Shredder {
             Shred::Coding(s) => s.write_at(written, buf),
         };
 
-        let active_shred = if buf.len() > slice_len || left_capacity == 0 {
+        let active_shred = if buf.len() > slice_len || capacity == 0 {
             self.finalize_data_shred(current_shred);
             // Continue generating more data shreds.
             // If the caller decides to finalize the FEC block or Slot, the data shred will

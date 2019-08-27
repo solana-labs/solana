@@ -315,7 +315,7 @@ impl ClusterInfoRepairListener {
                         // sending the blobs in this slot for repair, we expect these slots
                         // to be full.
                         if let Some(blob_data) = blocktree
-                            .get_data_shred_bytes(slot, blob_index as u64)
+                            .get_data_shred(slot, blob_index as u64)
                             .expect("Failed to read data blob from blocktree")
                         {
                             socket.send_to(&blob_data[..], repairee_tvu)?;
@@ -323,7 +323,7 @@ impl ClusterInfoRepairListener {
                         }
 
                         if let Some(coding_bytes) = blocktree
-                            .get_coding_blob_bytes(slot, blob_index as u64)
+                            .get_coding_shred(slot, blob_index as u64)
                             .expect("Failed to read coding blob from blocktree")
                         {
                             socket.send_to(&coding_bytes[..], repairee_tvu)?;

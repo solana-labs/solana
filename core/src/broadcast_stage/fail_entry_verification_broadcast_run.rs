@@ -12,14 +12,13 @@ impl FailEntryVerificationBroadcastRun {
 impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
-        broadcast: &mut Broadcast,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let mut receive_results = broadcast_utils::recv_slot_blobs(receiver)?;
+        let mut receive_results = broadcast_utils::recv_slot_shreds(receiver)?;
         let bank = receive_results.bank.clone();
         let last_tick = receive_results.last_tick;
 
@@ -42,27 +41,29 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        let (data_blobs, coding_blobs) = broadcast_utils::entries_to_blobs(
+        let (shreds, shred_bufs, _) = broadcast_utils::entries_to_shreds(
             receive_results.ventries,
-            &broadcast.thread_pool,
-            latest_blob_index,
+            bank.slot(),
             last_tick,
-            &bank,
-            &keypair,
-            &mut broadcast.coding_generator,
+            bank.max_tick_height(),
+            keypair,
+            latest_blob_index,
+            bank.parent().unwrap().slot(),
         );
 
-        blocktree.write_shared_blobs(data_blobs.iter())?;
-        blocktree.put_shared_coding_blobs(coding_blobs.iter())?;
+        let seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
+
+        blocktree.insert_shreds(shreds)?;
 
         // 3) Start broadcast step
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
         // Broadcast data + erasures
-        cluster_info.read().unwrap().broadcast(
+        cluster_info.read().unwrap().broadcast_shreds(
             sock,
-            data_blobs.iter().chain(coding_blobs.iter()),
+            &shred_bufs,
+            &seeds,
             stakes.as_ref(),
         )?;
 
