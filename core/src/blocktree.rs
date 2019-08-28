@@ -36,6 +36,7 @@ use std::sync::{Arc, RwLock};
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
 use solana_sdk::timing::Slot;
+use std::ops::Range;
 
 mod db;
 mod meta;
@@ -662,6 +663,47 @@ impl Blocktree {
 
     pub fn get_data_shred(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
         self.data_shred_cf.get_bytes((slot, index))
+    }
+
+    pub fn get_data_shreds(
+        &self,
+        slot: u64,
+        index_range: Range<u64>,
+        buffer: &mut [u8],
+    ) -> Result<(u64, usize)> {
+        let meta_cf = self.db.column::<cf::SlotMeta>();
+        let mut buffer_offset = 0;
+        let mut last_index = 0;
+        if let Some(meta) = meta_cf.get(slot)? {
+            if !meta.is_full() {
+                warn!("The slot is not yet full. Will not return any shreds");
+                return Ok((last_index, buffer_offset));
+            }
+            for index in index_range {
+                if index < meta.consumed {
+                    if let Some(shred_data) = self.get_data_shred(slot, index)? {
+                        let shred_len = shred_data.len();
+                        if buffer.len().saturating_sub(buffer_offset) > shred_len {
+                            buffer[buffer_offset..buffer_offset + shred_len]
+                                .copy_from_slice(&shred_data[..shred_len]);
+                            buffer_offset += shred_len;
+                            last_index = index;
+                            // All shreds are of the same length.
+                            // Let's check if we have scope to accomodate another shred
+                            // If not, let's break right away, as it'll save on 1 DB read
+                            if buffer.len().saturating_sub(buffer_offset) > shred_len {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        Ok((last_index, buffer_offset))
     }
 
     /// Use this function to write data blobs to blocktree

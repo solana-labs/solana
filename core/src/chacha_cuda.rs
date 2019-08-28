@@ -38,6 +38,8 @@ pub fn chacha_cbc_encrypt_file_many_keys(
     let mut sha_states = vec![0; num_keys * size_of::<Hash>()];
     let mut int_sha_states = vec![0; num_keys * 112];
     let keys: Vec<u8> = vec![0; num_keys * CHACHA_KEY_SIZE]; // keys not used ATM, uniqueness comes from IV
+    let mut current_slot = segment * slots_per_segment;
+    let mut start_index = 0;
     let mut entry = segment;
     let mut total_entries = 0;
     let mut total_entry_len = 0;
@@ -46,41 +48,47 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match blocktree.read_blobs_bytes(entry, slots_per_segment - total_entries, &mut buffer, 0) {
-            Ok((num_entries, entry_len)) => {
+        match blocktree.get_data_shreds(current_slot, start_index..std::u64::MAX, &mut buffer) {
+            Ok((last_index, mut size)) => {
                 debug!(
-                    "chacha_cuda: encrypting segment: {} num_entries: {} entry_len: {}",
-                    segment, num_entries, entry_len
+                    "chacha_cuda: encrypting segment: {} num_shreds: {} data_len: {}",
+                    segment,
+                    last_index.saturating_sub(start_index),
+                    size
                 );
-                if num_entries == 0 {
-                    break;
+
+                if size == 0 {
+                    if current_slot.saturating_sub(start_slot) < slots_per_segment {
+                        current_slot += 1;
+                        start_index = 0;
+                        continue;
+                    } else {
+                        break;
+                    }
                 }
-                let entry_len_usz = entry_len as usize;
+
+                if size < BUFFER_SIZE {
+                    // round to the nearest key_size boundary
+                    size = (size + CHACHA_KEY_SIZE - 1) & !(CHACHA_KEY_SIZE - 1);
+                }
+
                 unsafe {
                     chacha_cbc_encrypt_many_sample(
-                        buffer[..entry_len_usz].as_ptr(),
+                        buffer[..size].as_ptr(),
                         int_sha_states.as_mut_ptr(),
-                        entry_len_usz,
+                        size,
                         keys.as_ptr(),
                         ivecs.as_mut_ptr(),
                         num_keys as u32,
                         samples.as_ptr(),
                         samples.len() as u32,
-                        total_entry_len,
+                        total_size,
                         &mut time,
                     );
                 }
 
-                total_entry_len += entry_len;
-                total_entries += num_entries;
-                entry += num_entries;
-                debug!(
-                    "total entries: {} entry: {} segment: {} entries_per_segment: {}",
-                    total_entries, entry, segment, slots_per_segment
-                );
-                if (entry - segment) >= slots_per_segment {
-                    break;
-                }
+                total_size += size;
+                start_index = last_index + 1;
             }
             Err(e) => {
                 info!("Error encrypting file: {:?}", e);
