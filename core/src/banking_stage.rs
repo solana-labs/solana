@@ -489,7 +489,7 @@ impl BankingStage {
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
         let (mut loaded_accounts, results, mut retryable_txs, tx_count, signature_count) =
-            bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
+            bank.load_and_execute_transactions(txs, None, lock_results, MAX_PROCESSING_AGE);
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();
@@ -510,6 +510,7 @@ impl BankingStage {
         if num_to_commit != 0 {
             bank.commit_transactions(
                 txs,
+                None,
                 &mut loaded_accounts,
                 &results,
                 tx_count,
@@ -541,7 +542,7 @@ impl BankingStage {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let lock_results = bank.lock_accounts(txs);
+        let lock_results = bank.lock_accounts(txs, None);
         lock_time.stop();
 
         let (result, mut retryable_txs) =
@@ -696,6 +697,7 @@ impl BankingStage {
         // Drop the transaction if it will expire by the time the next node receives and processes it
         let result = bank.check_transactions(
             transactions,
+            None,
             &filter,
             (MAX_PROCESSING_AGE)
                 .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY)

@@ -23,6 +23,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use crate::transaction_utils::OrderedIterator;
+
 #[derive(Default, Debug)]
 struct CreditOnlyLock {
     credits: AtomicU64,
@@ -210,6 +212,7 @@ impl Accounts {
         &self,
         ancestors: &HashMap<Fork, usize>,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         lock_results: Vec<Result<()>>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
@@ -226,7 +229,7 @@ impl Accounts {
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
-        txs.iter()
+        OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, Ok(())) => {
@@ -477,10 +480,13 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+    pub fn lock_accounts(
+        &self,
+        txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
+    ) -> Vec<Result<()>> {
         let mut error_counters = ErrorCounters::default();
-        let rv = txs
-            .iter()
+        let rv = OrderedIterator::new(txs, txs_iteration_order)
             .map(|tx| {
                 let message = &tx.message();
                 Self::lock_account(
@@ -521,6 +527,7 @@ impl Accounts {
         &self,
         fork: Fork,
         txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
         res: &[Result<()>],
         loaded: &mut [Result<(
             TransactionAccounts,
@@ -529,7 +536,8 @@ impl Accounts {
             TransactionRents,
         )>],
     ) {
-        let accounts_to_store = self.collect_accounts_to_store(txs, res, loaded);
+        let accounts_to_store =
+            self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded);
         self.accounts_db.store(fork, &accounts_to_store);
     }
 
@@ -601,6 +609,7 @@ impl Accounts {
     fn collect_accounts_to_store<'a>(
         &self,
         txs: &'a [Transaction],
+        txs_iteration_order: Option<&'a [usize]>,
         res: &'a [Result<()>],
         loaded: &'a mut [Result<(
             TransactionAccounts,
@@ -610,12 +619,16 @@ impl Accounts {
         )>],
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::new();
-        for (i, raccs) in loaded.iter_mut().enumerate() {
+        for (i, (raccs, tx)) in loaded
+            .iter_mut()
+            .zip(OrderedIterator::new(txs, txs_iteration_order))
+            .enumerate()
+        {
             if res[i].is_err() || raccs.is_err() {
                 continue;
             }
 
-            let message = &txs[i].message();
+            let message = &tx.message();
             let acc = raccs.as_mut().unwrap();
             for (((i, key), account), credit) in message
                 .account_keys
@@ -700,6 +713,7 @@ mod tests {
         let res = accounts.load_accounts(
             &ancestors,
             &[tx],
+            None,
             vec![Ok(())],
             &hash_queue,
             error_counters,
@@ -1276,7 +1290,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts(&[tx.clone()]);
+        let results0 = accounts.lock_accounts(&[tx.clone()], None);
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -1315,7 +1329,7 @@ mod tests {
         );
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-        let results1 = accounts.lock_accounts(&txs);
+        let results1 = accounts.lock_accounts(&txs, None);
 
         assert!(results1[0].is_ok()); // Credit-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Credit-only account (keypair1) cannot also be locked as credit-debit
@@ -1347,7 +1361,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair1], message, Hash::default());
-        let results2 = accounts.lock_accounts(&[tx]);
+        let results2 = accounts.lock_accounts(&[tx], None);
 
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as credit-debit
 
@@ -1409,7 +1423,7 @@ mod tests {
             let exit_clone = exit_clone.clone();
             loop {
                 let txs = vec![credit_debit_tx.clone()];
-                let results = accounts_clone.clone().lock_accounts(&txs);
+                let results = accounts_clone.clone().lock_accounts(&txs, None);
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
@@ -1424,7 +1438,7 @@ mod tests {
         let counter_clone = counter.clone();
         for _ in 0..5 {
             let txs = vec![credit_only_tx.clone()];
-            let results = accounts_arc.clone().lock_accounts(&txs);
+            let results = accounts_arc.clone().lock_accounts(&txs, None);
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));
@@ -1577,7 +1591,8 @@ mod tests {
                 },
             );
         }
-        let collected_accounts = accounts.collect_accounts_to_store(&txs, &loaders, &mut loaded);
+        let collected_accounts =
+            accounts.collect_accounts_to_store(&txs, None, &loaders, &mut loaded);
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()

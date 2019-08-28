@@ -18,6 +18,7 @@ pub mod stakes;
 pub mod status_cache;
 pub mod storage_utils;
 mod system_instruction_processor;
+pub mod transaction_utils;
 
 #[macro_use]
 extern crate solana_metrics;
