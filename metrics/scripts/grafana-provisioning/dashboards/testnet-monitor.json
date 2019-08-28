@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 886,
-  "iteration": 1566928212712,
+  "id": 890,
+  "iteration": 1566963171536,
   "links": [
     {
       "asDropdown": true,
@@ -1776,7 +1776,7 @@
       }
     },
     {
-      "collapsed": true,
+      "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1784,359 +1784,358 @@
         "y": 14
       },
       "id": 15,
-      "panels": [
-        {
-          "aliasColors": {},
-          "bars": true,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$datasource",
-          "fill": 1,
-          "gridPos": {
-            "h": 8,
-            "w": 14,
-            "x": 0,
-            "y": 15
-          },
-          "id": 16,
-          "legend": {
-            "alignAsTable": false,
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": false,
-            "total": false,
-            "values": false
-          },
-          "lines": false,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "percentage": false,
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "groupBy": [
-                {
-                  "params": [
-                    "$__interval"
-                  ],
-                  "type": "time"
-                },
-                {
-                  "params": [
-                    "null"
-                  ],
-                  "type": "fill"
-                }
-              ],
-              "measurement": "cluster_info-vote-count",
-              "orderByTime": "ASC",
-              "policy": "autogen",
-              "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(1s) FILL(0)\n",
-              "rawQuery": true,
-              "refId": "A",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "count"
-                    ],
-                    "type": "field"
-                  },
-                  {
-                    "params": [],
-                    "type": "sum"
-                  }
-                ]
-              ],
-              "tags": []
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Validator Confirmation Time ($hostid)",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "decimals": 1,
-              "format": "ms",
-              "label": "",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$datasource",
-          "fill": 1,
-          "gridPos": {
-            "h": 4,
-            "w": 10,
-            "x": 14,
-            "y": 15
-          },
-          "id": 17,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": false,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "percentage": false,
-          "pointradius": 5,
-          "points": true,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "groupBy": [
-                {
-                  "params": [
-                    "$__interval"
-                  ],
-                  "type": "time"
-                },
-                {
-                  "params": [
-                    "null"
-                  ],
-                  "type": "fill"
-                }
-              ],
-              "measurement": "cluster_info-vote-count",
-              "orderByTime": "ASC",
-              "policy": "autogen",
-              "query": "SELECT \"request_amount\" FROM \"$testnet\".\"autogen\".\"drone-airdrop\" WHERE $timeFilter fill(null)\n\n\n\n",
-              "rawQuery": true,
-              "refId": "A",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "count"
-                    ],
-                    "type": "field"
-                  },
-                  {
-                    "params": [],
-                    "type": "sum"
-                  }
-                ]
-              ],
-              "tags": []
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Airdrops",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": true,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$datasource",
-          "fill": 1,
-          "gridPos": {
-            "h": 4,
-            "w": 10,
-            "x": 14,
-            "y": 19
-          },
-          "id": 18,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": false,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "percentage": false,
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "groupBy": [
-                {
-                  "params": [
-                    "$__interval"
-                  ],
-                  "type": "time"
-                },
-                {
-                  "params": [
-                    "null"
-                  ],
-                  "type": "fill"
-                }
-              ],
-              "measurement": "cluster_info-vote-count",
-              "orderByTime": "ASC",
-              "policy": "autogen",
-              "query": "SELECT mean(\"duration_ms\") / 1000 AS \".\"  FROM  \"$testnet\".\"autogen\".\"thinclient\" WHERE $timeFilter GROUP BY time($__interval), \"op\" \n\n\n\n\n\n",
-              "rawQuery": true,
-              "refId": "A",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "count"
-                    ],
-                    "type": "field"
-                  },
-                  {
-                    "params": [],
-                    "type": "sum"
-                  }
-                ]
-              ],
-              "tags": []
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Client Operation Mean Duration",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": true,
-            "alignLevel": null
-          }
-        }
-      ],
+      "panels": [],
       "title": "Summary",
       "type": "row"
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 0,
+        "y": 15
+      },
+      "id": 64,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Validator Confirmation Time ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": 1,
+          "format": "ms",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 14,
+        "y": 15
+      },
+      "id": 65,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT \"request_amount\" FROM \"$testnet\".\"autogen\".\"drone-airdrop\" WHERE $timeFilter fill(null)\n\n\n\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Airdrops",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 14,
+        "y": 19
+      },
+      "id": 66,
+      "legend": {
+        "alignAsTable": true,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"duration_ms\") / 1000 AS \".\"  FROM  \"$testnet\".\"autogen\".\"thinclient\" WHERE $timeFilter GROUP BY time($__interval), \"op\" \n\n\n\n\n\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Client Operation Mean Duration",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": "0",
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": true,
+        "alignLevel": null
+      }
     },
     {
       "collapsed": false,
@@ -2144,9 +2143,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 23
       },
-      "id": 19,
+      "id": 16,
       "panels": [],
       "title": "Stability",
       "type": "row"
@@ -2173,9 +2172,9 @@
         "h": 2,
         "w": 5,
         "x": 0,
-        "y": 16
+        "y": 24
       },
-      "id": 20,
+      "id": 17,
       "interval": null,
       "links": [
         {
@@ -2295,9 +2294,9 @@
         "h": 2,
         "w": 4,
         "x": 5,
-        "y": 16
+        "y": 24
       },
-      "id": 21,
+      "id": 18,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2406,9 +2405,9 @@
         "h": 2,
         "w": 3,
         "x": 9,
-        "y": 16
+        "y": 24
       },
-      "id": 22,
+      "id": 19,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2517,9 +2516,9 @@
         "h": 2,
         "w": 3,
         "x": 12,
-        "y": 16
+        "y": 24
       },
-      "id": 23,
+      "id": 20,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2628,9 +2627,9 @@
         "h": 2,
         "w": 3,
         "x": 15,
-        "y": 16
+        "y": 24
       },
-      "id": 24,
+      "id": 21,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2728,9 +2727,9 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 16
+        "y": 24
       },
-      "id": 25,
+      "id": 22,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -2846,9 +2845,9 @@
         "h": 3,
         "w": 8,
         "x": 0,
-        "y": 18
+        "y": 26
       },
-      "id": 26,
+      "id": 23,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -3002,9 +3001,9 @@
         "h": 6,
         "w": 10,
         "x": 8,
-        "y": 18
+        "y": 26
       },
-      "id": 27,
+      "id": 24,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -3159,9 +3158,9 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 20
+        "y": 28
       },
-      "id": 28,
+      "id": 25,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -3277,9 +3276,9 @@
         "h": 3,
         "w": 8,
         "x": 0,
-        "y": 21
+        "y": 29
       },
-      "id": 29,
+      "id": 26,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -3430,9 +3429,9 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 32
       },
-      "id": 30,
+      "id": 27,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3515,9 +3514,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 30
+        "y": 38
       },
-      "id": 31,
+      "id": 28,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3600,9 +3599,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 30
+        "y": 38
       },
-      "id": 32,
+      "id": 29,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3688,9 +3687,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 30
+        "y": 38
       },
-      "id": 33,
+      "id": 30,
       "legend": {
         "avg": false,
         "current": false,
@@ -4056,9 +4055,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 44
       },
-      "id": 34,
+      "id": 31,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -4074,9 +4073,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 45
       },
-      "id": 35,
+      "id": 32,
       "legend": {
         "avg": false,
         "current": false,
@@ -4189,9 +4188,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 37
+        "y": 45
       },
-      "id": 36,
+      "id": 33,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4375,9 +4374,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 50
       },
-      "id": 37,
+      "id": 34,
       "panels": [],
       "title": "Bench Exchange",
       "type": "row"
@@ -4393,9 +4392,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 43
+        "y": 51
       },
-      "id": 38,
+      "id": 35,
       "legend": {
         "avg": false,
         "current": false,
@@ -4544,9 +4543,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 43
+        "y": 51
       },
-      "id": 39,
+      "id": 36,
       "legend": {
         "avg": false,
         "current": false,
@@ -4727,9 +4726,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 56
       },
-      "id": 40,
+      "id": 37,
       "panels": [],
       "title": "Fullnode Streamer",
       "type": "row"
@@ -4745,9 +4744,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 49
+        "y": 57
       },
-      "id": 41,
+      "id": 38,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5159,9 +5158,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 49
+        "y": 57
       },
-      "id": 42,
+      "id": 39,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5505,9 +5504,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 49
+        "y": 57
       },
-      "id": 43,
+      "id": 40,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5714,9 +5713,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 55
+        "y": 63
       },
-      "id": 44,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6032,9 +6031,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 55
+        "y": 63
       },
-      "id": 45,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6221,9 +6220,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 55
+        "y": 63
       },
-      "id": 46,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6415,9 +6414,9 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 61
+        "y": 69
       },
-      "id": 47,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6571,9 +6570,9 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 61
+        "y": 69
       },
-      "id": 48,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6690,9 +6689,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 61
+        "y": 69
       },
-      "id": 49,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6842,9 +6841,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 66
+        "y": 74
       },
-      "id": 50,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6995,9 +6994,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 66
+        "y": 74
       },
-      "id": 51,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7145,9 +7144,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 71
+        "y": 79
       },
-      "id": 52,
+      "id": 49,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -7168,9 +7167,9 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 72
+        "y": 80
       },
-      "id": 53,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7328,9 +7327,9 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 72
+        "y": 80
       },
-      "id": 54,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7450,7 +7449,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "none",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -7488,9 +7487,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 72
+        "y": 80
       },
-      "id": 55,
+      "id": 52,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7551,6 +7550,80 @@
             ]
           ],
           "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT max(\"slot\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT min(\"slot\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
         }
       ],
       "thresholds": [],
@@ -7572,8 +7645,8 @@
       },
       "yaxes": [
         {
-          "format": "short",
-          "label": null,
+          "format": "none",
+          "label": "slot",
           "logBase": 1,
           "max": null,
           "min": null,
@@ -7599,9 +7672,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 77
+        "y": 85
       },
-      "id": 56,
+      "id": 53,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -7618,9 +7691,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 78
+        "y": 86
       },
-      "id": 57,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7851,9 +7924,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 78
+        "y": 86
       },
-      "id": 58,
+      "id": 55,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8004,9 +8077,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 91
       },
-      "id": 59,
+      "id": 56,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -8022,9 +8095,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 84
+        "y": 92
       },
-      "id": 60,
+      "id": 57,
       "legend": {
         "avg": false,
         "current": false,
@@ -8143,9 +8216,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 84
+        "y": 92
       },
-      "id": 61,
+      "id": 58,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8265,7 +8338,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "none",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -8292,16 +8365,16 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 97
       },
-      "id": 63,
+      "id": 59,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
     },
     {
       "aliasColors": {},
-      "bars": true,
+      "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
@@ -8310,9 +8383,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 90
+        "y": 98
       },
-      "id": 64,
+      "id": 60,
       "legend": {
         "avg": false,
         "current": false,
@@ -8327,7 +8400,7 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-      "pointradius": 5,
+      "pointradius": 3,
       "points": true,
       "renderer": "flot",
       "seriesOverrides": [],
@@ -8353,7 +8426,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MEAN(\"slot\")  as \"Mean\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)\n\n\n",
+          "query": "SELECT MEAN(\"slot\")  FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)\n\n\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -8388,7 +8461,7 @@
               "type": "fill"
             }
           ],
-          "hide": false,
+          "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT MAX(\"slot\")  as \"Max\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)",
@@ -8426,7 +8499,7 @@
               "type": "fill"
             }
           ],
-          "hide": false,
+          "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT MIN(\"slot\")  as \"Min\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)",
@@ -8493,7 +8566,7 @@
     },
     {
       "aliasColors": {},
-      "bars": true,
+      "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
@@ -8502,9 +8575,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 90
+        "y": 98
       },
-      "id": 65,
+      "id": 61,
       "legend": {
         "avg": false,
         "current": false,
@@ -8542,7 +8615,7 @@
               "type": "fill"
             }
           ],
-          "hide": false,
+          "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT MIN(\"size\")  as \"Min\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)",
@@ -8583,7 +8656,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MAX(\"size\")  as \"Max\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT MAX(\"size\")  FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -8621,7 +8694,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MEAN(\"size\")  as \"Mean\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)\n\n\n",
+          "query": "SELECT MEAN(\"size\")  FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)\n\n\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -8685,7 +8758,7 @@
     },
     {
       "aliasColors": {},
-      "bars": true,
+      "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
@@ -8694,9 +8767,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 90
+        "y": 98
       },
-      "id": 68,
+      "id": 62,
       "legend": {
         "avg": false,
         "current": false,
@@ -8711,10 +8784,12 @@
       "links": [],
       "nullPointMode": "null",
       "percentage": false,
-      "pointradius": 5,
+      "pointradius": 4,
       "points": true,
       "renderer": "flot",
-      "seriesOverrides": [],
+      "seriesOverrides": [
+        {}
+      ],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
@@ -8734,7 +8809,7 @@
               "type": "fill"
             }
           ],
-          "hide": false,
+          "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT MIN(\"duration_ms\")  as \"Min\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)",
@@ -8775,7 +8850,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MAX(\"duration_ms\")  as \"Max\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT MAX(\"duration_ms\")  FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -8813,7 +8888,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MEAN(\"duration_ms\")  as \"Mean\" FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)\n\n\n",
+          "query": "SELECT MEAN(\"duration_ms\")  FROM \"$testnet\".\"autogen\".\"snapshot-package\" WHERE $timeFilter GROUP BY time($__interval)\n\n\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -8854,7 +8929,7 @@
       "yaxes": [
         {
           "decimals": null,
-          "format": "dtdurationms",
+          "format": "ms",
           "label": "",
           "logBase": 1,
           "max": null,
