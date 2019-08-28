@@ -66,6 +66,30 @@ type VoteAccountStatus = {
   delinquent: Array<VoteAccountInfo>,
 };
 
+/**
+ * Network Inflation parameters
+ *
+ * @typedef {Object} Inflation TODO - link to book terminology?
+ * @property {number} foundation TODO - link to book terminology?
+ * @property {number} foundation_term TODO - link to book terminology?
+ * @property {number} grant TODO - link to book terminology?
+ * @property {number} grant_term TODO - link to book terminology?
+ * @property {number} initial TODO - link to book terminology?
+ * @property {number} storage TODO - link to book terminology?
+ * @property {number} taper TODO - link to book terminology?
+ * @property {number} terminal TODO - link to book terminology?
+ */
+const GetInflationResult = struct({
+  foundation: 'number',
+  foundation_term: 'number',
+  grant: 'number',
+  grant_term: 'number',
+  initial: 'number',
+  storage: 'number',
+  taper: 'number',
+  terminal: 'number',
+});
+
 function createRpcRequest(url): RpcRequest {
   const server = jayson(async (request, callback) => {
     const options = {
@@ -97,6 +121,16 @@ function createRpcRequest(url): RpcRequest {
     });
   };
 }
+
+/**
+ * Expected JSON RPC response for the "getInflation" message
+ */
+const GetInflationRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: GetInflationResult,
+});
 
 /**
  * Expected JSON RPC response for the "getBalance" message
@@ -636,6 +670,19 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     return Number(res.result);
+  }
+
+  /**
+   * Fetch the cluster Inflation parameters (TODO - book link/terminology?)
+   */
+  async getInflation(): Promise<GetInflationRpcResult> {
+    const unsafeRes = await this._rpcRequest('getInflation', []);
+    const res = GetInflationRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return GetInflationResult(res.result);
   }
 
   /**

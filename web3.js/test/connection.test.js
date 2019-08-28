@@ -128,6 +128,36 @@ test('get balance', async () => {
   expect(balance).toBeGreaterThanOrEqual(0);
 });
 
+test('get inflation', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getInflation',
+      params: [],
+    },
+    {
+      error: null,
+      result: {
+        foundation: 0.05,
+        foundation_term: 7.0,
+        grant: 0.05,
+        grant_term: 7.0,
+        initial: 0.15,
+        storage: 0.1,
+        taper: 0.15,
+        terminal: 0.015,
+      },
+    },
+  ]);
+
+  const inflation = await connection.getInflation();
+  expect(inflation.initial).toBeGreaterThan(0);
+  expect(inflation.storage).toBeGreaterThan(0);
+  expect(inflation.terminal).toBeGreaterThan(0);
+});
+
 test('get slot', async () => {
   const connection = new Connection(url);
 
