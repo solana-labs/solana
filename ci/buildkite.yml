@@ -3,7 +3,7 @@
 # Release tags use buildkite-release.yml instead
 steps:
   - wait
-  - command: "RUST_LOG=solana=info cargo +1.37.0 test --test local_cluster -- --nocapture --test-threads 1"
+  - command: "RUST_LOG=solana=info cargo +1.37.0 test test_fail_entry_verification_leader  --test local_cluster -- --nocapture --test-threads 1"
     name: "local_cluster"
     timeout_in_minutes: 40
     artifact_paths: "log-*.txt"
