@@ -72,8 +72,8 @@ for proofs as well as proofs themselves for verification in response to requests
 There will be multiple SPV Program instances active at any given time, at least
 one for each connected external network and potentially multiple instances per
 network. SPV program instances will be relatively consistent in their high level
-API and feature sets with some variation between currency networks (Bitcoin,
-Litecoin) and smart contract networks owing to the potential for verification of
+API and feature sets with some variation between currency platforms (Bitcoin,
+Litecoin) and smart contract platforms owing to the potential for verification of
 network state changes beyond simply transactions. In every case regardless of
 network, the SPV Program relies on an internal component called an SPV engine to
 provide stateless verification of the actual SPV proofs upon which the higher
