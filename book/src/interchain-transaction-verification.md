@@ -177,23 +177,28 @@ the Prover. Provers typically operate as Solana Blockstreamer nodes that also
 have access to a Bitcoin node, which they use for purposes of constructing proofs
 and accessing block headers.
 
-#### HeaderStore
+#### Header Store
 An account-based data structure used to maintain block headers for the purpose
-of inclusion in submitted proofs by reference to the HeaderStore account.
-HeaderStores can be maintained by independent entities, since header chain
+of inclusion in submitted proofs by reference to the header store account.
+header stores can be maintained by independent entities, since header chain
 validation is a component of the SPV program proof validation mechanism. Fees
 that are paid out by Proof Requests to Provers are split between the submitter
-of the merkle proof itself and the HeaderStore that is referenced in the
-submitted proof. Multiple potential approaches to the implementation of the
-HeaderStore system are feasible:
+of the merkle proof itself and the header store that is referenced in the
+submitted proof. Due to the current inability to grow already allocated account
+data capacity, the use case necessitates a data structure that can grow
+indefinitely without rebalancing. Sub-accounts are accounts owned by the SPV
+program without their own private keys that are used for storage by allocating
+blockheaders to their account data. Multiple potential approaches to the
+implementation of the header store system are feasible:
 
 Store Headers in program sub-accounts indexed by Public address:
+* Each sub-account holds one header and has a public key matching the blockhash
 * Requires same number of account data lookups as confirmations per verification
 * Limit on number of confirmations (15-20) via max transaction data ceiling
 * No network-wide duplication of individual headers
 
-Linked List of multiple sub-accounts:
-* Maintain sequential index of storage accounts, many headers per account
+Linked List of multiple sub-accounts storing headers:
+* Maintain sequential index of storage accounts, many headers per storage account
 * Max 2 account data lookups for >99.9% of verifications (1 for most)
-* Compact sequential data address format allows any number of confirmations
+* Compact sequential data address format allows any number of confirmations and fast lookups
 * Facilitates network-wide header duplication inefficiencies
