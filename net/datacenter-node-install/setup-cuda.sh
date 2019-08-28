@@ -12,5 +12,6 @@ set -xe
 apt update
 apt install -y gcc make dkms
 
+# https://developer.nvidia.com/cuda-toolkit-archive
 sh cuda_10.0.130_410.48_linux.run --silent --driver --toolkit
 sh cuda_10.1.168_418.67_linux.run --silent --driver --toolkit
