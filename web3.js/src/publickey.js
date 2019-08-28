@@ -19,7 +19,11 @@ export class PublicKey {
         this._bn = new BN(value.substring(2), 16);
       } else {
         // assume base 58 encoding by default
-        this._bn = new BN(bs58.decode(value));
+        const decoded = bs58.decode(value);
+        if (decoded.length != 32) {
+          throw new Error(`Invalid public key input`);
+        }
+        this._bn = new BN(decoded);
       }
     } else {
       this._bn = new BN(value);

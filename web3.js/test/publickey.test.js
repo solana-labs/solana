@@ -51,6 +51,10 @@ test('invalid', () => {
       '135693854574979916511997248057056142015550763280047535983739356259273198796800000',
     );
   }).toThrow();
+
+  expect(() => {
+    new PublicKey('12345');
+  }).toThrow();
 });
 
 test('equals', () => {
@@ -170,6 +174,14 @@ test('toBuffer', () => {
   );
   expect(key2.toBuffer()).toHaveLength(32);
   expect(key2.toBase58()).toBe('11111111111111111111111111111111');
+
+  const key3 = new PublicKey(0);
+  expect(key3.toBuffer()).toHaveLength(32);
+  expect(key3.toBase58()).toBe('11111111111111111111111111111111');
+
+  const key4 = new PublicKey('0x0');
+  expect(key4.toBuffer()).toHaveLength(32);
+  expect(key4.toBase58()).toBe('11111111111111111111111111111111');
 });
 
 test('equals (II)', () => {
