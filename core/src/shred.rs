@@ -107,6 +107,11 @@ impl Shred {
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
+        let shred = bincode::serialize(&self).unwrap();
+        self.fast_verify(&shred, pubkey)
+    }
+
+    pub fn fast_verify(&self, shred_buf: &[u8], pubkey: &Pubkey) -> bool {
         let signed_payload_offset = match self {
             Shred::FirstInSlot(_)
             | Shred::FirstInFECSet(_)
@@ -119,9 +124,8 @@ impl Shred {
             }
         } + bincode::serialized_size(&Signature::default()).unwrap()
             as usize;
-        let shred = bincode::serialize(&self).unwrap();
         self.signature()
-            .verify(pubkey.as_ref(), &shred[signed_payload_offset..])
+            .verify(pubkey.as_ref(), &shred_buf[signed_payload_offset..])
     }
 }
 

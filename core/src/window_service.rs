@@ -31,6 +31,7 @@ pub fn process_shreds(shreds: Vec<Shred>, blocktree: &Arc<Blocktree>) -> Result<
 /// blob's slot
 pub fn should_retransmit_and_persist(
     shred: &Shred,
+    shred_buf: &[u8],
     bank: Option<Arc<Bank>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     my_pubkey: &Pubkey,
@@ -44,7 +45,7 @@ pub fn should_retransmit_and_persist(
         if leader_id == *my_pubkey {
             inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
             false
-        } else if !shred.verify(&leader_id) {
+        } else if !shred.fast_verify(&shred_buf, &leader_id) {
             inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
             false
         } else {
@@ -64,7 +65,7 @@ fn recv_window<F>(
     shred_filter: F,
 ) -> Result<()>
 where
-    F: Fn(&Shred) -> bool,
+    F: Fn(&Shred, &[u8]) -> bool,
     F: Sync,
 {
     let timer = Duration::from_millis(200);
@@ -81,7 +82,7 @@ where
     for (i, packet) in packets.packets.iter_mut().enumerate() {
         if let Ok(s) = bincode::deserialize(&packet.data) {
             let shred: Shred = s;
-            if shred_filter(&shred) {
+            if shred_filter(&shred, &packet.data) {
                 packet.meta.slot = shred.slot();
                 packet.meta.seed = shred.seed();
                 shreds.push(shred);
@@ -157,7 +158,7 @@ impl WindowService {
     ) -> WindowService
     where
         F: 'static
-            + Fn(&Pubkey, &Shred, Option<Arc<Bank>>) -> bool
+            + Fn(&Pubkey, &Shred, &[u8], Option<Arc<Bank>>) -> bool
             + std::marker::Send
             + std::marker::Sync,
     {
@@ -196,10 +197,11 @@ impl WindowService {
                         &id,
                         &r,
                         &retransmit,
-                        |shred| {
+                        |shred, shred_buf| {
                             shred_filter(
                                 &id,
                                 shred,
+                                shred_buf,
                                 bank_forks
                                     .as_ref()
                                     .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
@@ -310,10 +312,20 @@ mod test {
 
         let entry = Entry::default();
         let mut shreds = local_entries_to_shred(vec![entry], &Arc::new(leader_keypair));
+        let shred_bufs: Vec<_> = shreds
+            .iter()
+            .map(|s| bincode::serialize(s).unwrap())
+            .collect();
 
         // with a Bank for slot 0, blob continues
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id),
+            should_retransmit_and_persist(
+                &shreds[0],
+                &shred_bufs[0],
+                Some(bank.clone()),
+                &cache,
+                &me_id
+            ),
             true
         );
 
@@ -328,7 +340,7 @@ mod test {
         // with a Bank and no idea who leader is, blob gets thrown out
         shreds[0].set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank), &cache, &me_id),
+            should_retransmit_and_persist(&shreds[0], &shred_bufs[0], Some(bank), &cache, &me_id),
             false
         );
 
@@ -388,7 +400,7 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             repair_strategy,
-            |_, _, _| true,
+            |_, _, _, _| true,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -477,7 +489,7 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             repair_strategy,
-            |_, _, _| true,
+            |_, _, _, _| true,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
