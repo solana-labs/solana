@@ -67,6 +67,7 @@ db_imports! {kvs, Kvs, "kvstore"}
 
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 
+pub type SlotMetaWorkingSetEntry = (Rc<RefCell<SlotMeta>>, Option<SlotMeta>);
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
 #[derive(Debug)]
@@ -498,7 +499,7 @@ impl Blocktree {
         &self,
         shred: &Shred,
         index_working_set: &mut HashMap<u64, Index>,
-        slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+        slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
     ) {
         let slot = shred.slot();
@@ -539,16 +540,15 @@ impl Blocktree {
         let index_meta = index_meta.unwrap_or_else(|| new_index_meta.as_mut().unwrap());
         // This gives the index of first coding shred in this FEC block
         // So, all coding shreds in a given FEC block will have the same set index
-        if Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root) {
-            if self
+        if Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root)
+            && self
                 .insert_coding_shred(erasure_metas, index_meta, &shred, write_batch)
                 .is_ok()
-            {
-                just_inserted_coding_shreds
-                    .entry((slot, shred_index))
-                    .or_insert_with(|| shred);
-                new_index_meta.map(|n| index_working_set.insert(slot, n));
-            }
+        {
+            just_inserted_coding_shreds
+                .entry((slot, shred_index))
+                .or_insert_with(|| shred);
+            new_index_meta.map(|n| index_working_set.insert(slot, n));
         }
     }
 
@@ -556,7 +556,7 @@ impl Blocktree {
         &self,
         shred: Shred,
         index_working_set: &mut HashMap<u64, Index>,
-        slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+        slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         just_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
     ) {
@@ -603,7 +603,7 @@ impl Blocktree {
         let (pos, num_coding) = {
             if let Shred::Coding(coding_shred) = &shred {
                 (
-                    coding_shred.header.position as u32,
+                    u32::from(coding_shred.header.position),
                     coding_shred.header.num_coding_shreds,
                 )
             } else {
@@ -616,19 +616,12 @@ impl Blocktree {
         }
 
         let set_index = shred_index - pos;
-        if num_coding == 0 {
-            false
-        } else if pos >= num_coding as u32 {
-            false
-        } else if std::u32::MAX - set_index < pos || set_index + pos != shred_index {
-            false
-        } else if coding_index.is_present(shred_index as u64) {
-            false
-        } else if slot <= *last_root.read().unwrap() {
-            false
-        } else {
-            true
-        }
+        !(num_coding == 0
+            || pos >= u32::from(num_coding)
+            || std::u32::MAX - set_index < pos
+            || set_index + pos != shred_index
+            || coding_index.is_present(u64::from(shred_index))
+            || slot <= *last_root.read().unwrap())
     }
 
     fn insert_coding_shred(
@@ -645,7 +638,7 @@ impl Blocktree {
                 (
                     coding_shred.header.num_data_shreds as usize,
                     coding_shred.header.num_coding_shreds as usize,
-                    coding_shred.header.position as u64,
+                    u64::from(coding_shred.header.position),
                 )
             } else {
                 panic!("insert_coding_shred called with non-coding shred")
@@ -690,7 +683,7 @@ impl Blocktree {
         data_index: &DataIndex,
         last_root: &RwLock<u64>,
     ) -> bool {
-        let shred_index = shred.index() as u64;
+        let shred_index = u64::from(shred.index());
         let slot = shred.slot();
         let last_in_slot = if let Shred::LastInSlot(_) = shred {
             debug!("got last in slot");
@@ -1296,29 +1289,15 @@ fn get_index_meta_entry<'a>(
 
 fn get_slot_meta_entry<'a>(
     db: &Database,
-    slot_meta_working_set: &'a mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    slot_meta_working_set: &'a mut HashMap<u64, SlotMetaWorkingSetEntry>,
     slot: u64,
     parent_slot: u64,
 ) -> (
-    Option<&'a mut (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
-    Option<(Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    Option<&'a mut SlotMetaWorkingSetEntry>,
+    Option<SlotMetaWorkingSetEntry>,
 ) {
     let meta_cf = db.column::<cf::SlotMeta>();
 
-<<<<<<< HEAD
-    // Check if we've already inserted the slot metadata for this shred's slot
-    slot_meta_working_set.entry(slot).or_insert_with(|| {
-        // Store a 2-tuple of the metadata (working copy, backup copy)
-        if let Some(mut meta) = meta_cf.get(slot).expect("Expect database get to succeed") {
-            let backup = Some(meta.clone());
-            // If parent_slot == std::u64::MAX, then this is one of the orphans inserted
-            // during the chaining process, see the function find_slot_meta_in_cached_state()
-            // for details. Slots that are orphans are missing a parent_slot, so we should
-            // fill in the parent now that we know it.
-            if is_orphan(&meta) {
-                meta.parent_slot = parent_slot;
-            }
-=======
     // Check if we've already inserted the slot metadata for this blob's slot
     slot_meta_working_set
         .get_mut(&slot)
@@ -1334,7 +1313,6 @@ fn get_slot_meta_entry<'a>(
                 if is_orphan(&meta) {
                     meta.parent_slot = parent_slot;
                 }
->>>>>>> Refactor get_slot_meta_entry
 
                 (None, Some((Rc::new(RefCell::new(meta)), backup)))
             } else {
@@ -1395,7 +1373,7 @@ fn send_signals(
 }
 
 fn commit_slot_meta_working_set(
-    slot_meta_working_set: &HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     completed_slots_senders: &[SyncSender<Vec<u64>>],
     write_batch: &mut WriteBatch,
 ) -> Result<(bool, Vec<u64>)> {
@@ -1425,7 +1403,7 @@ fn commit_slot_meta_working_set(
 // 3) Create a dummy orphan slot in the database
 fn find_slot_meta_else_create<'a>(
     db: &Database,
-    working_set: &'a HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    working_set: &'a HashMap<u64, SlotMetaWorkingSetEntry>,
     chained_slots: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot_index: u64,
 ) -> Result<Rc<RefCell<SlotMeta>>> {
@@ -1461,7 +1439,7 @@ fn find_slot_meta_in_db_else_create<'a>(
 
 // Find the slot metadata in the cache of dirty slot metadata we've previously touched
 fn find_slot_meta_in_cached_state<'a>(
-    working_set: &'a HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    working_set: &'a HashMap<u64, SlotMetaWorkingSetEntry>,
     chained_slots: &'a HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot: u64,
 ) -> Result<Option<Rc<RefCell<SlotMeta>>>> {
@@ -1494,7 +1472,7 @@ fn get_slot_consecutive_shreds<'a>(
 fn handle_chaining(
     db: &Database,
     write_batch: &mut WriteBatch,
-    working_set: &HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
 ) -> Result<()> {
     let mut new_chained_slots = HashMap::new();
     let working_set_slots: Vec<_> = working_set.iter().map(|s| *s.0).collect();
@@ -1513,7 +1491,7 @@ fn handle_chaining(
 fn handle_chaining_for_slot(
     db: &Database,
     write_batch: &mut WriteBatch,
-    working_set: &HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot: u64,
 ) -> Result<()> {
@@ -1593,7 +1571,7 @@ fn traverse_children_mut<F>(
     db: &Database,
     slot: u64,
     slot_meta: &Rc<RefCell<(SlotMeta)>>,
-    working_set: &HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+    working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot_function: F,
 ) -> Result<()>
