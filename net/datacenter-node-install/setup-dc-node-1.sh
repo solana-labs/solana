@@ -7,8 +7,6 @@ source "$HERE"/utils.sh
 
 ensure_env || exit 1
 
-exit
-
 if [[ -n "$1" ]]; then
   PUBKEY_FILE="$1"
 else
