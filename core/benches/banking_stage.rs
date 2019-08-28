@@ -285,7 +285,7 @@ fn simulate_process_entries(
             .unwrap();
     }
 
-    for i in (0..num_acounts).step_by(2) {
+    for i in (0..num_accounts).step_by(2) {
         tx_vector.push(system_transaction::transfer(
             &keypairs[i],
             &keypairs[i + 1].pubkey(),
