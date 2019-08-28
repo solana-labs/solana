@@ -474,7 +474,7 @@ impl Replicator {
             repair_socket,
             &exit,
             RepairStrategy::RepairRange(repair_slot_range),
-            |_, _, _| true,
+            |_, _, _, _| true,
         );
         info!("waiting for ledger download");
         Self::wait_for_segment_download(

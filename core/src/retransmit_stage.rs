@@ -150,8 +150,14 @@ impl RetransmitStage {
             repair_socket,
             exit,
             repair_strategy,
-            move |id, blob, working_bank| {
-                should_retransmit_and_persist(blob, working_bank, &leader_schedule_cache, id)
+            move |id, shred, shred_buf, working_bank| {
+                should_retransmit_and_persist(
+                    shred,
+                    shred_buf,
+                    working_bank,
+                    &leader_schedule_cache,
+                    id,
+                )
             },
         );
 
