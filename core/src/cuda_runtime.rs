@@ -23,7 +23,7 @@ use std::os::raw::c_int;
 const CUDA_SUCCESS: c_int = 0;
 
 pub fn pin<T>(_mem: &mut Vec<T>) {
-    #[cfg(feature = "cuda")]
+    /*#[cfg(feature = "cuda")]
     unsafe {
         let err = cuda_host_register(
             _mem.as_mut_ptr() as *mut c_void,
@@ -38,17 +38,17 @@ pub fn pin<T>(_mem: &mut Vec<T>) {
                 _mem.capacity() * size_of::<T>()
             );
         }
-    }
+    }*/
 }
 
 pub fn unpin<T>(_mem: *mut T) {
-    #[cfg(feature = "cuda")]
+    /*#[cfg(feature = "cuda")]
     unsafe {
         let err = cuda_host_unregister(_mem as *mut c_void);
         if err != CUDA_SUCCESS {
             error!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
         }
-    }
+    }*/
 }
 
 // A vector wrapper where the underlying memory can be
