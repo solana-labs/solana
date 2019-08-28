@@ -4369,12 +4369,7 @@ dependencies = [
 
 [[package]]
 name = "spin"
-version = "0.4.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "spin"
-version = "0.5.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
