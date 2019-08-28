@@ -71,7 +71,7 @@ of public marketplace for SPV proofs that allows any party to submit both reques
 for proofs as well as proofs themselves for verification in response to requests.
 There will be multiple SPV Program instances active at any given time, at least
 one for each connected external network and potentially multiple instances per
-network. Spv program instances will be relatively consistent in their high level
+network. SPV program instances will be relatively consistent in their high level
 API and feature sets with some variation between currency networks (Bitcoin,
 Litecoin) and smart contract networks owing to the potential for verification of
 network state changes beyond simply transactions. In every case regardless of
@@ -110,12 +110,12 @@ The Solana Inter-chain SPV mechanism consists of the following components and pa
 #### SPV engine
 A contract deployed on Solana which statelessly verifies SPV proofs for the caller.
 It takes as arguments for validation:
-* An spv proof in the correct format of the blockchain associated with the program
+* An SPV proof in the correct format of the blockchain associated with the program
 * Reference(s) to the relevant block headers to compare that proof against
 * The necessary parameters of the transaction to verify
 If the proof in question is successfully validated, the SPV program saves proof
 of that verification to the request account, which can be saved by the caller to
-its account data or otherwise handled as necessary. Spv programs also expose
+its account data or otherwise handled as necessary. SPV programs also expose
 utilities and structs used for representation and validation of headers,
 transactions, hashes, etc. on a chain by chain basis.
 
