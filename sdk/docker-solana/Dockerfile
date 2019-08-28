@@ -3,9 +3,8 @@ FROM debian:buster
 # JSON RPC port
 EXPOSE 8899/tcp
 
-# Install libssl
 RUN apt update && \
-    apt-get install -y libssl-dev && \
+    apt-get install -y bzip2 libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY usr/bin /usr/bin/
