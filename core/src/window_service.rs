@@ -258,7 +258,6 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use std::io::Write;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -268,11 +267,8 @@ mod test {
     fn local_entries_to_shred(entries: Vec<Entry>, keypair: &Arc<Keypair>) -> Vec<Shred> {
         let mut shredder =
             Shredder::new(0, Some(0), 0.0, keypair, 0).expect("Failed to create entry shredder");
-        let data = bincode::serialize(&entries).unwrap();
-        let mut offset = 0;
-        while offset < data.len() {
-            offset += shredder.write(&data[offset..]).unwrap();
-        }
+        bincode::serialize_into(&mut shredder, &entries)
+            .expect("Expect to write all entries to shreds");
         shredder.finalize_slot();
         shredder
             .shreds
