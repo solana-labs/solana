@@ -36,7 +36,6 @@ use std::sync::{Arc, RwLock};
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
 use solana_sdk::timing::Slot;
-use std::ops::Range;
 
 mod db;
 mod meta;
@@ -668,7 +667,7 @@ impl Blocktree {
     pub fn get_data_shreds(
         &self,
         slot: u64,
-        index_range: Range<u64>,
+        from_index: u64,
         buffer: &mut [u8],
     ) -> Result<(u64, usize)> {
         let meta_cf = self.db.column::<cf::SlotMeta>();
@@ -679,27 +678,23 @@ impl Blocktree {
                 warn!("The slot is not yet full. Will not return any shreds");
                 return Ok((last_index, buffer_offset));
             }
-            for index in index_range {
-                if index < meta.consumed {
-                    if let Some(shred_data) = self.get_data_shred(slot, index)? {
-                        let shred_len = shred_data.len();
-                        if buffer.len().saturating_sub(buffer_offset) > shred_len {
-                            buffer[buffer_offset..buffer_offset + shred_len]
-                                .copy_from_slice(&shred_data[..shred_len]);
-                            buffer_offset += shred_len;
-                            last_index = index;
-                            // All shreds are of the same length.
-                            // Let's check if we have scope to accomodate another shred
-                            // If not, let's break right away, as it'll save on 1 DB read
-                            if buffer.len().saturating_sub(buffer_offset) > shred_len {
-                                break;
-                            }
-                        } else {
+            for index in from_index..meta.consumed {
+                if let Some(shred_data) = self.get_data_shred(slot, index)? {
+                    let shred_len = shred_data.len();
+                    if buffer.len().saturating_sub(buffer_offset) >= shred_len {
+                        buffer[buffer_offset..buffer_offset + shred_len]
+                            .copy_from_slice(&shred_data[..shred_len]);
+                        buffer_offset += shred_len;
+                        last_index = index;
+                        // All shreds are of the same length.
+                        // Let's check if we have scope to accomodate another shred
+                        // If not, let's break right away, as it'll save on 1 DB read
+                        if buffer.len().saturating_sub(buffer_offset) < shred_len {
                             break;
                         }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
                 }
             }
         }
@@ -794,6 +789,7 @@ impl Blocktree {
         ticks_per_slot: u64,
         parent: Option<u64>,
         is_full_slot: bool,
+        keypair: &Arc<Keypair>,
         entries: I,
     ) -> Result<usize>
     where
@@ -816,7 +812,7 @@ impl Blocktree {
             current_slot,
             Some(parent_slot),
             0.0,
-            &Arc::new(Keypair::new()),
+            keypair,
             start_index as u32,
         )
         .expect("Failed to create entry shredder");
@@ -2650,6 +2646,7 @@ pub mod tests {
                         ticks_per_slot,
                         Some(i.saturating_sub(1)),
                         true,
+                        &Arc::new(Keypair::new()),
                         new_ticks.clone(),
                     )
                     .unwrap() as u64;

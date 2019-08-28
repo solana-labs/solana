@@ -27,7 +27,7 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut current_slot = start_slot;
     let mut start_index = 0;
     loop {
-        match blocktree.get_data_shreds(current_slot, start_index..std::u64::MAX, &mut buffer) {
+        match blocktree.get_data_shreds(current_slot, start_index, &mut buffer) {
             Ok((last_index, mut size)) => {
                 debug!(
                     "chacha: encrypting slice: {} num_shreds: {} data_len: {}",
@@ -122,9 +122,22 @@ mod tests {
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
+        let seed = [2u8; 32];
+        let mut rnd = GenKeys::new(seed);
+        let keypair = rnd.gen_keypair();
+
         let entries = make_tiny_deterministic_test_entries(slots_per_segment);
         blocktree
-            .write_entries_using_shreds(0, 0, 0, ticks_per_slot, None, true, &entries)
+            .write_entries_using_shreds(
+                0,
+                0,
+                0,
+                ticks_per_slot,
+                None,
+                true,
+                &Arc::new(keypair),
+                &entries,
+            )
             .unwrap();
 
         let mut key = hex!(
@@ -140,7 +153,7 @@ mod tests {
         hasher.hash(&buf[..size]);
 
         //  golden needs to be updated if blob stuff changes....
-        let golden: Hash = "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn"
+        let golden: Hash = "EdYYuAuDPVY7DLNeCtPWAKipicx2KjsxqD2PZ7oxVmHE"
             .parse()
             .unwrap();
 
