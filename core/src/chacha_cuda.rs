@@ -87,7 +87,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
                     );
                 }
 
-                total_size += size;
+                total_size += size as u64;
                 start_index = last_index + 1;
             }
             Err(e) => {
