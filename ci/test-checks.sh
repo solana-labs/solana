@@ -18,8 +18,13 @@ _ cargo +"$rust_stable" clippy --version
 _ cargo +"$rust_stable" clippy --all --exclude solana-sdk-c -- --deny=warnings
 _ cargo +"$rust_stable" clippy --manifest-path sdk-c/Cargo.toml -- --deny=warnings
 
+<<<<<<< HEAD
 # _ cargo +"$rust_stable" audit --version ### cargo-audit stopped supporting --version??  https://github.com/RustSec/cargo-audit/issues/100
 _ cargo +"$rust_stable" audit
+=======
+_ cargo +"$rust_stable" audit --version
+_ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0013
+>>>>>>> f41fb7d77... Ignore cargo audit advisory RUSTSEC-2019-0013 (#5713)
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
