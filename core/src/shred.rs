@@ -219,8 +219,8 @@ impl Default for CodingShred {
 
 /// Common trait implemented by all types of shreds
 pub trait ShredCommon {
-    /// Write at a particular offset in the shred
-    fn write_at(&mut self, offset: usize, buf: &[u8]) -> usize;
+    /// Write at a particular offset in the shred. Returns amount written and leftover capacity
+    fn write_at(&mut self, offset: usize, buf: &[u8]) -> (usize, usize);
     /// Overhead of shred enum and headers
     fn overhead() -> usize;
     /// Utility function to create an empty shred
@@ -228,12 +228,14 @@ pub trait ShredCommon {
 }
 
 impl ShredCommon for FirstDataShred {
-    fn write_at(&mut self, offset: usize, buf: &[u8]) -> usize {
-        let slice_len = cmp::min(self.payload.len().saturating_sub(offset), buf.len());
+    fn write_at(&mut self, offset: usize, buf: &[u8]) -> (usize, usize) {
+        let mut capacity = self.payload.len().saturating_sub(offset);
+        let slice_len = cmp::min(capacity, buf.len());
+        capacity -= slice_len;
         if slice_len > 0 {
             self.payload[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
         }
-        slice_len
+        (slice_len, capacity)
     }
 
     fn overhead() -> usize {
@@ -250,12 +252,14 @@ impl ShredCommon for FirstDataShred {
 }
 
 impl ShredCommon for DataShred {
-    fn write_at(&mut self, offset: usize, buf: &[u8]) -> usize {
-        let slice_len = cmp::min(self.payload.len().saturating_sub(offset), buf.len());
+    fn write_at(&mut self, offset: usize, buf: &[u8]) -> (usize, usize) {
+        let mut capacity = self.payload.len().saturating_sub(offset);
+        let slice_len = cmp::min(capacity, buf.len());
+        capacity -= slice_len;
         if slice_len > 0 {
             self.payload[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
         }
-        slice_len
+        (slice_len, capacity)
     }
 
     fn overhead() -> usize {
@@ -272,12 +276,14 @@ impl ShredCommon for DataShred {
 }
 
 impl ShredCommon for CodingShred {
-    fn write_at(&mut self, offset: usize, buf: &[u8]) -> usize {
-        let slice_len = cmp::min(self.header.payload.len().saturating_sub(offset), buf.len());
+    fn write_at(&mut self, offset: usize, buf: &[u8]) -> (usize, usize) {
+        let mut capacity = self.header.payload.len().saturating_sub(offset);
+        let slice_len = cmp::min(capacity, buf.len());
+        capacity -= slice_len;
         if slice_len > 0 {
             self.header.payload[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
         }
-        slice_len
+        (slice_len, capacity)
     }
 
     fn overhead() -> usize {
@@ -333,7 +339,7 @@ impl Write for Shredder {
             .unwrap();
 
         let written = self.active_offset;
-        let slice_len = match current_shred.borrow_mut() {
+        let (slice_len, left_capacity) = match current_shred.borrow_mut() {
             Shred::FirstInSlot(s) => s.write_at(written, buf),
             Shred::FirstInFECSet(s)
             | Shred::Data(s)
@@ -342,7 +348,7 @@ impl Write for Shredder {
             Shred::Coding(s) => s.write_at(written, buf),
         };
 
-        let active_shred = if buf.len() > slice_len {
+        let active_shred = if buf.len() > slice_len || left_capacity == 0 {
             self.finalize_data_shred(current_shred);
             // Continue generating more data shreds.
             // If the caller decides to finalize the FEC block or Slot, the data shred will
