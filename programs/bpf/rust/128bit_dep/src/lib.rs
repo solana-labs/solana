@@ -54,7 +54,7 @@ mod test {
     }
 
     #[test]
-    fn test_work() {
-        assert_eq!(3, work(1, 2));
+    fn test_add() {
+        assert_eq!(3, add(1, 2));
     }
 }
