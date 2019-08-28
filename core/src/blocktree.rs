@@ -36,7 +36,6 @@ use std::sync::{Arc, RwLock};
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
 use solana_sdk::timing::Slot;
-use std::io::Write;
 
 mod db;
 mod meta;
@@ -807,11 +806,8 @@ impl Blocktree {
                 remaining_ticks_in_slot -= 1;
             }
 
-            let data = bincode::serialize(&vec![entry.borrow().clone()]).unwrap();
-            let mut offset = 0;
-            while offset < data.len() {
-                offset += shredder.write(&data[offset..]).unwrap();
-            }
+            bincode::serialize_into(&mut shredder, &vec![entry.borrow().clone()])
+                .expect("Expect to write all entries to shreds");
             if remaining_ticks_in_slot == 0 {
                 shredder.finalize_slot();
             } else {
@@ -2507,11 +2503,8 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     let mut shredder = Shredder::new(0, Some(0), 0.0, &Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
     let last_hash = entries.last().unwrap().hash;
-    let data = bincode::serialize(&entries).unwrap();
-    let mut offset = 0;
-    while offset < data.len() {
-        offset += shredder.write(&data[offset..]).unwrap();
-    }
+    bincode::serialize_into(&mut shredder, &entries)
+        .expect("Expect to write all entries to shreds");
     shredder.finalize_slot();
     let shreds: Vec<Shred> = shredder
         .shreds
@@ -4842,11 +4835,8 @@ pub mod tests {
         )
         .expect("Failed to create entry shredder");
 
-        let data = bincode::serialize(&entries).unwrap();
-        let mut offset = 0;
-        while offset < data.len() {
-            offset += shredder.write(&data[offset..]).unwrap();
-        }
+        bincode::serialize_into(&mut shredder, &entries)
+            .expect("Expect to write all entries to shreds");
         if is_full_slot {
             shredder.finalize_slot();
         } else {

@@ -2,7 +2,6 @@ use super::broadcast_utils;
 use super::*;
 use crate::shred::Shred;
 use solana_sdk::timing::duration_as_ms;
-use std::io::Write;
 
 #[derive(Default)]
 struct BroadcastStats {
@@ -99,12 +98,8 @@ impl BroadcastRun for StandardBroadcastRun {
                 )
                 .expect("Expected to create a new shredder");
 
-                let data = bincode::serialize(&entries).unwrap();
-                let mut offset = 0;
-                while offset < data.len() {
-                    offset += shredder.write(&data[offset..]).unwrap();
-                }
-
+                bincode::serialize_into(&mut shredder, &entries)
+                    .expect("Expect to write all entries to shreds");
                 if i == (num_ventries - 1) && last_tick == bank.max_tick_height() {
                     shredder.finalize_slot();
                 } else {
