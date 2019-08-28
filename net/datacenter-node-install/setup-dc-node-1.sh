@@ -50,7 +50,6 @@ chown "$SETUP_USER:$SETUP_USER" "${BASE_SSH_DIR}/.ssh/authorized_keys"
 "$HERE"/../scripts/install-rsync.sh
 "$HERE"/../scripts/install-libssl-compatability.sh
 "$HERE"/setup-procfs-knobs.sh
-# Allow more files to be opened by a user
-sed -i 's/^\(# End of file\)/* soft nofile 65535\n\n\1/' /etc/security/limits.conf
+"$HERE"/setup-limits.sh
 
 echo "Please reboot then run setup-dc-node-2.sh"
