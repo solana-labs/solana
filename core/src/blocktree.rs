@@ -619,7 +619,6 @@ impl Blocktree {
         !(num_coding == 0
             || pos >= u32::from(num_coding)
             || std::u32::MAX - set_index < pos
-            || set_index + pos != shred_index
             || coding_index.is_present(u64::from(shred_index))
             || slot <= *last_root.read().unwrap())
     }
@@ -3098,57 +3097,76 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_should_insert_shred() {
-        let (mut shreds, _) = make_slot_entries(0, 0, 100);
+    pub fn test_should_insert_data_shred() {
+        let (shreds, _) = make_slot_entries(0, 0, 100);
         let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let last_root = RwLock::new(0);
             // Insert the first 5 shreds, we don't have a "is_last" shred yet
-            let shreds1 = shreds.drain(0..5).collect_vec();
-            blocktree.insert_shreds(shreds1).unwrap();
+            blocktree.insert_shreds(shreds[0..5].to_vec()).unwrap();
 
-            let data_cf = blocktree.db.column::<cf::ShredData>();
-
-            let check_data_cf = |slot, index| {
-                data_cf
-                    .get_bytes((slot, index))
-                    .map(|opt| opt.is_some())
-                    .unwrap_or(false)
-            };
-
-            // Trying to insert a shred less than consumed should fail
+            // Trying to insert a shred less than `slot_meta.consumed` should fail
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            let index_cf = blocktree.db.column::<cf::Index>();
+            let index = index_cf.get(0).unwrap().unwrap();
             assert_eq!(slot_meta.consumed, 5);
-            assert!(!should_insert(&slot_meta, 3, 0, false, check_data_cf, 0));
+            assert!(!Blocktree::should_insert_data_shred(
+                &shreds[1],
+                &slot_meta,
+                index.data(),
+                &last_root
+            ));
 
             // Trying to insert the same shred again should fail
-            // skip over shred 5
-            let shreds1 = shreds.drain(1..2).collect_vec();
-            blocktree.insert_shreds(shreds1).unwrap();
+            // skip over shred 5 so the `slot_meta.consumed` doesn't increment
+            blocktree.insert_shreds(shreds[6..7].to_vec()).unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
-            assert!(!should_insert(&slot_meta, 6, 0, false, check_data_cf, 0));
+            let index = index_cf.get(0).unwrap().unwrap();
+            assert!(!Blocktree::should_insert_data_shred(
+                &shreds[6],
+                &slot_meta,
+                index.data(),
+                &last_root
+            ));
 
-            // Trying to insert another "is_last" shred with index < the received index
-            // should fail
-            // skip over shred 5 and 7
-            let shreds1 = shreds.drain(2..3).collect_vec();
-            blocktree.insert_shreds(shreds1).unwrap();
+            // Trying to insert another "is_last" shred with index < the received index should fail
+            // skip over shred 7
+            blocktree.insert_shreds(shreds[8..9].to_vec()).unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            let index = index_cf.get(0).unwrap().unwrap();
             assert_eq!(slot_meta.received, 9);
-            assert!(!should_insert(&slot_meta, 7, 0, true, check_data_cf, 0));
+            let shred7 = {
+                if let Shred::Data(ref s) = shreds[7] {
+                    Shred::LastInSlot(s.clone())
+                } else {
+                    panic!("Shred in unexpected format")
+                }
+            };
+            assert!(!Blocktree::should_insert_data_shred(
+                &shred7,
+                &slot_meta,
+                index.data(),
+                &last_root
+            ));
 
             // Insert all pending shreds
+            let mut shred8 = shreds[8].clone();
             blocktree.insert_shreds(shreds).unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            let index = index_cf.get(0).unwrap().unwrap();
 
             // Trying to insert a shred with index > the "is_last" shred should fail
-            assert!(!should_insert(
+            if let Shred::Data(ref mut s) = shred8 {
+                s.header.common_header.slot = slot_meta.last_index + 1;
+            } else {
+                panic!("Shred in unexpected format")
+            }
+            assert!(!Blocktree::should_insert_data_shred(
+                &shred7,
                 &slot_meta,
-                slot_meta.last_index + 1,
-                0,
-                true,
-                check_data_cf,
-                0
+                index.data(),
+                &last_root
             ));
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
