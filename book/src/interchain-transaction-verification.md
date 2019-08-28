@@ -1,9 +1,9 @@
 
-# Interchain Transaction Verification Program
+# Inter-chain Transaction Verification Program
 
 ## Problem
 
-Interchain applications are not new to the digital asset ecosystem; in fact, even
+Inter-chain applications are not new to the digital asset ecosystem; in fact, even
 the smaller centralized exchanges still categorically dwarf all single chain dapps
 put together in terms of users and volume. They command massive valuations and
 have spent years effectively optimizing their core products for a broad range of
@@ -79,7 +79,7 @@ network, the SPV Program relies on an internal component called an SPV engine to
 provide stateless verification of the actual SPV proofs upon which the higher
 level client facing features and api are built. The SPV engine requires a
 network specific implementation, but allows easy extension of the larger
-interchain ecosystem by any team who chooses to carry out that implementation
+inter-chain ecosystem by any team who chooses to carry out that implementation
 and drop it into the standard SPV program for deployment.
 
 For purposes of Proof Requests, the requester is referred to as the program client,
@@ -105,7 +105,7 @@ than requiring a polling style process as described.
 
 ## Implementation
 
-The Solana Interchain SPV mechanism consists of the following components and participants:
+The Solana Inter-chain SPV mechanism consists of the following components and participants:
 
 #### SPV engine
 A contract deployed on Solana which statelessly verifies SPV proofs for the caller.
@@ -123,7 +123,7 @@ transactions, hashes, etc. on a chain by chain basis.
 A contract deployed on Solana which coordinates and intermediates the interaction
 between Clients and Provers and manages the validation of requests, headers,
 proofs, etc. It is the primary point of access for Client contracts to access the
-interchain SPV mechanism. It offers the following core features:
+inter-chain. SPV mechanism. It offers the following core features:
 * Submit Proof Request - allows client to place a request for a specific proof or set of proofs
 * Cancel Proof Request - allows client to invalidate a pending request
 * Fill Proof Request   - used by Provers to submit for validation a proof corresponding to a given Proof Request
