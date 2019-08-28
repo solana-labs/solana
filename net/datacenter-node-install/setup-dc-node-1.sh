@@ -49,20 +49,7 @@ chown "$SETUP_USER:$SETUP_USER" "${BASE_SSH_DIR}/.ssh/authorized_keys"
 "$HERE"/../scripts/install-redis.sh
 "$HERE"/../scripts/install-rsync.sh
 "$HERE"/../scripts/install-libssl-compatability.sh
-
-# Setup kernel constants
-cat > /etc/sysctl.d/20-solana-node.conf <<EOF
-
-# Solana networking requirements
-net.core.rmem_default=1610612736
-net.core.rmem_max=1610612736
-net.core.wmem_default=1610612736
-net.core.wmem_max=1610612736
-
-# Solana earlyoom setup
-kernel.sysrq=$(( $(cat /proc/sys/kernel/sysrq) | 64 ))
-EOF
-
+"$HERE"/setup-procfs-knobs.sh
 # Allow more files to be opened by a user
 sed -i 's/^\(# End of file\)/* soft nofile 65535\n\n\1/' /etc/security/limits.conf
 
