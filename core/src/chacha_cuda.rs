@@ -33,16 +33,16 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         ));
     }
 
-    let mut buffer = [0; 8 * 1024];
+    const BUFFER_SIZE: usize = 8 * 1024;
+    let mut buffer = [0; BUFFER_SIZE];
     let num_keys = ivecs.len() / CHACHA_BLOCK_SIZE;
     let mut sha_states = vec![0; num_keys * size_of::<Hash>()];
     let mut int_sha_states = vec![0; num_keys * 112];
     let keys: Vec<u8> = vec![0; num_keys * CHACHA_KEY_SIZE]; // keys not used ATM, uniqueness comes from IV
     let mut current_slot = segment * slots_per_segment;
     let mut start_index = 0;
-    let mut entry = segment;
-    let mut total_entries = 0;
-    let mut total_entry_len = 0;
+    let start_slot = current_slot;
+    let mut total_size = 0;
     let mut time: f32 = 0.0;
     unsafe {
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
