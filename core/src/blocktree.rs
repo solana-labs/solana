@@ -646,7 +646,13 @@ impl Blocktree {
 
         // Assert guaranteed by integrity checks on the shred that happen before
         // `insert_coding_shred` is called
-        assert!(shred_index >= pos);
+        if shred_index < pos {
+            error!("Due to earlier validation, shred index must be >= pos");
+            return Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(
+                Box::new(ErrorKind::Custom("shred index < pos")),
+            )));
+        }
+
         let set_index = shred_index - pos;
         let erasure_config = ErasureConfig::new(num_data, num_coding);
 
