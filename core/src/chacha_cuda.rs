@@ -138,7 +138,16 @@ mod tests {
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
 
         blocktree
-            .write_entries(0, 0, 0, ticks_per_slot, &entries)
+            .write_entries_using_shreds(
+                0,
+                0,
+                0,
+                ticks_per_slot,
+                Some(0),
+                true,
+                &Arc::new(Keypair::new()),
+                &entries,
+            )
             .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_single_output.txt.enc");
@@ -186,7 +195,16 @@ mod tests {
         let ticks_per_slot = 16;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         blocktree
-            .write_entries(0, 0, 0, ticks_per_slot, &entries)
+            .write_entries_using_shreds(
+                0,
+                0,
+                0,
+                ticks_per_slot,
+                Some(0),
+                true,
+                &Arc::new(Keypair::new()),
+                &entries,
+            )
             .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_multiple_output.txt.enc");
