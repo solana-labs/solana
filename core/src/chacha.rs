@@ -12,7 +12,7 @@ pub const CHACHA_KEY_SIZE: usize = 32;
 
 pub fn chacha_cbc_encrypt_ledger(
     blocktree: &Arc<Blocktree>,
-    slice: u64,
+    start_slot: u64,
     slots_per_segment: u64,
     out_path: &Path,
     ivec: &mut [u8; CHACHA_BLOCK_SIZE],
@@ -23,26 +23,32 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut buffer = [0; BUFFER_SIZE];
     let mut encrypted_buffer = [0; BUFFER_SIZE];
     let key = [0; CHACHA_KEY_SIZE];
-    let mut total_entries = 0;
     let mut total_size = 0;
-    let mut entry = slice;
-
+    let mut current_slot = start_slot;
+    let mut start_index = 0;
     loop {
-        match blocktree.read_blobs_bytes(0, slots_per_segment - total_entries, &mut buffer, entry) {
-            Ok((num_entries, entry_len)) => {
+        match blocktree.get_data_shreds(current_slot, start_index, &mut buffer) {
+            Ok((last_index, mut size)) => {
                 debug!(
-                    "chacha: encrypting slice: {} num_entries: {} entry_len: {}",
-                    slice, num_entries, entry_len
+                    "chacha: encrypting slice: {} num_shreds: {} data_len: {}",
+                    current_slot,
+                    last_index.saturating_sub(start_index),
+                    size
                 );
-                debug!("read {} bytes", entry_len);
-                let mut size = entry_len as usize;
+                debug!("read {} bytes", size);
+
                 if size == 0 {
-                    break;
+                    if current_slot.saturating_sub(start_slot) < slots_per_segment {
+                        current_slot += 1;
+                        start_index = 0;
+                        continue;
+                    } else {
+                        break;
+                    }
                 }
 
                 if size < BUFFER_SIZE {
-                    // We are on the last block, round to the nearest key_size
-                    // boundary
+                    // round to the nearest key_size boundary
                     size = (size + CHACHA_KEY_SIZE - 1) & !(CHACHA_KEY_SIZE - 1);
                 }
                 total_size += size;
@@ -53,8 +59,7 @@ pub fn chacha_cbc_encrypt_ledger(
                     return Err(res);
                 }
 
-                total_entries += num_entries;
-                entry += num_entries;
+                start_index = last_index + 1;
             }
             Err(e) => {
                 info!("Error encrypting file: {:?}", e);
@@ -117,9 +122,22 @@ mod tests {
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
+        let seed = [2u8; 32];
+        let mut rnd = GenKeys::new(seed);
+        let keypair = rnd.gen_keypair();
+
         let entries = make_tiny_deterministic_test_entries(slots_per_segment);
         blocktree
-            .write_entries_using_shreds(0, 0, 0, ticks_per_slot, None, true, &entries)
+            .write_entries_using_shreds(
+                0,
+                0,
+                0,
+                ticks_per_slot,
+                None,
+                true,
+                &Arc::new(keypair),
+                &entries,
+            )
             .unwrap();
 
         let mut key = hex!(
@@ -135,7 +153,7 @@ mod tests {
         hasher.hash(&buf[..size]);
 
         //  golden needs to be updated if blob stuff changes....
-        let golden: Hash = "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn"
+        let golden: Hash = "EdYYuAuDPVY7DLNeCtPWAKipicx2KjsxqD2PZ7oxVmHE"
             .parse()
             .unwrap();
 
