@@ -161,7 +161,16 @@ mod test {
         let expected_tick_heights = [5, 6, 7, 8, 8, 9];
 
         blocktree
-            .write_entries_using_shreds(1, 0, 0, ticks_per_slot, None, true, &entries)
+            .write_entries_using_shreds(
+                1,
+                0,
+                0,
+                ticks_per_slot,
+                None,
+                true,
+                &Arc::new(Keypair::new()),
+                &entries,
+            )
             .unwrap();
 
         slot_full_sender.send((1, leader_pubkey)).unwrap();

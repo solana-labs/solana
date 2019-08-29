@@ -437,6 +437,7 @@ pub mod tests {
                 ticks_per_slot,
                 Some(parent_slot),
                 true,
+                &Arc::new(Keypair::new()),
                 &entries,
             )
             .unwrap();
@@ -824,7 +825,16 @@ pub mod tests {
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
         blocktree
-            .write_entries_using_shreds(1, 0, 0, genesis_block.ticks_per_slot, None, true, &entries)
+            .write_entries_using_shreds(
+                1,
+                0,
+                0,
+                genesis_block.ticks_per_slot,
+                None,
+                true,
+                &Arc::new(Keypair::new()),
+                &entries,
+            )
             .unwrap();
         let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None, true, None).unwrap();
