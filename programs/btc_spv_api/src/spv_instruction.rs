@@ -17,12 +17,13 @@ pub enum SpvInstruction {
     // Used by clients to cancel a pending proof request
     // key 0 - signer
     // key 1 - Request to cancel
-    CancelRequest(BitcoinTxHash),
+    CancelRequest,
 
     // used to submit a proof matching a posted BitcoinTxHash or for own benefit
     // key 0 - signer
     // key 1 - Request to prove
-    SubmitProof(ProofInfo),
+    SubmitProof(Proof),
+
 }
 
 
@@ -32,6 +33,7 @@ pub fn client_request(
     fee           : u64,
     confirmations : u8,
     difficulty    : u64,
+    expiration    : Option<u32>,
 ) -> Instruction {
     let account_meta = vec![AccountMeta::new(*owner, true)];
     Instruction::new(
@@ -41,6 +43,7 @@ pub fn client_request(
             confirmations,
             fee,
             difficulty,
+            expiration,
         }),
         account_meta,
     )
@@ -48,12 +51,12 @@ pub fn client_request(
 
 pub fn cancel_request(
     owner   : &Pubkey,
-    txHash  : BitcoinTxHash,
+    request : &Pubkey,
 ) -> Instruction {
-    let account_meta = vec![AccountMeta::new(*owner, true)];
+    let account_meta = vec![AccountMeta::new(*owner, true), AccountMeta::new(*request, false)];
     Instruction::new(
         id(),
-        &SpvInstruction::CancelRequest(txHash),
+        &SpvInstruction::CancelRequest,
         account_meta,
     )
 }
@@ -62,15 +65,18 @@ pub fn submit_proof(
     submitter : &Pubkey,
     proof     : MerkleProof,
     headers   : HeaderChain,
-    txhash    : BitcoinTxHash,
+    transaction: Transaction,
+    request   : &Pubkey,
 ) -> Instruction {
-    let account_meta = vec![AccountMeta::new(*submitter, true)];
+    let account_meta = vec![AccountMeta::new(*submitter, true), AccountMeta::new(*request, false)];
     Instruction::new(
         id(),
-        &SpvInstruction::SubmitProof(ProofInfo{
+        &SpvInstruction::SubmitProof(Proof{
+            submitter: *submitter,
             proof,
             headers,
-            txhash,
+            transaction,
+            request: *request,
         }),
         account_meta,
     )

@@ -7,7 +7,8 @@ use crate::spv_state::*;
 
 // HeaderStore is a data structure that allows linked list style cheap appends and
 // sequential reads, but also has a "lookup index" to speed up random access
-enum HeaderStoreError {
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum HeaderStoreError {
     InvalidHeader,
     GroupExists,
     GroupDNE,
@@ -15,8 +16,8 @@ enum HeaderStoreError {
 }
 
 // AccountList is a linked list of groups of blockheaders. It stores sequential blockheaders
-#[derive(PartialEq, Eq, Hash)]
-struct HeaderStore {
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct HeaderStore {
     pub index: Vec<Pubkey>,
     // number of header entries to include per group account
     pub groupSize: u16,
@@ -30,12 +31,12 @@ struct HeaderStore {
 
 impl HeaderStore {
     pub fn getGroup(self, blockHeight: u32) -> Result<Pubkey, HeaderStoreError> {
-        if blockHeight < self.baseHeight || blockHeight > self.ceiling {
+        if blockHeight < self.baseHeight || blockHeight > self.topHeight {
             Err(HeaderStoreError::InvalidBlockHeight)
         }
         else {
-            let gheight: u32    = (blockheight - self.baseHeight) / self.groupSize as u32;
-            let grouppk: Pubkey = self.index[gheight];
+            let gheight = (blockHeight - self.baseHeight) / self.groupSize as u32;
+            let grouppk: Pubkey = self.index[gheight as usize];
             Ok(grouppk)
         }
     }
@@ -45,51 +46,60 @@ impl HeaderStore {
             Err(HeaderStoreError::GroupDNE)
         }
         else {
-            let grouppk: Pubkey = self.index.last().unwrap();
+            let grouppk: Pubkey = *self.index.last().unwrap();
             Ok(grouppk)
         }
     }
 
-    pub fn AppendHeader(mut self, blockheader: &BlockHeader) -> Result<(), SpvError> {
+    pub fn AppendHeader(mut self, blockheader: &BlockHeader) -> Result<(), HeaderStoreError> {
         match self.topGroup() {
-            Some(n) => {
+            Ok(n) => {
                 let group = n;
+                Ok(())
             }
-            None    => { // HeaderStore is empty need to create first group
-
+            Err(E) => { // HeaderStore is empty need to create first group
+                if HeaderStoreError::GroupDNE == E {
+                    Ok(())
+                }
+                else {
+                    Err(E)
+                }
+                //todo
             }
         }
-        // access account data for group
     }
 
-    pub fn ReplaceHeader(mut self, blockheader: &BlockHeader, blockheight: u32) -> Result<(), SpvError> {
+    pub fn ReplaceHeader(mut self, blockheader: &BlockHeader, blockheight: u32) -> Result<(), HeaderStoreError> {
         match self.getGroup(blockheight) {
-            Some(n) => {
-                let group = n;
+            Err(e)    => {
+                Err(HeaderStoreError::InvalidHeader)
             }
-            None    => SpvError::InvalidHeader
+            Ok(n) => {
+                let group = n;
+                Ok(())
+            }
         }
-        // access account data for group
+        //todo
     }
 
-    pub fn AppendGroup(mut self, pubkey: Pubkey) -> Result<(), SpvError> {
+    pub fn AppendGroup(mut self, pubkey: Pubkey) -> Result<(), HeaderStoreError> {
         if self.index.contains(&pubkey){
             // group to be appended is already in the index
-            HeaderStoreError::GroupExists
+            Err(HeaderStoreError::GroupExists)
         }
-
+        else {
+            Ok(())
+            //insert actual function HeaderStoreError
+        }
     }
-
-
-
 }
 
-struct HeaderAccount {
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct HeaderAccountInfo {
     // parent stores the pubkey of the parent AccountList
     pub parent: Pubkey,
     // stores a vec of BlockHeader structs
     pub headers: Vec<BlockHeader>,
     // next DataAccount in the chain or none if last
     pub next: Option<Pubkey>,
-
 }

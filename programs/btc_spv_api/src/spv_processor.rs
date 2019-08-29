@@ -14,37 +14,21 @@ pub struct SpvProcessor {}
 impl SpvProcessor {
 
     pub fn validateHeaderChain(headers: &HeaderChain, proof_req: &ProofRequest) -> Result<(), InstructionError> {
-        let ln       = *headers.len();
-        let confirms = *proof_req.confirmations;
-        let diff     = *proof_req.difficulty;
-        // check that the headerchain is the right length
-        if ln != (2 + confirms) {
-            error!("Invalid length for Header Chain");
-            Err(InstructionError::InvalidArgument)? //is this ? necessary?
-        }
-
-        for bh in 1..ln {
-            let header    = *headers[bh];
-            let pheader   = *headers[bh-1];
-            // check that the headerchain is in order and contiguous
-            if header.parent != pheader.digest {
-                error!("Invalid Header Chain hash sequence for header index {}", bh);
-                Err(InstructionError::InvalidArgument)?
-            }
-            //check that block difficulty is above the given threshold
-            if header.difficulty < diff {
-                error!("Invalid block difficulty for header index {}", bh);
-                Err(InstructionError::InvalidArgument)?
-            }
-        }
+        // disabled for time being
         //not done yet, needs difficulty average/variance checking still
         Ok(())
     }
 
-    fn deserialize_proof(data: &[u8]) -> Result<ProofInfo, InstructionError> {
-        let proof_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg);
+    #[allow(clippy::needless_pass_by_value)]
+    fn map_to_invalid_arg(err: std::boxed::Box<bincode::ErrorKind>) -> InstructionError {
+        warn!("Deserialize failed, not a valid state: {:?}", err);
+        InstructionError::InvalidArgument
+    }
+
+    fn deserialize_proof(data: &[u8]) -> Result<Proof, InstructionError> {
+        let proof_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Verification(Proof) = proof_state {
-            Ok(proof_state)
+            Ok(Proof)
         } else {
             error!("Not a valid proof");
             Err(InstructionError::InvalidAccountData)?
@@ -52,22 +36,22 @@ impl SpvProcessor {
     }
 
     fn deserialize_request(data: &[u8]) -> Result<ClientRequestInfo, InstructionError> {
-        let req_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg);
+        let req_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Request(info) = req_state {
-            Ok(req_state)
+            Ok(info)
         } else {
             error!("Not a valid proof request");
-            Err(InstructionError::InvalidAccountData)?;
+            Err(InstructionError::InvalidAccountData)
         }
     }
 
     pub fn check_account_unallocated(data: &[u8]) -> Result<(), InstructionError> {
-        let acct_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg);
+        let acct_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Unallocated = acct_state {
             Ok(())
         } else {
             error!("Provided account is already occupied");
-            Err(InstructionError::InvalidAccountData)?;
+            Err(InstructionError::InvalidAccountData)
         }
     }
 
@@ -76,21 +60,20 @@ impl SpvProcessor {
         keyed_accounts: &mut [KeyedAccount],
         request_info  : &ClientRequestInfo,
     ) -> Result<(), InstructionError> {
-        if *keyed_accounts.len() != 2 {
+        if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
         const OWNER_INDEX   : usize = 0;
         const REQUEST_INDEX : usize = 1;
 
-        Self.check_account_unallocated(&keyed_accounts[REQUEST_INDEX].account.data)?;
+        // check_account_unallocated(&keyed_accounts[REQUEST_INDEX].account.data)?;
         Ok(()) //placeholder
     }
 
     pub fn do_cancel_request(
         keyed_accounts: &mut[KeyedAccount],
-        txHash        : BitcoinTxHash,
     ) -> Result<(), InstructionError> {
-        if *keyed_accounts.len() != 2 {
+        if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
         const OWNER_INDEX: usize = 0;
@@ -101,9 +84,9 @@ impl SpvProcessor {
 
     pub fn do_submit_proof(
         keyed_accounts: &mut[KeyedAccount],
-        proof_info    : &ProofInfo,
+        proof_info    : &Proof,
     ) -> Result<(), InstructionError> {
-        if *keyed_accounts.len() != 2 {
+        if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
         const SUBMITTER_INDEX: usize = 0;
@@ -128,13 +111,13 @@ pub fn process_instruction(
 
     match command{
         SpvInstruction::ClientRequest(client_request_info) => {
-            SpvProcessor::client_request(keyed_accounts, &client_request_info)
+            SpvProcessor::do_client_request(keyed_accounts, &client_request_info)
         }
         SpvInstruction::CancelRequest => {
-            SpvProcessor::cancel_request(keyed_accounts)
+            SpvProcessor::do_cancel_request(keyed_accounts)
         }
         SpvInstruction::SubmitProof(proof_info) => {
-            SpvProcessor::submit_request(keyed_accounts, &proof_info)
+            SpvProcessor::do_submit_proof(keyed_accounts, &proof_info)
         }
     }
 }
@@ -149,9 +132,14 @@ mod test {
         let testheader = "010000008a730974ac39042e95f82d719550e224c1a680a8dc9e8df9d007000000000000f50b20e8720a552dd36eb2ebdb7dceec9569e0395c990c1eb8a4292eeda05a931e1fce4e9a110e1a7a58aeb0";
         let testhash   = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
         let testhashbytes = decode_hex(&testhash)?;
+        let mut thb: [u8; 32] = Default::default();
+        thb.copy_from_slice(&testhashbytes[..32]);
 
         let bh = BlockHeader::hexnew(&testheader, &testhash)?;
-        assert_eq!(bh.blockhash, testhashbytes);
+        // let mut bbh: [u8;32] = Default::default();
+        // bbh.copy_from_slice(bh[.. bh.len()]);
+
+        assert_eq!(bh.blockhash, thb);
         Ok(())
     }
 }
