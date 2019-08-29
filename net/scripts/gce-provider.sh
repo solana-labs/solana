@@ -149,7 +149,7 @@ cloud_CreateInstances() {
     imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
   else
     # Upstream Ubuntu 18.04 LTS image
-    imageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
+    imageName="ubuntu-1804-bionic-v20190813a --image-project ubuntu-os-cloud"
   fi
 
   declare -a nodes
