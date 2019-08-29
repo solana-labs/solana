@@ -9,6 +9,8 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::shred::Shred;
 use crate::streamer::{PacketReceiver, PacketSender};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::ThreadPool;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
@@ -63,6 +65,7 @@ fn recv_window<F>(
     r: &PacketReceiver,
     retransmit: &PacketSender,
     shred_filter: F,
+    thread_pool: &ThreadPool,
 ) -> Result<()>
 where
     F: Fn(&Shred, &[u8]) -> bool,
@@ -77,22 +80,46 @@ where
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", packets.packets.len());
 
-    let mut shreds = vec![];
-    let mut discards = vec![];
-    for (i, packet) in packets.packets.iter_mut().enumerate() {
-        if let Ok(s) = bincode::deserialize(&packet.data) {
-            let shred: Shred = s;
-            if shred_filter(&shred, &packet.data) {
-                packet.meta.slot = shred.slot();
-                packet.meta.seed = shred.seed();
-                shreds.push(shred);
-            } else {
-                discards.push(i);
-            }
-        } else {
-            discards.push(i);
-        }
-    }
+    let (shreds, discards): (Vec<_>, Vec<_>) = thread_pool.install(|| {
+        packets
+            .packets
+            .par_iter_mut()
+            .enumerate()
+            .map(|(i, packet)| {
+                if let Ok(s) = bincode::deserialize(&packet.data) {
+                    let shred: Shred = s;
+                    if shred_filter(&shred, &packet.data) {
+                        packet.meta.slot = shred.slot();
+                        packet.meta.seed = shred.seed();
+                        (Some(shred), None)
+                    } else {
+                        (None, Some(i))
+                    }
+                } else {
+                    (None, Some(i))
+                }
+            })
+            .fold(
+                || (Vec::new(), Vec::new()),
+                |(mut shreds, mut discards), (s, d)| {
+                    if let Some(s) = s {
+                        shreds.push(s)
+                    }
+                    if let Some(i) = d {
+                        discards.push(i)
+                    }
+                    (shreds, discards)
+                },
+            )
+            .reduce(
+                || (Vec::new(), Vec::new()),
+                |(mut shreds, mut discards), (mut s, mut d)| {
+                    shreds.append(&mut s);
+                    discards.append(&mut d);
+                    (shreds, discards)
+                },
+            )
+    });
 
     for i in discards.into_iter().rev() {
         packets.packets.remove(i);
@@ -187,6 +214,10 @@ impl WindowService {
                 let id = cluster_info.read().unwrap().id();
                 trace!("{}: RECV_WINDOW started", id);
                 let mut now = Instant::now();
+                let thread_pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .build()
+                    .unwrap();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -207,6 +238,7 @@ impl WindowService {
                                     .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
                             )
                         },
+                        &thread_pool,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
