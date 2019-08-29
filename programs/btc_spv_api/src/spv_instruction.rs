@@ -17,12 +17,13 @@ pub enum SpvInstruction {
     // Used by clients to cancel a pending proof request
     // key 0 - signer
     // key 1 - Request to cancel
-    CancelRequest(BitcoinTxHash),
+    CancelRequest,
 
     // used to submit a proof matching a posted BitcoinTxHash or for own benefit
     // key 0 - signer
     // key 1 - Request to prove
     SubmitProof(ProofInfo),
+
 }
 
 
@@ -48,12 +49,12 @@ pub fn client_request(
 
 pub fn cancel_request(
     owner   : &Pubkey,
-    txHash  : BitcoinTxHash,
+    request : &Pubkey,
 ) -> Instruction {
-    let account_meta = vec![AccountMeta::new(*owner, true)];
+    let account_meta = vec![AccountMeta::new(*owner, true), AccountMeta::new(*request)];
     Instruction::new(
         id(),
-        &SpvInstruction::CancelRequest(txHash),
+        &SpvInstruction::CancelRequest,
         account_meta,
     )
 }
