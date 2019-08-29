@@ -24,16 +24,25 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     z -= 1;
     assert_eq!(z, 340_282_366_920_938_463_463_374_607_431_768_211_454);
 
-    // ISSUE: https://github.com/solana-labs/solana/issues/5600
-    // assert_eq!(u128::from(1u32.to_be()), 1);
+    assert_eq!(u128::from(1u32.to_le()), 1);
+    assert_eq!(u128::from(1u32.to_be()), 0x1_000_000);
 
-    // ISSUE: https://github.com/solana-labs/solana/issues/5619
-    // solana_bpf_rust_128bit_dep::two_thirds(10);
+    assert_eq!(solana_bpf_rust_128bit_dep::uadd(10, 20), 30u128);
+    assert_eq!(solana_bpf_rust_128bit_dep::usubtract(30, 20), 10u128);
+    assert_eq!(solana_bpf_rust_128bit_dep::umultiply(30, 20), 600u128);
+    assert_eq!(solana_bpf_rust_128bit_dep::udivide(20, 10), 2u128);
+    assert_eq!(solana_bpf_rust_128bit_dep::umodulo(20, 3), 2u128);
+
+    assert_eq!(solana_bpf_rust_128bit_dep::add(-10, -20), -30i128);
+    assert_eq!(solana_bpf_rust_128bit_dep::subtract(-30, -20), -10i128);
+    assert_eq!(solana_bpf_rust_128bit_dep::multiply(-30, -20), 600i128);
+    assert_eq!(solana_bpf_rust_128bit_dep::divide(-20, -10), 2i128);
+    assert_eq!(solana_bpf_rust_128bit_dep::modulo(-20, -3), -2i128);
 
     let x = u64::max_value();
     assert_eq!(u128::from(x) + u128::from(x), 36_893_488_147_419_103_230);
 
-    let x = solana_bpf_rust_128bit_dep::work(
+    let x = solana_bpf_rust_128bit_dep::uadd(
         u128::from(u64::max_value()),
         u128::from(u64::max_value()),
     );

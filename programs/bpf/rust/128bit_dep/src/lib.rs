@@ -4,12 +4,36 @@
 
 extern crate solana_sdk_bpf_utils;
 
-pub fn work(x: u128, y: u128) -> u128 {
+pub fn uadd(x: u128, y: u128) -> u128 {
     x + y
 }
+pub fn usubtract(x: u128, y: u128) -> u128 {
+    x - y
+}
+pub fn umultiply(x: u128, y: u128) -> u128 {
+    x * y
+}
+pub fn udivide(n: u128, d: u128) -> u128 {
+    n / d
+}
+pub fn umodulo(n: u128, d: u128) -> u128 {
+    n % d
+}
 
-pub fn two_thirds(x: u128) -> u128 {
-    2 * x / 3
+pub fn add(x: i128, y: i128) -> i128 {
+    x + y
+}
+pub fn subtract(x: i128, y: i128) -> i128 {
+    x - y
+}
+pub fn multiply(x: i128, y: i128) -> i128 {
+    x * y
+}
+pub fn divide(n: i128, d: i128) -> i128 {
+    n / d
+}
+pub fn modulo(n: i128, d: i128) -> i128 {
+    n % d
 }
 
 #[cfg(test)]
@@ -30,7 +54,7 @@ mod test {
     }
 
     #[test]
-    fn test_work() {
-        assert_eq!(3, work(1, 2));
+    fn test_add() {
+        assert_eq!(3, add(1, 2));
     }
 }
