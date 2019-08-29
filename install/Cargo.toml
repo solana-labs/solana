@@ -41,7 +41,7 @@ tempdir = "0.3.7"
 url = "2.1.0"
 
 [target."cfg(windows)".dependencies]
-winapi = "0.3.7"
+winapi = "0.3.8"
 winreg = "0.6"
 
 [[bin]]
