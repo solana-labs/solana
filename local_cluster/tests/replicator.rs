@@ -74,13 +74,13 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
 }
 
 #[test]
-#[ignore]
+#[serial]
 fn test_replicator_startup_1_node() {
     run_replicator_startup_basic(1, 1);
 }
 
 #[test]
-#[ignore]
+#[serial]
 fn test_replicator_startup_2_nodes() {
     run_replicator_startup_basic(2, 1);
 }
