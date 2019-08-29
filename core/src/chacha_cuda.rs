@@ -121,6 +121,7 @@ mod tests {
     use crate::entry::make_tiny_test_entries;
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::DEFAULT_SLOTS_PER_SEGMENT;
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
