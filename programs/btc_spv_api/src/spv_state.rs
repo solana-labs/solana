@@ -1,5 +1,6 @@
 use crate::utils::*;
 use crate::header_store::*;
+use crate::header_store::HeaderStoreError;
 use std::{error, fmt};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -172,9 +173,9 @@ impl Default for AccountState {
 pub enum SpvError {
     InvalidBlockHeader,
 
-    HeaderStoreError(err),
+    HeaderStoreError,
 
-    ParseError(err),
+    ParseError,
 }
 
 impl error::Error for SpvError {
@@ -186,13 +187,23 @@ impl error::Error for SpvError {
 
 impl From<HeaderStoreError> for SpvError {
     fn from(e: HeaderStoreError) -> Self {
-        SpvError::HeaderStoreError(e)
+        SpvError::HeaderStoreError
     }
 }
 
 impl From<DecodeHexError> for SpvError {
     fn from(e: DecodeHexError) -> Self {
-        SpvError::ParseError(e)
+        SpvError::ParseError
+    }
+}
+
+impl fmt::Debug for SpvError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result{
+        match self {
+            SpvError::InvalidBlockHeader  => "BlockHeader is malformed or does not apply ".fmt(f),
+            SpvError::HeaderStoreError => "Placeholder headerstore error debug text".fmt(f),
+            SpvError::ParseError => "Error parsing blockheaders debug".fmt(f),
+        }
     }
 }
 
@@ -200,8 +211,8 @@ impl fmt::Display for SpvError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SpvError::InvalidBlockHeader  => "BlockHeader is malformed or does not apply ".fmt(f),
-            SpvError::HeaderStoreError(e) => e.fmt(f),
-            SpvError::ParseError(e) => e.fmt(f),
+            SpvError::HeaderStoreError => "Placeholder headerstore error text".fmt(f),
+            SpvError::ParseError => "Error parsing blockheaders placceholder text".fmt(f),
         }
     }
 }
