@@ -76,8 +76,12 @@ fn main() {
             "external_spend",
             "noop",
             "panic",
+<<<<<<< HEAD
             // ISSUE: https://github.com/solana-labs/solana/issues/5602
             // "stack_bug",
+=======
+            "param_passing",
+>>>>>>> 50214f059... Pull in LLVM with stack location fixes (#5732)
             "tick_height",
         ];
         for program in rust_programs.iter() {
