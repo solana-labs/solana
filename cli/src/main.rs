@@ -24,14 +24,17 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     println_name_value("* keypair:", &config.keypair);
                 }
             } else {
-                println!("{} Either provide the `--config` arg or ensure home directory exists to use the default config location", style("No config file found.").bold());
+                println!(
+                    "{} Either provide the `--config` arg or ensure home directory exists to use the default config location",
+                    style("No config file found.").bold()
+                );
             }
             false
         }
         ("set", Some(subcommand_matches)) => {
             if let Some(config_file) = matches.value_of("config_file") {
                 let mut config = Config::load(config_file).unwrap_or_default();
-                if let Some(url) = subcommand_matches.value_of("url") {
+                if let Some(url) = subcommand_matches.value_of("json_rpc_url") {
                     config.url = url.to_string();
                 }
                 if let Some(keypair) = subcommand_matches.value_of("keypair") {
@@ -42,7 +45,10 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                 println_name_value("* url:", &config.url);
                 println_name_value("* keypair:", &config.keypair);
             } else {
-                println!("{} Either provide the `--config` arg or ensure home directory exists to use the default config location", style("No config file found.").bold());
+                println!(
+                    "{} Either provide the `--config` arg or ensure home directory exists to use the default config location",
+                    style("No config file found.").bold()
+                );
             }
             false
         }
@@ -116,10 +122,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = app(crate_name!(), crate_description!(), crate_version!())
         .arg({
             let arg = Arg::with_name("config_file")
-                .short("c")
+                .short("C")
                 .long("config")
                 .value_name("PATH")
                 .takes_value(true)
+                .global(true)
                 .help("Configuration file to use");
             if let Some(ref config_file) = *config::CONFIG_FILE {
                 arg.default_value(&config_file)
@@ -133,6 +140,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("url")
                 .value_name("URL")
                 .takes_value(true)
+                .global(true)
                 .validator(is_url)
                 .help("JSON RPC URL for the solana cluster"),
         )
@@ -141,6 +149,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .short("k")
                 .long("keypair")
                 .value_name("PATH")
+                .global(true)
                 .takes_value(true)
                 .help("/path/to/id.json"),
         )
@@ -159,26 +168,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .subcommand(
             SubCommand::with_name("set")
                 .about("Set a wallet config setting")
-                .arg(
-                    Arg::with_name("url")
-                        .short("u")
-                        .long("url")
-                        .value_name("URL")
-                        .takes_value(true)
-                        .validator(is_url)
-                        .help("Set default JSON RPC URL to query"),
-                )
-                .arg(
-                    Arg::with_name("keypair")
-                        .short("k")
-                        .long("keypair")
-                        .value_name("PATH")
-                        .takes_value(true)
-                        .help("/path/to/id.json"),
-                )
                 .group(
                     ArgGroup::with_name("config_settings")
-                        .args(&["url", "keypair"])
+                        .args(&["json_rpc_url", "keypair"])
                         .multiple(true)
                         .required(true),
                 ),

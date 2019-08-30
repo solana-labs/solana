@@ -1683,22 +1683,21 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request lamports")
-        .arg(
-            Arg::with_name("drone_host")
-                .long("drone-host")
-                .value_name("HOST")
-                .takes_value(true)
-                .help("Drone host to use [default: the --url host]"),
-        )
-        .arg(
-            Arg::with_name("drone_port")
-                .long("drone-port")
-                .value_name("PORT")
-                .takes_value(true)
-                .default_value(solana_drone::drone::DRONE_PORT_STR)
-                .help("Drone port to use"),
-        )
-
+                .arg(
+                    Arg::with_name("drone_host")
+                        .long("drone-host")
+                        .value_name("HOST")
+                        .takes_value(true)
+                        .help("Drone host to use [default: the --url host]"),
+                )
+                .arg(
+                    Arg::with_name("drone_port")
+                        .long("drone-port")
+                        .value_name("PORT")
+                        .takes_value(true)
+                        .default_value(solana_drone::drone::DRONE_PORT_STR)
+                        .help("Drone port to use"),
+                )
                 .arg(
                     Arg::with_name("lamports")
                         .index(1)
@@ -1832,7 +1831,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("FILE")
                         .takes_value(true)
                         .help("Write the account data to this file"),
-                )
+                ),
         )
         .subcommand(
             SubCommand::with_name("show-vote-account")
@@ -1845,7 +1844,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Vote account pubkey"),
-                )
+                ),
         )
         .subcommand(
             SubCommand::with_name("delegate-stake")
@@ -2045,14 +2044,13 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 )
                 .arg(
                     Arg::with_name("storage_account_pubkey")
-                        .index(3)
+                        .index(2)
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Storage account address to redeem credits for"),
                 ))
-
         .subcommand(
             SubCommand::with_name("show-storage-account")
                 .about("Show the contents of a storage account")
@@ -2166,7 +2164,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .default_value("10")
                         .help("Wait up to timeout seconds for transaction confirmation"),
-                )
+                ),
         )
         .subcommand(
             SubCommand::with_name("send-signature")
