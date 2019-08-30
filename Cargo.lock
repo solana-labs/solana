@@ -3685,8 +3685,10 @@ name = "solana-replicator"
 version = "0.19.0-pre0"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "console 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-core 0.19.0-pre0",
  "solana-logger 0.19.0-pre0",
+ "solana-metrics 0.19.0-pre0",
  "solana-netutil 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
 ]
