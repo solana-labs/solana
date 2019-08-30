@@ -8,6 +8,13 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 
+// Return an error if a keypair file cannot be parsed.
+fn is_keypair(string: String) -> Result<(), String> {
+    read_keypair(&string)
+        .map(|_| ())
+        .map_err(|err| format!("{:?}", err))
+}
+
 fn main() {
     solana_logger::setup();
 
@@ -20,6 +27,7 @@ fn main() {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
+                .validator(is_keypair)
                 .help("File containing an identity (keypair)"),
         )
         .arg(
@@ -29,6 +37,7 @@ fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .required(true)
+                .validator(solana_netutil::is_host_port)
                 .help("Rendezvous with the cluster at this entry point"),
         )
         .arg(
@@ -47,6 +56,7 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .required(true)
+                .validator(is_keypair)
                 .help("File containing the storage account keypair"),
         )
         .get_matches();

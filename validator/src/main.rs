@@ -211,6 +211,13 @@ fn initialize_ledger_path(
     Ok(genesis_blockhash)
 }
 
+// Return an error if a keypair file cannot be parsed.
+fn is_keypair(string: String) -> Result<(), String> {
+    read_keypair(&string)
+        .map(|_| ())
+        .map_err(|err| format!("{:?}", err))
+}
+
 fn main() {
     solana_logger::setup_with_filter("solana=info");
     solana_metrics::set_panic_hook("validator");
@@ -233,6 +240,7 @@ fn main() {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
+                .validator(is_keypair)
                 .help("File containing the identity keypair for the validator"),
         )
         .arg(
@@ -240,6 +248,7 @@ fn main() {
                 .long("voting-keypair")
                 .value_name("PATH")
                 .takes_value(true)
+                .validator(is_keypair)
                 .help("File containing the authorized voting keypair.  Default is an ephemeral keypair"),
         )
         .arg(
@@ -247,6 +256,7 @@ fn main() {
                 .long("vote-account")
                 .value_name("PUBKEY")
                 .takes_value(true)
+                .validator(is_keypair)
                 .help("Public key of the vote account to vote with.  Default is the public key of the voting keypair"),
         )
         .arg(
@@ -254,6 +264,7 @@ fn main() {
                 .long("storage-keypair")
                 .value_name("PATH")
                 .takes_value(true)
+                .validator(is_keypair)
                 .help("File containing the storage account keypair.  Default is an ephemeral keypair"),
         )
         .arg(
@@ -278,6 +289,7 @@ fn main() {
                 .long("entrypoint")
                 .value_name("HOST:PORT")
                 .takes_value(true)
+                .validator(solana_netutil::is_host_port)
                 .help("Rendezvous with the cluster at this entry point"),
         )
         .arg(
@@ -324,6 +336,7 @@ fn main() {
                 .long("rpc-drone-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
+                .validator(solana_netutil::is_host_port)
                 .help("Enable the JSON RPC 'requestAirdrop' API with this drone address."),
         )
         .arg(
@@ -332,6 +345,7 @@ fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .hidden(true) // Don't document this argument to discourage its use
+                .validator(solana_netutil::is_host_port)
                 .help("Rendezvous with the vote signer at this RPC end point"),
         )
         .arg(

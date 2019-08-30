@@ -50,6 +50,13 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
+// Return an error if a keypair file cannot be parsed.
+fn is_keypair(string: String) -> Result<(), String> {
+    read_keypair(&string)
+        .map(|_| ())
+        .map_err(|err| format!("{:?}", err))
+}
+
 // Return an error if a url cannot be parsed.
 fn is_url(string: String) -> Result<(), String> {
     match url::Url::parse(&string) {
@@ -187,6 +194,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_keypair)
                         .help("/path/to/validator-keypair.json"),
                 )
                 .arg(

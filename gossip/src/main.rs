@@ -15,7 +15,7 @@ use std::error;
 use std::net::SocketAddr;
 use std::process::exit;
 
-fn pubkey_validator(pubkey: String) -> Result<(), String> {
+fn is_pubkey(pubkey: String) -> Result<(), String> {
     match pubkey.parse::<Pubkey>() {
         Ok(_) => Ok(()),
         Err(err) => Err(format!("{:?}", err)),
@@ -38,6 +38,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .default_value(&entrypoint_string)
+                .validator(solana_netutil::is_host_port)
                 .global(true)
                 .help("Rendezvous with the cluster at this entry point"),
         )
@@ -81,7 +82,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("pubkey")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(pubkey_validator)
+                        .validator(is_pubkey)
                         .help("Public key of a specific node to wait for"),
                 )
                 .arg(
@@ -101,7 +102,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .index(1)
                         .required(true)
                         .value_name("PUBKEY")
-                        .validator(pubkey_validator)
+                        .validator(is_pubkey)
                         .help("Public key of a specific node to stop"),
                 ),
         )
