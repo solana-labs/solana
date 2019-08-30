@@ -10,7 +10,7 @@ Both installation methods require that the scripts be run from the same
 directory as the NVIDIA proprietary driver installer programs have been
 downloaded to. `.` is `net/datacenter-node-install` in these examples, so the
 NVIDIA installers should be downloaded there as well. For up-to-date NVIDIA
-driver version requirements, see [scripts/setup-cuda.sh](scripts/setup-cuda.sh.)
+driver version requirements, see [./setup-cuda.sh](setup-cuda.sh.)
 
 ## Datacenter Node
 
