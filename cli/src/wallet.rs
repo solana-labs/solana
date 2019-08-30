@@ -13,7 +13,6 @@ use solana_client::client_error::ClientError;
 use solana_client::rpc_client::RpcClient;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
-use solana_drone::drone::DRONE_PORT;
 #[cfg(test)]
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::account_utils::State;
@@ -51,7 +50,11 @@ static CROSS_MARK: Emoji = Emoji("❌ ", "");
 pub enum WalletCommand {
     Address,
     Fees,
-    Airdrop(u64),
+    Airdrop {
+        drone_host: Option<IpAddr>,
+        drone_port: u16,
+        lamports: u64,
+    },
     Balance(Pubkey),
     Cancel(Pubkey),
     Confirm(Signature),
@@ -120,8 +123,6 @@ impl error::Error for WalletError {
 
 pub struct WalletConfig {
     pub command: WalletCommand,
-    pub drone_host: Option<IpAddr>,
-    pub drone_port: u16,
     pub json_rpc_url: String,
     pub keypair: Keypair,
     pub rpc_client: Option<RpcClient>,
@@ -131,30 +132,10 @@ impl Default for WalletConfig {
     fn default() -> WalletConfig {
         WalletConfig {
             command: WalletCommand::Balance(Pubkey::default()),
-            drone_host: None,
-            drone_port: DRONE_PORT,
             json_rpc_url: "http://127.0.0.1:8899".to_string(),
             keypair: Keypair::new(),
             rpc_client: None,
         }
-    }
-}
-
-impl WalletConfig {
-    pub fn drone_addr(&self) -> SocketAddr {
-        SocketAddr::new(
-            self.drone_host.unwrap_or_else(|| {
-                let drone_host = url::Url::parse(&self.json_rpc_url)
-                    .unwrap()
-                    .host()
-                    .unwrap()
-                    .to_string();
-                solana_netutil::parse_host(&drone_host).unwrap_or_else(|err| {
-                    panic!("Unable to resolve {}: {}", drone_host, err);
-                })
-            }),
-            self.drone_port,
-        )
     }
 }
 
@@ -205,8 +186,33 @@ pub fn parse_command(
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
         ("fees", Some(_fees_matches)) => Ok(WalletCommand::Fees),
         ("airdrop", Some(airdrop_matches)) => {
+            let drone_port = airdrop_matches
+                .value_of("drone_port")
+                .unwrap()
+                .parse()
+                .or_else(|err| {
+                    Err(WalletError::BadParameter(format!(
+                        "Invalid drone port: {:?}",
+                        err
+                    )))
+                })?;
+
+            let drone_host = if let Some(drone_host) = matches.value_of("drone_host") {
+                Some(solana_netutil::parse_host(drone_host).or_else(|err| {
+                    Err(WalletError::BadParameter(format!(
+                        "Invalid drone host: {:?}",
+                        err
+                    )))
+                })?)
+            } else {
+                None
+            };
             let lamports = airdrop_matches.value_of("lamports").unwrap().parse()?;
-            Ok(WalletCommand::Airdrop(lamports))
+            Ok(WalletCommand::Airdrop {
+                drone_host,
+                drone_port,
+                lamports,
+            })
         }
         ("balance", Some(balance_matches)) => {
             let pubkey = pubkey_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
@@ -483,7 +489,7 @@ fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
 fn process_airdrop(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    drone_addr: SocketAddr,
+    drone_addr: &SocketAddr,
     lamports: u64,
 ) -> ProcessResult {
     println!(
@@ -497,7 +503,7 @@ fn process_airdrop(
         ))?,
     };
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.keypair.pubkey(), lamports)?;
+    request_and_confirm_airdrop(&rpc_client, drone_addr, &config.keypair.pubkey(), lamports)?;
 
     let current_balance = rpc_client
         .retry_get_balance(&config.keypair.pubkey(), 5)?
@@ -1348,8 +1354,6 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
     }
     println_name_value("Using RPC Endpoint:", &config.json_rpc_url);
 
-    let drone_addr = config.drone_addr();
-
     let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
         _rpc_client = RpcClient::new(config.json_rpc_url.to_string());
@@ -1366,8 +1370,26 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Fees => process_fees(&rpc_client),
 
         // Request an airdrop from Solana Drone;
-        WalletCommand::Airdrop(lamports) => {
-            process_airdrop(&rpc_client, config, drone_addr, *lamports)
+        WalletCommand::Airdrop {
+            drone_host,
+            drone_port,
+            lamports,
+        } => {
+            let drone_addr = SocketAddr::new(
+                drone_host.unwrap_or_else(|| {
+                    let drone_host = url::Url::parse(&config.json_rpc_url)
+                        .unwrap()
+                        .host()
+                        .unwrap()
+                        .to_string();
+                    solana_netutil::parse_host(&drone_host).unwrap_or_else(|err| {
+                        panic!("Unable to resolve {}: {}", drone_host, err);
+                    })
+                }),
+                *drone_port,
+            );
+
+            process_airdrop(&rpc_client, config, &drone_addr, *lamports)
         }
 
         // Check client balance
@@ -1660,7 +1682,23 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
         .subcommand(
             SubCommand::with_name("airdrop")
-                .about("Request a batch of lamports")
+                .about("Request lamports")
+        .arg(
+            Arg::with_name("drone_host")
+                .long("drone-host")
+                .value_name("HOST")
+                .takes_value(true)
+                .help("Drone host to use [default: the --url host]"),
+        )
+        .arg(
+            Arg::with_name("drone_port")
+                .long("drone-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .default_value(solana_drone::drone::DRONE_PORT_STR)
+                .help("Drone port to use"),
+        )
+
                 .arg(
                     Arg::with_name("lamports")
                         .index(1)
@@ -2192,28 +2230,7 @@ mod tests {
     use solana_client::mock_rpc_client_request::SIGNATURE;
     use solana_sdk::signature::gen_keypair_file;
     use solana_sdk::transaction::TransactionError;
-    use std::net::{Ipv4Addr, SocketAddr};
     use std::path::PathBuf;
-
-    #[test]
-    fn test_wallet_config_drone_addr() {
-        let mut config = WalletConfig::default();
-        config.json_rpc_url = "http://127.0.0.1:8899".to_string();
-        let rpc_host = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        assert_eq!(
-            config.drone_addr(),
-            SocketAddr::new(rpc_host, config.drone_port)
-        );
-
-        config.drone_port = 1234;
-        assert_eq!(config.drone_addr(), SocketAddr::new(rpc_host, 1234));
-
-        config.drone_host = Some(rpc_host);
-        assert_eq!(
-            config.drone_addr(),
-            SocketAddr::new(config.drone_host.unwrap(), 1234)
-        );
-    }
 
     #[test]
     fn test_wallet_parse_command() {
@@ -2233,7 +2250,11 @@ mod tests {
             .get_matches_from(vec!["test", "airdrop", "50"]);
         assert_eq!(
             parse_command(&pubkey, &test_airdrop).unwrap(),
-            WalletCommand::Airdrop(50)
+            WalletCommand::Airdrop {
+                drone_host: None,
+                drone_port: solana_drone::drone::DRONE_PORT,
+                lamports: 50
+            }
         );
         let test_bad_airdrop = test_commands
             .clone()
@@ -2654,7 +2675,11 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // Need airdrop cases
-        config.command = WalletCommand::Airdrop(50);
+        config.command = WalletCommand::Airdrop {
+            drone_host: None,
+            drone_port: 1234,
+            lamports: 50,
+        };
         assert!(process_command(&config).is_ok());
 
         config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
@@ -2688,7 +2713,11 @@ mod tests {
         // Failure cases
         config.rpc_client = Some(RpcClient::new_mock("fails".to_string()));
 
-        config.command = WalletCommand::Airdrop(50);
+        config.command = WalletCommand::Airdrop {
+            drone_host: None,
+            drone_port: 1234,
+            lamports: 50,
+        };
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::Balance(config.keypair.pubkey());

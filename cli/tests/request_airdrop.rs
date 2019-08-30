@@ -14,10 +14,12 @@ fn test_wallet_request_airdrop() {
     let drone_addr = receiver.recv().unwrap();
 
     let mut bob_config = WalletConfig::default();
-    bob_config.drone_port = drone_addr.port();
     bob_config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    bob_config.command = WalletCommand::Airdrop(50);
+    bob_config.command = WalletCommand::Airdrop {
+        drone_host: None,
+        drone_port: drone_addr.port(),
+        lamports: 50,
+    };
 
     let sig_response = process_command(&bob_config);
     sig_response.unwrap();

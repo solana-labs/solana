@@ -29,9 +29,12 @@ fn test_wallet_deploy_program() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config = WalletConfig::default();
-    config.drone_port = drone_addr.port();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    config.command = WalletCommand::Airdrop(50);
+    config.command = WalletCommand::Airdrop {
+        drone_host: None,
+        drone_port: drone_addr.port(),
+        lamports: 50,
+    };
     process_command(&config).unwrap();
 
     config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());
