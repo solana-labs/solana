@@ -7,12 +7,12 @@ nodes.  They have been tested as working from a clean installation of Ubuntu
 # Installation
 
 Both installation methods require that the NVIDIA proprietary driver installer
-programs be downloaded alongside [setup-cuda.sh.](./setup-cuda.sh). If they do
+programs be downloaded alongside [setup-cuda.sh](./setup-cuda.sh). If they do
 not exist at runtime, an attempt will be made to download them automatically. To
 avoid downloading the installers at runtime, they may be downloaded in advanced
-and placed as siblings to [setup-cuda.sh.](./setup-cuda.sh).
+and placed as siblings to [setup-cuda.sh](./setup-cuda.sh).
 
-For up-to-date NVIDIA driver version requirements, see [setup-cuda.sh.](./setup-cuda.sh)
+For up-to-date NVIDIA driver version requirements, see [setup-cuda.sh](./setup-cuda.sh)
 
 ## Datacenter Node
 
