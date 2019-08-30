@@ -162,6 +162,7 @@ fn initialize_ledger_path(
         Some(1),
         Some(60),
         None,
+        Some(entrypoint.gossip.ip()),
         Some(&gossip_addr),
     )
     .map_err(|err| err.to_string())?;
