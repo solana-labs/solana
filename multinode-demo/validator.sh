@@ -277,21 +277,6 @@ while true; do
   [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
 
   setup_validator_accounts "$node_lamports"
-
-  vote_pubkey=$($solana_keygen pubkey "$voting_keypair_path")
-  storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
-  identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
-  export SOLANA_METRICS_HOST_ID="$identity_pubkey"
-
-  cat <<EOF
-======================[ validator configuration ]======================
-identity pubkey: $identity_pubkey
-vote pubkey: $vote_pubkey
-storage pubkey: $storage_pubkey
-ledger: $ledger_dir
-========================================================================
-EOF
-
   echo "$PS4$program ${args[*]}"
 
   $program "${args[@]}" &

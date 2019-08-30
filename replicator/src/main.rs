@@ -1,4 +1,5 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
+use console::style;
 use solana_core::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
 use solana_core::replicator::Replicator;
@@ -96,6 +97,14 @@ fn main() {
     let node =
         Node::new_replicator_with_external_ip(&keypair.pubkey(), &gossip_addr, FULLNODE_PORT_RANGE);
 
+    println!(
+        "{} version {} (branch={}, commit={})",
+        style(crate_name!()).bold(),
+        crate_version!(),
+        option_env!("CI_BRANCH").unwrap_or("unknown"),
+        option_env!("CI_COMMIT").unwrap_or("unknown")
+    );
+    solana_metrics::set_host_id(keypair.pubkey().to_string());
     println!(
         "replicating the data with keypair={:?} gossip_addr={:?}",
         keypair.pubkey(),

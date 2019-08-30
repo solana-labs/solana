@@ -71,9 +71,6 @@ args+=(
 )
 default_arg --gossip-port 8001
 
-identity_pubkey=$($solana_keygen pubkey "$identity_keypair")
-export SOLANA_METRICS_HOST_ID="$identity_pubkey"
-
 set -x
 # shellcheck disable=SC2086 # Don't want to double quote $program
 exec $program "${args[@]}"

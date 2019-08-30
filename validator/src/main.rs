@@ -403,6 +403,7 @@ fn main() {
     } else {
         Keypair::new()
     };
+
     let voting_keypair = if let Some(identity) = matches.value_of("voting_keypair") {
         read_keypair(identity).unwrap_or_else(|err| {
             eprintln!("{}: Unable to open keypair file: {}", err, identity);
@@ -522,6 +523,7 @@ fn main() {
         option_env!("CI_BRANCH").unwrap_or("unknown"),
         option_env!("CI_COMMIT").unwrap_or("unknown")
     );
+    solana_metrics::set_host_id(keypair.pubkey().to_string());
 
     if let Some(ref entrypoint_addr) = cluster_entrypoint {
         let expected_genesis_blockhash = initialize_ledger_path(
