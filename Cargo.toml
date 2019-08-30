@@ -50,8 +50,8 @@ members = [
     "sdk-c",
     "upload-perf",
     "validator-info",
-    "utils/netutil",
-    "utils/fixed-buf",
+    "netutil",
+    "fixed-buf",
     "vote-signer",
     "cli",
 ]

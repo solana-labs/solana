@@ -11,7 +11,7 @@ homepage = "https://solana.com/"
 clap = "2.33.0"
 solana-core = { path = "../core", version = "0.19.0-pre0" }
 solana-logger = { path = "../logger", version = "0.19.0-pre0" }
-solana-netutil = { path = "../utils/netutil", version = "0.19.0-pre0" }
+solana-netutil = { path = "../netutil", version = "0.19.0-pre0" }
 solana-sdk = { path = "../sdk", version = "0.19.0-pre0" }
 
 [features]
