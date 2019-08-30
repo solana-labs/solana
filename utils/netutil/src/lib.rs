@@ -104,6 +104,11 @@ pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
     }
 }
 
+pub fn is_host_port(string: String) -> Result<(), String> {
+    parse_host_port(&string)?;
+    Ok(())
+}
+
 #[cfg(windows)]
 fn udp_socket(_reuseaddr: bool) -> io::Result<Socket> {
     let sock = Socket::new(Domain::ipv4(), Type::dgram(), None)?;

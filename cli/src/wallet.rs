@@ -1661,7 +1661,7 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
-// Return an error if a pubkey cannot be parsed.
+// Return an error if a keypair file cannot be parsed.
 fn is_keypair(string: String) -> Result<(), String> {
     read_keypair(&string)
         .map(|_| ())
