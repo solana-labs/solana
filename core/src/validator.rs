@@ -483,10 +483,16 @@ pub fn new_banks_from_blocktree(
 
     if let Some(expected_genesis_blockhash) = expected_genesis_blockhash {
         if genesis_blockhash != expected_genesis_blockhash {
-            panic!(
+            error!(
                 "Genesis blockhash mismatch: expected {} but local genesis blockhash is {}",
                 expected_genesis_blockhash, genesis_blockhash,
             );
+            error!(
+                "Delete the ledger directory to continue: {:?}",
+                blocktree_path
+            );
+            // TODO: bubble error up to caller?
+            std::process::exit(1);
         }
     }
 
