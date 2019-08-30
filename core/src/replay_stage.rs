@@ -573,7 +573,6 @@ impl ReplayStage {
     ) -> Vec<(u128, Arc<Bank>, HashMap<u64, StakeLockout>, u64)> {
         let tower_start = Instant::now();
         // Tower voting
-        let descendants = bank_forks.read().unwrap().descendants();
         let ancestors = bank_forks.read().unwrap().ancestors();
         let frozen_banks = bank_forks.read().unwrap().frozen_banks();
 
@@ -591,7 +590,7 @@ impl ReplayStage {
                 !has_voted
             })
             .filter(|b| {
-                let is_locked_out = tower.is_locked_out(b.slot(), &descendants);
+                let is_locked_out = tower.is_locked_out(b.slot(), &ancestors);
                 trace!("bank is is_locked_out: {} {}", b.slot(), is_locked_out);
                 !is_locked_out
             })
