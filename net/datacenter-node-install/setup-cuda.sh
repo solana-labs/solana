@@ -16,7 +16,7 @@ set -xe
 
 RUN_FILES=()
 FAILED=()
-for i in ${!VERSIONS[@]}; do
+for i in "${!VERSIONS[@]}"; do
   URL=${VERSIONS[$i]}
   RUN_FILE="$(basename "$URL")"
   DEST="${HERE}/${RUN_FILE}"
@@ -35,7 +35,7 @@ for i in ${!VERSIONS[@]}; do
 done
 
 if [[ 0 -ne ${#FAILED[@]} ]]; then
-  for f in ${FAILED[@]}; do
+  for f in "${FAILED[@]}"; do
     echo "Failed to download required resource: $f"
   done
   echo "Please manually download the above resources, save them to \"${HERE}\" and rerun $0"
@@ -45,6 +45,6 @@ fi
 apt update
 apt install -y gcc make dkms
 
-for rf in ${RUN_FILES[@]}; do
+for rf in "${RUN_FILES[@]}"; do
   sh "$rf" --silent --driver --toolkit
 done
