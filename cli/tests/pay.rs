@@ -40,12 +40,10 @@ fn test_wallet_timestamp_tx() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = WalletConfig::default();
-    config_payer.drone_port = drone_addr.port();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
-    config_witness.drone_port = config_payer.drone_port;
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(
@@ -113,12 +111,10 @@ fn test_wallet_witness_tx() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = WalletConfig::default();
-    config_payer.drone_port = drone_addr.port();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
-    config_witness.drone_port = config_payer.drone_port;
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(
@@ -182,12 +178,10 @@ fn test_wallet_cancel_tx() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = WalletConfig::default();
-    config_payer.drone_port = drone_addr.port();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
-    config_witness.drone_port = config_payer.drone_port;
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(

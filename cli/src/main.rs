@@ -66,28 +66,6 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         default.json_rpc_url
     };
 
-    let drone_host = if let Some(drone_host) = matches.value_of("drone_host") {
-        Some(solana_netutil::parse_host(drone_host).or_else(|err| {
-            Err(WalletError::BadParameter(format!(
-                "Invalid drone host: {:?}",
-                err
-            )))
-        })?)
-    } else {
-        None
-    };
-
-    let drone_port = matches
-        .value_of("drone_port")
-        .unwrap()
-        .parse()
-        .or_else(|err| {
-            Err(WalletError::BadParameter(format!(
-                "Invalid drone port: {:?}",
-                err
-            )))
-        })?;
-
     let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {
         matches.value_of("keypair").unwrap()
@@ -113,8 +91,6 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
 
     Ok(WalletConfig {
         command,
-        drone_host,
-        drone_port,
         json_rpc_url,
         keypair,
         rpc_client: None,
@@ -137,10 +113,6 @@ fn is_url(string: String) -> Result<(), String> {
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup();
-
-    let default = WalletConfig::default();
-    let default_drone_port = format!("{}", default.drone_port);
-
     let matches = app(crate_name!(), crate_description!(), crate_version!())
         .arg({
             let arg = Arg::with_name("config_file")
@@ -163,21 +135,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .validator(is_url)
                 .help("JSON RPC URL for the solana cluster"),
-        )
-        .arg(
-            Arg::with_name("drone_host")
-                .long("drone-host")
-                .value_name("HOST")
-                .takes_value(true)
-                .help("Drone host to use [default: same as the --url host]"),
-        )
-        .arg(
-            Arg::with_name("drone_port")
-                .long("drone-port")
-                .value_name("PORT")
-                .takes_value(true)
-                .default_value(&default_drone_port)
-                .help("Drone port to use"),
         )
         .arg(
             Arg::with_name("keypair")
