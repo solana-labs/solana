@@ -7,7 +7,7 @@ use crate::spv_state::*;
 
 // HeaderStore is a data structure that allows linked list style cheap appends and
 // sequential reads, but also has a "lookup index" to speed up random access
-enum HeaderStoreError {
+pub enum HeaderStoreError {
     InvalidHeader,
     GroupExists,
     GroupDNE,
@@ -16,7 +16,7 @@ enum HeaderStoreError {
 
 // AccountList is a linked list of groups of blockheaders. It stores sequential blockheaders
 #[derive(PartialEq, Eq, Hash)]
-struct HeaderStore {
+pub struct HeaderStore {
     pub index: Vec<Pubkey>,
     // number of header entries to include per group account
     pub groupSize: u16,
@@ -34,7 +34,7 @@ impl HeaderStore {
             Err(HeaderStoreError::InvalidBlockHeight)
         }
         else {
-            let gheight: u32    = (blockheight - self.baseHeight) / self.groupSize as u32;
+            let gheight: u32    = (blockHeight - self.baseHeight) / self.groupSize as u32;
             let grouppk: Pubkey = self.index[gheight];
             Ok(grouppk)
         }
@@ -64,10 +64,10 @@ impl HeaderStore {
 
     pub fn ReplaceHeader(mut self, blockheader: &BlockHeader, blockheight: u32) -> Result<(), SpvError> {
         match self.getGroup(blockheight) {
+            None    => SpvError::InvalidHeader
             Some(n) => {
                 let group = n;
             }
-            None    => SpvError::InvalidHeader
         }
         // access account data for group
     }
@@ -77,14 +77,14 @@ impl HeaderStore {
             // group to be appended is already in the index
             HeaderStoreError::GroupExists
         }
-
+        else {
+            Ok()
+            //insert actual function HeaderStoreError
+        }
     }
-
-
-
 }
 
-struct HeaderAccount {
+pub struct HeaderAccount {
     // parent stores the pubkey of the parent AccountList
     pub parent: Pubkey,
     // stores a vec of BlockHeader structs
