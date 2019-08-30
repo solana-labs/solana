@@ -147,6 +147,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 num_nodes,
                 timeout,
                 pubkey,
+                None,
                 gossip_addr.as_ref(),
             )?;
 
@@ -184,6 +185,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 Some(1),
                 Some(timeout),
                 None,
+                Some(entrypoint_addr.ip()),
                 gossip_addr.as_ref(),
             )?;
 
@@ -211,6 +213,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 None,
                 None,
                 Some(pubkey),
+                None,
                 gossip_addr.as_ref(),
             )?;
             let node = nodes.iter().find(|x| x.id == pubkey).unwrap();
