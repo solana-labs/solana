@@ -149,11 +149,16 @@ impl Reset for Packets {
     fn reset(&mut self) {
         self.packets.resize(0, Packet::default());
     }
+    fn debug(&self) {
+    }
 }
 
 impl Reset for PinnedVec<Packet> {
     fn reset(&mut self) {
         self.resize(0, Packet::default());
+    }
+    fn debug(&self) {
+        info!("self: {}", self.id);
     }
 }
 
@@ -181,7 +186,10 @@ impl Packets {
 
     pub fn new_with_recycler(recycler: PacketsRecycler, size: usize, name: &'static str) -> Self {
         let mut packets = recycler.allocate(name);
-        packets.reserve_and_pin(size);
+        let res = packets.reserve_and_pin(size);
+        if res.is_err() {
+            recycler.debug();
+        }
         Packets {
             packets,
             recycler: Some(recycler),

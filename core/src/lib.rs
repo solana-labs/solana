@@ -5,6 +5,11 @@
 //! command-line tools to spin up fullnodes and a Rust library
 //!
 
+#![feature(ptr_internals)]
+#![feature(allocator_api)]
+#![feature(alloc_layout_extra)]
+
+
 pub mod bank_forks;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
