@@ -40,18 +40,9 @@ impl<T: Default> Clone for Recycler<T> {
 
 pub trait Reset {
     fn reset(&mut self);
-    fn debug(&self);
 }
 
 impl<T: Default + Reset> Recycler<T> {
-    pub fn debug(&self) {
-        let gc = self.gc.lock().expect("recycler debug gc lock");
-        info!("recycler: {}", gc.len());
-        for x in gc.iter() {
-            x.debug();
-        }
-    }
-
     pub fn allocate(&self, name: &'static str) -> T {
         let new = self
             .gc

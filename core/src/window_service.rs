@@ -275,6 +275,7 @@ mod test {
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::contact_info::ContactInfo;
+    use crate::cuda_runtime::PinnedVec;
     use crate::entry::{make_consecutive_blobs, make_tiny_test_entries, Entry};
     use crate::genesis_utils::create_genesis_block_with_leader;
     use crate::packet::{Packet, Packets};
@@ -458,7 +459,7 @@ mod test {
 
         let max_attempts = 10;
         let mut num_attempts = 0;
-        let mut q = Vec::new();
+        let mut q = PinnedVec::new();
         loop {
             assert!(num_attempts != max_attempts);
             while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(500)) {
@@ -547,7 +548,7 @@ mod test {
             s_responder.send(msgs1).expect("send");
             t_responder
         };
-        let mut q = Vec::new();
+        let mut q = PinnedVec::new();
         while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(5000)) {
             q.append(&mut nq.packets);
         }
@@ -609,7 +610,9 @@ mod test {
         sleep(Duration::from_millis(500));
 
         // add some empty packets to the data set. These should fail to deserialize
-        packets.packets.append(&mut vec![Packet::default(); 10]);
+        packets
+            .packets
+            .append(&mut PinnedVec::from_vec(vec![Packet::default(); 10]));
         packets.packets.shuffle(&mut thread_rng());
         packet_sender.send(packets.clone()).unwrap();
         sleep(Duration::from_millis(500));
