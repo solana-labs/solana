@@ -30,6 +30,10 @@ solana-sdk = { path = "../sdk", version = "0.19.0-pre0" }
 solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.19.0-pre0" }
 solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.19.0-pre0" }
 
+[dev-dependencies]
+serial_test = "0.2.0"
+serial_test_derive = "0.2.0"
+
 [features]
 cuda = ["solana-core/cuda"]
 

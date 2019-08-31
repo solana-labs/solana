@@ -935,6 +935,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
 mod tests {
 
     use super::*;
+    use serial_test_derive::serial;
     use solana_client::thin_client::create_client;
     use solana_core::cluster_info::FULLNODE_PORT_RANGE;
     use solana_core::validator::ValidatorConfig;
@@ -1006,6 +1007,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_bench_tps_local_cluster_solana() {
         let mut config = Config::default();
         config.tx_count = 100;
@@ -1015,6 +1017,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_bench_tps_local_cluster_move() {
         let mut config = Config::default();
         config.tx_count = 100;
