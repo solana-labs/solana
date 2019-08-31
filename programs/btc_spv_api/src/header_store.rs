@@ -31,12 +31,12 @@ pub struct HeaderStore {
 
 impl HeaderStore {
     pub fn getGroup(self, blockHeight: u32) -> Result<Pubkey, HeaderStoreError> {
-        if blockHeight < self.baseHeight || blockHeight > self.ceiling {
+        if blockHeight < self.baseHeight || blockHeight > self.topHeight {
             Err(HeaderStoreError::InvalidBlockHeight)
         }
         else {
-            let gheight: u32    = (blockHeight - self.baseHeight) / self.groupSize as u32;
-            let grouppk: Pubkey = self.index[gheight];
+            let gheight = (blockHeight - self.baseHeight) / self.groupSize as u32;
+            let grouppk: Pubkey = self.index[gheight as usize];
             Ok(grouppk)
         }
     }
