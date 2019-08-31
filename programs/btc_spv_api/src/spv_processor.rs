@@ -29,22 +29,22 @@ impl SpvProcessor {
     }
 
     fn deserialize_request(data: &[u8]) -> Result<ClientRequestInfo, InstructionError> {
-        let req_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg);
+        let req_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Request(info) = req_state {
-            Ok(req_state)
+            Ok(info)
         } else {
             error!("Not a valid proof request");
-            Err(InstructionError::InvalidAccountData)?;
+            Err(InstructionError::InvalidAccountData)
         }
     }
 
     pub fn check_account_unallocated(data: &[u8]) -> Result<(), InstructionError> {
-        let acct_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg);
+        let acct_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Unallocated = acct_state {
             Ok(())
         } else {
             error!("Provided account is already occupied");
-            Err(InstructionError::InvalidAccountData)?;
+            Err(InstructionError::InvalidAccountData)
         }
     }
 
