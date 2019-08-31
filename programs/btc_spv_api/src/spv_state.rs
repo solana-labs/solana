@@ -94,11 +94,68 @@ impl BlockHeader {
 
     pub fn difficulty(mut self) -> u32 {
         // calculates difficulty from nbits
-
+        let standin: u32 = 123456789;
+        standdin
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Transaction {
+    inputs: Vec<Input>,
 
+    outputs: Vec<Output>,
+
+    version: u32,
+
+    locktime: u32,
+}
+
+impl Transaction {
+    fn new(bytes: Vec<u8>) -> Self {
+        //todo
+    }
+    fn hexnew(hex: String) -> Self {
+        //todo
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Input {
+    r#type: InputType,
+    // Type of the input
+    position: u32,
+    // position of the tx in its Block
+    txhash: BitcoinTxHash,
+    // hash of the transaction
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum InputType{
+    LEGACY,
+    COMPATIBILITY,
+    WITNESS,
+    NONE,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Output {
+    r#type: OutputType,
+    // type of the output
+    value: u64,
+    // amount of btc in sats
+    payload: Vec<u8>
+    // data sent with the transaction
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum OutputType{
+    WPKH,
+    WSH,
+    OP_RETURN,
+    PKH,
+    SH,
+    NONSTANDARD,
+}
 
 pub type HeaderChain = Vec<BlockHeader>;
 // a vector of BlockHeaders used as part of a Proof
