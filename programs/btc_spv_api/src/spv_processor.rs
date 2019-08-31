@@ -76,7 +76,7 @@ impl SpvProcessor {
         keyed_accounts: &mut [KeyedAccount],
         request_info  : &ClientRequestInfo,
     ) -> Result<(), InstructionError> {
-        if *keyed_accounts.len() != 2 {
+        if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
         const OWNER_INDEX   : usize = 0;
@@ -88,9 +88,8 @@ impl SpvProcessor {
 
     pub fn do_cancel_request(
         keyed_accounts: &mut[KeyedAccount],
-        txHash        : BitcoinTxHash,
     ) -> Result<(), InstructionError> {
-        if *keyed_accounts.len() != 2 {
+        if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
         const OWNER_INDEX: usize = 0;

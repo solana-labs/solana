@@ -33,6 +33,7 @@ pub fn client_request(
     fee           : u64,
     confirmations : u8,
     difficulty    : u64,
+    expiration    : Option<u32>,
 ) -> Instruction {
     let account_meta = vec![AccountMeta::new(*owner, true)];
     Instruction::new(
@@ -42,6 +43,7 @@ pub fn client_request(
             confirmations,
             fee,
             difficulty,
+            expiration,
         }),
         account_meta,
     )
@@ -51,7 +53,7 @@ pub fn cancel_request(
     owner   : &Pubkey,
     request : &Pubkey,
 ) -> Instruction {
-    let account_meta = vec![AccountMeta::new(*owner, true), AccountMeta::new(*request)];
+    let account_meta = vec![AccountMeta::new(*owner, true), AccountMeta::new(*request, false)];
     Instruction::new(
         id(),
         &SpvInstruction::CancelRequest,
