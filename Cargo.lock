@@ -3131,7 +3131,7 @@ dependencies = [
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.18.0-pre2",
+ "solana-sdk 0.19.0-pre0",
 ]
 
 [[package]]
@@ -3145,7 +3145,7 @@ dependencies = [
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.18.0-pre2",
+ "solana-sdk 0.19.0-pre0",
 ]
 
 [[package]]
