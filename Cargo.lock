@@ -3095,6 +3095,8 @@ dependencies = [
  "serde_derive 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_yaml 0.8.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial_test 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial_test_derive 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-client 0.19.0-pre0",
  "solana-core 0.19.0-pre0",
  "solana-drone 0.19.0-pre0",
