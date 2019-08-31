@@ -85,6 +85,7 @@ pub type HeaderChain = Vec<BlockHeader>;
 // index 2-n* : the block headers for the confirmation chain
 // (where n is the confirmations value from the proof request)
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct ProofEntry {
     // 32 byte merkle hashes
     pub hash: [u8;32],
@@ -92,6 +93,7 @@ pub struct ProofEntry {
     pub side: EntrySide,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum EntrySide {
     // Left side of the hash combination
     Left,
@@ -138,24 +140,26 @@ pub struct ProofRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct ProofInfo {
+pub struct Proof {
     // the pubkey who submitted the proof in question, entitled to fees from any corresponding proof requests
     pub submitter:  Pubkey,
     // merkle branch connecting txhash to block header merkle root
     pub proof:      MerkleProof,
     // chain of bitcoin headers provifing context for the proof
     pub headers:    HeaderChain,
-    // computed validity of the proof in question
-    pub validity:   Option<bool>,
     // txhash associated with the Proof
-    pub txhash:     BitcoinTxHash,
+    pub transaction:Transaction,
+    // public key of the request this proof corresponds to
+    pub request: Pubkey,
 }
 
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum AccountState {
     // Request Account
     Request(ClientRequestInfo),
     // Verified Proof
-    Verification(ProofInfo),
+    Verification(Proof),
     // Account's userdata is Unallocated
     Unallocated,
     // Invalid
@@ -169,7 +173,7 @@ impl Default for AccountState {
 }
 
 ///Errors
-
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum SpvError {
     InvalidBlockHeader,
 
