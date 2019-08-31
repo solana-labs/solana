@@ -20,7 +20,7 @@ libloading = "0.5.2"
 log = "0.4.8"
 memmap = "0.6.2"
 rand = "0.6.5"
-rayon = "1.1.0"
+rayon = "1.2.0"
 serde = { version = "1.0.99", features = ["rc"] }
 serde_derive = "1.0.99"
 serde_json = "1.0.40"
