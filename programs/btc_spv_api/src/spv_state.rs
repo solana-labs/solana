@@ -112,14 +112,14 @@ pub struct Transaction {
     locktime: u32,
 }
 
-impl Transaction {
-    fn new(bytes: Vec<u8>) -> Self {
-        //todo
-    }
-    fn hexnew(hex: String) -> Self {
-        //todo
-    }
-}
+// impl Transaction {
+//     fn new(bytes: Vec<u8>) -> Self {
+//         //todo
+//     }
+//     fn hexnew(hex: String) -> Self {
+//         //todo
+//     }
+// }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Input {
