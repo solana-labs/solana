@@ -15,54 +15,76 @@ pub struct BlockHeader {
     // Bitcoin network version
     pub version     : u32,
     // Previous block's hash/digest
-    pub parent      : BitcoinTxHash,
+    pub parent      : [u8;32],
     // merkle Root of the block, proofEntry side should be None
     pub merkle_root : ProofEntry,
     // the blocktime associate with the block
     pub time        : u32,
     // An encoded version of the target threshold this block’s header hash must be less than or equal to.
-    pub nbits       : u32,
+    pub nbits       : [u8;4],
 
-    pub nonce       : u32,
+    pub nonce       : [u8;4],
     // Block hash
-    pub blockhash   : BitcoinTxHash,
+    pub blockhash   : [u8;32],
 }
 
 impl BlockHeader {
     pub fn new(header: &[u8;80], blockhash: &[u8;32]) -> Result<BlockHeader, SpvError> {
+        let mut va : [u8;4] = Default::default();
+        va.copy_from_slice(&header[0 .. 4]);
+        let version    = u32::from_le_bytes(va);
 
-        let version    = header[0 .. 4]; // version is largely useless because of miners messing with the last 2 bytes
-        // extract digest from last block
-        let parentHash = header[4 .. 36];
+        let mut ph : [u8;32] = Default::default();
+        ph.copy_from_slice(&header[4 .. 36]);
+        let parentHash = ph;
         // extract merkle root in internal byte order
-        let merkleRoot = header[36 .. 68];
+        let mut mrr : [u8;32] = Default::default();
+        mrr.copy_from_slice(&header[36 .. 68]);
+        let merkleRoot = ProofEntry {
+            hash: mrr,
+            side: EntrySide::Root,
+        };
         // timestamp associate with the block
-        let blockTime  = u32::from_le_bytes(header[68 .. 72]);
+        let mut bt : [u8;4] = Default::default();
+        bt.copy_from_slice(&header[68 .. 72]);
+        let blockTime  = u32::from_le_bytes(bt);
+
         // nbits field is an encoded version of the
-        let nbits      = header[72 .. 76];
+        let mut nb: [u8;4] = Default::default();
+        nb.copy_from_slice(&header[72 .. 76]);
+        let nbits      = nb;
 
-        let nonce      = header[76 .. 80];
+        let mut nn : [u8;4] = Default::default();
+        nn.copy_from_slice(&header[76 .. 80]);
+        let nonce      = nn;
 
-        BlockHeader {
+        let bh = BlockHeader {
             version: version,
             parent: parentHash,
             merkle_root: merkleRoot,
             time: blockTime,
             nbits: nbits,
             nonce: nonce,
-            blockhash: blockhash,
-        }
+            blockhash: *blockhash,
+        };
+        Ok(bh)
     }
 
     pub fn hexnew(header: &str, blockhash: &str) -> Result<BlockHeader, SpvError> {
         if header.len() != 160 || blockhash.len() != 64 {
-            Err(SpvError::InvalidBlockHeader)
+            Err(SpvError::InvalidBlockHeader);
         }
-        let bhbytes = decode_hex(blockhash)?;
 
         match decode_hex(header){
             Ok(header) => {
-                Ok(BlockHeader::new(&header, &bhbytes))
+                let bhbytes = decode_hex(blockhash)?;
+                let mut hh: [u8;80] = Default.default();
+                hh.copy_from_slice(&header[..header.len()]);
+
+                let mut bhb: [u8;32] = Default.default();
+                bhb.copy_from_slice(&bhbytes[..bhbytes.len()]);
+
+                Ok(BlockHeader::new(&hh, &bhb).unwrap())
             }
             Err(e) => {
                 Err(e)
