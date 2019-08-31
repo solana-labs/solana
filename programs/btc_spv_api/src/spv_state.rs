@@ -282,15 +282,15 @@ impl From<DecodeHexError> for SpvError {
     }
 }
 
-impl fmt::Debug for SpvError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result{
-        match self {
-            SpvError::InvalidBlockHeader  => "BlockHeader is malformed or does not apply ".fmt(f),
-            SpvError::HeaderStoreError => "Placeholder headerstore error debug text".fmt(f),
-            SpvError::ParseError => "Error parsing blockheaders debug".fmt(f),
-        }
-    }
-}
+// impl fmt::Debug for SpvError {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result{
+//         match self {
+//             SpvError::InvalidBlockHeader  => "BlockHeader is malformed or does not apply ".fmt(f),
+//             SpvError::HeaderStoreError => "Placeholder headerstore error debug text".fmt(f),
+//             SpvError::ParseError => "Error parsing blockheaders debug".fmt(f),
+//         }
+//     }
+// }
 
 impl fmt::Display for SpvError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
