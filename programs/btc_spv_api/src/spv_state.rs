@@ -78,10 +78,12 @@ impl BlockHeader {
         match decode_hex(header){
             Ok(header) => {
                 let bhbytes = decode_hex(blockhash)?;
-                let mut hh: [u8;80] = Default.default();
+                const size: usize = 80;
+                let mut hh = [0; size];
+                // let mut hh: [u8;80] = [Default.default(), 80];
                 hh.copy_from_slice(&header[..header.len()]);
 
-                let mut bhb: [u8;32] = Default.default();
+                let mut bhb: [u8;32] = Default::default();
                 bhb.copy_from_slice(&bhbytes[..bhbytes.len()]);
 
                 Ok(BlockHeader::new(&hh, &bhb).unwrap())
@@ -95,7 +97,7 @@ impl BlockHeader {
     pub fn difficulty(mut self) -> u32 {
         // calculates difficulty from nbits
         let standin: u32 = 123456789;
-        standdin
+        standin
     }
 }
 

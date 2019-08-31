@@ -21,7 +21,7 @@ impl SpvProcessor {
     fn deserialize_proof(data: &[u8]) -> Result<Proof, InstructionError> {
         let proof_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Verification(Proof) = proof_state {
-            Ok(proof_state)
+            Ok(Proof)
         } else {
             error!("Not a valid proof");
             Err(InstructionError::InvalidAccountData)?
@@ -125,9 +125,14 @@ mod test {
         let testheader = "010000008a730974ac39042e95f82d719550e224c1a680a8dc9e8df9d007000000000000f50b20e8720a552dd36eb2ebdb7dceec9569e0395c990c1eb8a4292eeda05a931e1fce4e9a110e1a7a58aeb0";
         let testhash   = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
         let testhashbytes = decode_hex(&testhash)?;
+        let mut thb: [u8; 32] = Default::default();
+        thb.copy_from_slice(&testhashbytes[..32]);
 
         let bh = BlockHeader::hexnew(&testheader, &testhash)?;
-        assert_eq!(bh.blockhash, testhashbytes);
+        // let mut bbh: [u8;32] = Default::default();
+        // bbh.copy_from_slice(bh[.. bh.len()]);
+
+        assert_eq!(bh.blockhash, thb);
         Ok(())
     }
 }

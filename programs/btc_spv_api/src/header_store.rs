@@ -69,12 +69,12 @@ impl HeaderStore {
         }
     }
 
-    pub fn ReplaceHeader(mut self, blockheader: &BlockHeader, blockheight: u32) -> Result<(), SpvError> {
+    pub fn ReplaceHeader(mut self, blockheader: &BlockHeader, blockheight: u32) -> Result<(), HeaderStoreError> {
         match self.getGroup(blockheight) {
-            None    => {
-                Err(SpvError::InvalidHeader)
+            Err(e)    => {
+                Err(HeaderStoreError::InvalidHeader)
             }
-            Some(n) => {
+            Ok(n) => {
                 let group = n;
                 Ok(())
             }
