@@ -14,29 +14,6 @@ pub struct SpvProcessor {}
 impl SpvProcessor {
 
     pub fn validateHeaderChain(headers: &HeaderChain, proof_req: &ProofRequest) -> Result<(), InstructionError> {
-        let ln       = *headers.len();
-        let confirms = *proof_req.confirmations;
-        let diff     = *proof_req.difficulty;
-        // check that the headerchain is the right length
-        if ln != (2 + confirms) {
-            error!("Invalid length for Header Chain");
-            Err(InstructionError::InvalidArgument)? //is this ? necessary?
-        }
-
-        for bh in 1..ln {
-            let header    = *headers[bh];
-            let pheader   = *headers[bh-1];
-            // check that the headerchain is in order and contiguous
-            if header.parent != pheader.digest {
-                error!("Invalid Header Chain hash sequence for header index {}", bh);
-                Err(InstructionError::InvalidArgument)?
-            }
-            //check that block difficulty is above the given threshold
-            if header.difficulty < diff {
-                error!("Invalid block difficulty for header index {}", bh);
-                Err(InstructionError::InvalidArgument)?
-            }
-        }
         //not done yet, needs difficulty average/variance checking still
         Ok(())
     }
