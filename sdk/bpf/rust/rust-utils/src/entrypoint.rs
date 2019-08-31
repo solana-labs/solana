@@ -66,7 +66,7 @@ pub unsafe fn deserialize<'a>(
 
     // KeyedAccounts
 
-    let mut kas = Vec::new();
+    let mut kas = Vec::with_capacity(num_ka);
     for _ in 0..num_ka {
         let is_signer = {
             #[allow(clippy::cast_ptr_alignment)]
