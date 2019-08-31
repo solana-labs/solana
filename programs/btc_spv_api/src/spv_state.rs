@@ -72,7 +72,7 @@ impl BlockHeader {
 
     pub fn hexnew(header: &str, blockhash: &str) -> Result<BlockHeader, SpvError> {
         if header.len() != 160 || blockhash.len() != 64 {
-            Err(SpvError::InvalidBlockHeader);
+            Err(SpvError::InvalidBlockHeader)?
         }
 
         match decode_hex(header){
@@ -89,7 +89,7 @@ impl BlockHeader {
                 Ok(BlockHeader::new(&hh, &bhb).unwrap())
             }
             Err(e) => {
-                Err(e)
+                Err(SpvError::InvalidBlockHeader)
             }
         }
     }

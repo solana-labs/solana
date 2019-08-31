@@ -14,8 +14,15 @@ pub struct SpvProcessor {}
 impl SpvProcessor {
 
     pub fn validateHeaderChain(headers: &HeaderChain, proof_req: &ProofRequest) -> Result<(), InstructionError> {
+        // disabled for time being
         //not done yet, needs difficulty average/variance checking still
         Ok(())
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
+    fn map_to_invalid_arg(err: std::boxed::Box<bincode::ErrorKind>) -> InstructionError {
+        warn!("Deserialize failed, not a valid state: {:?}", err);
+        InstructionError::InvalidArgument
     }
 
     fn deserialize_proof(data: &[u8]) -> Result<Proof, InstructionError> {
@@ -59,7 +66,7 @@ impl SpvProcessor {
         const OWNER_INDEX   : usize = 0;
         const REQUEST_INDEX : usize = 1;
 
-        Self.check_account_unallocated(&keyed_accounts[REQUEST_INDEX].account.data)?;
+        // check_account_unallocated(&keyed_accounts[REQUEST_INDEX].account.data)?;
         Ok(()) //placeholder
     }
 
