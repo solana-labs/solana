@@ -22,7 +22,7 @@ pub enum SpvInstruction {
     // used to submit a proof matching a posted BitcoinTxHash or for own benefit
     // key 0 - signer
     // key 1 - Request to prove
-    SubmitProof(ProofInfo),
+    SubmitProof(Proof),
 
 }
 
@@ -63,15 +63,18 @@ pub fn submit_proof(
     submitter : &Pubkey,
     proof     : MerkleProof,
     headers   : HeaderChain,
-    txhash    : BitcoinTxHash,
+    transaction: Transaction,
+    request   : &Pubkey,
 ) -> Instruction {
-    let account_meta = vec![AccountMeta::new(*submitter, true)];
+    let account_meta = vec![AccountMeta::new(*submitter, true), AccountMeta::new(*request, false)];
     Instruction::new(
         id(),
-        &SpvInstruction::SubmitProof(ProofInfo{
+        &SpvInstruction::SubmitProof(Proof{
+            submitter: *submitter,
             proof,
             headers,
-            txhash,
+            transaction,
+            request: *request,
         }),
         account_meta,
     )

@@ -41,8 +41,8 @@ impl SpvProcessor {
         Ok(())
     }
 
-    fn deserialize_proof(data: &[u8]) -> Result<ProofInfo, InstructionError> {
-        let proof_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg);
+    fn deserialize_proof(data: &[u8]) -> Result<Proof, InstructionError> {
+        let proof_state : AccountState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
         if let AccountState::Verification(Proof) = proof_state {
             Ok(proof_state)
         } else {
@@ -101,9 +101,9 @@ impl SpvProcessor {
 
     pub fn do_submit_proof(
         keyed_accounts: &mut[KeyedAccount],
-        proof_info    : &ProofInfo,
+        proof_info    : &Proof,
     ) -> Result<(), InstructionError> {
-        if *keyed_accounts.len() != 2 {
+        if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
         const SUBMITTER_INDEX: usize = 0;
@@ -128,13 +128,13 @@ pub fn process_instruction(
 
     match command{
         SpvInstruction::ClientRequest(client_request_info) => {
-            SpvProcessor::client_request(keyed_accounts, &client_request_info)
+            SpvProcessor::do_client_request(keyed_accounts, &client_request_info)
         }
         SpvInstruction::CancelRequest => {
-            SpvProcessor::cancel_request(keyed_accounts)
+            SpvProcessor::do_cancel_request(keyed_accounts)
         }
         SpvInstruction::SubmitProof(proof_info) => {
-            SpvProcessor::submit_request(keyed_accounts, &proof_info)
+            SpvProcessor::do_submit_proof(keyed_accounts, &proof_info)
         }
     }
 }
