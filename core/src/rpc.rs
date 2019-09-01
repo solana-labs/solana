@@ -274,6 +274,9 @@ pub struct RpcEpochInfo {
 
     /// The number of slots in this epoch
     pub slots_in_epoch: u64,
+
+    /// The absolute current slot
+    pub absolute_slot: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -464,10 +467,12 @@ impl RpcSol for RpcSolImpl {
         let bank = meta.request_processor.read().unwrap().bank();
         let epoch_schedule = bank.epoch_schedule();
         let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
+        let slot = bank.slot();
         Ok(RpcEpochInfo {
             epoch,
             slot_index,
             slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
+            absolute_slot: slot,
         })
     }
 
