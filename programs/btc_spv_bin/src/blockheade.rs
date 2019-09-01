@@ -6,6 +6,7 @@ use serde::Deserialize;
 // pub type blockHash = [u8; 32];
 pub type BlockHeader = [u8; 80];
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct JsonBH {
     hash: String,
@@ -24,7 +25,8 @@ struct JsonBH {
     relayed_by: String,
 }
 
-fn GetHeaderJson(hash: &str) -> JsonBH {
+#[allow(dead_code)]
+fn get_header_json(hash: &str) -> JsonBH {
     let qs = format!("https://www.blockchain.info/rawblock/{}", hash);
     let body = reqwest::get(&qs);
     match body {
@@ -40,7 +42,7 @@ fn GetHeaderJson(hash: &str) -> JsonBH {
     }
 }
 
-fn GetHeaderRaw(hash: &str) -> String {
+fn get_header_raw(hash: &str) -> String {
     let qs = format!("https://blockchain.info/block/{}?format=hex", hash);
     let body = reqwest::get(&qs);
     match body {
@@ -66,7 +68,7 @@ fn main() {
 
     let testhash = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
     let blockhash = matches.value_of("blockhash").unwrap_or(testhash);
-    let headerraw = GetHeaderRaw(&blockhash);
+    let headerraw = get_header_raw(&blockhash);
     println!("header - {}", headerraw);
     println!("hash   - {}", blockhash);
     println!("length - {}", headerraw.len());

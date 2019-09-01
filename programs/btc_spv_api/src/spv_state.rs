@@ -1,9 +1,7 @@
 use crate::header_store::HeaderStoreError;
 use crate::header_store::*;
 use crate::utils::*;
-use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use std::{error, fmt};
 
@@ -21,7 +19,7 @@ pub struct BlockHeader {
     pub time: u32,
     // An encoded version of the target threshold this block’s header hash must be less than or equal to.
     pub nbits: [u8; 4],
-
+    // block header's nonce
     pub nonce: [u8; 4],
     // Block hash
     pub blockhash: [u8; 32],
@@ -35,18 +33,18 @@ impl BlockHeader {
 
         let mut ph: [u8; 32] = Default::default();
         ph.copy_from_slice(&header[4..36]);
-        let parentHash = ph;
+        let parent = ph;
         // extract merkle root in internal byte order
         let mut mrr: [u8; 32] = Default::default();
         mrr.copy_from_slice(&header[36..68]);
-        let merkleRoot = ProofEntry {
+        let merkle_root = ProofEntry {
             hash: mrr,
             side: EntrySide::Root,
         };
         // timestamp associate with the block
         let mut bt: [u8; 4] = Default::default();
         bt.copy_from_slice(&header[68..72]);
-        let blockTime = u32::from_le_bytes(bt);
+        let time = u32::from_le_bytes(bt);
 
         // nbits field is an encoded version of the
         let mut nb: [u8; 4] = Default::default();
@@ -58,12 +56,12 @@ impl BlockHeader {
         let nonce = nn;
 
         let bh = BlockHeader {
-            version: version,
-            parent: parentHash,
-            merkle_root: merkleRoot,
-            time: blockTime,
-            nbits: nbits,
-            nonce: nonce,
+            version,
+            parent,
+            merkle_root,
+            time,
+            nbits,
+            nonce,
             blockhash: *blockhash,
         };
         Ok(bh)
@@ -71,14 +69,14 @@ impl BlockHeader {
 
     pub fn hexnew(header: &str, blockhash: &str) -> Result<BlockHeader, SpvError> {
         if header.len() != 160 || blockhash.len() != 64 {
-            Err(SpvError::InvalidBlockHeader)?
+            return Err(SpvError::InvalidBlockHeader);
         }
 
         match decode_hex(header) {
             Ok(header) => {
                 let bhbytes = decode_hex(blockhash)?;
-                const size: usize = 80;
-                let mut hh = [0; size];
+                const SIZE: usize = 80;
+                let mut hh = [0; SIZE];
                 // let mut hh: [u8;80] = [Default.default(), 80];
                 hh.copy_from_slice(&header[..header.len()]);
 
@@ -93,7 +91,7 @@ impl BlockHeader {
 
     pub fn difficulty(mut self) -> u32 {
         // calculates difficulty from nbits
-        let standin: u32 = 123456789;
+        let standin: u32 = 123_456_789;
         standin
     }
 }
@@ -101,20 +99,20 @@ impl BlockHeader {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     inputs: Vec<Input>,
-
+    //input utxos
     outputs: Vec<Output>,
-
+    //output utxos
     version: u32,
-
+    //bitcoin network version
     locktime: u32,
 }
 
 // impl Transaction {
 //     fn new(bytes: Vec<u8>) -> Self {
-//         //todo
+//         //reinsert later
 //     }
 //     fn hexnew(hex: String) -> Self {
-//         //todo
+//         //reinsert later
 //     }
 // }
 
@@ -145,6 +143,7 @@ pub struct Output {
     payload: Vec<u8>, // data sent with the transaction
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum OutputType {
     WPKH,
@@ -189,7 +188,7 @@ pub type MerkleProof = Vec<ProofEntry>;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct ClientRequestInfo {
     // bitcoin transaction hash
-    pub txHash: BitcoinTxHash,
+    pub txhash: BitcoinTxHash,
     // confirmation count
     pub confirmations: u8,
     // fee paid for tx verification
@@ -204,7 +203,7 @@ pub struct ClientRequestInfo {
 pub struct ProofRequest {
     pub owner: Pubkey,
     // bitcoin transaction hash
-    pub txHash: BitcoinTxHash,
+    pub txhash: BitcoinTxHash,
     // confirmation count
     pub confirmations: u8,
     // fee paid for tx verification
@@ -223,7 +222,7 @@ pub struct Proof {
     pub proof: MerkleProof,
     // chain of bitcoin headers provifing context for the proof
     pub headers: HeaderChain,
-    // txhash associated with the Proof
+    // transaction associated with the Proof
     pub transaction: Transaction,
     // public key of the request this proof corresponds to
     pub request: Pubkey,
@@ -251,10 +250,11 @@ impl Default for AccountState {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum SpvError {
     InvalidBlockHeader,
-
+    // blockheader is malformed or out of order
     HeaderStoreError,
-
+    // header store write/read result is invalid
     ParseError,
+    // other errors with parsing inputs
 }
 
 impl error::Error for SpvError {

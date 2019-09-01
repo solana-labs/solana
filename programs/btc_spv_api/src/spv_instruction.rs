@@ -1,7 +1,6 @@
 //! Spv proof Verification Program
 use crate::id;
 use crate::spv_state::*;
-use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
@@ -26,7 +25,7 @@ pub enum SpvInstruction {
 
 pub fn client_request(
     owner: &Pubkey,
-    txHash: BitcoinTxHash,
+    txhash: BitcoinTxHash,
     fee: u64,
     confirmations: u8,
     difficulty: u64,
@@ -36,7 +35,7 @@ pub fn client_request(
     Instruction::new(
         id(),
         &SpvInstruction::ClientRequest(ClientRequestInfo {
-            txHash,
+            txhash,
             confirmations,
             fee,
             difficulty,

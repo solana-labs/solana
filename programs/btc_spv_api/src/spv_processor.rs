@@ -1,8 +1,8 @@
 //! Bitcoin SPV proof verifier program
 //! Receive merkle proofs and block headers, validate transaction
+#[allow(unused_imports)]
 use crate::spv_instruction::*;
 use crate::spv_state::*;
-use crate::utils::*;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
@@ -11,8 +11,8 @@ use solana_sdk::pubkey::Pubkey;
 pub struct SpvProcessor {}
 
 impl SpvProcessor {
-    pub fn validateHeaderChain(
-        headers: &HeaderChain,
+    pub fn validate_header_chain(
+        headers: HeaderChain,
         proof_req: &ProofRequest,
     ) -> Result<(), InstructionError> {
         // disabled for time being
@@ -29,11 +29,11 @@ impl SpvProcessor {
     fn deserialize_proof(data: &[u8]) -> Result<Proof, InstructionError> {
         let proof_state: AccountState =
             bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
-        if let AccountState::Verification(Proof) = proof_state {
-            Ok(Proof)
+        if let AccountState::Verification(proof) = proof_state {
+            Ok(proof)
         } else {
             error!("Not a valid proof");
-            Err(InstructionError::InvalidAccountData)?
+            Err(InstructionError::InvalidAccountData)
         }
     }
 
