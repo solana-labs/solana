@@ -1,8 +1,9 @@
 //! Bitcoin SPV proof verifier program
 //! Receive merkle proofs and block headers, validate transaction
-#[allow(unused_imports)]
 use crate::spv_instruction::*;
 use crate::spv_state::*;
+#[allow(unused_imports)]
+use crate::utils::decode_hex;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
@@ -128,15 +129,38 @@ mod test {
     fn test_parse_header_hex() -> Result<(), SpvError> {
         let testheader = "010000008a730974ac39042e95f82d719550e224c1a680a8dc9e8df9d007000000000000f50b20e8720a552dd36eb2ebdb7dceec9569e0395c990c1eb8a4292eeda05a931e1fce4e9a110e1a7a58aeb0";
         let testhash = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
+        let testheaderbytes = decode_hex(&testheader)?;
         let testhashbytes = decode_hex(&testhash)?;
-        let mut thb: [u8; 32] = Default::default();
-        thb.copy_from_slice(&testhashbytes[..32]);
+
+        let mut blockhash: [u8; 32] = [0; 32];
+        blockhash.copy_from_slice(&testhashbytes[..32]);
+
+        let mut version: [u8; 4] = [0; 4];
+        version.copy_from_slice(&testheaderbytes[..4]);
+        let test_version = u32::from_le_bytes(version);
+
+        let mut test_parent: [u8; 32] = [0; 32];
+        test_parent.copy_from_slice(&testheaderbytes[4..36]);
+
+        let mut merkleroot: [u8; 32] = [0; 32];
+        merkleroot.copy_from_slice(&testheaderbytes[36..68]);
+
+        let mut time: [u8; 4] = [0; 4];
+        time.copy_from_slice(&testheaderbytes[68..72]);
+        let test_time = u32::from_le_bytes(time);
+
+        let mut test_nonce: [u8; 4] = [0; 4];
+        test_nonce.copy_from_slice(&testheaderbytes[76..80]);
 
         let bh = BlockHeader::hexnew(&testheader, &testhash)?;
-        // let mut bbh: [u8;32] = Default::default();
-        // bbh.copy_from_slice(bh[.. bh.len()]);
 
-        assert_eq!(bh.blockhash, thb);
+        assert_eq!(bh.blockhash, blockhash);
+        assert_eq!(bh.merkle_root.hash, merkleroot);
+        assert_eq!(bh.version, test_version);
+        assert_eq!(bh.time, test_time);
+        assert_eq!(bh.parent, test_parent);
+        assert_eq!(bh.nonce, test_nonce);
+
         Ok(())
     }
 }

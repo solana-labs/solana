@@ -1,9 +1,7 @@
 #[allow(unused_imports)]
 use crate::spv_state::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account::KeyedAccount;
 use solana_sdk::pubkey::Pubkey;
-use std::{error, fmt};
 
 // HeaderStore is a data structure that allows linked list style cheap appends and
 // sequential reads, but also has a "lookup index" to speed up random access

@@ -1,4 +1,3 @@
-use crate::header_store::HeaderStoreError;
 use crate::header_store::*;
 use crate::utils::*;
 use serde_derive::{Deserialize, Serialize};
@@ -27,31 +26,31 @@ pub struct BlockHeader {
 
 impl BlockHeader {
     pub fn new(header: &[u8; 80], blockhash: &[u8; 32]) -> Result<BlockHeader, SpvError> {
-        let mut va: [u8; 4] = Default::default();
+        let mut va: [u8; 4] = [0; 4];
         va.copy_from_slice(&header[0..4]);
         let version = u32::from_le_bytes(va);
 
-        let mut ph: [u8; 32] = Default::default();
+        let mut ph: [u8; 32] = [0; 32];
         ph.copy_from_slice(&header[4..36]);
         let parent = ph;
         // extract merkle root in internal byte order
-        let mut mrr: [u8; 32] = Default::default();
+        let mut mrr: [u8; 32] = [0; 32];
         mrr.copy_from_slice(&header[36..68]);
         let merkle_root = ProofEntry {
             hash: mrr,
             side: EntrySide::Root,
         };
         // timestamp associate with the block
-        let mut bt: [u8; 4] = Default::default();
+        let mut bt: [u8; 4] = [0; 4];
         bt.copy_from_slice(&header[68..72]);
         let time = u32::from_le_bytes(bt);
 
         // nbits field is an encoded version of the
-        let mut nb: [u8; 4] = Default::default();
+        let mut nb: [u8; 4] = [0; 4];
         nb.copy_from_slice(&header[72..76]);
         let nbits = nb;
 
-        let mut nn: [u8; 4] = Default::default();
+        let mut nn: [u8; 4] = [0; 4];
         nn.copy_from_slice(&header[76..80]);
         let nonce = nn;
 
@@ -77,10 +76,9 @@ impl BlockHeader {
                 let bhbytes = decode_hex(blockhash)?;
                 const SIZE: usize = 80;
                 let mut hh = [0; SIZE];
-                // let mut hh: [u8;80] = [Default.default(), 80];
                 hh.copy_from_slice(&header[..header.len()]);
 
-                let mut bhb: [u8; 32] = Default::default();
+                let mut bhb: [u8; 32] = [0; 32];
                 bhb.copy_from_slice(&bhbytes[..bhbytes.len()]);
 
                 Ok(BlockHeader::new(&hh, &bhb).unwrap())
