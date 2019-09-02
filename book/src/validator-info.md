@@ -3,10 +3,10 @@
 You can publish your validator information to the chain to be publicly visible
 to other users.
 
-## Run solana-validator-info
-Run the solana-validator-info CLI to populate a validator-info account:
+## Run solana validator-info
+Run the solana CLI to populate a validator-info account:
 ```bash
-$ solana-validator-info publish ~/validator-keypair.json <VALIDATOR_NAME> <VALIDATOR_INFO_ARGS>
+$ solana validator-info publish ~/validator-keypair.json <VALIDATOR_NAME> <VALIDATOR_INFO_ARGS>
 ```
 Optional fields for VALIDATOR_INFO_ARGS:
 * Website
@@ -27,5 +27,5 @@ Keybase:
   a `solana` subdirectory in your public folder: `/keybase/public/<KEYBASE_USERNAME>/solana`
   * To check your pubkey, ensure you can successfully browse to
   `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<PUBKEY>`
-3. Add or update your `solana-validator-info` with your Keybase username. The
+3. Add or update your `solana validator-info` with your Keybase username. The
 CLI will verify the `validator-<PUBKEY>` file

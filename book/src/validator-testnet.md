@@ -42,9 +42,7 @@ $ solana-install init 0.18.0
 If you are downloading pre-compiled binaries or building from source, simply choose the release matching your desired testnet.
 
 ### Validator Commands
-Solana CLI tools like solana and solana-validator-info point at
-testnet.solana.com by default. Include a `--url` argument to point at a
-different testnet. For instance:
+The Solana CLI tool points at testnet.solana.com by default. Include a `--url` argument to point at a different testnet. For instance:
 ```bash
 $ solana --url http://beta.testnet.solana.com:8899 balance
 ```

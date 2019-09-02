@@ -177,7 +177,7 @@ local|tar|skip)
     oom_score_adj "$pid" 1000
     waitForNodeToInit
 
-    solana-validator-info publish --url http://"$entrypointIp":8899 \
+    solana validator-info publish --url http://"$entrypointIp":8899 \
       config/bootstrap-leader/identity-keypair.json "$(hostname)" -k team/solana --force || true
     ;;
   validator|blockstreamer)
@@ -282,7 +282,7 @@ local|tar|skip)
       ./multinode-demo/delegate-stake.sh "${args[@]}"
     fi
 
-    solana-validator-info publish --url http://"$entrypointIp":8899 \
+    solana validator-info publish --url http://"$entrypointIp":8899 \
       ~/solana/fullnode-identity.json "$(hostname)" -k team/solana --force || true
     ;;
   replicator)
