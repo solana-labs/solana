@@ -99,6 +99,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         command,
         json_rpc_url,
         keypair,
+        keypair_path: id_path.to_string(),
         rpc_client: None,
     })
 }

@@ -125,6 +125,7 @@ pub struct WalletConfig {
     pub command: WalletCommand,
     pub json_rpc_url: String,
     pub keypair: Keypair,
+    pub keypair_path: String,
     pub rpc_client: Option<RpcClient>,
 }
 
@@ -134,6 +135,7 @@ impl Default for WalletConfig {
             command: WalletCommand::Balance(Pubkey::default()),
             json_rpc_url: "http://127.0.0.1:8899".to_string(),
             keypair: Keypair::new(),
+            keypair_path: "".to_string(),
             rpc_client: None,
         }
     }
@@ -1348,11 +1350,12 @@ fn process_ping(
 }
 
 pub fn process_command(config: &WalletConfig) -> ProcessResult {
+    println_name_value("Keypair:", &config.keypair_path);
     if let WalletCommand::Address = config.command {
         // Get address of this client
         return Ok(format!("{}", config.keypair.pubkey()));
     }
-    println_name_value("Using RPC Endpoint:", &config.json_rpc_url);
+    println_name_value("RPC Endpoint:", &config.json_rpc_url);
 
     let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
