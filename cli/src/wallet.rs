@@ -1,4 +1,4 @@
-use crate::display::println_name_value;
+use crate::{display::println_name_value, input_validators::*, validator_info::*};
 use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
@@ -75,24 +75,23 @@ pub enum WalletCommand {
     GetSlot,
     GetTransactionCount,
     GetVersion,
-    // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
-        u64,
-        Pubkey,
-        Option<DateTime<Utc>>,
-        Option<Pubkey>,
-        Option<Vec<Pubkey>>,
-        Option<Pubkey>,
+        u64,                   // lamports
+        Pubkey,                // to
+        Option<DateTime<Utc>>, // timestamp
+        Option<Pubkey>,        // timestamp_pubkey
+        Option<Vec<Pubkey>>,   // witness(es)
+        Option<Pubkey>,        // cancelable
     ),
     Ping {
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
     },
-    // TimeElapsed(to, process_id, timestamp)
-    TimeElapsed(Pubkey, Pubkey, DateTime<Utc>),
-    // Witness(to, process_id)
-    Witness(Pubkey, Pubkey),
+    TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
+    Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
+    GetValidatorInfo(Option<Pubkey>),
+    SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
 }
 
 #[derive(Debug, Clone)]
@@ -424,6 +423,17 @@ pub fn parse_command(
             Ok(WalletCommand::TimeElapsed(to, process_id, dt))
         }
         ("cluster-version", Some(_matches)) => Ok(WalletCommand::GetVersion),
+        ("validator-info", Some(matches)) => match matches.subcommand() {
+            ("publish", Some(matches)) => parse_validator_info_command(matches, pubkey),
+            ("get", Some(matches)) => parse_get_validator_info_command(matches),
+            ("", None) => {
+                eprintln!("{}", matches.usage());
+                Err(WalletError::CommandNotRecognized(
+                    "no validator-info subcommand given".to_string(),
+                ))
+            }
+            _ => unreachable!(),
+        },
         ("", None) => {
             eprintln!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
@@ -435,9 +445,9 @@ pub fn parse_command(
     Ok(response)
 }
 
-type ProcessResult = Result<String, Box<dyn error::Error>>;
+pub type ProcessResult = Result<String, Box<dyn error::Error>>;
 
-fn check_account_for_fee(
+pub fn check_account_for_fee(
     rpc_client: &RpcClient,
     config: &WalletConfig,
     fee_calculator: &FeeCalculator,
@@ -1563,6 +1573,16 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 
         // Return software version of wallet and cluster entrypoint node
         WalletCommand::GetVersion => process_get_version(&rpc_client, config),
+
+        // Return all or single validator info
+        WalletCommand::GetValidatorInfo(info_pubkey) => {
+            process_get_validator_info(&rpc_client, *info_pubkey)
+        }
+
+        // Publish validator info
+        WalletCommand::SetValidatorInfo(validator_info, info_pubkey) => {
+            process_set_validator_info(&rpc_client, config, &validator_info, *info_pubkey)
+        }
     }
 }
 
@@ -1654,26 +1674,6 @@ where
     } else {
         Ok(result.unwrap())
     }
-}
-
-// Return an error if a pubkey cannot be parsed.
-fn is_pubkey(string: String) -> Result<(), String> {
-    match string.parse::<Pubkey>() {
-        Ok(_) => Ok(()),
-        Err(err) => Err(format!("{:?}", err)),
-    }
-}
-
-// Return an error if a keypair file cannot be parsed.
-fn is_keypair(string: String) -> Result<(), String> {
-    read_keypair(&string)
-        .map(|_| ())
-        .map_err(|err| format!("{:?}", err))
-}
-
-// Return an error if string cannot be parsed as pubkey string or keypair file location
-fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
-    is_pubkey(string.clone()).or_else(|_| is_keypair(string))
 }
 
 pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
@@ -2221,6 +2221,78 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .subcommand(
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
+        )
+        .subcommand(
+            SubCommand::with_name("validator-info")
+                .about("Publish/get Validator info on Solana")
+                .subcommand(
+                    SubCommand::with_name("publish")
+                        .about("Publish Validator info on Solana")
+                        .arg(
+                            Arg::with_name("info_pubkey")
+                                .short("p")
+                                .long("info-pubkey")
+                                .value_name("PUBKEY")
+                                .takes_value(true)
+                                .validator(is_pubkey)
+                                .help("The pubkey of the Validator info account to update"),
+                        )
+                        .arg(
+                            Arg::with_name("name")
+                                .index(1)
+                                .value_name("NAME")
+                                .takes_value(true)
+                                .required(true)
+                                .validator(is_short_field)
+                                .help("Validator name"),
+                        )
+                        .arg(
+                            Arg::with_name("website")
+                                .short("w")
+                                .long("website")
+                                .value_name("URL")
+                                .takes_value(true)
+                                .validator(check_url)
+                                .help("Validator website url"),
+                        )
+                        .arg(
+                            Arg::with_name("keybase_username")
+                                .short("n")
+                                .long("keybase")
+                                .value_name("USERNAME")
+                                .takes_value(true)
+                                .validator(is_short_field)
+                                .help("Validator Keybase username"),
+                        )
+                        .arg(
+                            Arg::with_name("details")
+                                .short("d")
+                                .long("details")
+                                .value_name("DETAILS")
+                                .takes_value(true)
+                                .validator(check_details_length)
+                                .help("Validator description")
+                        )
+                        .arg(
+                            Arg::with_name("force")
+                                .long("force")
+                                .takes_value(false)
+                                .hidden(true) // Don't document this argument to discourage its use
+                                .help("Override keybase username validity check"),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("get")
+                        .about("Get and parse Solana Validator info")
+                        .arg(
+                            Arg::with_name("info_pubkey")
+                                .index(1)
+                                .value_name("PUBKEY")
+                                .takes_value(true)
+                                .validator(is_pubkey)
+                                .help("The pubkey of the Validator info account; without this argument, returns all"),
+                        ),
+                )
         )
 }
 

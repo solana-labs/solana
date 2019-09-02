@@ -1,8 +1,11 @@
 use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
-use solana_cli::config::{self, Config};
-use solana_cli::display::println_name_value;
-use solana_cli::wallet::{app, parse_command, process_command, WalletConfig, WalletError};
+use solana_cli::{
+    config::{self, Config},
+    display::println_name_value,
+    input_validators::is_url,
+    wallet::{app, parse_command, process_command, WalletConfig, WalletError},
+};
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use std::error;
 
@@ -102,20 +105,6 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         keypair_path: id_path.to_string(),
         rpc_client: None,
     })
-}
-
-// Return an error if a url cannot be parsed.
-fn is_url(string: String) -> Result<(), String> {
-    match url::Url::parse(&string) {
-        Ok(url) => {
-            if url.has_host() {
-                Ok(())
-            } else {
-                Err("no host provided".to_string())
-            }
-        }
-        Err(err) => Err(format!("{:?}", err)),
-    }
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
