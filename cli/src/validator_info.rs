@@ -103,6 +103,7 @@ fn verify_keybase(
 }
 
 fn parse_args(matches: &ArgMatches<'_>) -> Value {
+    println!("{:?}", matches);
     let mut map = Map::new();
     map.insert(
         "name".to_string(),
@@ -308,8 +309,8 @@ pub fn process_get_validator_info(rpc_client: &RpcClient, pubkey: Option<Pubkey>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wallet::app;
     use bincode::{serialize, serialized_size};
-    use clap::{App, Arg};
     use serde_json::json;
 
     #[test]
@@ -332,16 +333,21 @@ mod tests {
 
     #[test]
     fn test_parse_args() {
-        let matches = App::new("test")
-            .arg(Arg::with_name("name").short("n").takes_value(true))
-            .arg(Arg::with_name("website").short("w").takes_value(true))
-            .arg(
-                Arg::with_name("keybase_username")
-                    .short("k")
-                    .takes_value(true),
-            )
-            .arg(Arg::with_name("details").short("d").takes_value(true))
-            .get_matches_from(vec!["test", "-n", "Alice", "-k", "alice_keybase"]);
+        let matches = app("test", "desc", "version").get_matches_from(vec![
+            "test",
+            "validator-info",
+            "publish",
+            "Alice",
+            "-n",
+            "alice_keybase",
+        ]);
+        let subcommand_matches = matches.subcommand();
+        assert_eq!(subcommand_matches.0, "validator-info");
+        assert!(subcommand_matches.1.is_some());
+        let subcommand_matches = subcommand_matches.1.unwrap().subcommand();
+        assert_eq!(subcommand_matches.0, "publish");
+        assert!(subcommand_matches.1.is_some());
+        let matches = subcommand_matches.1.unwrap();
         let expected = json!({
             "name": "Alice",
             "keybaseUsername": "alice_keybase",
