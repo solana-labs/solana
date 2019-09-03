@@ -46,7 +46,6 @@ BIN_CRATES=(
   ledger-tool
   replicator
   validator
-  validator-info
   cli
   bench-exchange
   bench-tps
