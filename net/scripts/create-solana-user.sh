@@ -4,6 +4,9 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
+# shellcheck source=net/paths.sh
+[[ -f "../paths.sh" ]] && source ../paths.sh
+
 if grep -q solana /etc/passwd ; then
   echo "User solana already exists"
 else

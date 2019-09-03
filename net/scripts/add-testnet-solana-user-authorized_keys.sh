@@ -4,9 +4,10 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
+# shellcheck source=net/paths.sh
+[[ -f "../paths.sh" ]] && source ../paths.sh
+
 [[ -d /home/solana/.ssh ]] || exit 1
-
-
 
 if [[ -z $SOLANA_PUBKEYS ]]; then
   echo "Warning: source solana-user-authorized_keys.sh first"
@@ -19,5 +20,5 @@ for key in "${SOLANA_PUBKEYS[@]}"; do
 done
 
 sudo -u solana bash -c "
-  cat "${testnetScratchDir}/solana-authorized_keys" >> /home/solana/.ssh/authorized_keys
+  cat \"${testnetScratchDir}/solana-authorized_keys\" >> /home/solana/.ssh/authorized_keys
 "
