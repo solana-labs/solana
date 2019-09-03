@@ -7,8 +7,6 @@ source "$HERE"/utils.sh
 
 ensure_env || exit 1
 
-exit
-
 if [[ -n "$1" ]]; then
   PUBKEY_FILE="$1"
 else
@@ -49,21 +47,7 @@ chown "$SETUP_USER:$SETUP_USER" "${BASE_SSH_DIR}/.ssh/authorized_keys"
 "$HERE"/../scripts/install-redis.sh
 "$HERE"/../scripts/install-rsync.sh
 "$HERE"/../scripts/install-libssl-compatability.sh
-
-# Setup kernel constants
-cat > /etc/sysctl.d/20-solana-node.conf <<EOF
-
-# Solana networking requirements
-net.core.rmem_default=1610612736
-net.core.rmem_max=1610612736
-net.core.wmem_default=1610612736
-net.core.wmem_max=1610612736
-
-# Solana earlyoom setup
-kernel.sysrq=$(( $(cat /proc/sys/kernel/sysrq) | 64 ))
-EOF
-
-# Allow more files to be opened by a user
-sed -i 's/^\(# End of file\)/* soft nofile 65535\n\n\1/' /etc/security/limits.conf
+"$HERE"/setup-procfs-knobs.sh
+"$HERE"/setup-limits.sh
 
 echo "Please reboot then run setup-dc-node-2.sh"
