@@ -18,9 +18,6 @@ mkdir -p "$netConfigDir" "$netLogDir"
 # shellcheck source=scripts/configure-metrics.sh
 source "$(dirname "${BASH_SOURCE[0]}")"/../scripts/configure-metrics.sh
 
-# shellcheck source=net/paths.sh
-source "$(dirname "${BASH_SOURCE[0]}")"/paths.sh
-
 configFile="$netConfigDir/config"
 geoipConfigFile="$netConfigDir/geoip.yml"
 

@@ -4,9 +4,6 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
-# shellcheck source=net/paths.sh
-[[ -f "../paths.sh" ]] && source ../paths.sh
-
 [[ -d /home/solana/.ssh ]] || exit 1
 
 if [[ -z $SOLANA_PUBKEYS ]]; then
@@ -16,9 +13,9 @@ fi
 # solana-user-authorized_keys.sh defines the public keys for users that should
 # automatically be granted access to ALL testnets
 for key in "${SOLANA_PUBKEYS[@]}"; do
-  echo "$key" >> "${testnetScratchDir}/solana-authorized_keys"
+  echo "$key" >> /solana/authorized_keys
 done
 
 sudo -u solana bash -c "
-  cat \"${testnetScratchDir}/solana-authorized_keys\" >> /home/solana/.ssh/authorized_keys
+  cat /solana/authorized_keys >> /home/solana/.ssh/authorized_keys
 "

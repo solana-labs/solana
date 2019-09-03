@@ -4,9 +4,6 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
-# shellcheck source=net/paths.sh
-[[ -f "../paths.sh" ]] && source ../paths.sh
-
 if grep -q solana /etc/passwd ; then
   echo "User solana already exists"
 else
@@ -16,15 +13,15 @@ else
   echo "solana ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
   id solana
 
-  [[ -r "$testnetSSHPrivateKey" ]] || exit 1
-  [[ -r "$testnetSSHPrivateKey".pub ]] || exit 1
+  [[ -r /solana/id_ecdsa ]] || exit 1
+  [[ -r /solana/id_ecdsa.pub ]] || exit 1
 
   sudo -u solana bash -c "
     mkdir -p /home/solana/.ssh/
     cd /home/solana/.ssh/
-    cp \"$testnetSSHPrivateKey\".pub authorized_keys
+    cp /solana/id_ecdsa.pub authorized_keys
     umask 377
-    cp \"$testnetSSHPrivateKey\" id_ecdsa
+    cp /solana/id_ecdsa id_ecdsa
     echo \"
       Host *
       BatchMode yes
