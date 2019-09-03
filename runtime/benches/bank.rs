@@ -120,7 +120,8 @@ fn do_bench_transactions(
 ) {
     solana_logger::setup();
     let ns_per_s = 1_000_000_000;
-    let (genesis_block, mint_keypair) = create_genesis_block(100_000_000);
+    let (mut genesis_block, mint_keypair) = create_genesis_block(100_000_000);
+    genesis_block.ticks_per_slot = 100;
     let mut bank = Bank::new(&genesis_block);
     bank.add_instruction_processor(Pubkey::new(&BUILTIN_PROGRAM_ID), process_instruction);
     bank.register_native_instruction_processor(
@@ -150,21 +151,25 @@ fn do_bench_transactions(
 }
 
 #[bench]
+#[ignore]
 fn bench_bank_sync_process_builtin_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &sync_bencher, &create_builtin_transactions);
 }
 
 #[bench]
+#[ignore]
 fn bench_bank_sync_process_native_loader_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &sync_bencher, &create_native_loader_transactions);
 }
 
 #[bench]
+#[ignore]
 fn bench_bank_async_process_builtin_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &async_bencher, &create_builtin_transactions);
 }
 
 #[bench]
+#[ignore]
 fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &async_bencher, &create_native_loader_transactions);
 }

@@ -227,7 +227,7 @@ fn test_in_memory() {
 }
 
 fn setup(test_name: &str) -> PathBuf {
-    let dir = Path::new("kvstore-test").join(test_name);;
+    let dir = Path::new("kvstore-test").join(test_name);
 
     let _ig = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();

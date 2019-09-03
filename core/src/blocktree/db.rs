@@ -5,11 +5,23 @@ use bincode::{deserialize, serialize};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use solana_sdk::timing::Slot;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
+
+pub enum IteratorMode<Index> {
+    Start,
+    End,
+    From(Index, IteratorDirection),
+}
+
+pub enum IteratorDirection {
+    Forward,
+    Reverse,
+}
 
 pub mod columns {
     #[derive(Debug)]
@@ -43,6 +55,14 @@ pub mod columns {
     #[derive(Debug)]
     /// The index column
     pub struct Index;
+
+    #[derive(Debug)]
+    /// The shred data column
+    pub struct ShredData;
+
+    #[derive(Debug)]
+    /// The shred erasure code column
+    pub struct ShredCode;
 }
 
 pub trait Backend: Sized + Send + Sync {
@@ -68,7 +88,11 @@ pub trait Backend: Sized + Send + Sync {
 
     fn delete_cf(&self, cf: Self::ColumnFamily, key: &Self::Key) -> Result<()>;
 
-    fn iterator_cf(&self, cf: Self::ColumnFamily, from: Option<&Self::Key>) -> Result<Self::Iter>;
+    fn iterator_cf(
+        &self,
+        cf: Self::ColumnFamily,
+        iterator_mode: IteratorMode<&Self::Key>,
+    ) -> Result<Self::Iter>;
 
     fn raw_iterator_cf(&self, cf: Self::ColumnFamily) -> Result<Self::Cursor>;
 
@@ -86,6 +110,8 @@ where
 
     fn key(index: Self::Index) -> B::OwnedKey;
     fn index(key: &B::Key) -> Self::Index;
+    fn slot(index: Self::Index) -> Slot;
+    fn as_index(slot: Slot) -> Self::Index;
 }
 
 pub trait DbCursor<B>
@@ -251,18 +277,26 @@ where
 
     pub fn iter<C>(
         &self,
-        start_from: Option<C::Index>,
+        iterator_mode: IteratorMode<C::Index>,
     ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>>
     where
         C: Column<B>,
     {
         let iter = {
-            if let Some(index) = start_from {
-                let key = C::key(index);
-                self.backend
-                    .iterator_cf(self.cf_handle::<C>(), Some(key.borrow()))?
-            } else {
-                self.backend.iterator_cf(self.cf_handle::<C>(), None)?
+            match iterator_mode {
+                IteratorMode::From(start_from, direction) => {
+                    let key = C::key(start_from);
+                    self.backend.iterator_cf(
+                        self.cf_handle::<C>(),
+                        IteratorMode::From(key.borrow(), direction),
+                    )?
+                }
+                IteratorMode::Start => self
+                    .backend
+                    .iterator_cf(self.cf_handle::<C>(), IteratorMode::Start)?,
+                IteratorMode::End => self
+                    .backend
+                    .iterator_cf(self.cf_handle::<C>(), IteratorMode::End)?,
             }
         };
 
@@ -394,19 +428,57 @@ where
 
     pub fn iter(
         &self,
-        start_from: Option<C::Index>,
+        iterator_mode: IteratorMode<C::Index>,
     ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>> {
         let iter = {
-            if let Some(index) = start_from {
-                let key = C::key(index);
-                self.backend
-                    .iterator_cf(self.handle(), Some(key.borrow()))?
-            } else {
-                self.backend.iterator_cf(self.handle(), None)?
+            match iterator_mode {
+                IteratorMode::From(start_from, direction) => {
+                    let key = C::key(start_from);
+                    self.backend
+                        .iterator_cf(self.handle(), IteratorMode::From(key.borrow(), direction))?
+                }
+                IteratorMode::Start => self
+                    .backend
+                    .iterator_cf(self.handle(), IteratorMode::Start)?,
+                IteratorMode::End => self.backend.iterator_cf(self.handle(), IteratorMode::End)?,
             }
         };
 
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
+    }
+
+    pub fn delete_slot(
+        &self,
+        batch: &mut WriteBatch<B>,
+        from: Option<Slot>,
+        to: Option<Slot>,
+    ) -> Result<bool>
+    where
+        C::Index: PartialOrd + Copy,
+    {
+        let mut end = true;
+        let iter_config = match from {
+            Some(s) => IteratorMode::From(C::as_index(s), IteratorDirection::Forward),
+            None => IteratorMode::Start,
+        };
+        let iter = self.iter(iter_config)?;
+        for (index, _) in iter {
+            if let Some(to) = to {
+                if C::slot(index) > to {
+                    end = false;
+                    break;
+                }
+            };
+            if let Err(e) = batch.delete::<C>(index) {
+                error!(
+                    "Error: {:?} while adding delete from_slot {:?} to batch {:?}",
+                    e,
+                    from,
+                    C::NAME
+                )
+            }
+        }
+        Ok(end)
     }
 
     #[inline]

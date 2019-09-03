@@ -33,3 +33,10 @@ source ci/env.sh
     kill -9 "$victim" || true
   done
 )
+
+# HACK: These are in our docker images, need to be removed from CARGO_HOME
+#  because we try to cache downloads across builds with CARGO_HOME
+# cargo lacks a facility for "system" tooling, always tries CARGO_HOME first
+cargo uninstall cargo-audit || true
+cargo uninstall svgbob_cli || true
+cargo uninstall mdbook || true

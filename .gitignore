@@ -11,10 +11,7 @@
 **/*.rs.bk
 .cargo
 
-# node config that is rsynced
 /config/
-# node config that remains local
-/config-local/
 
 # log files
 *.log
@@ -23,3 +20,4 @@ log-*.txt
 # intellij files
 /.idea/
 /solana.iml
+/.vscode/

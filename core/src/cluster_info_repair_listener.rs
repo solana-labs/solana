@@ -234,6 +234,7 @@ impl ClusterInfoRepairListener {
 
                 let _ = Self::serve_repairs_to_repairee(
                     my_pubkey,
+                    repairee_pubkey,
                     my_root,
                     blocktree,
                     &repairee_epoch_slots,
@@ -249,8 +250,10 @@ impl ClusterInfoRepairListener {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn serve_repairs_to_repairee(
         my_pubkey: &Pubkey,
+        repairee_pubkey: &Pubkey,
         my_root: u64,
         blocktree: &Blocktree,
         repairee_epoch_slots: &EpochSlots,
@@ -263,8 +266,8 @@ impl ClusterInfoRepairListener {
         let slot_iter = blocktree.rooted_slot_iterator(repairee_epoch_slots.root);
         if slot_iter.is_err() {
             info!(
-                "Root for repairee is on different fork. My root: {}, repairee_root: {}",
-                my_root, repairee_epoch_slots.root
+                "Root for repairee is on different fork. My root: {}, repairee_root: {} repairee_pubkey: {:?}",
+                my_root, repairee_epoch_slots.root, repairee_pubkey,
             );
             return Ok(());
         }
@@ -312,7 +315,7 @@ impl ClusterInfoRepairListener {
                         // sending the blobs in this slot for repair, we expect these slots
                         // to be full.
                         if let Some(blob_data) = blocktree
-                            .get_data_blob_bytes(slot, blob_index as u64)
+                            .get_data_shred_bytes(slot, blob_index as u64)
                             .expect("Failed to read data blob from blocktree")
                         {
                             socket.send_to(&blob_data[..], repairee_tvu)?;
@@ -476,7 +479,7 @@ impl Service for ClusterInfoRepairListener {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries;
+    use crate::blocktree::tests::make_many_slot_entries_using_shreds;
     use crate::cluster_info::Node;
     use crate::packet::{Blob, SharedBlob};
     use crate::streamer;
@@ -617,13 +620,14 @@ mod tests {
     fn test_serve_repairs_to_repairee() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let blobs_per_slot = 5;
+        let entries_per_slot = 5;
         let num_slots = 10;
         assert_eq!(num_slots % 2, 0);
-        let (blobs, _) = make_many_slot_entries(0, num_slots, blobs_per_slot);
+        let (shreds, _) = make_many_slot_entries_using_shreds(0, num_slots, entries_per_slot);
+        let num_shreds_per_slot = shreds.len() as u64 / num_slots;
 
         // Write slots in the range [0, num_slots] to blocktree
-        blocktree.insert_data_blobs(&blobs).unwrap();
+        blocktree.insert_shreds(shreds).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
         let roots: Vec<_> = (0..=num_slots - 1).collect();
@@ -643,8 +647,8 @@ mod tests {
         let repairee_epoch_slots =
             EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots, 1);
 
-        // Mock out some other repairmen such that each repairman is responsible for 1 blob in a slot
-        let num_repairmen = blobs_per_slot - 1;
+        // Mock out some other repairmen such that each repairman is responsible for 1 shred in a slot
+        let num_repairmen = entries_per_slot - 1;
         let mut eligible_repairmen: Vec<_> =
             (0..num_repairmen).map(|_| Pubkey::new_rand()).collect();
         eligible_repairmen.push(my_pubkey);
@@ -656,6 +660,7 @@ mod tests {
         for repairman_pubkey in &eligible_repairmen {
             ClusterInfoRepairListener::serve_repairs_to_repairee(
                 &repairman_pubkey,
+                &mock_repairee.id,
                 num_slots - 1,
                 &blocktree,
                 &repairee_epoch_slots,
@@ -668,19 +673,19 @@ mod tests {
             .unwrap();
         }
 
-        let mut received_blobs: Vec<Arc<RwLock<Blob>>> = vec![];
+        let mut received_shreds: Vec<Arc<RwLock<Blob>>> = vec![];
 
         // This repairee was missing exactly `num_slots / 2` slots, so we expect to get
-        // `(num_slots / 2) * blobs_per_slot * REPAIR_REDUNDANCY` blobs.
-        let num_expected_blobs = (num_slots / 2) * blobs_per_slot * REPAIR_REDUNDANCY as u64;
-        while (received_blobs.len() as u64) < num_expected_blobs {
-            received_blobs.extend(mock_repairee.receiver.recv().unwrap());
+        // `(num_slots / 2) * num_shreds_per_slot * REPAIR_REDUNDANCY` blobs.
+        let num_expected_shreds = (num_slots / 2) * num_shreds_per_slot * REPAIR_REDUNDANCY as u64;
+        while (received_shreds.len() as u64) < num_expected_shreds {
+            received_shreds.extend(mock_repairee.receiver.recv().unwrap());
         }
 
         // Make sure no extra blobs get sent
         sleep(Duration::from_millis(1000));
         assert!(mock_repairee.receiver.try_recv().is_err());
-        assert_eq!(received_blobs.len() as u64, num_expected_blobs);
+        assert_eq!(received_shreds.len() as u64, num_expected_shreds);
 
         // Shutdown
         mock_repairee.close().unwrap();
@@ -698,8 +703,8 @@ mod tests {
 
         // Create blobs for first two epochs and write them to blocktree
         let total_slots = slots_per_epoch * 2;
-        let (blobs, _) = make_many_slot_entries(0, total_slots, 1);
-        blocktree.insert_data_blobs(&blobs).unwrap();
+        let (shreds, _) = make_many_slot_entries_using_shreds(0, total_slots, 1);
+        blocktree.insert_shreds(shreds).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
         let roots: Vec<_> = (0..=slots_per_epoch * 2 - 1).collect();
@@ -725,6 +730,7 @@ mod tests {
 
         ClusterInfoRepairListener::serve_repairs_to_repairee(
             &my_pubkey,
+            &mock_repairee.id,
             total_slots - 1,
             &blocktree,
             &repairee_epoch_slots,
@@ -736,7 +742,7 @@ mod tests {
         )
         .unwrap();
 
-        // Make sure no blobs get sent
+        // Make sure no shreds get sent
         sleep(Duration::from_millis(1000));
         assert!(mock_repairee.receiver.try_recv().is_err());
 
@@ -746,6 +752,7 @@ mod tests {
             EpochSlots::new(mock_repairee.id, stakers_slot_offset, repairee_slots, 1);
         ClusterInfoRepairListener::serve_repairs_to_repairee(
             &my_pubkey,
+            &mock_repairee.id,
             total_slots - 1,
             &blocktree,
             &repairee_epoch_slots,

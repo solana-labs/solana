@@ -25,9 +25,13 @@ Methods
 * [getAccountInfo](#getaccountinfo)
 * [getBalance](#getbalance)
 * [getClusterNodes](#getclusternodes)
+* [getEpochInfo](#getepochinfo)
+* [getGenesisBlockhash](#getgenesisblockhash)
+* [getLeaderSchedule](#getleaderschedule)
 * [getProgramAccounts](#getprogramaccounts)
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
+* [getSlot](#getslot)
 * [getSlotLeader](#getslotleader)
 * [getSlotsPerSegment](#getslotspersegment)
 * [getStorageTurn](#getstorageturn)
@@ -35,7 +39,8 @@ Methods
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [getTotalSupply](#gettotalsupply)
-* [getEpochVoteAccounts](#getepochvoteaccounts)
+* [getVersion](#getversion)
+* [getVoteAccounts](#getvoteaccounts)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
 * [startSubscriptionChannel](#startsubscriptionchannel)
@@ -172,6 +177,69 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 ---
 
+### getEpochInfo
+Returns information about the current epoch
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be an object with the following fields:
+* `epoch`, the current epoch
+* `slotIndex`, the current slot relative to the start of the current epoch
+* `slotsInEpoch`, the number of slots in this epoch
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
+```
+
+---
+### getGenesisBlockhash
+Returns the genesis block hash
+
+##### Parameters:
+None
+
+##### Results:
+* `string` - a Hash as base-58 encoded string
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getGenesisBlockhash"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
+```
+
+---
+
+### getLeaderSchedule
+Returns the leader schedule for the current epoch
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be an array of leader public keys (as base-58 encoded
+strings) for each slot in the current epoch
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[...],"id":1}
+```
+
+---
+
 ### getProgramAccounts
 Returns all accounts owned by the provided program Pubkey
 
@@ -180,7 +248,7 @@ Returns all accounts owned by the provided program Pubkey
 
 ##### Results:
 The result field will be an array of arrays. Each sub array will contain:
-* `string` - a the account Pubkey as base-58 encoded string
+* `string` - the account Pubkey as base-58 encoded string
 and a JSON object, with the following sub fields:
 
 * `lamports`, number of lamports assigned to this account, as a signed 64-bit integer
@@ -245,6 +313,25 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 {"jsonrpc":"2.0","result":"SignatureNotFound","id":1}
 ```
 
+-----
+
+### getSlot
+Returns the current slot the node is processing
+
+##### Parameters:
+None
+
+##### Results:
+* `u64` - Current slot
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlot"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":"1234","id":1}
+```
 -----
 
 ### getSlotLeader
@@ -387,30 +474,52 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ---
 
-### getEpochVoteAccounts
-Returns the account info and associated stake for all the voting accounts in the current epoch.
+### getVersion
+Returns the current solana versions running on the node
 
 ##### Parameters:
 None
 
 ##### Results:
-The result field will be an array of JSON objects, each with the following sub fields:
-* `votePubkey` - Vote account public key, as base-58 encoded string
-* `nodePubkey` - Node public key, as base-58 encoded string
-* `stake` - the stake, in lamports, delegated to this vote account
-* `commission`, a 32-bit integer used as a fraction (commission/MAX_U32) for rewards payout
+The result field will be a JSON object with the following sub fields:
+* `solana-core`, software version of solana-core
 
 ##### Example:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochVoteAccounts"}' http://localhost:8899
-
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":[{"commission":0,"nodePubkey":"Et2RaZJdJRTzTkodUwiHr4H6sLkVmijBFv8tkd7oSSFY","stake":42,"votePubkey":"B4CdWq3NBSoH2wYsVE1CaZSWPo2ZtopE4SJipQhZ3srF"}],"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "0.17.2"},"id":1}
 ```
 
 ---
 
+### getVoteAccounts
+Returns the account info and associated stake for all the voting accounts in the current bank.
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be a JSON object of `current` and `delinquent` accounts,
+each containing an array of JSON objects with the following sub fields:
+* `votePubkey` - Vote account public key, as base-58 encoded string
+* `nodePubkey` - Node public key, as base-58 encoded string
+* `activatedStake` - the stake, in lamports, delegated to this vote account and active in this epoch
+* `epochVoteAccount` - bool, whether the vote account is staked for this epoch
+* `commission`, an 8-bit integer used as a fraction (commission/MAX_U8) for rewards payout
+* `lastVote` - Most recent slot voted on by this vote account
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"current":[{"commission":0,"epochVoteAccount":true,"nodePubkey":"B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD","lastVote":147,"activatedStake":42,"votePubkey":"3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"}],"delinquent":[{"commission":127,"epochVoteAccount":false,"nodePubkey":"6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f","lastVote":0,"activatedStake":0,"votePubkey":"CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"}]},"id":1}
+```
+
+---
 
 ### requestAirdrop
 Requests an airdrop of lamports to a Pubkey

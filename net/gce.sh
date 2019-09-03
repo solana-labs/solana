@@ -12,7 +12,7 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuBootstrapLeaderMachineType="--machine-type n1-standard-16 --min-cpu-platform Intel%20Skylake"
+  cpuBootstrapLeaderMachineType="--custom-cpu 12 --custom-memory 32GB --min-cpu-platform Intel%20Skylake"
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
@@ -128,8 +128,8 @@ Manage testnet instances
                               DNS name (useful only when the -a and -P options
                               are also provided)
    --fullnode-additional-disk-size-gb [number]
-                    - Add an additional [number] GB SSD to all fullnodes to store the config-local directory.
-                      If not set, config-local will be written to the boot disk by default.
+                    - Add an additional [number] GB SSD to all fullnodes to store the config directory.
+                      If not set, config will be written to the boot disk by default.
                       Only supported on GCE.
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -412,7 +412,6 @@ EOF
     declare failOnFailure="$6"
     declare arrayName="$7"
 
-    # This check should eventually be moved to cloud provider specific script
     if [ "$publicIp" = "TERMINATED" ] || [ "$privateIp" = "TERMINATED" ]; then
       if $failOnFailure; then
         exit 1
@@ -631,7 +630,8 @@ $(
   cat \
     disable-background-upgrades.sh \
     create-solana-user.sh \
-    add-solana-user-authorized_keys.sh \
+    solana-user-authorized_keys.sh \
+    add-testnet-solana-user-authorized_keys.sh \
     install-certbot.sh \
     install-earlyoom.sh \
     install-libssl-compatability.sh \

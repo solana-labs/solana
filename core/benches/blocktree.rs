@@ -4,19 +4,20 @@ use rand;
 extern crate test;
 
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
-use solana::blocktree::{get_tmp_ledger_path, Blocktree};
-use solana::entry::{make_large_test_entries, make_tiny_test_entries, EntrySlice};
-use solana::packet::{Blob, BLOB_HEADER_SIZE};
+use solana_core::blocktree::{get_tmp_ledger_path, Blocktree};
+use solana_core::entry::{make_large_test_entries, make_tiny_test_entries, EntrySlice};
+use solana_core::packet::{Blob, BLOB_HEADER_SIZE};
+use std::path::Path;
 use test::Bencher;
 
 // Given some blobs and a ledger at ledger_path, benchmark writing the blobs to the ledger
-fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &str) {
+fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &Path) {
     let blocktree =
-        Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+        Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
 
     let num_blobs = blobs.len();
 
@@ -36,7 +37,7 @@ fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &s
         }
     });
 
-    Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(ledger_path).expect("Expected successful database destruction");
 }
 
 // Insert some blobs into the ledger in preparation for read benchmarks
@@ -110,7 +111,7 @@ fn bench_read_sequential(bench: &mut Bencher) {
         // Generate random starting point in the range [0, total_blobs - 1], read num_reads blobs sequentially
         let start_index = rng.gen_range(0, num_small_blobs + num_large_blobs);
         for i in start_index..start_index + num_reads {
-            let _ = blocktree.get_data_blob(slot, i as u64 % total_blobs);
+            let _ = blocktree.get_data_shred_as_blob(slot, i as u64 % total_blobs);
         }
     });
 
@@ -141,7 +142,7 @@ fn bench_read_random(bench: &mut Bencher) {
         .collect();
     bench.iter(move || {
         for i in indexes.iter() {
-            let _ = blocktree.get_data_blob(slot, *i as u64);
+            let _ = blocktree.get_data_shred_as_blob(slot, *i as u64);
         }
     });
 

@@ -9,8 +9,6 @@
 
 SOLANA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"
 
-rsync=rsync
-
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
   # later. Arguably these should be fatal errors but for now prefer tolerance.
@@ -28,7 +26,11 @@ fi
 if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
   solana_program() {
     declare program="$1"
-    printf "solana-%s" "$program"
+    if [[ -z $program ]]; then
+      printf "solana"
+    else
+      printf "solana-%s" "$program"
+    fi
   }
 else
   solana_program() {
@@ -38,14 +40,23 @@ else
       program=${BASH_REMATCH[1]}
       features+="cuda"
     fi
-    if [[ -r "$SOLANA_ROOT/$program"/Cargo.toml ]]; then
-      maybe_package="--package solana-$program"
+
+    declare crate="$program"
+    if [[ -z $program ]]; then
+      crate="cli"
+      program="solana"
+    else
+      program="solana-$program"
+    fi
+
+    if [[ -r "$SOLANA_ROOT/$crate"/Cargo.toml ]]; then
+      maybe_package="--package solana-$crate"
     fi
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
     fi
-    declare manifest_path="--manifest-path=$SOLANA_ROOT/$program/Cargo.toml"
-    printf "cargo run $manifest_path $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
+    declare manifest_path="--manifest-path=$SOLANA_ROOT/$crate/Cargo.toml"
+    printf "cargo run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program" "$features"
   }
 fi
 
@@ -57,31 +68,25 @@ solana_genesis=$(solana_program genesis)
 solana_gossip=$(solana_program gossip)
 solana_keygen=$(solana_program keygen)
 solana_ledger_tool=$(solana_program ledger-tool)
-solana_wallet=$(solana_program wallet)
+solana_cli=$(solana_program)
 solana_replicator=$(solana_program replicator)
 
-export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
 
 # shellcheck source=scripts/configure-metrics.sh
 source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 
-# The directory on the cluster entrypoint that is rsynced by other full nodes
-SOLANA_RSYNC_CONFIG_DIR=$SOLANA_ROOT/config
-
-# Configuration that remains local
-SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
+SOLANA_CONFIG_DIR=$SOLANA_ROOT/config
 
 SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
 setup_secondary_mount() {
-  # If there is a secondary disk, symlink the config-local dir there
+  # If there is a secondary disk, symlink the config/ dir there
   if [[ -d $SECONDARY_DISK_MOUNT_POINT ]]; then
-    mkdir -p $SECONDARY_DISK_MOUNT_POINT/config-local
+    mkdir -p $SECONDARY_DISK_MOUNT_POINT/config
     rm -rf "$SOLANA_CONFIG_DIR"
-    ln -sfT $SECONDARY_DISK_MOUNT_POINT/config-local "$SOLANA_CONFIG_DIR"
+    ln -sfT $SECONDARY_DISK_MOUNT_POINT/config "$SOLANA_CONFIG_DIR"
   fi
 }
-setup_secondary_mount
 
 default_arg() {
   declare name=$1

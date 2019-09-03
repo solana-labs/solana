@@ -59,24 +59,24 @@ static_assert(sizeof(uint64_t) == 8);
 #endif
 
 /**
- * Helper function that prints a string to stdout
- */
-void sol_log(const char *);
-
-/**
- * Helper function that prints a 64 bit values represented in hexadecimal
- * to stdout
- */
-void sol_log_64(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-
-
-/**
  * Prefix for all BPF functions
  *
  * This prefix should be used for functions in order to facilitate
  * interoperability with BPF representation
  */
 #define SOL_FN_PREFIX __attribute__((always_inline)) static
+
+/**
+ * Helper function that prints a string to stdout
+ */
+void sol_log_(const char *, uint64_t);
+#define sol_log(message) sol_log_(message, sol_strlen(message))
+
+/**
+ * Helper function that prints a 64 bit values represented in hexadecimal
+ * to stdout
+ */
+void sol_log_64(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 
 /**
  * Size of Public key in bytes
@@ -175,8 +175,8 @@ SOL_FN_PREFIX size_t sol_strlen(const char *s) {
  * Prints the line number where the panic occurred and then causes
  * the BPF VM to immediately halt execution. No accounts' userdata are updated
  */
-void sol_panic_(const char *, uint64_t, uint64_t);
-#define sol_panic() sol_panic_(__FILE__, __LINE__, 0)
+void sol_panic_(const char *, uint64_t, uint64_t, uint64_t);
+#define sol_panic() sol_panic_(__FILE__, sizeof(__FILE__), __LINE__, 0)
 
 /**
  * Asserts
@@ -329,7 +329,7 @@ bool entrypoint(const uint8_t *input);
  * Stub log functions when building tests
  */
 #include <stdio.h>
-void sol_log(const char *s) {
+void sol_log_(const char *s, uint64_t len) {
   printf("sol_log: %s\n", s);
 }
 void sol_log_64(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5) {

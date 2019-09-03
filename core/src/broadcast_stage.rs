@@ -9,12 +9,10 @@ use crate::erasure::{CodingGenerator, ErasureConfig};
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
+use crate::shred::Shredder;
 use crate::staking_utils;
 use rayon::ThreadPool;
-use solana_metrics::{
-    datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
-};
-use solana_sdk::timing::duration_as_ms;
+use solana_metrics::{datapoint, inc_new_counter_error, inc_new_counter_info};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -24,7 +22,7 @@ use std::time::Instant;
 
 mod broadcast_bad_blob_sizes;
 mod broadcast_fake_blobs_run;
-mod broadcast_utils;
+pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
 
@@ -241,6 +239,7 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::path::Path;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -255,7 +254,7 @@ mod test {
 
     fn setup_dummy_broadcast_service(
         leader_pubkey: &Pubkey,
-        ledger_path: &str,
+        ledger_path: &Path,
         entry_receiver: Receiver<WorkingBankEntries>,
     ) -> MockBroadcastStage {
         // Make the database ledger
@@ -311,18 +310,23 @@ mod test {
                 &ledger_path,
                 entry_receiver,
             );
-            let bank = broadcast_service.bank.clone();
-            let start_tick_height = bank.tick_height();
-            let max_tick_height = bank.max_tick_height();
-            let ticks_per_slot = bank.ticks_per_slot();
-
-            let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
-            for (i, tick) in ticks.into_iter().enumerate() {
-                entry_sender
-                    .send((bank.clone(), vec![(tick, i as u64 + 1)]))
-                    .expect("Expect successful send to broadcast service");
+            let start_tick_height;
+            let max_tick_height;
+            let ticks_per_slot;
+            let slot;
+            {
+                let bank = broadcast_service.bank.clone();
+                start_tick_height = bank.tick_height();
+                max_tick_height = bank.max_tick_height();
+                ticks_per_slot = bank.ticks_per_slot();
+                slot = bank.slot();
+                let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
+                for (i, tick) in ticks.into_iter().enumerate() {
+                    entry_sender
+                        .send((bank.clone(), vec![(tick, i as u64 + 1)]))
+                        .expect("Expect successful send to broadcast service");
+                }
             }
-
             sleep(Duration::from_millis(2000));
 
             trace!(
@@ -333,15 +337,10 @@ mod test {
             );
 
             let blocktree = broadcast_service.blocktree;
-            let mut blob_index = 0;
-            for i in 0..max_tick_height - start_tick_height {
-                let slot = (start_tick_height + i + 1) / ticks_per_slot;
-
-                let result = blocktree.get_data_blob(slot, blob_index).unwrap();
-
-                blob_index += 1;
-                result.expect("expect blob presence");
-            }
+            let (entries, _) = blocktree
+                .get_slot_entries_with_shred_count(slot, 0)
+                .expect("Expect entries to be present");
+            assert_eq!(entries.len(), max_tick_height as usize);
 
             drop(entry_sender);
             broadcast_service

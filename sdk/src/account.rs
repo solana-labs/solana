@@ -1,4 +1,5 @@
 use crate::pubkey::Pubkey;
+use crate::Epoch;
 use std::{cmp, fmt};
 
 /// An Account with data that is stored on chain
@@ -13,6 +14,8 @@ pub struct Account {
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
 }
 
 impl fmt::Debug for Account {
@@ -25,11 +28,12 @@ impl fmt::Debug for Account {
         };
         write!(
             f,
-            "Account {{ lamports: {} data.len: {} owner: {} executable: {}{} }}",
+            "Account {{ lamports: {} data.len: {} owner: {} executable: {} rent_epoch: {}{} }}",
             self.lamports,
             self.data.len(),
             self.owner,
             self.executable,
+            self.rent_epoch,
             data_str,
         )
     }
@@ -42,7 +46,7 @@ impl Account {
             lamports,
             data: vec![0u8; space],
             owner: *owner,
-            executable: false,
+            ..Account::default()
         }
     }
 
@@ -56,7 +60,7 @@ impl Account {
             lamports,
             data,
             owner: *owner,
-            executable: false,
+            ..Account::default()
         })
     }
 

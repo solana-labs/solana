@@ -1,29 +1,14 @@
 //! A command-line executable for generating the chain's genesis block.
-#[macro_use]
-extern crate solana_bpf_loader_program;
-#[macro_use]
-extern crate solana_vote_program;
-#[macro_use]
-extern crate solana_stake_program;
-#[macro_use]
-extern crate solana_budget_program;
-#[macro_use]
-extern crate solana_token_program;
-#[macro_use]
-extern crate solana_config_program;
-#[macro_use]
-extern crate solana_exchange_program;
-#[macro_use]
-extern crate solana_storage_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
-use solana::blocktree::create_new_ledger;
+use solana_core::blocktree::create_new_ledger;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::Builder;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::rent::Rent;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use solana_sdk::system_program;
 use solana_sdk::timing;
@@ -34,6 +19,7 @@ use std::collections::HashMap;
 use std::error;
 use std::fs::File;
 use std::io;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -74,6 +60,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_target_lamports_per_signature = &FeeCalculator::default()
         .target_lamports_per_signature
         .to_string();
+    let default_lamports_per_byte_year = &Rent::default().lamports_per_byte_year.to_string();
     let default_target_signatures_per_slot = &FeeCalculator::default()
         .target_signatures_per_slot
         .to_string();
@@ -177,6 +164,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
+            Arg::with_name("lamports_per_byte_year")
+                .long("lamports-per-byte-year")
+                .value_name("LAMPORTS")
+                .takes_value(true)
+                .default_value(default_lamports_per_byte_year)
+                .help(
+                    "The cost in lamports that the cluster will charge per byte per year \
+                     for accounts with data.",
+                ),
+        )
+        .arg(
             Arg::with_name("target_signatures_per_slot")
                 .long("target-signatures-per-slot")
                 .value_name("NUMBER")
@@ -248,7 +246,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_keypair_file =
         matches.value_of("bootstrap_storage_keypair_file").unwrap();
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
-    let ledger_path = matches.value_of("ledger_path").unwrap();
+    let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let lamports = value_t_or_exit!(matches, "lamports", u64);
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
@@ -260,11 +258,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_keypair = read_keypair(bootstrap_storage_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
-    let (vote_account, vote_state) = vote_state::create_bootstrap_leader_account(
+    let vote_account = vote_state::create_account(
         &bootstrap_vote_keypair.pubkey(),
         &bootstrap_leader_keypair.pubkey(),
         0,
         1,
+    );
+    let stake_account = stake_state::create_account(
+        &bootstrap_vote_keypair.pubkey(),
+        &vote_account,
+        bootstrap_leader_stake_lamports,
     );
 
     let mut builder = Builder::new()
@@ -282,14 +285,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // where votes go to
             (bootstrap_vote_keypair.pubkey(), vote_account),
             // passive bootstrap leader stake
-            (
-                bootstrap_stake_keypair.pubkey(),
-                stake_state::create_stake_account(
-                    &bootstrap_vote_keypair.pubkey(),
-                    &vote_state,
-                    bootstrap_leader_stake_lamports,
-                ),
-            ),
+            (bootstrap_stake_keypair.pubkey(), stake_account),
             (
                 bootstrap_storage_keypair.pubkey(),
                 storage_contract::create_validator_storage_account(
@@ -298,16 +294,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
             ),
         ])
-        .native_instruction_processors(&[
-            solana_bpf_loader_program!(),
-            solana_vote_program!(),
-            solana_stake_program!(),
-            solana_budget_program!(),
-            solana_token_program!(),
-            solana_config_program!(),
-            solana_exchange_program!(),
-            solana_storage_program!(),
-        ])
+        .native_instruction_processors(&solana_genesis_programs::get())
         .ticks_per_slot(value_t_or_exit!(matches, "ticks_per_slot", u64))
         .slots_per_epoch(value_t_or_exit!(matches, "slots_per_epoch", u64));
 
@@ -355,42 +342,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         builder = append_primordial_accounts(file, AccountFileFormat::Keypair, builder)?;
     }
 
-    // add the reward pools
+    // add genesis stuff from storage and stake
     builder = solana_storage_api::rewards_pools::genesis(builder);
-    builder = solana_stake_api::rewards_pools::genesis(builder);
+    builder = solana_stake_api::genesis(builder);
 
-    create_new_ledger(ledger_path, &builder.build())?;
+    create_new_ledger(&ledger_path, &builder.build())?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hashbrown::HashSet;
     use solana_sdk::genesis_block::Builder;
     use solana_sdk::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::fs::remove_file;
     use std::io::Write;
     use std::path::Path;
-
-    #[test]
-    fn test_program_id_uniqueness() {
-        let mut unique = HashSet::new();
-        let ids = vec![
-            solana_sdk::system_program::id(),
-            solana_sdk::native_loader::id(),
-            solana_sdk::bpf_loader::id(),
-            solana_budget_api::id(),
-            solana_storage_api::id(),
-            solana_token_api::id(),
-            solana_vote_api::id(),
-            solana_stake_api::id(),
-            solana_config_api::id(),
-            solana_exchange_api::id(),
-        ];
-        assert!(ids.into_iter().all(move |id| unique.insert(id)));
-    }
 
     #[test]
     fn test_append_primordial_accounts_to_genesis() {

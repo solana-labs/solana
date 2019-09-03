@@ -6,7 +6,9 @@ usage() {
 usage: $0 [major|minor|patch|-preXYZ]
 
 Increments the Cargo.toml version.
-A minor version increment is the default
+
+Default:
+* Removes the prerelease tag if present, otherwise the minor version is incremented.
 EOF
   exit 0
 }
@@ -47,10 +49,19 @@ semverParseInto "$(readCargoVariable version "${Cargo_tomls[0]}")" MAJOR MINOR P
 [[ -n $MAJOR ]] || usage
 
 currentVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
+
+bump=$1
+if [[ -z $bump ]]; then
+  if [[ -n $SPECIAL ]]; then
+    bump=dropspecial # Remove prerelease tag
+  else
+    bump=minor
+  fi
+fi
 SPECIAL=""
 
 # Figure out what to increment
-case ${1:-minor} in
+case $bump in
 patch)
   PATCH=$((PATCH + 1))
   ;;
@@ -59,6 +70,8 @@ major)
   ;;
 minor)
   MINOR=$((MINOR+ 1))
+  ;;
+dropspecial)
   ;;
 -*)
   if [[ $1 =~ ^-[A-Za-z0-9]*$ ]]; then
@@ -81,7 +94,7 @@ for Cargo_toml in "${Cargo_tomls[@]}"; do
   # Set new crate version
   (
     set -x
-    sed -i "$Cargo_toml" -e "s/^version = \"[^\"]*\"$/version = \"$newVersion\"/"
+    sed -i "$Cargo_toml" -e "0,/^version =/{s/^version = \"[^\"]*\"$/version = \"$newVersion\"/}"
   )
 
   # Fix up the version references to other internal crates

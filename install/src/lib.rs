@@ -33,6 +33,20 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
+fn is_semver(semver: &str) -> Result<(), String> {
+    match semver::Version::parse(&semver) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
+}
+
+fn is_release_channel(channel: &str) -> Result<(), String> {
+    match channel {
+        "edge" | "beta" | "stable" => Ok(()),
+        _ => Err(format!("Invalid release channel {}", channel)),
+    }
+}
+
 pub fn main() -> Result<(), String> {
     solana_logger::setup();
 
@@ -46,6 +60,7 @@ pub fn main() -> Result<(), String> {
                 .long("config")
                 .value_name("PATH")
                 .takes_value(true)
+                .global(true)
                 .help("Configuration file to use");
             match *defaults::CONFIG_FILE {
                 Some(ref config_file) => arg.default_value(&config_file),
@@ -98,7 +113,15 @@ pub fn main() -> Result<(), String> {
                         Some(default_value) => arg.default_value(default_value),
                         None => arg,
                     }
-                }),
+                })
+                .arg(
+                    Arg::with_name("explicit_release")
+                        .value_name("release")
+                        .index(1)
+                        .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
+                .validator(|string| is_semver(&string).or_else(|_| is_release_channel(&string)))
+                        .help("The exact version to install.  Either a semver or release channel name"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("info")
@@ -191,6 +214,9 @@ pub fn main() -> Result<(), String> {
                 .unwrap();
             let data_dir = matches.value_of("data_dir").unwrap();
             let no_modify_path = matches.is_present("no_modify_path");
+            let explicit_release = matches
+                .value_of("explicit_release")
+                .map(ToString::to_string);
 
             command::init(
                 config_file,
@@ -198,6 +224,13 @@ pub fn main() -> Result<(), String> {
                 json_rpc_url,
                 &update_manifest_pubkey,
                 no_modify_path,
+                explicit_release.map(|explicit_release| {
+                    if is_semver(&explicit_release).is_ok() {
+                        config::ExplicitRelease::Semver(explicit_release)
+                    } else {
+                        config::ExplicitRelease::Channel(explicit_release)
+                    }
+                }),
             )
         }
         ("info", Some(matches)) => {
@@ -292,6 +325,14 @@ pub fn main_init() -> Result<(), String> {
                 None => arg,
             }
         })
+        .arg(
+            Arg::with_name("explicit_release")
+                .value_name("release")
+                .index(1)
+                .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
+                .validator(|string| is_semver(&string).or_else(|_| is_release_channel(&string)))
+                .help("The exact version to install.  Updates will not be available if this argument is used"),
+        )
         .get_matches();
 
     let config_file = matches.value_of("config_file").unwrap();
@@ -304,6 +345,9 @@ pub fn main_init() -> Result<(), String> {
         .unwrap();
     let data_dir = matches.value_of("data_dir").unwrap();
     let no_modify_path = matches.is_present("no_modify_path");
+    let explicit_release = matches
+        .value_of("explicit_release")
+        .map(ToString::to_string);
 
     command::init(
         config_file,
@@ -311,5 +355,12 @@ pub fn main_init() -> Result<(), String> {
         json_rpc_url,
         &update_manifest_pubkey,
         no_modify_path,
+        explicit_release.map(|explicit_release| {
+            if is_semver(&explicit_release).is_ok() {
+                config::ExplicitRelease::Semver(explicit_release)
+            } else {
+                config::ExplicitRelease::Channel(explicit_release)
+            }
+        }),
     )
 }

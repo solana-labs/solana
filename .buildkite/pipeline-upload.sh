@@ -10,7 +10,13 @@
 set -e
 cd "$(dirname "$0")"/..
 
-buildkite-agent pipeline upload ci/buildkite.yml
+if [[ -n $BUILDKITE_TAG ]]; then
+  buildkite-agent annotate --style info --context release-tag \
+    "https://github.com/solana-labs/solana/releases/$BUILDKITE_TAG"
+  buildkite-agent pipeline upload ci/buildkite-release.yml
+else
+  buildkite-agent pipeline upload ci/buildkite.yml
+fi
 
 if [[ $BUILDKITE_BRANCH =~ ^pull ]]; then
   # Add helpful link back to the corresponding Github Pull Request

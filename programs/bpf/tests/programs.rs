@@ -97,6 +97,7 @@ mod bpf {
                 ("solana_bpf_rust_external_spend", false),
                 ("solana_bpf_rust_noop", true),
                 ("solana_bpf_rust_panic", false),
+                ("solana_bpf_rust_param_passing", true),
             ];
             for program in programs.iter() {
                 let filename = create_bpf_path(program.0);

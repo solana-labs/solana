@@ -11,6 +11,7 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction;
 use std::sync::{atomic, Arc};
 
+#[allow(clippy::needless_return)] // TODO remove me when rpc is updated?
 #[rpc(server)]
 pub trait RpcSolPubSub {
     type Metadata;
@@ -428,7 +429,8 @@ mod tests {
                    "owner": budget_program_id,
                    "lamports": 51,
                    "data": expected_data,
-                    "executable": executable,
+                   "executable": executable,
+                   "rent_epoch": 0,
                },
                "subscription": 0,
            }
@@ -573,6 +575,7 @@ mod tests {
                    "lamports": 100,
                    "data": [],
                    "executable": false,
+                   "rent_epoch": 0,
                },
                "subscription": 0,
            }

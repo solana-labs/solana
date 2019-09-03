@@ -142,8 +142,6 @@ testnet-beta|testnet-beta-perf)
 testnet)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
-  : "${EC2_NODE_COUNT:=10}"
-  : "${GCE_NODE_COUNT:=}"
   ;;
 testnet-perf)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
@@ -156,8 +154,9 @@ testnet-demo)
   : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
   ;;
 tds)
-  CHANNEL_OR_TAG=beta
-  CHANNEL_BRANCH=$BETA_CHANNEL
+  : "${TDS_CHANNEL_OR_TAG:=edge}"
+  CHANNEL_OR_TAG="$TDS_CHANNEL_OR_TAG"
+  CHANNEL_BRANCH="$CI_BRANCH"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
@@ -178,11 +177,11 @@ for val in "${GCE_LOW_QUOTA_ZONES[@]}"; do
   GCE_LOW_QUOTA_ZONE_ARGS+=("-z $val")
 done
 
-if [[ -n $TESTNET_DB_HOST ]]; then
-  SOLANA_METRICS_PARTIAL_CONFIG="host=$TESTNET_DB_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
+if [[ -z $TESTNET_DB_HOST ]]; then
+  TESTNET_DB_HOST="https://metrics.solana.com:8086"
 fi
 
-export SOLANA_METRICS_CONFIG="db=$TESTNET,$SOLANA_METRICS_PARTIAL_CONFIG"
+export SOLANA_METRICS_CONFIG="db=$TESTNET,host=$TESTNET_DB_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
 source scripts/configure-metrics.sh
 
@@ -203,7 +202,6 @@ steps:
         TESTNET: "$TESTNET"
         TESTNET_OP: "$TESTNET_OP"
         TESTNET_DB_HOST: "$TESTNET_DB_HOST"
-        EC2_NODE_COUNT: "$EC2_NODE_COUNT"
         GCE_NODE_COUNT: "$GCE_NODE_COUNT"
         GCE_LOW_QUOTA_NODE_COUNT: "$GCE_LOW_QUOTA_NODE_COUNT"
 EOF
@@ -220,7 +218,8 @@ sanity() {
       set -x
       NO_INSTALL_CHECK=1 \
       NO_LEDGER_VERIFY=1 \
-        ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh edge-testnet-solana-com gce us-west1-b
     )
     ;;
   testnet-edge-perf)
@@ -237,7 +236,8 @@ sanity() {
       set -x
       NO_INSTALL_CHECK=1 \
       NO_LEDGER_VERIFY=1 \
-        ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
     )
     ;;
   testnet-beta-perf)
@@ -252,19 +252,9 @@ sanity() {
   testnet)
     (
       set -x
-
-      ok=true
-      if [[ -n $EC2_NODE_COUNT ]]; then
-        NO_LEDGER_VERIFY=1 \
-          ci/testnet-sanity.sh testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
-      elif [[ -n $GCE_NODE_COUNT ]]; then
-        NO_LEDGER_VERIFY=1 \
-          ci/testnet-sanity.sh testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
-      else
-        echo "Error: no EC2 or GCE nodes"
-        ok=false
-      fi
-      $ok
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh testnet-solana-com gce us-west1-b
     )
     ;;
   testnet-perf)
@@ -334,9 +324,9 @@ deploy() {
   testnet-edge)
     (
       set -x
-      ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
-        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
-        -a eipalloc-0ccd4f2239886fa94 --letsencrypt edge.testnet.solana.com \
+      ci/testnet-deploy.sh -p edge-testnet-solana-com -C gce -z us-west1-b \
+        -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
+        -a edge-testnet-solana-com --letsencrypt edge.testnet.solana.com \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
@@ -361,9 +351,9 @@ deploy() {
     (
       set -x
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 -z us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
-          -a eipalloc-0f286cf8a0771ce35 --letsencrypt beta.testnet.solana.com \
+        ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce -z us-west1-b \
+          -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
+          -a beta-testnet-solana-com --letsencrypt beta.testnet.solana.com \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
@@ -387,30 +377,14 @@ deploy() {
   testnet)
     (
       set -x
-
-      if [[ -n $GCE_NODE_COUNT ]] || [[ -n $skipStart ]]; then
-        maybeSkipStart="skip"
-      fi
-
-      # shellcheck disable=SC2068
-      ci/testnet-deploy.sh -p testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -f \
-        -a eipalloc-0fa502bf95f6f18b2 --letsencrypt testnet.solana.com \
-        ${skipCreate:+-e} \
-        ${maybeSkipStart:+-s} \
-        ${maybeStop:+-S} \
-        ${maybeDelete:+-D}
-
-      if [[ -n $GCE_NODE_COUNT ]]; then
-        # shellcheck disable=SC2068
-        ci/testnet-deploy.sh -p testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -f \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh -p testnet-solana-com -C gce -z us-west1-b \
+          -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
+          -a testnet-solana-com --letsencrypt testnet.solana.com \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D} \
-          -x
-      fi
+          ${maybeDelete:+-D}
     )
     ;;
   testnet-perf)
@@ -500,23 +474,40 @@ deploy() {
         maybeHashesPerTick="--hashes-per-tick ${HASHES_PER_TICK}"
       fi
 
-      if [[ -z $STAKE_INTERNAL_NODES ]]; then
-        maybeStakeInternalNodes="--stake-internal-nodes 1000000000000"
-      elif [[ $STAKE_INTERNAL_NODES == skip ]]; then
-        maybeStakeInternalNodes=""
+      if [[ -z $DISABLE_AIRDROPS ]]; then
+        DISABLE_AIRDROPS="true"
+      fi
+
+      if [[ $DISABLE_AIRDROPS == true ]] ; then
+        maybeDisableAirdrops="--no-airdrop"
       else
-        maybeStakeInternalNodes="--stake-internal-nodes ${STAKE_INTERNAL_NODES}"
+        maybeDisableAirdrops=""
+      fi
+
+      if [[ -z $INTERNAL_NODES_STAKE_LAMPORTS ]]; then
+        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports 1000000000000"
+      elif [[ $INTERNAL_NODES_STAKE_LAMPORTS == skip ]]; then
+        maybeInternalNodesStakeLamports=""
+      else
+        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports ${INTERNAL_NODES_STAKE_LAMPORTS}"
+      fi
+
+      if [[ -z $INTERNAL_NODES_LAMPORTS ]]; then
+        maybeInternalNodesLamports="--internal-nodes-lamports 2000000000000"
+      elif [[ $INTERNAL_NODES_LAMPORTS == skip ]]; then
+        maybeInternalNodesLamports=""
+      else
+        maybeInternalNodesLamports="--internal-nodes-lamports ${INTERNAL_NODES_LAMPORTS}"
       fi
 
       EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
       if [[ -z $EXTERNAL_ACCOUNTS_FILE_URL ]]; then
-        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
+        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/validators/all.yml
         wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
         maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
       elif [[ $EXTERNAL_ACCOUNTS_FILE_URL == skip ]]; then
         maybeExternalAccountsFile=""
       else
-        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/stage1/validator.yml
         wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
         maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
       fi
@@ -557,12 +548,13 @@ deploy() {
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
-          ${maybeStakeInternalNodes} \
+          ${maybeDisableAirdrops} \
+          ${maybeInternalNodesStakeLamports} \
+          ${maybeInternalNodesLamports} \
           ${maybeExternalAccountsFile} \
           ${maybeLamports} \
           ${maybeAdditionalDisk} \
-          --skip-deploy-update \
-          --no-snapshot
+          --skip-deploy-update
     )
     ;;
   *)

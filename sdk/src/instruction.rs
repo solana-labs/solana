@@ -61,6 +61,12 @@ pub enum InstructionError {
     /// An account was referenced more than once in a single instruction
     DuplicateAccountIndex,
 
+    /// Executable bit on account changed, but shouldn't have
+    ExecutableModified,
+
+    /// Rent_epoch account changed, but shouldn't have
+    RentEpochModified,
+
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is represented
     /// as or serialized to a u32 integer.

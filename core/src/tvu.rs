@@ -18,15 +18,18 @@ use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
+use crate::ledger_cleanup_service::LedgerCleanupService;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
+use crate::snapshot_package::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
@@ -37,13 +40,16 @@ pub struct Tvu {
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
     blockstream_service: Option<BlockstreamService>,
+    ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
+    snapshot_packager_service: Option<SnapshotPackagerService>,
 }
 
 pub struct Sockets {
     pub fetch: Vec<UdpSocket>,
     pub repair: UdpSocket,
     pub retransmit: UdpSocket,
+    pub forwards: Vec<UdpSocket>,
 }
 
 impl Tvu {
@@ -63,7 +69,8 @@ impl Tvu {
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
         storage_state: &StorageState,
-        blockstream: Option<&String>,
+        blockstream_unix_socket: Option<&PathBuf>,
+        max_ledger_slots: Option<u64>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -84,15 +91,23 @@ impl Tvu {
             repair: repair_socket,
             fetch: fetch_sockets,
             retransmit: retransmit_socket,
+            forwards: tvu_forward_sockets,
         } = sockets;
 
-        let (blob_fetch_sender, blob_fetch_receiver) = channel();
+        let (fetch_sender, fetch_receiver) = channel();
 
         let repair_socket = Arc::new(repair_socket);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
             fetch_sockets.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
-        let fetch_stage = BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, &exit);
+        let blob_forward_sockets: Vec<Arc<UdpSocket>> =
+            tvu_forward_sockets.into_iter().map(Arc::new).collect();
+        let fetch_stage = BlobFetchStage::new_multi_socket_packet(
+            blob_sockets,
+            blob_forward_sockets,
+            &fetch_sender,
+            &exit,
+        );
 
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
@@ -104,13 +119,27 @@ impl Tvu {
             &cluster_info,
             Arc::new(retransmit_socket),
             repair_socket,
-            blob_fetch_receiver,
+            fetch_receiver,
             &exit,
             completed_slots_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
         );
 
-        let (replay_stage, slot_full_receiver, root_bank_receiver) = ReplayStage::new(
+        let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
+        let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
+        let (snapshot_packager_service, snapshot_package_sender) = {
+            let snapshot_config = { bank_forks.read().unwrap().snapshot_config().clone() };
+            if snapshot_config.is_some() {
+                // Start a snapshot packaging service
+                let (sender, receiver) = channel();
+                let snapshot_packager_service = SnapshotPackagerService::new(receiver, exit);
+                (Some(snapshot_packager_service), Some(sender))
+            } else {
+                (None, None)
+            }
+        };
+
+        let (replay_stage, root_bank_receiver) = ReplayStage::new(
             &keypair.pubkey(),
             vote_account,
             voting_keypair,
@@ -122,19 +151,30 @@ impl Tvu {
             subscriptions,
             poh_recorder,
             leader_schedule_cache,
+            vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
+            snapshot_package_sender,
         );
 
-        let blockstream_service = if blockstream.is_some() {
+        let blockstream_service = if blockstream_unix_socket.is_some() {
             let blockstream_service = BlockstreamService::new(
-                slot_full_receiver,
+                blockstream_slot_receiver,
                 blocktree.clone(),
-                blockstream.unwrap().to_string(),
+                blockstream_unix_socket.unwrap(),
                 &exit,
             );
             Some(blockstream_service)
         } else {
             None
         };
+
+        let ledger_cleanup_service = max_ledger_slots.map(|max_ledger_slots| {
+            LedgerCleanupService::new(
+                ledger_cleanup_slot_receiver,
+                blocktree.clone(),
+                max_ledger_slots,
+                &exit,
+            )
+        });
 
         let storage_stage = StorageStage::new(
             storage_state,
@@ -152,7 +192,9 @@ impl Tvu {
             retransmit_stage,
             replay_stage,
             blockstream_service,
+            ledger_cleanup_service,
             storage_stage,
+            snapshot_packager_service,
         }
     }
 }
@@ -167,7 +209,13 @@ impl Service for Tvu {
         if self.blockstream_service.is_some() {
             self.blockstream_service.unwrap().join()?;
         }
+        if self.ledger_cleanup_service.is_some() {
+            self.ledger_cleanup_service.unwrap().join()?;
+        }
         self.replay_stage.join()?;
+        if let Some(s) = self.snapshot_packager_service {
+            s.join()?;
+        }
         Ok(())
     }
 }
@@ -176,7 +224,7 @@ impl Service for Tvu {
 pub mod tests {
     use super::*;
     use crate::banking_stage::create_test_recorder;
-    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_runtime::bank::Bank;
@@ -199,7 +247,7 @@ pub mod tests {
         cluster_info1.insert_info(leader.info.clone());
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
-        let blocktree_path = get_tmp_ledger_path!();
+        let (blocktree_path, _) = create_new_tmp_ledger!(&genesis_block);
         let (blocktree, l_receiver, completed_slots_receiver) =
             Blocktree::open_with_signal(&blocktree_path)
                 .expect("Expected to successfully open ledger");
@@ -221,10 +269,12 @@ pub mod tests {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit,
                     fetch: target1.sockets.tvu,
+                    forwards: target1.sockets.tvu_forwards,
                 }
             },
             blocktree,
             &StorageState::default(),
+            None,
             None,
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),

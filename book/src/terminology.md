@@ -58,6 +58,17 @@ with a ledger interpretation that matches the leader's.
 
 A gossip network connecting all [nodes](#node) of a [cluster](#cluster).
 
+#### cooldown period
+
+Some number of epochs after stake has been deactivated while it progressively
+becomes available for withdrawal. During this period, the stake is considered to
+be "deactivating". More info about:
+[warmup and cooldown](stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+
+#### credit
+
+See [vote credit](#vote-credit).
+
 #### data plane
 
 A multicast network used to efficiently validate [entries](#entry) and gain
@@ -90,6 +101,10 @@ History](#proof-of-history).
 
 The time, i.e. number of [slots](#slot), for which a [leader
 schedule](#leader-schedule) is valid.
+
+#### finality
+
+When nodes representing 2/3rd of the stake have a common [root](#root).
 
 #### fork
 
@@ -189,6 +204,10 @@ The number of [fullnodes](#fullnode) participating in a [cluster](#cluster).
 
 See [Proof of History](#proof-of-history).
 
+#### point
+
+A weighted [credit](#credit) in a rewards regime.  In the validator [rewards regime](staking-rewards.md), the number of points owed to a stake during redemption is the product of the [vote credits](#vote-credit) earned and the number of lamports staked.
+
 #### program
 
 The code that interprets [instructions](#instruction).
@@ -212,6 +231,15 @@ The public key of a [keypair](#keypair).
 
 Storage mining client, stores some part of the ledger enumerated in blocks and
 submits storage proofs to the chain. Not a full-node.
+
+#### root
+
+A [block](#block) or [slot](#slot) that has reached maximum [lockout](#lockout)
+on a validator.  The root is the highest block that is an ancestor of all active
+forks on a validator.  All ancestor blocks of a root are also transitively a
+root.  Blocks that are not an ancestor and not a descendant of the root are
+excluded from consideration for consensus and can be discarded.
+
 
 #### runtime
 
@@ -263,6 +291,11 @@ hash values and a bit which says if this hash is valid or fake.
 
 The number of keys and samples that a validator can verify each storage epoch.
 
+#### sysvar
+
+A synthetic [account](#account) provided by the runtime to allow programs to
+access network state such as current tick height, rewards [points](#point) values, etc.
+
 #### thin client
 
 A type of [client](#client) that trusts it is communicating with a valid
@@ -310,3 +343,15 @@ that it ran, which can then be verified in less time than it took to produce.
 #### vote
 
 See [ledger vote](#ledger-vote).
+
+#### vote credit
+
+A reward tally for validators.  A vote credit is awarded to a validator in its
+vote account when the validator reaches a [root](#root).
+
+#### warmup period
+
+Some number of epochs after stake has been delegated while it progressively
+becomes effective. During this period, the stake is considered to be
+"activating". More info about:
+[warmup and cooldown](stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

@@ -9,18 +9,21 @@ pub enum RpcRequest {
     GetAccountInfo,
     GetBalance,
     GetClusterNodes,
+    GetGenesisBlockhash,
+    GetInflation,
     GetNumBlocksSinceSignatureConfirmation,
     GetProgramAccounts,
     GetRecentBlockhash,
     GetSignatureStatus,
     GetSlot,
     GetSlotLeader,
-    GetEpochVoteAccounts,
     GetStorageTurn,
     GetStorageTurnRate,
     GetSlotsPerSegment,
     GetStoragePubkeysForSlot,
     GetTransactionCount,
+    GetVersion,
+    GetVoteAccounts,
     RegisterNode,
     RequestAirdrop,
     SendTransaction,
@@ -37,6 +40,8 @@ impl RpcRequest {
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
             RpcRequest::GetClusterNodes => "getClusterNodes",
+            RpcRequest::GetGenesisBlockhash => "getGenesisBlockhash",
+            RpcRequest::GetInflation => "getInflation",
             RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
                 "getNumBlocksSinceSignatureConfirmation"
             }
@@ -45,12 +50,13 @@ impl RpcRequest {
             RpcRequest::GetSignatureStatus => "getSignatureStatus",
             RpcRequest::GetSlot => "getSlot",
             RpcRequest::GetSlotLeader => "getSlotLeader",
-            RpcRequest::GetEpochVoteAccounts => "getEpochVoteAccounts",
             RpcRequest::GetStorageTurn => "getStorageTurn",
             RpcRequest::GetStorageTurnRate => "getStorageTurnRate",
             RpcRequest::GetSlotsPerSegment => "getSlotsPerSegment",
             RpcRequest::GetStoragePubkeysForSlot => "getStoragePubkeysForSlot",
             RpcRequest::GetTransactionCount => "getTransactionCount",
+            RpcRequest::GetVersion => "getVersion",
+            RpcRequest::GetVoteAccounts => "getVoteAccounts",
             RpcRequest::RegisterNode => "registerNode",
             RpcRequest::RequestAirdrop => "requestAirdrop",
             RpcRequest::SendTransaction => "sendTransaction",
@@ -105,6 +111,10 @@ mod tests {
         let test_request = RpcRequest::GetBalance;
         let request = test_request.build_request_json(1, Some(addr));
         assert_eq!(request["method"], "getBalance");
+
+        let test_request = RpcRequest::GetInflation;
+        let request = test_request.build_request_json(1, None);
+        assert_eq!(request["method"], "getInflation");
 
         let test_request = RpcRequest::GetRecentBlockhash;
         let request = test_request.build_request_json(1, None);

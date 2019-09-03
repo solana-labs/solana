@@ -1,11 +1,20 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
-use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
-use solana::contact_info::ContactInfo;
-use solana::replicator::Replicator;
+use console::style;
+use solana_core::cluster_info::{Node, FULLNODE_PORT_RANGE};
+use solana_core::contact_info::ContactInfo;
+use solana_core::replicator::Replicator;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
+
+// Return an error if a keypair file cannot be parsed.
+fn is_keypair(string: String) -> Result<(), String> {
+    read_keypair(&string)
+        .map(|_| ())
+        .map_err(|err| format!("{:?}", err))
+}
 
 fn main() {
     solana_logger::setup();
@@ -19,6 +28,7 @@ fn main() {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
+                .validator(is_keypair)
                 .help("File containing an identity (keypair)"),
         )
         .arg(
@@ -28,6 +38,7 @@ fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .required(true)
+                .validator(solana_netutil::is_host_port)
                 .help("Rendezvous with the cluster at this entry point"),
         )
         .arg(
@@ -46,11 +57,12 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .required(true)
+                .validator(is_keypair)
                 .help("File containing the storage account keypair"),
         )
         .get_matches();
 
-    let ledger_path = matches.value_of("ledger").unwrap();
+    let ledger_path = PathBuf::from(matches.value_of("ledger").unwrap());
 
     let keypair = if let Some(identity) = matches.value_of("identity") {
         read_keypair(identity).unwrap_or_else(|err| {
@@ -86,6 +98,14 @@ fn main() {
         Node::new_replicator_with_external_ip(&keypair.pubkey(), &gossip_addr, FULLNODE_PORT_RANGE);
 
     println!(
+        "{} version {} (branch={}, commit={})",
+        style(crate_name!()).bold(),
+        crate_version!(),
+        option_env!("CI_BRANCH").unwrap_or("unknown"),
+        option_env!("CI_COMMIT").unwrap_or("unknown")
+    );
+    solana_metrics::set_host_id(keypair.pubkey().to_string());
+    println!(
         "replicating the data with keypair={:?} gossip_addr={:?}",
         keypair.pubkey(),
         gossip_addr
@@ -93,7 +113,7 @@ fn main() {
 
     let entrypoint_info = ContactInfo::new_gossip_entry_point(&entrypoint_addr);
     let replicator = Replicator::new(
-        ledger_path,
+        &ledger_path,
         node,
         entrypoint_info,
         Arc::new(keypair),

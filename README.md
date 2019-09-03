@@ -1,5 +1,5 @@
-[![Solana crate](https://img.shields.io/crates/v/solana.svg)](https://crates.io/crates/solana)
-[![Solana documentation](https://docs.rs/solana/badge.svg)](https://docs.rs/solana)
+[![Solana crate](https://img.shields.io/crates/v/solana-core.svg)](https://crates.io/crates/solana-core)
+[![Solana documentation](https://docs.rs/solana-core/badge.svg)](https://docs.rs/solana-core)
 [![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
@@ -78,7 +78,7 @@ $ source $HOME/.cargo/env
 $ rustup component add rustfmt
 ```
 
-If your rustc version is lower than 1.34.0, please update it:
+If your rustc version is lower than 1.37.0, please update it:
 
 ```bash
 $ rustup update
@@ -127,12 +127,9 @@ Remote Testnets
 
 We maintain several testnets:
 
-* `testnet` - public stable testnet accessible via testnet.solana.com, with an https proxy for web apps at api.testnet.solana.com. Runs 24/7
+* `testnet` - public stable testnet accessible via testnet.solana.com. Runs 24/7
 * `testnet-beta` - public beta channel testnet accessible via beta.testnet.solana.com. Runs 24/7
 * `testnet-edge` - public edge channel testnet accessible via edge.testnet.solana.com. Runs 24/7
-* `testnet-perf` - permissioned stable testnet running a 24/7 soak test
-* `testnet-beta-perf` - permissioned beta channel testnet running a multi-hour soak test weekday mornings
-* `testnet-edge-perf` - permissioned edge channel testnet running a multi-hour soak test weekday mornings
 
 ## Deploy process
 
@@ -243,5 +240,3 @@ problem is solved by this code?" On the other hand, if a test does fail and you 
 better way to solve the same problem, a Pull Request with your solution would most certainly be
 welcome! Likewise, if rewriting a test can better communicate what code it's protecting, please
 send us that patch!
-
-

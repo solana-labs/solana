@@ -54,7 +54,7 @@ impl ClusterInfoVoteListener {
                 return Ok(());
             }
             let (votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
-            if poh_recorder.lock().unwrap().bank().is_some() {
+            if poh_recorder.lock().unwrap().has_bank() {
                 last_ts = new_ts;
                 inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
                 let msgs = packet::to_packets(&votes);
@@ -85,7 +85,6 @@ impl Service for ClusterInfoVoteListener {
 
 #[cfg(test)]
 mod tests {
-    use crate::consensus::MAX_RECENT_VOTES;
     use crate::packet;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -98,9 +97,8 @@ mod tests {
         solana_logger::setup();
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
-        let votes = (0..MAX_RECENT_VOTES)
-            .map(|i| Vote::new(i as u64, Hash::default()))
-            .collect::<Vec<_>>();
+        let slots: Vec<_> = (0..31).into_iter().collect();
+        let votes = Vote::new(slots, Hash::default());
         let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), &vote_keypair.pubkey(), votes);
 
         let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));

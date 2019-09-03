@@ -1,3 +1,4 @@
+pub mod config;
 pub mod rewards_pools;
 pub mod stake_instruction;
 pub mod stake_state;
@@ -11,3 +12,12 @@ solana_sdk::solana_name_id!(
     STAKE_PROGRAM_ID,
     "Stake11111111111111111111111111111111111111"
 );
+
+use solana_sdk::genesis_block::Builder;
+
+pub fn genesis(mut builder: Builder) -> Builder {
+    for (pubkey, account) in crate::rewards_pools::genesis().iter() {
+        builder = builder.rewards_pool(*pubkey, account.clone());
+    }
+    builder.accounts(&[crate::config::genesis()])
+}

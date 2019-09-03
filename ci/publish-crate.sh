@@ -2,6 +2,7 @@
 set -e
 cd "$(dirname "$0")/.."
 source ci/semver_bash/semver.sh
+source ci/rust-version.sh stable
 
 # shellcheck disable=SC2086
 is_crate_version_uploaded() {
@@ -24,8 +25,6 @@ expectedCrateVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
   echo CRATES_IO_TOKEN undefined
   exit 1
 }
-
-cargoCommand="cargo publish --token $CRATES_IO_TOKEN"
 
 Cargo_tomls=$(ci/order-crates-for-publishing.py)
 
@@ -53,7 +52,7 @@ for Cargo_toml in $Cargo_tomls; do
     crate=$(dirname "$Cargo_toml")
     # TODO: the rocksdb package does not build with the stock rust docker image,
     # so use the solana rust docker image until this is resolved upstream
-    source ci/rust-version.sh
+    cargoCommand="cargo publish --token $CRATES_IO_TOKEN"
     ci/docker-run.sh "$rust_stable_docker_image" bash -exc "cd $crate; $cargoCommand"
   ) || true # <-- Don't fail.  We want to be able to retry the job in cases when a publish fails halfway due to network/cloud issues
 
@@ -67,11 +66,11 @@ for Cargo_toml in $Cargo_tomls; do
       (
         set -x
         rm -rf crate-test
-        cargo init crate-test
+        cargo +"$rust_stable" init crate-test
         cd crate-test/
         echo "${crate_name} = \"${expectedCrateVersion}\"" >> Cargo.toml
         echo "[workspace]" >> Cargo.toml
-        cargo check
+        cargo +"$rust_stable" check
       ) && really_uploaded=1
       if ((really_uploaded)); then
         break;

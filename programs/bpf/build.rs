@@ -76,6 +76,7 @@ fn main() {
             "external_spend",
             "noop",
             "panic",
+            "param_passing",
             "tick_height",
         ];
         for program in rust_programs.iter() {

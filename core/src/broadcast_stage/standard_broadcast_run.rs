@@ -1,5 +1,7 @@
 use super::broadcast_utils;
 use super::*;
+use crate::shred::Shred;
+use solana_sdk::timing::duration_as_ms;
 
 #[derive(Default)]
 struct BroadcastStats {
@@ -49,7 +51,7 @@ impl StandardBroadcastRun {
 impl BroadcastRun for StandardBroadcastRun {
     fn run(
         &mut self,
-        broadcast: &mut Broadcast,
+        _broadcast: &mut Broadcast,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
@@ -66,24 +68,59 @@ impl BroadcastRun for StandardBroadcastRun {
         // 2) Convert entries to blobs + generate coding blobs
         let to_blobs_start = Instant::now();
         let keypair = &cluster_info.read().unwrap().keypair.clone();
-        let latest_blob_index = blocktree
+        let mut latest_blob_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        let (data_blobs, coding_blobs) = broadcast_utils::entries_to_blobs(
-            receive_results.ventries,
-            &broadcast.thread_pool,
-            latest_blob_index,
-            last_tick,
-            &bank,
-            &keypair,
-            &mut broadcast.coding_generator,
-        );
+        let parent_slot = if let Some(parent_bank) = bank.parent() {
+            parent_bank.slot()
+        } else {
+            0
+        };
+        let mut all_shreds = vec![];
+        let mut all_seeds = vec![];
+        let num_ventries = receive_results.ventries.len();
+        receive_results
+            .ventries
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, entries_tuple)| {
+                let (entries, _): (Vec<_>, Vec<_>) = entries_tuple.into_iter().unzip();
+                //entries
+                let mut shredder = Shredder::new(
+                    bank.slot(),
+                    Some(parent_slot),
+                    1.0,
+                    keypair,
+                    latest_blob_index as u32,
+                )
+                .expect("Expected to create a new shredder");
 
-        blocktree.write_shared_blobs(data_blobs.iter())?;
-        blocktree.put_shared_coding_blobs(coding_blobs.iter())?;
+                bincode::serialize_into(&mut shredder, &entries)
+                    .expect("Expect to write all entries to shreds");
+                if i == (num_ventries - 1) && last_tick == bank.max_tick_height() {
+                    shredder.finalize_slot();
+                } else {
+                    shredder.finalize_fec_block();
+                }
+
+                let shreds: Vec<Shred> = shredder
+                    .shreds
+                    .iter()
+                    .map(|s| bincode::deserialize(s).unwrap())
+                    .collect();
+
+                let mut seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
+                trace!("Inserting {:?} shreds in blocktree", shreds.len());
+                blocktree
+                    .insert_shreds(shreds)
+                    .expect("Failed to insert shreds in blocktree");
+                latest_blob_index = u64::from(shredder.index);
+                all_shreds.append(&mut shredder.shreds);
+                all_seeds.append(&mut seeds);
+            });
 
         let to_blobs_elapsed = to_blobs_start.elapsed();
 
@@ -92,17 +129,15 @@ impl BroadcastRun for StandardBroadcastRun {
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        // Broadcast data + erasures
-        cluster_info.read().unwrap().broadcast(
+        trace!("Broadcasting {:?} shreds", all_shreds.len());
+        cluster_info.read().unwrap().broadcast_shreds(
             sock,
-            data_blobs.iter().chain(coding_blobs.iter()),
+            &all_shreds,
+            &all_seeds,
             stakes.as_ref(),
         )?;
 
-        inc_new_counter_debug!(
-            "streamer-broadcast-sent",
-            data_blobs.len() + coding_blobs.len()
-        );
+        inc_new_counter_debug!("streamer-broadcast-sent", all_shreds.len());
 
         let broadcast_elapsed = broadcast_start.elapsed();
         self.update_broadcast_stats(

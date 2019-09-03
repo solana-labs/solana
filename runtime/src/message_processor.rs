@@ -61,36 +61,49 @@ fn get_subset_unchecked_mut<'a, T>(
 fn verify_instruction(
     is_debitable: bool,
     program_id: &Pubkey,
-    pre_program_id: &Pubkey,
-    pre_lamports: u64,
-    pre_data: &[u8],
-    account: &Account,
+    pre: &Account,
+    post: &Account,
 ) -> Result<(), InstructionError> {
     // Verify the transaction
 
-    // Make sure that program_id is still the same or this was just assigned by the system program
-    if *pre_program_id != account.owner && !system_program::check_id(&program_id) {
+    // Make sure that program_id is still the same or this was just assigned by the system program,
+    //  but even the system program can't touch a credit-only account
+    if pre.owner != post.owner && (!is_debitable || !system_program::check_id(&program_id)) {
         return Err(InstructionError::ModifiedProgramId);
     }
     // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
-    if *program_id != account.owner && pre_lamports > account.lamports {
+    if *program_id != post.owner && pre.lamports > post.lamports {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
     // The balance of credit-only accounts may only increase
-    if !is_debitable && pre_lamports > account.lamports {
+    if !is_debitable && pre.lamports > post.lamports {
         return Err(InstructionError::CreditOnlyLamportSpend);
     }
     // For accounts unassigned to the program, the data may not change.
-    if *program_id != account.owner
-        && !system_program::check_id(&program_id)
-        && pre_data != &account.data[..]
+    if *program_id != post.owner && !system_program::check_id(&program_id) && pre.data != post.data
     {
         return Err(InstructionError::ExternalAccountDataModified);
     }
     // Credit-only account data may not change.
-    if !is_debitable && pre_data != &account.data[..] {
+    if !is_debitable && pre.data != post.data {
         return Err(InstructionError::CreditOnlyDataModified);
     }
+
+    // executable is one-way (false->true) and
+    //  only system or the account owner may modify
+    if pre.executable != post.executable
+        && (!is_debitable
+            || pre.executable
+            || *program_id != post.owner && !system_program::check_id(&program_id))
+    {
+        return Err(InstructionError::ExecutableModified);
+    }
+
+    // no one modifies rent_epoch (yet)
+    if pre.rent_epoch != post.rent_epoch {
+        return Err(InstructionError::RentEpochModified);
+    }
+
     Ok(())
 }
 
@@ -143,7 +156,7 @@ impl Default for MessageProcessor {
 }
 
 impl MessageProcessor {
-    /// Add a static entrypoint to intercept intructions before the dynamic loader.
+    /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_instruction_processor(
         &mut self,
         program_id: Pubkey,
@@ -235,37 +248,28 @@ impl MessageProcessor {
             .iter()
             .map(|a| u128::from(a.lamports))
             .sum();
-        let pre_data: Vec<_> = program_accounts
+        #[allow(clippy::map_clone)]
+        let pre_accounts: Vec<_> = program_accounts
             .iter_mut()
-            .map(|a| (a.owner, a.lamports, a.data.clone()))
+            .map(|account| account.clone()) // cloned() doesn't work on & &
             .collect();
 
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
         // Verify the instruction
-        for ((pre_program_id, pre_lamports, pre_data), (i, post_account, is_debitable)) in
-            pre_data.iter().zip(
-                program_accounts
-                    .iter()
-                    .enumerate()
-                    .map(|(i, program_account)| {
-                        (
-                            i,
-                            program_account,
-                            message.is_debitable(instruction.accounts[i] as usize),
-                        )
-                    }),
-            )
+        for (pre_account, (i, post_account, is_debitable)) in
+            pre_accounts
+                .iter()
+                .zip(program_accounts.iter().enumerate().map(|(i, account)| {
+                    (
+                        i,
+                        account,
+                        message.is_debitable(instruction.accounts[i] as usize),
+                    )
+                }))
         {
-            verify_instruction(
-                is_debitable,
-                &program_id,
-                pre_program_id,
-                *pre_lamports,
-                pre_data,
-                post_account,
-            )?;
+            verify_instruction(is_debitable, &program_id, pre_account, post_account)?;
             if !is_debitable {
-                *credits[i] += post_account.lamports - *pre_lamports;
+                *credits[i] += post_account.lamports - pre_account.lamports;
             }
         }
         // The total sum of all the lamports in all the accounts cannot change.
@@ -273,6 +277,7 @@ impl MessageProcessor {
             .iter()
             .map(|a| u128::from(a.lamports))
             .sum();
+
         if pre_total != post_total {
             return Err(InstructionError::UnbalancedInstruction);
         }
@@ -361,8 +366,14 @@ mod tests {
             ix: &Pubkey,
             pre: &Pubkey,
             post: &Pubkey,
+            is_debitable: bool,
         ) -> Result<(), InstructionError> {
-            verify_instruction(true, &ix, &pre, 0, &[], &Account::new(0, 0, post))
+            verify_instruction(
+                is_debitable,
+                &ix,
+                &Account::new(0, 0, pre),
+                &Account::new(0, 0, post),
+            )
         }
 
         let system_program_id = system_program::id();
@@ -370,31 +381,95 @@ mod tests {
         let mallory_program_id = Pubkey::new_rand();
 
         assert_eq!(
-            change_program_id(&system_program_id, &system_program_id, &alice_program_id),
+            change_program_id(
+                &system_program_id,
+                &system_program_id,
+                &alice_program_id,
+                true
+            ),
             Ok(()),
             "system program should be able to change the account owner"
         );
         assert_eq!(
-            change_program_id(&mallory_program_id, &system_program_id, &alice_program_id),
+            change_program_id(&system_program_id, &system_program_id, &alice_program_id, false),
+            Err(InstructionError::ModifiedProgramId),
+            "system program should not be able to change the account owner of a credit only account"
+        );
+
+        assert_eq!(
+            change_program_id(
+                &mallory_program_id,
+                &system_program_id,
+                &alice_program_id,
+                true
+            ),
             Err(InstructionError::ModifiedProgramId),
             "malicious Mallory should not be able to change the account owner"
         );
     }
 
     #[test]
+    fn test_verify_instruction_change_executable() {
+        let alice_program_id = Pubkey::new_rand();
+        let change_executable = |program_id: &Pubkey,
+                                 is_debitable: bool,
+                                 pre_executable: bool,
+                                 post_executable: bool|
+         -> Result<(), InstructionError> {
+            let pre = Account {
+                owner: alice_program_id,
+                executable: pre_executable,
+                ..Account::default()
+            };
+
+            let post = Account {
+                owner: alice_program_id,
+                executable: post_executable,
+                ..Account::default()
+            };
+            verify_instruction(is_debitable, &program_id, &pre, &post)
+        };
+
+        let mallory_program_id = Pubkey::new_rand();
+        let system_program_id = system_program::id();
+
+        assert_eq!(
+            change_executable(&system_program_id, true, false, true),
+            Ok(()),
+            "system program should be able to change executable"
+        );
+        assert_eq!(
+            change_executable(&alice_program_id, true, false, true),
+            Ok(()),
+            "alice program should be able to change executable"
+        );
+        assert_eq!(
+            change_executable(&system_program_id, false, false, true),
+            Err(InstructionError::ExecutableModified),
+            "system program can't modify executable of credit-only accounts"
+        );
+        assert_eq!(
+            change_executable(&system_program_id, true, true, false),
+            Err(InstructionError::ExecutableModified),
+            "system program can't reverse executable"
+        );
+        assert_eq!(
+            change_executable(&mallory_program_id, true, false, true),
+            Err(InstructionError::ExecutableModified),
+            "malicious Mallory should not be able to change the account executable"
+        );
+    }
+
+    #[test]
     fn test_verify_instruction_change_data() {
-        fn change_data(program_id: &Pubkey, is_debitable: bool) -> Result<(), InstructionError> {
-            let alice_program_id = Pubkey::new_rand();
-            let account = Account::new(0, 0, &alice_program_id);
-            verify_instruction(
-                is_debitable,
-                &program_id,
-                &alice_program_id,
-                0,
-                &[42],
-                &account,
-            )
-        }
+        let alice_program_id = Pubkey::new_rand();
+
+        let change_data =
+            |program_id: &Pubkey, is_debitable: bool| -> Result<(), InstructionError> {
+                let pre = Account::new(0, 0, &alice_program_id);
+                let post = Account::new_data(0, &[42], &alice_program_id).unwrap();
+                verify_instruction(is_debitable, &program_id, &pre, &post)
+            };
 
         let system_program_id = system_program::id();
         let mallory_program_id = Pubkey::new_rand();
@@ -403,6 +478,11 @@ mod tests {
             change_data(&system_program_id, true),
             Ok(()),
             "system program should be able to change the data"
+        );
+        assert_eq!(
+            change_data(&alice_program_id, true),
+            Ok(()),
+            "alice program should be able to change the data"
         );
         assert_eq!(
             change_data(&mallory_program_id, true),
@@ -418,30 +498,37 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_instruction_rent_epoch() {
+        let alice_program_id = Pubkey::new_rand();
+        let pre = Account::new(0, 0, &alice_program_id);
+        let mut post = Account::new(0, 0, &alice_program_id);
+
+        assert_eq!(
+            verify_instruction(false, &system_program::id(), &pre, &post),
+            Ok(()),
+            "nothing changed!"
+        );
+
+        post.rent_epoch += 1;
+        assert_eq!(
+            verify_instruction(false, &system_program::id(), &pre, &post),
+            Err(InstructionError::RentEpochModified),
+            "no one touches rent_epoch"
+        );
+    }
+
+    #[test]
     fn test_verify_instruction_credit_only() {
         let alice_program_id = Pubkey::new_rand();
-        let account = Account::new(0, 0, &alice_program_id);
+        let pre = Account::new(42, 0, &alice_program_id);
+        let post = Account::new(0, 0, &alice_program_id);
         assert_eq!(
-            verify_instruction(
-                false,
-                &system_program::id(),
-                &alice_program_id,
-                42,
-                &[],
-                &account
-            ),
+            verify_instruction(false, &system_program::id(), &pre, &post),
             Err(InstructionError::ExternalAccountLamportSpend),
             "debit should fail, even if system program"
         );
         assert_eq!(
-            verify_instruction(
-                false,
-                &alice_program_id,
-                &alice_program_id,
-                42,
-                &[],
-                &account
-            ),
+            verify_instruction(false, &alice_program_id, &pre, &post,),
             Err(InstructionError::CreditOnlyLamportSpend),
             "debit should fail, even if owning program"
         );

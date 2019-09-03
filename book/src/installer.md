@@ -12,7 +12,7 @@ updates is managed using an on-chain update manifest program.
 #### Fetch and run a pre-built installer using a bootstrap curl/shell script
 The easiest install method for supported platforms:
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.0/install/solana-install-init.sh | sh
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh
 ```
 
 This script will check github for the latest tagged release and download and run the
@@ -23,7 +23,7 @@ If additional arguments need to be specified during the installation, the
 following shell syntax is used:
 ```bash
 $ init_args=.... # arguments for `solana-install-init ...`
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.0/install/solana-install-init.sh | sh -s - ${init_args}
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s - ${init_args}
 ```
 
 #### Fetch and run a pre-built installer from a Github release
@@ -31,7 +31,7 @@ With a well-known release URL, a pre-built binary can be obtained for supported
 platforms:
 
 ```bash
-$ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v0.16.0/solana-install-init-x86_64-apple-darwin
+$ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v0.18.0/solana-install-init-x86_64-apple-darwin
 $ chmod +x ./solana-install-init
 $ ./solana-install-init --help
 ```
@@ -130,7 +130,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -c, --config <PATH>    Configuration file to use [default: /Users/mvines/Library/Preferences/solana/install.yml]
+    -c, --config <PATH>    Configuration file to use [default: .../Library/Preferences/solana/install.yml]
 
 SUBCOMMANDS:
     deploy    deploys a new update
@@ -152,8 +152,8 @@ FLAGS:
     -h, --help    Prints help information
 
 OPTIONS:
-    -d, --data_dir <PATH>    Directory to store install data [default: /Users/mvines/Library/Application Support/solana]
-    -u, --url <URL>          JSON RPC URL for the solana cluster [default: https://api.testnet.solana.com/]
+    -d, --data_dir <PATH>    Directory to store install data [default: .../Library/Application Support/solana]
+    -u, --url <URL>          JSON RPC URL for the solana cluster [default: http://testnet.solana.com:8899]
     -p, --pubkey <PUBKEY>    Public key of the update manifest [default: 9XX329sPuskWhH4DQh6k16c87dHKhXLBZTL3Gxmve8Gp]
 ```
 

@@ -1,12 +1,10 @@
 use bincode::{deserialize_from, serialize_into, serialized_size};
-use lazy_static::lazy_static;
-use log::warn;
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{account::Account, pubkey::Pubkey, Epoch};
 use std::fmt;
-use std::fs::OpenOptions;
+use std::fs::{create_dir_all, remove_file, OpenOptions};
+use std::io;
 use std::io::{Cursor, Seek, SeekFrom, Write};
 use std::mem;
 use std::path::{Path, PathBuf};
@@ -39,6 +37,8 @@ pub struct AccountBalance {
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
 }
 
 /// References to Memory Mapped memory
@@ -58,13 +58,10 @@ impl<'a> StoredAccount<'a> {
             lamports: self.balance.lamports,
             owner: self.balance.owner,
             executable: self.balance.executable,
+            rent_epoch: self.balance.rent_epoch,
             data: self.data.to_vec(),
         }
     }
-}
-
-lazy_static! {
-    static ref ACCOUNT_PATHS: Mutex<Vec<String>> = Mutex::new(vec![]);
 }
 
 #[derive(Debug)]
@@ -80,21 +77,37 @@ pub struct AppendVec {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
-        let _ignored = std::fs::remove_dir_all(&self.path.parent().unwrap());
+        let _ignored = remove_file(&self.path);
     }
 }
 
 impl AppendVec {
     #[allow(clippy::mutex_atomic)]
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
+        if create {
+            let _ignored = remove_file(file);
+            if let Some(parent) = file.parent() {
+                create_dir_all(parent).expect("Create directory failed");
+            }
+        }
+
         let mut data = OpenOptions::new()
             .read(true)
             .write(true)
             .create(create)
             .open(file)
             .map_err(|e| {
+                let mut msg = format!("in current dir {:?}\n", std::env::current_dir());
+                for ancestor in file.ancestors() {
+                    msg.push_str(&format!(
+                        "{:?} is {:?}\n",
+                        ancestor,
+                        std::fs::metadata(ancestor)
+                    ));
+                }
                 panic!(
-                    "Unable to {} data file {}, err {:?}",
+                    "{}Unable to {} data file {}, err {:?}",
+                    msg,
                     if create { "create" } else { "open" },
                     file.display(),
                     e
@@ -141,8 +154,31 @@ impl AppendVec {
         self.file_size
     }
 
+    // Get the file path relative to the top level accounts directory
+    pub fn get_relative_path<P: AsRef<Path>>(append_vec_path: P) -> Option<PathBuf> {
+        append_vec_path.as_ref().file_name().map(PathBuf::from)
+    }
+
+    pub fn new_relative_path(fork_id: u64, id: usize) -> PathBuf {
+        PathBuf::from(&format!("{}.{}", fork_id, id))
+    }
+
+    pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+        self.path = path.as_ref().to_path_buf();
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(&path)?;
+
+        let map = unsafe { MmapMut::map_mut(&data)? };
+        self.map = map;
+        Ok(())
+    }
+
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
         let len = self.len();
+
         if len < offset + size {
             return None;
         }
@@ -224,6 +260,10 @@ impl AppendVec {
         Some((meta, stored.0.clone_account()))
     }
 
+    pub fn get_path(&self) -> PathBuf {
+        self.path.clone()
+    }
+
     pub fn accounts<'a>(&'a self, mut start: usize) -> Vec<StoredAccount<'a>> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(start) {
@@ -243,6 +283,7 @@ impl AppendVec {
                 lamports: account.lamports,
                 owner: account.owner,
                 executable: account.executable,
+                rent_epoch: account.rent_epoch,
             };
             let balance_ptr = &balance as *const AccountBalance;
             let data_len = storage_meta.data_len as usize;
@@ -270,10 +311,6 @@ impl AppendVec {
     pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
         self.append_account(data.0.clone(), &data.1)
     }
-
-    pub fn set_account_paths(paths: &[String]) {
-        ACCOUNT_PATHS.lock().unwrap().extend_from_slice(paths);
-    }
 }
 
 pub mod test_utils {
@@ -298,7 +335,7 @@ pub mod test_utils {
     }
 
     pub fn get_append_vec_dir() -> String {
-        std::env::var("OUT_DIR").unwrap_or_else(|_| "farf/append_vec_tests".to_string())
+        std::env::var("FARF_DIR").unwrap_or_else(|_| "farf/append_vec_tests".to_string())
     }
 
     pub fn get_append_vec_path(path: &str) -> TempFile {
@@ -359,47 +396,23 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
     }
 
     #[allow(clippy::mutex_atomic)]
+    // Note this does not initialize a valid Mmap in the AppendVec, needs to be done
+    // externally
     fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
+        // TODO: this path does not need to be serialized, can remove
         let path: PathBuf = deserialize_from(&mut rd).map_err(Error::custom)?;
         let current_len: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
 
-        let split_path: Vec<&str> = path.to_str().unwrap().rsplit('/').collect();
-        let account_paths = ACCOUNT_PATHS.lock().unwrap().clone();
-        let mut account_path = path.clone();
-        if split_path.len() >= 2 {
-            for dir_path in account_paths.iter() {
-                let fullpath = format!("{}/{}/{}", dir_path, split_path[1], split_path[0]);
-                let file_path = Path::new(&fullpath);
-                account_path = file_path.to_path_buf();
-                if file_path.exists() {
-                    break;
-                }
-            }
-        }
-
-        let data = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(false)
-            .open(account_path.as_path());
-
-        if data.is_err() {
-            warn!("account open {:?} failed", account_path);
-            std::fs::create_dir_all(&account_path.parent().unwrap())
-                .expect("Create directory failed");
-            return Ok(AppendVec::new(&account_path, true, file_size as usize));
-        }
-
-        let map = unsafe { MmapMut::map_mut(&data.unwrap()).expect("failed to map the data file") };
+        let map = MmapMut::map_anon(1).map_err(|e| Error::custom(e.to_string()))?;
         Ok(AppendVec {
-            path: account_path,
+            path,
             map,
             append_offset: Mutex::new(offset),
             current_len: AtomicUsize::new(current_len as usize),
@@ -490,7 +503,7 @@ pub mod tests {
     #[test]
     fn test_append_vec_serialize() {
         let path = get_append_vec_path("test_append_serialize");
-        let av: AppendVec = AppendVec::new(Path::new(&path.path), true, 1024 * 1024);
+        let av: AppendVec = AppendVec::new(&Path::new(&path.path).join("0"), true, 1024 * 1024);
         let account1 = create_test_account(1);
         let index1 = av.append_account_test(&account1).unwrap();
         assert_eq!(index1, 0);
@@ -501,20 +514,37 @@ pub mod tests {
         assert_eq!(av.get_account_test(index2).unwrap(), account2);
         assert_eq!(av.get_account_test(index1).unwrap(), account1);
 
-        let mut buf = vec![0u8; serialized_size(&av).unwrap() as usize];
-        let mut writer = Cursor::new(&mut buf[..]);
+        let append_vec_path = &av.path;
+
+        // Serialize the AppendVec
+        let mut writer = Cursor::new(vec![]);
         serialize_into(&mut writer, &av).unwrap();
 
-        AppendVec::set_account_paths(&vec![get_append_vec_dir()]);
-        let mut reader = Cursor::new(&mut buf[..]);
-        let dav: AppendVec = deserialize_from(&mut reader).unwrap();
+        // Deserialize the AppendVec
+        let buf = writer.into_inner();
+        let mut reader = Cursor::new(&buf[..]);
+        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
 
+        // Set the AppendVec path
+        dav.set_file(append_vec_path).unwrap();
         assert_eq!(dav.get_account_test(index2).unwrap(), account2);
         assert_eq!(dav.get_account_test(index1).unwrap(), account1);
         drop(dav);
 
-        let mut reader = Cursor::new(&mut buf[..]);
-        let dav: AppendVec = deserialize_from(&mut reader).unwrap();
-        assert!(dav.get_account_test(index2).is_none());
+        // Dropping dav above blows away underlying file's directory entry, so
+        // trying to set the file will fail
+        let mut reader = Cursor::new(&buf[..]);
+        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
+        assert!(dav.set_file(append_vec_path).is_err());
+    }
+
+    #[test]
+    fn test_relative_path() {
+        let relative_path = AppendVec::new_relative_path(0, 2);
+        let full_path = Path::new("/tmp").join(&relative_path);
+        assert_eq!(
+            relative_path,
+            AppendVec::get_relative_path(full_path).unwrap()
+        );
     }
 }

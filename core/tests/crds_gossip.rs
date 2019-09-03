@@ -1,12 +1,13 @@
 use bincode::serialized_size;
 use log::*;
 use rayon::prelude::*;
-use solana::contact_info::ContactInfo;
-use solana::crds_gossip::*;
-use solana::crds_gossip_error::CrdsGossipError;
-use solana::crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
-use solana::crds_value::CrdsValue;
-use solana::crds_value::CrdsValueLabel;
+use solana_core::cluster_info::ClusterInfo;
+use solana_core::contact_info::ContactInfo;
+use solana_core::crds_gossip::*;
+use solana_core::crds_gossip_error::CrdsGossipError;
+use solana_core::crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
+use solana_core::crds_value::CrdsValue;
+use solana_core::crds_value::CrdsValueLabel;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
@@ -380,27 +381,42 @@ fn network_run_pull(
                 .filter_map(|from| {
                     from.lock()
                         .unwrap()
-                        .new_pull_request(now, &HashMap::new())
+                        .new_pull_request(now, &HashMap::new(), ClusterInfo::max_bloom_size())
                         .ok()
                 })
                 .collect()
         };
         let transfered: Vec<_> = requests
             .into_par_iter()
-            .map(|(to, request, caller_info)| {
+            .map(|(to, filters, caller_info)| {
                 let mut bytes: usize = 0;
                 let mut msgs: usize = 0;
                 let mut overhead: usize = 0;
                 let from = caller_info.label().pubkey();
-                bytes += request.keys.len();
-                bytes += (request.bits.len() / 8) as usize;
+                bytes += filters.iter().map(|f| f.filter.keys.len()).sum::<usize>();
+                bytes += filters
+                    .iter()
+                    .map(|f| f.filter.bits.len() as usize / 8)
+                    .sum::<usize>();
                 bytes += serialized_size(&caller_info).unwrap() as usize;
+                let filters = filters
+                    .into_iter()
+                    .map(|f| (caller_info.clone(), f))
+                    .collect();
                 let rsp = network
                     .get(&to)
                     .map(|node| {
-                        node.lock()
-                            .unwrap()
-                            .process_pull_request(caller_info, request, now)
+                        let mut rsp = vec![];
+                        rsp.append(
+                            &mut node
+                                .lock()
+                                .unwrap()
+                                .process_pull_requests(filters, now)
+                                .into_iter()
+                                .flatten()
+                                .collect(),
+                        );
+                        rsp
                     })
                     .unwrap();
                 bytes += serialized_size(&rsp).unwrap() as usize;
@@ -456,6 +472,7 @@ fn test_star_network_push_star_200() {
     let mut network = star_network_create(200);
     network_simulator(&mut network, 0.9);
 }
+#[ignore]
 #[test]
 fn test_star_network_push_rstar_200() {
     let mut network = rstar_network_create(200);

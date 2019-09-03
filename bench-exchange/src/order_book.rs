@@ -96,12 +96,12 @@ impl OrderBook {
     //     Ok(())
     // }
     pub fn push(&mut self, pubkey: Pubkey, info: OrderInfo) -> Result<(), Box<dyn error::Error>> {
-        check_trade(info.direction, info.tokens, info.price)?;
-        match info.direction {
-            Direction::To => {
+        check_trade(info.side, info.tokens, info.price)?;
+        match info.side {
+            OrderSide::Ask => {
                 self.to_ab.push(ToOrder { pubkey, info });
             }
-            Direction::From => {
+            OrderSide::Bid => {
                 self.from_ab.push(FromOrder { pubkey, info });
             }
         }

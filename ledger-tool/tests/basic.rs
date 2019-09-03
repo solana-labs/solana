@@ -1,9 +1,9 @@
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
 use assert_cmd::prelude::*;
-use solana::blocktree::create_new_tmp_ledger;
-use solana::genesis_utils::create_genesis_block;
+use solana_core::blocktree::create_new_tmp_ledger;
+use solana_core::genesis_utils::create_genesis_block;
 use std::process::Command;
 use std::process::Output;
 
@@ -37,6 +37,8 @@ fn nominal() {
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
     let ticks = ticks_per_slot as usize;
+
+    let ledger_path = ledger_path.to_str().unwrap();
 
     // Basic validation
     let output = run_ledger_tool(&["-l", &ledger_path, "verify"]);

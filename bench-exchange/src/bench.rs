@@ -5,8 +5,8 @@ use itertools::izip;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana::gen_keys::GenKeys;
 use solana_client::perf_utils::{sample_txs, SampleStats};
+use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
@@ -509,7 +509,7 @@ fn trader<T>(
     T: Client,
 {
     // TODO Hard coded for now
-    let pair = TokenPair::AB;
+    let pair = AssetPair::default();
     let tokens = 1;
     let price = 1000;
     let mut account_group: usize = 0;
@@ -527,21 +527,21 @@ fn trader<T>(
         let mut trade_infos = vec![];
         let start = account_group * batch_size as usize;
         let end = account_group * batch_size as usize + batch_size as usize;
-        let mut direction = Direction::To;
+        let mut side = OrderSide::Ask;
         for (signer, trade, src) in izip!(
             signers[start..end].iter(),
             trade_keys,
             srcs[start..end].iter(),
         ) {
-            direction = if direction == Direction::To {
-                Direction::From
+            side = if side == OrderSide::Ask {
+                OrderSide::Bid
             } else {
-                Direction::To
+                OrderSide::Ask
             };
             let order_info = OrderInfo {
                 /// Owner of the trade order
                 owner: Pubkey::default(), // don't care
-                direction,
+                side,
                 pair,
                 tokens,
                 price,
@@ -551,7 +551,7 @@ fn trader<T>(
                 trade_account: trade.pubkey(),
                 order_info,
             });
-            trades.push((signer, trade.pubkey(), direction, src));
+            trades.push((signer, trade.pubkey(), side, src));
         }
         account_group = (account_group + 1) % account_groups as usize;
 
@@ -562,7 +562,7 @@ fn trader<T>(
         trades.chunks(chunk_size).for_each(|chunk| {
             let trades_txs: Vec<_> = chunk
                 .par_iter()
-                .map(|(signer, trade, direction, src)| {
+                .map(|(signer, trade, side, src)| {
                     let s: &Keypair = &signer;
                     let owner = &signer.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
@@ -571,7 +571,7 @@ fn trader<T>(
                         vec![
                             system_instruction::create_account(owner, trade, 1, space, &id()),
                             exchange_instruction::trade_request(
-                                owner, trade, *direction, pair, tokens, price, src,
+                                owner, trade, *side, pair, tokens, price, src,
                             ),
                         ],
                         blockhash,
@@ -660,7 +660,7 @@ fn verify_funding_transfer<T: SyncClient + ?Sized>(
     false
 }
 
-pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamports: u64) {
+pub fn fund_keys(client: &dyn Client, source: &Keypair, dests: &[Arc<Keypair>], lamports: u64) {
     let total = lamports * (dests.len() as u64 + 1);
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Arc<Keypair>> = dests.iter().collect();
@@ -764,7 +764,7 @@ pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamp
                     retries += 1;
                     debug!("  Retry {:?}", retries);
                     if retries >= 10 {
-                        error!("  Too many retries, give up");
+                        error!("fund_keys: Too many retries ({}), give up", retries);
                         exit(1);
                     }
                 }
@@ -778,7 +778,7 @@ pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamp
     }
 }
 
-pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts: &[Pubkey]) {
+pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], accounts: &[Pubkey]) {
     let mut notfunded: Vec<(&Arc<Keypair>, &Pubkey)> = signers.iter().zip(accounts).collect();
 
     while !notfunded.is_empty() {
@@ -843,7 +843,10 @@ pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts
                     retries += 1;
                     debug!("  Retry {:?}", retries);
                     if retries >= 20 {
-                        error!("  Too many retries, give up");
+                        error!(
+                            "create_token_accounts: Too many retries ({}), give up",
+                            retries
+                        );
                         exit(1);
                     }
                 }
@@ -908,7 +911,7 @@ fn generate_keypairs(num: u64) -> Vec<Keypair> {
     rnd.gen_n_keypairs(num)
 }
 
-pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, amount: u64) {
+pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypair, amount: u64) {
     let balance = client.get_balance(&id.pubkey());
     let balance = balance.unwrap_or(0);
     if balance >= amount {
@@ -953,7 +956,7 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
         debug!("  Retry...");
         tries += 1;
         if tries > 50 {
-            error!("Too many retries, give up");
+            error!("airdrop_lamports: Too many retries ({}), give up", tries);
             exit(1);
         }
         sleep(Duration::from_secs(2));
@@ -963,11 +966,11 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana::gossip_service::{discover_cluster, get_multi_client};
-    use solana::local_cluster::{ClusterConfig, LocalCluster};
-    use solana::validator::ValidatorConfig;
+    use solana_core::gossip_service::{discover_cluster, get_multi_client};
+    use solana_core::validator::ValidatorConfig;
     use solana_drone::drone::run_local_drone;
     use solana_exchange_api::exchange_processor::process_instruction;
+    use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::create_genesis_block;

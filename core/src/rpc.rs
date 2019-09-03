@@ -5,6 +5,8 @@ use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::storage_stage::StorageState;
+use crate::validator::ValidatorExit;
+use crate::version::VERSION;
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
@@ -12,12 +14,13 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
+use solana_sdk::hash::Hash;
+use solana_sdk::inflation::Inflation;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::{self, Transaction};
-use solana_vote_api::vote_state::VoteState;
+use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -42,7 +45,7 @@ pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
     storage_state: StorageState,
     config: JsonRpcConfig,
-    fullnode_exit: Arc<AtomicBool>,
+    validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
 }
 
 impl JsonRpcRequestProcessor {
@@ -54,13 +57,13 @@ impl JsonRpcRequestProcessor {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
-        fullnode_exit: &Arc<AtomicBool>,
+        validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         JsonRpcRequestProcessor {
             bank_forks,
             storage_state,
             config,
-            fullnode_exit: fullnode_exit.clone(),
+            validator_exit: validator_exit.clone(),
         }
     }
 
@@ -77,6 +80,10 @@ impl JsonRpcRequestProcessor {
             .into_iter()
             .map(|(pubkey, account)| (pubkey.to_string(), account))
             .collect())
+    }
+
+    pub fn get_inflation(&self) -> Result<Inflation> {
+        Ok(self.bank().inflation())
     }
 
     pub fn get_balance(&self, pubkey: &Pubkey) -> u64 {
@@ -121,22 +128,43 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank().capitalization())
     }
 
-    fn get_epoch_vote_accounts(&self) -> Result<Vec<RpcVoteAccountInfo>> {
+    fn get_vote_accounts(&self) -> Result<RpcVoteAccountStatus> {
         let bank = self.bank();
-        Ok(bank
+        let vote_accounts = bank.vote_accounts();
+        let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
-            .ok_or_else(Error::invalid_request)?
+            .ok_or_else(Error::invalid_request)?;
+        let (current_vote_accounts, delinquent_vote_accounts): (
+            Vec<RpcVoteAccountInfo>,
+            Vec<RpcVoteAccountInfo>,
+        ) = vote_accounts
             .iter()
-            .map(|(pubkey, (stake, account))| {
-                let vote_state = VoteState::from(account).unwrap_or_default();
+            .map(|(pubkey, (activated_stake, account))| {
+                let vote_state = VoteState::from(&account).unwrap_or_default();
+                let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
+                    vote.slot
+                } else {
+                    0
+                };
+                let epoch_vote_account = epoch_vote_accounts
+                    .iter()
+                    .any(|(epoch_vote_pubkey, _)| epoch_vote_pubkey == pubkey);
                 RpcVoteAccountInfo {
-                    vote_pubkey: (*pubkey).to_string(),
+                    vote_pubkey: (pubkey).to_string(),
                     node_pubkey: vote_state.node_pubkey.to_string(),
-                    stake: *stake,
+                    activated_stake: *activated_stake,
                     commission: vote_state.commission,
+                    epoch_vote_account,
+                    last_vote,
                 }
             })
-            .collect::<Vec<_>>())
+            .partition(|vote_account_info| {
+                vote_account_info.last_vote >= bank.slot() - MAX_LOCKOUT_HISTORY as u64
+            });
+        Ok(RpcVoteAccountStatus {
+            current: current_vote_accounts,
+            delinquent: delinquent_vote_accounts,
+        })
     }
 
     fn get_storage_turn_rate(&self) -> Result<u64> {
@@ -163,7 +191,9 @@ impl JsonRpcRequestProcessor {
     pub fn fullnode_exit(&self) -> Result<bool> {
         if self.config.enable_fullnode_exit {
             warn!("fullnode_exit request...");
-            self.fullnode_exit.store(true, Ordering::Relaxed);
+            if let Some(x) = self.validator_exit.write().unwrap().take() {
+                x.exit()
+            }
             Ok(true)
         } else {
             debug!("fullnode_exit ignored");
@@ -189,6 +219,7 @@ fn verify_signature(input: &str) -> Result<Signature> {
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
     pub cluster_info: Arc<RwLock<ClusterInfo>>,
+    pub genesis_blockhash: Hash,
 }
 impl Metadata for Meta {}
 
@@ -203,6 +234,12 @@ pub struct RpcContactInfo {
     /// JSON RPC port
     pub rpc: Option<SocketAddr>,
 }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcVoteAccountStatus {
+    pub current: Vec<RpcVoteAccountInfo>,
+    pub delinquent: Vec<RpcVoteAccountInfo>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -214,10 +251,39 @@ pub struct RpcVoteAccountInfo {
     pub node_pubkey: String,
 
     /// The current stake, in lamports, delegated to this vote account
-    pub stake: u64,
+    pub activated_stake: u64,
 
     /// An 8-bit integer used as a fraction (commission/MAX_U8) for rewards payout
     pub commission: u8,
+
+    /// Whether this account is staked for the current epoch
+    pub epoch_vote_account: bool,
+
+    /// Most recent slot voted on by this vote account
+    pub last_vote: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcEpochInfo {
+    /// The current epoch
+    pub epoch: u64,
+
+    /// The current slot, relative to the start of the current epoch
+    pub slot_index: u64,
+
+    /// The number of slots in this epoch
+    pub slots_in_epoch: u64,
+
+    /// The absolute current slot
+    pub absolute_slot: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct RpcVersionInfo {
+    /// The current version of solana-core
+    pub solana_core: String,
 }
 
 #[rpc(server)]
@@ -233,11 +299,23 @@ pub trait RpcSol {
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(&self, _: Self::Metadata, _: String) -> Result<Vec<(String, Account)>>;
 
+    #[rpc(meta, name = "getInflation")]
+    fn get_inflation(&self, _: Self::Metadata) -> Result<Inflation>;
+
     #[rpc(meta, name = "getBalance")]
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, _: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
+
+    #[rpc(meta, name = "getEpochInfo")]
+    fn get_epoch_info(&self, _: Self::Metadata) -> Result<RpcEpochInfo>;
+
+    #[rpc(meta, name = "getGenesisBlockhash")]
+    fn get_genesis_blockhash(&self, _: Self::Metadata) -> Result<String>;
+
+    #[rpc(meta, name = "getLeaderSchedule")]
+    fn get_leader_schedule(&self, _: Self::Metadata) -> Result<Option<Vec<String>>>;
 
     #[rpc(meta, name = "getRecentBlockhash")]
     fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<(String, FeeCalculator)>;
@@ -267,8 +345,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "getSlotLeader")]
     fn get_slot_leader(&self, _: Self::Metadata) -> Result<String>;
 
-    #[rpc(meta, name = "getEpochVoteAccounts")]
-    fn get_epoch_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<RpcVoteAccountInfo>>;
+    #[rpc(meta, name = "getVoteAccounts")]
+    fn get_vote_accounts(&self, _: Self::Metadata) -> Result<RpcVoteAccountStatus>;
 
     #[rpc(meta, name = "getStorageTurnRate")]
     fn get_storage_turn_rate(&self, _: Self::Metadata) -> Result<u64>;
@@ -298,6 +376,12 @@ pub trait RpcSol {
         _: Self::Metadata,
         _: String,
     ) -> Result<Option<(usize, transaction::Result<()>)>>;
+
+    #[rpc(meta, name = "getVersion")]
+    fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo>;
+
+    #[rpc(meta, name = "setLogFilter")]
+    fn set_log_filter(&self, _: Self::Metadata, _: String) -> Result<()>;
 }
 
 pub struct RpcSolImpl;
@@ -336,6 +420,16 @@ impl RpcSol for RpcSolImpl {
             .get_program_accounts(&program_id)
     }
 
+    fn get_inflation(&self, meta: Self::Metadata) -> Result<Inflation> {
+        debug!("get_inflation rpc request received");
+        Ok(meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_inflation()
+            .unwrap())
+    }
+
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<u64> {
         debug!("get_balance rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
@@ -367,6 +461,39 @@ impl RpcSol for RpcSolImpl {
                 }
             })
             .collect())
+    }
+
+    fn get_epoch_info(&self, meta: Self::Metadata) -> Result<RpcEpochInfo> {
+        let bank = meta.request_processor.read().unwrap().bank();
+        let epoch_schedule = bank.epoch_schedule();
+        let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
+        let slot = bank.slot();
+        Ok(RpcEpochInfo {
+            epoch,
+            slot_index,
+            slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
+            absolute_slot: slot,
+        })
+    }
+
+    fn get_genesis_blockhash(&self, meta: Self::Metadata) -> Result<String> {
+        debug!("get_genesis_blockhash rpc request received");
+        Ok(meta.genesis_blockhash.to_string())
+    }
+
+    fn get_leader_schedule(&self, meta: Self::Metadata) -> Result<Option<Vec<String>>> {
+        let bank = meta.request_processor.read().unwrap().bank();
+        Ok(
+            crate::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
+                |leader_schedule| {
+                    leader_schedule
+                        .get_slot_leaders()
+                        .iter()
+                        .map(|pubkey| pubkey.to_string())
+                        .collect()
+                },
+            ),
+        )
     }
 
     fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<(String, FeeCalculator)> {
@@ -450,7 +577,7 @@ impl RpcSol for RpcSolImpl {
             .map_err(|err| {
                 info!("request_airdrop_transaction failed: {:?}", err);
                 Error::internal_error()
-            })?;;
+            })?;
 
         let data = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);
@@ -522,11 +649,8 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().get_slot_leader()
     }
 
-    fn get_epoch_vote_accounts(&self, meta: Self::Metadata) -> Result<Vec<RpcVoteAccountInfo>> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_epoch_vote_accounts()
+    fn get_vote_accounts(&self, meta: Self::Metadata) -> Result<RpcVoteAccountStatus> {
+        meta.request_processor.read().unwrap().get_vote_accounts()
     }
 
     fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64> {
@@ -557,19 +681,32 @@ impl RpcSol for RpcSolImpl {
     fn fullnode_exit(&self, meta: Self::Metadata) -> Result<bool> {
         meta.request_processor.read().unwrap().fullnode_exit()
     }
+
+    fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
+        Ok(RpcVersionInfo {
+            solana_core: VERSION.to_string(),
+        })
+    }
+
+    fn set_log_filter(&self, _: Self::Metadata, filter: String) -> Result<()> {
+        solana_logger::setup_with_filter(&filter);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
+    use solana_sdk::fee_calculator::DEFAULT_BURN_PERCENT;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::TransactionError;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread;
 
     const TEST_MINT_LAMPORTS: u64 = 10_000;
@@ -581,6 +718,7 @@ mod tests {
         let bank = bank_forks.read().unwrap().working_bank();
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
 
         let blockhash = bank.confirmed_last_blockhash().0;
         let tx = system_transaction::transfer(&alice, pubkey, 20, blockhash);
@@ -593,7 +731,7 @@ mod tests {
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
-            &exit,
+            &validator_exit,
         )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::default(),
@@ -613,6 +751,7 @@ mod tests {
         let meta = Meta {
             request_processor,
             cluster_info,
+            genesis_blockhash: Hash::default(),
         };
         (io, meta, bank, blockhash, alice, leader_pubkey)
     }
@@ -621,13 +760,14 @@ mod tests {
     fn test_rpc_request_processor_new() {
         let bob_pubkey = Pubkey::new_rand();
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
-            &exit,
+            &validator_exit,
         );
         thread::spawn(move || {
             let blockhash = bank.confirmed_last_blockhash().0;
@@ -738,6 +878,28 @@ mod tests {
     }
 
     #[test]
+    fn test_rpc_get_inflation() {
+        let bob_pubkey = Pubkey::new_rand();
+        let (io, meta, bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getInflation"}}"#);
+        let rep = io.handle_request_sync(&req, meta);
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+        let inflation: Inflation = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        assert_eq!(inflation, bank.inflation());
+    }
+
+    #[test]
     fn test_rpc_get_account_info() {
         let bob_pubkey = Pubkey::new_rand();
         let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
@@ -754,7 +916,8 @@ mod tests {
                 "owner": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
                 "lamports": 20,
                 "data": [],
-                "executable": false
+                "executable": false,
+                "rent_epoch": 0
             },
             "id":1}
         "#;
@@ -786,7 +949,8 @@ mod tests {
                     "owner": {:?},
                     "lamports": 20,
                     "data": [],
-                    "executable": false
+                    "executable": false,
+                    "rent_epoch": 0
                 }}]],
                 "id":1}}
             "#,
@@ -896,7 +1060,7 @@ mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": [ blockhash.to_string(), {
-                "burnPercent": 50,
+                "burnPercent": DEFAULT_BURN_PERCENT,
                 "lamportsPerSignature": 0,
                 "maxLamportsPerSignature": 0,
                 "minLamportsPerSignature": 0,
@@ -936,6 +1100,7 @@ mod tests {
     #[test]
     fn test_rpc_send_bad_tx() {
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -946,13 +1111,14 @@ mod tests {
                     StorageState::default(),
                     JsonRpcConfig::default(),
                     new_bank_forks().0,
-                    &exit,
+                    &validator_exit,
                 );
                 Arc::new(RwLock::new(request_processor))
             },
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
                 ContactInfo::default(),
             ))),
+            genesis_blockhash: Hash::default(),
         };
 
         let req =
@@ -1016,14 +1182,22 @@ mod tests {
         )
     }
 
+    pub fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option<ValidatorExit>>> {
+        let mut validator_exit = ValidatorExit::default();
+        let exit_ = exit.clone();
+        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+        Arc::new(RwLock::new(Some(validator_exit)))
+    }
+
     #[test]
     fn test_rpc_request_processor_config_default_trait_fullnode_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             new_bank_forks().0,
-            &exit,
+            &validator_exit,
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -1032,15 +1206,37 @@ mod tests {
     #[test]
     fn test_rpc_request_processor_allow_fullnode_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
         let mut config = JsonRpcConfig::default();
         config.enable_fullnode_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             config,
             new_bank_forks().0,
-            &exit,
+            &validator_exit,
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
+    }
+
+    #[test]
+    fn test_rpc_get_version() {
+        let bob_pubkey = Pubkey::new_rand();
+        let (io, meta, ..) = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVersion"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "solana-core": VERSION
+            },
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
     }
 }

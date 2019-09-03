@@ -23,7 +23,10 @@ pub enum VoteInstruction {
     AuthorizeVoter(Pubkey),
 
     /// A Vote instruction with recent votes
-    Vote(Vec<Vote>),
+    Vote(Vote),
+
+    /// Withdraw some amount of funds
+    Withdraw(u64),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u8) -> Instruction {
@@ -33,6 +36,12 @@ fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u8
         &VoteInstruction::InitializeAccount(*node_pubkey, commission),
         account_metas,
     )
+}
+
+pub fn minimum_balance() -> u64 {
+    let rent = solana_sdk::rent::Rent::default();
+
+    rent.minimum_balance(VoteState::size_of())
 }
 
 pub fn create_account(
@@ -65,7 +74,7 @@ fn metas_for_authorized_signer(
 
     // append signer at the end
     if !is_own_signer {
-        account_metas.push(AccountMeta::new(*authorized_voter_pubkey, true)) // signer
+        account_metas.push(AccountMeta::new_credit_only(*authorized_voter_pubkey, true)) // signer
     }
 
     account_metas
@@ -85,11 +94,7 @@ pub fn authorize_voter(
     )
 }
 
-pub fn vote(
-    vote_pubkey: &Pubkey,
-    authorized_voter_pubkey: &Pubkey,
-    recent_votes: Vec<Vote>,
-) -> Instruction {
+pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) -> Instruction {
     let account_metas = metas_for_authorized_signer(
         vote_pubkey,
         authorized_voter_pubkey,
@@ -101,7 +106,16 @@ pub fn vote(
         ],
     );
 
-    Instruction::new(id(), &VoteInstruction::Vote(recent_votes), account_metas)
+    Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
+}
+
+pub fn withdraw(vote_pubkey: &Pubkey, lamports: u64, to_pubkey: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, true),
+        AccountMeta::new_credit_only(*to_pubkey, false),
+    ];
+
+    Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }
 
 pub fn process_instruction(
@@ -109,7 +123,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    solana_logger::setup();
+    solana_logger::setup_with_filter("solana=warn");
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -130,20 +144,26 @@ pub fn process_instruction(
         VoteInstruction::AuthorizeVoter(voter_pubkey) => {
             vote_state::authorize_voter(me, rest, &voter_pubkey)
         }
-        VoteInstruction::Vote(votes) => {
+        VoteInstruction::Vote(vote) => {
             datapoint_warn!("vote-native", ("count", 1, i64));
             if rest.len() < 2 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             let (slot_hashes_and_clock, other_signers) = rest.split_at_mut(2);
 
-            vote_state::process_votes(
+            vote_state::process_vote(
                 me,
                 &sysvar::slot_hashes::from_keyed_account(&slot_hashes_and_clock[0])?,
                 &sysvar::clock::from_keyed_account(&slot_hashes_and_clock[1])?,
                 other_signers,
-                &votes,
+                &vote,
             )
+        }
+        VoteInstruction::Withdraw(lamports) => {
+            if rest.is_empty() {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            vote_state::withdraw(me, lamports, &mut rest[0])
         }
     }
 }
@@ -208,7 +228,7 @@ mod tests {
             process_instruction(&vote(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                vec![Vote::default()]
+                Vote::default(),
             )),
             Err(InstructionError::InvalidAccountData),
         );
@@ -220,6 +240,14 @@ mod tests {
             )),
             Err(InstructionError::InvalidAccountData),
         );
+    }
+
+    #[test]
+    fn test_minimum_balance() {
+        let rent = solana_sdk::rent::Rent::default();
+        let minimum_balance = rent.minimum_balance(VoteState::size_of());
+        // vote state cheaper than "my $0.02" ;)
+        assert!(minimum_balance as f64 / 2f64.powf(34.0) < 0.02)
     }
 
 }

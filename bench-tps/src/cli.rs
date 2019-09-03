@@ -22,6 +22,7 @@ pub struct Config {
     pub write_to_client_file: bool,
     pub read_from_client_file: bool,
     pub target_lamports_per_signature: u64,
+    pub use_move: bool,
 }
 
 impl Default for Config {
@@ -40,6 +41,7 @@ impl Default for Config {
             write_to_client_file: false,
             read_from_client_file: false,
             target_lamports_per_signature: FeeCalculator::default().target_lamports_per_signature,
+            use_move: false,
         }
     }
 }
@@ -99,6 +101,11 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
             Arg::with_name("sustained")
                 .long("sustained")
                 .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
+        )
+        .arg(
+            Arg::with_name("use-move")
+                .long("use-move")
+                .help("Use Move language transactions to perform transfers."),
         )
         .arg(
             Arg::with_name("tx_count")
@@ -210,6 +217,8 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     if let Some(v) = matches.value_of("target_lamports_per_signature") {
         args.target_lamports_per_signature = v.to_string().parse().expect("can't parse lamports");
     }
+
+    args.use_move = matches.is_present("use-move");
 
     args
 }

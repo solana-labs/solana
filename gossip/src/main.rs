@@ -1,18 +1,21 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
 #[macro_use]
-extern crate solana;
+extern crate solana_core;
 
-use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg, SubCommand};
-use solana::contact_info::ContactInfo;
-use solana::gossip_service::discover;
+use clap::{
+    crate_description, crate_name, crate_version, value_t_or_exit, App, AppSettings, Arg,
+    SubCommand,
+};
 use solana_client::rpc_client::RpcClient;
+use solana_core::contact_info::ContactInfo;
+use solana_core::gossip_service::discover;
 use solana_sdk::pubkey::Pubkey;
 use std::error;
 use std::net::SocketAddr;
 use std::process::exit;
 
-fn pubkey_validator(pubkey: String) -> Result<(), String> {
+fn is_pubkey(pubkey: String) -> Result<(), String> {
     match pubkey.parse::<Pubkey>() {
         Ok(_) => Ok(()),
         Err(err) => Err(format!("{:?}", err)),
@@ -20,7 +23,7 @@ fn pubkey_validator(pubkey: String) -> Result<(), String> {
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info")).init();
+    solana_logger::setup_with_filter("solana=info");
 
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
     let entrypoint_string = entrypoint_addr.to_string();
@@ -35,7 +38,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .default_value(&entrypoint_string)
+                .validator(solana_netutil::is_host_port)
+                .global(true)
                 .help("Rendezvous with the cluster at this entry point"),
+        )
+        .subcommand(
+            SubCommand::with_name("get-rpc-url")
+                .about("Get an RPC URL for the cluster")
+                .arg(
+                    Arg::with_name("timeout")
+                        .long("timeout")
+                        .value_name("SECONDS")
+                        .takes_value(true)
+                        .default_value("5")
+                        .help("Timeout in seconds"),
+                )
+                .setting(AppSettings::DisableVersion),
         )
         .subcommand(
             SubCommand::with_name("spy")
@@ -48,7 +66,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("NUM")
                         .takes_value(true)
                         .conflicts_with("num_nodes_exactly")
-                        .help("Wait for at least NUM nodes to converge"),
+                        .help("Wait for at least NUM nodes to be visible"),
                 )
                 .arg(
                     Arg::with_name("num_nodes_exactly")
@@ -56,7 +74,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("num-nodes-exactly")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("Wait for exactly NUM nodes to converge"),
+                        .help("Wait for exactly NUM nodes to be visible"),
                 )
                 .arg(
                     Arg::with_name("node_pubkey")
@@ -64,17 +82,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("pubkey")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(pubkey_validator)
+                        .validator(is_pubkey)
                         .help("Public key of a specific node to wait for"),
                 )
                 .arg(
                     Arg::with_name("timeout")
                         .long("timeout")
-                        .value_name("SECS")
+                        .value_name("SECONDS")
                         .takes_value(true)
-                        .help(
-                            "Maximum time to wait for cluster to converge [default: wait forever]",
-                        ),
+                        .help("Maximum time to wait in seconds [default: wait forever]"),
                 ),
         )
         .subcommand(
@@ -86,7 +102,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .index(1)
                         .required(true)
                         .value_name("PUBKEY")
-                        .validator(pubkey_validator)
+                        .validator(is_pubkey)
                         .help("Public key of a specific node to stop"),
                 ),
         )
@@ -98,6 +114,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             exit(1)
         });
     }
+
+    let gossip_addr = {
+        let mut addr = socketaddr_any!();
+        addr.set_ip(
+            solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                eprintln!("failed to contact {}: {}", entrypoint_addr, err);
+                exit(1)
+            }),
+        );
+        Some(addr)
+    };
+
     match matches.subcommand() {
         ("spy", Some(matches)) => {
             let num_nodes_exactly = matches
@@ -114,22 +142,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_of("node_pubkey")
                 .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
 
-            let gossip_addr = {
-                let mut addr = socketaddr_any!();
-                addr.set_ip(
-                    solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-                        eprintln!("failed to contact {}: {}", entrypoint_addr, err);
-                        exit(1)
-                    }),
-                );
-                Some(addr)
-            };
-
             let (nodes, _replicators) = discover(
                 &entrypoint_addr,
                 num_nodes,
                 timeout,
                 pubkey,
+                None,
                 gossip_addr.as_ref(),
             )?;
 
@@ -160,13 +178,44 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 );
             }
         }
+        ("get-rpc-url", Some(matches)) => {
+            let timeout = value_t_or_exit!(matches, "timeout", u64);
+            let (nodes, _replicators) = discover(
+                &entrypoint_addr,
+                Some(1),
+                Some(timeout),
+                None,
+                Some(entrypoint_addr.ip()),
+                gossip_addr.as_ref(),
+            )?;
+
+            let rpc_addr = nodes
+                .iter()
+                .filter_map(ContactInfo::valid_client_facing_addr)
+                .map(|addrs| addrs.0)
+                .find(|rpc_addr| rpc_addr.ip() == entrypoint_addr.ip());
+
+            if rpc_addr.is_none() {
+                eprintln!("No RPC URL found");
+                exit(1);
+            }
+
+            println!("http://{}", rpc_addr.unwrap());
+        }
         ("stop", Some(matches)) => {
             let pubkey = matches
                 .value_of("node_pubkey")
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
-            let (nodes, _replicators) = discover(&entrypoint_addr, None, None, Some(pubkey), None)?;
+            let (nodes, _replicators) = discover(
+                &entrypoint_addr,
+                None,
+                None,
+                Some(pubkey),
+                None,
+                gossip_addr.as_ref(),
+            )?;
             let node = nodes.iter().find(|x| x.id == pubkey).unwrap();
 
             if !ContactInfo::is_valid_address(&node.rpc) {

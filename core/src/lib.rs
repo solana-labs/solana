@@ -30,7 +30,6 @@ pub mod blocktree_processor;
 pub mod cluster;
 pub mod cluster_info;
 pub mod cluster_info_repair_listener;
-pub mod cluster_tests;
 pub mod consensus;
 pub mod cuda_runtime;
 pub mod entry;
@@ -42,7 +41,7 @@ pub mod gossip_service;
 pub mod leader_schedule;
 pub mod leader_schedule_cache;
 pub mod leader_schedule_utils;
-pub mod local_cluster;
+pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;
 pub mod packet;
 pub mod poh;
@@ -60,8 +59,11 @@ pub mod rpc_pubsub_service;
 pub mod rpc_service;
 pub mod rpc_subscriptions;
 pub mod service;
+pub mod shred;
 pub mod sigverify;
 pub mod sigverify_stage;
+pub mod snapshot_package;
+pub mod snapshot_utils;
 pub mod staking_utils;
 pub mod storage_stage;
 pub mod streamer;
@@ -69,13 +71,13 @@ pub mod test_tx;
 pub mod tpu;
 pub mod tvu;
 pub mod validator;
+pub(crate) mod version;
 pub mod weighted_shuffle;
 pub mod window_service;
 
 #[macro_use]
 extern crate solana_budget_program;
 
-#[macro_use]
 extern crate solana_storage_program;
 
 #[cfg(test)]
@@ -99,4 +101,10 @@ extern crate solana_metrics;
 #[macro_use]
 extern crate matches;
 
+extern crate bzip2;
 extern crate crossbeam_channel;
+extern crate dir_diff;
+extern crate fs_extra;
+extern crate symlink;
+extern crate tar;
+extern crate tempfile;

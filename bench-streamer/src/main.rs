@@ -1,8 +1,8 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
-use solana::packet::PacketsRecycler;
-use solana::packet::{Packet, Packets, BLOB_SIZE, PACKET_DATA_SIZE};
-use solana::result::Result;
-use solana::streamer::{receiver, PacketReceiver};
+use solana_core::packet::PacketsRecycler;
+use solana_core::packet::{Packet, Packets, BLOB_SIZE, PACKET_DATA_SIZE};
+use solana_core::result::Result;
+use solana_core::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

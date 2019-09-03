@@ -1,10 +1,13 @@
+# Build steps that run on pushes and pull requests.
+#
+# Release tags use buildkite-release.yml instead
 steps:
   - command: "ci/shellcheck.sh"
     name: "shellcheck"
     timeout_in_minutes: 5
   - command: ". ci/rust-version.sh; ci/docker-run.sh $$rust_nightly_docker_image ci/test-checks.sh"
     name: "checks"
-    timeout_in_minutes: 15
+    timeout_in_minutes: 35
   - wait
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"

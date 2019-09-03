@@ -205,7 +205,7 @@ impl StorageStage {
                             ) {
                                 match e {
                                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
-                                        break
+                                        break;
                                     }
                                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                                     _ => info!("Error from process_entries: {:?}", e),
@@ -659,7 +659,10 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(1000);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
+            &[bank.clone()],
+            vec![0],
+        )));
         let (_slot_sender, slot_receiver) = channel();
         let storage_state = StorageState::new(
             &bank.last_blockhash(),
@@ -699,7 +702,10 @@ mod tests {
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let slot = 1;
         let bank = Arc::new(Bank::new(&genesis_block));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
+            &[bank.clone()],
+            vec![0],
+        )));
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let (bank_sender, bank_receiver) = channel();
@@ -737,6 +743,7 @@ mod tests {
                 blocktree_processor::process_entries(
                     &bank,
                     &entry::create_ticks(64, bank.last_blockhash()),
+                    true,
                 )
                 .expect("failed process entries");
                 last_bank = Arc::new(bank);
@@ -791,7 +798,10 @@ mod tests {
 
         let bank = Bank::new(&genesis_block);
         let bank = Arc::new(bank);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
+            &[bank.clone()],
+            vec![0],
+        )));
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (bank_sender, bank_receiver) = channel();
@@ -854,6 +864,7 @@ mod tests {
                 DEFAULT_TICKS_PER_SLOT * next_bank.slots_per_segment() + 1,
                 bank.last_blockhash(),
             ),
+            true,
         )
         .unwrap();
         let message = Message::new_with_payer(vec![mining_proof_ix], Some(&mint_keypair.pubkey()));

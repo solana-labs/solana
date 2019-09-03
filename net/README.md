@@ -32,7 +32,7 @@ NOTE: This example uses GCE.  If you are using AWS EC2, replace `./gce.sh` with
 ```bash
 $ cd net/
 $ ./gce.sh create -n 5 -c 1     #<-- Create a GCE testnet with 5 additional nodes (beyond the bootstrap node) and 1 client (billing starts here)
-$ ./init-metrics.sh -c $(whoami)   #<-- Configure a metrics database for the testnet
+$ ./init-metrics.sh $(whoami)   #<-- Configure a metrics database for the testnet
 $ ./net.sh start                #<-- Deploy the network from the local workspace and start all clients with bench-tps
 $ ./ssh.sh                      #<-- Details on how to ssh into any testnet node to access logs/etc
 $ ./gce.sh delete               #<-- Dispose of the network (billing stops here)
@@ -81,8 +81,9 @@ $ ./net.sh start -f "cuda"
 
 ### How to interact with a CD testnet deployed by ci/testnet-deploy.sh
 
-**AWS-Specific Extra Setup**: Follow the steps in `scripts/add-solana-user-authorized_keys.sh`,
-then redeploy the testnet before continuing in this section.
+**AWS-Specific Extra Setup**: Follow the steps in
+`scripts/solana-user-authorized_keys.sh`, then redeploy the testnet
+before continuing in this section.
 
 Taking **master-testnet-solana-com** as an example, configure your workspace for
 the testnet using:

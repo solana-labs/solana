@@ -33,54 +33,62 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         ));
     }
 
-    let mut buffer = [0; 8 * 1024];
+    const BUFFER_SIZE: usize = 8 * 1024;
+    let mut buffer = [0; BUFFER_SIZE];
     let num_keys = ivecs.len() / CHACHA_BLOCK_SIZE;
     let mut sha_states = vec![0; num_keys * size_of::<Hash>()];
     let mut int_sha_states = vec![0; num_keys * 112];
     let keys: Vec<u8> = vec![0; num_keys * CHACHA_KEY_SIZE]; // keys not used ATM, uniqueness comes from IV
-    let mut entry = segment;
-    let mut total_entries = 0;
-    let mut total_entry_len = 0;
+    let mut current_slot = segment * slots_per_segment;
+    let mut start_index = 0;
+    let start_slot = current_slot;
+    let mut total_size = 0;
     let mut time: f32 = 0.0;
     unsafe {
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match blocktree.read_blobs_bytes(entry, slots_per_segment - total_entries, &mut buffer, 0) {
-            Ok((num_entries, entry_len)) => {
+        match blocktree.get_data_shreds(current_slot, start_index, &mut buffer) {
+            Ok((last_index, mut size)) => {
                 debug!(
-                    "chacha_cuda: encrypting segment: {} num_entries: {} entry_len: {}",
-                    segment, num_entries, entry_len
+                    "chacha_cuda: encrypting segment: {} num_shreds: {} data_len: {}",
+                    segment,
+                    last_index.saturating_sub(start_index),
+                    size
                 );
-                if num_entries == 0 {
-                    break;
+
+                if size == 0 {
+                    if current_slot.saturating_sub(start_slot) < slots_per_segment {
+                        current_slot += 1;
+                        start_index = 0;
+                        continue;
+                    } else {
+                        break;
+                    }
                 }
-                let entry_len_usz = entry_len as usize;
+
+                if size < BUFFER_SIZE {
+                    // round to the nearest key_size boundary
+                    size = (size + CHACHA_KEY_SIZE - 1) & !(CHACHA_KEY_SIZE - 1);
+                }
+
                 unsafe {
                     chacha_cbc_encrypt_many_sample(
-                        buffer[..entry_len_usz].as_ptr(),
+                        buffer[..size].as_ptr(),
                         int_sha_states.as_mut_ptr(),
-                        entry_len_usz,
+                        size,
                         keys.as_ptr(),
                         ivecs.as_mut_ptr(),
                         num_keys as u32,
                         samples.as_ptr(),
                         samples.len() as u32,
-                        total_entry_len,
+                        total_size,
                         &mut time,
                     );
                 }
 
-                total_entry_len += entry_len;
-                total_entries += num_entries;
-                entry += num_entries;
-                debug!(
-                    "total entries: {} entry: {} segment: {} entries_per_segment: {}",
-                    total_entries, entry, segment, slots_per_segment
-                );
-                if (entry - segment) >= slots_per_segment {
-                    break;
-                }
+                total_size += size as u64;
+                start_index = last_index + 1;
             }
             Err(e) => {
                 info!("Error encrypting file: {:?}", e);
@@ -113,6 +121,7 @@ mod tests {
     use crate::entry::make_tiny_test_entries;
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::DEFAULT_SLOTS_PER_SEGMENT;
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
@@ -130,7 +139,16 @@ mod tests {
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
 
         blocktree
-            .write_entries(0, 0, 0, ticks_per_slot, &entries)
+            .write_entries_using_shreds(
+                0,
+                0,
+                0,
+                ticks_per_slot,
+                Some(0),
+                true,
+                &Arc::new(Keypair::new()),
+                &entries,
+            )
             .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_single_output.txt.enc");
@@ -178,7 +196,16 @@ mod tests {
         let ticks_per_slot = 16;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         blocktree
-            .write_entries(0, 0, 0, ticks_per_slot, &entries)
+            .write_entries_using_shreds(
+                0,
+                0,
+                0,
+                ticks_per_slot,
+                Some(0),
+                true,
+                &Arc::new(Keypair::new()),
+                &entries,
+            )
             .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_multiple_output.txt.enc");

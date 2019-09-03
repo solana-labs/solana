@@ -189,7 +189,7 @@ pub fn hash_transactions(transactions: &[Transaction]) -> Hash {
 /// a signature, the final hash will be a hash of both the previous ID and
 /// the signature.  If num_hashes is zero and there's no transaction data,
 ///  start_hash is returned.
-fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -> Hash {
+pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -> Hash {
     if num_hashes == 0 && transactions.is_empty() {
         return *start_hash;
     }
