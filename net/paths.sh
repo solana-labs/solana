@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-testnetSSHDir="/solana"
-testnetSSHPrivateKey="${testnetSSHDir}/solana-id_ecdsa"
+testnetScratchDir="/solana"
+testnetSSHPrivateKey="${testnetScratchDir}/solana-id_ecdsa"
 

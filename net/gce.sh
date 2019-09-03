@@ -615,7 +615,7 @@ EOM
 
 # Place the generated private key at "$testnetSSHPrivateKey" so it's retrievable by anybody
 # who is able to log into this machine
-mkdir -p -m 0777 "$testnetSSHDir"
+mkdir -p -m 0777 "$testnetScratchDir"
 cat > "$testnetSSHPrivateKey" <<EOK
 $(cat "$sshPrivateKey")
 EOK
