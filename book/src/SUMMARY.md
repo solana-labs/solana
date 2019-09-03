@@ -74,6 +74,7 @@
   - [Validator](validator-proposal.md)
   - [Simple Payment and State Verification](simple-payment-and-state-verification.md)
   - [Cross-Program Invocation](cross-program-invocation.md)
+  - [Rent](rent.md)
   - [Inter-chain Transaction Verification](interchain-transaction-verification.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
