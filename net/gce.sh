@@ -428,7 +428,7 @@ EOF
       for i in $(seq 1 60); do
         (
           set -x
-          timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+          timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /solana/.instance-startup-complete"
         )
         ret=$?
         if [[ $ret -eq 0 ]]; then
@@ -607,7 +607,7 @@ cat > /etc/motd <<EOM
     $ sudo cat /var/log/syslog | egrep \\(startup-script\\|cloud-init\)
 
   To block until setup is complete, run:
-    $ until [[ -f /.instance-startup-complete ]]; do sleep 1; done
+    $ until [[ -f /solana/.instance-startup-complete ]]; do sleep 1; done
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 $(creationInfo)
@@ -658,7 +658,7 @@ $(printNetworkInfo)
 $(creationInfo)
 EOM
 
-touch /.instance-startup-complete
+touch /solana/.instance-startup-complete
 
 EOF
 
