@@ -4,12 +4,13 @@
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
+use crate::packet::Packets;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::shred::Shred;
 use crate::streamer::{PacketReceiver, PacketSender};
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use rayon::ThreadPool;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_runtime::bank::Bank;
@@ -80,50 +81,28 @@ where
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", packets.packets.len());
 
-    let (shreds, discards): (Vec<_>, Vec<_>) = thread_pool.install(|| {
+    let (shreds, packets): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
             .packets
-            .par_iter_mut()
-            .enumerate()
-            .map(|(i, packet)| {
+            .drain(..)
+            .par_bridge()
+            .filter_map(|mut packet| {
                 if let Ok(s) = bincode::deserialize(&packet.data) {
                     let shred: Shred = s;
                     if shred_filter(&shred, &packet.data) {
                         packet.meta.slot = shred.slot();
                         packet.meta.seed = shred.seed();
-                        (Some(shred), None)
+                        Some((shred, packet))
                     } else {
-                        (None, Some(i))
+                        None
                     }
                 } else {
-                    (None, Some(i))
+                    None
                 }
             })
-            .fold(
-                || (Vec::new(), Vec::new()),
-                |(mut shreds, mut discards), (s, d)| {
-                    if let Some(s) = s {
-                        shreds.push(s)
-                    }
-                    if let Some(i) = d {
-                        discards.push(i)
-                    }
-                    (shreds, discards)
-                },
-            )
-            .reduce(
-                || (Vec::new(), Vec::new()),
-                |(mut shreds, mut discards), (mut s, mut d)| {
-                    shreds.append(&mut s);
-                    discards.append(&mut d);
-                    (shreds, discards)
-                },
-            )
+            .unzip()
     });
-
-    for i in discards.into_iter().rev() {
-        packets.packets.remove(i);
-    }
+    let packets = Packets::new(packets);
 
     trace!("{:?} shreds from packets", shreds.len());
 
