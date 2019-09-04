@@ -32,7 +32,9 @@ pub const BLOB_SIZE: usize = (2 * 1024 - 128); // wikipedia says there should be
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
 pub const BLOB_DATA_ALIGN: usize = 16; // safe for erasure input pointers, gf.c needs 16byte-aligned buffers
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
-pub const PACKETS_PER_BLOB: usize = 8; // reasonable estimate for payment packets per blob based on ~200b transaction size
+
+pub const PACKETS_PER_BATCH: usize = 256;
+pub const PACKETS_BATCH_SIZE: usize = (PACKETS_PER_BATCH * PACKET_DATA_SIZE);
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
@@ -291,9 +293,9 @@ impl Packets {
                     trace!("got {} packets", npkts);
                     i += npkts;
                     total_size += size;
-                    // Try to batch into blob-sized buffers
+                    // Try to batch into big enough buffers
                     // will cause less re-shuffling later on.
-                    if start.elapsed().as_millis() > 1 || total_size >= (BLOB_DATA_SIZE - 512) {
+                    if start.elapsed().as_millis() > 1 || total_size >= PACKETS_BATCH_SIZE {
                         break;
                     }
                 }

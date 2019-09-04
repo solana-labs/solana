@@ -7,7 +7,7 @@ use crate::entry;
 use crate::entry::{hash_transactions, Entry};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::packet;
-use crate::packet::PACKETS_PER_BLOB;
+use crate::packet::PACKETS_PER_BATCH;
 use crate::packet::{Packet, Packets};
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
 use crate::poh_service::PohService;
@@ -87,7 +87,7 @@ impl BankingStage {
         verified_vote_receiver: CrossbeamReceiver<VerifiedPackets>,
         num_threads: u32,
     ) -> Self {
-        let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BLOB);
+        let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its blockhash is registered with the bank.
