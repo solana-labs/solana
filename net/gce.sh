@@ -387,8 +387,8 @@ EOF
         set -o pipefail
         for i in $(seq 1 60); do
           set -x
-          cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone" &&
-            cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone" &&
+          cloud_FetchFile "$nodeName" "$nodeIp" /solana-scratch/id_ecdsa "$sshPrivateKey" "$nodeZone" &&
+            cloud_FetchFile "$nodeName" "$nodeIp" /solana-scratch/id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone" &&
               break
           set +x
 
@@ -428,7 +428,7 @@ EOF
       for i in $(seq 1 60); do
         (
           set -x
-          timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+          timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /solana-scratch/.instance-startup-complete"
         )
         ret=$?
         if [[ $ret -eq 0 ]]; then
@@ -607,21 +607,22 @@ cat > /etc/motd <<EOM
     $ sudo cat /var/log/syslog | egrep \\(startup-script\\|cloud-init\)
 
   To block until setup is complete, run:
-    $ until [[ -f /.instance-startup-complete ]]; do sleep 1; done
+    $ until [[ -f /solana-scratch/.instance-startup-complete ]]; do sleep 1; done
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 $(creationInfo)
 EOM
 
-# Place the generated private key at /solana-id_ecdsa so it's retrievable by anybody
+# Place the generated private key at /solana-scratch/id_ecdsa so it's retrievable by anybody
 # who is able to log into this machine
-cat > /solana-id_ecdsa <<EOK
+mkdir -p -m 0777 "/solana-scratch"
+cat > /solana-scratch/id_ecdsa <<EOK
 $(cat "$sshPrivateKey")
 EOK
-cat > /solana-id_ecdsa.pub <<EOK
+cat > /solana-scratch/id_ecdsa.pub <<EOK
 $(cat "$sshPrivateKey.pub")
 EOK
-chmod 444 /solana-id_ecdsa
+chmod 444 /solana-scratch/id_ecdsa
 
 USER=\$(id -un)
 export DEBIAN_FRONTEND=noninteractive
@@ -657,7 +658,7 @@ $(printNetworkInfo)
 $(creationInfo)
 EOM
 
-touch /.instance-startup-complete
+touch /solana-scratch/.instance-startup-complete
 
 EOF
 

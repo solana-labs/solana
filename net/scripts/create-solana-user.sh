@@ -13,15 +13,15 @@ else
   echo "solana ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
   id solana
 
-  [[ -r /solana-id_ecdsa ]] || exit 1
-  [[ -r /solana-id_ecdsa.pub ]] || exit 1
+  [[ -r /solana-scratch/id_ecdsa ]] || exit 1
+  [[ -r /solana-scratch/id_ecdsa.pub ]] || exit 1
 
   sudo -u solana bash -c "
     mkdir -p /home/solana/.ssh/
     cd /home/solana/.ssh/
-    cp /solana-id_ecdsa.pub authorized_keys
+    cp /solana-scratch/id_ecdsa.pub authorized_keys
     umask 377
-    cp /solana-id_ecdsa id_ecdsa
+    cp /solana-scratch/id_ecdsa id_ecdsa
     echo \"
       Host *
       BatchMode yes
