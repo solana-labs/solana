@@ -18,8 +18,8 @@ const ID: [u8; 32] = [
 solana_sdk::solana_name_id!(ID, "StakeConfig11111111111111111111111111111111");
 
 // means that no more tha
-pub const DEFAULT_WARMUP_RATE: f64 = 0.15;
-pub const DEFAULT_COOLDOWN_RATE: f64 = 0.15;
+pub const DEFAULT_WARMUP_RATE: f64 = 0.25;
+pub const DEFAULT_COOLDOWN_RATE: f64 = 0.25;
 pub const DEFAULT_SLASH_PENALTY: u8 = ((5 * std::u8::MAX as usize) / 100) as u8;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
