@@ -1,12 +1,6 @@
 //! @brief Example Rust-based BPF program tests dependent crates
 
-#![no_std]
-#![allow(unused_attributes)]
-
-#[cfg(not(test))]
-extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
-
 use byteorder::{ByteOrder, LittleEndian};
 use solana_sdk_bpf_utils::info;
 

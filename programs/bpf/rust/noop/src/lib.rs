@@ -1,13 +1,8 @@
 //! @brief Example Rust-based BPF program that prints out the parameters passed to it
 
-#![no_std]
 #![allow(unreachable_code)]
-#![allow(unused_attributes)]
 
-#[cfg(not(test))]
-extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
-
 use solana_sdk_bpf_utils::entrypoint::*;
 use solana_sdk_bpf_utils::log::*;
 use solana_sdk_bpf_utils::{entrypoint, info};
@@ -36,17 +31,11 @@ fn process_instruction(ka: &mut [SolKeyedAccount], info: &SolClusterInfo, data: 
     sol_log_params(ka, data);
 
     {
-        // Test - arch config
-        #[cfg(not(target_arch = "bpf"))]
-        panic!();
-    }
-
-    {
-        // Test - use core methods, unwrap
+        // Test - use std methods, unwrap
 
         // valid bytes, in a stack-allocated array
         let sparkle_heart = [240, 159, 146, 150];
-        let result_str = core::str::from_utf8(&sparkle_heart).unwrap();
+        let result_str = std::str::from_utf8(&sparkle_heart).unwrap();
         assert_eq!(4, result_str.len());
         assert_eq!("💖", result_str);
         info!(result_str);
@@ -57,6 +46,12 @@ fn process_instruction(ka: &mut [SolKeyedAccount], info: &SolClusterInfo, data: 
 
         let s = return_sstruct();
         assert_eq!(s.x + s.y + s.z, 6);
+    }
+
+    {
+        // Test - arch config
+        #[cfg(not(target_arch = "bpf"))]
+        panic!();
     }
 
     info!("Success");

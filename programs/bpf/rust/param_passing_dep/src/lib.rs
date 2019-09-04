@@ -1,8 +1,5 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
-#![no_std]
-#![allow(unused_attributes)]
-
 extern crate solana_sdk_bpf_utils;
 
 pub struct Data<'a> {

@@ -13,7 +13,6 @@ edition = "2018"
 
 [dependencies]
 solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust/rust-utils", version = "0.19.0-pre0" }
-solana-sdk-bpf-no-std = { path = "../../../../sdk/bpf/rust/rust-no-std", version = "0.19.0-pre0" }
 
 [workspace]
 members = []
