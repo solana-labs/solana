@@ -33,14 +33,6 @@ pub mod columns {
     pub struct Orphans;
 
     #[derive(Debug)]
-    /// Erasure Column
-    pub struct Coding;
-
-    #[derive(Debug)]
-    /// Data Column
-    pub struct Data;
-
-    #[derive(Debug)]
     /// Data Column
     pub struct DeadSlots;
 

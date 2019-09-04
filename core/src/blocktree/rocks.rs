@@ -1,5 +1,7 @@
 use crate::blocktree::db::columns as cf;
-use crate::blocktree::db::{Backend, Column, DbCursor, IWriteBatch, TypedColumn, IteratorMode, IteratorDirection};
+use crate::blocktree::db::{
+    Backend, Column, DbCursor, IWriteBatch, IteratorDirection, IteratorMode, TypedColumn,
+};
 use crate::blocktree::BlocktreeError;
 use crate::result::{Error, Result};
 use solana_sdk::timing::Slot;
@@ -7,8 +9,8 @@ use solana_sdk::timing::Slot;
 use byteorder::{BigEndian, ByteOrder};
 
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, Direction, IteratorMode as RocksIteratorMode,
-    Options, WriteBatch as RWriteBatch, DB,
+    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, Direction,
+    IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
 
 use std::fs;
@@ -33,8 +35,7 @@ impl Backend for Rocks {
 
     fn open(path: &Path) -> Result<Rocks> {
         use crate::blocktree::db::columns::{
-            Coding, Data, DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
-            SlotMeta,
+            DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
         };
 
         fs::create_dir_all(&path)?;
@@ -45,12 +46,8 @@ impl Backend for Rocks {
         // Column family names
         let meta_cf_descriptor =
             ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(SlotMeta::NAME));
-        let data_cf_descriptor =
-            ColumnFamilyDescriptor::new(Data::NAME, get_cf_options(Data::NAME));
         let dead_slots_cf_descriptor =
             ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options(DeadSlots::NAME));
-        let erasure_cf_descriptor =
-            ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options(Coding::NAME));
         let erasure_meta_cf_descriptor =
             ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options(ErasureMeta::NAME));
         let orphans_cf_descriptor =
@@ -66,9 +63,7 @@ impl Backend for Rocks {
 
         let cfs = vec![
             meta_cf_descriptor,
-            data_cf_descriptor,
             dead_slots_cf_descriptor,
-            erasure_cf_descriptor,
             erasure_meta_cf_descriptor,
             orphans_cf_descriptor,
             root_cf_descriptor,
@@ -85,15 +80,12 @@ impl Backend for Rocks {
 
     fn columns(&self) -> Vec<&'static str> {
         use crate::blocktree::db::columns::{
-            Coding, Data, DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
-            SlotMeta,
+            DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
         };
 
         vec![
-            Coding::NAME,
             ErasureMeta::NAME,
             DeadSlots::NAME,
-            Data::NAME,
             Index::NAME,
             Orphans::NAME,
             Root::NAME,
@@ -130,28 +122,24 @@ impl Backend for Rocks {
         Ok(())
     }
 
-    fn iterator_cf(&self, cf: ColumnFamily, iterator_mode: IteratorMode<&[u8]>,) -> Result<DBIterator> {
+    fn iterator_cf(
+        &self,
+        cf: ColumnFamily,
+        iterator_mode: IteratorMode<&[u8]>,
+    ) -> Result<DBIterator> {
         let iter = {
-                match iterator_mode {
-                    IteratorMode::Start => {
-                        self.0.iterator_cf(cf, RocksIteratorMode::Start)?
-                    }
-                    IteratorMode::End => {
-                        self.0.iterator_cf(cf, RocksIteratorMode::End)?
-                    }
-                    IteratorMode::From(start_from, direction) => {
-                        let rocks_direction = match direction {
-                            IteratorDirection::Forward => {
-                                Direction::Forward
-                            }
-                            IteratorDirection::Reverse => {
-                                Direction::Reverse
-                            }
-                        };
-                        self.0
-                            .iterator_cf(cf, RocksIteratorMode::From(start_from, rocks_direction))?
-                    }
+            match iterator_mode {
+                IteratorMode::Start => self.0.iterator_cf(cf, RocksIteratorMode::Start)?,
+                IteratorMode::End => self.0.iterator_cf(cf, RocksIteratorMode::End)?,
+                IteratorMode::From(start_from, direction) => {
+                    let rocks_direction = match direction {
+                        IteratorDirection::Forward => Direction::Forward,
+                        IteratorDirection::Reverse => Direction::Reverse,
+                    };
+                    self.0
+                        .iterator_cf(cf, RocksIteratorMode::From(start_from, rocks_direction))?
                 }
+            }
         };
 
         Ok(iter)
@@ -170,53 +158,6 @@ impl Backend for Rocks {
     fn write(&self, batch: RWriteBatch) -> Result<()> {
         self.0.write(batch)?;
         Ok(())
-    }
-}
-
-impl Column<Rocks> for cf::Coding {
-    const NAME: &'static str = super::ERASURE_CF;
-    type Index = (u64, u64);
-
-    fn key(index: (u64, u64)) -> Vec<u8> {
-        cf::Data::key(index)
-    }
-
-    fn index(key: &[u8]) -> (u64, u64) {
-        cf::Data::index(key)
-    }
-
-    fn slot(index: Self::Index) -> Slot {
-        index.0
-    }
-
-    fn as_index(slot: Slot) -> Self::Index {
-        (slot, 0)
-    }
-}
-
-impl Column<Rocks> for cf::Data {
-    const NAME: &'static str = super::DATA_CF;
-    type Index = (u64, u64);
-
-    fn key((slot, index): (u64, u64)) -> Vec<u8> {
-        let mut key = vec![0; 16];
-        BigEndian::write_u64(&mut key[..8], slot);
-        BigEndian::write_u64(&mut key[8..16], index);
-        key
-    }
-
-    fn index(key: &[u8]) -> (u64, u64) {
-        let slot = BigEndian::read_u64(&key[..8]);
-        let index = BigEndian::read_u64(&key[8..16]);
-        (slot, index)
-    }
-
-    fn slot(index: Self::Index) -> Slot {
-        index.0
-    }
-
-    fn as_index(slot: Slot) -> Self::Index {
-        (slot, 0)
     }
 }
 
@@ -478,11 +419,11 @@ impl std::convert::From<rocksdb::Error> for Error {
 }
 
 fn get_cf_options(name: &'static str) -> Options {
-    use crate::blocktree::db::columns::{Coding, Data, ShredCode, ShredData};
+    use crate::blocktree::db::columns::{ShredCode, ShredData};
 
     let mut options = Options::default();
     match name {
-        Coding::NAME | Data::NAME | ShredCode::NAME | ShredData::NAME => {
+        ShredCode::NAME | ShredData::NAME => {
             // 512MB * 8 = 4GB. 2 of these columns should take no more than 8GB of RAM
             options.set_max_write_buffer_number(8);
             options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);

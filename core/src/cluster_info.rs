@@ -19,7 +19,7 @@ use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
 use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
-use crate::packet::{to_shared_blob, Packet, SharedBlob};
+use crate::packet::{to_shared_blob, Blob, Packet, SharedBlob};
 use crate::repair_service::RepairType;
 use crate::result::Result;
 use crate::staking_utils;
@@ -1035,6 +1035,15 @@ impl ClusterInfo {
             .unwrap()
     }
 
+    fn get_data_shred_as_blob(
+        blocktree: &Arc<Blocktree>,
+        slot: u64,
+        shred_index: u64,
+    ) -> Result<Option<Blob>> {
+        let bytes = blocktree.get_data_shred(slot, shred_index)?;
+        Ok(bytes.map(|bytes| Blob::new(&bytes)))
+    }
+
     fn run_window_request(
         from: &ContactInfo,
         from_addr: &SocketAddr,
@@ -1045,7 +1054,7 @@ impl ClusterInfo {
     ) -> Vec<SharedBlob> {
         if let Some(blocktree) = blocktree {
             // Try to find the requested index in one of the slots
-            let blob = blocktree.get_data_shred_as_blob(slot, blob_index);
+            let blob = Self::get_data_shred_as_blob(blocktree, slot, blob_index);
 
             if let Ok(Some(mut blob)) = blob {
                 inc_new_counter_debug!("cluster_info-window-request-ledger", 1);
@@ -1080,7 +1089,7 @@ impl ClusterInfo {
             if let Ok(Some(meta)) = meta {
                 if meta.received > highest_index {
                     // meta.received must be at least 1 by this point
-                    let blob = blocktree.get_data_shred_as_blob(slot, meta.received - 1);
+                    let blob = Self::get_data_shred_as_blob(blocktree, slot, meta.received - 1);
 
                     if let Ok(Some(mut blob)) = blob {
                         blob.meta.set_addr(from_addr);
@@ -1106,7 +1115,7 @@ impl ClusterInfo {
                 if meta.received == 0 {
                     break;
                 }
-                let blob = blocktree.get_data_shred_as_blob(slot, meta.received - 1);
+                let blob = Self::get_data_shred_as_blob(blocktree, slot, meta.received - 1);
                 if let Ok(Some(mut blob)) = blob {
                     blob.meta.set_addr(from_addr);
                     res.push(Arc::new(RwLock::new(blob)));
@@ -2018,8 +2027,7 @@ mod tests {
                 .rev()
                 .map(|slot| {
                     let index = blocktree.meta(slot).unwrap().unwrap().received - 1;
-                    blocktree
-                        .get_data_shred_as_blob(slot, index)
+                    ClusterInfo::get_data_shred_as_blob(&blocktree, slot, index)
                         .unwrap()
                         .unwrap()
                 })
