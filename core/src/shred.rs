@@ -14,7 +14,7 @@ use std::{cmp, io};
 
 #[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub enum Shred {
-    FirstInSlot(FirstDataShred),
+    FirstInSlot(DataShred),
     FirstInFECSet(DataShred),
     Data(DataShred),
     LastInFECSet(DataShred),
@@ -25,8 +25,8 @@ pub enum Shred {
 impl Shred {
     pub fn slot(&self) -> u64 {
         match self {
-            Shred::FirstInSlot(s) => s.header.data_header.common_header.slot,
-            Shred::FirstInFECSet(s)
+            Shred::FirstInSlot(s)
+            | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
             | Shred::LastInSlot(s) => s.header.common_header.slot,
@@ -36,19 +36,19 @@ impl Shred {
 
     pub fn parent(&self) -> u64 {
         match self {
-            Shred::FirstInSlot(s) => s.header.data_header.parent,
-            Shred::FirstInFECSet(s)
+            Shred::FirstInSlot(s)
+            | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
-            | Shred::LastInSlot(s) => s.header.parent,
+            | Shred::LastInSlot(s) => s.header.parent_offset as u64 + s.header.common_header.slot,
             Shred::Coding(_) => std::u64::MAX,
         }
     }
 
     pub fn set_slot(&mut self, slot: u64) {
         match self {
-            Shred::FirstInSlot(s) => s.header.data_header.common_header.slot = slot,
-            Shred::FirstInFECSet(s)
+            Shred::FirstInSlot(s)
+            | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
             | Shred::LastInSlot(s) => s.header.common_header.slot = slot,
@@ -58,8 +58,8 @@ impl Shred {
 
     pub fn index(&self) -> u32 {
         match self {
-            Shred::FirstInSlot(s) => s.header.data_header.common_header.index,
-            Shred::FirstInFECSet(s)
+            Shred::FirstInSlot(s)
+            | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
             | Shred::LastInSlot(s) => s.header.common_header.index,
@@ -69,8 +69,8 @@ impl Shred {
 
     pub fn set_index(&mut self, index: u32) {
         match self {
-            Shred::FirstInSlot(s) => s.header.data_header.common_header.index = index,
-            Shred::FirstInFECSet(s)
+            Shred::FirstInSlot(s)
+            | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
             | Shred::LastInSlot(s) => s.header.common_header.index = index,
@@ -80,8 +80,8 @@ impl Shred {
 
     pub fn signature(&self) -> Signature {
         match self {
-            Shred::FirstInSlot(s) => s.header.data_header.common_header.signature,
-            Shred::FirstInFECSet(s)
+            Shred::FirstInSlot(s)
+            | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
             | Shred::LastInSlot(s) => s.header.common_header.signature,
@@ -93,8 +93,8 @@ impl Shred {
         let mut seed = [0; 32];
         let seed_len = seed.len();
         let sig = match self {
-            Shred::FirstInSlot(s) => &s.header.data_header.common_header.signature,
-            Shred::FirstInFECSet(s)
+            Shred::FirstInSlot(s)
+            | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
             | Shred::LastInSlot(s) => &s.header.common_header.signature,
@@ -142,15 +142,8 @@ pub struct ShredCommonHeader {
 pub struct DataShredHeader {
     _reserved: CodingShredHeader,
     pub common_header: ShredCommonHeader,
-    pub parent: u64,
+    pub parent_offset: u16,
     pub last_in_slot: u8,
-}
-
-/// The first data shred also has parent slot value in it
-#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
-pub struct FirstDataShredHeader {
-    pub data_header: DataShredHeader,
-    pub parent: u64,
 }
 
 /// The coding shred header has FEC information
@@ -164,12 +157,6 @@ pub struct CodingShredHeader {
 }
 
 #[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
-pub struct FirstDataShred {
-    pub header: FirstDataShredHeader,
-    pub payload: Vec<u8>,
-}
-
-#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub struct DataShred {
     pub header: DataShredHeader,
     pub payload: Vec<u8>,
@@ -178,18 +165,6 @@ pub struct DataShred {
 #[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub struct CodingShred {
     pub header: CodingShredHeader,
-}
-
-/// Default shred is sized correctly to meet MTU/Packet size requirements
-impl Default for FirstDataShred {
-    fn default() -> Self {
-        let size = PACKET_DATA_SIZE
-            - serialized_size(&Shred::FirstInSlot(Self::empty_shred())).unwrap() as usize;
-        FirstDataShred {
-            header: FirstDataShredHeader::default(),
-            payload: vec![0; size],
-        }
-    }
 }
 
 /// Default shred is sized correctly to meet MTU/Packet size requirements
@@ -229,30 +204,6 @@ pub trait ShredCommon {
     fn overhead() -> usize;
     /// Utility function to create an empty shred
     fn empty_shred() -> Self;
-}
-
-impl ShredCommon for FirstDataShred {
-    fn write_at(&mut self, offset: usize, buf: &[u8]) -> (usize, usize) {
-        let mut capacity = self.payload.len().saturating_sub(offset);
-        let slice_len = cmp::min(capacity, buf.len());
-        capacity -= slice_len;
-        if slice_len > 0 {
-            self.payload[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
-        }
-        (slice_len, capacity)
-    }
-
-    fn overhead() -> usize {
-        (bincode::serialized_size(&Shred::FirstInSlot(Self::empty_shred())).unwrap()
-            - bincode::serialized_size(&vec![0u8; 0]).unwrap()) as usize
-    }
-
-    fn empty_shred() -> Self {
-        FirstDataShred {
-            header: FirstDataShredHeader::default(),
-            payload: vec![],
-        }
-    }
 }
 
 impl ShredCommon for DataShred {
@@ -305,8 +256,7 @@ impl ShredCommon for CodingShred {
 pub struct Shredder {
     slot: u64,
     pub index: u32,
-    pub parent: Option<u64>,
-    parent_slot: u64,
+    parent_offset: u16,
     fec_rate: f32,
     signer: Arc<Keypair>,
     pub shreds: Vec<Vec<u8>>,
@@ -320,32 +270,20 @@ impl Write for Shredder {
             .active_shred
             .take()
             .or_else(|| {
-                Some(
-                    self.parent
-                        .take()
-                        .map(|parent| {
-                            self.parent_slot = parent;
-                            // If parent slot is available
-                            if self.index == 0 {
-                                // If index is 0, it's the first shred in slot
-                                Shred::FirstInSlot(self.new_first_shred(parent))
-                            } else {
-                                // Or, it is the first shred in FEC set
-                                Shred::FirstInFECSet(self.new_data_shred())
-                            }
-                        })
-                        .unwrap_or_else(||
-                            // If parent slot is not provided, and since there's no existing shred,
-                            // assume it's first shred in FEC block
-                            Shred::FirstInFECSet(self.new_data_shred())),
-                )
+                Some(if self.index == 0 {
+                    // If index is 0, it's the first shred in slot
+                    Shred::FirstInSlot(self.new_data_shred())
+                } else {
+                    // Else, it is the first shred in FEC set
+                    Shred::FirstInFECSet(self.new_data_shred())
+                })
             })
             .unwrap();
 
         let written = self.active_offset;
         let (slice_len, capacity) = match current_shred.borrow_mut() {
-            Shred::FirstInSlot(s) => s.write_at(written, buf),
-            Shred::FirstInFECSet(s)
+            Shred::FirstInSlot(s)
+            | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
             | Shred::LastInSlot(s) => s.write_at(written, buf),
@@ -389,7 +327,7 @@ pub struct DeshredResult {
 impl Shredder {
     pub fn new(
         slot: u64,
-        parent: Option<u64>,
+        parent: u64,
         fec_rate: f32,
         signer: &Arc<Keypair>,
         index: u32,
@@ -402,12 +340,19 @@ impl Shredder {
                     fec_rate
                 ),
             )))
+        } else if slot < parent || slot - parent > std::u16::MAX as u64 {
+            Err(Error::IO(IOError::new(
+                ErrorKind::Other,
+                format!(
+                    "Current slot {:?} must be > Parent slot {:?}, but the difference must not be > {:?}",
+                    slot, parent, std::u16::MAX
+                ),
+            )))
         } else {
             Ok(Shredder {
                 slot,
                 index,
-                parent,
-                parent_slot: 0,
+                parent_offset: (slot - parent) as u16,
                 fec_rate,
                 signer: signer.clone(),
                 ..Shredder::default()
@@ -440,18 +385,8 @@ impl Shredder {
         let mut data_shred = DataShred::default();
         data_shred.header.common_header.slot = self.slot;
         data_shred.header.common_header.index = self.index;
-        data_shred.header.parent = self.parent_slot;
+        data_shred.header.parent_offset = self.parent_offset;
         data_shred
-    }
-
-    /// Create a new data shred that's also first in the slot
-    fn new_first_shred(&self, parent: u64) -> FirstDataShred {
-        let mut first_shred = FirstDataShred::default();
-        first_shred.header.parent = parent;
-        first_shred.header.data_header.parent = parent;
-        first_shred.header.data_header.common_header.slot = self.slot;
-        first_shred.header.data_header.common_header.index = self.index;
-        first_shred
     }
 
     pub fn new_coding_shred(
@@ -568,26 +503,24 @@ impl Shredder {
         first_index: usize,
         expected_index: usize,
         present: &mut [bool],
-    ) -> (Vec<Vec<u8>>, bool, usize) {
-        let (index, mut first_shred_in_slot) = Self::get_shred_index(shred, num_data);
+    ) -> (Vec<Vec<u8>>, usize) {
+        let index = Self::get_shred_index(shred, num_data);
 
         // The index of current shred must be within the range of shreds that are being
         // recovered
         if !(first_index..first_index + num_data + num_coding).contains(&index) {
-            return (vec![], false, index);
+            return (vec![], index);
         }
 
         let mut missing_blocks: Vec<Vec<u8>> = (expected_index..index)
             .map(|missing| {
                 present[missing.saturating_sub(first_index)] = false;
-                // If index 0 shred is missing, then first shred in slot will also be recovered
-                first_shred_in_slot |= missing == 0;
                 Shredder::new_empty_missing_shred(num_data, num_coding, slot, first_index, missing)
             })
             .collect();
         let shred_buf = bincode::serialize(shred).unwrap();
         missing_blocks.push(shred_buf);
-        (missing_blocks, first_shred_in_slot, index)
+        (missing_blocks, index)
     }
 
     fn new_empty_missing_shred(
@@ -598,9 +531,9 @@ impl Shredder {
         missing: usize,
     ) -> Vec<u8> {
         let missing_shred = if missing == 0 {
-            let mut data_shred = FirstDataShred::default();
-            data_shred.header.data_header.common_header.slot = slot;
-            data_shred.header.data_header.common_header.index = 0;
+            let mut data_shred = DataShred::default();
+            data_shred.header.common_header.slot = slot;
+            data_shred.header.common_header.index = missing as u32;
             Shred::FirstInSlot(data_shred)
         } else if missing < first_index + num_data {
             let mut data_shred = DataShred::default();
@@ -642,7 +575,7 @@ impl Shredder {
             let mut shred_bufs: Vec<Vec<u8>> = shreds
                 .iter()
                 .flat_map(|shred| {
-                    let (blocks, _first_shred, last_index) = Self::fill_in_missing_shreds(
+                    let (blocks, last_index) = Self::fill_in_missing_shreds(
                         shred,
                         num_data,
                         num_coding,
@@ -736,9 +669,8 @@ impl Shredder {
     /// (lower to higher index, and data shreds before coding shreds)
     pub fn deshred(shreds: &[Shred]) -> Result<Vec<u8>, reed_solomon_erasure::Error> {
         let num_data = shreds.len();
-        let (data_shred_bufs, first_shred) = {
-            let (first_index, first_shred_in_slot) =
-                Shredder::get_shred_index(shreds.first().unwrap(), num_data);
+        let data_shred_bufs = {
+            let first_index = Shredder::get_shred_index(shreds.first().unwrap(), num_data);
 
             let last_index = match shreds.last().unwrap() {
                 Shred::LastInFECSet(s) | Shred::LastInSlot(s) => {
@@ -755,43 +687,26 @@ impl Shredder {
                 .iter()
                 .map(|shred| bincode::serialize(shred).unwrap())
                 .collect();
-            (shred_bufs, first_shred_in_slot)
+            shred_bufs
         };
 
-        Ok(Self::reassemble_payload(
-            num_data,
-            data_shred_bufs,
-            first_shred,
-        ))
+        Ok(Self::reassemble_payload(num_data, data_shred_bufs))
     }
 
-    fn get_shred_index(shred: &Shred, num_data: usize) -> (usize, bool) {
-        let (first_index, first_shred_in_slot) = match shred {
-            Shred::FirstInSlot(s) => (s.header.data_header.common_header.index as usize, true),
-            Shred::FirstInFECSet(s)
-            | Shred::Data(s)
-            | Shred::LastInFECSet(s)
-            | Shred::LastInSlot(s) => (s.header.common_header.index as usize, false),
-            Shred::Coding(s) => (s.header.common_header.index as usize + num_data, false),
-        };
-        (first_index, first_shred_in_slot)
+    fn get_shred_index(shred: &Shred, num_data: usize) -> usize {
+        if let Shred::Coding(_) = shred {
+            shred.index() as usize + num_data
+        } else {
+            shred.index() as usize
+        }
     }
 
-    fn reassemble_payload(
-        num_data: usize,
-        data_shred_bufs: Vec<Vec<u8>>,
-        first_shred: bool,
-    ) -> Vec<u8> {
+    fn reassemble_payload(num_data: usize, data_shred_bufs: Vec<Vec<u8>>) -> Vec<u8> {
         data_shred_bufs[..num_data]
             .iter()
-            .enumerate()
-            .flat_map(|(i, data)| {
-                let offset = if i == 0 && first_shred {
-                    bincode::serialized_size(&Shred::FirstInSlot(FirstDataShred::empty_shred()))
-                        .unwrap()
-                } else {
-                    bincode::serialized_size(&Shred::Data(DataShred::empty_shred())).unwrap()
-                };
+            .flat_map(|data| {
+                let offset =
+                    bincode::serialized_size(&Shred::Data(DataShred::empty_shred())).unwrap();
                 data[offset as usize..].iter()
             })
             .cloned()
@@ -807,14 +722,22 @@ mod tests {
     fn test_data_shredder() {
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
+
+        // Test that parent cannot be > current slot
+        assert_matches!(Shredder::new(slot, slot + 1, 1.001, &keypair, 0), Err(_));
+        // Test that slot - parent cannot be > u16 MAX
+        assert_matches!(
+            Shredder::new(slot, slot - 1 - 0xffff, 1.001, &keypair, 0),
+            Err(_)
+        );
+
         let mut shredder =
-            Shredder::new(slot, Some(5), 0.0, &keypair, 0).expect("Failed in creating shredder");
+            Shredder::new(slot, slot - 5, 0.0, &keypair, 0).expect("Failed in creating shredder");
 
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_shred, None);
         assert_eq!(shredder.active_offset, 0);
 
-        assert!(FirstDataShred::overhead() < PACKET_DATA_SIZE);
         assert!(DataShred::overhead() < PACKET_DATA_SIZE);
         assert!(CodingShred::overhead() < PACKET_DATA_SIZE);
 
@@ -948,7 +871,7 @@ mod tests {
 
         let slot = 0x123456789abcdef0;
         let mut shredder =
-            Shredder::new(slot, Some(5), 0.0, &keypair, 0).expect("Failed in creating shredder");
+            Shredder::new(slot, slot - 5, 0.0, &keypair, 0).expect("Failed in creating shredder");
 
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_shred, None);
@@ -982,8 +905,7 @@ mod tests {
         assert_eq!(deserialized_shred.slot(), slot);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
 
-        // Try shredder when no parent is provided
-        let mut shredder = Shredder::new(0x123456789abcdef0, None, 0.0, &keypair, 2)
+        let mut shredder = Shredder::new(0x123456789abcdef0, slot - 5, 0.0, &keypair, 2)
             .expect("Failed in creating shredder");
 
         assert!(shredder.shreds.is_empty());
@@ -1016,9 +938,9 @@ mod tests {
 
         let slot = 0x123456789abcdef0;
         // Test that FEC rate cannot be > 1.0
-        assert_matches!(Shredder::new(slot, Some(5), 1.001, &keypair, 0), Err(_));
+        assert_matches!(Shredder::new(slot, slot - 5, 1.001, &keypair, 0), Err(_));
 
-        let mut shredder = Shredder::new(0x123456789abcdef0, Some(5), 1.0, &keypair, 0)
+        let mut shredder = Shredder::new(0x123456789abcdef0, slot - 5, 1.0, &keypair, 0)
             .expect("Failed in creating shredder");
 
         assert!(shredder.shreds.is_empty());
@@ -1092,7 +1014,7 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
         let mut shredder =
-            Shredder::new(slot, Some(5), 1.0, &keypair, 0).expect("Failed in creating shredder");
+            Shredder::new(slot, slot - 5, 1.0, &keypair, 0).expect("Failed in creating shredder");
 
         assert!(shredder.shreds.is_empty());
         assert_eq!(shredder.active_shred, None);
@@ -1293,7 +1215,7 @@ mod tests {
 
         // Test4: Try recovery/reassembly full slot with 3 missing data shreds + 2 coding shreds. Hint: should work
         let mut shredder =
-            Shredder::new(slot, Some(5), 1.0, &keypair, 0).expect("Failed in creating shredder");
+            Shredder::new(slot, slot - 5, 1.0, &keypair, 0).expect("Failed in creating shredder");
 
         let mut offset = shredder.write(&data).unwrap();
         let approx_shred_payload_size = offset;
@@ -1404,7 +1326,7 @@ mod tests {
 
         // Test6: Try recovery/reassembly with non zero index full slot with 3 missing data shreds + 2 coding shreds. Hint: should work
         let mut shredder =
-            Shredder::new(slot, Some(5), 1.0, &keypair, 25).expect("Failed in creating shredder");
+            Shredder::new(slot, slot - 5, 1.0, &keypair, 25).expect("Failed in creating shredder");
 
         let mut offset = shredder.write(&data).unwrap();
         let approx_shred_payload_size = offset;

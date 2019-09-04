@@ -895,14 +895,9 @@ impl Blocktree {
             },
             |v| v,
         );
-        let mut shredder = Shredder::new(
-            current_slot,
-            Some(parent_slot),
-            0.0,
-            keypair,
-            start_index as u32,
-        )
-        .expect("Failed to create entry shredder");
+        let mut shredder =
+            Shredder::new(current_slot, parent_slot, 0.0, keypair, start_index as u32)
+                .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
         // Find all the entries for start_slot
         for entry in entries {
@@ -917,14 +912,9 @@ impl Blocktree {
                     .map(|s| bincode::deserialize(s).unwrap())
                     .collect();
                 all_shreds.extend(shreds);
-                shredder = Shredder::new(
-                    current_slot,
-                    Some(parent_slot),
-                    0.0,
-                    &Arc::new(Keypair::new()),
-                    0,
-                )
-                .expect("Failed to create entry shredder");
+                shredder =
+                    Shredder::new(current_slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0)
+                        .expect("Failed to create entry shredder");
             }
 
             if entry.borrow().is_tick() {
@@ -1654,7 +1644,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     let blocktree = Blocktree::open(ledger_path)?;
     let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
 
-    let mut shredder = Shredder::new(0, Some(0), 0.0, &Arc::new(Keypair::new()), 0)
+    let mut shredder = Shredder::new(0, 0, 0.0, &Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
     let last_hash = entries.last().unwrap().hash;
     bincode::serialize_into(&mut shredder, &entries)
@@ -1728,14 +1718,8 @@ pub fn entries_to_test_shreds(
     parent_slot: u64,
     is_full_slot: bool,
 ) -> Vec<Shred> {
-    let mut shredder = Shredder::new(
-        slot,
-        Some(parent_slot),
-        0.0,
-        &Arc::new(Keypair::new()),
-        0 as u32,
-    )
-    .expect("Failed to create entry shredder");
+    let mut shredder = Shredder::new(slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0 as u32)
+        .expect("Failed to create entry shredder");
 
     bincode::serialize_into(&mut shredder, &entries)
         .expect("Expect to write all entries to shreds");
