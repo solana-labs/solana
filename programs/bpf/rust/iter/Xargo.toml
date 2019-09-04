@@ -1,10 +1,2 @@
-# [dependencies.compiler_builtins]
-# path = "../../../../sdk/bpf/dependencies/rust-bpf-sysroot/src/compiler-builtins"
-# features = ["c", "mem"]
-
-# [target.bpfel-unknown-unknown.dependencies]
-# alloc = { path = "../../../../sdk/bpf/dependencies/rust-bpf-sysroot/src/liballoc" }
-# std = { path = "../../../../sdk/bpf/dependencies/rust-bpf-sysroot/src/libstd" }
-
 [target.bpfel-unknown-unknown.dependencies.std]
 features = []

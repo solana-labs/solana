@@ -1,24 +1,18 @@
 //! @brief Example Rust-based BPF program that test dynamic memory allocation
-// #![no_std]
-#![allow(unused_attributes)]
 
 #[macro_use]
 extern crate alloc;
-// #[cfg(not(test))]
-// extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
-
-// use alloc::vec::Vec;
-use core::alloc::Layout;
-use core::mem;
 use solana_sdk_bpf_utils::info;
+use std::alloc::Layout;
+use std::mem;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     unsafe {
         // Confirm large allocation fails
 
-        let layout = Layout::from_size_align(core::usize::MAX, mem::align_of::<u8>()).unwrap();
+        let layout = Layout::from_size_align(std::usize::MAX, mem::align_of::<u8>()).unwrap();
         let ptr = alloc::alloc::alloc(layout);
         if !ptr.is_null() {
             info!("Error: Alloc of very larger buffer should fail");
@@ -32,6 +26,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         let layout = Layout::from_size_align(100, mem::align_of::<u8>()).unwrap();
         let ptr = alloc::alloc::alloc(layout);
         if ptr.is_null() {
+            info!("Error: Alloc of 100 bytes failed");
             alloc::alloc::handle_alloc_error(layout);
         }
         alloc::alloc::dealloc(ptr, layout);
