@@ -303,3 +303,10 @@ As rewards are earned lamports can be withdrawn from a stake account.  Only
 lamports in excess of effective+activating stake may be withdrawn at any time.
 This means that during warmup, effectively no stake can be withdrawn.  During
 cooldown, any tokens in excess of effective stake may be withdrawn (activating == 0);
+
+### Lock-up
+
+Stake accounts support the notion of lock-up, wherein the stake account balance is 
+unavailable for withdrawal until a specified time.  Lock-up is specified as a slot height,
+i.e. the minimum slot height that must be reached by the network before the stake account balance 
+is available for withdrawal.
