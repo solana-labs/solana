@@ -24,7 +24,7 @@ _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
 
-for project in sdk/bpf/rust/{rust-no-std,rust-utils,rust-test} programs/bpf/rust/*/ ; do
+for project in sdk/bpf/rust/{rust-utils,rust-test} programs/bpf/rust/*/ ; do
   echo "+++ do_bpf_check $project"
   (
     cd "$project"
