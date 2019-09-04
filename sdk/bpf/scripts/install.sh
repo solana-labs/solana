@@ -135,7 +135,7 @@ if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
 fi
 
 # Install custom Hashbrown crate needed by Rust-BPF Sysroot
-version=master
+version=v0.1
 if [[ ! -f hashbrown-$version.md ]]; then
   (
     set -ex
