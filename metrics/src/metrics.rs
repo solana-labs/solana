@@ -523,9 +523,9 @@ pub fn query(q: &str) -> Result<String, String> {
         &config.host, &config.username, &config.password, &q
     );
 
-    let response = reqwest::get(query.as_str())
-        .map_err(|err| err.to_string())?
-        .text()
+    let response = ureq::get(query.as_str())
+        .call()
+        .into_string()
         .map_err(|err| err.to_string())?;
 
     Ok(response)

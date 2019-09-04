@@ -1,5 +1,4 @@
-use crate::pubkey::Pubkey;
-use crate::Epoch;
+use crate::{pubkey::Pubkey, timing::Epoch};
 use std::{cmp, fmt};
 
 /// An Account with data that is stored on chain
@@ -62,6 +61,19 @@ impl Account {
             owner: *owner,
             ..Account::default()
         })
+    }
+
+    pub fn new_data_with_space<T: serde::Serialize>(
+        lamports: u64,
+        state: &T,
+        space: usize,
+        owner: &Pubkey,
+    ) -> Result<Account, bincode::Error> {
+        let mut account = Self::new(lamports, space, owner);
+
+        account.serialize_data(state)?;
+
+        Ok(account)
     }
 
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {

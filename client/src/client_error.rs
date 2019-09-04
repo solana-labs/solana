@@ -5,10 +5,10 @@ use std::{fmt, io};
 #[derive(Debug)]
 pub enum ClientError {
     Io(io::Error),
-    Reqwest(reqwest::Error),
     RpcError(rpc_request::RpcError),
     SerdeJson(serde_json::error::Error),
     TransactionError(TransactionError),
+    Ureq(String),
 }
 
 impl fmt::Display for ClientError {
@@ -25,9 +25,9 @@ impl From<io::Error> for ClientError {
     }
 }
 
-impl From<reqwest::Error> for ClientError {
-    fn from(err: reqwest::Error) -> ClientError {
-        ClientError::Reqwest(err)
+impl From<&ureq::Error> for ClientError {
+    fn from(err: &ureq::Error) -> ClientError {
+        ClientError::Ureq(err.to_string())
     }
 }
 

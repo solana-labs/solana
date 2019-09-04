@@ -73,17 +73,15 @@ fn download_to_temp_archive(
     let temp_dir = TempDir::new(clap::crate_name!())?;
     let temp_file = temp_dir.path().join("release.tar.bz2");
 
-    let client = reqwest::Client::new();
+    let client = ureq::agent();
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Downloading...", TRUCK));
 
-    let response = client.get(url.as_str()).send()?;
+    let response = client.get(url.as_str()).call();
     let download_size = {
         response
-            .headers()
-            .get(reqwest::header::CONTENT_LENGTH)
-            .and_then(|content_length| content_length.to_str().ok())
+            .header("Content-Length")
             .and_then(|content_length| content_length.parse().ok())
             .unwrap_or(0)
     };
@@ -116,7 +114,7 @@ fn download_to_temp_archive(
 
     let mut source = DownloadProgress {
         progress_bar,
-        response,
+        response: response.into_reader(),
     };
 
     let mut file = File::create(&temp_file)?;
