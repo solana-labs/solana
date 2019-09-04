@@ -1,4 +1,5 @@
 /dependencies/criterion*
+/dependencies/hashbrown*
 /dependencies/llvm-native*
 /dependencies/rust-bpf*
 /dependencies/xargo*
