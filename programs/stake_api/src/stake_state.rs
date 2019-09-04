@@ -14,13 +14,14 @@ use solana_sdk::{
         self,
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
-    timing::Epoch,
+    timing::{Epoch, Slot},
 };
 use solana_vote_api::vote_state::VoteState;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum StakeState {
     Uninitialized,
+    Lockup(Slot),
     Stake(Stake),
     RewardsPool,
 }
@@ -57,6 +58,7 @@ pub struct Stake {
     pub activation_epoch: Epoch, // epoch the stake was activated, std::Epoch::MAX if is a bootstrap stake
     pub deactivation_epoch: Epoch, // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
     pub config: Config,
+    pub lockup: Slot,
 }
 
 impl Default for Stake {
@@ -68,6 +70,7 @@ impl Default for Stake {
             activation_epoch: 0,
             deactivation_epoch: std::u64::MAX,
             config: Config::default(),
+            lockup: 0,
         }
     }
 }
@@ -256,6 +259,7 @@ impl Stake {
             vote_state,
             std::u64::MAX,
             &Config::default(),
+            0,
         )
     }
 
@@ -265,6 +269,7 @@ impl Stake {
         vote_state: &VoteState,
         activation_epoch: Epoch,
         config: &Config,
+        lockup: Slot,
     ) -> Self {
         Self {
             stake,
@@ -272,6 +277,7 @@ impl Stake {
             voter_pubkey: *voter_pubkey,
             credits_observed: vote_state.credits(),
             config: *config,
+            lockup,
             ..Stake::default()
         }
     }
@@ -282,6 +288,7 @@ impl Stake {
 }
 
 pub trait StakeAccount {
+    fn lockup(&mut self, slot: Slot) -> Result<(), InstructionError>;
     fn delegate_stake(
         &mut self,
         vote_account: &KeyedAccount,
@@ -311,6 +318,13 @@ pub trait StakeAccount {
 }
 
 impl<'a> StakeAccount for KeyedAccount<'a> {
+    fn lockup(&mut self, lockup: Slot) -> Result<(), InstructionError> {
+        if let StakeState::Uninitialized = self.state()? {
+            self.set_state(&StakeState::Lockup(lockup))
+        } else {
+            Err(InstructionError::InvalidAccountData)
+        }
+    }
     fn delegate_stake(
         &mut self,
         vote_account: &KeyedAccount,
@@ -326,13 +340,14 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             return Err(InstructionError::InsufficientFunds);
         }
 
-        if let StakeState::Uninitialized = self.state()? {
+        if let StakeState::Lockup(lockup) = self.state()? {
             let stake = Stake::new(
                 new_stake,
                 vote_account.unsigned_key(),
                 &vote_account.state()?,
                 clock.epoch,
                 config,
+                lockup,
             );
 
             self.set_state(&StakeState::Stake(stake))
@@ -410,6 +425,19 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             return Err(InstructionError::MissingRequiredSignature);
         }
 
+        fn transfer(
+            from: &mut Account,
+            to: &mut Account,
+            lamports: u64,
+        ) -> Result<(), InstructionError> {
+            if lamports > from.lamports {
+                return Err(InstructionError::InsufficientFunds);
+            }
+            from.lamports -= lamports;
+            to.lamports += lamports;
+            Ok(())
+        }
+
         match self.state()? {
             StakeState::Stake(stake) => {
                 // if we have a deactivation epoch and we're in cooldown
@@ -425,20 +453,16 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 if lamports > self.account.lamports.saturating_sub(staked) {
                     return Err(InstructionError::InsufficientFunds);
                 }
-                self.account.lamports -= lamports;
-                to.account.lamports += lamports;
-                Ok(())
             }
-            StakeState::Uninitialized => {
-                if lamports > self.account.lamports {
+            StakeState::Lockup(lockup) => {
+                if lockup > clock.slot {
                     return Err(InstructionError::InsufficientFunds);
                 }
-                self.account.lamports -= lamports;
-                to.account.lamports += lamports;
-                Ok(())
             }
-            _ => Err(InstructionError::InvalidAccountData),
+            StakeState::Uninitialized => {}
+            _ => return Err(InstructionError::InvalidAccountData),
         }
+        transfer(&mut self.account, &mut to.account, lamports)
     }
 }
 
@@ -546,15 +570,20 @@ mod tests {
 
         let stake_pubkey = Pubkey::default();
         let stake_lamports = 42;
-        let mut stake_account =
-            Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
+        let mut stake_account = Account::new_data_with_space(
+            stake_lamports,
+            &StakeState::Lockup(0),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
 
         // unsigned keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
 
         {
             let stake_state: StakeState = stake_keyed_account.state().unwrap();
-            assert_eq!(stake_state, StakeState::default());
+            assert_eq!(stake_state, StakeState::Lockup(0));
         }
 
         assert_eq!(
@@ -583,7 +612,8 @@ mod tests {
                 stake: stake_lamports,
                 activation_epoch: clock.epoch,
                 deactivation_epoch: std::u64::MAX,
-                config: Config::default()
+                config: Config::default(),
+                lockup: 0
             })
         );
         // verify that delegate_stake can't be called twice StakeState::default()
@@ -865,11 +895,40 @@ mod tests {
     }
 
     #[test]
-    fn test_deactivate_stake() {
+    fn test_stake_lockup() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
         let mut stake_account =
             Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
+
+        // unsigned keyed account
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
+        assert_eq!(stake_keyed_account.lockup(1), Ok(()));
+
+        // first time works, as is uninit
+        assert_eq!(
+            StakeState::from(&stake_keyed_account.account).unwrap(),
+            StakeState::Lockup(1)
+        );
+
+        // 2nd time fails, can't move it from anything other than uninit->lockup
+        assert_eq!(
+            stake_keyed_account.lockup(1),
+            Err(InstructionError::InvalidAccountData)
+        );
+    }
+
+    #[test]
+    fn test_deactivate_stake() {
+        let stake_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+        let mut stake_account = Account::new_data_with_space(
+            stake_lamports,
+            &StakeState::Lockup(0),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
 
         let clock = sysvar::clock::Clock {
             epoch: 1,
@@ -923,8 +982,13 @@ mod tests {
         let stake_pubkey = Pubkey::new_rand();
         let total_lamports = 100;
         let stake_lamports = 42;
-        let mut stake_account =
-            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+        let mut stake_account = Account::new_data_with_space(
+            total_lamports,
+            &StakeState::Lockup(0),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
 
         let mut clock = sysvar::clock::Clock::default();
 
@@ -1051,8 +1115,13 @@ mod tests {
         let stake_pubkey = Pubkey::new_rand();
         let total_lamports = 100;
         let stake_lamports = 42;
-        let mut stake_account =
-            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+        let mut stake_account = Account::new_data_with_space(
+            total_lamports,
+            &StakeState::Lockup(0),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
 
         let clock = sysvar::clock::Clock::default();
         let mut future = sysvar::clock::Clock::default();
@@ -1102,21 +1171,49 @@ mod tests {
     fn test_withdraw_stake_invalid_state() {
         let stake_pubkey = Pubkey::new_rand();
         let total_lamports = 100;
-        let mut stake_account =
-            Account::new(total_lamports, std::mem::size_of::<StakeState>(), &id());
+        let mut stake_account = Account::new_data_with_space(
+            total_lamports,
+            &StakeState::RewardsPool,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");;
 
-        let clock = sysvar::clock::Clock::default();
-        let mut future = sysvar::clock::Clock::default();
-        future.epoch += 16;
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports,
+                &mut to_keyed_account,
+                &sysvar::clock::Clock::default(),
+                &StakeHistory::default()
+            ),
+            Err(InstructionError::InvalidAccountData)
+        );
+    }
+
+    #[test]
+    fn test_withdraw_lockout() {
+        let stake_pubkey = Pubkey::new_rand();
+        let total_lamports = 100;
+        let mut stake_account = Account::new_data_with_space(
+            total_lamports,
+            &StakeState::Lockup(1),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
-        let stake_state = StakeState::RewardsPool;
-        stake_keyed_account.set_state(&stake_state).unwrap();
 
+        let mut clock = sysvar::clock::Clock::default();
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports,
@@ -1124,7 +1221,18 @@ mod tests {
                 &clock,
                 &StakeHistory::default()
             ),
-            Err(InstructionError::InvalidAccountData)
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        clock.slot += 1;
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports,
+                &mut to_keyed_account,
+                &clock,
+                &StakeHistory::default()
+            ),
+            Ok(())
         );
     }
 
@@ -1221,8 +1329,14 @@ mod tests {
 
         let pubkey = Pubkey::default();
         let stake_lamports = 100;
-        let mut stake_account =
-            Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
+        let mut stake_account = Account::new_data_with_space(
+            stake_lamports,
+            &StakeState::Lockup(0),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+
         let mut stake_keyed_account = KeyedAccount::new(&pubkey, true, &mut stake_account);
 
         let vote_pubkey = Pubkey::new_rand();
