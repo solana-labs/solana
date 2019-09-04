@@ -28,6 +28,3 @@ pub mod transport;
 
 #[macro_use]
 extern crate serde_derive;
-
-pub type Epoch = u64;
-pub type Slot = u64;

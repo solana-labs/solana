@@ -10,14 +10,25 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     pubkey::Pubkey,
     system_instruction, sysvar,
+    timing::Slot,
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
+    /// `Lockup` a stake until the specified slot
+    ///
+    /// Expects 1 Account:
+    ///    0 - Uninitialized StakeAccount to be lockup'd
+    ///
+    /// The u64 is the portion of the Stake account balance to be activated,
+    ///    must be less than StakeAccount.lamports
+    ///
+    Lockup(Slot),
+
     /// `Delegate` a stake to a particular node
     ///
     /// Expects 3 Accounts:
-    ///    0 - Uninitialized StakeAccount to be delegated <= must have this signature
+    ///    0 - Lockup'd StakeAccount to be delegated <= must have this signature
     ///    1 - VoteAccount to which this Stake will be delegated
     ///    2 - Clock sysvar Account that carries clock bank epoch
     ///    3 - Config Account that carries stake config
@@ -58,28 +69,44 @@ pub enum StakeInstruction {
     Deactivate,
 }
 
+pub fn create_stake_account_with_lockup(
+    from_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
+    lamports: u64,
+    lockup: Slot,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account(
+            from_pubkey,
+            stake_pubkey,
+            lamports,
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        Instruction::new(
+            id(),
+            &StakeInstruction::Lockup(lockup),
+            vec![AccountMeta::new(*stake_pubkey, false)],
+        ),
+    ]
+}
+
 pub fn create_stake_account(
     from_pubkey: &Pubkey,
-    staker_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
-    vec![system_instruction::create_account(
-        from_pubkey,
-        staker_pubkey,
-        lamports,
-        std::mem::size_of::<StakeState>() as u64,
-        &id(),
-    )]
+    create_stake_account_with_lockup(from_pubkey, stake_pubkey, lamports, 0)
 }
 
 pub fn create_stake_account_and_delegate_stake(
     from_pubkey: &Pubkey,
-    staker_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let mut instructions = create_stake_account(from_pubkey, staker_pubkey, lamports);
-    instructions.push(delegate_stake(staker_pubkey, vote_pubkey, lamports));
+    let mut instructions = create_stake_account(from_pubkey, stake_pubkey, lamports);
+    instructions.push(delegate_stake(stake_pubkey, vote_pubkey, lamports));
     instructions
 }
 
@@ -142,6 +169,7 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
+        StakeInstruction::Lockup(slot) => me.lockup(slot),
         StakeInstruction::DelegateStake(stake) => {
             if rest.len() != 3 {
                 Err(InstructionError::InvalidInstructionData)?;
