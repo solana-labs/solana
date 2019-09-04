@@ -1752,7 +1752,7 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries_using_shreds;
+    use crate::blocktree::tests::make_many_slot_entries;
     use crate::blocktree::Blocktree;
     use crate::blocktree_processor::tests::fill_blocktree_slot_with_ticks;
     use crate::crds_value::CrdsValueLabel;
@@ -1998,7 +1998,7 @@ mod tests {
             assert!(rv.is_empty());
 
             // Create slots 1, 2, 3 with 5 blobs apiece
-            let (blobs, _) = make_many_slot_entries_using_shreds(1, 3, 5);
+            let (blobs, _) = make_many_slot_entries(1, 3, 5);
 
             blocktree
                 .insert_shreds(blobs)

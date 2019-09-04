@@ -315,7 +315,7 @@ impl ClusterInfoRepairListener {
                         // sending the blobs in this slot for repair, we expect these slots
                         // to be full.
                         if let Some(blob_data) = blocktree
-                            .get_data_shred_bytes(slot, blob_index as u64)
+                            .get_data_shred(slot, blob_index as u64)
                             .expect("Failed to read data blob from blocktree")
                         {
                             socket.send_to(&blob_data[..], repairee_tvu)?;
@@ -323,7 +323,7 @@ impl ClusterInfoRepairListener {
                         }
 
                         if let Some(coding_bytes) = blocktree
-                            .get_coding_blob_bytes(slot, blob_index as u64)
+                            .get_coding_shred(slot, blob_index as u64)
                             .expect("Failed to read coding blob from blocktree")
                         {
                             socket.send_to(&coding_bytes[..], repairee_tvu)?;
@@ -479,7 +479,7 @@ impl Service for ClusterInfoRepairListener {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries_using_shreds;
+    use crate::blocktree::tests::make_many_slot_entries;
     use crate::cluster_info::Node;
     use crate::packet::{Blob, SharedBlob};
     use crate::streamer;
@@ -623,7 +623,7 @@ mod tests {
         let entries_per_slot = 5;
         let num_slots = 10;
         assert_eq!(num_slots % 2, 0);
-        let (shreds, _) = make_many_slot_entries_using_shreds(0, num_slots, entries_per_slot);
+        let (shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
         let num_shreds_per_slot = shreds.len() as u64 / num_slots;
 
         // Write slots in the range [0, num_slots] to blocktree
@@ -703,7 +703,7 @@ mod tests {
 
         // Create blobs for first two epochs and write them to blocktree
         let total_slots = slots_per_epoch * 2;
-        let (shreds, _) = make_many_slot_entries_using_shreds(0, total_slots, 1);
+        let (shreds, _) = make_many_slot_entries(0, total_slots, 1);
         blocktree.insert_shreds(shreds).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman

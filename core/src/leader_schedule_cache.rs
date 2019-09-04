@@ -399,8 +399,8 @@ mod tests {
 
             // Write a blob into slot 2 that chains to slot 1,
             // but slot 1 is empty so should not be skipped
-            let (blobs, _) = make_slot_entries(2, 1, 1);
-            blocktree.write_blobs(&blobs[..]).unwrap();
+            let (shreds, _) = make_slot_entries(2, 1, 1);
+            blocktree.insert_shreds(shreds).unwrap();
             assert_eq!(
                 cache
                     .next_leader_slot(&pubkey, 0, &bank, Some(&blocktree))
@@ -410,10 +410,10 @@ mod tests {
             );
 
             // Write a blob into slot 1
-            let (blobs, _) = make_slot_entries(1, 0, 1);
+            let (shreds, _) = make_slot_entries(1, 0, 1);
 
             // Check that slot 1 and 2 are skipped
-            blocktree.write_blobs(&blobs[..]).unwrap();
+            blocktree.insert_shreds(shreds).unwrap();
             assert_eq!(
                 cache
                     .next_leader_slot(&pubkey, 0, &bank, Some(&blocktree))

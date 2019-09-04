@@ -27,7 +27,7 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut current_slot = start_slot;
     let mut start_index = 0;
     loop {
-        match blocktree.get_data_shreds(current_slot, start_index, &mut buffer) {
+        match blocktree.get_data_shreds(current_slot, start_index, std::u64::MAX, &mut buffer) {
             Ok((last_index, mut size)) => {
                 debug!(
                     "chacha: encrypting slice: {} num_shreds: {} data_len: {}",
@@ -128,7 +128,7 @@ mod tests {
 
         let entries = make_tiny_deterministic_test_entries(slots_per_segment);
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 0,
                 0,
                 0,

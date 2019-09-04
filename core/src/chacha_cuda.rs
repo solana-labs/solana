@@ -48,7 +48,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match blocktree.get_data_shreds(current_slot, start_index, &mut buffer) {
+        match blocktree.get_data_shreds(current_slot, start_index, std::u64::MAX, &mut buffer) {
             Ok((last_index, mut size)) => {
                 debug!(
                     "chacha_cuda: encrypting segment: {} num_shreds: {} data_len: {}",
@@ -139,7 +139,7 @@ mod tests {
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
 
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 0,
                 0,
                 0,
@@ -196,7 +196,7 @@ mod tests {
         let ticks_per_slot = 16;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 0,
                 0,
                 0,

@@ -491,14 +491,6 @@ fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
 
-#[allow(unused_attributes)]
-#[test]
-#[serial]
-#[ignore]
-fn test_bad_blob_size_leader() {
-    test_faulty_node(BroadcastStageType::BroadcastBadBlobSizes);
-}
-
 #[test]
 #[ignore]
 fn test_fake_blobs_broadcast_leader() {

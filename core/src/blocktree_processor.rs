@@ -442,7 +442,6 @@ fn process_pending_slots(
 pub mod tests {
     use super::*;
     use crate::blocktree::create_new_tmp_ledger;
-    use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, next_entry_mut, Entry};
     use crate::genesis_utils::{
         create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
@@ -468,7 +467,7 @@ pub mod tests {
         let last_entry_hash = entries.last().unwrap().hash;
 
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 slot,
                 0,
                 0,
@@ -520,8 +519,18 @@ pub mod tests {
             // throw away last one
             entries.pop();
 
-            let blobs = entries_to_blobs(&entries, slot, parent_slot, false);
-            blocktree.insert_data_blobs(blobs.iter()).unwrap();
+            blocktree
+                .write_entries(
+                    slot,
+                    0,
+                    0,
+                    ticks_per_slot,
+                    Some(parent_slot),
+                    false,
+                    &Arc::new(Keypair::new()),
+                    entries,
+                )
+                .expect("Expected to write shredded entries to blocktree");
         }
 
         // slot 2, points at slot 1
@@ -863,7 +872,7 @@ pub mod tests {
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 1,
                 0,
                 0,

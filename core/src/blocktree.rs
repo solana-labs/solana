@@ -2,8 +2,8 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 use crate::entry::Entry;
-use crate::erasure::{ErasureConfig, Session};
-use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
+use crate::erasure::ErasureConfig;
+use crate::packet::Blob;
 use crate::result::{Error, Result};
 use crate::shred::{Shred, Shredder};
 
@@ -27,7 +27,6 @@ use std::borrow::{Borrow, Cow};
 use std::cell::RefCell;
 use std::cmp;
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
@@ -95,7 +94,7 @@ pub struct Blocktree {
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     batch_processor: Arc<RwLock<BatchProcessor>>,
     last_root: Arc<RwLock<u64>>,
-    pub new_blobs_signals: Vec<SyncSender<bool>>,
+    pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
 
@@ -120,7 +119,7 @@ pub const DATA_SHRED_CF: &str = "data_shred";
 pub const CODE_SHRED_CF: &str = "code_shred";
 
 impl Blocktree {
-    /// Opens a Ledger in directory, provides "infinite" window of blobs
+    /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blocktree> {
         fs::create_dir_all(&ledger_path)?;
         let blocktree_path = ledger_path.join(BLOCKTREE_DIRECTORY);
@@ -174,7 +173,7 @@ impl Blocktree {
             index_cf,
             data_shred_cf,
             code_shred_cf,
-            new_blobs_signals: vec![],
+            new_shreds_signals: vec![],
             batch_processor,
             completed_slots_senders: vec![],
             last_root,
@@ -188,7 +187,7 @@ impl Blocktree {
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
-        blocktree.new_blobs_signals = vec![signal_sender];
+        blocktree.new_shreds_signals = vec![signal_sender];
         blocktree.completed_slots_senders = vec![completed_slots_sender];
 
         Ok((blocktree, signal_receiver, completed_slots_receiver))
@@ -334,8 +333,8 @@ impl Blocktree {
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)>> {
         let slot_iterator = self
             .db
-            .iter::<cf::Data>(IteratorMode::From((slot, 0), IteratorDirection::Forward))?;
-        Ok(slot_iterator.take_while(move |((blob_slot, _), _)| *blob_slot == slot))
+            .iter::<cf::ShredData>(IteratorMode::From((slot, 0), IteratorDirection::Forward))?;
+        Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
     fn try_shred_recovery(
@@ -525,13 +524,13 @@ impl Blocktree {
         batch_processor.write(write_batch)?;
 
         if should_signal {
-            for signal in &self.new_blobs_signals {
+            for signal in &self.new_shreds_signals {
                 let _ = signal.try_send(true);
             }
         }
 
         send_signals(
-            &self.new_blobs_signals,
+            &self.new_shreds_signals,
             &self.completed_slots_senders,
             should_signal,
             newly_completed_slots,
@@ -621,7 +620,7 @@ impl Blocktree {
 
         let index_meta = index_working_set
             .get_mut(&slot)
-            .expect("Index must be present for all data blobs")
+            .expect("Index must be present for all data shreds")
             .data_mut();
 
         if !index_meta.is_present(index)
@@ -668,6 +667,7 @@ impl Blocktree {
         &self,
         slot: u64,
         from_index: u64,
+        to_index: u64,
         buffer: &mut [u8],
     ) -> Result<(u64, usize)> {
         let meta_cf = self.db.column::<cf::SlotMeta>();
@@ -678,7 +678,8 @@ impl Blocktree {
                 warn!("The slot is not yet full. Will not return any shreds");
                 return Ok((last_index, buffer_offset));
             }
-            for index in from_index..meta.consumed {
+            let to_index = cmp::min(to_index, meta.consumed);
+            for index in from_index..to_index {
                 if let Some(shred_data) = self.get_data_shred(slot, index)? {
                     let shred_len = shred_data.len();
                     if buffer.len().saturating_sub(buffer_offset) >= shred_len {
@@ -701,87 +702,11 @@ impl Blocktree {
         Ok((last_index, buffer_offset))
     }
 
-    /// Use this function to write data blobs to blocktree
-    pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<()>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<SharedBlob>,
-    {
-        let c_blobs: Vec<_> = shared_blobs
-            .into_iter()
-            .map(move |s| s.borrow().clone())
-            .collect();
-
-        let r_blobs: Vec<_> = c_blobs.iter().map(move |b| b.read().unwrap()).collect();
-
-        let blobs = r_blobs.iter().map(|s| &**s);
-
-        self.insert_data_blobs(blobs)
-    }
-
-    pub fn write_blobs<I>(&self, blobs: I) -> Result<()>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<Blob>,
-    {
-        self.insert_data_blobs(blobs)
+    pub fn get_coding_shred(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
+        self.code_shred_cf.get_bytes((slot, index))
     }
 
     pub fn write_entries<I>(
-        &self,
-        start_slot: u64,
-        num_ticks_in_start_slot: u64,
-        start_index: u64,
-        ticks_per_slot: u64,
-        entries: I,
-    ) -> Result<()>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<Entry>,
-    {
-        assert!(num_ticks_in_start_slot < ticks_per_slot);
-        let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
-
-        let mut blobs = vec![];
-        let mut current_index = start_index;
-        let mut current_slot = start_slot;
-        let mut parent_slot = {
-            if current_slot == 0 {
-                current_slot
-            } else {
-                current_slot - 1
-            }
-        };
-        // Find all the entries for start_slot
-        for entry in entries {
-            if remaining_ticks_in_slot == 0 {
-                current_slot += 1;
-                current_index = 0;
-                parent_slot = current_slot - 1;
-                remaining_ticks_in_slot = ticks_per_slot;
-            }
-
-            let mut b = entry.borrow().to_blob();
-
-            if entry.borrow().is_tick() {
-                remaining_ticks_in_slot -= 1;
-                if remaining_ticks_in_slot == 0 {
-                    b.set_is_last_in_slot();
-                }
-            }
-
-            b.set_index(current_index);
-            b.set_slot(current_slot);
-            b.set_parent(parent_slot);
-            blobs.push(b);
-
-            current_index += 1;
-        }
-
-        self.write_blobs(&blobs)
-    }
-
-    pub fn write_entries_using_shreds<I>(
         &self,
         start_slot: u64,
         num_ticks_in_start_slot: u64,
@@ -868,214 +793,8 @@ impl Blocktree {
         Ok(num_shreds)
     }
 
-    pub fn insert_data_blobs<I>(&self, new_blobs: I) -> Result<()>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<Blob>,
-    {
-        let db = &*self.db;
-        let mut batch_processor = self.batch_processor.write().unwrap();
-        let mut write_batch = batch_processor.batch()?;
-
-        let new_blobs: Vec<_> = new_blobs.into_iter().collect();
-
-        let mut prev_inserted_blob_datas = HashMap::new();
-        let mut prev_inserted_coding = HashMap::new();
-
-        // A map from slot to a 2-tuple of metadata: (working copy, backup copy),
-        // so we can detect changes to the slot metadata later
-        let mut slot_meta_working_set = HashMap::new();
-        let mut erasure_meta_working_set = HashMap::new();
-        let mut index_working_set = HashMap::new();
-        let mut erasure_config_opt = None;
-
-        for blob in new_blobs.iter() {
-            let blob = blob.borrow();
-            assert!(!blob.is_coding());
-
-            match erasure_config_opt {
-                Some(config) => {
-                    if config != blob.erasure_config() {
-                        // ToDo: This is a potential slashing condition
-                        error!("Multiple erasure config for the same slot.");
-                    }
-                }
-                None => erasure_config_opt = Some(blob.erasure_config()),
-            }
-
-            let blob_slot = blob.slot();
-
-            let _ = index_working_set.entry(blob_slot).or_insert_with(|| {
-                self.index_cf
-                    .get(blob_slot)
-                    .unwrap()
-                    .unwrap_or_else(|| Index::new(blob_slot))
-            });
-
-            let set_index =
-                ErasureMeta::set_index_for(blob.index(), erasure_config_opt.unwrap().num_data());
-            if let Some(erasure_meta) = self.erasure_meta_cf.get((blob_slot, set_index))? {
-                erasure_meta_working_set.insert((blob_slot, set_index), erasure_meta);
-            }
-        }
-
-        let recovered_data_opt = handle_recovery(
-            &self.db,
-            &erasure_meta_working_set,
-            &mut index_working_set,
-            &prev_inserted_blob_datas,
-            &mut prev_inserted_coding,
-            &mut write_batch,
-            &erasure_config_opt.unwrap_or_default(),
-        )?;
-
-        if let Some(recovered_data) = recovered_data_opt {
-            insert_data_blob_batch(
-                recovered_data
-                    .iter()
-                    .chain(new_blobs.iter().map(Borrow::borrow)),
-                &self.db,
-                &mut slot_meta_working_set,
-                &mut index_working_set,
-                &mut prev_inserted_blob_datas,
-                &mut write_batch,
-                *self.last_root.read().unwrap(),
-            )?;
-        } else {
-            insert_data_blob_batch(
-                new_blobs.iter().map(Borrow::borrow),
-                &db,
-                &mut slot_meta_working_set,
-                &mut index_working_set,
-                &mut prev_inserted_blob_datas,
-                &mut write_batch,
-                *self.last_root.read().unwrap(),
-            )?;
-        }
-
-        // Handle chaining for the working set
-        handle_chaining(&db, &mut write_batch, &slot_meta_working_set)?;
-
-        let (should_signal, newly_completed_slots) = prepare_signals(
-            &slot_meta_working_set,
-            &self.completed_slots_senders,
-            &mut write_batch,
-        )?;
-
-        for ((slot, set_index), erasure_meta) in erasure_meta_working_set {
-            write_batch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
-        }
-
-        for (&slot, index) in index_working_set.iter() {
-            write_batch.put::<cf::Index>(slot, index)?;
-        }
-
-        batch_processor.write(write_batch)?;
-
-        if should_signal {
-            for signal in &self.new_blobs_signals {
-                let _ = signal.try_send(true);
-            }
-        }
-
-        send_signals(
-            &self.new_blobs_signals,
-            &self.completed_slots_senders,
-            should_signal,
-            newly_completed_slots,
-        )?;
-
-        Ok(())
-    }
-
-    // Fill 'buf' with num_blobs or most number of consecutive
-    // whole blobs that fit into buf.len()
-    //
-    // Return tuple of (number of blob read, total size of blobs read)
-    pub fn read_blobs_bytes(
-        &self,
-        start_index: u64,
-        num_blobs: u64,
-        buf: &mut [u8],
-        slot: u64,
-    ) -> Result<(u64, u64)> {
-        let mut db_iterator = self.db.cursor::<cf::Data>()?;
-
-        db_iterator.seek((slot, start_index));
-        let mut total_blobs = 0;
-        let mut total_current_size = 0;
-        for expected_index in start_index..start_index + num_blobs {
-            if !db_iterator.valid() {
-                if expected_index == start_index {
-                    return Err(Error::IO(io::Error::new(
-                        io::ErrorKind::NotFound,
-                        "Blob at start_index not found",
-                    )));
-                } else {
-                    break;
-                }
-            }
-
-            // Check key is the next sequential key based on
-            // blob index
-            let (_, index) = db_iterator.key().expect("Expected valid key");
-            if index != expected_index {
-                break;
-            }
-
-            // Get the blob data
-            let value = &db_iterator.value_bytes();
-
-            if value.is_none() {
-                break;
-            }
-
-            let value = value.as_ref().unwrap();
-            let blob_data_len = value.len();
-
-            if total_current_size + blob_data_len > buf.len() {
-                break;
-            }
-
-            buf[total_current_size..total_current_size + value.len()].copy_from_slice(value);
-            total_current_size += blob_data_len;
-            total_blobs += 1;
-
-            // TODO: Change this logic to support looking for data
-            // that spans multiple leader slots, once we support
-            // a window that knows about different leader slots
-            db_iterator.next();
-        }
-
-        Ok((total_blobs, total_current_size as u64))
-    }
-
     pub fn get_index(&self, slot: u64) -> Result<Option<Index>> {
         self.index_cf.get(slot)
-    }
-
-    pub fn get_coding_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
-        self.erasure_cf.get_bytes((slot, index))
-    }
-
-    pub fn delete_coding_blob(&self, slot: u64, blob_index: u64) -> Result<()> {
-        let mut batch_processor = self.batch_processor.write().unwrap();
-
-        let mut index = self.index_cf.get(slot)?.unwrap_or_else(|| Index::new(slot));
-
-        index.coding_mut().set_present(blob_index, false);
-
-        let mut batch = batch_processor.batch()?;
-
-        batch.delete::<cf::Coding>((slot, blob_index))?;
-        batch.put::<cf::Index>(slot, &index)?;
-
-        batch_processor.write(batch)?;
-        Ok(())
-    }
-
-    pub fn get_data_shred_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
-        self.get_data_shred(slot, index)
     }
 
     /// Manually update the meta for a slot.
@@ -1085,185 +804,9 @@ impl Blocktree {
         self.meta_cf.put_bytes(slot, bytes)
     }
 
-    /// For benchmarks, testing, and setup.
-    /// Does no metadata tracking. Use with care.
-    pub fn put_data_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
-        self.data_cf.put_bytes((slot, index), bytes)
-    }
-
-    /// For benchmarks, testing, and setup.
-    /// Does no metadata tracking. Use with care.
-    pub fn put_coding_blob_bytes_raw(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
-        self.erasure_cf.put_bytes((slot, index), bytes)
-    }
-
-    /// this function will insert coding blobs and also automatically track erasure-related
-    /// metadata. If recovery is available it will be done
-    pub fn put_coding_blob(&self, blob: &Blob) -> Result<()> {
-        self.put_many_coding_blobs(vec![blob])
-    }
-
-    /// this function will insert coding blobs and also automatically track erasure-related
-    /// metadata. If recovery is available it will be done
-    pub fn put_many_coding_blobs<I>(&self, blobs: I) -> Result<()>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<Blob>,
-    {
-        let mut batch_processor = self.batch_processor.write().unwrap();
-        let mut writebatch = batch_processor.batch()?;
-
-        let mut erasure_metas = HashMap::new();
-        let mut slot_meta_working_set = HashMap::new();
-        let mut index_working_set = HashMap::new();
-
-        let mut prev_inserted_coding = HashMap::new();
-        let mut prev_inserted_blob_datas = HashMap::new();
-
-        let mut erasure_config_opt = None;
-
-        for blob_item in blobs {
-            let blob = blob_item.borrow();
-            assert!(blob.is_coding());
-
-            match erasure_config_opt {
-                Some(config) => {
-                    if config != blob.erasure_config() {
-                        // ToDo: This is a potential slashing condition
-                        error!("Multiple erasure config for the same slot.");
-                    }
-                }
-                None => erasure_config_opt = Some(blob.erasure_config()),
-            }
-
-            let (blob_slot, blob_index, blob_size) =
-                (blob.slot(), blob.index(), blob.size() as usize);
-            let set_index = blob_index / blob.erasure_config().num_coding() as u64;
-
-            writebatch.put_bytes::<cf::Coding>(
-                (blob_slot, blob_index),
-                &blob.data[..BLOB_HEADER_SIZE + blob_size],
-            )?;
-
-            let index = index_working_set.entry(blob_slot).or_insert_with(|| {
-                self.index_cf
-                    .get(blob_slot)
-                    .unwrap()
-                    .unwrap_or_else(|| Index::new(blob_slot))
-            });
-
-            let erasure_meta = erasure_metas
-                .entry((blob_slot, set_index))
-                .or_insert_with(|| {
-                    self.erasure_meta_cf
-                        .get((blob_slot, set_index))
-                        .expect("Expect database get to succeed")
-                        .unwrap_or_else(|| {
-                            ErasureMeta::new(set_index, &erasure_config_opt.unwrap())
-                        })
-                });
-
-            // size should be the same for all coding blobs, else there's a bug
-            erasure_meta.set_size(blob_size);
-            index.coding_mut().set_present(blob_index, true);
-
-            // `or_insert_with` used to prevent stack overflow
-            prev_inserted_coding
-                .entry((blob_slot, blob_index))
-                .or_insert_with(|| blob.clone());
-        }
-
-        let recovered_data_opt = handle_recovery(
-            &self.db,
-            &erasure_metas,
-            &mut index_working_set,
-            &prev_inserted_blob_datas,
-            &mut prev_inserted_coding,
-            &mut writebatch,
-            &erasure_config_opt.unwrap_or_default(),
-        )?;
-
-        if let Some(recovered_data) = recovered_data_opt {
-            insert_data_blob_batch(
-                recovered_data.iter(),
-                &self.db,
-                &mut slot_meta_working_set,
-                &mut index_working_set,
-                &mut prev_inserted_blob_datas,
-                &mut writebatch,
-                *self.last_root.read().unwrap(),
-            )?;
-
-            // Handle chaining for the working set
-            handle_chaining(&self.db, &mut writebatch, &slot_meta_working_set)?;
-        }
-
-        let (should_signal, newly_completed_slots) = prepare_signals(
-            &slot_meta_working_set,
-            &self.completed_slots_senders,
-            &mut writebatch,
-        )?;
-
-        for ((slot, set_index), erasure_meta) in erasure_metas {
-            writebatch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
-        }
-
-        for (&slot, index) in index_working_set.iter() {
-            writebatch.put::<cf::Index>(slot, index)?;
-        }
-
-        batch_processor.write(writebatch)?;
-
-        send_signals(
-            &self.new_blobs_signals,
-            &self.completed_slots_senders,
-            should_signal,
-            newly_completed_slots,
-        )?;
-
-        Ok(())
-    }
-
-    pub fn put_shared_coding_blobs<I>(&self, shared_blobs: I) -> Result<()>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<SharedBlob>,
-    {
-        let blobs: Vec<_> = shared_blobs
-            .into_iter()
-            .map(move |s| s.borrow().clone())
-            .collect();
-
-        let locks: Vec<_> = blobs.iter().map(move |b| b.read().unwrap()).collect();
-
-        let blob_refs = locks.iter().map(|s| &**s);
-
-        self.put_many_coding_blobs(blob_refs)
-    }
-
-    pub fn put_many_coding_blob_bytes_raw(&self, coding_blobs: &[SharedBlob]) -> Result<()> {
-        for shared_coding_blob in coding_blobs {
-            let blob = shared_coding_blob.read().unwrap();
-            assert!(blob.is_coding());
-            let size = blob.size() + BLOB_HEADER_SIZE;
-            self.put_coding_blob_bytes_raw(blob.slot(), blob.index(), &blob.data[..size])?
-        }
-
-        Ok(())
-    }
-
-    pub fn get_data_shred_as_blob(&self, slot: u64, blob_index: u64) -> Result<Option<Blob>> {
-        let bytes = self.get_data_shred(slot, blob_index)?;
+    pub fn get_data_shred_as_blob(&self, slot: u64, shred_index: u64) -> Result<Option<Blob>> {
+        let bytes = self.get_data_shred(slot, shred_index)?;
         Ok(bytes.map(|bytes| Blob::new(&bytes)))
-    }
-
-    pub fn get_entries_bytes(
-        &self,
-        _start_index: u64,
-        _num_entries: u64,
-        _buf: &mut [u8],
-    ) -> io::Result<(u64, u64)> {
-        Err(io::Error::new(io::ErrorKind::Other, "TODO"))
     }
 
     // Given a start and end entry index, find all the missing
@@ -1285,10 +828,10 @@ impl Blocktree {
 
         let mut missing_indexes = vec![];
 
-        // Seek to the first blob with index >= start_index
+        // Seek to the first shred with index >= start_index
         db_iterator.seek((slot, start_index));
 
-        // The index of the first missing blob in the slot
+        // The index of the first missing shred in the slot
         let mut prev_index = start_index;
         'outer: loop {
             if !db_iterator.valid() {
@@ -1346,35 +889,15 @@ impl Blocktree {
         }
     }
 
-    /// Returns the entry vector for the slot starting with `blob_start_index`
+    /// Returns the entry vector for the slot starting with `shred_start_index`
     pub fn get_slot_entries(
         &self,
         slot: u64,
-        blob_start_index: u64,
+        shred_start_index: u64,
         _max_entries: Option<u64>,
     ) -> Result<Vec<Entry>> {
-        self.get_slot_entries_with_shred_count(slot, blob_start_index)
+        self.get_slot_entries_with_shred_count(slot, shred_start_index)
             .map(|x| x.0)
-    }
-
-    pub fn get_slot_entries_with_blob_count(
-        &self,
-        slot: u64,
-        blob_start_index: u64,
-        max_entries: Option<u64>,
-    ) -> Result<(Vec<Entry>, usize)> {
-        // Find the next consecutive block of blobs.
-        let consecutive_blobs = get_slot_consecutive_blobs(
-            slot,
-            &self.db,
-            &HashMap::new(),
-            blob_start_index,
-            max_entries,
-        )?;
-        let num = consecutive_blobs.len();
-        let blobs =
-            deserialize_blobs(&consecutive_blobs).map_err(BlocktreeError::InvalidBlobData)?;
-        Ok((blobs, num))
     }
 
     pub fn get_slot_entries_with_shred_count(
@@ -1382,7 +905,7 @@ impl Blocktree {
         slot: u64,
         start_index: u64,
     ) -> Result<(Vec<Entry>, usize)> {
-        // Find the next consecutive block of blobs.
+        // Find the next consecutive block of shreds.
         let serialized_shreds = get_slot_consecutive_shreds(slot, &self.db, start_index)?;
         trace!(
             "Found {:?} shreds for slot {:?}",
@@ -1466,11 +989,6 @@ impl Blocktree {
             .collect();
 
         Ok(result)
-    }
-
-    pub fn deserialize_blob_data(data: &[u8]) -> bincode::Result<Vec<Entry>> {
-        let entries = deserialize(data)?;
-        Ok(entries)
     }
 
     pub fn is_root(&self, slot: u64) -> bool {
@@ -1571,83 +1089,6 @@ impl Blocktree {
     }
 }
 
-fn insert_data_blob_batch<'a, I>(
-    new_blobs: I,
-    db: &Database,
-    slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
-    index_working_set: &mut HashMap<u64, Index>,
-    prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
-    write_batch: &mut WriteBatch,
-    last_root: u64,
-) -> Result<()>
-where
-    I: IntoIterator<Item = &'a Blob>,
-{
-    for blob in new_blobs.into_iter() {
-        let inserted = check_insert_data_blob(
-            blob,
-            db,
-            slot_meta_working_set,
-            prev_inserted_blob_datas,
-            write_batch,
-            last_root,
-        );
-
-        if inserted {
-            index_working_set
-                .get_mut(&blob.slot())
-                .expect("Index must be present for all data blobs")
-                .data_mut()
-                .set_present(blob.index(), true);
-        }
-    }
-
-    Ok(())
-}
-
-/// Insert a blob into ledger, updating the slot_meta if necessary
-fn insert_data_blob<'a>(
-    blob_to_insert: &'a Blob,
-    db: &Database,
-    prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
-    slot_meta: &mut SlotMeta,
-    write_batch: &mut WriteBatch,
-) -> Result<()> {
-    let blob_index = blob_to_insert.index();
-    let blob_slot = blob_to_insert.slot();
-    let blob_size = blob_to_insert.size();
-    let data_cf = db.column::<cf::Data>();
-
-    let check_data_cf = |slot, index| {
-        data_cf
-            .get_bytes((slot, index))
-            .map(|opt| opt.is_some())
-            .unwrap_or(false)
-    };
-
-    let new_consumed = compute_consume_index(
-        prev_inserted_blob_datas,
-        slot_meta,
-        blob_index,
-        blob_slot,
-        check_data_cf,
-    );
-
-    let serialized_blob_data = &blob_to_insert.data[..BLOB_HEADER_SIZE + blob_size];
-
-    // Commit step: commit all changes to the mutable structures at once, or none at all.
-    // We don't want only a subset of these changes going through.
-    write_batch.put_bytes::<cf::Data>((blob_slot, blob_index), serialized_blob_data)?;
-    prev_inserted_blob_datas.insert((blob_slot, blob_index), serialized_blob_data);
-    update_slot_meta(
-        blob_to_insert.is_last_in_slot(),
-        slot_meta,
-        blob_index,
-        new_consumed,
-    );
-    Ok(())
-}
-
 fn update_slot_meta(
     is_last_in_slot: bool,
     slot_meta: &mut SlotMeta,
@@ -1655,12 +1096,12 @@ fn update_slot_meta(
     new_consumed: u64,
 ) {
     // Index is zero-indexed, while the "received" height starts from 1,
-    // so received = index + 1 for the same blob.
+    // so received = index + 1 for the same shred.
     slot_meta.received = cmp::max(index + 1, slot_meta.received);
     slot_meta.consumed = new_consumed;
     slot_meta.last_index = {
         // If the last index in the slot hasn't been set before, then
-        // set it to this blob index
+        // set it to this shred index
         if slot_meta.last_index == std::u64::MAX {
             if is_last_in_slot {
                 index
@@ -1673,59 +1114,6 @@ fn update_slot_meta(
     };
 }
 
-fn compute_consume_index<F>(
-    prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
-    slot_meta: &mut SlotMeta,
-    index: u64,
-    slot: u64,
-    db_check: F,
-) -> u64
-where
-    F: Fn(u64, u64) -> bool,
-{
-    if slot_meta.consumed == index {
-        let mut current_index = index + 1;
-
-        while prev_inserted_blob_datas
-            .get(&(slot, current_index))
-            .is_some()
-            || db_check(slot, current_index)
-        {
-            current_index += 1;
-        }
-        current_index
-    } else {
-        slot_meta.consumed
-    }
-}
-
-/// Checks to see if the data blob passes integrity checks for insertion. Proceeds with
-/// insertion if it does.
-fn check_insert_data_blob<'a>(
-    blob: &'a Blob,
-    db: &Database,
-    slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
-    prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
-    write_batch: &mut WriteBatch,
-    last_root: u64,
-) -> bool {
-    let entry = get_slot_meta_entry(db, slot_meta_working_set, blob.slot(), blob.parent());
-
-    let slot_meta = &mut entry.0.borrow_mut();
-    if is_orphan(slot_meta) {
-        slot_meta.parent_slot = blob.parent();
-    }
-
-    // This slot is full, skip the bogus blob
-    // Check if this blob should be inserted
-    if !should_insert_blob(&slot_meta, db, &prev_inserted_blob_datas, blob, last_root) {
-        false
-    } else {
-        let _ = insert_data_blob(blob, db, prev_inserted_blob_datas, slot_meta, write_batch);
-        true
-    }
-}
-
 fn get_slot_meta_entry<'a>(
     db: &Database,
     slot_meta_working_set: &'a mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
@@ -1734,7 +1122,7 @@ fn get_slot_meta_entry<'a>(
 ) -> &'a mut (Rc<RefCell<SlotMeta>>, Option<SlotMeta>) {
     let meta_cf = db.column::<cf::SlotMeta>();
 
-    // Check if we've already inserted the slot metadata for this blob's slot
+    // Check if we've already inserted the slot metadata for this shred's slot
     slot_meta_working_set.entry(slot).or_insert_with(|| {
         // Store a 2-tuple of the metadata (working copy, backup copy)
         if let Some(mut meta) = meta_cf.get(slot).expect("Expect database get to succeed") {
@@ -1755,36 +1143,6 @@ fn get_slot_meta_entry<'a>(
             )
         }
     })
-}
-
-fn should_insert_blob(
-    slot: &SlotMeta,
-    db: &Database,
-    prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
-    blob: &Blob,
-    last_slot: u64,
-) -> bool {
-    let blob_index = blob.index();
-    let blob_slot = blob.slot();
-    let last_in_slot = blob.is_last_in_slot();
-    let data_cf = db.column::<cf::Data>();
-
-    let check_data_cf = |slot, index| {
-        data_cf
-            .get_bytes((slot, index))
-            .map(|opt| opt.is_some())
-            .unwrap_or(false)
-    };
-
-    !prev_inserted_blob_datas.contains_key(&(blob_slot, blob_index))
-        && should_insert(
-            slot,
-            blob_index,
-            blob_slot,
-            last_in_slot,
-            check_data_cf,
-            last_slot,
-        )
 }
 
 fn should_insert<F>(
@@ -1816,7 +1174,7 @@ where
         );
         return false;
     }
-    // Check that we do not receive a blob with "last_index" true, but index
+    // Check that we do not receive a shred with "last_index" true, but index
     // less than our current received
     if last_in_slot && index < slot_meta.received {
         datapoint_error!(
@@ -1841,7 +1199,7 @@ where
                 (
                     "error",
                     format!(
-                        "Received blob with parent_slot {} >= slot {}",
+                        "Received shred with parent_slot {} >= slot {}",
                         slot_meta.parent_slot, slot
                     ),
                     String
@@ -1850,12 +1208,12 @@ where
             return false;
         }
 
-        // Check that the blob is for a slot that is past the root
+        // Check that the shred is for a slot that is past the root
         if slot <= last_root {
             return false;
         }
 
-        // Ignore blobs that chain to slots before the last root
+        // Ignore shreds that chain to slots before the last root
         if slot_meta.parent_slot < last_root {
             return false;
         }
@@ -1869,13 +1227,13 @@ fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: u64, last_root: u64
 }
 
 fn send_signals(
-    new_blobs_signals: &[SyncSender<bool>],
+    new_shreds_signals: &[SyncSender<bool>],
     completed_slots_senders: &[SyncSender<Vec<u64>>],
     should_signal: bool,
     newly_completed_slots: Vec<u64>,
 ) -> Result<()> {
     if should_signal {
-        for signal in new_blobs_signals {
+        for signal in new_shreds_signals {
             let _ = signal.try_send(true);
         }
     }
@@ -1964,7 +1322,7 @@ fn find_slot_meta_in_db_else_create<'a>(
         Ok(insert_map.get(&slot).unwrap().clone())
     } else {
         // If this slot doesn't exist, make a orphan slot. This way we
-        // remember which slots chained to this one when we eventually get a real blob
+        // remember which slots chained to this one when we eventually get a real shred
         // for this slot
         insert_map.insert(
             slot,
@@ -1987,38 +1345,6 @@ fn find_slot_meta_in_cached_state<'a>(
     } else {
         Ok(None)
     }
-}
-
-/// Returns the next consumed index and the number of ticks in the new consumed
-/// range
-fn get_slot_consecutive_blobs<'a>(
-    slot: u64,
-    db: &Database,
-    prev_inserted_blob_datas: &HashMap<(u64, u64), &'a [u8]>,
-    mut current_index: u64,
-    max_blobs: Option<u64>,
-) -> Result<Vec<Cow<'a, [u8]>>> {
-    let mut blobs: Vec<Cow<[u8]>> = vec![];
-    let data_cf = db.column::<cf::Data>();
-
-    loop {
-        if Some(blobs.len() as u64) == max_blobs {
-            break;
-        }
-        // Try to find the next blob we're looking for in the prev_inserted_blob_datas
-        if let Some(prev_blob_data) = prev_inserted_blob_datas.get(&(slot, current_index)) {
-            blobs.push(Cow::Borrowed(*prev_blob_data));
-        } else if let Some(blob_data) = data_cf.get_bytes((slot, current_index))? {
-            // Try to find the next blob we're looking for in the database
-            blobs.push(Cow::Owned(blob_data));
-        } else {
-            break;
-        }
-
-        current_index += 1;
-    }
-
-    Ok(blobs)
 }
 
 fn get_slot_consecutive_shreds<'a>(
@@ -2191,326 +1517,6 @@ fn is_newly_completed_slot(slot_meta: &SlotMeta, backup_slot_meta: &Option<SlotM
             || slot_meta.consumed != backup_slot_meta.as_ref().unwrap().consumed)
 }
 
-fn handle_recovery(
-    db: &Database,
-    erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
-    index_working_set: &mut HashMap<u64, Index>,
-    prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
-    prev_inserted_coding: &mut HashMap<(u64, u64), Blob>,
-    writebatch: &mut WriteBatch,
-    erasure_config: &ErasureConfig,
-) -> Result<Option<Vec<Blob>>> {
-    use solana_sdk::signature::Signable;
-
-    let (mut recovered_data, mut recovered_coding) = (vec![], vec![]);
-
-    for (&(slot, _), erasure_meta) in erasure_metas.iter() {
-        let index = index_working_set.get_mut(&slot).expect("Index");
-
-        if let Some((mut data, coding)) = try_erasure_recover(
-            db,
-            &erasure_meta,
-            index,
-            slot,
-            &prev_inserted_blob_datas,
-            &prev_inserted_coding,
-            erasure_config,
-        )? {
-            for blob in data.iter() {
-                debug!(
-                    "[handle_recovery] recovered blob at ({}, {})",
-                    blob.slot(),
-                    blob.index()
-                );
-
-                let blob_index = blob.index();
-                let blob_slot = blob.slot();
-
-                assert_eq!(blob_slot, slot);
-
-                assert!(
-                    blob_index >= erasure_meta.start_index()
-                        && blob_index < erasure_meta.end_indexes().0
-                );
-            }
-
-            recovered_data.append(&mut data);
-
-            for coding_blob in coding {
-                if !index.coding().is_present(coding_blob.index()) {
-                    recovered_coding.push(coding_blob);
-                }
-            }
-        }
-    }
-
-    if !recovered_coding.is_empty() {
-        debug!(
-            "[handle_recovery] recovered {} coding blobs",
-            recovered_coding.len()
-        );
-
-        for coding_blob in recovered_coding {
-            let (blob_slot, blob_index) = (coding_blob.slot(), coding_blob.index());
-            let index = index_working_set.get_mut(&blob_slot).expect("Index");
-
-            index.coding_mut().set_present(coding_blob.index(), true);
-
-            writebatch.put_bytes::<cf::Coding>(
-                (blob_slot, blob_index),
-                &coding_blob.data[..coding_blob.data_size() as usize],
-            )?;
-
-            prev_inserted_coding.insert((blob_slot, blob_index), coding_blob);
-        }
-    }
-
-    if !recovered_data.is_empty() {
-        let mut new_data = vec![];
-
-        for blob in recovered_data {
-            let index = index_working_set
-                .get_mut(&blob.slot())
-                .expect("Index must have been present if blob was recovered");
-
-            let (blob_slot, blob_index) = (blob.slot(), blob.index());
-
-            if !index.data().is_present(blob_index) {
-                if blob.verify() {
-                    trace!(
-                        "[handle_recovery] successful verification at slot = {}, index={}",
-                        blob_slot,
-                        blob_index
-                    );
-
-                    new_data.push(blob);
-                } else {
-                    warn!(
-                        "[handle_recovery] failed verification at slot={}, index={}, discarding",
-                        blob.slot(),
-                        blob.index()
-                    );
-                }
-            }
-        }
-
-        debug!("[handle_recovery] recovered {} data blobs", new_data.len());
-
-        Ok(Some(new_data))
-    } else {
-        Ok(None)
-    }
-}
-
-/// Attempts recovery using erasure coding
-fn try_erasure_recover(
-    db: &Database,
-    erasure_meta: &ErasureMeta,
-    index: &Index,
-    slot: u64,
-    prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
-    prev_inserted_coding: &HashMap<(u64, u64), Blob>,
-    erasure_config: &ErasureConfig,
-) -> Result<Option<(Vec<Blob>, Vec<Blob>)>> {
-    let set_index = erasure_meta.set_index;
-    let start_index = erasure_meta.start_index();
-    let (data_end_index, coding_end_idx) = erasure_meta.end_indexes();
-
-    let submit_metrics = |attempted: bool, status: String| {
-        datapoint_info!(
-            "blocktree-erasure",
-            ("slot", slot as i64, i64),
-            ("start_index", start_index as i64, i64),
-            ("end_index", data_end_index as i64, i64),
-            ("recovery_attempted", attempted, bool),
-            ("recovery_status", status, String),
-        );
-    };
-
-    let blobs = match erasure_meta.status(index) {
-        ErasureMetaStatus::CanRecover => {
-            let session = Session::new_from_config(erasure_config).unwrap();
-            let erasure_result = recover(
-                db,
-                &session,
-                slot,
-                erasure_meta,
-                index,
-                prev_inserted_blob_datas,
-                prev_inserted_coding,
-                erasure_config,
-            );
-
-            match erasure_result {
-                Ok((data, coding)) => {
-                    let recovered = data.len() + coding.len();
-
-                    assert_eq!(
-                        erasure_config.num_data() + erasure_config.num_coding(),
-                        recovered
-                            + index.data().present_in_bounds(start_index..data_end_index)
-                            + index
-                                .coding()
-                                .present_in_bounds(start_index..coding_end_idx),
-                        "Recovery should always complete a set"
-                    );
-
-                    submit_metrics(true, "complete".into());
-
-                    debug!(
-                        "[try_erasure] slot: {}, set_index: {}, recovered {} blobs",
-                        slot, set_index, recovered
-                    );
-
-                    Some((data, coding))
-                }
-                Err(Error::ErasureError(e)) => {
-                    submit_metrics(true, format!("error: {}", e));
-
-                    error!(
-                        "[try_erasure] slot: {}, set_index: {}, recovery failed: cause: {}",
-                        slot, erasure_meta.set_index, e
-                    );
-
-                    None
-                }
-
-                Err(e) => return Err(e),
-            }
-        }
-        ErasureMetaStatus::StillNeed(needed) => {
-            submit_metrics(false, format!("still need: {}", needed));
-
-            debug!(
-                "[try_erasure] slot: {}, set_index: {}, still need {} blobs",
-                slot, set_index, needed
-            );
-
-            None
-        }
-        ErasureMetaStatus::DataFull => {
-            submit_metrics(false, "complete".into());
-
-            trace!(
-                "[try_erasure] slot: {}, set_index: {}, set full",
-                slot,
-                set_index,
-            );
-
-            None
-        }
-    };
-
-    Ok(blobs)
-}
-
-fn recover(
-    db: &Database,
-    session: &Session,
-    slot: u64,
-    erasure_meta: &ErasureMeta,
-    index: &Index,
-    prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
-    prev_inserted_coding: &HashMap<(u64, u64), Blob>,
-    erasure_config: &ErasureConfig,
-) -> Result<(Vec<Blob>, Vec<Blob>)> {
-    let start_idx = erasure_meta.start_index();
-    let size = erasure_meta.size();
-    let data_cf = db.column::<cf::Data>();
-    let erasure_cf = db.column::<cf::Coding>();
-
-    debug!(
-        "[recover] Attempting recovery: slot = {}, start_idx = {}, size = {}, erasure_meta = {:?}",
-        slot, start_idx, size, erasure_meta
-    );
-
-    let (data_end_idx, coding_end_idx) = erasure_meta.end_indexes();
-
-    let erasure_set_size = erasure_config.num_data() + erasure_config.num_coding();
-    let present = &mut vec![true; erasure_set_size];
-    let mut blobs = Vec::with_capacity(erasure_set_size);
-
-    for i in start_idx..data_end_idx {
-        if index.data().is_present(i) {
-            trace!("[recover] present data blob at {}", i);
-
-            let mut blob_bytes = match prev_inserted_blob_datas.get(&(slot, i)) {
-                Some(bytes) => bytes.to_vec(),
-                None => data_cf
-                    .get_bytes((slot, i))?
-                    .expect("erasure_meta must have no false positives"),
-            };
-
-            // If data is too short, extend it with zeroes
-            blob_bytes.resize(size, 0u8);
-
-            blobs.push(blob_bytes);
-        } else {
-            trace!("[recover] absent data blob at {}", i);
-
-            let set_relative_idx = (i - start_idx) as usize;
-            blobs.push(vec![0u8; size]);
-            present[set_relative_idx] = false;
-        }
-    }
-
-    for i in start_idx..coding_end_idx {
-        if index.coding().is_present(i) {
-            trace!("[recover] present coding blob at {}", i);
-            let blob = match prev_inserted_coding.get(&(slot, i)) {
-                Some(blob) => (*blob).clone(),
-                _ => {
-                    let bytes = erasure_cf
-                        .get_bytes((slot, i))?
-                        .expect("ErasureMeta must have no false positives");
-
-                    Blob::new(&bytes)
-                }
-            };
-
-            blobs.push(blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size].to_vec());
-        } else {
-            trace!("[recover] absent coding blob at {}", i);
-            let set_relative_idx = (i - start_idx) as usize + erasure_config.num_data();
-            blobs.push(vec![0; size]);
-            present[set_relative_idx] = false;
-        }
-    }
-
-    let (recovered_data, recovered_coding) =
-        session.reconstruct_blobs(&mut blobs, present, size, start_idx, slot)?;
-
-    debug!(
-        "[recover] reconstruction OK slot: {}, indexes: [{},{})",
-        slot, start_idx, data_end_idx
-    );
-
-    Ok((recovered_data, recovered_coding))
-}
-
-fn deserialize_blobs<I>(blob_datas: &[I]) -> bincode::Result<Vec<Entry>>
-where
-    I: Borrow<[u8]>,
-{
-    let blob_results = blob_datas.iter().map(|blob_data| {
-        let serialized_entries_data = &blob_data.borrow()[BLOB_HEADER_SIZE..];
-        Blocktree::deserialize_blob_data(serialized_entries_data)
-    });
-
-    let mut entries = vec![];
-
-    // We want to early exit in this loop to prevent needless work if any blob is corrupted.
-    // However, there's no way to early exit from a flat_map, so we're flattening manually
-    // instead of calling map().flatten() to avoid allocating a vector for the map results above,
-    // and then allocating another vector for flattening the results
-    for r in blob_results {
-        let blob_entries = r?;
-        entries.extend(blob_entries);
-    }
-
-    Ok(entries)
-}
-
 fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -> bool {
     // We should signal that there are updates if we extended the chain of consecutive blocks starting
     // from block 0, which is true iff:
@@ -2606,21 +1612,47 @@ pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (PathB
     (ledger_path, blockhash)
 }
 
+pub fn entries_to_test_shreds(
+    entries: Vec<Entry>,
+    slot: u64,
+    parent_slot: u64,
+    is_full_slot: bool,
+) -> Vec<Shred> {
+    let mut shredder = Shredder::new(
+        slot,
+        Some(parent_slot),
+        0.0,
+        &Arc::new(Keypair::new()),
+        0 as u32,
+    )
+    .expect("Failed to create entry shredder");
+
+    bincode::serialize_into(&mut shredder, &entries)
+        .expect("Expect to write all entries to shreds");
+    if is_full_slot {
+        shredder.finalize_slot();
+    } else {
+        shredder.finalize_fec_block();
+    }
+
+    let shreds: Vec<Shred> = shredder
+        .shreds
+        .iter()
+        .map(|s| bincode::deserialize(s).unwrap())
+        .collect();
+
+    shreds
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::entry::{create_ticks, make_tiny_test_entries, Entry, EntrySlice};
-    use crate::erasure::{CodingGenerator, ErasureConfig};
-    use crate::packet;
+    use crate::entry::{create_ticks, make_tiny_test_entries, Entry};
+    use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
-    use rand::Rng;
     use solana_sdk::hash::Hash;
     use solana_sdk::packet::PACKET_DATA_SIZE;
-    use solana_sdk::pubkey::Pubkey;
-    use std::cmp::min;
-    use std::collections::HashSet;
-    use std::iter::once;
     use std::iter::FromIterator;
     use std::time::Duration;
 
@@ -2639,7 +1671,7 @@ pub mod tests {
             for i in 0..num_slots {
                 let mut new_ticks = create_ticks(ticks_per_slot, Hash::default());
                 let num_shreds = ledger
-                    .write_entries_using_shreds(
+                    .write_entries(
                         i,
                         0,
                         0,
@@ -2691,9 +1723,9 @@ pub mod tests {
 
                         let meta = ledger.meta(num_slots).unwrap().unwrap();
                         assert_eq!(meta.consumed, 0);
-                        // received blob was ticks_per_slot - 2, so received should be ticks_per_slot - 2 + 1
+                        // received shred was ticks_per_slot - 2, so received should be ticks_per_slot - 2 + 1
                         assert_eq!(meta.received, ticks_per_slot - 1);
-                        // last blob index ticks_per_slot - 2 because that's the blob that made tick_height == ticks_per_slot
+                        // last shred index ticks_per_slot - 2 because that's the shred that made tick_height == ticks_per_slot
                         // for the slot
                         assert_eq!(meta.last_index, ticks_per_slot - 2);
                         assert_eq!(meta.parent_slot, num_slots - 1);
@@ -2770,64 +1802,60 @@ pub mod tests {
     }
 
     #[test]
-    fn test_read_blobs_bytes() {
-        let shared_blobs = make_tiny_test_entries(10).to_single_entry_shared_blobs();
+    fn test_read_shred_bytes() {
         let slot = 0;
-        packet::index_blobs(&shared_blobs, &Pubkey::new_rand(), 0, slot, 0);
+        let (shreds, _) = make_slot_entries(slot, 0, 100);
+        let num_shreds = shreds.len() as u64;
+        let shred_bufs: Vec<_> = shreds
+            .iter()
+            .map(|shred| bincode::serialize(shred).unwrap())
+            .collect();
 
-        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
-        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-
-        let ledger_path = get_tmp_ledger_path("test_read_blobs_bytes");
+        let ledger_path = get_tmp_ledger_path("test_read_shreds_bytes");
         let ledger = Blocktree::open(&ledger_path).unwrap();
-        ledger.write_blobs(blobs.clone()).unwrap();
+        ledger.insert_shreds(shreds).unwrap();
 
-        let mut buf = [0; 1024];
-        let (num_blobs, bytes) = ledger.read_blobs_bytes(0, 1, &mut buf, slot).unwrap();
-        let bytes = bytes as usize;
-        assert_eq!(num_blobs, 1);
-        {
-            let blob_data = &buf[..bytes];
-            assert_eq!(blob_data, &blobs[0].data[..bytes]);
-        }
+        let mut buf = [0; 4096];
+        let (_, bytes) = ledger.get_data_shreds(slot, 0, 1, &mut buf).unwrap();
+        assert_eq!(buf[..bytes], shred_bufs[0][..bytes]);
 
-        let (num_blobs, bytes2) = ledger.read_blobs_bytes(0, 2, &mut buf, slot).unwrap();
-        let bytes2 = bytes2 as usize;
-        assert_eq!(num_blobs, 2);
+        let (last_index, bytes2) = ledger.get_data_shreds(slot, 0, 2, &mut buf).unwrap();
+        assert_eq!(last_index, 1);
         assert!(bytes2 > bytes);
         {
-            let blob_data_1 = &buf[..bytes];
-            assert_eq!(blob_data_1, &blobs[0].data[..bytes]);
+            let shred_data_1 = &buf[..bytes];
+            assert_eq!(shred_data_1, &shred_bufs[0][..bytes]);
 
-            let blob_data_2 = &buf[bytes..bytes2];
-            assert_eq!(blob_data_2, &blobs[1].data[..bytes2 - bytes]);
+            let shred_data_2 = &buf[bytes..bytes2];
+            assert_eq!(shred_data_2, &shred_bufs[1][..bytes2 - bytes]);
         }
 
-        // buf size part-way into blob[1], should just return blob[0]
+        // buf size part-way into shred[1], should just return shred[0]
         let mut buf = vec![0; bytes + 1];
-        let (num_blobs, bytes3) = ledger.read_blobs_bytes(0, 2, &mut buf, slot).unwrap();
-        assert_eq!(num_blobs, 1);
-        let bytes3 = bytes3 as usize;
+        let (last_index, bytes3) = ledger.get_data_shreds(slot, 0, 2, &mut buf).unwrap();
+        assert_eq!(last_index, 0);
         assert_eq!(bytes3, bytes);
 
         let mut buf = vec![0; bytes2 - 1];
-        let (num_blobs, bytes4) = ledger.read_blobs_bytes(0, 2, &mut buf, slot).unwrap();
-        assert_eq!(num_blobs, 1);
-        let bytes4 = bytes4 as usize;
+        let (last_index, bytes4) = ledger.get_data_shreds(slot, 0, 2, &mut buf).unwrap();
+        assert_eq!(last_index, 0);
         assert_eq!(bytes4, bytes);
 
         let mut buf = vec![0; bytes * 2];
-        let (num_blobs, bytes6) = ledger.read_blobs_bytes(9, 1, &mut buf, slot).unwrap();
-        assert_eq!(num_blobs, 1);
-        let bytes6 = bytes6 as usize;
+        let (last_index, bytes6) = ledger.get_data_shreds(slot, 9, 10, &mut buf).unwrap();
+        assert_eq!(last_index, 9);
 
         {
-            let blob_data = &buf[..bytes6];
-            assert_eq!(blob_data, &blobs[9].data[..bytes6]);
+            let shred_data = &buf[..bytes6];
+            assert_eq!(shred_data, &shred_bufs[9][..bytes6]);
         }
 
         // Read out of range
-        assert!(ledger.read_blobs_bytes(20, 2, &mut buf, slot).is_err());
+        let (last_index, bytes6) = ledger
+            .get_data_shreds(slot, num_shreds, num_shreds + 2, &mut buf)
+            .unwrap();
+        assert_eq!(last_index, 0);
+        assert_eq!(bytes6, 0);
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
@@ -2839,14 +1867,14 @@ pub mod tests {
         let num_entries = 5;
         assert!(num_entries > 1);
 
-        let (mut shreds, entries) = make_slot_entries_using_shreds(0, 0, num_entries);
+        let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_basic");
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
-        // Insert last blob, we're missing the other blobs, so no consecutive
-        // blobs starting from slot 0, index 0 should exist.
+        // Insert last shred, we're missing the other shreds, so no consecutive
+        // shreds starting from slot 0, index 0 should exist.
         let last_shred = shreds.pop().unwrap();
         ledger.insert_shreds(vec![last_shred]).unwrap();
         assert!(ledger.get_slot_entries(0, 0, None).unwrap().is_empty());
@@ -2857,7 +1885,7 @@ pub mod tests {
             .expect("Expected new metadata object to be created");
         assert!(meta.consumed == 0 && meta.received == num_shreds);
 
-        // Insert the other blobs, check for consecutive returned entries
+        // Insert the other shreds, check for consecutive returned entries
         ledger.insert_shreds(shreds).unwrap();
         let result = ledger.get_slot_entries(0, 0, None).unwrap();
 
@@ -2882,13 +1910,13 @@ pub mod tests {
     #[test]
     fn test_insert_data_shreds_reverse() {
         let num_entries = 10;
-        let (mut shreds, entries) = make_slot_entries_using_shreds(0, 0, num_entries);
+        let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_reverse");
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
-        // Insert blobs in reverse, check for consecutive returned blobs
+        // Insert shreds in reverse, check for consecutive returned shreds
         for i in (0..num_shreds).rev() {
             let shred = shreds.pop().unwrap();
             ledger.insert_shreds(vec![shred]).unwrap();
@@ -2916,48 +1944,50 @@ pub mod tests {
 
     #[test]
     fn test_insert_slots() {
-        test_insert_data_shreds_slots("test_insert_data_blobs_slots_single", false);
-        test_insert_data_shreds_slots("test_insert_data_blobs_slots_bulk", true);
+        test_insert_data_shreds_slots("test_insert_data_shreds_slots_single", false);
+        test_insert_data_shreds_slots("test_insert_data_shreds_slots_bulk", true);
     }
 
-    #[test]
-    pub fn test_iteration_order() {
-        let slot = 0;
-        let blocktree_path = get_tmp_ledger_path("test_iteration_order");
-        {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+    /*
+        #[test]
+        pub fn test_iteration_order() {
+            let slot = 0;
+            let blocktree_path = get_tmp_ledger_path("test_iteration_order");
+            {
+                let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Write entries
-            let num_entries = 8;
-            let entries = make_tiny_test_entries(num_entries);
-            let mut blobs = entries.to_single_entry_blobs();
+                // Write entries
+                let num_entries = 8;
+                let entries = make_tiny_test_entries(num_entries);
+                let mut shreds = entries.to_single_entry_shreds();
 
-            for (i, b) in blobs.iter_mut().enumerate() {
-                b.set_index(1 << (i * 8));
-                b.set_slot(0);
+                for (i, b) in shreds.iter_mut().enumerate() {
+                    b.set_index(1 << (i * 8));
+                    b.set_slot(0);
+                }
+
+                blocktree
+                    .write_shreds(&shreds)
+                    .expect("Expected successful write of shreds");
+
+                let mut db_iterator = blocktree
+                    .db
+                    .cursor::<cf::Data>()
+                    .expect("Expected to be able to open database iterator");
+
+                db_iterator.seek((slot, 1));
+
+                // Iterate through ledger
+                for i in 0..num_entries {
+                    assert!(db_iterator.valid());
+                    let (_, current_index) = db_iterator.key().expect("Expected a valid key");
+                    assert_eq!(current_index, (1 as u64) << (i * 8));
+                    db_iterator.next();
+                }
             }
-
-            blocktree
-                .write_blobs(&blobs)
-                .expect("Expected successful write of blobs");
-
-            let mut db_iterator = blocktree
-                .db
-                .cursor::<cf::Data>()
-                .expect("Expected to be able to open database iterator");
-
-            db_iterator.seek((slot, 1));
-
-            // Iterate through ledger
-            for i in 0..num_entries {
-                assert!(db_iterator.valid());
-                let (_, current_index) = db_iterator.key().expect("Expected a valid key");
-                assert_eq!(current_index, (1 as u64) << (i * 8));
-                db_iterator.next();
-            }
+            Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
-    }
+    */
 
     #[test]
     pub fn test_get_slot_entries1() {
@@ -2968,7 +1998,7 @@ pub mod tests {
             let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false);
             blocktree
                 .insert_shreds(shreds)
-                .expect("Expected successful write of blobs");
+                .expect("Expected successful write of shreds");
 
             let mut shreds1 = entries_to_test_shreds(entries[4..].to_vec(), 1, 0, false);
             for (i, b) in shreds1.iter_mut().enumerate() {
@@ -2976,7 +2006,7 @@ pub mod tests {
             }
             blocktree
                 .insert_shreds(shreds1)
-                .expect("Expected successful write of blobs");
+                .expect("Expected successful write of shreds");
 
             assert_eq!(
                 blocktree.get_slot_entries(1, 0, None).unwrap()[2..4],
@@ -2987,7 +2017,7 @@ pub mod tests {
     }
 
     // This test seems to be unnecessary with introduction of data shreds. There are no
-    // guarantees that a particular blob index contains a complete entry
+    // guarantees that a particular shred index contains a complete entry
     #[test]
     #[ignore]
     pub fn test_get_slot_entries2() {
@@ -3024,7 +2054,7 @@ pub mod tests {
 
     #[test]
     pub fn test_get_slot_entries3() {
-        // Test inserting/fetching blobs which contain multiple entries per blob
+        // Test inserting/fetching shreds which contain multiple entries per shred
         let blocktree_path = get_tmp_ledger_path("test_get_slot_entries3");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -3052,7 +2082,7 @@ pub mod tests {
 
     #[test]
     pub fn test_insert_data_shreds_consecutive() {
-        let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
+        let blocktree_path = get_tmp_ledger_path("test_insert_data_shreds_consecutive");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             for i in 0..4 {
@@ -3061,7 +2091,7 @@ pub mod tests {
                 // Write entries
                 let num_entries = 21 as u64 * (i + 1);
                 let (mut shreds, original_entries) =
-                    make_slot_entries_using_shreds(slot, parent_slot, num_entries);
+                    make_slot_entries(slot, parent_slot, num_entries);
 
                 let num_shreds = shreds.len() as u64;
                 let mut odd_shreds = vec![];
@@ -3109,14 +2139,14 @@ pub mod tests {
     #[test]
     pub fn test_insert_data_shreds_duplicate() {
         // Create RocksDb ledger
-        let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_duplicate");
+        let blocktree_path = get_tmp_ledger_path("test_insert_data_shreds_duplicate");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Make duplicate entries and blobs
+            // Make duplicate entries and shreds
             let num_unique_entries = 10;
             let (mut original_shreds, original_entries) =
-                make_slot_entries_using_shreds(0, 0, num_unique_entries);
+                make_slot_entries(0, 0, num_unique_entries);
 
             // Discard first shred
             original_shreds.remove(0);
@@ -3144,79 +2174,75 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_new_blobs_signal() {
+    pub fn test_new_shreds_signal() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_new_blobs_signal");
+        let ledger_path = get_tmp_ledger_path("test_new_shreds_signal");
         let (ledger, recvr, _) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
-        let entries_per_slot = 10;
+        let entries_per_slot = 50;
         // Create entries for slot 0
-        let (blobs, _) = make_slot_entries(0, 0, entries_per_slot);
+        let (mut shreds, _) = make_slot_entries(0, 0, entries_per_slot);
+        let shreds_per_slot = shreds.len() as u64;
 
-        // Insert second blob, but we're missing the first blob, so no consecutive
-        // blobs starting from slot 0, index 0 should exist.
-        ledger.insert_data_blobs(once(&blobs[1])).unwrap();
+        // Insert second shred, but we're missing the first shred, so no consecutive
+        // shreds starting from slot 0, index 0 should exist.
+        ledger.insert_shreds(vec![shreds.remove(1)]).unwrap();
         let timer = Duration::new(1, 0);
         assert!(recvr.recv_timeout(timer).is_err());
-        // Insert first blob, now we've made a consecutive block
-        ledger.insert_data_blobs(once(&blobs[0])).unwrap();
+        // Insert first shred, now we've made a consecutive block
+        ledger.insert_shreds(vec![shreds.remove(0)]).unwrap();
         // Wait to get notified of update, should only be one update
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
         // Insert the rest of the ticks
-        ledger
-            .insert_data_blobs(&blobs[1..entries_per_slot as usize])
-            .unwrap();
+        ledger.insert_shreds(shreds).unwrap();
         // Wait to get notified of update, should only be one update
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
 
         // Create some other slots, and send batches of ticks for each slot such that each slot
-        // is missing the tick at blob index == slot index - 1. Thus, no consecutive blocks
+        // is missing the tick at shred index == slot index - 1. Thus, no consecutive blocks
         // will be formed
-        let num_slots = entries_per_slot;
-        let mut blobs: Vec<Blob> = vec![];
-        let mut missing_blobs = vec![];
+        let num_slots = shreds_per_slot;
+        let mut shreds: Vec<Shred> = vec![];
+        let mut missing_shreds = vec![];
         for slot in 1..num_slots + 1 {
-            let (mut slot_blobs, _) = make_slot_entries(slot, slot - 1, entries_per_slot);
-            let missing_blob = slot_blobs.remove(slot as usize - 1);
-            blobs.extend(slot_blobs);
-            missing_blobs.push(missing_blob);
+            let (mut slot_shreds, _) = make_slot_entries(slot, slot - 1, entries_per_slot);
+            let missing_shred = slot_shreds.remove(slot as usize - 1);
+            shreds.extend(slot_shreds);
+            missing_shreds.push(missing_shred);
         }
 
         // Should be no updates, since no new chains from block 0 were formed
-        ledger.insert_data_blobs(blobs.iter()).unwrap();
+        ledger.insert_shreds(shreds).unwrap();
         assert!(recvr.recv_timeout(timer).is_err());
 
-        // Insert a blob for each slot that doesn't make a consecutive block, we
+        // Insert a shred for each slot that doesn't make a consecutive block, we
         // should get no updates
-        let blobs: Vec<_> = (1..num_slots + 1)
+        let shreds: Vec<_> = (1..num_slots + 1)
             .flat_map(|slot| {
-                let (mut blob, _) = make_slot_entries(slot, slot - 1, 1);
-                blob[0].set_index(2 * num_slots as u64);
-                blob
+                let (mut shred, _) = make_slot_entries(slot, slot - 1, 1);
+                shred[0].set_index(2 * num_slots as u32);
+                shred
             })
             .collect();
 
-        ledger.insert_data_blobs(blobs.iter()).unwrap();
+        ledger.insert_shreds(shreds).unwrap();
         assert!(recvr.recv_timeout(timer).is_err());
 
         // For slots 1..num_slots/2, fill in the holes in one batch insertion,
         // so we should only get one signal
-        ledger
-            .insert_data_blobs(&missing_blobs[..(num_slots / 2) as usize])
-            .unwrap();
+        let missing_shreds2 = missing_shreds
+            .drain((num_slots / 2) as usize..)
+            .collect_vec();
+        ledger.insert_shreds(missing_shreds).unwrap();
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
 
         // Fill in the holes for each of the remaining slots, we should get a single update
         // for each
-        for missing_blob in &missing_blobs[(num_slots / 2) as usize..] {
-            ledger
-                .insert_data_blobs(vec![missing_blob.clone()])
-                .unwrap();
-        }
+        ledger.insert_shreds(missing_shreds2).unwrap();
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
@@ -3224,90 +2250,87 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_completed_blobs_signal() {
+    pub fn test_completed_shreds_signal() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal");
+        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal");
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
 
-        // Create blobs for slot 0
-        let (blobs, _) = make_slot_entries(0, 0, entries_per_slot);
+        // Create shreds for slot 0
+        let (mut shreds, _) = make_slot_entries(0, 0, entries_per_slot);
 
-        // Insert all but the first blob in the slot, should not be considered complete
-        ledger
-            .insert_data_blobs(&blobs[1..entries_per_slot as usize])
-            .unwrap();
+        let shred0 = shreds.remove(0);
+        // Insert all but the first shred in the slot, should not be considered complete
+        ledger.insert_shreds(shreds).unwrap();
         assert!(recvr.try_recv().is_err());
 
-        // Insert first blob, slot should now be considered complete
-        ledger.insert_data_blobs(once(&blobs[0])).unwrap();
+        // Insert first shred, slot should now be considered complete
+        ledger.insert_shreds(vec![shred0]).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![0]);
     }
 
     #[test]
-    pub fn test_completed_blobs_signal_orphans() {
+    pub fn test_completed_shreds_signal_orphans() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal_orphans");
+        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal_orphans");
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
         let slots = vec![2, 5, 10];
-        let all_blobs = make_chaining_slot_entries(&slots[..], entries_per_slot);
+        let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot);
 
-        // Get the blobs for slot 5 chaining to slot 2
-        let (ref orphan_blobs, _) = all_blobs[1];
+        // Get the shreds for slot 10, chaining to slot 5
+        let (mut orphan_child, _) = all_shreds.remove(2);
 
-        // Get the blobs for slot 10, chaining to slot 5
-        let (ref orphan_child, _) = all_blobs[2];
+        // Get the shreds for slot 5 chaining to slot 2
+        let (mut orphan_shreds, _) = all_shreds.remove(1);
 
-        // Insert all but the first blob in the slot, should not be considered complete
-        ledger
-            .insert_data_blobs(&orphan_child[1..entries_per_slot as usize])
-            .unwrap();
+        // Insert all but the first shred in the slot, should not be considered complete
+        let orphan_child0 = orphan_child.remove(0);
+        ledger.insert_shreds(orphan_child).unwrap();
         assert!(recvr.try_recv().is_err());
 
-        // Insert first blob, slot should now be considered complete
-        ledger.insert_data_blobs(once(&orphan_child[0])).unwrap();
+        // Insert first shred, slot should now be considered complete
+        ledger.insert_shreds(vec![orphan_child0]).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[2]]);
 
-        // Insert the blobs for the orphan_slot
-        ledger
-            .insert_data_blobs(&orphan_blobs[1..entries_per_slot as usize])
-            .unwrap();
+        // Insert the shreds for the orphan_slot
+        let orphan_shred0 = orphan_shreds.remove(0);
+        ledger.insert_shreds(orphan_shreds).unwrap();
         assert!(recvr.try_recv().is_err());
 
-        // Insert first blob, slot should now be considered complete
-        ledger.insert_data_blobs(once(&orphan_blobs[0])).unwrap();
+        // Insert first shred, slot should now be considered complete
+        ledger.insert_shreds(vec![orphan_shred0]).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[1]]);
     }
 
     #[test]
-    pub fn test_completed_blobs_signal_many() {
+    pub fn test_completed_shreds_signal_many() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal_many");
+        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal_many");
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
         let mut slots = vec![2, 5, 10];
-        let all_blobs = make_chaining_slot_entries(&slots[..], entries_per_slot);
+        let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot);
         let disconnected_slot = 4;
 
-        let (ref blobs0, _) = all_blobs[0];
-        let (ref blobs1, _) = all_blobs[1];
-        let (ref blobs2, _) = all_blobs[2];
-        let (ref blobs3, _) = make_slot_entries(disconnected_slot, 1, entries_per_slot);
+        let (shreds0, _) = all_shreds.remove(0);
+        let (shreds1, _) = all_shreds.remove(0);
+        let (shreds2, _) = all_shreds.remove(0);
+        let (shreds3, _) = make_slot_entries(disconnected_slot, 1, entries_per_slot);
 
-        let mut all_blobs: Vec<_> = vec![blobs0, blobs1, blobs2, blobs3]
+        let mut all_shreds: Vec<_> = vec![shreds0, shreds1, shreds2, shreds3]
             .into_iter()
             .flatten()
             .collect();
 
-        all_blobs.shuffle(&mut thread_rng());
-        ledger.insert_data_blobs(all_blobs).unwrap();
+        all_shreds.shuffle(&mut thread_rng());
+        ledger.insert_shreds(all_shreds).unwrap();
         let mut result = recvr.try_recv().unwrap();
         result.sort();
         slots.push(disconnected_slot);
@@ -3323,13 +2346,15 @@ pub mod tests {
             let num_slots = 3;
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Construct the blobs
-            let (blobs, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+            // Construct the shreds
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+            let shreds_per_slot = shreds.len() / num_slots as usize;
 
             // 1) Write to the first slot
-            blocktree
-                .write_blobs(&blobs[entries_per_slot as usize..2 * entries_per_slot as usize])
-                .unwrap();
+            let shreds1 = shreds
+                .drain(shreds_per_slot..2 * shreds_per_slot)
+                .collect_vec();
+            blocktree.insert_shreds(shreds1).unwrap();
             let s1 = blocktree.meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
@@ -3338,9 +2363,10 @@ pub mod tests {
             assert_eq!(s1.last_index, entries_per_slot - 1);
 
             // 2) Write to the second slot
-            blocktree
-                .write_blobs(&blobs[2 * entries_per_slot as usize..3 * entries_per_slot as usize])
-                .unwrap();
+            let shreds2 = shreds
+                .drain(shreds_per_slot..2 * shreds_per_slot)
+                .collect_vec();
+            blocktree.insert_shreds(shreds2).unwrap();
             let s2 = blocktree.meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
@@ -3358,9 +2384,7 @@ pub mod tests {
 
             // 3) Write to the zeroth slot, check that every slot
             // is now part of the trunk
-            blocktree
-                .write_blobs(&blobs[0..entries_per_slot as usize])
-                .unwrap();
+            blocktree.insert_shreds(shreds).unwrap();
             for i in 0..3 {
                 let s = blocktree.meta(i).unwrap().unwrap();
                 // The last slot will not chain to any other slots
@@ -3398,17 +2422,17 @@ pub mod tests {
                         slot - 1
                     }
                 };
-                let (slot_blobs, _) = make_slot_entries(slot, parent_slot, entries_per_slot);
+                let (slot_shreds, _) = make_slot_entries(slot, parent_slot, entries_per_slot);
 
                 if slot % 2 == 1 {
-                    slots.extend(slot_blobs);
+                    slots.extend(slot_shreds);
                 } else {
-                    missing_slots.extend(slot_blobs);
+                    missing_slots.extend(slot_shreds);
                 }
             }
 
-            // Write the blobs for every other slot
-            blocktree.write_blobs(&slots).unwrap();
+            // Write the shreds for every other slot
+            blocktree.insert_shreds(slots).unwrap();
 
             // Check metadata
             for i in 0..num_slots {
@@ -3433,8 +2457,8 @@ pub mod tests {
                 }
             }
 
-            // Write the blobs for the other half of the slots that we didn't insert earlier
-            blocktree.write_blobs(&missing_slots[..]).unwrap();
+            // Write the shreds for the other half of the slots that we didn't insert earlier
+            blocktree.insert_shreds(missing_slots).unwrap();
 
             for i in 0..num_slots {
                 // Check that all the slots chain correctly once the missing slots
@@ -3468,18 +2492,19 @@ pub mod tests {
             let entries_per_slot = 2;
             assert!(entries_per_slot > 1);
 
-            let (blobs, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+            let shreds_per_slot = shreds.len() / num_slots as usize;
 
-            // Write the blobs such that every 3rd slot has a gap in the beginning
-            for (slot, slot_ticks) in blobs.chunks(entries_per_slot as usize).enumerate() {
+            // Write the shreds such that every 3rd slot has a gap in the beginning
+            let mut missing_shreds = vec![];
+            for slot in 0..num_slots {
+                let mut shreds_for_slot = shreds.drain(..shreds_per_slot).collect_vec();
                 if slot % 3 == 0 {
-                    blocktree
-                        .write_blobs(&slot_ticks[1..entries_per_slot as usize])
-                        .unwrap();
+                    let shred0 = shreds_for_slot.remove(0);
+                    missing_shreds.push(shred0);
+                    blocktree.insert_shreds(shreds_for_slot).unwrap();
                 } else {
-                    blocktree
-                        .write_blobs(&slot_ticks[..entries_per_slot as usize])
-                        .unwrap();
+                    blocktree.insert_shreds(shreds_for_slot).unwrap();
                 }
             }
 
@@ -3511,9 +2536,10 @@ pub mod tests {
 
             // Iteratively finish every 3rd slot, and check that all slots up to and including
             // slot_index + 3 become part of the trunk
-            for (slot_index, slot_ticks) in blobs.chunks(entries_per_slot as usize).enumerate() {
+            for slot_index in 0..num_slots {
                 if slot_index % 3 == 0 {
-                    blocktree.write_blobs(&slot_ticks[0..1]).unwrap();
+                    let shred = missing_shreds.remove(0);
+                    blocktree.insert_shreds(vec![shred]).unwrap();
 
                     for i in 0..num_slots {
                         let s = blocktree.meta(i as u64).unwrap().unwrap();
@@ -3541,34 +2567,73 @@ pub mod tests {
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
+    /*
+        #[test]
+        pub fn test_chaining_tree() {
+            let blocktree_path = get_tmp_ledger_path("test_chaining_tree");
+            {
+                let blocktree = Blocktree::open(&blocktree_path).unwrap();
+                let num_tree_levels = 6;
+                assert!(num_tree_levels > 1);
+                let branching_factor: u64 = 4;
+                // Number of slots that will be in the tree
+                let num_slots = (branching_factor.pow(num_tree_levels) - 1) / (branching_factor - 1);
+                let erasure_config = ErasureConfig::default();
+                let entries_per_slot = erasure_config.num_data() as u64;
+                assert!(entries_per_slot > 1);
 
-    #[test]
-    pub fn test_chaining_tree() {
-        let blocktree_path = get_tmp_ledger_path("test_chaining_tree");
-        {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let num_tree_levels = 6;
-            assert!(num_tree_levels > 1);
-            let branching_factor: u64 = 4;
-            // Number of slots that will be in the tree
-            let num_slots = (branching_factor.pow(num_tree_levels) - 1) / (branching_factor - 1);
-            let erasure_config = ErasureConfig::default();
-            let entries_per_slot = erasure_config.num_data() as u64;
-            assert!(entries_per_slot > 1);
+                let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
 
-            let (mut blobs, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+                // Insert tree one slot at a time in a random order
+                let mut slots: Vec<_> = (0..num_slots).collect();
 
-            // Insert tree one slot at a time in a random order
-            let mut slots: Vec<_> = (0..num_slots).collect();
+                // Get shreds for the slot
+                slots.shuffle(&mut thread_rng());
+                for slot in slots {
+                    // Get shreds for the slot "slot"
+                    let slot_shreds = &mut shreds
+                        [(slot * entries_per_slot) as usize..((slot + 1) * entries_per_slot) as usize];
+                    for shred in slot_shreds.iter_mut() {
+                        // Get the parent slot of the slot in the tree
+                        let slot_parent = {
+                            if slot == 0 {
+                                0
+                            } else {
+                                (slot - 1) / branching_factor
+                            }
+                        };
+                        shred.set_parent(slot_parent);
+                    }
 
-            // Get blobs for the slot
-            slots.shuffle(&mut thread_rng());
-            for slot in slots {
-                // Get blobs for the slot "slot"
-                let slot_blobs = &mut blobs
-                    [(slot * entries_per_slot) as usize..((slot + 1) * entries_per_slot) as usize];
-                for blob in slot_blobs.iter_mut() {
-                    // Get the parent slot of the slot in the tree
+                    let shared_shreds: Vec<_> = slot_shreds
+                        .iter()
+                        .cloned()
+                        .map(|shred| Arc::new(RwLock::new(shred)))
+                        .collect();
+                    let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
+                    let coding_shreds = coding_generator.next(&shared_shreds);
+                    assert_eq!(coding_shreds.len(), erasure_config.num_coding());
+
+                    let mut rng = thread_rng();
+
+                    // Randomly pick whether to insert erasure or coding shreds first
+                    if rng.gen_bool(0.5) {
+                        blocktree.write_shreds(slot_shreds).unwrap();
+                        blocktree.put_shared_coding_shreds(&coding_shreds).unwrap();
+                    } else {
+                        blocktree.put_shared_coding_shreds(&coding_shreds).unwrap();
+                        blocktree.write_shreds(slot_shreds).unwrap();
+                    }
+                }
+
+                // Make sure everything chains correctly
+                let last_level =
+                    (branching_factor.pow(num_tree_levels - 1) - 1) / (branching_factor - 1);
+                for slot in 0..num_slots {
+                    let slot_meta = blocktree.meta(slot).unwrap().unwrap();
+                    assert_eq!(slot_meta.consumed, entries_per_slot);
+                    assert_eq!(slot_meta.received, entries_per_slot);
+                    assert!(slot_meta.is_connected);
                     let slot_parent = {
                         if slot == 0 {
                             0
@@ -3576,73 +2641,34 @@ pub mod tests {
                             (slot - 1) / branching_factor
                         }
                     };
-                    blob.set_parent(slot_parent);
+                    assert_eq!(slot_meta.parent_slot, slot_parent);
+
+                    let expected_children: HashSet<_> = {
+                        if slot >= last_level {
+                            HashSet::new()
+                        } else {
+                            let first_child_slot = min(num_slots - 1, slot * branching_factor + 1);
+                            let last_child_slot = min(num_slots - 1, (slot + 1) * branching_factor);
+                            (first_child_slot..last_child_slot + 1).collect()
+                        }
+                    };
+
+                    let result: HashSet<_> = slot_meta.next_slots.iter().cloned().collect();
+                    if expected_children.len() != 0 {
+                        assert_eq!(slot_meta.next_slots.len(), branching_factor as usize);
+                    } else {
+                        assert_eq!(slot_meta.next_slots.len(), 0);
+                    }
+                    assert_eq!(expected_children, result);
                 }
 
-                let shared_blobs: Vec<_> = slot_blobs
-                    .iter()
-                    .cloned()
-                    .map(|blob| Arc::new(RwLock::new(blob)))
-                    .collect();
-                let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
-                let coding_blobs = coding_generator.next(&shared_blobs);
-                assert_eq!(coding_blobs.len(), erasure_config.num_coding());
-
-                let mut rng = thread_rng();
-
-                // Randomly pick whether to insert erasure or coding blobs first
-                if rng.gen_bool(0.5) {
-                    blocktree.write_blobs(slot_blobs).unwrap();
-                    blocktree.put_shared_coding_blobs(&coding_blobs).unwrap();
-                } else {
-                    blocktree.put_shared_coding_blobs(&coding_blobs).unwrap();
-                    blocktree.write_blobs(slot_blobs).unwrap();
-                }
+                // No orphan slots should exist
+                assert!(blocktree.orphans_cf.is_empty().unwrap())
             }
 
-            // Make sure everything chains correctly
-            let last_level =
-                (branching_factor.pow(num_tree_levels - 1) - 1) / (branching_factor - 1);
-            for slot in 0..num_slots {
-                let slot_meta = blocktree.meta(slot).unwrap().unwrap();
-                assert_eq!(slot_meta.consumed, entries_per_slot);
-                assert_eq!(slot_meta.received, entries_per_slot);
-                assert!(slot_meta.is_connected);
-                let slot_parent = {
-                    if slot == 0 {
-                        0
-                    } else {
-                        (slot - 1) / branching_factor
-                    }
-                };
-                assert_eq!(slot_meta.parent_slot, slot_parent);
-
-                let expected_children: HashSet<_> = {
-                    if slot >= last_level {
-                        HashSet::new()
-                    } else {
-                        let first_child_slot = min(num_slots - 1, slot * branching_factor + 1);
-                        let last_child_slot = min(num_slots - 1, (slot + 1) * branching_factor);
-                        (first_child_slot..last_child_slot + 1).collect()
-                    }
-                };
-
-                let result: HashSet<_> = slot_meta.next_slots.iter().cloned().collect();
-                if expected_children.len() != 0 {
-                    assert_eq!(slot_meta.next_slots.len(), branching_factor as usize);
-                } else {
-                    assert_eq!(slot_meta.next_slots.len(), 0);
-                }
-                assert_eq!(expected_children, result);
-            }
-
-            // No orphan slots should exist
-            assert!(blocktree.orphans_cf.is_empty().unwrap())
+            Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
         }
-
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
-    }
-
+    */
     #[test]
     pub fn test_get_slots_since() {
         let blocktree_path = get_tmp_ledger_path("test_get_slots_since");
@@ -3686,13 +2712,15 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Create blobs and entries
+            // Create shreds and entries
             let entries_per_slot = 1;
-            let (blobs, _) = make_many_slot_entries(0, 3, entries_per_slot);
+            let (mut shreds, _) = make_many_slot_entries(0, 3, entries_per_slot);
+            let shreds_per_slot = shreds.len() / 3;
 
             // Write slot 2, which chains to slot 1. We're missing slot 0,
             // so slot 1 is the orphan
-            blocktree.write_blobs(once(&blobs[2])).unwrap();
+            let shreds_for_slot = shreds.drain((shreds_per_slot * 2)..).collect_vec();
+            blocktree.insert_shreds(shreds_for_slot).unwrap();
             let meta = blocktree
                 .meta(1)
                 .expect("Expect database get to succeed")
@@ -3702,7 +2730,8 @@ pub mod tests {
 
             // Write slot 1 which chains to slot 0, so now slot 0 is the
             // orphan, and slot 1 is no longer the orphan.
-            blocktree.write_blobs(once(&blobs[1])).unwrap();
+            let shreds_for_slot = shreds.drain(shreds_per_slot..).collect_vec();
+            blocktree.insert_shreds(shreds_for_slot).unwrap();
             let meta = blocktree
                 .meta(1)
                 .expect("Expect database get to succeed")
@@ -3717,13 +2746,14 @@ pub mod tests {
 
             // Write some slot that also chains to existing slots and orphan,
             // nothing should change
-            let blob4 = &make_slot_entries(4, 0, 1).0[0];
-            let blob5 = &make_slot_entries(5, 1, 1).0[0];
-            blocktree.write_blobs(vec![blob4, blob5]).unwrap();
+            let (shred4, _) = make_slot_entries(4, 0, 1);
+            let (shred5, _) = make_slot_entries(5, 1, 1);
+            blocktree.insert_shreds(shred4).unwrap();
+            blocktree.insert_shreds(shred5).unwrap();
             assert_eq!(blocktree.get_orphans(None), vec![0]);
 
             // Write zeroth slot, no more orphans
-            blocktree.write_blobs(once(&blobs[0])).unwrap();
+            blocktree.insert_shreds(shreds).unwrap();
             for i in 0..3 {
                 let meta = blocktree
                     .meta(i)
@@ -3742,7 +2772,7 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Create blobs and entries
+            // Create shreds and entries
             let num_entries = 20 as u64;
             let mut entries = vec![];
             let mut shreds = vec![];
@@ -3756,7 +2786,7 @@ pub mod tests {
                     }
                 };
 
-                let (mut shred, entry) = make_slot_entries_using_shreds(slot, parent_slot, 1);
+                let (mut shred, entry) = make_slot_entries(slot, parent_slot, 1);
                 num_shreds_per_slot = shred.len() as u64;
                 shred
                     .iter_mut()
@@ -3767,7 +2797,7 @@ pub mod tests {
             }
 
             let num_shreds = shreds.len();
-            // Write blobs to the database
+            // Write shreds to the database
             if should_bulk_write {
                 blocktree.insert_shreds(shreds).unwrap();
             } else {
@@ -3817,8 +2847,8 @@ pub mod tests {
         }
         blocktree.insert_shreds(shreds).unwrap();
 
-        // Index of the first blob is 0
-        // Index of the second blob is "gap"
+        // Index of the first shred is 0
+        // Index of the second shred is "gap"
         // Thus, the missing indexes should then be [1, gap - 1] for the input index
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
@@ -3908,13 +2938,13 @@ pub mod tests {
         shreds[0].set_index(ONE as u32);
         shreds[1].set_index(OTHER as u32);
 
-        // Insert one blob at index = first_index
+        // Insert one shred at index = first_index
         blocktree.insert_shreds(shreds).unwrap();
 
         const STARTS: u64 = OTHER * 2;
         const END: u64 = OTHER * 3;
         const MAX: usize = 10;
-        // The first blob has index = first_index. Thus, for i < first_index,
+        // The first shred has index = first_index. Thus, for i < first_index,
         // given the input range of [i, first_index], the missing indexes should be
         // [i, first_index - 1]
         for start in 0..STARTS {
@@ -3932,7 +2962,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_no_missing_blob_indexes() {
+    pub fn test_no_missing_shred_indexes() {
         let slot = 0;
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -3960,86 +2990,84 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_should_insert_blob() {
-        let (mut blobs, _) = make_slot_entries(0, 0, 20);
+    pub fn test_should_insert_shred() {
+        let (mut shreds, _) = make_slot_entries(0, 0, 100);
         let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            // Insert the first 5 shreds, we don't have a "is_last" shred yet
+            let shreds1 = shreds.drain(0..5).collect_vec();
+            blocktree.insert_shreds(shreds1).unwrap();
 
-        // Insert the first 5 blobs, we don't have a "is_last" blob yet
-        blocktree.insert_data_blobs(&blobs[0..5]).unwrap();
+            let data_cf = blocktree.db.column::<cf::ShredData>();
 
-        // Trying to insert a blob less than consumed should fail
-        let slot_meta = blocktree.meta(0).unwrap().unwrap();
-        assert_eq!(slot_meta.consumed, 5);
-        assert!(!should_insert_blob(
-            &slot_meta,
-            &blocktree.db,
-            &HashMap::new(),
-            &blobs[4].clone(),
-            0
-        ));
+            let check_data_cf = |slot, index| {
+                data_cf
+                    .get_bytes((slot, index))
+                    .map(|opt| opt.is_some())
+                    .unwrap_or(false)
+            };
 
-        // Trying to insert the same blob again should fail
-        blocktree.insert_data_blobs(&blobs[7..8]).unwrap();
-        let slot_meta = blocktree.meta(0).unwrap().unwrap();
-        assert!(!should_insert_blob(
-            &slot_meta,
-            &blocktree.db,
-            &HashMap::new(),
-            &blobs[7].clone(),
-            0
-        ));
+            // Trying to insert a shred less than consumed should fail
+            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            assert_eq!(slot_meta.consumed, 5);
+            assert!(!should_insert(&slot_meta, 3, 0, false, check_data_cf, 0));
 
-        // Trying to insert another "is_last" blob with index < the received index
-        // should fail
-        blocktree.insert_data_blobs(&blobs[8..9]).unwrap();
-        let slot_meta = blocktree.meta(0).unwrap().unwrap();
-        assert_eq!(slot_meta.received, 9);
-        blobs[8].set_is_last_in_slot();
-        assert!(!should_insert_blob(
-            &slot_meta,
-            &blocktree.db,
-            &HashMap::new(),
-            &blobs[8].clone(),
-            0
-        ));
+            // Trying to insert the same shred again should fail
+            // skip over shred 5
+            let shreds1 = shreds.drain(1..2).collect_vec();
+            blocktree.insert_shreds(shreds1).unwrap();
+            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            assert!(!should_insert(&slot_meta, 6, 0, false, check_data_cf, 0));
 
-        // Insert the 10th blob, which is marked as "is_last"
-        blobs[9].set_is_last_in_slot();
-        blocktree.insert_data_blobs(&blobs[9..10]).unwrap();
-        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            // Trying to insert another "is_last" shred with index < the received index
+            // should fail
+            // skip over shred 5 and 7
+            let shreds1 = shreds.drain(2..3).collect_vec();
+            blocktree.insert_shreds(shreds1).unwrap();
+            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            assert_eq!(slot_meta.received, 9);
+            assert!(!should_insert(&slot_meta, 7, 0, true, check_data_cf, 0));
 
-        // Trying to insert a blob with index > the "is_last" blob should fail
-        assert!(!should_insert_blob(
-            &slot_meta,
-            &blocktree.db,
-            &HashMap::new(),
-            &blobs[10].clone(),
-            0
-        ));
+            // Insert all pending shreds
+            blocktree.insert_shreds(shreds).unwrap();
+            let slot_meta = blocktree.meta(0).unwrap().unwrap();
 
-        drop(blocktree);
+            // Trying to insert a shred with index > the "is_last" shred should fail
+            assert!(!should_insert(
+                &slot_meta,
+                slot_meta.last_index + 1,
+                0,
+                true,
+                check_data_cf,
+                0
+            ));
+        }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_insert_multiple_is_last() {
-        let (mut blobs, _) = make_slot_entries(0, 0, 20);
+        let (shreds, _) = make_slot_entries(0, 0, 20);
+        let num_shreds = shreds.len() as u64;
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-        // Inserting multiple blobs with the is_last flag set should only insert
-        // the first blob with the "is_last" flag, and drop the rest
-        for i in 6..20 {
-            blobs[i].set_is_last_in_slot();
-        }
-
-        blocktree.insert_data_blobs(&blobs[..]).unwrap();
+        blocktree.insert_shreds(shreds).unwrap();
         let slot_meta = blocktree.meta(0).unwrap().unwrap();
 
-        assert_eq!(slot_meta.consumed, 7);
-        assert_eq!(slot_meta.received, 7);
-        assert_eq!(slot_meta.last_index, 6);
+        assert_eq!(slot_meta.consumed, num_shreds);
+        assert_eq!(slot_meta.received, num_shreds);
+        assert_eq!(slot_meta.last_index, num_shreds - 1);
+        assert!(slot_meta.is_full());
+
+        let (shreds, _) = make_slot_entries(0, 0, 22);
+        blocktree.insert_shreds(shreds).unwrap();
+        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+
+        assert_eq!(slot_meta.consumed, num_shreds);
+        assert_eq!(slot_meta.received, num_shreds);
+        assert_eq!(slot_meta.last_index, num_shreds - 1);
         assert!(slot_meta.is_full());
 
         drop(blocktree);
@@ -4048,27 +3076,33 @@ pub mod tests {
 
     #[test]
     fn test_slot_data_iterator() {
-        // Construct the blobs
+        // Construct the shreds
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let blobs_per_slot = 10;
+        let shreds_per_slot = 10;
         let slots = vec![2, 4, 8, 12];
-        let all_blobs = make_chaining_slot_entries(&slots, blobs_per_slot);
-        let slot_8_blobs = all_blobs[2].0.clone();
-        for (slot_blobs, _) in all_blobs {
-            blocktree.insert_data_blobs(&slot_blobs[..]).unwrap();
+        let all_shreds = make_chaining_slot_entries(&slots, shreds_per_slot);
+        let slot_8_shreds = bincode::serialize(&all_shreds[2].0).unwrap();
+        for (slot_shreds, _) in all_shreds {
+            blocktree.insert_shreds(slot_shreds).unwrap();
         }
 
         // Slot doesnt exist, iterator should be empty
-        let blob_iter = blocktree.slot_data_iterator(5).unwrap();
-        let result: Vec<_> = blob_iter.collect();
+        let shred_iter = blocktree.slot_data_iterator(5).unwrap();
+        let result: Vec<_> = shred_iter.collect();
         assert_eq!(result, vec![]);
 
         // Test that the iterator for slot 8 contains what was inserted earlier
-        let blob_iter = blocktree.slot_data_iterator(8).unwrap();
-        let result: Vec<_> = blob_iter.map(|(_, bytes)| Blob::new(&bytes)).collect();
-        assert_eq!(result.len() as u64, blobs_per_slot);
-        assert_eq!(result, slot_8_blobs);
+        let shred_iter = blocktree.slot_data_iterator(8).unwrap();
+        let result: Vec<Shred> = shred_iter
+            .map(|(_, bytes)| {
+                let shred: Shred = bincode::deserialize(&bytes).unwrap();
+                shred
+            })
+            .collect();
+        let result_serialized = bincode::serialize(&result).unwrap();
+        assert_eq!(result_serialized.len(), slot_8_shreds.len());
+        assert_eq!(result_serialized, slot_8_shreds);
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -4097,12 +3131,13 @@ pub mod tests {
     fn test_prune() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let (blobs, _) = make_many_slot_entries(0, 50, 6);
-        blocktree.write_blobs(blobs).unwrap();
+        let (shreds, _) = make_many_slot_entries(0, 50, 6);
+        let shreds_per_slot = shreds.len() as u64 / 50;
+        blocktree.insert_shreds(shreds).unwrap();
         blocktree
             .slot_meta_iterator(0)
             .unwrap()
-            .for_each(|(_, meta)| assert_eq!(meta.last_index, 5));
+            .for_each(|(_, meta)| assert_eq!(meta.last_index, shreds_per_slot - 1));
 
         blocktree.prune(5);
 
@@ -4111,11 +3146,11 @@ pub mod tests {
             .unwrap()
             .for_each(|(slot, meta)| {
                 assert!(slot <= 5);
-                assert_eq!(meta.last_index, 5)
+                assert_eq!(meta.last_index, shreds_per_slot - 1)
             });
 
         let data_iter = blocktree
-            .data_cf
+            .data_shred_cf
             .iter(IteratorMode::From((0, 0), IteratorDirection::Forward))
             .unwrap();
         for ((slot, _), _) in data_iter {
@@ -4132,8 +3167,8 @@ pub mod tests {
     fn test_purge_slots() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let (blobs, _) = make_many_slot_entries(0, 50, 5);
-        blocktree.write_blobs(blobs).unwrap();
+        let (shreds, _) = make_many_slot_entries(0, 50, 5);
+        blocktree.insert_shreds(shreds).unwrap();
 
         blocktree.purge_slots(0, Some(5));
 
@@ -4158,8 +3193,8 @@ pub mod tests {
     fn test_purge_huge() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let (blobs, _) = make_many_slot_entries(0, 5000, 10);
-        blocktree.write_blobs(blobs).unwrap();
+        let (shreds, _) = make_many_slot_entries(0, 5000, 10);
+        blocktree.insert_shreds(shreds).unwrap();
 
         blocktree.purge_slots(0, Some(4999));
 
@@ -4202,696 +3237,7 @@ pub mod tests {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
-    mod erasure {
-        use super::*;
-        use crate::blocktree::meta::ErasureMetaStatus;
-        use crate::erasure::test::{generate_ledger_model, ErasureSpec, SlotSpec};
-        use crate::erasure::CodingGenerator;
-        use rand::{thread_rng, Rng};
-        use solana_sdk::signature::Signable;
-        use std::sync::RwLock;
-
-        impl Into<SharedBlob> for Blob {
-            fn into(self) -> SharedBlob {
-                Arc::new(RwLock::new(self))
-            }
-        }
-
-        #[test]
-        fn test_erasure_meta_accuracy() {
-            use ErasureMetaStatus::DataFull;
-
-            solana_logger::setup();
-
-            let path = get_tmp_ledger_path!();
-            let blocktree = Blocktree::open(&path).unwrap();
-
-            let erasure_config = ErasureConfig::default();
-            // two erasure sets
-            let num_blobs = erasure_config.num_data() as u64 * 2;
-            let slot = 0;
-
-            let (mut blobs, _) = make_slot_entries(slot, 0, num_blobs);
-            let keypair = Keypair::new();
-            blobs.iter_mut().for_each(|blob| {
-                blob.set_id(&keypair.pubkey());
-                blob.sign(&keypair);
-            });
-            let shared_blobs: Vec<_> = blobs
-                .iter()
-                .cloned()
-                .map(|blob| Arc::new(RwLock::new(blob)))
-                .collect();
-
-            blocktree.write_blobs(&blobs[..2]).unwrap();
-
-            let erasure_meta_opt = blocktree
-                .erasure_meta(slot, 0)
-                .expect("DB get must succeed");
-
-            assert!(erasure_meta_opt.is_none());
-
-            blocktree
-                .write_blobs(&blobs[2..erasure_config.num_data()])
-                .unwrap();
-
-            // insert all coding blobs in first set
-            let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
-            let coding_blobs = coding_generator.next(&shared_blobs[..erasure_config.num_data()]);
-
-            blocktree
-                .put_shared_coding_blobs(coding_blobs.iter())
-                .unwrap();
-
-            let erasure_meta = blocktree
-                .erasure_meta(slot, 0)
-                .expect("DB get must succeed")
-                .unwrap();
-            let index = blocktree.get_index(slot).unwrap().unwrap();
-
-            assert_eq!(erasure_meta.status(&index), DataFull);
-
-            // insert blob in the 2nd set so that recovery should be possible given all coding blobs
-            let set2 = &blobs[erasure_config.num_data()..];
-            blocktree.write_blobs(&set2[..1]).unwrap();
-
-            // insert all coding blobs in 2nd set. Should trigger recovery
-            let coding_blobs = coding_generator.next(&shared_blobs[erasure_config.num_data()..]);
-
-            blocktree
-                .put_shared_coding_blobs(coding_blobs.iter())
-                .unwrap();
-
-            let erasure_meta = blocktree
-                .erasure_meta(slot, 1)
-                .expect("DB get must succeed")
-                .unwrap();
-            let index = blocktree.get_index(slot).unwrap().unwrap();
-
-            assert_eq!(erasure_meta.status(&index), DataFull);
-
-            // remove coding blobs, erasure meta should still report being full
-            let (start_idx, coding_end_idx) =
-                (erasure_meta.start_index(), erasure_meta.end_indexes().1);
-
-            for idx in start_idx..coding_end_idx {
-                blocktree.delete_coding_blob(slot, idx).unwrap();
-            }
-
-            let erasure_meta = blocktree
-                .erasure_meta(slot, 1)
-                .expect("DB get must succeed")
-                .unwrap();
-            let index = blocktree.get_index(slot).unwrap().unwrap();
-
-            assert_eq!(erasure_meta.status(&index), DataFull);
-        }
-
-        #[test]
-        #[ignore]
-        pub fn test_recovery_basic() {
-            solana_logger::setup();
-
-            let slot = 0;
-
-            let ledger_path = get_tmp_ledger_path!();
-            let erasure_config = ErasureConfig::default();
-
-            let blocktree = Blocktree::open(&ledger_path).unwrap();
-            let num_sets = 3;
-            let data_blobs =
-                make_slot_entries(slot, 0, num_sets * erasure_config.num_data() as u64)
-                    .0
-                    .into_iter()
-                    .map(Blob::into)
-                    .collect::<Vec<_>>();
-            let keypair = Keypair::new();
-            data_blobs.iter().for_each(|blob: &Arc<RwLock<Blob>>| {
-                let mut b = blob.write().unwrap();
-                b.set_id(&keypair.pubkey());
-                b.sign(&keypair);
-            });
-
-            let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
-
-            for (set_index, data_blobs) in data_blobs
-                .chunks_exact(erasure_config.num_data())
-                .enumerate()
-            {
-                let coding_blobs = coding_generator.next(&data_blobs);
-
-                assert_eq!(coding_blobs.len(), erasure_config.num_coding());
-
-                let deleted_data = data_blobs[0].clone();
-
-                blocktree
-                    .write_shared_blobs(data_blobs.iter().skip(1))
-                    .unwrap();
-
-                // This should trigger recovery of the missing data blob
-                blocktree
-                    .put_shared_coding_blobs(coding_blobs.iter())
-                    .unwrap();
-
-                // Verify the slot meta
-                let slot_meta = blocktree.meta(slot).unwrap().unwrap();
-                assert_eq!(
-                    slot_meta.consumed,
-                    (erasure_config.num_data() * (set_index + 1)) as u64
-                );
-                assert_eq!(
-                    slot_meta.received,
-                    (erasure_config.num_data() * (set_index + 1)) as u64
-                );
-                assert_eq!(slot_meta.parent_slot, 0);
-                assert!(slot_meta.next_slots.is_empty());
-                assert_eq!(slot_meta.is_connected, true);
-                if set_index as u64 == num_sets - 1 {
-                    assert_eq!(
-                        slot_meta.last_index,
-                        (erasure_config.num_data() * (set_index + 1) - 1) as u64
-                    );
-                }
-
-                let erasure_meta = blocktree
-                    .erasure_meta_cf
-                    .get((slot, set_index as u64))
-                    .expect("Erasure Meta should be present")
-                    .unwrap();
-                let index = blocktree.get_index(slot).unwrap().unwrap();
-                let status = erasure_meta.status(&index);
-
-                assert_eq!(status, ErasureMetaStatus::DataFull);
-
-                let retrieved_data = blocktree
-                    .data_cf
-                    .get_bytes((slot, erasure_meta.start_index()))
-                    .unwrap();
-
-                assert!(retrieved_data.is_some());
-
-                let data_blob = Blob::new(&retrieved_data.unwrap());
-
-                assert_eq!(&data_blob, &*deleted_data.read().unwrap());
-                //assert_eq!(
-                //&retrieved_data.unwrap()[..],
-                //deleted_data.read().unwrap().data()
-                //);
-            }
-
-            drop(blocktree);
-
-            Blocktree::destroy(&ledger_path).expect("Expect successful Blocktree destruction");
-        }
-
-        #[test]
-        fn test_recovery_is_accurate() {
-            const SLOT: u64 = 0;
-            const SET_INDEX: u64 = 0;
-
-            solana_logger::setup();
-
-            let ledger_path = get_tmp_ledger_path!();
-            let erasure_config = ErasureConfig::default();
-            let blocktree = Blocktree::open(&ledger_path).unwrap();
-            let data_blobs = make_slot_entries(SLOT, 0, erasure_config.num_data() as u64)
-                .0
-                .into_iter()
-                .map(Blob::into)
-                .collect::<Vec<_>>();
-
-            let session = Arc::new(Session::new_from_config(&erasure_config).unwrap());
-
-            let mut coding_generator = CodingGenerator::new(Arc::clone(&session));
-
-            let shared_coding_blobs = coding_generator.next(&data_blobs);
-            assert_eq!(shared_coding_blobs.len(), erasure_config.num_coding());
-
-            let mut prev_coding = HashMap::new();
-            let prev_data = HashMap::new();
-            let mut index = Index::new(SLOT);
-            let mut erasure_meta = ErasureMeta::new(SET_INDEX, &erasure_config);
-            erasure_meta.size = shared_coding_blobs[0].read().unwrap().size();
-
-            for shared_blob in shared_coding_blobs.iter() {
-                let blob = shared_blob.read().unwrap();
-
-                prev_coding.insert((blob.slot(), blob.index()), blob.clone());
-            }
-
-            index.coding_mut().set_many_present(
-                (0..erasure_config.num_coding() as u64).zip(std::iter::repeat(true)),
-            );
-
-            let (recovered_data, recovered_coding) = recover(
-                &blocktree.db,
-                &session,
-                SLOT,
-                &erasure_meta,
-                &index,
-                &prev_data,
-                &prev_coding,
-                &erasure_config,
-            )
-            .expect("Successful recovery");
-
-            for (original, recovered) in data_blobs.iter().zip(recovered_data.iter()) {
-                let original = original.read().unwrap();
-
-                assert_eq!(original.slot(), recovered.slot());
-                assert_eq!(original.index(), recovered.index());
-
-                assert_eq!(original.data(), recovered.data());
-                assert_eq!(&*original, recovered);
-            }
-
-            for (original, recovered) in shared_coding_blobs.iter().zip(recovered_coding.iter()) {
-                let original = original.read().unwrap();
-
-                assert_eq!(original.slot(), recovered.slot());
-                assert_eq!(original.index(), recovered.index());
-
-                assert_eq!(original.data(), recovered.data());
-                assert_eq!(&*original, recovered);
-            }
-        }
-
-        pub fn try_recovery_using_erasure_config(
-            erasure_config: &ErasureConfig,
-            num_drop_data: usize,
-            slot: u64,
-            blocktree: &Blocktree,
-        ) -> ErasureMetaStatus {
-            let entries = make_tiny_test_entries(erasure_config.num_data());
-            let mut blobs = entries_to_blobs_using_config(&entries, slot, 0, true, &erasure_config);
-
-            let keypair = Keypair::new();
-            blobs.iter_mut().for_each(|blob| {
-                blob.set_id(&keypair.pubkey());
-                blob.sign(&keypair);
-            });
-
-            let shared_blobs: Vec<_> = blobs
-                .iter()
-                .cloned()
-                .map(|blob| Arc::new(RwLock::new(blob)))
-                .collect();
-
-            blocktree
-                .write_blobs(&blobs[..(erasure_config.num_data() - num_drop_data)])
-                .unwrap();
-
-            let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
-            let coding_blobs = coding_generator.next(&shared_blobs[..erasure_config.num_data()]);
-
-            blocktree
-                .put_shared_coding_blobs(coding_blobs.iter())
-                .unwrap();
-
-            let erasure_meta = blocktree
-                .erasure_meta(slot, 0)
-                .expect("DB get must succeed")
-                .unwrap();
-            let index = blocktree.get_index(slot).unwrap().unwrap();
-
-            erasure_meta.status(&index)
-        }
-
-        #[test]
-        fn test_recovery_different_configs() {
-            use ErasureMetaStatus::DataFull;
-            solana_logger::setup();
-
-            let ledger_path = get_tmp_ledger_path!();
-            let blocktree = Blocktree::open(&ledger_path).unwrap();
-
-            assert_eq!(
-                try_recovery_using_erasure_config(&ErasureConfig::default(), 4, 0, &blocktree),
-                DataFull
-            );
-
-            assert_eq!(
-                try_recovery_using_erasure_config(&ErasureConfig::new(12, 8), 8, 1, &blocktree),
-                DataFull
-            );
-
-            assert_eq!(
-                try_recovery_using_erasure_config(&ErasureConfig::new(16, 4), 4, 2, &blocktree),
-                DataFull
-            );
-        }
-
-        #[test]
-        fn test_recovery_fails_safely() {
-            const SLOT: u64 = 0;
-            const SET_INDEX: u64 = 0;
-
-            solana_logger::setup();
-            let ledger_path = get_tmp_ledger_path!();
-            let erasure_config = ErasureConfig::default();
-            let blocktree = Blocktree::open(&ledger_path).unwrap();
-            let data_blobs = make_slot_entries(SLOT, 0, erasure_config.num_data() as u64)
-                .0
-                .into_iter()
-                .map(Blob::into)
-                .collect::<Vec<_>>();
-
-            let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
-
-            let shared_coding_blobs = coding_generator.next(&data_blobs);
-            assert_eq!(shared_coding_blobs.len(), erasure_config.num_coding());
-
-            // Insert coding blobs except 1 and no data. Not enough to do recovery
-            blocktree
-                .put_shared_coding_blobs(shared_coding_blobs.iter().skip(1))
-                .unwrap();
-
-            // try recovery even though there aren't enough blobs
-            let erasure_meta = blocktree
-                .erasure_meta_cf
-                .get((SLOT, SET_INDEX))
-                .unwrap()
-                .unwrap();
-
-            let index = blocktree.index_cf.get(SLOT).unwrap().unwrap();
-
-            assert_eq!(erasure_meta.status(&index), ErasureMetaStatus::StillNeed(1));
-
-            let prev_inserted_blob_datas = HashMap::new();
-            let prev_inserted_coding = HashMap::new();
-
-            let attempt_result = try_erasure_recover(
-                &blocktree.db,
-                &erasure_meta,
-                &index,
-                SLOT,
-                &prev_inserted_blob_datas,
-                &prev_inserted_coding,
-                &erasure_config,
-            );
-
-            assert!(attempt_result.is_ok());
-            let recovered_blobs_opt = attempt_result.unwrap();
-
-            assert!(recovered_blobs_opt.is_none());
-        }
-
-        #[test]
-        #[ignore]
-        fn test_deserialize_corrupted_blob() {
-            let path = get_tmp_ledger_path!();
-            let blocktree = Blocktree::open(&path).unwrap();
-            let (mut blobs, _) = make_slot_entries(0, 0, 1);
-            {
-                let blob0 = &mut blobs[0];
-                // corrupt the size
-                blob0.set_size(BLOB_HEADER_SIZE);
-            }
-            blocktree.insert_data_blobs(&blobs).unwrap();
-            assert_matches!(
-                blocktree.get_slot_entries(0, 0, None),
-                Err(Error::BlocktreeError(BlocktreeError::InvalidBlobData(_)))
-            );
-        }
-
-        #[test]
-        #[ignore]
-        fn test_recovery_multi_slot_multi_thread() {
-            use rand::{rngs::SmallRng, seq::SliceRandom, SeedableRng};
-            use std::thread;
-
-            const N_THREADS: usize = 3;
-
-            let slots = vec![0, 3, 5, 50, 100];
-            let max_erasure_sets = 16;
-            solana_logger::setup();
-
-            let erasure_config = ErasureConfig::default();
-            let path = get_tmp_ledger_path!();
-            let blocktree = Arc::new(Blocktree::open(&path).unwrap());
-            let mut rng = thread_rng();
-
-            // Specification should generate a ledger where each slot has an random number of
-            // erasure sets. Odd erasure sets will have all coding blobs and between 1-4 data blobs
-            // missing, and even ones will have between 1-2 data blobs missing and 1-2 coding blobs
-            // missing
-            let specs = slots
-                .iter()
-                .map(|&slot| {
-                    let num_erasure_sets = rng.gen_range(0, max_erasure_sets);
-
-                    let set_specs = (0..num_erasure_sets)
-                        .map(|set_index| {
-                            let (num_data, num_coding) = if set_index % 2 == 0 {
-                                (
-                                    erasure_config.num_data() - rng.gen_range(1, 3),
-                                    erasure_config.num_coding() - rng.gen_range(1, 3),
-                                )
-                            } else {
-                                (
-                                    erasure_config.num_data() - rng.gen_range(1, 5),
-                                    erasure_config.num_coding(),
-                                )
-                            };
-                            ErasureSpec {
-                                set_index,
-                                num_data,
-                                num_coding,
-                            }
-                        })
-                        .collect();
-
-                    SlotSpec { slot, set_specs }
-                })
-                .collect::<Vec<_>>();
-
-            let model = generate_ledger_model(specs);
-
-            // Write to each slot in a different thread simultaneously.
-            // These writes should trigger the recovery. Every erasure set should have all of its
-            // data blobs and coding_blobs at the end
-            let mut handles = vec![];
-
-            // Each thread will attempt to write to each slot in order. Within a slot, each thread
-            // will try to write each erasure set in a random order. Within each erasure set, there
-            // is a 50/50 chance of attempting to write the coding blobs first or the data blobs
-            // first.
-            // The goal is to be as contentious as possible and cover a wide range of situations
-            for thread_id in 0..N_THREADS {
-                let blocktree = Arc::clone(&blocktree);
-
-                let model = model.clone();
-                let handle = thread::Builder::new().stack_size(32* 1024 * 1024).spawn(move || {
-                    let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
-
-                    for slot_model in model {
-                        let slot = slot_model.slot;
-                        let num_erasure_sets = slot_model.chunks.len();
-                        let unordered_sets = slot_model
-                            .chunks
-                            .choose_multiple(&mut rng, num_erasure_sets);
-
-                        for erasure_set in unordered_sets {
-                            let mut attempt = 0;
-                            loop {
-                                if rng.gen() {
-                                    blocktree
-                                        .write_shared_blobs(&erasure_set.data)
-                                        .expect("Writing data blobs must succeed");
-                                    trace!(
-                                        "multislot: wrote data: slot: {}, erasure_set: {}",
-                                        slot,
-                                        erasure_set.set_index
-                                    );
-
-                                    blocktree
-                                        .put_shared_coding_blobs(erasure_set.coding.iter())
-                                        .unwrap();
-
-                                    trace!(
-                                        "multislot: wrote coding: slot: {}, erasure_set: {}",
-                                        slot,
-                                        erasure_set.set_index
-                                    );
-                                } else {
-                                    // write coding blobs first, then write the data blobs.
-                                    blocktree
-                                        .put_shared_coding_blobs(erasure_set.coding.iter())
-                                        .unwrap();
-
-                                    trace!(
-                                        "multislot: wrote coding: slot: {}, erasure_set: {}",
-                                        slot,
-                                        erasure_set.set_index
-                                    );
-
-                                    blocktree
-                                        .write_shared_blobs(&erasure_set.data)
-                                        .expect("Writing data blobs must succeed");
-                                    trace!(
-                                        "multislot: wrote data: slot: {}, erasure_set: {}",
-                                        slot,
-                                        erasure_set.set_index
-                                    );
-                                }
-
-                                // due to racing, some blobs might not be inserted. don't stop
-                                // trying until *some* thread succeeds in writing everything and
-                                // triggering recovery.
-                                let erasure_meta = blocktree
-                                    .erasure_meta_cf
-                                    .get((slot, erasure_set.set_index))
-                                    .unwrap()
-                                    .unwrap();
-
-                                let index = blocktree.index_cf.get(slot).unwrap().unwrap();
-
-                                let status = erasure_meta.status(&index);
-                                attempt += 1;
-
-                                debug!(
-                                    "[multi_slot] thread_id: {}, attempt: {}, slot: {}, set_index: {}, status: {:?}",
-                                    thread_id, attempt, slot, erasure_set.set_index, status
-                                );
-
-                                match status {
-                                    ErasureMetaStatus::DataFull => break,
-                                    ErasureMetaStatus::CanRecover => {
-                                        debug!("[test_multi_slot] can recover");
-
-                                        if !rng.gen::<bool>() {
-                                            continue;
-                                        } else {
-                                            break;
-                                        }
-                                    }
-                                    ErasureMetaStatus::StillNeed(_) => {
-                                        if attempt > N_THREADS + thread_id {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }).unwrap();
-
-                handles.push(handle);
-            }
-
-            handles
-                .into_iter()
-                .for_each(|handle| handle.join().unwrap());
-
-            for slot_model in model {
-                let slot = slot_model.slot;
-
-                for erasure_set_model in slot_model.chunks {
-                    let set_index = erasure_set_model.set_index as u64;
-
-                    let erasure_meta = blocktree
-                        .erasure_meta_cf
-                        .get((slot, set_index))
-                        .expect("DB get must succeed")
-                        .expect("ErasureMeta must be present for each erasure set");
-
-                    let index = blocktree
-                        .index_cf
-                        .get(slot)
-                        .expect("DB read")
-                        .expect("Erasure meta for each set");
-
-                    debug!(
-                        "multislot: got erasure_meta: slot: {}, set_index: {}, erasure_meta: {:?}",
-                        slot, set_index, erasure_meta
-                    );
-
-                    let start_index = erasure_meta.start_index();
-                    let (data_end_idx, _) = erasure_meta.end_indexes();
-
-                    // all possibility for recovery should be exhausted
-                    assert_eq!(erasure_meta.status(&index), ErasureMetaStatus::DataFull);
-                    // Should have all data
-                    assert_eq!(
-                        index.data().present_in_bounds(start_index..data_end_idx),
-                        erasure_config.num_data()
-                    );
-                }
-            }
-
-            drop(blocktree);
-            Blocktree::destroy(&path).expect("Blocktree destruction must succeed");
-        }
-    }
-
-    pub fn entries_to_blobs_using_config(
-        entries: &Vec<Entry>,
-        slot: u64,
-        parent_slot: u64,
-        is_full_slot: bool,
-        config: &ErasureConfig,
-    ) -> Vec<Blob> {
-        let mut blobs = entries.clone().to_single_entry_blobs();
-        for (i, b) in blobs.iter_mut().enumerate() {
-            b.set_index(i as u64);
-            b.set_slot(slot);
-            b.set_parent(parent_slot);
-            b.set_erasure_config(config);
-        }
-        if is_full_slot {
-            blobs.last_mut().unwrap().set_is_last_in_slot();
-        }
-        blobs
-    }
-
-    pub fn entries_to_blobs(
-        entries: &Vec<Entry>,
-        slot: u64,
-        parent_slot: u64,
-        is_full_slot: bool,
-    ) -> Vec<Blob> {
-        entries_to_blobs_using_config(
-            entries,
-            slot,
-            parent_slot,
-            is_full_slot,
-            &ErasureConfig::default(),
-        )
-    }
-
-    pub fn entries_to_test_shreds(
-        entries: Vec<Entry>,
-        slot: u64,
-        parent_slot: u64,
-        is_full_slot: bool,
-    ) -> Vec<Shred> {
-        let mut shredder = Shredder::new(
-            slot,
-            Some(parent_slot),
-            0.0,
-            &Arc::new(Keypair::new()),
-            0 as u32,
-        )
-        .expect("Failed to create entry shredder");
-
-        bincode::serialize_into(&mut shredder, &entries)
-            .expect("Expect to write all entries to shreds");
-        if is_full_slot {
-            shredder.finalize_slot();
-        } else {
-            shredder.finalize_fec_block();
-        }
-
-        let shreds: Vec<Shred> = shredder
-            .shreds
-            .iter()
-            .map(|s| bincode::deserialize(s).unwrap())
-            .collect();
-
-        shreds
-    }
-
-    pub fn make_slot_entries_using_shreds(
+    pub fn make_slot_entries(
         slot: u64,
         parent_slot: u64,
         num_entries: u64,
@@ -4901,7 +3247,7 @@ pub mod tests {
         (shreds, entries)
     }
 
-    pub fn make_many_slot_entries_using_shreds(
+    pub fn make_many_slot_entries(
         start_slot: u64,
         num_slots: u64,
         entries_per_slot: u64,
@@ -4911,17 +3257,17 @@ pub mod tests {
         for slot in start_slot..start_slot + num_slots {
             let parent_slot = if slot == 0 { 0 } else { slot - 1 };
 
-            let (slot_blobs, slot_entries) =
-                make_slot_entries_using_shreds(slot, parent_slot, entries_per_slot);
-            shreds.extend(slot_blobs);
+            let (slot_shreds, slot_entries) =
+                make_slot_entries(slot, parent_slot, entries_per_slot);
+            shreds.extend(slot_shreds);
             entries.extend(slot_entries);
         }
 
         (shreds, entries)
     }
 
-    // Create blobs for slots that have a parent-child relationship defined by the input `chain`
-    pub fn make_chaining_slot_entries_using_shreds(
+    // Create shreds for slots that have a parent-child relationship defined by the input `chain`
+    pub fn make_chaining_slot_entries(
         chain: &[u64],
         entries_per_slot: u64,
     ) -> Vec<(Vec<Shred>, Vec<Entry>)> {
@@ -4935,60 +3281,10 @@ pub mod tests {
                 }
             };
 
-            let result = make_slot_entries_using_shreds(*slot, parent_slot, entries_per_slot);
+            let result = make_slot_entries(*slot, parent_slot, entries_per_slot);
             slots_shreds_and_entries.push(result);
         }
 
         slots_shreds_and_entries
-    }
-
-    pub fn make_slot_entries(
-        slot: u64,
-        parent_slot: u64,
-        num_entries: u64,
-    ) -> (Vec<Blob>, Vec<Entry>) {
-        let entries = make_tiny_test_entries(num_entries as usize);
-        let blobs = entries_to_blobs(&entries, slot, parent_slot, true);
-        (blobs, entries)
-    }
-
-    pub fn make_many_slot_entries(
-        start_slot: u64,
-        num_slots: u64,
-        entries_per_slot: u64,
-    ) -> (Vec<Blob>, Vec<Entry>) {
-        let mut blobs = vec![];
-        let mut entries = vec![];
-        for slot in start_slot..start_slot + num_slots {
-            let parent_slot = if slot == 0 { 0 } else { slot - 1 };
-
-            let (slot_blobs, slot_entries) = make_slot_entries(slot, parent_slot, entries_per_slot);
-            blobs.extend(slot_blobs);
-            entries.extend(slot_entries);
-        }
-
-        (blobs, entries)
-    }
-
-    // Create blobs for slots that have a parent-child relationship defined by the input `chain`
-    pub fn make_chaining_slot_entries(
-        chain: &[u64],
-        entries_per_slot: u64,
-    ) -> Vec<(Vec<Blob>, Vec<Entry>)> {
-        let mut slots_blobs_and_entries = vec![];
-        for (i, slot) in chain.iter().enumerate() {
-            let parent_slot = {
-                if *slot == 0 || i == 0 {
-                    0
-                } else {
-                    chain[i - 1]
-                }
-            };
-
-            let result = make_slot_entries(*slot, parent_slot, entries_per_slot);
-            slots_blobs_and_entries.push(result);
-        }
-
-        slots_blobs_and_entries
     }
 }

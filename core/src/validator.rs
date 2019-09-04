@@ -234,7 +234,7 @@ impl Validator {
             bank.ticks_per_slot(),
             &id,
             &blocktree,
-            blocktree.new_blobs_signals.first().cloned(),
+            blocktree.new_shreds_signals.first().cloned(),
             &leader_schedule_cache,
             &poh_config,
         );
@@ -245,7 +245,7 @@ impl Validator {
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
         assert_eq!(
-            blocktree.new_blobs_signals.len(),
+            blocktree.new_shreds_signals.len(),
             1,
             "New blob signal for the TVU should be the same as the clear bank signal."
         );

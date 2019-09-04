@@ -83,8 +83,8 @@ mod tests {
     fn test_cleanup() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let (blobs, _) = make_many_slot_entries(0, 50, 5);
-        blocktree.write_blobs(blobs).unwrap();
+        let (shreds, _) = make_many_slot_entries(0, 50, 5);
+        blocktree.insert_shreds(shreds).unwrap();
         let blocktree = Arc::new(blocktree);
         let (sender, receiver) = channel();
 
