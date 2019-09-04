@@ -1,7 +1,6 @@
 use clap;
 use clap::{App, Arg};
-use reqwest;
-use serde::Deserialize;
+use serde_derive::Deserialize;
 
 // pub type blockHash = [u8; 32];
 pub type BlockHeader = [u8; 80];
@@ -28,35 +27,24 @@ struct JsonBH {
 #[allow(dead_code)]
 fn get_header_json(hash: &str) -> JsonBH {
     let qs = format!("https://www.blockchain.info/rawblock/{}", hash);
-    let body = reqwest::get(&qs);
-    match body {
-        Err(e) => panic!("rest request failed {}", e),
-        Ok(mut n) => {
-            if n.status().is_success() {
-                let jsonbh: JsonBH = n.json().unwrap();
-                jsonbh
-            } else {
-                panic!("request failed");
-            }
-        }
+    let body = ureq::get(&qs).call();
+    if body.error() {
+        panic!("request failed");
+    } else {
+        serde_json::from_value(body.into_json().unwrap()).unwrap()
     }
 }
 
 fn get_header_raw(hash: &str) -> String {
     let qs = format!("https://blockchain.info/block/{}?format=hex", hash);
-    let body = reqwest::get(&qs);
-    match body {
-        Err(e) => panic!("rest request failed {}", e),
-        Ok(mut n) => {
-            if n.status().is_success() {
-                let textbh: String = n.text().unwrap();
-                let hs = &textbh[0..160]; // 160 characters since it's in hex format
-                let header: String = hs.to_string();
-                header
-            } else {
-                panic!("request failed");
-            }
-        }
+    let body = ureq::get(&qs).call();
+    if body.error() {
+        panic!("request failed");
+    } else {
+        let textbh: String = body.into_string().unwrap();
+        let hs = &textbh[0..160]; // 160 characters since it's in hex format
+        let header: String = hs.to_string();
+        header
     }
 }
 
