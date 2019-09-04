@@ -1,14 +1,7 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
-#![no_std]
-#![allow(unused_attributes)]
-
 mod helper;
-
-#[cfg(not(test))]
-extern crate solana_sdk_bpf_no_std;
 extern crate solana_sdk_bpf_utils;
-
 use solana_sdk_bpf_utils::info;
 
 #[no_mangle]
