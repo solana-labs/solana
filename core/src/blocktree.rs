@@ -1612,6 +1612,38 @@ pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (PathB
     (ledger_path, blockhash)
 }
 
+pub fn entries_to_test_shreds(
+    entries: Vec<Entry>,
+    slot: u64,
+    parent_slot: u64,
+    is_full_slot: bool,
+) -> Vec<Shred> {
+    let mut shredder = Shredder::new(
+        slot,
+        Some(parent_slot),
+        0.0,
+        &Arc::new(Keypair::new()),
+        0 as u32,
+    )
+    .expect("Failed to create entry shredder");
+
+    bincode::serialize_into(&mut shredder, &entries)
+        .expect("Expect to write all entries to shreds");
+    if is_full_slot {
+        shredder.finalize_slot();
+    } else {
+        shredder.finalize_fec_block();
+    }
+
+    let shreds: Vec<Shred> = shredder
+        .shreds
+        .iter()
+        .map(|s| bincode::deserialize(s).unwrap())
+        .collect();
+
+    shreds
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -3203,38 +3235,6 @@ pub mod tests {
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
-    }
-
-    pub fn entries_to_test_shreds(
-        entries: Vec<Entry>,
-        slot: u64,
-        parent_slot: u64,
-        is_full_slot: bool,
-    ) -> Vec<Shred> {
-        let mut shredder = Shredder::new(
-            slot,
-            Some(parent_slot),
-            0.0,
-            &Arc::new(Keypair::new()),
-            0 as u32,
-        )
-        .expect("Failed to create entry shredder");
-
-        bincode::serialize_into(&mut shredder, &entries)
-            .expect("Expect to write all entries to shreds");
-        if is_full_slot {
-            shredder.finalize_slot();
-        } else {
-            shredder.finalize_fec_block();
-        }
-
-        let shreds: Vec<Shred> = shredder
-            .shreds
-            .iter()
-            .map(|s| bincode::deserialize(s).unwrap())
-            .collect();
-
-        shreds
     }
 
     pub fn make_slot_entries(

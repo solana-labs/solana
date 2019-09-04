@@ -841,8 +841,8 @@ fn aggregate_stake_lockouts(
 mod test {
     use super::*;
     use crate::bank_forks::Confidence;
-    use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::{entries_to_test_shreds, make_slot_entries};
+    use crate::blocktree::tests::make_slot_entries;
+    use crate::blocktree::{entries_to_test_shreds, get_tmp_ledger_path};
     use crate::entry;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::replay_stage::ReplayStage;

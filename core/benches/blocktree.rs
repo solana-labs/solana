@@ -7,8 +7,7 @@ extern crate test;
 extern crate solana_core;
 
 use rand::{thread_rng, Rng};
-use solana_core::blocktree::tests::entries_to_test_shreds;
-use solana_core::blocktree::{get_tmp_ledger_path, Blocktree};
+use solana_core::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, Blocktree};
 use solana_core::entry::{make_large_test_entries, make_tiny_test_entries};
 use solana_core::shred::Shred;
 use std::path::Path;
