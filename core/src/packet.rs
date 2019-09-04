@@ -73,7 +73,7 @@ impl fmt::Debug for Packet {
 impl Default for Packet {
     fn default() -> Packet {
         Packet {
-            data: unsafe { std::mem::uninitialized() },
+            data: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
             meta: Meta::default(),
         }
     }
