@@ -3,7 +3,6 @@
 //! access read to a persistent file-based ledger.
 use crate::entry::Entry;
 use crate::erasure::ErasureConfig;
-use crate::packet::Blob;
 use crate::result::{Error, Result};
 use crate::shred::{Shred, Shredder};
 
@@ -72,8 +71,8 @@ pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
 #[derive(Debug)]
 pub enum BlocktreeError {
-    BlobForIndexExists,
-    InvalidBlobData(Box<bincode::ErrorKind>),
+    ShredForIndexExists,
+    InvalidShredData(Box<bincode::ErrorKind>),
     RocksDb(rocksdb::Error),
     #[cfg(feature = "kvstore")]
     KvsDb(kvstore::Error),
@@ -84,9 +83,7 @@ pub enum BlocktreeError {
 pub struct Blocktree {
     db: Arc<Database>,
     meta_cf: LedgerColumn<cf::SlotMeta>,
-    data_cf: LedgerColumn<cf::Data>,
     dead_slots_cf: LedgerColumn<cf::DeadSlots>,
-    erasure_cf: LedgerColumn<cf::Coding>,
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
     index_cf: LedgerColumn<cf::Index>,
@@ -100,12 +97,8 @@ pub struct Blocktree {
 
 // Column family for metadata about a leader slot
 pub const META_CF: &str = "meta";
-// Column family for the data in a leader slot
-pub const DATA_CF: &str = "data";
 // Column family for slots that have been marked as dead
 pub const DEAD_SLOTS_CF: &str = "dead_slots";
-// Column family for erasure data
-pub const ERASURE_CF: &str = "erasure";
 pub const ERASURE_META_CF: &str = "erasure_meta";
 // Column family for orphans data
 pub const ORPHANS_CF: &str = "orphans";
@@ -132,14 +125,8 @@ impl Blocktree {
         // Create the metadata column family
         let meta_cf = db.column();
 
-        // Create the data column family
-        let data_cf = db.column();
-
         // Create the dead slots column family
         let dead_slots_cf = db.column();
-
-        // Create the erasure column family
-        let erasure_cf = db.column();
 
         let erasure_meta_cf = db.column();
 
@@ -165,9 +152,7 @@ impl Blocktree {
         Ok(Blocktree {
             db,
             meta_cf,
-            data_cf,
             dead_slots_cf,
-            erasure_cf,
             erasure_meta_cf,
             orphans_cf,
             index_cf,
@@ -254,15 +239,7 @@ impl Blocktree {
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
                 && self
-                    .data_cf
-                    .delete_slot(&mut write_batch, from_slot, batch_end)
-                    .unwrap_or(false)
-                && self
                     .erasure_meta_cf
-                    .delete_slot(&mut write_batch, from_slot, batch_end)
-                    .unwrap_or(false)
-                && self
-                    .erasure_cf
                     .delete_slot(&mut write_batch, from_slot, batch_end)
                     .unwrap_or(false)
                 && self
@@ -802,11 +779,6 @@ impl Blocktree {
     /// Dangerous. Use with care.
     pub fn put_meta_bytes(&self, slot: u64, bytes: &[u8]) -> Result<()> {
         self.meta_cf.put_bytes(slot, bytes)
-    }
-
-    pub fn get_data_shred_as_blob(&self, slot: u64, shred_index: u64) -> Result<Option<Blob>> {
-        let bytes = self.get_data_shred(slot, shred_index)?;
-        Ok(bytes.map(|bytes| Blob::new(&bytes)))
     }
 
     // Given a start and end entry index, find all the missing
@@ -1773,10 +1745,13 @@ pub mod tests {
         // Test erasure column family
         let erasure = vec![1u8; 16];
         let erasure_key = (0, 0);
-        ledger.erasure_cf.put_bytes(erasure_key, &erasure).unwrap();
+        ledger
+            .code_shred_cf
+            .put_bytes(erasure_key, &erasure)
+            .unwrap();
 
         let result = ledger
-            .erasure_cf
+            .code_shred_cf
             .get_bytes(erasure_key)
             .unwrap()
             .expect("Expected erasure object to exist");
@@ -1786,10 +1761,10 @@ pub mod tests {
         // Test data column family
         let data = vec![2u8; 16];
         let data_key = (0, 0);
-        ledger.data_cf.put_bytes(data_key, &data).unwrap();
+        ledger.data_shred_cf.put_bytes(data_key, &data).unwrap();
 
         let result = ledger
-            .data_cf
+            .data_shred_cf
             .get_bytes(data_key)
             .unwrap()
             .expect("Expected data object to exist");

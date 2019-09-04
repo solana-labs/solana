@@ -346,7 +346,7 @@ impl ReplayStage {
                 !Bank::can_commit(&tx_error)
             }
             Err(Error::BlobError(BlobError::VerificationFailed)) => true,
-            Err(Error::BlocktreeError(BlocktreeError::InvalidBlobData(_))) => true,
+            Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(_))) => true,
             _ => false,
         }
     }
