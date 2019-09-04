@@ -1,8 +1,8 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
 mod helper;
-extern crate solana_sdk_bpf_utils;
-use solana_sdk_bpf_utils::info;
+extern crate solana_sdk_bpf;
+use solana_sdk_bpf::info;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> bool {

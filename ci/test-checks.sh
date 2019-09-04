@@ -24,16 +24,13 @@ _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
 
-for project in sdk/bpf/rust/{rust-utils,rust-test} programs/bpf/rust/*/ ; do
-  echo "+++ do_bpf_check $project"
-  (
-    cd "$project"
-    _ cargo +"$rust_stable" fmt --all -- --check
-    _ cargo +"$rust_nightly" test --all
-    _ cargo +"$rust_nightly" clippy --version
-    _ cargo +"$rust_nightly" clippy --all -- --deny=warnings
-    _ cargo +"$rust_stable" audit
-  )
-done
+(
+  cd sdk/bpf/rust
+  _ cargo +"$rust_stable" fmt --all -- --check
+  _ cargo +"$rust_nightly" test --all
+  _ cargo +"$rust_nightly" clippy --version
+  _ cargo +"$rust_nightly" clippy --all -- --deny=warnings
+  _ cargo +"$rust_stable" audit
+)
 
 echo --- ok

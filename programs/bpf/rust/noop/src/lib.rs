@@ -2,10 +2,11 @@
 
 #![allow(unreachable_code)]
 
-extern crate solana_sdk_bpf_utils;
-use solana_sdk_bpf_utils::entrypoint::*;
-use solana_sdk_bpf_utils::log::*;
-use solana_sdk_bpf_utils::{entrypoint, info};
+extern crate solana_sdk_bpf;
+use solana_sdk_bpf::account::Account;
+use solana_sdk_bpf::log::*;
+use solana_sdk_bpf::pubkey::Pubkey;
+use solana_sdk_bpf::{entrypoint, info};
 
 #[derive(Debug, PartialEq)]
 struct SStruct {
@@ -16,19 +17,20 @@ struct SStruct {
 
 #[inline(never)]
 fn return_sstruct() -> SStruct {
+    info!("return_sstruct");
     SStruct { x: 1, y: 2, z: 3 }
 }
 
 entrypoint!(process_instruction);
-fn process_instruction(ka: &mut [SolKeyedAccount], info: &SolClusterInfo, data: &[u8]) -> bool {
+fn process_instruction(program_id: &Pubkey, accounts: &mut [Account], data: &[u8]) -> bool {
     info!("Program identifier:");
-    sol_log_key(&info.program_id);
+    program_id.print();
 
     // Log the provided account keys and instruction input data.  In the case of
     // the no-op program, no account keys or input data are expected but real
     // programs will have specific requirements so they can do their work.
     info!("Account keys and instruction input data:");
-    sol_log_params(ka, data);
+    sol_log_params(accounts, data);
 
     {
         // Test - use std methods, unwrap
