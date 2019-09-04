@@ -76,14 +76,14 @@ impl Service for LedgerCleanupService {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries_using_shreds;
+    use crate::blocktree::tests::make_many_slot_entries;
     use std::sync::mpsc::channel;
 
     #[test]
     fn test_cleanup() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let (shreds, _) = make_many_slot_entries_using_shreds(0, 50, 5);
+        let (shreds, _) = make_many_slot_entries(0, 50, 5);
         blocktree.insert_shreds(shreds).unwrap();
         let blocktree = Arc::new(blocktree);
         let (sender, receiver) = channel();

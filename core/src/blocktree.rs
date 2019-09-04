@@ -94,7 +94,7 @@ pub struct Blocktree {
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     batch_processor: Arc<RwLock<BatchProcessor>>,
     last_root: Arc<RwLock<u64>>,
-    pub new_blobs_signals: Vec<SyncSender<bool>>,
+    pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
 
@@ -119,7 +119,7 @@ pub const DATA_SHRED_CF: &str = "data_shred";
 pub const CODE_SHRED_CF: &str = "code_shred";
 
 impl Blocktree {
-    /// Opens a Ledger in directory, provides "infinite" window of blobs
+    /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blocktree> {
         fs::create_dir_all(&ledger_path)?;
         let blocktree_path = ledger_path.join(BLOCKTREE_DIRECTORY);
@@ -173,7 +173,7 @@ impl Blocktree {
             index_cf,
             data_shred_cf,
             code_shred_cf,
-            new_blobs_signals: vec![],
+            new_shreds_signals: vec![],
             batch_processor,
             completed_slots_senders: vec![],
             last_root,
@@ -187,7 +187,7 @@ impl Blocktree {
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
-        blocktree.new_blobs_signals = vec![signal_sender];
+        blocktree.new_shreds_signals = vec![signal_sender];
         blocktree.completed_slots_senders = vec![completed_slots_sender];
 
         Ok((blocktree, signal_receiver, completed_slots_receiver))
@@ -524,13 +524,13 @@ impl Blocktree {
         batch_processor.write(write_batch)?;
 
         if should_signal {
-            for signal in &self.new_blobs_signals {
+            for signal in &self.new_shreds_signals {
                 let _ = signal.try_send(true);
             }
         }
 
         send_signals(
-            &self.new_blobs_signals,
+            &self.new_shreds_signals,
             &self.completed_slots_senders,
             should_signal,
             newly_completed_slots,
@@ -620,7 +620,7 @@ impl Blocktree {
 
         let index_meta = index_working_set
             .get_mut(&slot)
-            .expect("Index must be present for all data blobs")
+            .expect("Index must be present for all data shreds")
             .data_mut();
 
         if !index_meta.is_present(index)
@@ -706,7 +706,7 @@ impl Blocktree {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
-    pub fn write_entries_using_shreds<I>(
+    pub fn write_entries<I>(
         &self,
         start_slot: u64,
         num_ticks_in_start_slot: u64,
@@ -804,8 +804,8 @@ impl Blocktree {
         self.meta_cf.put_bytes(slot, bytes)
     }
 
-    pub fn get_data_shred_as_blob(&self, slot: u64, blob_index: u64) -> Result<Option<Blob>> {
-        let bytes = self.get_data_shred(slot, blob_index)?;
+    pub fn get_data_shred_as_blob(&self, slot: u64, shred_index: u64) -> Result<Option<Blob>> {
+        let bytes = self.get_data_shred(slot, shred_index)?;
         Ok(bytes.map(|bytes| Blob::new(&bytes)))
     }
 
@@ -828,10 +828,10 @@ impl Blocktree {
 
         let mut missing_indexes = vec![];
 
-        // Seek to the first blob with index >= start_index
+        // Seek to the first shred with index >= start_index
         db_iterator.seek((slot, start_index));
 
-        // The index of the first missing blob in the slot
+        // The index of the first missing shred in the slot
         let mut prev_index = start_index;
         'outer: loop {
             if !db_iterator.valid() {
@@ -889,14 +889,14 @@ impl Blocktree {
         }
     }
 
-    /// Returns the entry vector for the slot starting with `blob_start_index`
+    /// Returns the entry vector for the slot starting with `shred_start_index`
     pub fn get_slot_entries(
         &self,
         slot: u64,
-        blob_start_index: u64,
+        shred_start_index: u64,
         _max_entries: Option<u64>,
     ) -> Result<Vec<Entry>> {
-        self.get_slot_entries_with_shred_count(slot, blob_start_index)
+        self.get_slot_entries_with_shred_count(slot, shred_start_index)
             .map(|x| x.0)
     }
 
@@ -905,7 +905,7 @@ impl Blocktree {
         slot: u64,
         start_index: u64,
     ) -> Result<(Vec<Entry>, usize)> {
-        // Find the next consecutive block of blobs.
+        // Find the next consecutive block of shreds.
         let serialized_shreds = get_slot_consecutive_shreds(slot, &self.db, start_index)?;
         trace!(
             "Found {:?} shreds for slot {:?}",
@@ -1096,12 +1096,12 @@ fn update_slot_meta(
     new_consumed: u64,
 ) {
     // Index is zero-indexed, while the "received" height starts from 1,
-    // so received = index + 1 for the same blob.
+    // so received = index + 1 for the same shred.
     slot_meta.received = cmp::max(index + 1, slot_meta.received);
     slot_meta.consumed = new_consumed;
     slot_meta.last_index = {
         // If the last index in the slot hasn't been set before, then
-        // set it to this blob index
+        // set it to this shred index
         if slot_meta.last_index == std::u64::MAX {
             if is_last_in_slot {
                 index
@@ -1122,7 +1122,7 @@ fn get_slot_meta_entry<'a>(
 ) -> &'a mut (Rc<RefCell<SlotMeta>>, Option<SlotMeta>) {
     let meta_cf = db.column::<cf::SlotMeta>();
 
-    // Check if we've already inserted the slot metadata for this blob's slot
+    // Check if we've already inserted the slot metadata for this shred's slot
     slot_meta_working_set.entry(slot).or_insert_with(|| {
         // Store a 2-tuple of the metadata (working copy, backup copy)
         if let Some(mut meta) = meta_cf.get(slot).expect("Expect database get to succeed") {
@@ -1174,7 +1174,7 @@ where
         );
         return false;
     }
-    // Check that we do not receive a blob with "last_index" true, but index
+    // Check that we do not receive a shred with "last_index" true, but index
     // less than our current received
     if last_in_slot && index < slot_meta.received {
         datapoint_error!(
@@ -1199,7 +1199,7 @@ where
                 (
                     "error",
                     format!(
-                        "Received blob with parent_slot {} >= slot {}",
+                        "Received shred with parent_slot {} >= slot {}",
                         slot_meta.parent_slot, slot
                     ),
                     String
@@ -1208,12 +1208,12 @@ where
             return false;
         }
 
-        // Check that the blob is for a slot that is past the root
+        // Check that the shred is for a slot that is past the root
         if slot <= last_root {
             return false;
         }
 
-        // Ignore blobs that chain to slots before the last root
+        // Ignore shreds that chain to slots before the last root
         if slot_meta.parent_slot < last_root {
             return false;
         }
@@ -1227,13 +1227,13 @@ fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: u64, last_root: u64
 }
 
 fn send_signals(
-    new_blobs_signals: &[SyncSender<bool>],
+    new_shreds_signals: &[SyncSender<bool>],
     completed_slots_senders: &[SyncSender<Vec<u64>>],
     should_signal: bool,
     newly_completed_slots: Vec<u64>,
 ) -> Result<()> {
     if should_signal {
-        for signal in new_blobs_signals {
+        for signal in new_shreds_signals {
             let _ = signal.try_send(true);
         }
     }
@@ -1322,7 +1322,7 @@ fn find_slot_meta_in_db_else_create<'a>(
         Ok(insert_map.get(&slot).unwrap().clone())
     } else {
         // If this slot doesn't exist, make a orphan slot. This way we
-        // remember which slots chained to this one when we eventually get a real blob
+        // remember which slots chained to this one when we eventually get a real shred
         // for this slot
         insert_map.insert(
             slot,
@@ -1639,7 +1639,7 @@ pub mod tests {
             for i in 0..num_slots {
                 let mut new_ticks = create_ticks(ticks_per_slot, Hash::default());
                 let num_shreds = ledger
-                    .write_entries_using_shreds(
+                    .write_entries(
                         i,
                         0,
                         0,
@@ -1691,9 +1691,9 @@ pub mod tests {
 
                         let meta = ledger.meta(num_slots).unwrap().unwrap();
                         assert_eq!(meta.consumed, 0);
-                        // received blob was ticks_per_slot - 2, so received should be ticks_per_slot - 2 + 1
+                        // received shred was ticks_per_slot - 2, so received should be ticks_per_slot - 2 + 1
                         assert_eq!(meta.received, ticks_per_slot - 1);
-                        // last blob index ticks_per_slot - 2 because that's the blob that made tick_height == ticks_per_slot
+                        // last shred index ticks_per_slot - 2 because that's the shred that made tick_height == ticks_per_slot
                         // for the slot
                         assert_eq!(meta.last_index, ticks_per_slot - 2);
                         assert_eq!(meta.parent_slot, num_slots - 1);
@@ -1772,14 +1772,14 @@ pub mod tests {
     #[test]
     fn test_read_shred_bytes() {
         let slot = 0;
-        let (shreds, _) = make_slot_entries_using_shreds(slot, 0, 100);
+        let (shreds, _) = make_slot_entries(slot, 0, 100);
         let num_shreds = shreds.len() as u64;
         let shred_bufs: Vec<_> = shreds
             .iter()
             .map(|shred| bincode::serialize(shred).unwrap())
             .collect();
 
-        let ledger_path = get_tmp_ledger_path("test_read_blobs_bytes");
+        let ledger_path = get_tmp_ledger_path("test_read_shreds_bytes");
         let ledger = Blocktree::open(&ledger_path).unwrap();
         ledger.insert_shreds(shreds).unwrap();
 
@@ -1798,7 +1798,7 @@ pub mod tests {
             assert_eq!(shred_data_2, &shred_bufs[1][..bytes2 - bytes]);
         }
 
-        // buf size part-way into blob[1], should just return blob[0]
+        // buf size part-way into shred[1], should just return shred[0]
         let mut buf = vec![0; bytes + 1];
         let (last_index, bytes3) = ledger.get_data_shreds(slot, 0, 2, &mut buf).unwrap();
         assert_eq!(last_index, 0);
@@ -1814,8 +1814,8 @@ pub mod tests {
         assert_eq!(last_index, 9);
 
         {
-            let blob_data = &buf[..bytes6];
-            assert_eq!(blob_data, &shred_bufs[9][..bytes6]);
+            let shred_data = &buf[..bytes6];
+            assert_eq!(shred_data, &shred_bufs[9][..bytes6]);
         }
 
         // Read out of range
@@ -1835,14 +1835,14 @@ pub mod tests {
         let num_entries = 5;
         assert!(num_entries > 1);
 
-        let (mut shreds, entries) = make_slot_entries_using_shreds(0, 0, num_entries);
+        let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_basic");
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
-        // Insert last blob, we're missing the other blobs, so no consecutive
-        // blobs starting from slot 0, index 0 should exist.
+        // Insert last shred, we're missing the other shreds, so no consecutive
+        // shreds starting from slot 0, index 0 should exist.
         let last_shred = shreds.pop().unwrap();
         ledger.insert_shreds(vec![last_shred]).unwrap();
         assert!(ledger.get_slot_entries(0, 0, None).unwrap().is_empty());
@@ -1853,7 +1853,7 @@ pub mod tests {
             .expect("Expected new metadata object to be created");
         assert!(meta.consumed == 0 && meta.received == num_shreds);
 
-        // Insert the other blobs, check for consecutive returned entries
+        // Insert the other shreds, check for consecutive returned entries
         ledger.insert_shreds(shreds).unwrap();
         let result = ledger.get_slot_entries(0, 0, None).unwrap();
 
@@ -1878,13 +1878,13 @@ pub mod tests {
     #[test]
     fn test_insert_data_shreds_reverse() {
         let num_entries = 10;
-        let (mut shreds, entries) = make_slot_entries_using_shreds(0, 0, num_entries);
+        let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_reverse");
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
-        // Insert blobs in reverse, check for consecutive returned blobs
+        // Insert shreds in reverse, check for consecutive returned shreds
         for i in (0..num_shreds).rev() {
             let shred = shreds.pop().unwrap();
             ledger.insert_shreds(vec![shred]).unwrap();
@@ -1912,8 +1912,8 @@ pub mod tests {
 
     #[test]
     fn test_insert_slots() {
-        test_insert_data_shreds_slots("test_insert_data_blobs_slots_single", false);
-        test_insert_data_shreds_slots("test_insert_data_blobs_slots_bulk", true);
+        test_insert_data_shreds_slots("test_insert_data_shreds_slots_single", false);
+        test_insert_data_shreds_slots("test_insert_data_shreds_slots_bulk", true);
     }
 
     /*
@@ -1927,16 +1927,16 @@ pub mod tests {
                 // Write entries
                 let num_entries = 8;
                 let entries = make_tiny_test_entries(num_entries);
-                let mut blobs = entries.to_single_entry_blobs();
+                let mut shreds = entries.to_single_entry_shreds();
 
-                for (i, b) in blobs.iter_mut().enumerate() {
+                for (i, b) in shreds.iter_mut().enumerate() {
                     b.set_index(1 << (i * 8));
                     b.set_slot(0);
                 }
 
                 blocktree
-                    .write_blobs(&blobs)
-                    .expect("Expected successful write of blobs");
+                    .write_shreds(&shreds)
+                    .expect("Expected successful write of shreds");
 
                 let mut db_iterator = blocktree
                     .db
@@ -1966,7 +1966,7 @@ pub mod tests {
             let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false);
             blocktree
                 .insert_shreds(shreds)
-                .expect("Expected successful write of blobs");
+                .expect("Expected successful write of shreds");
 
             let mut shreds1 = entries_to_test_shreds(entries[4..].to_vec(), 1, 0, false);
             for (i, b) in shreds1.iter_mut().enumerate() {
@@ -1974,7 +1974,7 @@ pub mod tests {
             }
             blocktree
                 .insert_shreds(shreds1)
-                .expect("Expected successful write of blobs");
+                .expect("Expected successful write of shreds");
 
             assert_eq!(
                 blocktree.get_slot_entries(1, 0, None).unwrap()[2..4],
@@ -1985,7 +1985,7 @@ pub mod tests {
     }
 
     // This test seems to be unnecessary with introduction of data shreds. There are no
-    // guarantees that a particular blob index contains a complete entry
+    // guarantees that a particular shred index contains a complete entry
     #[test]
     #[ignore]
     pub fn test_get_slot_entries2() {
@@ -2022,7 +2022,7 @@ pub mod tests {
 
     #[test]
     pub fn test_get_slot_entries3() {
-        // Test inserting/fetching blobs which contain multiple entries per blob
+        // Test inserting/fetching shreds which contain multiple entries per shred
         let blocktree_path = get_tmp_ledger_path("test_get_slot_entries3");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -2050,7 +2050,7 @@ pub mod tests {
 
     #[test]
     pub fn test_insert_data_shreds_consecutive() {
-        let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
+        let blocktree_path = get_tmp_ledger_path("test_insert_data_shreds_consecutive");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             for i in 0..4 {
@@ -2059,7 +2059,7 @@ pub mod tests {
                 // Write entries
                 let num_entries = 21 as u64 * (i + 1);
                 let (mut shreds, original_entries) =
-                    make_slot_entries_using_shreds(slot, parent_slot, num_entries);
+                    make_slot_entries(slot, parent_slot, num_entries);
 
                 let num_shreds = shreds.len() as u64;
                 let mut odd_shreds = vec![];
@@ -2107,14 +2107,14 @@ pub mod tests {
     #[test]
     pub fn test_insert_data_shreds_duplicate() {
         // Create RocksDb ledger
-        let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_duplicate");
+        let blocktree_path = get_tmp_ledger_path("test_insert_data_shreds_duplicate");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Make duplicate entries and blobs
+            // Make duplicate entries and shreds
             let num_unique_entries = 10;
             let (mut original_shreds, original_entries) =
-                make_slot_entries_using_shreds(0, 0, num_unique_entries);
+                make_slot_entries(0, 0, num_unique_entries);
 
             // Discard first shred
             original_shreds.remove(0);
@@ -2142,23 +2142,23 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_new_blobs_signal() {
+    pub fn test_new_shreds_signal() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_new_blobs_signal");
+        let ledger_path = get_tmp_ledger_path("test_new_shreds_signal");
         let (ledger, recvr, _) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 50;
         // Create entries for slot 0
-        let (mut shreds, _) = make_slot_entries_using_shreds(0, 0, entries_per_slot);
+        let (mut shreds, _) = make_slot_entries(0, 0, entries_per_slot);
         let shreds_per_slot = shreds.len() as u64;
 
-        // Insert second blob, but we're missing the first blob, so no consecutive
-        // blobs starting from slot 0, index 0 should exist.
+        // Insert second shred, but we're missing the first shred, so no consecutive
+        // shreds starting from slot 0, index 0 should exist.
         ledger.insert_shreds(vec![shreds.remove(1)]).unwrap();
         let timer = Duration::new(1, 0);
         assert!(recvr.recv_timeout(timer).is_err());
-        // Insert first blob, now we've made a consecutive block
+        // Insert first shred, now we've made a consecutive block
         ledger.insert_shreds(vec![shreds.remove(0)]).unwrap();
         // Wait to get notified of update, should only be one update
         assert!(recvr.recv_timeout(timer).is_ok());
@@ -2170,14 +2170,13 @@ pub mod tests {
         assert!(recvr.try_recv().is_err());
 
         // Create some other slots, and send batches of ticks for each slot such that each slot
-        // is missing the tick at blob index == slot index - 1. Thus, no consecutive blocks
+        // is missing the tick at shred index == slot index - 1. Thus, no consecutive blocks
         // will be formed
         let num_slots = shreds_per_slot;
         let mut shreds: Vec<Shred> = vec![];
         let mut missing_shreds = vec![];
         for slot in 1..num_slots + 1 {
-            let (mut slot_shreds, _) =
-                make_slot_entries_using_shreds(slot, slot - 1, entries_per_slot);
+            let (mut slot_shreds, _) = make_slot_entries(slot, slot - 1, entries_per_slot);
             let missing_shred = slot_shreds.remove(slot as usize - 1);
             shreds.extend(slot_shreds);
             missing_shreds.push(missing_shred);
@@ -2187,11 +2186,11 @@ pub mod tests {
         ledger.insert_shreds(shreds).unwrap();
         assert!(recvr.recv_timeout(timer).is_err());
 
-        // Insert a blob for each slot that doesn't make a consecutive block, we
+        // Insert a shred for each slot that doesn't make a consecutive block, we
         // should get no updates
         let shreds: Vec<_> = (1..num_slots + 1)
             .flat_map(|slot| {
-                let (mut shred, _) = make_slot_entries_using_shreds(slot, slot - 1, 1);
+                let (mut shred, _) = make_slot_entries(slot, slot - 1, 1);
                 shred[0].set_index(2 * num_slots as u32);
                 shred
             })
@@ -2219,79 +2218,79 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_completed_blobs_signal() {
+    pub fn test_completed_shreds_signal() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal");
+        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal");
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
 
-        // Create blobs for slot 0
-        let (mut shreds, _) = make_slot_entries_using_shreds(0, 0, entries_per_slot);
+        // Create shreds for slot 0
+        let (mut shreds, _) = make_slot_entries(0, 0, entries_per_slot);
 
         let shred0 = shreds.remove(0);
-        // Insert all but the first blob in the slot, should not be considered complete
+        // Insert all but the first shred in the slot, should not be considered complete
         ledger.insert_shreds(shreds).unwrap();
         assert!(recvr.try_recv().is_err());
 
-        // Insert first blob, slot should now be considered complete
+        // Insert first shred, slot should now be considered complete
         ledger.insert_shreds(vec![shred0]).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![0]);
     }
 
     #[test]
-    pub fn test_completed_blobs_signal_orphans() {
+    pub fn test_completed_shreds_signal_orphans() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal_orphans");
+        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal_orphans");
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
         let slots = vec![2, 5, 10];
-        let mut all_shreds = make_chaining_slot_entries_using_shreds(&slots[..], entries_per_slot);
+        let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot);
 
-        // Get the blobs for slot 10, chaining to slot 5
+        // Get the shreds for slot 10, chaining to slot 5
         let (mut orphan_child, _) = all_shreds.remove(2);
 
-        // Get the blobs for slot 5 chaining to slot 2
+        // Get the shreds for slot 5 chaining to slot 2
         let (mut orphan_shreds, _) = all_shreds.remove(1);
 
-        // Insert all but the first blob in the slot, should not be considered complete
+        // Insert all but the first shred in the slot, should not be considered complete
         let orphan_child0 = orphan_child.remove(0);
         ledger.insert_shreds(orphan_child).unwrap();
         assert!(recvr.try_recv().is_err());
 
-        // Insert first blob, slot should now be considered complete
+        // Insert first shred, slot should now be considered complete
         ledger.insert_shreds(vec![orphan_child0]).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[2]]);
 
-        // Insert the blobs for the orphan_slot
+        // Insert the shreds for the orphan_slot
         let orphan_shred0 = orphan_shreds.remove(0);
         ledger.insert_shreds(orphan_shreds).unwrap();
         assert!(recvr.try_recv().is_err());
 
-        // Insert first blob, slot should now be considered complete
+        // Insert first shred, slot should now be considered complete
         ledger.insert_shreds(vec![orphan_shred0]).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[1]]);
     }
 
     #[test]
-    pub fn test_completed_blobs_signal_many() {
+    pub fn test_completed_shreds_signal_many() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_blobs_signal_many");
+        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal_many");
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
         let mut slots = vec![2, 5, 10];
-        let mut all_shreds = make_chaining_slot_entries_using_shreds(&slots[..], entries_per_slot);
+        let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot);
         let disconnected_slot = 4;
 
         let (shreds0, _) = all_shreds.remove(0);
         let (shreds1, _) = all_shreds.remove(0);
         let (shreds2, _) = all_shreds.remove(0);
-        let (shreds3, _) = make_slot_entries_using_shreds(disconnected_slot, 1, entries_per_slot);
+        let (shreds3, _) = make_slot_entries(disconnected_slot, 1, entries_per_slot);
 
         let mut all_shreds: Vec<_> = vec![shreds0, shreds1, shreds2, shreds3]
             .into_iter()
@@ -2315,9 +2314,8 @@ pub mod tests {
             let num_slots = 3;
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Construct the blobs
-            let (mut shreds, _) =
-                make_many_slot_entries_using_shreds(0, num_slots, entries_per_slot);
+            // Construct the shreds
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
             let shreds_per_slot = shreds.len() / num_slots as usize;
 
             // 1) Write to the first slot
@@ -2392,8 +2390,7 @@ pub mod tests {
                         slot - 1
                     }
                 };
-                let (slot_shreds, _) =
-                    make_slot_entries_using_shreds(slot, parent_slot, entries_per_slot);
+                let (slot_shreds, _) = make_slot_entries(slot, parent_slot, entries_per_slot);
 
                 if slot % 2 == 1 {
                     slots.extend(slot_shreds);
@@ -2402,7 +2399,7 @@ pub mod tests {
                 }
             }
 
-            // Write the blobs for every other slot
+            // Write the shreds for every other slot
             blocktree.insert_shreds(slots).unwrap();
 
             // Check metadata
@@ -2428,7 +2425,7 @@ pub mod tests {
                 }
             }
 
-            // Write the blobs for the other half of the slots that we didn't insert earlier
+            // Write the shreds for the other half of the slots that we didn't insert earlier
             blocktree.insert_shreds(missing_slots).unwrap();
 
             for i in 0..num_slots {
@@ -2463,11 +2460,10 @@ pub mod tests {
             let entries_per_slot = 2;
             assert!(entries_per_slot > 1);
 
-            let (mut shreds, _) =
-                make_many_slot_entries_using_shreds(0, num_slots, entries_per_slot);
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
             let shreds_per_slot = shreds.len() / num_slots as usize;
 
-            // Write the blobs such that every 3rd slot has a gap in the beginning
+            // Write the shreds such that every 3rd slot has a gap in the beginning
             let mut missing_shreds = vec![];
             for slot in 0..num_slots {
                 let mut shreds_for_slot = shreds.drain(..shreds_per_slot).collect_vec();
@@ -2554,18 +2550,18 @@ pub mod tests {
                 let entries_per_slot = erasure_config.num_data() as u64;
                 assert!(entries_per_slot > 1);
 
-                let (mut shreds, _) = make_many_slot_entries_using_shreds(0, num_slots, entries_per_slot);
+                let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
 
                 // Insert tree one slot at a time in a random order
                 let mut slots: Vec<_> = (0..num_slots).collect();
 
-                // Get blobs for the slot
+                // Get shreds for the slot
                 slots.shuffle(&mut thread_rng());
                 for slot in slots {
-                    // Get blobs for the slot "slot"
-                    let slot_blobs = &mut shreds
+                    // Get shreds for the slot "slot"
+                    let slot_shreds = &mut shreds
                         [(slot * entries_per_slot) as usize..((slot + 1) * entries_per_slot) as usize];
-                    for blob in slot_blobs.iter_mut() {
+                    for shred in slot_shreds.iter_mut() {
                         // Get the parent slot of the slot in the tree
                         let slot_parent = {
                             if slot == 0 {
@@ -2574,27 +2570,27 @@ pub mod tests {
                                 (slot - 1) / branching_factor
                             }
                         };
-                        blob.set_parent(slot_parent);
+                        shred.set_parent(slot_parent);
                     }
 
-                    let shared_blobs: Vec<_> = slot_blobs
+                    let shared_shreds: Vec<_> = slot_shreds
                         .iter()
                         .cloned()
-                        .map(|blob| Arc::new(RwLock::new(blob)))
+                        .map(|shred| Arc::new(RwLock::new(shred)))
                         .collect();
                     let mut coding_generator = CodingGenerator::new_from_config(&erasure_config);
-                    let coding_blobs = coding_generator.next(&shared_blobs);
-                    assert_eq!(coding_blobs.len(), erasure_config.num_coding());
+                    let coding_shreds = coding_generator.next(&shared_shreds);
+                    assert_eq!(coding_shreds.len(), erasure_config.num_coding());
 
                     let mut rng = thread_rng();
 
-                    // Randomly pick whether to insert erasure or coding blobs first
+                    // Randomly pick whether to insert erasure or coding shreds first
                     if rng.gen_bool(0.5) {
-                        blocktree.write_blobs(slot_blobs).unwrap();
-                        blocktree.put_shared_coding_blobs(&coding_blobs).unwrap();
+                        blocktree.write_shreds(slot_shreds).unwrap();
+                        blocktree.put_shared_coding_shreds(&coding_shreds).unwrap();
                     } else {
-                        blocktree.put_shared_coding_blobs(&coding_blobs).unwrap();
-                        blocktree.write_blobs(slot_blobs).unwrap();
+                        blocktree.put_shared_coding_shreds(&coding_shreds).unwrap();
+                        blocktree.write_shreds(slot_shreds).unwrap();
                     }
                 }
 
@@ -2684,9 +2680,9 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Create blobs and entries
+            // Create shreds and entries
             let entries_per_slot = 1;
-            let (mut shreds, _) = make_many_slot_entries_using_shreds(0, 3, entries_per_slot);
+            let (mut shreds, _) = make_many_slot_entries(0, 3, entries_per_slot);
             let shreds_per_slot = shreds.len() / 3;
 
             // Write slot 2, which chains to slot 1. We're missing slot 0,
@@ -2718,8 +2714,8 @@ pub mod tests {
 
             // Write some slot that also chains to existing slots and orphan,
             // nothing should change
-            let (shred4, _) = make_slot_entries_using_shreds(4, 0, 1);
-            let (shred5, _) = make_slot_entries_using_shreds(5, 1, 1);
+            let (shred4, _) = make_slot_entries(4, 0, 1);
+            let (shred5, _) = make_slot_entries(5, 1, 1);
             blocktree.insert_shreds(shred4).unwrap();
             blocktree.insert_shreds(shred5).unwrap();
             assert_eq!(blocktree.get_orphans(None), vec![0]);
@@ -2744,7 +2740,7 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Create blobs and entries
+            // Create shreds and entries
             let num_entries = 20 as u64;
             let mut entries = vec![];
             let mut shreds = vec![];
@@ -2758,7 +2754,7 @@ pub mod tests {
                     }
                 };
 
-                let (mut shred, entry) = make_slot_entries_using_shreds(slot, parent_slot, 1);
+                let (mut shred, entry) = make_slot_entries(slot, parent_slot, 1);
                 num_shreds_per_slot = shred.len() as u64;
                 shred
                     .iter_mut()
@@ -2769,7 +2765,7 @@ pub mod tests {
             }
 
             let num_shreds = shreds.len();
-            // Write blobs to the database
+            // Write shreds to the database
             if should_bulk_write {
                 blocktree.insert_shreds(shreds).unwrap();
             } else {
@@ -2819,8 +2815,8 @@ pub mod tests {
         }
         blocktree.insert_shreds(shreds).unwrap();
 
-        // Index of the first blob is 0
-        // Index of the second blob is "gap"
+        // Index of the first shred is 0
+        // Index of the second shred is "gap"
         // Thus, the missing indexes should then be [1, gap - 1] for the input index
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
@@ -2910,13 +2906,13 @@ pub mod tests {
         shreds[0].set_index(ONE as u32);
         shreds[1].set_index(OTHER as u32);
 
-        // Insert one blob at index = first_index
+        // Insert one shred at index = first_index
         blocktree.insert_shreds(shreds).unwrap();
 
         const STARTS: u64 = OTHER * 2;
         const END: u64 = OTHER * 3;
         const MAX: usize = 10;
-        // The first blob has index = first_index. Thus, for i < first_index,
+        // The first shred has index = first_index. Thus, for i < first_index,
         // given the input range of [i, first_index], the missing indexes should be
         // [i, first_index - 1]
         for start in 0..STARTS {
@@ -2934,7 +2930,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_no_missing_blob_indexes() {
+    pub fn test_no_missing_shred_indexes() {
         let slot = 0;
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -2962,12 +2958,12 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_should_insert_blob() {
-        let (mut shreds, _) = make_slot_entries_using_shreds(0, 0, 100);
+    pub fn test_should_insert_shred() {
+        let (mut shreds, _) = make_slot_entries(0, 0, 100);
         let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            // Insert the first 5 blobs, we don't have a "is_last" blob yet
+            // Insert the first 5 shreds, we don't have a "is_last" shred yet
             let shreds1 = shreds.drain(0..5).collect_vec();
             blocktree.insert_shreds(shreds1).unwrap();
 
@@ -2980,19 +2976,19 @@ pub mod tests {
                     .unwrap_or(false)
             };
 
-            // Trying to insert a blob less than consumed should fail
+            // Trying to insert a shred less than consumed should fail
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             assert_eq!(slot_meta.consumed, 5);
             assert!(!should_insert(&slot_meta, 3, 0, false, check_data_cf, 0));
 
-            // Trying to insert the same blob again should fail
+            // Trying to insert the same shred again should fail
             // skip over shred 5
             let shreds1 = shreds.drain(1..2).collect_vec();
             blocktree.insert_shreds(shreds1).unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             assert!(!should_insert(&slot_meta, 6, 0, false, check_data_cf, 0));
 
-            // Trying to insert another "is_last" blob with index < the received index
+            // Trying to insert another "is_last" shred with index < the received index
             // should fail
             // skip over shred 5 and 7
             let shreds1 = shreds.drain(2..3).collect_vec();
@@ -3001,11 +2997,11 @@ pub mod tests {
             assert_eq!(slot_meta.received, 9);
             assert!(!should_insert(&slot_meta, 7, 0, true, check_data_cf, 0));
 
-            // Insert all pending blobs
+            // Insert all pending shreds
             blocktree.insert_shreds(shreds).unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
 
-            // Trying to insert a blob with index > the "is_last" blob should fail
+            // Trying to insert a shred with index > the "is_last" shred should fail
             assert!(!should_insert(
                 &slot_meta,
                 slot_meta.last_index + 1,
@@ -3020,7 +3016,7 @@ pub mod tests {
 
     #[test]
     pub fn test_insert_multiple_is_last() {
-        let (shreds, _) = make_slot_entries_using_shreds(0, 0, 20);
+        let (shreds, _) = make_slot_entries(0, 0, 20);
         let num_shreds = shreds.len() as u64;
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -3033,7 +3029,7 @@ pub mod tests {
         assert_eq!(slot_meta.last_index, num_shreds - 1);
         assert!(slot_meta.is_full());
 
-        let (shreds, _) = make_slot_entries_using_shreds(0, 0, 22);
+        let (shreds, _) = make_slot_entries(0, 0, 22);
         blocktree.insert_shreds(shreds).unwrap();
         let slot_meta = blocktree.meta(0).unwrap().unwrap();
 
@@ -3048,12 +3044,12 @@ pub mod tests {
 
     #[test]
     fn test_slot_data_iterator() {
-        // Construct the blobs
+        // Construct the shreds
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let blobs_per_slot = 10;
+        let shreds_per_slot = 10;
         let slots = vec![2, 4, 8, 12];
-        let all_shreds = make_chaining_slot_entries_using_shreds(&slots, blobs_per_slot);
+        let all_shreds = make_chaining_slot_entries(&slots, shreds_per_slot);
         let slot_8_shreds = bincode::serialize(&all_shreds[2].0).unwrap();
         for (slot_shreds, _) in all_shreds {
             blocktree.insert_shreds(slot_shreds).unwrap();
@@ -3103,7 +3099,7 @@ pub mod tests {
     fn test_prune() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let (shreds, _) = make_many_slot_entries_using_shreds(0, 50, 6);
+        let (shreds, _) = make_many_slot_entries(0, 50, 6);
         let shreds_per_slot = shreds.len() as u64 / 50;
         blocktree.insert_shreds(shreds).unwrap();
         blocktree
@@ -3139,7 +3135,7 @@ pub mod tests {
     fn test_purge_slots() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let (shreds, _) = make_many_slot_entries_using_shreds(0, 50, 5);
+        let (shreds, _) = make_many_slot_entries(0, 50, 5);
         blocktree.insert_shreds(shreds).unwrap();
 
         blocktree.purge_slots(0, Some(5));
@@ -3165,7 +3161,7 @@ pub mod tests {
     fn test_purge_huge() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        let (shreds, _) = make_many_slot_entries_using_shreds(0, 5000, 10);
+        let (shreds, _) = make_many_slot_entries(0, 5000, 10);
         blocktree.insert_shreds(shreds).unwrap();
 
         blocktree.purge_slots(0, Some(4999));
@@ -3241,7 +3237,7 @@ pub mod tests {
         shreds
     }
 
-    pub fn make_slot_entries_using_shreds(
+    pub fn make_slot_entries(
         slot: u64,
         parent_slot: u64,
         num_entries: u64,
@@ -3251,7 +3247,7 @@ pub mod tests {
         (shreds, entries)
     }
 
-    pub fn make_many_slot_entries_using_shreds(
+    pub fn make_many_slot_entries(
         start_slot: u64,
         num_slots: u64,
         entries_per_slot: u64,
@@ -3261,17 +3257,17 @@ pub mod tests {
         for slot in start_slot..start_slot + num_slots {
             let parent_slot = if slot == 0 { 0 } else { slot - 1 };
 
-            let (slot_blobs, slot_entries) =
-                make_slot_entries_using_shreds(slot, parent_slot, entries_per_slot);
-            shreds.extend(slot_blobs);
+            let (slot_shreds, slot_entries) =
+                make_slot_entries(slot, parent_slot, entries_per_slot);
+            shreds.extend(slot_shreds);
             entries.extend(slot_entries);
         }
 
         (shreds, entries)
     }
 
-    // Create blobs for slots that have a parent-child relationship defined by the input `chain`
-    pub fn make_chaining_slot_entries_using_shreds(
+    // Create shreds for slots that have a parent-child relationship defined by the input `chain`
+    pub fn make_chaining_slot_entries(
         chain: &[u64],
         entries_per_slot: u64,
     ) -> Vec<(Vec<Shred>, Vec<Entry>)> {
@@ -3285,7 +3281,7 @@ pub mod tests {
                 }
             };
 
-            let result = make_slot_entries_using_shreds(*slot, parent_slot, entries_per_slot);
+            let result = make_slot_entries(*slot, parent_slot, entries_per_slot);
             slots_shreds_and_entries.push(result);
         }
 

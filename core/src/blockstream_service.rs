@@ -161,7 +161,7 @@ mod test {
         let expected_tick_heights = [5, 6, 7, 8, 8, 9];
 
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 1,
                 0,
                 0,

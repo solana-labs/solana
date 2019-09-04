@@ -139,7 +139,7 @@ mod tests {
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
 
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 0,
                 0,
                 0,
@@ -196,7 +196,7 @@ mod tests {
         let ticks_per_slot = 16;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 0,
                 0,
                 0,

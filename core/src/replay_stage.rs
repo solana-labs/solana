@@ -842,7 +842,7 @@ mod test {
     use super::*;
     use crate::bank_forks::Confidence;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::{entries_to_test_shreds, make_slot_entries_using_shreds};
+    use crate::blocktree::tests::{entries_to_test_shreds, make_slot_entries};
     use crate::entry;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::replay_stage::ReplayStage;
@@ -871,7 +871,7 @@ mod test {
             bank_forks.working_bank().freeze();
 
             // Insert blob for slot 1, generate new forks, check result
-            let (shreds, _) = make_slot_entries_using_shreds(1, 0, 8);
+            let (shreds, _) = make_slot_entries(1, 0, 8);
             blocktree.insert_shreds(shreds).unwrap();
             assert!(bank_forks.get(1).is_none());
             ReplayStage::generate_new_bank_forks(
@@ -882,7 +882,7 @@ mod test {
             assert!(bank_forks.get(1).is_some());
 
             // Insert blob for slot 3, generate new forks, check result
-            let (shreds, _) = make_slot_entries_using_shreds(2, 0, 8);
+            let (shreds, _) = make_slot_entries(2, 0, 8);
             blocktree.insert_shreds(shreds).unwrap();
             assert!(bank_forks.get(2).is_none());
             ReplayStage::generate_new_bank_forks(

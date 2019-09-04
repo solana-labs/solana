@@ -467,7 +467,7 @@ pub mod tests {
         let last_entry_hash = entries.last().unwrap().hash;
 
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 slot,
                 0,
                 0,
@@ -520,7 +520,7 @@ pub mod tests {
             entries.pop();
 
             blocktree
-                .write_entries_using_shreds(
+                .write_entries(
                     slot,
                     0,
                     0,
@@ -872,7 +872,7 @@ pub mod tests {
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 1,
                 0,
                 0,

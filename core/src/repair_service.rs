@@ -403,8 +403,7 @@ impl Service for RepairService {
 mod test {
     use super::*;
     use crate::blocktree::tests::{
-        make_chaining_slot_entries_using_shreds, make_many_slot_entries_using_shreds,
-        make_slot_entries_using_shreds,
+        make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
     };
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::Node;
@@ -421,8 +420,8 @@ mod test {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             // Create some orphan slots
-            let (mut shreds, _) = make_slot_entries_using_shreds(1, 0, 1);
-            let (shreds2, _) = make_slot_entries_using_shreds(5, 2, 1);
+            let (mut shreds, _) = make_slot_entries(1, 0, 1);
+            let (shreds2, _) = make_slot_entries(5, 2, 1);
             shreds.extend(shreds2);
             blocktree.insert_shreds(shreds).unwrap();
             assert_eq!(
@@ -440,7 +439,7 @@ mod test {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            let (shreds, _) = make_slot_entries_using_shreds(2, 0, 1);
+            let (shreds, _) = make_slot_entries(2, 0, 1);
 
             // Write this blob to slot 2, should chain to slot 0, which we haven't received
             // any blobs for
@@ -465,8 +464,7 @@ mod test {
             let num_slots = 2;
 
             // Create some blobs
-            let (mut shreds, _) =
-                make_many_slot_entries_using_shreds(0, num_slots as u64, 50 as u64);
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 50 as u64);
             let num_shreds = shreds.len() as u64;
             let num_shreds_per_slot = num_shreds / num_slots;
 
@@ -513,7 +511,7 @@ mod test {
             let num_entries_per_slot = 100;
 
             // Create some blobs
-            let (mut shreds, _) = make_slot_entries_using_shreds(0, 0, num_entries_per_slot as u64);
+            let (mut shreds, _) = make_slot_entries(0, 0, num_entries_per_slot as u64);
             let num_shreds_per_slot = shreds.len() as u64;
 
             // Remove last shred (which is also last in slot) so that slot is not complete
@@ -542,7 +540,7 @@ mod test {
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
             let num_entries_per_slot = 10;
 
-            let shreds = make_chaining_slot_entries_using_shreds(&slots, num_entries_per_slot);
+            let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
             for (mut slot_shreds, _) in shreds.into_iter() {
                 slot_shreds.remove(0);
                 blocktree.insert_shreds(slot_shreds).unwrap();
@@ -595,8 +593,7 @@ mod test {
             // Create some blobs in slots 0..num_slots
             for i in start..start + num_slots {
                 let parent = if i > 0 { i - 1 } else { 0 };
-                let (shreds, _) =
-                    make_slot_entries_using_shreds(i, parent, num_entries_per_slot as u64);
+                let (shreds, _) = make_slot_entries(i, parent, num_entries_per_slot as u64);
 
                 blocktree.insert_shreds(shreds).unwrap();
             }
@@ -634,14 +631,12 @@ mod test {
             let root = 10;
 
             let fork1 = vec![5, 7, root, 15, 20, 21];
-            let fork1_shreds: Vec<_> =
-                make_chaining_slot_entries_using_shreds(&fork1, num_entries_per_slot)
-                    .into_iter()
-                    .flat_map(|(shreds, _)| shreds)
-                    .collect();
+            let fork1_shreds: Vec<_> = make_chaining_slot_entries(&fork1, num_entries_per_slot)
+                .into_iter()
+                .flat_map(|(shreds, _)| shreds)
+                .collect();
             let fork2 = vec![8, 12];
-            let fork2_shreds =
-                make_chaining_slot_entries_using_shreds(&fork2, num_entries_per_slot);
+            let fork2_shreds = make_chaining_slot_entries(&fork2, num_entries_per_slot);
 
             // Remove the last blob from each slot to make an incomplete slot
             let fork2_incomplete_shreds: Vec<_> = fork2_shreds
@@ -673,11 +668,10 @@ mod test {
             let last_epoch = epoch_schedule.get_stakers_epoch(root);
             let last_slot = epoch_schedule.get_last_slot_in_epoch(last_epoch);
             let fork3 = vec![last_slot, last_slot + 1];
-            let fork3_shreds: Vec<_> =
-                make_chaining_slot_entries_using_shreds(&fork3, num_entries_per_slot)
-                    .into_iter()
-                    .flat_map(|(shreds, _)| shreds)
-                    .collect();
+            let fork3_shreds: Vec<_> = make_chaining_slot_entries(&fork3, num_entries_per_slot)
+                .into_iter()
+                .flat_map(|(shreds, _)| shreds)
+                .collect();
             blocktree.insert_shreds(fork3_shreds).unwrap();
             RepairService::get_completed_slots_past_root(
                 &blocktree,
@@ -711,11 +705,10 @@ mod test {
                 .name("writer".to_string())
                 .spawn(move || {
                     let slots: Vec<_> = (1..num_slots + 1).collect();
-                    let mut shreds: Vec<_> =
-                        make_chaining_slot_entries_using_shreds(&slots, entries_per_slot)
-                            .into_iter()
-                            .flat_map(|(shreds, _)| shreds)
-                            .collect();
+                    let mut shreds: Vec<_> = make_chaining_slot_entries(&slots, entries_per_slot)
+                        .into_iter()
+                        .flat_map(|(shreds, _)| shreds)
+                        .collect();
                     shreds.shuffle(&mut thread_rng());
                     let mut i = 0;
                     let max_step = entries_per_slot * 4;
@@ -755,8 +748,7 @@ mod test {
 
             // Update with new root, should filter out the slots <= root
             root = num_slots / 2;
-            let (shreds, _) =
-                make_slot_entries_using_shreds(num_slots + 2, num_slots + 1, entries_per_slot);
+            let (shreds, _) = make_slot_entries(num_slots + 2, num_slots + 1, entries_per_slot);
             blocktree.insert_shreds(shreds).unwrap();
             RepairService::update_epoch_slots(
                 Pubkey::default(),

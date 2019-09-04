@@ -128,7 +128,7 @@ mod tests {
 
         let entries = make_tiny_deterministic_test_entries(slots_per_segment);
         blocktree
-            .write_entries_using_shreds(
+            .write_entries(
                 0,
                 0,
                 0,
