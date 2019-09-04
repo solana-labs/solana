@@ -292,6 +292,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "btc_spv_bin"
+version = "0.1.0"
+dependencies = [
+ "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "build_const"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3124,6 +3134,34 @@ dependencies = [
  "solana-move-loader-program 0.19.0-pre0",
  "solana-netutil 0.19.0-pre0",
  "solana-runtime 0.19.0-pre0",
+ "solana-sdk 0.19.0-pre0",
+]
+
+[[package]]
+name = "solana-bitcoin-spv-api"
+version = "0.0.1"
+dependencies = [
+ "bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.19.0-pre0",
+]
+
+[[package]]
+name = "solana-bitcoin-spv-program"
+version = "0.0.1"
+dependencies = [
+ "bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 0.19.0-pre0",
 ]
 

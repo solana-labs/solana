@@ -1,0 +1,15 @@
+[package]
+name = "btc_spv_bin"
+version = "0.1.0"
+authors = ["patrick <patrick.solana.com>"]
+edition = "2018"
+
+[dependencies]
+reqwest="0.9.19"
+clap="2.33.0"
+serde_derive="1.0.98"
+serde="1.0.99"
+
+[[bin]]
+name = "blockheaders"
+path = "src/blockheade.rs"
