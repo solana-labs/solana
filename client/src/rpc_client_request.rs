@@ -3,8 +3,10 @@ use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::rpc_request::{RpcError, RpcRequest};
 use log::*;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
+use std::io::{Error as IoError, ErrorKind};
 use std::thread::sleep;
 use std::time::Duration;
+use ureq::Error;
 
 pub struct RpcClientRequest {
     client: ureq::Agent,
@@ -67,13 +69,18 @@ impl GenericRpcClientRequest for RpcClientRequest {
                 }
                 return Ok(json["result"].clone());
             } else {
-                let err = response.synthetic_error().as_ref().unwrap();
+                let io_error = Error::Io(IoError::new(ErrorKind::Other, "Unspecified error"));
+                let error = if let Some(err) = response.synthetic_error().as_ref() {
+                    err
+                } else {
+                    &io_error
+                };
                 info!(
                     "make_rpc_request({:?}) failed, {} retries left: {:?}",
-                    request, retries, err
+                    request, retries, error
                 );
                 if retries == 0 {
-                    Err(err)?;
+                    Err(error)?;
                 }
                 retries -= 1;
 

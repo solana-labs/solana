@@ -69,8 +69,12 @@ fn download_tar_bz2(
     let client = ureq::agent();
     let response = client.get(url.as_str()).call();
     if response.error() {
-        let err = response.synthetic_error().as_ref().unwrap();
-        Err(format!("Unable to get: {:?}", err))?
+        let error = if let Some(err) = response.synthetic_error().as_ref() {
+            format!("Unable to get: {:?}", err)
+        } else {
+            "Unable to get: unspecified error".to_string()
+        };
+        Err(error)?
     }
     let download_size = {
         response
