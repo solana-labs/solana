@@ -40,7 +40,9 @@ impl Shred {
             | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
-            | Shred::LastInSlot(s) => s.header.parent_offset as u64 + s.header.common_header.slot,
+            | Shred::LastInSlot(s) => {
+                u64::from(s.header.parent_offset) + s.header.common_header.slot
+            }
             Shred::Coding(_) => std::u64::MAX,
         }
     }
@@ -340,7 +342,7 @@ impl Shredder {
                     fec_rate
                 ),
             )))
-        } else if slot < parent || slot - parent > std::u16::MAX as u64 {
+        } else if slot < parent || slot - parent > u64::from(std::u16::MAX) {
             Err(Error::IO(IOError::new(
                 ErrorKind::Other,
                 format!(
