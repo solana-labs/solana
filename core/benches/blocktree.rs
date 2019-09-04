@@ -6,19 +6,20 @@ extern crate test;
 #[macro_use]
 extern crate solana_core;
 
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use solana_core::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, Blocktree};
-use solana_core::entry::{make_large_test_entries, make_tiny_test_entries};
-use solana_core::shred::Shred;
+use solana_core::entry::{make_large_test_entries, make_tiny_test_entries, Entry};
 use std::path::Path;
 use test::Bencher;
 
 // Given some shreds and a ledger at ledger_path, benchmark writing the shreds to the ledger
-fn bench_write_shreds(bench: &mut Bencher, shreds: Vec<Shred>, ledger_path: &Path) {
+fn bench_write_shreds(bench: &mut Bencher, entries: Vec<Entry>, ledger_path: &Path) {
     let blocktree =
         Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
-
-    blocktree.insert_shreds(shreds).unwrap();
+    bench.iter(move || {
+        let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true);
+        blocktree.insert_shreds(shreds).unwrap();
+    });
 
     Blocktree::destroy(ledger_path).expect("Expected successful database destruction");
 }
@@ -48,8 +49,7 @@ fn bench_write_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
-    let shreds = entries_to_test_shreds(entries, 0, 0, true);
-    bench_write_shreds(bench, shreds, &ledger_path);
+    bench_write_shreds(bench, entries, &ledger_path);
 }
 
 // Write big shreds to the ledger
@@ -59,8 +59,7 @@ fn bench_write_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
     let num_entries = 32 * 1024;
     let entries = make_large_test_entries(num_entries);
-    let shreds = entries_to_test_shreds(entries, 0, 0, true);
-    bench_write_shreds(bench, shreds, &ledger_path);
+    bench_write_shreds(bench, entries, &ledger_path);
 }
 
 #[bench]
@@ -129,9 +128,10 @@ fn bench_insert_data_shred_small(bench: &mut Bencher) {
         Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
-    let mut shreds = entries_to_test_shreds(entries, 0, 0, true);
-    shreds.shuffle(&mut thread_rng());
-    blocktree.insert_shreds(shreds).unwrap();
+    bench.iter(move || {
+        let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true);
+        blocktree.insert_shreds(shreds).unwrap();
+    });
     Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
@@ -143,8 +143,9 @@ fn bench_insert_data_shred_big(bench: &mut Bencher) {
         Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_large_test_entries(num_entries);
-    let mut shreds = entries_to_test_shreds(entries, 0, 0, true);
-    shreds.shuffle(&mut thread_rng());
-    blocktree.insert_shreds(shreds).unwrap();
+    bench.iter(move || {
+        let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true);
+        blocktree.insert_shreds(shreds).unwrap();
+    });
     Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
