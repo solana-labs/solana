@@ -303,6 +303,7 @@ fn test_listener_startup() {
 #[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_snapshots_blocktree_floor() {
     // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
