@@ -58,11 +58,12 @@ pub enum StakeError {
     NoCreditsToRedeem,
 }
 
-impl<T> DecodeError<T> for StakeError {
-    fn type_of(&self) -> &'static str {
+impl<E> DecodeError<E> for StakeError {
+    fn type_of() -> &'static str {
         "StakeError"
     }
 }
+
 impl Into<InstructionError> for StakeError {
     fn into(self) -> InstructionError {
         InstructionError::CustomError(self as u32)
@@ -72,10 +73,7 @@ impl Into<InstructionError> for StakeError {
 impl std::fmt::Display for StakeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            StakeError::NoCreditsToRedeem => write!(
-                f,
-                "StakeError::NoCreditsToRedeem not enough credits to redeem"
-            ),
+            StakeError::NoCreditsToRedeem => write!(f, "not enough credits to redeem"),
         }
     }
 }
@@ -1416,15 +1414,8 @@ mod tests {
 
         let err: InstructionError = StakeError::NoCreditsToRedeem.into();
         if let InstructionError::CustomError(code) = err {
-            let specific_error: Option<StakeError> = StakeError::decode_custom_error_to_enum(code);
-            if let Some(specific_error) = specific_error {
-                eprintln!(
-                    "{:?}: {}::{:?}",
-                    err,
-                    specific_error.type_of(),
-                    specific_error
-                );
-            }
+            let specific_error: StakeError = StakeError::decode_custom_error_to_enum(code).unwrap();
+            eprintln!("{:?}: {}::{:?}", err, StakeError::type_of(), specific_error);
         }
 
         // in this call, we've swapped rewards and vote, deserialization of rewards_pool fails

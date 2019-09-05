@@ -14,7 +14,7 @@ pub enum SystemError {
 }
 
 impl<T> DecodeError<T> for SystemError {
-    fn type_of(&self) -> &'static str {
+    fn type_of() -> &'static str {
         "SystemError"
     }
 }

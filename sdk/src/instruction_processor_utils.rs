@@ -36,7 +36,7 @@ pub trait DecodeError<E> {
     {
         E::from_u32(int)
     }
-    fn type_of(&self) -> &'static str;
+    fn type_of() -> &'static str;
 }
 
 #[cfg(test)]
