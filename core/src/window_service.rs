@@ -279,7 +279,7 @@ mod test {
 
     fn local_entries_to_shred(entries: Vec<Entry>, keypair: &Arc<Keypair>) -> Vec<Shred> {
         let mut shredder =
-            Shredder::new(0, Some(0), 0.0, keypair, 0).expect("Failed to create entry shredder");
+            Shredder::new(0, 0, 0.0, keypair, 0).expect("Failed to create entry shredder");
         bincode::serialize_into(&mut shredder, &entries)
             .expect("Expect to write all entries to shreds");
         shredder.finalize_slot();

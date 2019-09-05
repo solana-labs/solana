@@ -88,14 +88,9 @@ pub(super) fn entries_to_shreds(
         .for_each(|(i, entries_tuple)| {
             let (entries, _): (Vec<_>, Vec<_>) = entries_tuple.into_iter().unzip();
             //entries
-            let mut shredder = Shredder::new(
-                slot,
-                Some(parent_slot),
-                1.0,
-                keypair,
-                latest_shred_index as u32,
-            )
-            .expect("Expected to create a new shredder");
+            let mut shredder =
+                Shredder::new(slot, parent_slot, 1.0, keypair, latest_shred_index as u32)
+                    .expect("Expected to create a new shredder");
 
             bincode::serialize_into(&mut shredder, &entries)
                 .expect("Expect to write all entries to shreds");

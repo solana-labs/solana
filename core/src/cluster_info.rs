@@ -1767,7 +1767,7 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
-    use crate::shred::{FirstDataShred, Shred};
+    use crate::shred::{DataShred, Shred};
     use crate::test_tx::test_tx;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -1927,7 +1927,7 @@ mod tests {
                 0,
             );
             assert!(rv.is_empty());
-            let mut shred = Shred::FirstInSlot(FirstDataShred::default());
+            let mut shred = Shred::FirstInSlot(DataShred::default());
             shred.set_slot(2);
             shred.set_index(1);
 
