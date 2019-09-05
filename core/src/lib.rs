@@ -13,6 +13,7 @@ pub mod chacha;
 #[cfg(cuda)]
 pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
+pub mod confidence;
 pub mod recycler;
 #[macro_use]
 pub mod contact_info;

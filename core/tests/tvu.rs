@@ -5,6 +5,7 @@ use log::*;
 use solana_core::banking_stage::create_test_recorder;
 use solana_core::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana_core::cluster_info::{ClusterInfo, Node};
+use solana_core::confidence::ForkConfidenceCache;
 use solana_core::entry::next_entry_mut;
 use solana_core::entry::EntrySlice;
 use solana_core::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
@@ -120,6 +121,7 @@ fn test_replay() {
     {
         let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(&working_bank, &blocktree);
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(&Arc::new(voting_keypair)),
@@ -144,6 +146,7 @@ fn test_replay() {
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
+            fork_confidence_cache,
         );
 
         let mut mint_ref_balance = mint_balance;
