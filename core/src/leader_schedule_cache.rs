@@ -62,6 +62,8 @@ impl LeaderScheduleCache {
     pub fn slot_leader_at(&self, slot: u64, bank: Option<&Bank>) -> Option<Pubkey> {
         if let Some(bank) = bank {
             self.slot_leader_at_else_compute(slot, bank)
+        } else if self.epoch_schedule.slots_per_epoch == 0 {
+            None
         } else {
             self.slot_leader_at_no_compute(slot)
         }

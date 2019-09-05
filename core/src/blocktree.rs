@@ -449,7 +449,7 @@ impl Blocktree {
         });
 
         if let Some(leader_schedule_cache) = leader_schedule {
-            let mut recovered_data = Self::try_shred_recovery(
+            let recovered_data = Self::try_shred_recovery(
                 &db,
                 &erasure_metas,
                 &index_working_set,
@@ -457,21 +457,18 @@ impl Blocktree {
                 &mut just_inserted_coding_shreds,
             );
 
-            recovered_data.retain(|shred| {
-                if let Some(leader) = leader_schedule_cache.slot_leader_at(shred.slot(), None) {
-                    shred.verify(&leader)
-                } else {
-                    false
-                }
-            });
-
             recovered_data.into_iter().for_each(|shred| {
-                self.insert_recovered_data_shred(
-                    &shred,
-                    &mut index_working_set,
-                    &mut slot_meta_working_set,
-                    &mut write_batch,
-                );
+                if let Some(leader) = leader_schedule_cache.slot_leader_at(shred.slot(), None) {
+                    if shred.verify(&leader) {
+                        self.check_insert_data_shred(
+                            shred,
+                            &mut index_working_set,
+                            &mut slot_meta_working_set,
+                            &mut write_batch,
+                            &mut just_inserted_coding_shreds,
+                        )
+                    }
+                }
             });
         }
 
@@ -508,34 +505,6 @@ impl Blocktree {
         )?;
 
         Ok(())
-    }
-
-    fn insert_recovered_data_shred(
-        &self,
-        shred: &Shred,
-        index_working_set: &mut HashMap<u64, Index>,
-        slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
-        write_batch: &mut WriteBatch,
-    ) {
-        let slot = shred.slot();
-        let (index_meta, mut new_index_meta) =
-            get_index_meta_entry(&self.db, slot, index_working_set);
-        let (slot_meta_entry, mut new_slot_meta_entry) =
-            get_slot_meta_entry(&self.db, slot_meta_working_set, slot, shred.parent());
-
-        let insert_ok = {
-            let index_meta = index_meta.unwrap_or_else(|| new_index_meta.as_mut().unwrap());
-            let entry = slot_meta_entry.unwrap_or_else(|| new_slot_meta_entry.as_mut().unwrap());
-            let mut slot_meta = entry.0.borrow_mut();
-
-            self.insert_data_shred(&mut slot_meta, index_meta.data_mut(), &shred, write_batch)
-                .is_ok()
-        };
-
-        if insert_ok {
-            new_index_meta.map(|n| index_working_set.insert(slot, n));
-            new_slot_meta_entry.map(|n| slot_meta_working_set.insert(slot, n));
-        }
     }
 
     fn check_insert_coding_shred(
