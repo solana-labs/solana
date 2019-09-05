@@ -210,7 +210,7 @@ new_genesis_block() {
     rm -f "$ledger_dir"/new-genesis.tar.bz2
   }
   if [[ -f "$ledger_dir"/new-genesis.tar.bz2 ]]; then
-    ! diff -q "$ledger_dir"/new-genesis.tar.bz2 "$ledger_dir"/genesis.tar.bz2 >/dev/null 2>&1
+    diff -q "$ledger_dir"/new-genesis.tar.bz2 "$ledger_dir"/genesis.tar.bz2 >/dev/null 2>&1 && false
   else
     false
   fi
