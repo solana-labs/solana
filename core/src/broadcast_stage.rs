@@ -4,7 +4,6 @@ use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastR
 use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
-use crate::erasure::ErasureConfig;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -44,7 +43,6 @@ impl BroadcastStageType {
         receiver: Receiver<WorkingBankEntries>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
-        erasure_config: &ErasureConfig,
     ) -> BroadcastStage {
         match self {
             BroadcastStageType::Standard => BroadcastStage::new(
@@ -54,7 +52,6 @@ impl BroadcastStageType {
                 exit_sender,
                 blocktree,
                 StandardBroadcastRun::new(),
-                erasure_config,
             ),
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
@@ -64,7 +61,6 @@ impl BroadcastStageType {
                 exit_sender,
                 blocktree,
                 FailEntryVerificationBroadcastRun::new(),
-                erasure_config,
             ),
 
             BroadcastStageType::BroadcastFakeBlobs => BroadcastStage::new(
@@ -74,7 +70,6 @@ impl BroadcastStageType {
                 exit_sender,
                 blocktree,
                 BroadcastFakeBlobsRun::new(0),
-                erasure_config,
             ),
         }
     }
@@ -161,7 +156,6 @@ impl BroadcastStage {
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static,
-        _erasure_config: &ErasureConfig,
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
@@ -249,7 +243,6 @@ mod test {
             &exit_sender,
             &blocktree,
             StandardBroadcastRun::new(),
-            &ErasureConfig::default(),
         );
 
         MockBroadcastStage {
