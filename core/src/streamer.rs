@@ -1,7 +1,7 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{Blob, Packets, PacketsRecycler, SharedBlobs, PACKETS_PER_BLOB};
+use crate::packet::{Blob, Packets, PacketsRecycler, SharedBlobs, PACKETS_PER_BATCH};
 use crate::result::{Error, Result};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -24,7 +24,7 @@ fn recv_loop(
     name: &'static str,
 ) -> Result<()> {
     loop {
-        let mut msgs = Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BLOB, name);
+        let mut msgs = Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name);
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader trasaction socket)
