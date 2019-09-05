@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatch
 use console::style;
 use solana_cli::{
     config::{self, Config},
-    display::println_name_value,
+    display::{println_name_value, println_name_value_or},
     input_validators::is_url,
     wallet::{app, parse_command, process_command, WalletConfig, WalletError},
 };
@@ -13,18 +13,27 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
     let parse_args = match matches.subcommand() {
         ("get", Some(subcommand_matches)) => {
             if let Some(config_file) = matches.value_of("config_file") {
+                let default_wallet_config = WalletConfig::default();
                 let config = Config::load(config_file).unwrap_or_default();
                 if let Some(field) = subcommand_matches.value_of("specific_setting") {
-                    let value = match field {
-                        "url" => config.url,
-                        "keypair" => config.keypair,
+                    let (value, default_value) = match field {
+                        "url" => (config.url, default_wallet_config.json_rpc_url),
+                        "keypair" => (config.keypair, default_wallet_config.keypair_path),
                         _ => unreachable!(),
                     };
-                    println_name_value(&format!("* {}:", field), &value);
+                    println_name_value_or(&format!("* {}:", field), &value, &default_value);
                 } else {
                     println_name_value("Wallet Config:", config_file);
-                    println_name_value("* url:", &config.url);
-                    println_name_value("* keypair:", &config.keypair);
+                    println_name_value_or(
+                        "* url:",
+                        &config.url,
+                        &default_wallet_config.json_rpc_url,
+                    );
+                    println_name_value_or(
+                        "* keypair:",
+                        &config.keypair,
+                        &default_wallet_config.keypair_path,
+                    );
                 }
             } else {
                 println!(
@@ -75,24 +84,22 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         default.json_rpc_url
     };
 
-    let mut path = dirs::home_dir().expect("home directory");
-    let id_path = if matches.is_present("keypair") {
-        matches.value_of("keypair").unwrap()
+    let keypair_path = if matches.is_present("keypair") {
+        matches.value_of("keypair").unwrap().to_string()
     } else if config.keypair != "" {
-        &config.keypair
+        config.keypair
     } else {
-        path.extend(&[".config", "solana", "id.json"]);
-        if !path.exists() {
-            gen_keypair_file(path.to_str().unwrap())?;
-            println!("New keypair generated at: {}", path.to_str().unwrap());
+        let default = WalletConfig::default();
+        if !std::path::Path::new(&default.keypair_path).exists() {
+            gen_keypair_file(&default.keypair_path)?;
+            println!("New keypair generated at: {}", default.keypair_path);
         }
-
-        path.to_str().unwrap()
+        default.keypair_path
     };
-    let keypair = read_keypair(id_path).or_else(|err| {
+    let keypair = read_keypair(&keypair_path).or_else(|err| {
         Err(WalletError::BadParameter(format!(
             "{}: Unable to open keypair file: {}",
-            err, id_path
+            err, keypair_path
         )))
     })?;
 
@@ -102,7 +109,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         command,
         json_rpc_url,
         keypair,
-        keypair_path: id_path.to_string(),
+        keypair_path: keypair_path.to_string(),
         rpc_client: None,
     })
 }

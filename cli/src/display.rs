@@ -9,3 +9,12 @@ pub fn println_name_value(name: &str, value: &str) {
     };
     println!("{} {}", style(name).bold(), styled_value);
 }
+
+pub fn println_name_value_or(name: &str, value: &str, default_value: &str) {
+    let styled_value = if value == "" {
+        style(default_value)
+    } else {
+        style(value)
+    };
+    println!("{} {}", style(name).bold(), styled_value);
+}
