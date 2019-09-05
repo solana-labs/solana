@@ -109,7 +109,7 @@ pub fn helper_sol_log(
             if i == len - 1 || c == 0 {
                 let message =
                     from_utf8(from_raw_parts(host_addr as *const u8, len as usize)).unwrap();
-                println!("info!: {}", message);
+                info!("info!: {}", message);
                 return Ok(0);
             }
         }

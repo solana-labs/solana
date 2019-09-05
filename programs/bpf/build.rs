@@ -68,16 +68,16 @@ fn main() {
             .success());
 
         let rust_programs = [
-            // "128bit",
-            // "alloc",
-            // "dep_crate",
-            // "iter",
-            // "many_args",
-            // "external_spend",
+            "128bit",
+            "alloc",
+            "clock",
+            "dep_crate",
+            "external_spend",
+            "iter",
+            "many_args",
             "noop",
-            // "panic",
-            // "param_passing",
-            // "tick_height",
+            "panic",
+            "param_passing",
         ];
         for program in rust_programs.iter() {
             println!(
