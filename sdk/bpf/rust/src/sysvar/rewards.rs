@@ -3,7 +3,7 @@
 use crate::account::Account;
 use bincode::serialized_size;
 
-///  account pubkey
+/// account pubkey
 const ID: [u8; 32] = [
     6, 167, 213, 23, 25, 44, 97, 55, 206, 224, 146, 217, 182, 146, 62, 225, 204, 214, 25, 3, 250,
     130, 184, 161, 97, 145, 87, 141, 128, 0, 0, 0,
@@ -20,13 +20,10 @@ pub struct Rewards {
 
 impl Rewards {
     pub fn from(account: &Account) -> Option<Self> {
-        bincode::deserialize(&account.data).ok()
+        account.deserialize_data().ok()
     }
     pub fn to(&self, account: &mut Account) -> Option<()> {
-        if Self::size_of() > account.data.len() {
-            return Err(Box::new(bincode::ErrorKind::SizeLimit)).ok();
-        }
-        bincode::serialize_into(&mut account.data[..], self).ok()
+        account.serialize_data(self).ok()
     }
     pub fn size_of() -> usize {
         serialized_size(&Self::default()).unwrap() as usize

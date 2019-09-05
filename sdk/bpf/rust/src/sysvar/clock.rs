@@ -3,7 +3,7 @@
 use crate::account::Account;
 use bincode::serialized_size;
 
-pub use crate::cluster_info::{Epoch, Segment, Slot};
+pub use crate::timing::{Epoch, Segment, Slot};
 
 const ID: [u8; 32] = [
     6, 167, 213, 23, 24, 199, 116, 201, 40, 86, 99, 152, 105, 29, 94, 182, 139, 94, 184, 163, 155,
@@ -23,13 +23,10 @@ pub struct Clock {
 
 impl Clock {
     pub fn from(account: &Account) -> Option<Self> {
-        bincode::deserialize(&account.data).ok()
+        account.deserialize_data().ok()
     }
     pub fn to(&self, account: &mut Account) -> Option<()> {
-        if Self::size_of() > account.data.len() {
-            return Err(Box::new(bincode::ErrorKind::SizeLimit)).ok();
-        }
-        bincode::serialize_into(&mut account.data[..], self).ok()
+        account.serialize_data(self).ok()
     }
 
     pub fn size_of() -> usize {

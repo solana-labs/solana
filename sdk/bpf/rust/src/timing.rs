@@ -1,4 +1,3 @@
-
 // The default tick rate that the cluster attempts to achieve.  Note that the actual tick
 // rate at any given time should be expected to drift
 pub const DEFAULT_TICKS_PER_SECOND: u64 = 10;
@@ -61,14 +60,14 @@ pub fn get_complete_segment_from_slot(
 }
 
 /// Slot is a unit of time given to a leader for encoding,
-///  is some some number of Ticks long.  Use a u64 to count them.
+/// is some number of Ticks long.
 pub type Slot = u64;
 
 /// A segment is some number of slots stored by replicators
 pub type Segment = u64;
 
 /// Epoch is a unit of time a given leader schedule is honored,
-///  some number of Slots.  Use a u64 to count them.
+/// some number of Slots.
 pub type Epoch = u64;
 
 #[cfg(test)]

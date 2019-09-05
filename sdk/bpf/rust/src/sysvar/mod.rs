@@ -3,10 +3,10 @@
 use crate::pubkey::Pubkey;
 
 pub mod clock;
-// pub mod fees;
+// pub mod fees; // needs fee calculator which uses signed div (not supported by BPF)
 pub mod rewards;
 pub mod slot_hashes;
-// pub mod stake_history;
+pub mod stake_history;
 
 // TODO
 pub fn is_sysvar_id(id: &Pubkey) -> bool {

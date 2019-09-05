@@ -7,7 +7,7 @@ use crate::hash::Hash;
 use bincode::serialized_size;
 use std::ops::Deref;
 
-pub use crate::cluster_info::Slot;
+pub use crate::timing::Slot;
 
 const ID: [u8; 32] = [
     6, 167, 213, 23, 25, 47, 10, 175, 198, 242, 101, 227, 251, 119, 204, 122, 218, 130, 197, 41,
@@ -26,13 +26,10 @@ pub struct SlotHashes {
 
 impl SlotHashes {
     pub fn from(account: &Account) -> Option<Self> {
-        bincode::deserialize(&account.data).ok()
+        account.deserialize_data().ok()
     }
     pub fn to(&self, account: &mut Account) -> Option<()> {
-        if Self::size_of() > account.data.len() {
-            return Err(Box::new(bincode::ErrorKind::SizeLimit)).ok();
-        }
-        bincode::serialize_into(&mut account.data[..], self).ok()
+        account.serialize_data(self).ok()
     }
 
     pub fn size_of() -> usize {
@@ -40,15 +37,6 @@ impl SlotHashes {
             inner: vec![(0, Hash::default()); MAX_SLOT_HASHES],
         })
         .unwrap() as usize
-    }
-    pub fn add(&mut self, slot: Slot, hash: Hash) {
-        self.inner.insert(0, (slot, hash));
-        self.inner.truncate(MAX_SLOT_HASHES);
-    }
-    pub fn new(slot_hashes: &[(Slot, Hash)]) -> Self {
-        Self {
-            inner: slot_hashes.to_vec(),
-        }
     }
 }
 

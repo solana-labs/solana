@@ -13,7 +13,6 @@ pub struct Account<'a> {
     pub data: &'a mut [u8],
     /// Program that owns this account
     pub owner: &'a Pubkey,
-    // TODO rent epoch?
 }
 
 impl<'a> fmt::Debug for Account<'a> {
@@ -30,8 +29,20 @@ impl<'a> fmt::Debug for Account<'a> {
             self.lamports,
             self.data.len(),
             self.owner,
-            // self.rent_epoch,
             data_str,
         )
+    }
+}
+
+impl<'a> Account<'a> {
+    pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
+        bincode::deserialize(&self.data)
+    }
+
+    pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
+        if bincode::serialized_size(state)? > self.data.len() as u64 {
+            return Err(Box::new(bincode::ErrorKind::SizeLimit));
+        }
+        bincode::serialize_into(&mut self.data[..], state)
     }
 }
