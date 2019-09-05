@@ -303,7 +303,6 @@ fn test_listener_startup() {
 #[allow(unused_attributes)]
 #[test]
 #[serial]
-#[ignore]
 fn test_snapshots_blocktree_floor() {
     // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
@@ -347,7 +346,7 @@ fn test_snapshots_blocktree_floor() {
     fs::hard_link(tar, &validator_tar_path).unwrap();
     let slot_floor = snapshot_utils::bank_slot_from_archive(&validator_tar_path).unwrap();
 
-    // Start up a new node from a snapshot, wait for it to catchup with the leader
+    // Start up a new node from a snapshot
     let validator_stake = 5;
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
@@ -361,7 +360,7 @@ fn test_snapshots_blocktree_floor() {
     let validator_client = cluster.get_validator_client(&validator_id).unwrap();
     let mut current_slot = 0;
 
-    // Make sure this validator can get repaired past the first few warmup epochs
+    // Let this validator run a while with repair
     let target_slot = slot_floor + 40;
     while current_slot <= target_slot {
         trace!("current_slot: {}", current_slot);
@@ -380,6 +379,7 @@ fn test_snapshots_blocktree_floor() {
 
     // Skip the zeroth slot in blocktree that the ledger is initialized with
     let (first_slot, _) = blocktree.slot_meta_iterator(1).unwrap().next().unwrap();
+
     assert_eq!(first_slot, slot_floor);
 }
 

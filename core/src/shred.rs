@@ -12,7 +12,7 @@ use std::io::{Error as IOError, ErrorKind, Write};
 use std::sync::Arc;
 use std::{cmp, io};
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub enum Shred {
     FirstInSlot(FirstDataShred),
     FirstInFECSet(DataShred),
@@ -130,7 +130,7 @@ impl Shred {
 }
 
 /// A common header that is present at start of every shred
-#[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
 pub struct ShredCommonHeader {
     pub signature: Signature,
     pub slot: u64,
@@ -138,7 +138,7 @@ pub struct ShredCommonHeader {
 }
 
 /// A common header that is present at start of every data shred
-#[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
 pub struct DataShredHeader {
     _reserved: CodingShredHeader,
     pub common_header: ShredCommonHeader,
@@ -147,14 +147,14 @@ pub struct DataShredHeader {
 }
 
 /// The first data shred also has parent slot value in it
-#[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
 pub struct FirstDataShredHeader {
     pub data_header: DataShredHeader,
     pub parent: u64,
 }
 
 /// The coding shred header has FEC information
-#[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
 pub struct CodingShredHeader {
     pub common_header: ShredCommonHeader,
     pub num_data_shreds: u16,
@@ -163,19 +163,19 @@ pub struct CodingShredHeader {
     pub payload: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub struct FirstDataShred {
     pub header: FirstDataShredHeader,
     pub payload: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub struct DataShred {
     pub header: DataShredHeader,
     pub payload: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub struct CodingShred {
     pub header: CodingShredHeader,
 }
@@ -454,7 +454,7 @@ impl Shredder {
         first_shred
     }
 
-    fn new_coding_shred(
+    pub fn new_coding_shred(
         slot: u64,
         index: u32,
         num_data: usize,
