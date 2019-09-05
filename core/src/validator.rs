@@ -5,6 +5,7 @@ use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::broadcast_stage::BroadcastStageType;
 use crate::cluster_info::{ClusterInfo, Node};
+use crate::confidence::ForkConfidenceCache;
 use crate::contact_info::ContactInfo;
 use crate::erasure::ErasureConfig;
 use crate::gossip_service::{discover_cluster, GossipService};
@@ -301,6 +302,7 @@ impl Validator {
             Some(voting_keypair)
         };
 
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,
@@ -318,6 +320,7 @@ impl Validator {
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
+            fork_confidence_cache,
         );
 
         if config.dev_sigverify_disabled {
