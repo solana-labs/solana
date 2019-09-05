@@ -1,6 +1,7 @@
 //! A command-line executable for generating the chain's genesis block.
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
+use serde::{Deserialize, Serialize};
 use solana_core::blocktree::create_new_ledger;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
@@ -13,9 +14,9 @@ use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use solana_sdk::system_program;
 use solana_sdk::timing;
 use solana_stake_api;
-use solana_vote_api;
 use solana_stake_api::stake_state;
 use solana_storage_api::storage_contract;
+use solana_vote_api;
 use solana_vote_api::vote_state;
 use std::collections::HashMap;
 use std::error;
@@ -24,11 +25,10 @@ use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use serde::{Serialize,Deserialize};
 
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
-pub const VOTE_PROGRAM_NAME : &str = "vote_program";
+pub const VOTE_PROGRAM_NAME: &str = "vote_program";
 pub const STAKE_PROGRAM_NAME: &str = "stake_program";
 pub const SYSTEM_PROGRAM_NAME: &str = "system_program";
 
@@ -40,7 +40,7 @@ pub enum AccountFileFormat {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PrimordialAccountDetails {
     balance: u64,
-    owner: String
+    owner: String,
 }
 
 impl PrimordialAccountDetails {
@@ -49,7 +49,7 @@ impl PrimordialAccountDetails {
             VOTE_PROGRAM_NAME => Ok(solana_vote_api::id()),
             STAKE_PROGRAM_NAME => Ok(solana_stake_api::id()),
             SYSTEM_PROGRAM_NAME => Ok(system_program::id()),
-            _ => Err("unsupported owner program name".to_string())
+            _ => Err("unsupported owner program name".to_string()),
         }
     }
 }
@@ -61,8 +61,9 @@ pub fn append_primordial_accounts(
 ) -> io::Result<(Builder)> {
     let accounts_file = File::open(file.to_string())?;
 
-    let primordial_accounts: HashMap<String, PrimordialAccountDetails> = serde_yaml::from_reader(accounts_file)
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
+    let primordial_accounts: HashMap<String, PrimordialAccountDetails> =
+        serde_yaml::from_reader(accounts_file)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
 
     for (account, account_details) in primordial_accounts {
         let pubkey = match file_format {
@@ -73,7 +74,14 @@ pub fn append_primordial_accounts(
             }
         };
 
-        builder = builder.account(pubkey, Account::new(account_details.balance, 0, &account_details.get_program_id().unwrap()));
+        builder = builder.account(
+            pubkey,
+            Account::new(
+                account_details.balance,
+                0,
+                &account_details.get_program_id().unwrap(),
+            ),
+        );
     }
 
     Ok(builder)
@@ -397,9 +405,27 @@ mod tests {
         let mut builder = Builder::new();
 
         let mut primordial_accounts = HashMap::new();
-        primordial_accounts.insert(Pubkey::new_rand().to_string(), PrimordialAccountDetails{owner: String::from(VOTE_PROGRAM_NAME), balance: 2 as u64});
-        primordial_accounts.insert(Pubkey::new_rand().to_string(), PrimordialAccountDetails{owner: String::from(STAKE_PROGRAM_NAME), balance: 1 as u64});
-        primordial_accounts.insert(Pubkey::new_rand().to_string(), PrimordialAccountDetails{owner: String::from(VOTE_PROGRAM_NAME), balance: 3 as u64});
+        primordial_accounts.insert(
+            Pubkey::new_rand().to_string(),
+            PrimordialAccountDetails {
+                owner: String::from(VOTE_PROGRAM_NAME),
+                balance: 2 as u64,
+            },
+        );
+        primordial_accounts.insert(
+            Pubkey::new_rand().to_string(),
+            PrimordialAccountDetails {
+                owner: String::from(STAKE_PROGRAM_NAME),
+                balance: 1 as u64,
+            },
+        );
+        primordial_accounts.insert(
+            Pubkey::new_rand().to_string(),
+            PrimordialAccountDetails {
+                owner: String::from(VOTE_PROGRAM_NAME),
+                balance: 3 as u64,
+            },
+        );
 
         let serialized = serde_yaml::to_string(&primordial_accounts).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
@@ -432,9 +458,27 @@ mod tests {
 
         // Test more accounts can be appended
         let mut primordial_accounts1 = HashMap::new();
-        primordial_accounts1.insert(Pubkey::new_rand().to_string(), PrimordialAccountDetails{owner: String::from(VOTE_PROGRAM_NAME), balance: 6 as u64});
-        primordial_accounts1.insert(Pubkey::new_rand().to_string(), PrimordialAccountDetails{owner: String::from(STAKE_PROGRAM_NAME), balance: 5 as u64});
-        primordial_accounts1.insert(Pubkey::new_rand().to_string(), PrimordialAccountDetails{owner: String::from(VOTE_PROGRAM_NAME), balance: 10 as u64});
+        primordial_accounts1.insert(
+            Pubkey::new_rand().to_string(),
+            PrimordialAccountDetails {
+                owner: String::from(VOTE_PROGRAM_NAME),
+                balance: 6 as u64,
+            },
+        );
+        primordial_accounts1.insert(
+            Pubkey::new_rand().to_string(),
+            PrimordialAccountDetails {
+                owner: String::from(STAKE_PROGRAM_NAME),
+                balance: 5 as u64,
+            },
+        );
+        primordial_accounts1.insert(
+            Pubkey::new_rand().to_string(),
+            PrimordialAccountDetails {
+                owner: String::from(VOTE_PROGRAM_NAME),
+                balance: 10 as u64,
+            },
+        );
 
         let serialized = serde_yaml::to_string(&primordial_accounts1).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
@@ -470,7 +514,8 @@ mod tests {
             assert_eq!(
                 primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
                     .0
-                    .to_string()].balance,
+                    .to_string()]
+                    .balance,
                 genesis_block.accounts[primordial_accounts.len() + i]
                     .1
                     .lamports,
@@ -482,15 +527,24 @@ mod tests {
         let mut primordial_accounts2 = HashMap::new();
         primordial_accounts2.insert(
             serde_json::to_string(&account_keypairs[0].to_bytes().to_vec()).unwrap(),
-            PrimordialAccountDetails{owner: String::from(VOTE_PROGRAM_NAME), balance: 20 as u64},
+            PrimordialAccountDetails {
+                owner: String::from(VOTE_PROGRAM_NAME),
+                balance: 20 as u64,
+            },
         );
         primordial_accounts2.insert(
             serde_json::to_string(&account_keypairs[1].to_bytes().to_vec()).unwrap(),
-            PrimordialAccountDetails{owner: String::from(STAKE_PROGRAM_NAME), balance: 15 as u64},
+            PrimordialAccountDetails {
+                owner: String::from(STAKE_PROGRAM_NAME),
+                balance: 15 as u64,
+            },
         );
         primordial_accounts2.insert(
             serde_json::to_string(&account_keypairs[2].to_bytes().to_vec()).unwrap(),
-            PrimordialAccountDetails{owner: String::from(VOTE_PROGRAM_NAME), balance: 30 as u64},
+            PrimordialAccountDetails {
+                owner: String::from(VOTE_PROGRAM_NAME),
+                balance: 30 as u64,
+            },
         );
 
         let serialized = serde_yaml::to_string(&primordial_accounts2).unwrap();
@@ -529,7 +583,8 @@ mod tests {
             assert_eq!(
                 primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
                     .0
-                    .to_string()].balance,
+                    .to_string()]
+                    .balance,
                 genesis_block.accounts[primordial_accounts.len() + i]
                     .1
                     .lamports,
@@ -548,7 +603,8 @@ mod tests {
 
             assert_ne!(i, 0);
             assert_eq!(
-                primordial_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()].balance,
+                primordial_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
+                    .balance,
                 genesis_block.accounts[i].1.lamports,
             );
         });
