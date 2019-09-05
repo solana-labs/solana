@@ -11,10 +11,14 @@ pub fn println_name_value(name: &str, value: &str) {
 }
 
 pub fn println_name_value_or(name: &str, value: &str, default_value: &str) {
-    let styled_value = if value == "" {
-        style(default_value)
+    if value == "" {
+        println!(
+            "{} {} {}",
+            style(name).bold(),
+            style(default_value),
+            style("(default)").italic()
+        );
     } else {
-        style(value)
+        println!("{} {}", style(name).bold(), style(value));
     };
-    println!("{} {}", style(name).bold(), styled_value);
 }
