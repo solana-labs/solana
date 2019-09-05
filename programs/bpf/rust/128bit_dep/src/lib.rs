@@ -1,7 +1,5 @@
 //! @brief Solana Rust-based BPF program utility functions and types
 
-#![no_std]
-
 extern crate solana_sdk_bpf_utils;
 
 pub fn uadd(x: u128, y: u128) -> u128 {
