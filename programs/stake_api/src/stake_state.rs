@@ -4,11 +4,13 @@
 //! * own mining pools
 
 use crate::{config::Config, id};
+use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
     instruction::InstructionError,
+    instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     sysvar::{
         self,
@@ -49,6 +51,36 @@ impl StakeState {
         }
     }
 }
+
+/// Reasons the stake might have had an error
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
+pub enum StakeError {
+    NoCreditsToRedeem,
+}
+
+impl<T> DecodeError<T> for StakeError {
+    fn type_of(&self) -> &'static str {
+        "StakeError"
+    }
+}
+impl Into<InstructionError> for StakeError {
+    fn into(self) -> InstructionError {
+        InstructionError::CustomError(self as u32)
+    }
+}
+
+impl std::fmt::Display for StakeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            StakeError::NoCreditsToRedeem => write!(
+                f,
+                "StakeError::NoCreditsToRedeem not enough credits to redeem"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for StakeError {}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Stake {
@@ -408,7 +440,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 self.set_state(&StakeState::Stake(stake))
             } else {
                 // not worth collecting
-                Err(InstructionError::CustomError(1))
+                Err(StakeError::NoCreditsToRedeem.into())
             }
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -1379,8 +1411,21 @@ mod tests {
                 &rewards,
                 &stake_history,
             ),
-            Err(InstructionError::CustomError(1))
+            Err(StakeError::NoCreditsToRedeem.into())
         );
+
+        let err: InstructionError = StakeError::NoCreditsToRedeem.into();
+        if let InstructionError::CustomError(code) = err {
+            let specific_error: Option<StakeError> = StakeError::decode_custom_error_to_enum(code);
+            if let Some(specific_error) = specific_error {
+                eprintln!(
+                    "{:?}: {}::{:?}",
+                    err,
+                    specific_error.type_of(),
+                    specific_error
+                );
+            }
+        }
 
         // in this call, we've swapped rewards and vote, deserialization of rewards_pool fails
         assert_eq!(
