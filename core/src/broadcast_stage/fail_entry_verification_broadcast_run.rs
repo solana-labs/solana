@@ -53,7 +53,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
 
         let seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
 
-        blocktree.insert_shreds(shreds)?;
+        blocktree.insert_shreds(shreds, None)?;
 
         // 3) Start broadcast step
         let bank_epoch = bank.get_stakers_epoch(bank.slot());

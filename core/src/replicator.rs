@@ -4,6 +4,7 @@ use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::packet::to_shared_blob;
 use crate::recycler::Recycler;
 use crate::repair_service;
@@ -474,6 +475,7 @@ impl Replicator {
             repair_socket,
             &exit,
             RepairStrategy::RepairRange(repair_slot_range),
+            &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
         );
         info!("waiting for ledger download");
@@ -873,7 +875,7 @@ impl Replicator {
                     .iter()
                     .filter_map(|p| bincode::deserialize(&p.data).ok())
                     .collect();
-                blocktree.insert_shreds(shreds)?;
+                blocktree.insert_shreds(shreds, None)?;
             }
             // check if all the slots in the segment are complete
             if Self::segment_complete(start_slot, slots_per_segment, blocktree) {

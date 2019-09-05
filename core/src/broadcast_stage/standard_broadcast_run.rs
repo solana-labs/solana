@@ -92,7 +92,7 @@ impl BroadcastRun for StandardBroadcastRun {
         let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
         let num_shreds = all_shreds.len();
         blocktree
-            .insert_shreds(all_shreds)
+            .insert_shreds(all_shreds, None)
             .expect("Failed to insert shreds in blocktree");
 
         let to_blobs_elapsed = to_blobs_start.elapsed();

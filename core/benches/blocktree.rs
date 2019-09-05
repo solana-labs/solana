@@ -18,7 +18,7 @@ fn bench_write_shreds(bench: &mut Bencher, entries: Vec<Entry>, ledger_path: &Pa
         Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
     bench.iter(move || {
         let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true);
-        blocktree.insert_shreds(shreds).unwrap();
+        blocktree.insert_shreds(shreds, None).unwrap();
     });
 
     Blocktree::destroy(ledger_path).expect("Expected successful database destruction");
@@ -38,7 +38,7 @@ fn setup_read_bench(
     // Convert the entries to shreds, write the shreds to the ledger
     let shreds = entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true);
     blocktree
-        .insert_shreds(shreds)
+        .insert_shreds(shreds, None)
         .expect("Expectd successful insertion of shreds into ledger");
 }
 
@@ -130,7 +130,7 @@ fn bench_insert_data_shred_small(bench: &mut Bencher) {
     let entries = make_tiny_test_entries(num_entries);
     bench.iter(move || {
         let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true);
-        blocktree.insert_shreds(shreds).unwrap();
+        blocktree.insert_shreds(shreds, None).unwrap();
     });
     Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
@@ -145,7 +145,7 @@ fn bench_insert_data_shred_big(bench: &mut Bencher) {
     let entries = make_large_test_entries(num_entries);
     bench.iter(move || {
         let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true);
-        blocktree.insert_shreds(shreds).unwrap();
+        blocktree.insert_shreds(shreds, None).unwrap();
     });
     Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
