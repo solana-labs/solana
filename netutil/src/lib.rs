@@ -2,13 +2,14 @@
 use log::*;
 use rand::{thread_rng, Rng};
 use socket2::{Domain, SockAddr, Socket, Type};
-use std::io;
-use std::io::Read;
+use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
+use std::sync::mpsc::channel;
 use std::time::Duration;
 
 mod ip_echo_server;
-pub use ip_echo_server::*;
+use ip_echo_server::IpEchoServerMessage;
+pub use ip_echo_server::{ip_echo_server, IpEchoServer};
 
 /// A data type representing a public Udp socket
 pub struct UdpSocketPair {
@@ -19,14 +20,18 @@ pub struct UdpSocketPair {
 
 pub type PortRange = (u16, u16);
 
-/// Determine the public IP address of this machine by asking an ip_echo_server at the given
-/// address
-pub fn get_public_ip_addr(ip_echo_server_addr: &SocketAddr) -> Result<IpAddr, String> {
+fn ip_echo_server_request(
+    ip_echo_server_addr: &SocketAddr,
+    msg: IpEchoServerMessage,
+) -> Result<IpAddr, String> {
     let mut data = Vec::new();
 
     let timeout = Duration::new(5, 0);
     TcpStream::connect_timeout(ip_echo_server_addr, timeout)
         .and_then(|mut stream| {
+            let msg = bincode::serialize(&msg).expect("serialize IpEchoServerMessage");
+            stream.write_all(&msg)?;
+            stream.shutdown(std::net::Shutdown::Write)?;
             stream
                 .set_read_timeout(Some(Duration::new(10, 0)))
                 .expect("set_read_timeout");
@@ -41,6 +46,98 @@ pub fn get_public_ip_addr(ip_echo_server_addr: &SocketAddr) -> Result<IpAddr, St
             })
         })
         .map_err(|err| err.to_string())
+}
+
+/// Determine the public IP address of this machine by asking an ip_echo_server at the given
+/// address
+pub fn get_public_ip_addr(ip_echo_server_addr: &SocketAddr) -> Result<IpAddr, String> {
+    ip_echo_server_request(ip_echo_server_addr, IpEchoServerMessage::default())
+}
+
+// Aborts the process if any of the provided TCP/UDP ports are not reachable by the machine at
+// `ip_echo_server_addr`
+pub fn verify_reachable_ports(
+    ip_echo_server_addr: &SocketAddr,
+    tcp_ports: &[u16],
+    udp_sockets: &[&UdpSocket],
+) {
+    let tcp: Vec<(_, _)> = tcp_ports
+        .iter()
+        .map(|port| {
+            (
+                port,
+                TcpListener::bind(&SocketAddr::from(([0, 0, 0, 0], *port))).unwrap_or_else(|err| {
+                    error!("Unable to bind to tcp/{}: {}", port, err);
+                    std::process::exit(1);
+                }),
+            )
+        })
+        .collect();
+
+    let udp: Vec<(_, _)> = udp_sockets
+        .iter()
+        .map(|udp_socket| {
+            (
+                udp_socket.local_addr().unwrap().port(),
+                udp_socket.try_clone().expect("Unable to clone udp socket"),
+            )
+        })
+        .collect();
+
+    let udp_ports: Vec<_> = udp.iter().map(|x| x.0).collect();
+
+    info!(
+        "Checking that tcp ports {:?} and udp ports {:?} are reachable from {:?}",
+        tcp_ports, udp_ports, ip_echo_server_addr
+    );
+
+    let _ = ip_echo_server_request(
+        ip_echo_server_addr,
+        IpEchoServerMessage::new(&tcp_ports, &udp_ports),
+    )
+    .map_err(|err| warn!("ip_echo_server request failed: {}", err));
+
+    // Wait for a connection to open on each TCP port
+    for (port, tcp_listener) in tcp {
+        let (sender, receiver) = channel();
+        let port = *port;
+        std::thread::spawn(move || {
+            debug!("Waiting for incoming connection on tcp/{}", port);
+            let _ = tcp_listener.incoming().next().expect("tcp incoming failed");
+            sender.send(()).expect("send failure");
+        });
+        receiver
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap_or_else(|err| {
+                error!(
+                    "Received no response at tcp/{}, check your port configuration: {}",
+                    port, err
+                );
+                std::process::exit(1);
+            });
+        info!("tdp/{} is reachable", port);
+    }
+
+    // Wait for a datagram to arrive at each UDP port
+    for (port, udp_socket) in udp {
+        let (sender, receiver) = channel();
+        std::thread::spawn(move || {
+            let mut buf = [0; 1];
+            debug!("Waiting for incoming datagram on udp/{}", port);
+            let _ = udp_socket.recv(&mut buf).expect("udp recv failure");
+            sender.send(()).expect("send failure");
+        });
+        receiver
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap_or_else(|err| {
+                error!(
+                    "Received no response at udp/{}, check your port configuration: {}",
+                    port, err
+                );
+                std::process::exit(1);
+            });
+        info!("udp/{} is reachable", port);
+    }
 }
 
 pub fn parse_port_or_addr(optstr: Option<&str>, default_addr: SocketAddr) -> SocketAddr {

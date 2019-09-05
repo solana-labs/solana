@@ -12,7 +12,6 @@ use solana_core::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
 use solana_core::service::Service;
 use solana_core::socketaddr;
 use solana_core::validator::{Validator, ValidatorConfig};
-use solana_netutil::parse_port_range;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use solana_sdk::timing::Slot;
@@ -25,7 +24,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
-    if parse_port_range(&port_range).is_some() {
+    if solana_netutil::parse_port_range(&port_range).is_some() {
         Ok(())
     } else {
         Err("Invalid port range".to_string())
@@ -155,7 +154,6 @@ fn download_tar_bz2(
 
 fn initialize_ledger_path(
     entrypoint: &ContactInfo,
-    gossip_addr: &SocketAddr,
     ledger_path: &Path,
     no_snapshot_fetch: bool,
 ) -> Result<Hash, String> {
@@ -165,7 +163,7 @@ fn initialize_ledger_path(
         Some(60),
         None,
         Some(entrypoint.gossip.ip()),
-        Some(&gossip_addr),
+        None,
     )
     .map_err(|err| err.to_string())?;
 
@@ -443,8 +441,9 @@ fn main() {
         solana_netutil::parse_host_port(address).expect("failed to parse drone address")
     });
 
-    let dynamic_port_range = parse_port_range(matches.value_of("dynamic_port_range").unwrap())
-        .expect("invalid dynamic_port_range");
+    let dynamic_port_range =
+        solana_netutil::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
+            .expect("invalid dynamic_port_range");
 
     let mut gossip_addr = solana_netutil::parse_port_or_addr(
         matches.value_of("gossip_port"),
@@ -528,10 +527,36 @@ fn main() {
     );
     solana_metrics::set_host_id(keypair.pubkey().to_string());
 
-    if let Some(ref entrypoint_addr) = cluster_entrypoint {
+    let mut tcp_ports = vec![gossip_addr.port()];
+
+    let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
+    if let Some(port) = matches.value_of("rpc_port") {
+        let port_number = port.to_string().parse().expect("integer");
+        if port_number == 0 {
+            eprintln!("Invalid RPC port requested: {:?}", port);
+            exit(1);
+        }
+        node.info.rpc = SocketAddr::new(gossip_addr.ip(), port_number);
+        node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
+        tcp_ports.extend_from_slice(&[port_number, port_number + 1]);
+    };
+
+    if let Some(ref cluster_entrypoint) = cluster_entrypoint {
+        let udp_sockets = [
+            &node.sockets.gossip,
+            &node.sockets.broadcast,
+            &node.sockets.repair,
+            &node.sockets.retransmit,
+        ];
+
+        solana_netutil::verify_reachable_ports(
+            &cluster_entrypoint.gossip,
+            &tcp_ports,
+            &udp_sockets,
+        );
+
         let expected_genesis_blockhash = initialize_ledger_path(
-            entrypoint_addr,
-            &gossip_addr,
+            cluster_entrypoint,
             &ledger_path,
             matches.is_present("no_snapshot_fetch"),
         )
@@ -550,17 +575,6 @@ fn main() {
             exit(1);
         }
     }
-
-    let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
-    if let Some(port) = matches.value_of("rpc_port") {
-        let port_number = port.to_string().parse().expect("integer");
-        if port_number == 0 {
-            eprintln!("Invalid RPC port requested: {:?}", port);
-            exit(1);
-        }
-        node.info.rpc = SocketAddr::new(gossip_addr.ip(), port_number);
-        node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
-    };
 
     let validator = Validator::new(
         node,

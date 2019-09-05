@@ -10,13 +10,17 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.1.4"
+bytes = "0.4"
 clap = "2.33.0"
 log = "0.4.8"
 nix = "0.15.0"
 rand = "0.6.1"
+serde = "1.0.99"
+serde_derive = "1.0.99"
 socket2 = "0.3.11"
 solana-logger = { path = "../logger", version = "0.19.0-pre0" }
 tokio = "0.1"
+tokio-codec = "0.1"
 
 [lib]
 name = "solana_netutil"
