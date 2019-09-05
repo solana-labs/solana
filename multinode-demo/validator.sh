@@ -47,6 +47,7 @@ ledger_dir=
 positional_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
+    # validator.sh-only options
     if [[ $1 = --label ]]; then
       label="-$2"
       shift 2
@@ -56,11 +57,14 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --poll-for-new-genesis-block ]]; then
       poll_for_new_genesis_block=1
       shift
-    elif [[ $1 = --blockstream ]]; then
-      args+=("$1" "$2")
+    elif [[ $1 = --node-lamports ]]; then
+      node_lamports="$2"
       shift 2
-    elif [[ $1 = --entrypoint ]]; then
-      gossip_entrypoint=$2
+    elif [[ $1 = --no-airdrop ]]; then
+      airdrops_enabled=0
+      shift
+    # solana-validator options
+    elif [[ $1 = --blockstream ]]; then
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --identity ]]; then
@@ -71,18 +75,22 @@ while [[ -n $1 ]]; do
       voting_keypair_path=$2
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --vote-account ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = --storage-keypair ]]; then
       storage_keypair_path=$2
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --enable-rpc-exit ]]; then
-      args+=("$1")
-      shift
     elif [[ $1 = --init-complete-file ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --node-lamports ]]; then
-      node_lamports="$2"
+    elif [[ $1 = --ledger ]]; then
+      ledger_dir=$2
+      shift 2
+    elif [[ $1 = --entrypoint ]]; then
+      gossip_entrypoint=$2
+      args+=("$1" "$2")
       shift 2
     elif [[ $1 = --no-snapshot-fetch ]]; then
       args+=("$1")
@@ -90,30 +98,42 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-voting ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --skip-ledger-verify ]]; then
-      args+=("$1")
-      shift
     elif [[ $1 = --dev-no-sigverify ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --limit-ledger-size ]]; then
-      args+=("$1")
-      shift
+    elif [[ $1 = --dev-halt-at-slot ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = --rpc-port ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --dynamic-port-range ]]; then
+    elif [[ $1 = --enable-rpc-exit ]]; then
+      args+=("$1")
+      shift
+    elif [[ $1 = --rpc-drone-address ]]; then
+      args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --vote-signer-address ]]; then
+      args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --accounts ]]; then
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --gossip-port ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --no-airdrop ]]; then
-      airdrops_enabled=0
-      shift
-    elif [[ $1 = --ledger ]]; then
-      ledger_dir=$2
+    elif [[ $1 = --dynamic-port-range ]]; then
+      args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --snapshot-interval-slots ]]; then
+      args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --limit-ledger-size ]]; then
+      args+=("$1")
+      shift
+    elif [[ $1 = --skip-ledger-verify ]]; then
+      args+=("$1")
+      shift
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
