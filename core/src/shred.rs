@@ -41,19 +41,23 @@ impl Shred {
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
             | Shred::LastInSlot(s) => {
-                u64::from(s.header.parent_offset) + s.header.common_header.slot
+                s.header.common_header.slot - u64::from(s.header.parent_offset)
             }
             Shred::Coding(_) => std::u64::MAX,
         }
     }
 
     pub fn set_slot(&mut self, slot: u64) {
+        let parent = self.parent();
         match self {
             Shred::FirstInSlot(s)
             | Shred::FirstInFECSet(s)
             | Shred::Data(s)
             | Shred::LastInFECSet(s)
-            | Shred::LastInSlot(s) => s.header.common_header.slot = slot,
+            | Shred::LastInSlot(s) => {
+                s.header.common_header.slot = slot;
+                s.header.parent_offset = (slot - parent) as u16;
+            }
             Shred::Coding(s) => s.header.common_header.slot = slot,
         };
     }
@@ -779,6 +783,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
         let seed0 = deserialized_shred.seed();
         // Test that same seed is generated for a given shred
@@ -805,6 +810,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
         // Test that same seed is NOT generated for two different shreds
         assert_ne!(seed0, deserialized_shred.seed());
@@ -827,6 +833,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::FirstInFECSet(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         // Test8: Write more data to generate an intermediate data shred
@@ -844,6 +851,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 3);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         // Test9: Write some data to shredder
@@ -864,6 +872,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInSlot(_));
         assert_eq!(deserialized_shred.index(), 4);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
     }
 
@@ -897,6 +906,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
@@ -905,6 +915,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let mut shredder = Shredder::new(0x123456789abcdef0, slot - 5, 0.0, &keypair, 2)
@@ -931,6 +942,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
     }
 
@@ -968,6 +980,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
@@ -976,6 +989,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
@@ -984,6 +998,7 @@ mod tests {
         assert_matches!(deserialized_shred, Shred::LastInFECSet(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let shred = shredder.shreds.remove(0);
@@ -1107,6 +1122,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 1);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(1, recovered_shred);
 
@@ -1114,6 +1130,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 3);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(3, recovered_shred);
 
@@ -1176,6 +1193,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::FirstInSlot(_));
         assert_eq!(recovered_shred.index(), 0);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(0, recovered_shred);
 
@@ -1183,6 +1201,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 2);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(2, recovered_shred);
 
@@ -1190,6 +1209,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::LastInFECSet(_));
         assert_eq!(recovered_shred.index(), 4);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(4, recovered_shred);
 
@@ -1267,6 +1287,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::FirstInSlot(_));
         assert_eq!(recovered_shred.index(), 0);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(0, recovered_shred);
 
@@ -1274,6 +1295,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 2);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(2, recovered_shred);
 
@@ -1281,6 +1303,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::LastInSlot(_));
         assert_eq!(recovered_shred.index(), 4);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(4, recovered_shred);
 
@@ -1378,6 +1401,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 25);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(0, recovered_shred);
 
@@ -1385,6 +1409,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 27);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(2, recovered_shred);
 
@@ -1392,6 +1417,7 @@ mod tests {
         assert_matches!(recovered_shred, Shred::LastInSlot(_));
         assert_eq!(recovered_shred.index(), 29);
         assert_eq!(recovered_shred.slot(), slot);
+        assert_eq!(recovered_shred.parent(), slot - 5);
         assert!(recovered_shred.verify(&keypair.pubkey()));
         shreds.insert(4, recovered_shred);
 
