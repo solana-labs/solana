@@ -227,8 +227,13 @@ new_genesis_block() {
     curl -f "$rpc_url"/genesis.tar.bz2 -o "$ledger_dir"/new-genesis.tar.bz2
   ) || {
     echo "Error: failed to fetch new genesis ledger"
+    rm -f "$ledger_dir"/new-genesis.tar.bz2
   }
-  ! diff -q "$ledger_dir"/new-genesis.tar.bz2 "$ledger_dir"/genesis.tar.bz2 >/dev/null 2>&1
+  if [[ -f "$ledger_dir"/new-genesis.tar.bz2 ]]; then
+    diff -q "$ledger_dir"/new-genesis.tar.bz2 "$ledger_dir"/genesis.tar.bz2 >/dev/null 2>&1 && false
+  else
+    false
+  fi
 }
 
 set -e
