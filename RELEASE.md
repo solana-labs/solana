@@ -86,9 +86,7 @@ At this point, `ci/channel-info.sh` should show your freshly cut release branch 
 
 ### Update documentation
 
-Document the new recommended version by updating
-```export SOLANA_RELEASE=[new scheduled TESTNET_TAG value]```
-in book/src/testnet-participation.md on the release (beta) branch.
+Document the new recommended version by updating `book/src/running-replicator.md` and `book/src/validator-testnet.md` on the release (beta) branch to point at the `solana-install` for the upcoming release version.
 
 ### Make the Release
 
