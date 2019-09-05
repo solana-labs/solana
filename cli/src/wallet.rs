@@ -130,11 +130,14 @@ pub struct WalletConfig {
 
 impl Default for WalletConfig {
     fn default() -> WalletConfig {
+        let mut keypair_path = dirs::home_dir().expect("home directory");
+        keypair_path.extend(&[".config", "solana", "id.json"]);
+
         WalletConfig {
             command: WalletCommand::Balance(Pubkey::default()),
             json_rpc_url: "http://127.0.0.1:8899".to_string(),
             keypair: Keypair::new(),
-            keypair_path: "".to_string(),
+            keypair_path: keypair_path.to_str().unwrap().to_string(),
             rpc_client: None,
         }
     }
