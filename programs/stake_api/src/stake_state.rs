@@ -1412,11 +1412,18 @@ mod tests {
             Err(StakeError::NoCreditsToRedeem.into())
         );
 
-        let err: InstructionError = StakeError::NoCreditsToRedeem.into();
-        if let InstructionError::CustomError(code) = err {
-            let specific_error: StakeError = StakeError::decode_custom_error_to_enum(code).unwrap();
-            eprintln!("{:?}: {}::{:?}", err, StakeError::type_of(), specific_error);
+        use num_traits::FromPrimitive;
+        fn foo<T>(err: InstructionError)
+        where
+            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
+        {
+            if let InstructionError::CustomError(code) = err {
+                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
+                eprintln!("{:?}: {}::{:?}", err, T::type_of(), specific_error);
+            }
         }
+        let err: InstructionError = StakeError::NoCreditsToRedeem.into();
+        foo::<StakeError>(err);
 
         // in this call, we've swapped rewards and vote, deserialization of rewards_pool fails
         assert_eq!(
