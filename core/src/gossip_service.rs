@@ -139,12 +139,12 @@ pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
         .filter_map(ContactInfo::valid_client_facing_addr)
         .map(|addrs| addrs)
         .collect();
-    let rpcs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
-    let tpus: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
+    let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
+    let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
     let (_, transactions_socket) = solana_netutil::bind_in_range(FULLNODE_PORT_RANGE).unwrap();
-    let num_nodes = tpus.len();
+    let num_nodes = tpu_addrs.len();
     (
-        ThinClient::new_from_addrs(tpus, transactions_socket, rpcs),
+        ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),
         num_nodes,
     )
 }

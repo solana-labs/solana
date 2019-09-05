@@ -404,7 +404,7 @@ fn do_tx_transfers<T: Client>(
             println!(
                 "Transferring 1 unit {} times... to {}",
                 txs0.len(),
-                client.as_ref().transactions_addr(),
+                client.as_ref().tpu_addr(),
             );
             let tx_len = txs0.len();
             let transfer_start = Instant::now();

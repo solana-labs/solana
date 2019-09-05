@@ -24,7 +24,7 @@ pub struct BankClient {
 }
 
 impl Client for BankClient {
-    fn transactions_addr(&self) -> String {
+    fn tpu_addr(&self) -> String {
         "Local BankClient".to_string()
     }
 }
