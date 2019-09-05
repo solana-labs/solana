@@ -1419,7 +1419,13 @@ mod tests {
         {
             if let InstructionError::CustomError(code) = err {
                 let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
-                eprintln!("{:?}: {}::{:?}", err, T::type_of(), specific_error);
+                eprintln!(
+                    "{:?}: {}::{:?} - {}",
+                    err,
+                    T::type_of(),
+                    specific_error,
+                    specific_error
+                );
             }
         }
         let err: InstructionError = StakeError::NoCreditsToRedeem.into();
