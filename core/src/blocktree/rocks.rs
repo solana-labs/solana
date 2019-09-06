@@ -4,7 +4,7 @@ use crate::blocktree::db::{
 };
 use crate::blocktree::BlocktreeError;
 use crate::result::{Error, Result};
-use solana_sdk::timing::Slot;
+use solana_sdk::clock::Slot;
 
 use byteorder::{BigEndian, ByteOrder};
 

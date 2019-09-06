@@ -1,7 +1,7 @@
 use bincode::{deserialize_from, serialize_into, serialized_size};
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
-use solana_sdk::{account::Account, pubkey::Pubkey, timing::Epoch};
+use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
 use std::fmt;
 use std::fs::{create_dir_all, remove_file, OpenOptions};
 use std::io;

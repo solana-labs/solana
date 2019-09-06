@@ -16,12 +16,12 @@ use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh::Poh;
 use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
+pub use solana_sdk::clock::Slot;
+use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
 use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
-pub use solana_sdk::timing::Slot;
-use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 use solana_sdk::transaction::Transaction;
 use std::cmp;
 use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
@@ -447,8 +447,8 @@ mod tests {
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::test_tx::test_tx;
+    use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::hash;
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::sync::mpsc::sync_channel;
 
     #[test]

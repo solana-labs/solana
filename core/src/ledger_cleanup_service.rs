@@ -3,8 +3,8 @@
 use crate::blocktree::Blocktree;
 use crate::result::{Error, Result};
 use crate::service::Service;
+use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use std::string::ToString;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};

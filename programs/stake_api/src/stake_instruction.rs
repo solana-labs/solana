@@ -7,10 +7,10 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount,
+    clock::Slot,
     instruction::{AccountMeta, Instruction, InstructionError},
     pubkey::Pubkey,
     system_instruction, sysvar,
-    timing::Slot,
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

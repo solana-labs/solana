@@ -1,8 +1,8 @@
 use crate::leader_schedule::LeaderSchedule;
 use crate::staking_utils;
 use solana_runtime::bank::Bank;
+use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 
 /// Return the leader schedule for the given epoch.
 pub fn leader_schedule(epoch: u64, bank: &Bank) -> Option<LeaderSchedule> {

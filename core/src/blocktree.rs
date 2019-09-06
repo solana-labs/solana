@@ -34,7 +34,7 @@ use std::sync::{Arc, RwLock};
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
 use crate::leader_schedule_cache::LeaderScheduleCache;
-use solana_sdk::timing::Slot;
+use solana_sdk::clock::Slot;
 
 mod db;
 mod meta;

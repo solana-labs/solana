@@ -14,7 +14,7 @@ use solana_runtime::{
     accounts_db::AccountsDB,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
 };
-use solana_sdk::{client::SyncClient, poh_config::PohConfig, timing};
+use solana_sdk::{client::SyncClient, clock, poh_config::PohConfig};
 use std::path::PathBuf;
 use std::{
     collections::{HashMap, HashSet},
@@ -267,14 +267,14 @@ fn test_restart_node() {
     cluster_tests::sleep_n_epochs(
         1.0,
         &cluster.genesis_block.poh_config,
-        timing::DEFAULT_TICKS_PER_SLOT,
+        clock::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
     cluster.restart_node(nodes[0], &validator_config);
     cluster_tests::sleep_n_epochs(
         0.5,
         &cluster.genesis_block.poh_config,
-        timing::DEFAULT_TICKS_PER_SLOT,
+        clock::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
     cluster_tests::send_many_transactions(

@@ -8,7 +8,7 @@ use bincode::serialized_size;
 use std::collections::HashMap;
 use std::ops::Deref;
 
-pub use crate::timing::Epoch;
+pub use crate::clock::Epoch;
 
 const ID: [u8; 32] = [
     6, 167, 213, 23, 25, 53, 132, 208, 254, 237, 155, 179, 67, 29, 19, 32, 107, 229, 68, 40, 27,

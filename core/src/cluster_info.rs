@@ -1769,9 +1769,9 @@ mod tests {
     use crate::result::Error;
     use crate::shred::{DataShred, Shred};
     use crate::test_tx::test_tx;
+    use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::{Arc, RwLock};

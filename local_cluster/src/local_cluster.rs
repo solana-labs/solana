@@ -12,14 +12,14 @@ use solana_core::{
 };
 use solana_sdk::{
     client::SyncClient,
+    clock::DEFAULT_TICKS_PER_SLOT,
+    clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
     genesis_block::GenesisBlock,
     message::Message,
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_transaction,
-    timing::DEFAULT_TICKS_PER_SLOT,
-    timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
     transaction::Transaction,
 };
 use solana_stake_api::{config as stake_config, stake_instruction, stake_state::StakeState};

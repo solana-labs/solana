@@ -1,4 +1,4 @@
-use crate::timing::DEFAULT_TICKS_PER_SECOND;
+use crate::clock::DEFAULT_TICKS_PER_SECOND;
 use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

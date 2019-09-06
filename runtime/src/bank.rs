@@ -33,6 +33,7 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
+    clock::{get_segment_from_slot, Epoch, Slot, MAX_RECENT_BLOCKHASHES},
     fee_calculator::FeeCalculator,
     genesis_block::GenesisBlock,
     hash::{hashv, Hash},
@@ -46,7 +47,7 @@ use solana_sdk::{
         slot_hashes::{self, SlotHashes},
         stake_history,
     },
-    timing::{duration_as_ns, get_segment_from_slot, Epoch, Slot, MAX_RECENT_BLOCKHASHES},
+    timing::duration_as_ns,
     transaction::{Result, Transaction, TransactionError},
 };
 use std::collections::{HashMap, HashSet};
@@ -1533,6 +1534,7 @@ mod tests {
         create_genesis_block_with_leader, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
+    use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash;
     use solana_sdk::instruction::InstructionError;
@@ -1541,7 +1543,6 @@ mod tests {
     use solana_sdk::system_instruction;
     use solana_sdk::system_transaction;
     use solana_sdk::sysvar::{fees::Fees, rewards::Rewards};
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use solana_stake_api::stake_state::Stake;
     use solana_vote_api::vote_instruction;
     use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};

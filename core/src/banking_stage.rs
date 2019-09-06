@@ -22,12 +22,13 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counte
 use solana_runtime::accounts_db::ErrorCounters;
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
-use solana_sdk::poh_config::PohConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::{
-    self, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
+use solana_sdk::clock::{
+    DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
     MAX_TRANSACTION_FORWARDING_DELAY,
 };
+use solana_sdk::poh_config::PohConfig;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::cmp;
 use std::env;
@@ -222,7 +223,7 @@ impl BankingStage {
 
         debug!(
             "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
-            timing::timestamp(),
+            timestamp(),
             buffered_len,
             proc_start.as_ms(),
             new_tx_count,
@@ -808,8 +809,8 @@ impl BankingStage {
         let count: usize = mms.iter().map(|x| x.1.len()).sum();
         debug!(
             "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
-            timing::timestamp(),
-            timing::duration_as_ms(&recv_start.elapsed()),
+            timestamp(),
+            duration_as_ms(&recv_start.elapsed()),
             count,
             id,
         );
@@ -878,7 +879,7 @@ impl BankingStage {
         inc_new_counter_debug!("banking_stage-time_ms", proc_start.as_ms() as usize);
         debug!(
             "@{:?} done processing transaction batches: {} time: {:?}ms tx count: {} tx/s: {} total count: {} id: {}",
-            timing::timestamp(),
+            timestamp(),
             mms_len,
             proc_start.as_ms(),
             new_tx_count,

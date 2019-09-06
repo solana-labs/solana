@@ -781,7 +781,7 @@ fn process_delegate_stake(
         )),
         Some(root_slot) => {
             let slot = rpc_client.get_slot()?;
-            if root_slot + solana_sdk::timing::DEFAULT_SLOTS_PER_TURN < slot {
+            if root_slot + solana_sdk::clock::DEFAULT_SLOTS_PER_TURN < slot {
                 Err(WalletError::BadParameter(
                     format!(
                     "Unable to delegate. Vote account root slot ({}) is too old, the current slot is {}", root_slot, slot
@@ -1307,8 +1307,8 @@ fn process_ping(
                     // Sleep for half a slot
                     if signal_receiver
                         .recv_timeout(Duration::from_millis(
-                            500 * solana_sdk::timing::DEFAULT_TICKS_PER_SLOT
-                                / solana_sdk::timing::DEFAULT_TICKS_PER_SECOND,
+                            500 * solana_sdk::clock::DEFAULT_TICKS_PER_SLOT
+                                / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND,
                         ))
                         .is_ok()
                     {

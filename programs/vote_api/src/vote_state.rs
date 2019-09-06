@@ -8,12 +8,12 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
+    clock::{Epoch, Slot},
     hash::Hash,
     instruction::InstructionError,
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     sysvar::clock::Clock,
-    timing::{Epoch, Slot},
 };
 use std::collections::VecDeque;
 

@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate cfg_if;
 
+pub mod clock;
 pub mod pubkey;
 
 // On-chain program modules

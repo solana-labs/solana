@@ -4,7 +4,7 @@ use crate::account::Account;
 use crate::sysvar;
 use bincode::serialized_size;
 
-pub use crate::timing::{Epoch, Slot};
+pub use crate::clock::{Epoch, Slot};
 
 const ID: [u8; 32] = [
     6, 167, 213, 23, 24, 199, 116, 201, 40, 86, 99, 152, 105, 29, 94, 182, 139, 94, 184, 163, 155,
@@ -57,7 +57,7 @@ pub fn create_account(
 
 use crate::account::KeyedAccount;
 use crate::instruction::InstructionError;
-use crate::timing::Segment;
+use crate::clock::Segment;
 
 pub fn from_keyed_account(account: &KeyedAccount) -> Result<Clock, InstructionError> {
     if !check_id(account.unsigned_key()) {
