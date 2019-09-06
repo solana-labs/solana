@@ -51,6 +51,14 @@ impl Pubkey {
     pub fn new_rand() -> Self {
         Self::new(&rand::random::<[u8; 32]>())
     }
+
+    #[cfg(feature = "program")]
+    pub fn log(&self) {
+        use crate::log::sol_log_64;
+        for (i, k) in self.0.iter().enumerate() {
+            sol_log_64(0, 0, 0, i as u64, u64::from(*k));
+        }
+    }
 }
 
 impl AsRef<[u8]> for Pubkey {
