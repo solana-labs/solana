@@ -5,6 +5,7 @@ use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, A
 use serde::{Deserialize, Serialize};
 use solana_core::blocktree::create_new_ledger;
 use solana_sdk::account::Account;
+use solana_sdk::clock;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::Builder;
 use solana_sdk::hash::{hash, Hash};
@@ -83,8 +84,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .to_string();
     let default_target_tick_duration =
         &timing::duration_as_ms(&PohConfig::default().target_tick_duration).to_string();
-    let default_ticks_per_slot = &timing::DEFAULT_TICKS_PER_SLOT.to_string();
-    let default_slots_per_epoch = &timing::DEFAULT_SLOTS_PER_EPOCH.to_string();
+    let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
+    let default_slots_per_epoch = &clock::DEFAULT_SLOTS_PER_EPOCH.to_string();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())

@@ -15,15 +15,13 @@ use solana_core::{
 use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 use solana_sdk::{
     client::SyncClient,
+    clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS},
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
     system_transaction,
-    timing::{
-        duration_as_ms, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
-        NUM_CONSECUTIVE_LEADER_SLOTS,
-    },
+    timing::duration_as_ms,
     transport::TransportError,
 };
 use std::{

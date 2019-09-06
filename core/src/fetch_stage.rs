@@ -7,7 +7,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
-use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
+use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, RecvTimeoutError};

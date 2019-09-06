@@ -2,7 +2,7 @@ use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::rpc_request::{RpcError, RpcRequest};
 use log::*;
-use solana_sdk::timing::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
+use solana_sdk::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
 use std::io::{Error as IoError, ErrorKind};
 use std::thread::sleep;
 use std::time::Duration;

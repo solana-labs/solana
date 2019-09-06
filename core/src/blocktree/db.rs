@@ -5,7 +5,7 @@ use bincode::{deserialize, serialize};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use solana_sdk::timing::Slot;
+use solana_sdk::clock::Slot;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::marker::PhantomData;

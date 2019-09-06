@@ -9,6 +9,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
+    clock::{Epoch, Slot},
     instruction::InstructionError,
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
@@ -16,7 +17,6 @@ use solana_sdk::{
         self,
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
-    timing::{Epoch, Slot},
 };
 use solana_vote_api::vote_state::VoteState;
 

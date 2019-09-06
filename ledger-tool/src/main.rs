@@ -1,8 +1,8 @@
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, SubCommand};
 use solana_core::blocktree::Blocktree;
 use solana_core::blocktree_processor::process_blocktree;
+use solana_sdk::clock::Slot;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::timing::Slot;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{stdout, Write};

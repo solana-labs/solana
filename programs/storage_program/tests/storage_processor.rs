@@ -7,6 +7,7 @@ use solana_runtime::genesis_utils::{create_genesis_block, GenesisBlockInfo};
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::account_utils::State;
 use solana_sdk::client::SyncClient;
+use solana_sdk::clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::instruction::{Instruction, InstructionError};
 use solana_sdk::message::Message;
@@ -16,9 +17,6 @@ use solana_sdk::system_instruction;
 use solana_sdk::sysvar::clock::Clock;
 use solana_sdk::sysvar::rewards::Rewards;
 use solana_sdk::sysvar::{clock, rewards};
-use solana_sdk::timing::{
-    get_segment_from_slot, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT,
-};
 use solana_storage_api::id;
 use solana_storage_api::storage_contract::StorageAccount;
 use solana_storage_api::storage_contract::{ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE};

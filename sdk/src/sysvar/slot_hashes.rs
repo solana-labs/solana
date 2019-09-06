@@ -8,7 +8,7 @@ use crate::sysvar;
 use bincode::serialized_size;
 use std::ops::Deref;
 
-pub use crate::timing::Slot;
+pub use crate::clock::Slot;
 
 const ID: [u8; 32] = [
     6, 167, 213, 23, 25, 47, 10, 175, 198, 242, 101, 227, 251, 119, 204, 122, 218, 130, 197, 41,

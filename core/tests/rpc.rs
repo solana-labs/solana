@@ -63,7 +63,7 @@ fn test_rpc_send_tx() {
        "params": [signature],
     });
 
-    for _ in 0..solana_sdk::timing::DEFAULT_TICKS_PER_SLOT {
+    for _ in 0..solana_sdk::clock::DEFAULT_TICKS_PER_SLOT {
         let response = client
             .post(&rpc_string)
             .set("Content-Type", "application/json")

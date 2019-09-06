@@ -21,12 +21,14 @@ use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
 use solana_metrics::datapoint_info;
+use solana_sdk::clock::{Slot, DEFAULT_SLOTS_PER_TURN};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::{timestamp, Slot, DEFAULT_SLOTS_PER_TURN};
+use solana_sdk::timing::timestamp;
+
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
