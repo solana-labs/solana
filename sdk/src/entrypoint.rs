@@ -1,10 +1,10 @@
 //! @brief Solana Rust-based BPF program entrypoint and its parameter types
 extern crate alloc;
 
+use crate::pubkey::Pubkey;
 use alloc::vec::Vec;
 use core::mem::size_of;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
-use crate::pubkey::Pubkey;
 
 /// Keyed Account
 pub struct SolKeyedAccount<'a> {
