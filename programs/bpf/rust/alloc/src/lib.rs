@@ -2,8 +2,8 @@
 
 #[macro_use]
 extern crate alloc;
-extern crate solana_sdk_bpf_utils;
-use solana_sdk_bpf_utils::info;
+extern crate solana_sdk;
+use solana_sdk::info;
 use std::alloc::Layout;
 use std::mem;
 

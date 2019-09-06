@@ -1,7 +1,7 @@
 //! @brief Solana Rust-based BPF program utility functions and types
 
-extern crate solana_sdk_bpf_utils;
-use solana_sdk_bpf_utils::info;
+extern crate solana_sdk;
+use solana_sdk::info;
 
 pub fn many_args(
     arg1: u64,
@@ -55,12 +55,11 @@ mod test {
 
     #[test]
     fn pull_in_externs() {
-        // Rust on Linux excludes the solana_sdk_bpf_test library unless there is a
+        // Rust on Linux excludes the externs unless there is a
         // direct dependency, use this test to force the pull in of the library.
         // This is not necessary on macos and unfortunate on Linux
         // Issue #4972
-        extern crate solana_sdk_bpf_test;
-        use solana_sdk_bpf_test::*;
+        use solana_sdk::program_test::*;
         unsafe { sol_log_("X".as_ptr(), 1) };
         sol_log_64_(1, 2, 3, 4, 5);
     }

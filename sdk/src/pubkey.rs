@@ -1,10 +1,7 @@
 use std::convert::TryFrom;
 use std::error;
 use std::fmt;
-use std::fs::{self, File};
-use std::io::Write;
 use std::mem;
-use std::path::Path;
 use std::str::FromStr;
 
 pub use bs58;
@@ -50,6 +47,7 @@ impl Pubkey {
         )
     }
 
+    #[cfg(not(feature = "program"))]
     pub fn new_rand() -> Self {
         Self::new(&rand::random::<[u8; 32]>())
     }
@@ -73,21 +71,25 @@ impl fmt::Display for Pubkey {
     }
 }
 
+#[cfg(not(feature = "program"))]
 pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn error::Error>> {
+    use std::io::Write;
+
     let printable = format!("{}", pubkey);
     let serialized = serde_json::to_string(&printable)?;
 
-    if let Some(outdir) = Path::new(&outfile).parent() {
-        fs::create_dir_all(outdir)?;
+    if let Some(outdir) = std::path::Path::new(&outfile).parent() {
+        std::fs::create_dir_all(outdir)?;
     }
-    let mut f = File::create(outfile)?;
+    let mut f = std::fs::File::create(outfile)?;
     f.write_all(&serialized.clone().into_bytes())?;
 
     Ok(())
 }
 
+#[cfg(not(feature = "program"))]
 pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
-    let f = File::open(infile.to_string())?;
+    let f = std::fs::File::open(infile.to_string())?;
     let printable: String = serde_json::from_reader(f)?;
     Ok(Pubkey::from_str(&printable)?)
 }

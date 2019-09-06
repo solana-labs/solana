@@ -2,10 +2,10 @@
 
 #![allow(unreachable_code)]
 
-extern crate solana_sdk_bpf_utils;
-use solana_sdk_bpf_utils::entrypoint::*;
-use solana_sdk_bpf_utils::log::*;
-use solana_sdk_bpf_utils::{entrypoint, info};
+extern crate solana_sdk;
+use solana_sdk::entrypoint::*;
+use solana_sdk::log::*;
+use solana_sdk::{entrypoint, info};
 
 #[derive(Debug, PartialEq)]
 struct SStruct {
