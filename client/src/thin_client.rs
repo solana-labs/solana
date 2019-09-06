@@ -107,21 +107,17 @@ impl ClientOptimizer {
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
     transactions_socket: UdpSocket,
-    transactions_addrs: Vec<SocketAddr>,
+    tpu_addrs: Vec<SocketAddr>,
     rpc_clients: Vec<RpcClient>,
     optimizer: ClientOptimizer,
 }
 
 impl ThinClient {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
-    /// and the Tpu at `transactions_addr` over `transactions_socket` using UDP.
-    pub fn new(
-        rpc_addr: SocketAddr,
-        transactions_addr: SocketAddr,
-        transactions_socket: UdpSocket,
-    ) -> Self {
+    /// and the Tpu at `tpu_addr` over `transactions_socket` using UDP.
+    pub fn new(rpc_addr: SocketAddr, tpu_addr: SocketAddr, transactions_socket: UdpSocket) -> Self {
         Self::new_from_client(
-            transactions_addr,
+            tpu_addr,
             transactions_socket,
             RpcClient::new_socket(rpc_addr),
         )
@@ -129,47 +125,47 @@ impl ThinClient {
 
     pub fn new_socket_with_timeout(
         rpc_addr: SocketAddr,
-        transactions_addr: SocketAddr,
+        tpu_addr: SocketAddr,
         transactions_socket: UdpSocket,
         timeout: Duration,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
-        Self::new_from_client(transactions_addr, transactions_socket, rpc_client)
+        Self::new_from_client(tpu_addr, transactions_socket, rpc_client)
     }
 
     fn new_from_client(
-        transactions_addr: SocketAddr,
+        tpu_addr: SocketAddr,
         transactions_socket: UdpSocket,
         rpc_client: RpcClient,
     ) -> Self {
         Self {
             transactions_socket,
-            transactions_addrs: vec![transactions_addr],
+            tpu_addrs: vec![tpu_addr],
             rpc_clients: vec![rpc_client],
             optimizer: ClientOptimizer::new(0),
         }
     }
 
     pub fn new_from_addrs(
-        transactions_addrs: Vec<SocketAddr>,
+        rpc_addrs: Vec<SocketAddr>,
+        tpu_addrs: Vec<SocketAddr>,
         transactions_socket: UdpSocket,
-        rpc_sockets: Vec<SocketAddr>,
     ) -> Self {
-        assert!(!transactions_addrs.is_empty());
-        assert!(!rpc_sockets.is_empty());
-        assert_eq!(rpc_sockets.len(), transactions_addrs.len());
-        let rpc_len = rpc_sockets.len();
-        let rpc_clients: Vec<_> = rpc_sockets.into_iter().map(RpcClient::new_socket).collect();
+        assert!(!rpc_addrs.is_empty());
+        assert_eq!(rpc_addrs.len(), tpu_addrs.len());
+
+        let rpc_clients: Vec<_> = rpc_addrs.into_iter().map(RpcClient::new_socket).collect();
+        let optimizer = ClientOptimizer::new(rpc_clients.len());
         Self {
-            transactions_addrs,
+            tpu_addrs,
             transactions_socket,
             rpc_clients,
-            optimizer: ClientOptimizer::new(rpc_len),
+            optimizer,
         }
     }
 
-    fn transactions_addr(&self) -> &SocketAddr {
-        &self.transactions_addrs[self.optimizer.best()]
+    fn tpu_addr(&self) -> &SocketAddr {
+        &self.tpu_addrs[self.optimizer.best()]
     }
 
     fn rpc_client(&self) -> &RpcClient {
@@ -218,7 +214,7 @@ impl ThinClient {
                 if num_confirmed == 0 {
                     // Send the transaction if there has been no confirmation (e.g. the first time)
                     self.transactions_socket
-                        .send_to(&buf[..], &self.transactions_addr())?;
+                        .send_to(&buf[..], &self.tpu_addr())?;
                 }
 
                 if let Ok(confirmed_blocks) = self.poll_for_signature_confirmation(
@@ -237,11 +233,7 @@ impl ThinClient {
                     );
                 }
             }
-            info!(
-                "{} tries failed transfer to {}",
-                x,
-                self.transactions_addr()
-            );
+            info!("{} tries failed transfer to {}", x, self.tpu_addr());
             let (blockhash, _fee_calculator) = self.rpc_client().get_recent_blockhash()?;
             transaction.sign(keypairs, blockhash);
         }
@@ -289,8 +281,8 @@ impl ThinClient {
 }
 
 impl Client for ThinClient {
-    fn transactions_addr(&self) -> String {
-        self.transactions_addr().to_string()
+    fn tpu_addr(&self) -> String {
+        self.tpu_addr().to_string()
     }
 }
 
@@ -421,7 +413,7 @@ impl AsyncClient for ThinClient {
             .expect("serialize Transaction in pub fn transfer_signed");
         assert!(buf.len() < PACKET_DATA_SIZE);
         self.transactions_socket
-            .send_to(&buf[..], &self.transactions_addr())?;
+            .send_to(&buf[..], &self.tpu_addr())?;
         Ok(transaction.signatures[0])
     }
     fn async_send_message(

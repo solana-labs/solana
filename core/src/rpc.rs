@@ -585,9 +585,9 @@ impl RpcSol for RpcSolImpl {
         })?;
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let transactions_addr = get_tpu_addr(&meta.cluster_info)?;
+        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
         transactions_socket
-            .send_to(&data, transactions_addr)
+            .send_to(&data, tpu_addr)
             .map_err(|err| {
                 info!("request_airdrop: send_to error: {:?}", err);
                 Error::internal_error()
@@ -628,10 +628,10 @@ impl RpcSol for RpcSolImpl {
             return Err(Error::invalid_request());
         }
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let transactions_addr = get_tpu_addr(&meta.cluster_info)?;
-        trace!("send_transaction: leader is {:?}", &transactions_addr);
+        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
+        trace!("send_transaction: leader is {:?}", &tpu_addr);
         transactions_socket
-            .send_to(&data, transactions_addr)
+            .send_to(&data, tpu_addr)
             .map_err(|err| {
                 info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()

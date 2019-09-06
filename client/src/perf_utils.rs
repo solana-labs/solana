@@ -79,7 +79,7 @@ pub fn sample_txs<T>(
             sample_stats
                 .write()
                 .unwrap()
-                .push((client.transactions_addr(), stats));
+                .push((client.tpu_addr(), stats));
             return;
         }
         sleep(Duration::from_secs(sample_period));
