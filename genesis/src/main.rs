@@ -24,6 +24,7 @@ use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
+use tempfile;
 
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
@@ -724,17 +725,14 @@ mod tests {
   data: aGVsbG8gd29ybGQ=
   executable: true";
 
-        let path = Path::new("test_genesis_pubkey.yaml");
+        let tmpfile = tempfile::NamedTempFile::new().unwrap();
+        let path = tmpfile.path();
         let mut file = File::create(path).unwrap();
         file.write_all(yaml_string_pubkey.as_bytes()).unwrap();
 
         let builder = Builder::new();
-        append_primordial_accounts(
-            "test_genesis_pubkey.yaml",
-            AccountFileFormat::Pubkey,
-            builder,
-        )
-        .expect("builder");
+        append_primordial_accounts(path.to_str().unwrap(), AccountFileFormat::Pubkey, builder)
+            .expect("builder");
         remove_file(path).unwrap();
 
         let yaml_string_keypair = "---
@@ -754,17 +752,14 @@ mod tests {
   data: Y29tYSBtb2Nh
   executable: true";
 
-        let path = Path::new("test_genesis_keypair.yaml");
+        let tmpfile = tempfile::NamedTempFile::new().unwrap();
+        let path = tmpfile.path();
         let mut file = File::create(path).unwrap();
         file.write_all(yaml_string_keypair.as_bytes()).unwrap();
 
         let builder = Builder::new();
-        append_primordial_accounts(
-            "test_genesis_keypair.yaml",
-            AccountFileFormat::Keypair,
-            builder,
-        )
-        .expect("builder");
+        append_primordial_accounts(path.to_str().unwrap(), AccountFileFormat::Keypair, builder)
+            .expect("builder");
         remove_file(path).unwrap();
     }
 }
