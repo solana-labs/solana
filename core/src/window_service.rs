@@ -582,6 +582,7 @@ mod test {
             repair_sock,
             &exit,
             RepairStrategy::RepairRange(RepairSlotRange { start: 0, end: 0 }),
+            &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
         );
         window
@@ -613,7 +614,7 @@ mod test {
         packet_sender.send(packets.clone()).unwrap();
         sleep(Duration::from_millis(500));
 
-        //send 1 empty packet that cannot deserialize into a shred
+        // send 1 empty packet that cannot deserialize into a shred
         packet_sender
             .send(Packets::new(vec![Packet::default(); 1]))
             .unwrap();
