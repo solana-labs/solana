@@ -1,5 +1,5 @@
-use crate::message::Message;
 use crate::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
+use crate::message::Message;
 use log::*;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]

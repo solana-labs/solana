@@ -56,8 +56,8 @@ pub fn create_account(
 }
 
 use crate::account::KeyedAccount;
-use crate::instruction::InstructionError;
 use crate::clock::Segment;
+use crate::instruction::InstructionError;
 
 pub fn from_keyed_account(account: &KeyedAccount) -> Result<Clock, InstructionError> {
     if !check_id(account.unsigned_key()) {

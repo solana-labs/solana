@@ -1,6 +1,7 @@
 //! The `genesis_block` module is a library for generating the chain's genesis block.
 
 use crate::account::Account;
+use crate::clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT};
 use crate::fee_calculator::FeeCalculator;
 use crate::hash::{hash, Hash};
 use crate::inflation::Inflation;
@@ -9,7 +10,6 @@ use crate::pubkey::Pubkey;
 use crate::rent::Rent;
 use crate::signature::{Keypair, KeypairUtil};
 use crate::system_program::{self, solana_system_program};
-use crate::clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT};
 use bincode::{deserialize, serialize};
 use memmap::Mmap;
 use std::fs::{File, OpenOptions};
