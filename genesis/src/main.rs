@@ -1,5 +1,6 @@
 //! A command-line executable for generating the chain's genesis block.
 
+use base64;
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use serde::{Deserialize, Serialize};
 use solana_core::blocktree::create_new_ledger;
@@ -28,10 +29,6 @@ use std::time::{Duration, Instant};
 
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
-pub const VOTE_PROGRAM_NAME: &str = "vote_program";
-pub const STAKE_PROGRAM_NAME: &str = "stake_program";
-pub const SYSTEM_PROGRAM_NAME: &str = "system_program";
-
 pub enum AccountFileFormat {
     Pubkey,
     Keypair,
@@ -41,17 +38,8 @@ pub enum AccountFileFormat {
 pub struct PrimordialAccountDetails {
     balance: u64,
     owner: String,
-}
-
-impl PrimordialAccountDetails {
-    pub fn get_program_id(self) -> Result<Pubkey, String> {
-        match self.owner.as_str() {
-            VOTE_PROGRAM_NAME => Ok(solana_vote_api::id()),
-            STAKE_PROGRAM_NAME => Ok(solana_stake_api::id()),
-            SYSTEM_PROGRAM_NAME => Ok(system_program::id()),
-            _ => Err("unsupported owner program name".to_string()),
-        }
-    }
+    data: String,
+    executable: bool,
 }
 
 pub fn append_primordial_accounts(
@@ -74,14 +62,13 @@ pub fn append_primordial_accounts(
             }
         };
 
-        builder = builder.account(
-            pubkey,
-            Account::new(
-                account_details.balance,
-                0,
-                &account_details.get_program_id().unwrap(),
-            ),
-        );
+        let owner_program_id = Pubkey::from_str(account_details.owner.as_str()).unwrap();
+
+        let mut account = Account::new(account_details.balance, 0, &owner_program_id);
+        account.data = base64::decode(account_details.data.as_str()).unwrap();
+        account.executable = account_details.executable;
+
+        builder = builder.account(pubkey, account);
     }
 
     Ok(builder)
@@ -408,22 +395,28 @@ mod tests {
         primordial_accounts.insert(
             Pubkey::new_rand().to_string(),
             PrimordialAccountDetails {
-                owner: String::from(VOTE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 2 as u64,
+                executable: false,
+                data: String::from("aGVsbG8="),
             },
         );
         primordial_accounts.insert(
             Pubkey::new_rand().to_string(),
             PrimordialAccountDetails {
-                owner: String::from(STAKE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 1 as u64,
+                executable: true,
+                data: String::from("aGVsbG8gd29ybGQ="),
             },
         );
         primordial_accounts.insert(
             Pubkey::new_rand().to_string(),
             PrimordialAccountDetails {
-                owner: String::from(VOTE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 3 as u64,
+                executable: true,
+                data: String::from("bWUgaGVsbG8gdG8gd29ybGQ="),
             },
         );
 
@@ -453,6 +446,16 @@ mod tests {
                     primordial_accounts[&genesis_block.accounts[i].0.to_string()].balance,
                     genesis_block.accounts[i].1.lamports
                 );
+
+                assert_eq!(
+                    primordial_accounts[&genesis_block.accounts[i].0.to_string()].executable,
+                    genesis_block.accounts[i].1.executable
+                );
+
+                assert_eq!(
+                    primordial_accounts[&genesis_block.accounts[i].0.to_string()].data,
+                    base64::encode(&genesis_block.accounts[i].1.data)
+                );
             });
         }
 
@@ -461,22 +464,28 @@ mod tests {
         primordial_accounts1.insert(
             Pubkey::new_rand().to_string(),
             PrimordialAccountDetails {
-                owner: String::from(VOTE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 6 as u64,
+                executable: true,
+                data: String::from("eW91IGFyZQ=="),
             },
         );
         primordial_accounts1.insert(
             Pubkey::new_rand().to_string(),
             PrimordialAccountDetails {
-                owner: String::from(STAKE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 5 as u64,
+                executable: false,
+                data: String::from("bWV0YSBzdHJpbmc="),
             },
         );
         primordial_accounts1.insert(
             Pubkey::new_rand().to_string(),
             PrimordialAccountDetails {
-                owner: String::from(VOTE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 10 as u64,
+                executable: false,
+                data: String::from("YmFzZTY0IHN0cmluZw=="),
             },
         );
 
@@ -520,6 +529,24 @@ mod tests {
                     .1
                     .lamports,
             );
+
+            assert_eq!(
+                primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
+                    .0
+                    .to_string()]
+                    .executable,
+                genesis_block.accounts[primordial_accounts.len() + i]
+                    .1
+                    .executable,
+            );
+
+            assert_eq!(
+                primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
+                    .0
+                    .to_string()]
+                    .data,
+                base64::encode(&genesis_block.accounts[primordial_accounts.len() + i].1.data),
+            );
         });
 
         // Test accounts from keypairs can be appended
@@ -528,22 +555,28 @@ mod tests {
         primordial_accounts2.insert(
             serde_json::to_string(&account_keypairs[0].to_bytes().to_vec()).unwrap(),
             PrimordialAccountDetails {
-                owner: String::from(VOTE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 20 as u64,
+                executable: true,
+                data: String::from("Y2F0IGRvZw=="),
             },
         );
         primordial_accounts2.insert(
             serde_json::to_string(&account_keypairs[1].to_bytes().to_vec()).unwrap(),
             PrimordialAccountDetails {
-                owner: String::from(STAKE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 15 as u64,
+                executable: false,
+                data: String::from("bW9ua2V5IGVsZXBoYW50"),
             },
         );
         primordial_accounts2.insert(
             serde_json::to_string(&account_keypairs[2].to_bytes().to_vec()).unwrap(),
             PrimordialAccountDetails {
-                owner: String::from(VOTE_PROGRAM_NAME),
+                owner: Pubkey::new_rand().to_string(),
                 balance: 30 as u64,
+                executable: true,
+                data: String::from("Y29tYSBtb2Nh"),
             },
         );
 
@@ -589,6 +622,24 @@ mod tests {
                     .1
                     .lamports,
             );
+
+            assert_eq!(
+                primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
+                    .0
+                    .to_string()]
+                    .executable,
+                genesis_block.accounts[primordial_accounts.len() + i]
+                    .1
+                    .executable,
+            );
+
+            assert_eq!(
+                primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
+                    .0
+                    .to_string()]
+                    .data,
+                base64::encode(&genesis_block.accounts[primordial_accounts.len() + i].1.data),
+            );
         });
 
         let offset = primordial_accounts.len() + primordial_accounts1.len();
@@ -606,6 +657,18 @@ mod tests {
                 primordial_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
                     .balance,
                 genesis_block.accounts[i].1.lamports,
+            );
+
+            assert_eq!(
+                primordial_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
+                    .executable,
+                genesis_block.accounts[i].1.executable,
+            );
+
+            assert_eq!(
+                primordial_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
+                    .data,
+                base64::encode(&genesis_block.accounts[i].1.data),
             );
         });
     }
