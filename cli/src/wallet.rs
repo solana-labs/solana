@@ -733,8 +733,9 @@ fn process_deactivate_stake_account(
         recent_blockhash,
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client
+    let result = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
+    let signature_str = log_instruction_custom_error::<StakeError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -812,7 +813,7 @@ fn process_delegate_stake(
 
     let result = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair]);
-    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
+    let signature_str = log_instruction_custom_error::<StakeError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -838,8 +839,9 @@ fn process_withdraw_stake(
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
 
-    let signature_str = rpc_client
+    let result = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
+    let signature_str = log_instruction_custom_error::<StakeError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -861,7 +863,8 @@ fn process_redeem_vote_credits(
         recent_blockhash,
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    let signature_str = log_instruction_custom_error::<StakeError>(result)?;
     Ok(signature_str.to_string())
 }
 
