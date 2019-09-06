@@ -443,6 +443,11 @@ mod tests {
             // Test account data matches
             (0..primordial_accounts.len()).for_each(|i| {
                 assert_eq!(
+                    primordial_accounts[&genesis_block.accounts[i].0.to_string()].owner,
+                    genesis_block.accounts[i].1.owner.to_string()
+                );
+
+                assert_eq!(
                     primordial_accounts[&genesis_block.accounts[i].0.to_string()].balance,
                     genesis_block.accounts[i].1.lamports
                 );
@@ -520,6 +525,17 @@ mod tests {
 
         // Test new account data matches
         (0..primordial_accounts1.len()).for_each(|i| {
+            assert_eq!(
+                primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
+                    .0
+                    .to_string()]
+                    .owner,
+                genesis_block.accounts[primordial_accounts.len() + i]
+                    .1
+                    .owner
+                    .to_string(),
+            );
+
             assert_eq!(
                 primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
                     .0
@@ -617,6 +633,17 @@ mod tests {
                 primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
                     .0
                     .to_string()]
+                    .owner,
+                genesis_block.accounts[primordial_accounts.len() + i]
+                    .1
+                    .owner
+                    .to_string(),
+            );
+
+            assert_eq!(
+                primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
+                    .0
+                    .to_string()]
                     .balance,
                 genesis_block.accounts[primordial_accounts.len() + i]
                     .1
@@ -653,6 +680,13 @@ mod tests {
             });
 
             assert_ne!(i, 0);
+
+            assert_eq!(
+                primordial_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
+                    .owner,
+                genesis_block.accounts[i].1.owner.to_string(),
+            );
+
             assert_eq!(
                 primordial_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
                     .balance,
