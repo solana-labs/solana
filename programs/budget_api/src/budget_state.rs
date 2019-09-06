@@ -12,7 +12,7 @@ pub enum BudgetError {
 }
 
 impl<T> DecodeError<T> for BudgetError {
-    fn type_of(&self) -> &'static str {
+    fn type_of() -> &'static str {
         "BudgetError"
     }
 }

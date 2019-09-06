@@ -13,7 +13,7 @@ pub enum TokenError {
 }
 
 impl<T> DecodeError<T> for TokenError {
-    fn type_of(&self) -> &'static str {
+    fn type_of() -> &'static str {
         "TokenError"
     }
 }

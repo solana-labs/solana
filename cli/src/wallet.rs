@@ -1665,12 +1665,7 @@ where
         )) = err
         {
             if let Some(specific_error) = E::decode_custom_error_to_enum(code) {
-                error!(
-                    "{:?}: {}::{:?}",
-                    err,
-                    specific_error.type_of(),
-                    specific_error
-                );
+                error!("{}::{:?}", E::type_of(), specific_error);
                 Err(specific_error)?
             }
         }

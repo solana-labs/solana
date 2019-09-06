@@ -4,7 +4,7 @@
 //! * own mining pools
 
 use crate::{config::Config, id};
-use num_derive::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
@@ -53,23 +53,15 @@ impl StakeState {
 }
 
 /// Reasons the stake might have had an error
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum StakeError {
     NoCreditsToRedeem,
 }
-
 impl<E> DecodeError<E> for StakeError {
     fn type_of() -> &'static str {
         "StakeError"
     }
 }
-
-impl Into<InstructionError> for StakeError {
-    fn into(self) -> InstructionError {
-        InstructionError::CustomError(self as u32)
-    }
-}
-
 impl std::fmt::Display for StakeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -77,7 +69,6 @@ impl std::fmt::Display for StakeError {
         }
     }
 }
-
 impl std::error::Error for StakeError {}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -1267,6 +1258,32 @@ mod tests {
     }
 
     #[test]
+    fn test_custom_error_decode() {
+        use num_traits::FromPrimitive;
+        fn pretty_err<T>(err: InstructionError) -> String
+        where
+            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
+        {
+            if let InstructionError::CustomError(code) = err {
+                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
+                format!(
+                    "{:?}: {}::{:?} - {}",
+                    err,
+                    T::type_of(),
+                    specific_error,
+                    specific_error,
+                )
+            } else {
+                "".to_string()
+            }
+        }
+        assert_eq!(
+            "CustomError(0): StakeError::NoCreditsToRedeem - not enough credits to redeem",
+            pretty_err::<StakeError>(StakeError::NoCreditsToRedeem.into())
+        )
+    }
+
+    #[test]
     fn test_stake_state_calculate_rewards() {
         let mut vote_state = VoteState::default();
         // assume stake.stake() is right
@@ -1411,25 +1428,6 @@ mod tests {
             ),
             Err(StakeError::NoCreditsToRedeem.into())
         );
-
-        use num_traits::FromPrimitive;
-        fn foo<T>(err: InstructionError)
-        where
-            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
-        {
-            if let InstructionError::CustomError(code) = err {
-                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
-                eprintln!(
-                    "{:?}: {}::{:?} - {}",
-                    err,
-                    T::type_of(),
-                    specific_error,
-                    specific_error
-                );
-            }
-        }
-        let err: InstructionError = StakeError::NoCreditsToRedeem.into();
-        foo::<StakeError>(err);
 
         // in this call, we've swapped rewards and vote, deserialization of rewards_pool fails
         assert_eq!(
