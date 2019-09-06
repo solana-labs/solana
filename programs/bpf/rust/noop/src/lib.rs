@@ -3,9 +3,7 @@
 #![allow(unreachable_code)]
 
 extern crate solana_sdk;
-use solana_sdk::{
-    account_info::AccountInfo, entrypoint, info, log::*, pubkey::Pubkey,
-};
+use solana_sdk::{account_info::AccountInfo, entrypoint, info, log::*, pubkey::Pubkey};
 
 #[derive(Debug, PartialEq)]
 struct SStruct {

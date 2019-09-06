@@ -2,11 +2,10 @@
 
 extern crate alloc;
 
+use crate::{account_info::AccountInfo, pubkey::Pubkey};
 use alloc::vec::Vec;
 use core::mem::size_of;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
-use crate::{pubkey::Pubkey,
-            account_info::AccountInfo};
 
 /// User implemented program entrypoint
 ///
