@@ -250,12 +250,13 @@ kill_node() {
     kill "$_pid" || true
     wait "$_pid" || true
   fi
-  exit
 }
+
 kill_node_and_exit() {
   kill_node
   exit
 }
+
 trap 'kill_node_and_exit' INT TERM ERR
 
 wallet() {
