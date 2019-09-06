@@ -43,7 +43,7 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     system_transaction,
     sysvar::{
-        clock, fees, rewards,
+        clock, clock_account, fees, rewards,
         slot_hashes::{self, SlotHashes},
         stake_history,
     },
@@ -402,7 +402,7 @@ impl Bank {
     fn update_clock(&self) {
         self.store_account(
             &clock::id(),
-            &clock::create_account(
+            &clock_account::create_account(
                 1,
                 self.slot,
                 get_segment_from_slot(self.slot, self.slots_per_segment),

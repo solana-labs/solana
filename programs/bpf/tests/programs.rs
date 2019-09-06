@@ -91,6 +91,7 @@ mod bpf {
             let programs = [
                 ("solana_bpf_rust_128bit", true),
                 ("solana_bpf_rust_alloc", true),
+                ("solana_bpf_rust_clock", true),
                 ("solana_bpf_rust_dep_crate", true),
                 ("solana_bpf_rust_iter", true),
                 ("solana_bpf_rust_many_args", true),

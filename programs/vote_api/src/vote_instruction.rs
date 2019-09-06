@@ -154,7 +154,7 @@ pub fn process_instruction(
             vote_state::process_vote(
                 me,
                 &sysvar::slot_hashes::from_keyed_account(&slot_hashes_and_clock[0])?,
-                &sysvar::clock::from_keyed_account(&slot_hashes_and_clock[1])?,
+                &sysvar::clock_account::from_keyed_account(&slot_hashes_and_clock[1])?,
                 other_signers,
                 &vote,
             )

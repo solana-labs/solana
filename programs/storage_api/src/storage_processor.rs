@@ -42,7 +42,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
-            let clock = sysvar::clock::from_keyed_account(&rest[0])?;
+            let clock = sysvar::clock_account::from_keyed_account(&rest[0])?;
             storage_account.submit_mining_proof(
                 sha_state,
                 segment_index,
@@ -56,7 +56,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
-            let clock = sysvar::clock::from_keyed_account(&rest[0])?;
+            let clock = sysvar::clock_account::from_keyed_account(&rest[0])?;
             storage_account.advertise_storage_recent_blockhash(hash, segment, clock)
         }
         StorageInstruction::ClaimStorageReward => {
@@ -68,7 +68,7 @@ pub fn process_instruction(
             let (rewards_pools, owner) = rest.split_at_mut(1);
 
             let rewards = sysvar::rewards::from_keyed_account(&rewards[0])?;
-            let clock = sysvar::clock::from_keyed_account(&clock[0])?;
+            let clock = sysvar::clock_account::from_keyed_account(&clock[0])?;
             let mut owner = StorageAccount::new(*owner[0].unsigned_key(), &mut owner[0].account);
 
             storage_account.claim_storage_reward(&mut rewards_pools[0], clock, rewards, &mut owner)
@@ -84,7 +84,7 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidArgument)?;
             }
             let me_id = storage_account.id;
-            let clock = sysvar::clock::from_keyed_account(&clock[0])?;
+            let clock = sysvar::clock_account::from_keyed_account(&clock[0])?;
             let mut rest: Vec<_> = rest
                 .iter_mut()
                 .map(|keyed_account| {

@@ -1,5 +1,6 @@
 pub mod clock;
 pub mod pubkey;
+pub mod sysvar;
 
 // On-chain program modules
 #[cfg(feature = "program")]
@@ -56,8 +57,6 @@ pub mod system_instruction;
 pub mod system_program;
 #[cfg(feature = "kitchen_sink")]
 pub mod system_transaction;
-#[cfg(feature = "kitchen_sink")]
-pub mod sysvar;
 #[cfg(feature = "kitchen_sink")]
 pub mod timing;
 #[cfg(feature = "kitchen_sink")]
