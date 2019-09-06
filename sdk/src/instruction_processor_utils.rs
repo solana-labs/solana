@@ -1,7 +1,7 @@
 use crate::account::KeyedAccount;
 use crate::instruction::InstructionError;
 use crate::pubkey::Pubkey;
-use num_traits::FromPrimitive;
+use num_traits::{FromPrimitive, ToPrimitive};
 
 // All native programs export a symbol named process()
 pub const ENTRYPOINT: &str = "process";
@@ -29,14 +29,23 @@ macro_rules! solana_entrypoint(
     )
 );
 
+impl<T> From<T> for InstructionError
+where
+    T: ToPrimitive,
+{
+    fn from(error: T) -> Self {
+        InstructionError::CustomError(error.to_u32().unwrap_or(0xbad_c0de))
+    }
+}
+
 pub trait DecodeError<E> {
-    fn decode_custom_error_to_enum(int: u32) -> Option<E>
+    fn decode_custom_error_to_enum(custom: u32) -> Option<E>
     where
         E: FromPrimitive,
     {
-        E::from_u32(int)
+        E::from_u32(custom)
     }
-    fn type_of(&self) -> &'static str;
+    fn type_of() -> &'static str;
 }
 
 #[cfg(test)]
@@ -53,7 +62,7 @@ mod tests {
             C,
         }
         impl<T> DecodeError<T> for TestEnum {
-            fn type_of(&self) -> &'static str {
+            fn type_of() -> &'static str {
                 "TestEnum"
             }
         }

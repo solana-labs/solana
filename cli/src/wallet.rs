@@ -28,7 +28,7 @@ use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction::SystemError;
 use solana_sdk::system_transaction;
 use solana_sdk::transaction::{Transaction, TransactionError};
-use solana_stake_api::stake_instruction;
+use solana_stake_api::{stake_instruction, stake_state::StakeError};
 use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::VoteState;
@@ -586,8 +586,7 @@ fn process_create_vote_account(
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
-    Ok(signature_str.to_string())
+    log_instruction_custom_error::<SystemError>(result)
 }
 
 fn process_authorize_voter(
@@ -733,9 +732,9 @@ fn process_deactivate_stake_account(
         recent_blockhash,
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
-    Ok(signature_str.to_string())
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair]);
+    log_instruction_custom_error::<StakeError>(result)
 }
 
 fn process_delegate_stake(
@@ -812,8 +811,7 @@ fn process_delegate_stake(
 
     let result = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair]);
-    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
-    Ok(signature_str.to_string())
+    log_instruction_custom_error::<StakeError>(result)
 }
 
 fn process_withdraw_stake(
@@ -838,9 +836,9 @@ fn process_withdraw_stake(
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
 
-    let signature_str = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair])?;
-    Ok(signature_str.to_string())
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &stake_account_keypair]);
+    log_instruction_custom_error::<StakeError>(result)
 }
 
 fn process_redeem_vote_credits(
@@ -861,8 +859,8 @@ fn process_redeem_vote_credits(
         recent_blockhash,
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
-    Ok(signature_str.to_string())
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    log_instruction_custom_error::<StakeError>(result)
 }
 
 fn process_show_stake_account(
@@ -931,8 +929,7 @@ fn process_create_replicator_storage_account(
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
-    Ok(signature_str.to_string())
+    log_instruction_custom_error::<SystemError>(result)
 }
 
 fn process_create_validator_storage_account(
@@ -958,8 +955,7 @@ fn process_create_validator_storage_account(
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    let signature_str = log_instruction_custom_error::<SystemError>(result)?;
-    Ok(signature_str.to_string())
+    log_instruction_custom_error::<SystemError>(result)
 }
 
 fn process_claim_storage_reward(
@@ -1104,8 +1100,7 @@ fn process_pay(
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
         check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-        let signature_str = log_instruction_custom_error::<SystemError>(result)?;
-        Ok(signature_str.to_string())
+        log_instruction_custom_error::<SystemError>(result)
     } else if *witnesses == None {
         let dt = timestamp.unwrap();
         let dt_pubkey = match timestamp_pubkey {
@@ -1182,8 +1177,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
-    Ok(signature_str.to_string())
+    log_instruction_custom_error::<BudgetError>(result)
 }
 
 fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
@@ -1209,9 +1203,7 @@ fn process_time_elapsed(
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
-
-    Ok(signature_str.to_string())
+    log_instruction_custom_error::<BudgetError>(result)
 }
 
 fn process_witness(
@@ -1226,9 +1218,7 @@ fn process_witness(
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
-
-    Ok(signature_str.to_string())
+    log_instruction_custom_error::<BudgetError>(result)
 }
 
 fn process_get_version(rpc_client: &RpcClient, config: &WalletConfig) -> ProcessResult {
@@ -1634,7 +1624,7 @@ pub fn request_and_confirm_airdrop(
     drone_addr: &SocketAddr,
     to_pubkey: &Pubkey,
     lamports: u64,
-) -> Result<(), Box<dyn error::Error>> {
+) -> ProcessResult {
     let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let keypair = {
         let mut retries = 5;
@@ -1649,8 +1639,7 @@ pub fn request_and_confirm_airdrop(
     }?;
     let mut tx = keypair.airdrop_transaction();
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&keypair]);
-    log_instruction_custom_error::<SystemError>(result)?;
-    Ok(())
+    log_instruction_custom_error::<SystemError>(result)
 }
 
 fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
@@ -1665,12 +1654,7 @@ where
         )) = err
         {
             if let Some(specific_error) = E::decode_custom_error_to_enum(code) {
-                error!(
-                    "{:?}: {}::{:?}",
-                    err,
-                    specific_error.type_of(),
-                    specific_error
-                );
+                error!("{}::{:?}", E::type_of(), specific_error);
                 Err(specific_error)?
             }
         }

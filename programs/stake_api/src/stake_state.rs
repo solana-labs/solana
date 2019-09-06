@@ -4,11 +4,13 @@
 //! * own mining pools
 
 use crate::{config::Config, id};
+use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
     instruction::InstructionError,
+    instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     sysvar::{
         self,
@@ -49,6 +51,25 @@ impl StakeState {
         }
     }
 }
+
+/// Reasons the stake might have had an error
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum StakeError {
+    NoCreditsToRedeem,
+}
+impl<E> DecodeError<E> for StakeError {
+    fn type_of() -> &'static str {
+        "StakeError"
+    }
+}
+impl std::fmt::Display for StakeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            StakeError::NoCreditsToRedeem => write!(f, "not enough credits to redeem"),
+        }
+    }
+}
+impl std::error::Error for StakeError {}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Stake {
@@ -408,7 +429,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 self.set_state(&StakeState::Stake(stake))
             } else {
                 // not worth collecting
-                Err(InstructionError::CustomError(1))
+                Err(StakeError::NoCreditsToRedeem.into())
             }
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -1237,6 +1258,32 @@ mod tests {
     }
 
     #[test]
+    fn test_custom_error_decode() {
+        use num_traits::FromPrimitive;
+        fn pretty_err<T>(err: InstructionError) -> String
+        where
+            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
+        {
+            if let InstructionError::CustomError(code) = err {
+                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
+                format!(
+                    "{:?}: {}::{:?} - {}",
+                    err,
+                    T::type_of(),
+                    specific_error,
+                    specific_error,
+                )
+            } else {
+                "".to_string()
+            }
+        }
+        assert_eq!(
+            "CustomError(0): StakeError::NoCreditsToRedeem - not enough credits to redeem",
+            pretty_err::<StakeError>(StakeError::NoCreditsToRedeem.into())
+        )
+    }
+
+    #[test]
     fn test_stake_state_calculate_rewards() {
         let mut vote_state = VoteState::default();
         // assume stake.stake() is right
@@ -1379,7 +1426,7 @@ mod tests {
                 &rewards,
                 &stake_history,
             ),
-            Err(InstructionError::CustomError(1))
+            Err(StakeError::NoCreditsToRedeem.into())
         );
 
         // in this call, we've swapped rewards and vote, deserialization of rewards_pool fails
