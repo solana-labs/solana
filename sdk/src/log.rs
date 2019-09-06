@@ -70,13 +70,13 @@ pub fn sol_log_params(ka: &[SolKeyedAccount], data: &[u8]) {
         sol_log("- Is signer");
         sol_log_64(0, 0, 0, 0, k.is_signer as u64);
         sol_log("- Key");
-        k.key.print();
+        k.key.log();
         sol_log("- Lamports");
         sol_log_64(0, 0, 0, 0, *k.lamports);
         sol_log("- AccountData");
         sol_log_slice(k.data);
         sol_log("- Owner");
-        k.owner.print();
+        k.owner.log();
     }
     sol_log("Instruction data");
     sol_log_slice(data);

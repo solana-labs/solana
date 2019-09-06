@@ -22,7 +22,7 @@ fn return_sstruct() -> SStruct {
 entrypoint!(process_instruction);
 fn process_instruction(ka: &mut [SolKeyedAccount], info: &SolClusterInfo, data: &[u8]) -> bool {
     info!("Program identifier:");
-    info.program_id.print();
+    info.program_id.log();
 
     // Log the provided account keys and instruction input data.  In the case of
     // the no-op program, no account keys or input data are expected but real
