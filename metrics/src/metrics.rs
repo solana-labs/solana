@@ -166,17 +166,17 @@ trait MetricsWriter {
 }
 
 struct InfluxDbMetricsWriter {
-    client: Option<influx_db_client::Client>,
+    write_url: Option<String>,
 }
 
 impl InfluxDbMetricsWriter {
     fn new() -> Self {
         Self {
-            client: Self::build_client().ok(),
+            write_url: Self::build_write_url().ok(),
         }
     }
 
-    fn build_client() -> Result<influx_db_client::Client, String> {
+    fn build_write_url() -> Result<String, String> {
         let config = get_metrics_config().map_err(|err| {
             info!("metrics disabled: {}", err);
             err
@@ -186,28 +186,33 @@ impl InfluxDbMetricsWriter {
             "metrics configuration: host={} db={} username={}",
             config.host, config.db, config.username
         );
-        let mut client = influx_db_client::Client::new_with_option(config.host, config.db, None)
-            .set_authentication(config.username, config.password);
 
-        client.set_read_timeout(1 /*second*/);
-        client.set_write_timeout(1 /*second*/);
+        let write_url = format!(
+            "{}/write?db={}&u={}&p={}&precision=ms",
+            &config.host, &config.db, &config.username, &config.password
+        );
 
-        debug!("InfluxDB version: {:?}", client.get_version());
-        Ok(client)
+        Ok(write_url)
     }
 }
 
 impl MetricsWriter for InfluxDbMetricsWriter {
     fn write(&self, points: Vec<influx_db_client::Point>) {
-        if let Some(ref client) = self.client {
-            debug!("submitting {} points", points.len());
-            if let Err(err) = client.write_points(
-                influx_db_client::Points { point: points },
-                Some(influx_db_client::Precision::Milliseconds),
-                None,
-            ) {
-                debug!("InfluxDbMetricsWriter write error: {:?}", err);
-            }
+        if let Some(ref write_url) = self.write_url {
+            info!("submitting {} points", points.len());
+
+            let line = crate::serialization::line_serialization(points);
+
+            let response = ureq::post(write_url.as_str())
+                .timeout_connect(2_000)
+                .timeout_read(2_000)
+                .timeout_write(4_000)
+                .send_string(&line);
+            info!(
+                "submit response: {} {}",
+                response.status(),
+                response.status_text()
+            );
         }
     }
 }
@@ -523,12 +528,12 @@ fn get_metrics_config() -> Result<MetricsConfig, String> {
 
 pub fn query(q: &str) -> Result<String, String> {
     let config = get_metrics_config().map_err(|err| err.to_string())?;
-    let query = format!(
+    let query_url = format!(
         "{}/query?u={}&p={}&q={}",
         &config.host, &config.username, &config.password, &q
     );
 
-    let response = ureq::get(query.as_str())
+    let response = ureq::get(query_url.as_str())
         .call()
         .into_string()
         .map_err(|err| err.to_string())?;

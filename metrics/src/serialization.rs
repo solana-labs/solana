@@ -1,7 +1,7 @@
-use {Point, Value};
+use influx_db_client::{Point, Value};
 
 /// Resolve the points to line protocol format
-pub(crate) fn line_serialization<T: Iterator<Item = Point>>(points: T) -> String {
+pub(crate) fn line_serialization(points: Vec<Point>) -> String {
     let mut line = Vec::new();
     for point in points {
         line.push(escape_measurement(&point.measurement));
@@ -36,15 +36,16 @@ pub(crate) fn line_serialization<T: Iterator<Item = Point>>(points: T) -> String
                     } else {
                         ","
                     }
-                }.to_string(),
+                }
+                .to_string(),
             );
             line.push(escape_keys_and_tags(&field));
             line.push("=".to_string());
 
             match value {
-                Value::String(s) => line.push(escape_string_field_value(
-                    &s.replace("\\\"", "\\\\\""),
-                )),
+                Value::String(s) => {
+                    line.push(escape_string_field_value(&s.replace("\\\"", "\\\\\"")))
+                }
                 Value::Float(f) => line.push(f.to_string()),
                 Value::Integer(i) => line.push(i.to_string() + "i"),
                 Value::Boolean(b) => line.push({
@@ -69,32 +70,6 @@ pub(crate) fn line_serialization<T: Iterator<Item = Point>>(points: T) -> String
 }
 
 #[inline]
-pub(crate) fn quote_ident(value: &str) -> String {
-    format!(
-        "\"{}\"",
-        value
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-    )
-}
-
-#[inline]
-pub(crate) fn quote_literal(value: &str) -> String {
-    format!("'{}'", value.replace("\\", "\\\\").replace("'", "\\'"))
-}
-
-#[inline]
-pub(crate) fn conversion(value: &str) -> String {
-    value
-        .replace("\'", "")
-        .replace("\"", "")
-        .replace("\\", "")
-        .trim()
-        .to_string()
-}
-
-#[inline]
 fn escape_keys_and_tags(value: &str) -> String {
     value
         .replace(",", "\\,")
@@ -115,17 +90,15 @@ fn escape_string_field_value(value: &str) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
-    use {Point, Points};
 
     #[test]
     fn line_serialization_test() {
         let mut point = Point::new("test");
         point.add_field("somefield", Value::Integer(65));
         point.add_tag("sometag", Value::Boolean(false));
-        let points = Points::new(point);
 
         assert_eq!(
-            line_serialization(points),
+            line_serialization(vec![point]),
             "test,sometag=false somefield=65i\n"
         )
     }
@@ -146,15 +119,5 @@ mod test {
     #[test]
     fn escape_string_field_value_test() {
         assert_eq!(escape_string_field_value("\"foo"), "\"\\\"foo\"")
-    }
-
-    #[test]
-    fn quote_ident_test() {
-        assert_eq!(quote_ident("root"), "\"root\"")
-    }
-
-    #[test]
-    fn quote_literal_test() {
-        assert_eq!(quote_literal("root"), "\'root\'")
     }
 }

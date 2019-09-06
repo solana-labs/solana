@@ -4,4 +4,5 @@ pub use influx_db_client;
 pub mod counter;
 
 mod metrics;
+mod serialization;
 pub use crate::metrics::{flush, query, set_host_id, set_panic_hook, submit};
