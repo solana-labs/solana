@@ -1,7 +1,5 @@
 use serde_json;
 use serde_json::Value;
-use solana_metrics;
-use solana_metrics::influxdb;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -63,22 +61,21 @@ fn main() {
                     last_commit = get_last_metrics(&"commit".to_string(), &db, &name, &branch).ok();
                 }
 
-                let median = v["median"].to_string().parse().unwrap();
-                let deviation = v["deviation"].to_string().parse().unwrap();
+                let median: i64 = v["median"].to_string().parse().unwrap();
+                let deviation: i64 = v["deviation"].to_string().parse().unwrap();
                 if upload_metrics {
-                    solana_metrics::submit(
-                        influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
-                            .add_tag("test", influxdb::Value::String("bench".to_string()))
-                            .add_tag("branch", influxdb::Value::String(branch.to_string()))
-                            .add_field("median", influxdb::Value::Integer(median))
-                            .add_field("deviation", influxdb::Value::Integer(deviation))
-                            .add_field(
-                                "commit",
-                                influxdb::Value::String(git_commit_hash.trim().to_string()),
-                            )
-                            .to_owned(),
-                        log::Level::Info,
+                    panic!("TODO...");
+                    /*
+                    solana_metrics::datapoint_info!(
+                        &v["name"].as_str().unwrap().trim_matches('\"'),
+                        ("test", "bench", String),
+                        ("branch", branch.to_string(), String),
+                        ("median", median, i64),
+                        ("deviation", deviation, i64),
+                        ("commit", git_commit_hash.trim().to_string(), String)
                     );
+                    */
+                    
                 }
                 let last_median = get_last_metrics(&"median".to_string(), &db, &name, &branch)
                     .unwrap_or_default();

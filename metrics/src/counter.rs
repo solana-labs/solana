@@ -1,4 +1,4 @@
-use crate::metrics::{submit_counter, CounterPoint};
+use crate::metrics::submit_counter;
 use log::*;
 use solana_sdk::timing;
 use std::env;
@@ -17,6 +17,24 @@ pub struct Counter {
     pub lastlog: AtomicUsize,
     pub lograte: AtomicUsize,
     pub metricsrate: AtomicU64,
+}
+
+#[derive(Clone, Debug)]
+pub struct CounterPoint {
+    pub name: &'static str,
+    pub count: i64,
+    pub timestamp: u64,
+}
+
+impl CounterPoint {
+    #[cfg(test)]
+    pub fn new(name: &'static str) -> Self {
+        CounterPoint {
+            name,
+            count: 0,
+            timestamp: 0,
+        }
+    }
 }
 
 #[macro_export]

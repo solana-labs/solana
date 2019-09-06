@@ -1332,17 +1332,13 @@ fn send_signals(
         for (signal, slots) in completed_slots_senders.iter().zip(slots.into_iter()) {
             let res = signal.try_send(slots);
             if let Err(TrySendError::Full(_)) = res {
-                solana_metrics::submit(
-                    solana_metrics::influxdb::Point::new("blocktree_error")
-                        .add_field(
-                            "error",
-                            solana_metrics::influxdb::Value::String(
-                                "Unable to send newly completed slot because channel is full"
-                                    .to_string(),
-                            ),
-                        )
-                        .to_owned(),
-                    log::Level::Error,
+                datapoint_error!(
+                    "blocktree_error",
+                    (
+                        "error",
+                        "Unable to send newly completed slot because channel is full".to_string(),
+                        String
+                    ),
                 );
             }
         }
