@@ -80,7 +80,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
     println!("Interpreted:");
     assert_eq!(
-        1, /*true*/
+        0, /*success*/
         vm.execute_program(&mut inner_iter, &[], &[]).unwrap()
     );
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
@@ -106,7 +106,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     // vm.jit_compile().unwrap();
     // unsafe {
     //     assert_eq!(
-    //         1, /*true*/
+    //         0, /*success*/
     //         vm.execute_program_jit(&mut inner_iter).unwrap()
     //     );
     // }

@@ -29,6 +29,9 @@ pub struct SolClusterInfo<'a> {
     pub program_id: &'a SolPubkey,
 }
 
+/// Programs indicate success with a return value of 0
+pub const SUCCESS: u32 = 0;
+
 /// Declare entrypoint of the program.
 ///
 /// Deserialize the program input parameters and call
@@ -39,6 +42,7 @@ pub struct SolClusterInfo<'a> {
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
         #[no_mangle]
+<<<<<<< HEAD:sdk/bpf/rust/rust-utils/src/entrypoint.rs
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> bool {
             unsafe {
                 if let Ok((mut kas, info, data)) = $crate::entrypoint::deserialize(input) {
@@ -46,6 +50,12 @@ macro_rules! entrypoint {
                 } else {
                     false
                 }
+=======
+        pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u32 {
+               unsafe {
+                let (program_id, mut kas, data) = $crate::entrypoint::deserialize(input);
+                $process_instruction(&program_id, &mut kas, &data)
+>>>>>>> 81c36699c...  Add support for BPF program custom errors (#5743):sdk/src/entrypoint.rs
             }
         }
     };
@@ -55,7 +65,11 @@ macro_rules! entrypoint {
 #[allow(clippy::type_complexity)]
 pub unsafe fn deserialize<'a>(
     input: *mut u8,
+<<<<<<< HEAD:sdk/bpf/rust/rust-utils/src/entrypoint.rs
 ) -> Result<(Vec<SolKeyedAccount<'a>>, SolClusterInfo<'a>, &'a [u8]), ()> {
+=======
+) -> (&'a Pubkey, Vec<SolKeyedAccount<'a>>, &'a [u8]) {
+>>>>>>> 81c36699c...  Add support for BPF program custom errors (#5743):sdk/src/entrypoint.rs
     let mut offset: usize = 0;
 
     // Number of KeyedAccounts present
@@ -115,5 +129,9 @@ pub unsafe fn deserialize<'a>(
     let program_id: &SolPubkey = &*(input.add(offset) as *const [u8; size_of::<SolPubkey>()]);
     let info = SolClusterInfo { program_id };
 
+<<<<<<< HEAD:sdk/bpf/rust/rust-utils/src/entrypoint.rs
     Ok((kas, info, data))
+=======
+    (program_id, kas, data)
+>>>>>>> 81c36699c...  Add support for BPF program custom errors (#5743):sdk/src/entrypoint.rs
 }

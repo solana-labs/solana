@@ -20,6 +20,7 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
+use std::convert::TryFrom;
 use std::io::prelude::*;
 use std::io::Error;
 use std::mem;
@@ -136,12 +137,18 @@ pub fn process_instruction(
                 let mut v = serialize_parameters(program_id, params, &data);
 
                 match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
-                    Ok(status) => {
-                        if 0 == status {
-                            warn!("BPF program failed: {}", status);
+                    Ok(status) => match u32::try_from(status) {
+                        Ok(status) => {
+                            if status > 0 {
+                                warn!("BPF program failed: {}", status);
+                                return Err(InstructionError::CustomError(status));
+                            }
+                        }
+                        Err(e) => {
+                            warn!("BPF VM encountered invalid status: {}", e);
                             return Err(InstructionError::GenericError);
                         }
-                    }
+                    },
                     Err(e) => {
                         warn!("BPF VM failed to run program: {}", e);
                         return Err(InstructionError::GenericError);

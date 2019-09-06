@@ -4,8 +4,7 @@
  */
 #include <solana_sdk.h>
 
-extern bool entrypoint(const uint8_t *input) {
+extern uint32_t entrypoint(const uint8_t *input) {
   sol_panic();
-  return true;
+  return SUCCESS;
 }
-

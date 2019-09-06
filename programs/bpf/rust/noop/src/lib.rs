@@ -20,7 +20,11 @@ fn return_sstruct() -> SStruct {
 }
 
 entrypoint!(process_instruction);
+<<<<<<< HEAD
 fn process_instruction(ka: &mut [SolKeyedAccount], info: &SolClusterInfo, data: &[u8]) -> bool {
+=======
+fn process_instruction(program_id: &Pubkey, ka: &mut [SolKeyedAccount], data: &[u8]) -> u32 {
+>>>>>>> 81c36699c...  Add support for BPF program custom errors (#5743)
     info!("Program identifier:");
     sol_log_key(&info.program_id);
 
@@ -55,7 +59,7 @@ fn process_instruction(ka: &mut [SolKeyedAccount], info: &SolClusterInfo, data: 
     }
 
     info!("Success");
-    true
+    SUCCESS
 }
 
 #[cfg(test)]
