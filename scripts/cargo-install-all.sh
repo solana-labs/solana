@@ -48,8 +48,11 @@ BIN_CRATES=(
   cli
   bench-exchange
   bench-tps
-  genesis
 )
+
+#XXX: Ensure `solana-genesis` is built LAST!
+# See https://github.com/solana-labs/solana/issues/5826
+BIN_CRATES+=( "genesis" )
 
 for crate in "${BIN_CRATES[@]}"; do
   (
