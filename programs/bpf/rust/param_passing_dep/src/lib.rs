@@ -1,6 +1,6 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
-extern crate solana_sdk_bpf_utils;
+extern crate solana_sdk;
 
 pub struct Data<'a> {
     pub twentyone: u64,

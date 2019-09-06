@@ -13,7 +13,11 @@ edition = "2018"
 
 [dependencies]
 byteorder = { version = "1", default-features = false }
-solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust/rust-utils", version = "0.19.0-pre0" }
+solana-sdk = { path = "../../../../sdk/", version = "0.19.0-pre0", default-features = false }
+
+[features]
+program = ["solana-sdk/program"]
+default = ["program"]
 
 [workspace]
 members = []

@@ -12,11 +12,12 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust/rust-utils", version = "0.19.0-pre0" }
+solana-sdk = { path = "../../../../sdk/", version = "0.19.0-pre0", default-features = false }
 solana-bpf-rust-128bit-dep = { path = "../128bit_dep", version = "0.19.0-pre0" }
 
-[dev_dependencies]
-solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/rust-test", version = "0.19.0-pre0" }
+[features]
+program = ["solana-sdk/program"]
+default = ["program"]
 
 [workspace]
 members = []
