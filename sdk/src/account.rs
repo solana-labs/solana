@@ -1,4 +1,4 @@
-use crate::{pubkey::Pubkey, clock::Epoch};
+use crate::{clock::Epoch, pubkey::Pubkey};
 use std::{cmp, fmt};
 
 /// An Account with data that is stored on chain
