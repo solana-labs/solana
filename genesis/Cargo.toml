@@ -9,6 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
+base64 = "0.10.1"
 bincode = "1.1.4"
 clap = "2.33.0"
 serde = "1.0.99"
@@ -21,6 +22,7 @@ solana-sdk = { path = "../sdk", version = "0.19.0-pre0" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.19.0-pre0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.19.0-pre0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.19.0-pre0" }
+tempfile = "3.1.0"
 
 [features]
 cuda = ["solana-core/cuda"]
