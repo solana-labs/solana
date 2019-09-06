@@ -39,7 +39,6 @@ SECONDS=0
 
 BIN_CRATES=(
   drone
-  genesis
   gossip
   install
   keygen
@@ -49,6 +48,7 @@ BIN_CRATES=(
   cli
   bench-exchange
   bench-tps
+  genesis
 )
 
 for crate in "${BIN_CRATES[@]}"; do
