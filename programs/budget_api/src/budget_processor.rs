@@ -1,14 +1,15 @@
 //! budget program
-use crate::budget_expr::Witness;
-use crate::budget_instruction::BudgetInstruction;
-use crate::budget_state::{BudgetError, BudgetState};
+use crate::{
+    budget_expr::Witness,
+    budget_instruction::{BudgetError, BudgetInstruction},
+    budget_state::BudgetState,
+};
 use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::hash::hash;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{
+    account::KeyedAccount, hash::hash, instruction::InstructionError, pubkey::Pubkey,
+};
 
 /// Process a Witness Signature. Any payment plans waiting on this signature
 /// will progress one step.

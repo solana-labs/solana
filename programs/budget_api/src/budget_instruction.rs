@@ -1,13 +1,39 @@
-use crate::budget_expr::BudgetExpr;
-use crate::budget_state::BudgetState;
-use crate::id;
+use crate::{budget_expr::BudgetExpr, budget_state::BudgetState, id};
 use bincode::serialized_size;
 use chrono::prelude::{DateTime, Utc};
+use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::hash::Hash;
-use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_instruction;
+use solana_sdk::{
+    hash::Hash,
+    instruction::{AccountMeta, Instruction},
+    instruction_processor_utils::DecodeError,
+    pubkey::Pubkey,
+    system_instruction,
+};
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
+pub enum BudgetError {
+    DestinationMissing,
+}
+
+impl<T> DecodeError<T> for BudgetError {
+    fn type_of() -> &'static str {
+        "BudgetError"
+    }
+}
+
+impl std::fmt::Display for BudgetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BudgetError::DestinationMissing => "destination missing",
+            }
+        )
+    }
+}
+impl std::error::Error for BudgetError {}
 
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
