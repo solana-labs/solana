@@ -1,10 +1,10 @@
 //! @brief Solana Rust-based BPF program entrypoint and its parameter types
 extern crate alloc;
 
+use crate::pubkey::Pubkey;
 use alloc::vec::Vec;
 use core::mem::size_of;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
-use crate::pubkey::Pubkey;
 
 /// Keyed Account
 pub struct SolKeyedAccount<'a> {
@@ -20,17 +20,18 @@ pub struct SolKeyedAccount<'a> {
     pub owner: &'a Pubkey,
 }
 
-/// Information about the state of the cluster immediately before the program
-/// started executing the current instruction
-pub struct SolClusterInfo<'a> {
-    /// program_id of the currently executing program
-    pub program_id: &'a Pubkey,
-}
+/// User implemented program entrypoint
+///
+/// program_id: Program ID of the currently executing program
+/// accounts: Accounts passed as part of the instruction
+/// data: Instruction data
+pub type ProcessInstruction =
+    fn(program_id: &Pubkey, accounts: &mut [SolKeyedAccount], data: &[u8]) -> bool;
 
 /// Declare entrypoint of the program.
 ///
 /// Deserialize the program input parameters and call
-/// a user defined entrypoint.  Users must call
+/// the user defined `ProcessInstruction`.  Users must call
 /// this function otherwise an entrypoint for
 /// their program will not be created.
 #[macro_export]
@@ -38,9 +39,9 @@ macro_rules! entrypoint {
     ($process_instruction:ident) => {
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> bool {
-            unsafe {
-                if let Ok((mut kas, info, data)) = $crate::entrypoint::deserialize(input) {
-                    $process_instruction(&mut kas, &info, &data)
+               unsafe {
+                if let Ok((program_id, mut kas, data)) = $crate::entrypoint::deserialize(input) {
+                    $process_instruction(&program_id, &mut kas, &data)
                 } else {
                     false
                 }
@@ -53,7 +54,7 @@ macro_rules! entrypoint {
 #[allow(clippy::type_complexity)]
 pub unsafe fn deserialize<'a>(
     input: *mut u8,
-) -> Result<(Vec<SolKeyedAccount<'a>>, SolClusterInfo<'a>, &'a [u8]), ()> {
+) -> Result<(&'a Pubkey, Vec<SolKeyedAccount<'a>>, &'a [u8]), ()> {
     let mut offset: usize = 0;
 
     // Number of KeyedAccounts present
@@ -111,7 +112,6 @@ pub unsafe fn deserialize<'a>(
     // Program Id
 
     let program_id: &Pubkey = &*(input.add(offset) as *const Pubkey);
-    let info = SolClusterInfo { program_id };
 
-    Ok((kas, info, data))
+    Ok((program_id, kas, data))
 }
