@@ -6,9 +6,9 @@ pub mod pubkey;
 // On-chain program modules
 cfg_if! {
     if #[cfg(feature = "program")] {
-    pub mod entrypoint;
-    pub mod log;
-    pub mod program_test;
+        pub mod entrypoint;
+        pub mod log;
+        pub mod program_test;
     }
 }
 
