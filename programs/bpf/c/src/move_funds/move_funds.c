@@ -11,17 +11,27 @@
  */
 #define NUM_KA 3
 
-extern bool entrypoint(const uint8_t *input) {
+/**
+ * Custom error for when input serialization fails
+ */
+#define INVALID_INPUT 1
+
+/**
+ * Custom error for when transaction is not signed properly
+ */
+#define NOT_SIGNED 2
+
+extern uint32_t entrypoint(const uint8_t *input) {
   SolKeyedAccount ka[NUM_KA];
   SolParameters params = (SolParameters) { .ka = ka };
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
-    return false;
+    return INVALID_INPUT;
   }
 
   if (!params.ka[0].is_signer) {
     sol_log("Transaction not signed by key 0");
-    return false;
+    return NOT_SIGNED;
   }
 
   int64_t lamports = *(int64_t *)params.data;
@@ -32,5 +42,5 @@ extern bool entrypoint(const uint8_t *input) {
   } else {
     // sol_log_64(0, 0, 0xFF, *ka[0].lamports, lamports);
   }
-  return true;
+  return SUCCESS;
 }

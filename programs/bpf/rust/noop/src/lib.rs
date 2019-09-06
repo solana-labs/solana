@@ -21,7 +21,7 @@ fn return_sstruct() -> SStruct {
 }
 
 entrypoint!(process_instruction);
-fn process_instruction(program_id: &Pubkey, ka: &mut [SolKeyedAccount], data: &[u8]) -> bool {
+fn process_instruction(program_id: &Pubkey, ka: &mut [SolKeyedAccount], data: &[u8]) -> u32 {
     info!("Program identifier:");
     program_id.log();
 
@@ -56,7 +56,7 @@ fn process_instruction(program_id: &Pubkey, ka: &mut [SolKeyedAccount], data: &[
     }
 
     info!("Success");
-    true
+    SUCCESS
 }
 
 #[cfg(test)]

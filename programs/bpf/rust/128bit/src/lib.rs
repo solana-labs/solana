@@ -1,10 +1,11 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
 extern crate solana_sdk;
+use solana_sdk::entrypoint::SUCCESS;
 use solana_sdk::info;
 
 #[no_mangle]
-pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
+pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
     let x: u128 = 1;
     let y = x.rotate_right(1);
     assert_eq!(y, 170_141_183_460_469_231_731_687_303_715_884_105_728);
@@ -48,5 +49,5 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     assert_eq!(x, 0x0001_ffff_ffff_ffff_fffe);
 
     info!("Success");
-    true
+    SUCCESS
 }

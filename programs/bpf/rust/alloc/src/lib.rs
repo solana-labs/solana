@@ -3,12 +3,13 @@
 #[macro_use]
 extern crate alloc;
 extern crate solana_sdk;
+use solana_sdk::entrypoint::SUCCESS;
 use solana_sdk::info;
 use std::alloc::Layout;
 use std::mem;
 
 #[no_mangle]
-pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
+pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
     unsafe {
         // Confirm large allocation fails
 
@@ -100,5 +101,5 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     }
 
     info!("Success");
-    true
+    SUCCESS
 }

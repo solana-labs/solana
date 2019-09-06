@@ -28,6 +28,9 @@ pub struct SolKeyedAccount<'a> {
 pub type ProcessInstruction =
     fn(program_id: &Pubkey, accounts: &mut [SolKeyedAccount], data: &[u8]) -> bool;
 
+/// Programs indicate success with a return value of 0
+pub const SUCCESS: u32 = 0;
+
 /// Declare entrypoint of the program.
 ///
 /// Deserialize the program input parameters and call
@@ -38,13 +41,10 @@ pub type ProcessInstruction =
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
         #[no_mangle]
-        pub unsafe extern "C" fn entrypoint(input: *mut u8) -> bool {
+        pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u32 {
                unsafe {
-                if let Ok((program_id, mut kas, data)) = $crate::entrypoint::deserialize(input) {
-                    $process_instruction(&program_id, &mut kas, &data)
-                } else {
-                    false
-                }
+                let (program_id, mut kas, data) = $crate::entrypoint::deserialize(input);
+                $process_instruction(&program_id, &mut kas, &data)
             }
         }
     };
@@ -54,7 +54,7 @@ macro_rules! entrypoint {
 #[allow(clippy::type_complexity)]
 pub unsafe fn deserialize<'a>(
     input: *mut u8,
-) -> Result<(&'a Pubkey, Vec<SolKeyedAccount<'a>>, &'a [u8]), ()> {
+) -> (&'a Pubkey, Vec<SolKeyedAccount<'a>>, &'a [u8]) {
     let mut offset: usize = 0;
 
     // Number of KeyedAccounts present
@@ -113,5 +113,5 @@ pub unsafe fn deserialize<'a>(
 
     let program_id: &Pubkey = &*(input.add(offset) as *const Pubkey);
 
-    Ok((program_id, kas, data))
+    (program_id, kas, data)
 }

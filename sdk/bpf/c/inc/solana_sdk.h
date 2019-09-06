@@ -52,6 +52,11 @@ static_assert(sizeof(uint64_t) == 8);
 #define NULL 0
 
 /**
+ * SUCCESS return value
+ */
+#define SUCCESS 0
+
+/**
  * Boolean type
  */
 #ifndef __cplusplus
@@ -319,9 +324,9 @@ SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
  * Program instruction entrypoint
  *
  * @param input Buffer of serialized input parameters.  Use sol_deserialize() to decode
- * @return true if the instruction executed successfully
+ * @return 0 if the instruction executed successfully
  */
-bool entrypoint(const uint8_t *input);
+uint32_t entrypoint(const uint8_t *input);
 
 
 #ifdef SOL_TEST
