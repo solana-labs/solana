@@ -23,5 +23,5 @@ extern uint32_t entrypoint(const uint8_t *input) {
   // program, no account keys or input data are expected but real
   // programs will have specific requirements so they can do their work.
   sol_log_params(&params);
-  return SOL_SUCCESS;
+  return SUCCESS;
 }

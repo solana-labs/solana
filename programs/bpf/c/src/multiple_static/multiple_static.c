@@ -6,5 +6,5 @@ static const char msg2[] = "This is a different message";
 extern uint32_t entrypoint(const uint8_t *input) {
   sol_log((char*)msg);
   sol_log((char*)msg2);
-  return SOL_SUCCESS;
+  return SUCCESS;
 }

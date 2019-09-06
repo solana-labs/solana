@@ -6,5 +6,5 @@
 
 extern uint32_t entrypoint(const uint8_t *input) {
   sol_panic();
-  return SOL_SUCCESS;
+  return SUCCESS;
 }

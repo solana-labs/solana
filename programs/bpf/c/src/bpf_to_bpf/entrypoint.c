@@ -10,5 +10,5 @@ extern uint32_t entrypoint(const uint8_t *input) {
   sol_log(__FILE__);
   helper_function();
   sol_log(__FILE__);
-  return SOL_SUCCESS;
+  return SUCCESS;
 }

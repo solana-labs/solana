@@ -12,5 +12,5 @@ fn process_instruction(_program_id: &Pubkey, ka: &mut [SolKeyedAccount], _data: 
     assert_eq!(10u64, tick_height);
 
     info!("Success");
-    SOL_SUCCESS
+    SUCCESS
 }

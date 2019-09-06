@@ -42,5 +42,5 @@ extern uint32_t entrypoint(const uint8_t *input) {
   } else {
     // sol_log_64(0, 0, 0xFF, *ka[0].lamports, lamports);
   }
-  return SOL_SUCCESS;
+  return SUCCESS;
 }

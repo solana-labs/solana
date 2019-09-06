@@ -3,7 +3,7 @@
 #[macro_use]
 extern crate alloc;
 extern crate solana_sdk;
-use solana_sdk::entrypoint::SOL_SUCCESS;
+use solana_sdk::entrypoint::SUCCESS;
 use solana_sdk::info;
 use std::alloc::Layout;
 use std::mem;
@@ -101,5 +101,5 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
     }
 
     info!("Success");
-    SOL_SUCCESS
+    SUCCESS
 }

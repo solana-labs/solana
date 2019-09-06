@@ -11,5 +11,5 @@ void __attribute__ ((noinline)) helper() {
 extern uint32_t entrypoint(const uint8_t *input) {
   sol_log(__func__);
   helper();
-  return SOL_SUCCESS;
+  return SUCCESS;
 }

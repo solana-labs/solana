@@ -56,7 +56,7 @@ fn process_instruction(program_id: &Pubkey, ka: &mut [SolKeyedAccount], data: &[
     }
 
     info!("Success");
-    SOL_SUCCESS
+    SUCCESS
 }
 
 #[cfg(test)]

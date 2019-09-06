@@ -29,7 +29,7 @@ pub type ProcessInstruction =
     fn(program_id: &Pubkey, accounts: &mut [SolKeyedAccount], data: &[u8]) -> bool;
 
 /// Programs indicate success with a return value of 0
-pub const SOL_SUCCESS: u32 = 0;
+pub const SUCCESS: u32 = 0;
 
 /// Declare entrypoint of the program.
 ///

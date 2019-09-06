@@ -52,9 +52,9 @@ static_assert(sizeof(uint64_t) == 8);
 #define NULL 0
 
 /**
- * SOL_SUCCESS return value
+ * SUCCESS return value
  */
-#define SOL_SUCCESS 0
+#define SUCCESS 0
 
 /**
  * Boolean type

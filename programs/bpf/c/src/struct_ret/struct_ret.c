@@ -19,7 +19,7 @@ extern uint32_t entrypoint(const uint8_t* input) {
   struct test_struct s = test_function();
   sol_log("foobar");
   if (s.x + s.y + s.z == 12 ) {
-    return SOL_SUCCESS;
+    return SUCCESS;
   }
   return INCORRECT_SUM;
 }

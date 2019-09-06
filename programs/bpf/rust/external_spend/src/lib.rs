@@ -11,5 +11,5 @@ fn process_instruction(_program_id: &Pubkey, ka: &mut [SolKeyedAccount], _data: 
     // should result in a failed program execution.  Test to ensure that this debit
     // is seen by the runtime and fails as expected
     *ka[0].lamports -= 1;
-    SOL_SUCCESS
+    SUCCESS
 }
