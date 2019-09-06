@@ -4,14 +4,12 @@ extern crate alloc;
 use alloc::vec::Vec;
 use core::mem::size_of;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
-
-/// Public key
-pub type SolPubkey = [u8; 32];
+use crate::pubkey::Pubkey;
 
 /// Keyed Account
 pub struct SolKeyedAccount<'a> {
     /// Public key of the account
-    pub key: &'a SolPubkey,
+    pub key: &'a Pubkey,
     /// Public key of the account
     pub is_signer: bool,
     /// Number of lamports owned by this account
@@ -19,14 +17,14 @@ pub struct SolKeyedAccount<'a> {
     /// On-chain data within this account
     pub data: &'a mut [u8],
     /// Program that owns this account
-    pub owner: &'a SolPubkey,
+    pub owner: &'a Pubkey,
 }
 
 /// Information about the state of the cluster immediately before the program
 /// started executing the current instruction
 pub struct SolClusterInfo<'a> {
     /// program_id of the currently executing program
-    pub program_id: &'a SolPubkey,
+    pub program_id: &'a Pubkey,
 }
 
 /// Declare entrypoint of the program.
@@ -75,8 +73,8 @@ pub unsafe fn deserialize<'a>(
         };
         offset += size_of::<u64>();
 
-        let key: &SolPubkey = &*(input.add(offset) as *const [u8; size_of::<SolPubkey>()]);
-        offset += size_of::<SolPubkey>();
+        let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
+        offset += size_of::<Pubkey>();
 
         #[allow(clippy::cast_ptr_alignment)]
         let lamports = &mut *(input.add(offset) as *mut u64);
@@ -89,8 +87,8 @@ pub unsafe fn deserialize<'a>(
         let data = { from_raw_parts_mut(input.add(offset), data_length) };
         offset += data_length;
 
-        let owner: &SolPubkey = &*(input.add(offset) as *const [u8; size_of::<SolPubkey>()]);
-        offset += size_of::<SolPubkey>();
+        let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
+        offset += size_of::<Pubkey>();
 
         kas.push(SolKeyedAccount {
             key,
@@ -112,7 +110,7 @@ pub unsafe fn deserialize<'a>(
 
     // Program Id
 
-    let program_id: &SolPubkey = &*(input.add(offset) as *const [u8; size_of::<SolPubkey>()]);
+    let program_id: &Pubkey = &*(input.add(offset) as *const Pubkey);
     let info = SolClusterInfo { program_id };
 
     Ok((kas, info, data))
