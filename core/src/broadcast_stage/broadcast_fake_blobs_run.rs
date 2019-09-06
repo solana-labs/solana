@@ -72,7 +72,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             self.last_blockhash = Hash::default();
         }
 
-        blocktree.insert_shreds(shreds)?;
+        blocktree.insert_shreds(shreds, None)?;
         // 3) Start broadcast step
         let peers = cluster_info.read().unwrap().tvu_peers();
         peers.iter().enumerate().for_each(|(i, peer)| {

@@ -150,6 +150,7 @@ impl RetransmitStage {
             repair_socket,
             exit,
             repair_strategy,
+            &leader_schedule_cache.clone(),
             move |id, shred, shred_buf, working_bank| {
                 should_retransmit_and_persist(
                     shred,

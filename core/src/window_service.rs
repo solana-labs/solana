@@ -25,11 +25,6 @@ use std::time::{Duration, Instant};
 
 pub const NUM_THREADS: u32 = 10;
 
-/// Process a blob: Add blob to the ledger window.
-pub fn process_shreds(shreds: Vec<Shred>, blocktree: &Arc<Blocktree>) -> Result<()> {
-    blocktree.insert_shreds(shreds)
-}
-
 /// drop blobs that are from myself or not from the correct leader for the
 /// blob's slot
 pub fn should_retransmit_and_persist(
@@ -67,6 +62,7 @@ fn recv_window<F>(
     retransmit: &PacketSender,
     shred_filter: F,
     thread_pool: &ThreadPool,
+    leader_schedule_cache: &Arc<LeaderScheduleCache>,
 ) -> Result<()>
 where
     F: Fn(&Shred, &[u8]) -> bool,
@@ -117,7 +113,7 @@ where
         let _ = retransmit.send(packets);
     }
 
-    blocktree.insert_shreds(shreds)?;
+    blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
@@ -160,6 +156,7 @@ impl WindowService {
         repair_socket: Arc<UdpSocket>,
         exit: &Arc<AtomicBool>,
         repair_strategy: RepairStrategy,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
         shred_filter: F,
     ) -> WindowService
     where
@@ -184,6 +181,7 @@ impl WindowService {
         let exit = exit.clone();
         let shred_filter = Arc::new(shred_filter);
         let bank_forks = bank_forks.clone();
+        let leader_schedule_cache = leader_schedule_cache.clone();
         let t_window = Builder::new()
             .name("solana-window".to_string())
             // TODO: Mark: Why is it overflowing
@@ -218,6 +216,7 @@ impl WindowService {
                             )
                         },
                         &thread_pool,
+                        &leader_schedule_cache,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -296,11 +295,12 @@ mod test {
         let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
         let num_entries = 10;
         let original_entries = make_tiny_test_entries(num_entries);
-        let shreds = local_entries_to_shred(original_entries.clone(), &Arc::new(Keypair::new()));
-
-        for shred in shreds.into_iter().rev() {
-            process_shreds(vec![shred], &blocktree).expect("Expect successful processing of blob");
-        }
+        let mut shreds =
+            local_entries_to_shred(original_entries.clone(), &Arc::new(Keypair::new()));
+        shreds.reverse();
+        blocktree
+            .insert_shreds(shreds, None)
+            .expect("Expect successful processing of shred");
 
         assert_eq!(
             blocktree.get_slot_entries(0, 0, None).unwrap(),
@@ -411,6 +411,7 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             repair_strategy,
+            &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
         );
         let t_responder = {
@@ -500,6 +501,7 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             repair_strategy,
+            &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
         );
         let t_responder = {
