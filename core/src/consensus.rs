@@ -275,7 +275,9 @@ impl Tower {
         if let Some(root) = lockouts.root_slot {
             // This case should never happen because bank forks purges all
             // non-descendants of the root every time root is set
-            assert!(ancestors[&slot].contains(&root));
+            if slot != root {
+                assert!(ancestors[&slot].contains(&root));
+            }
         }
 
         false
@@ -328,8 +330,15 @@ impl Tower {
         vote: &Lockout,
         ancestors: &HashMap<u64, HashSet<u64>>,
     ) {
+        // If there's no ancestors, that means this slot must be from before the current root,
+        // in which case the lockouts won't be calculated in bank_weight anyways, so ignore
+        // this slot
+        let vote_slot_ancestors = ancestors.get(&vote.slot);
+        if vote_slot_ancestors.is_none() {
+            return;
+        }
         let mut slot_with_ancestors = vec![vote.slot];
-        slot_with_ancestors.extend(ancestors.get(&vote.slot).unwrap_or(&HashSet::new()));
+        slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
         for slot in slot_with_ancestors {
             let entry = &mut stake_lockouts.entry(slot).or_default();
             entry.lockout += vote.lockout();
@@ -344,8 +353,15 @@ impl Tower {
         lamports: u64,
         ancestors: &HashMap<u64, HashSet<u64>>,
     ) {
+        // If there's no ancestors, that means this slot must be from before the current root,
+        // in which case the lockouts won't be calculated in bank_weight anyways, so ignore
+        // this slot
+        let vote_slot_ancestors = ancestors.get(&slot);
+        if vote_slot_ancestors.is_none() {
+            return;
+        }
         let mut slot_with_ancestors = vec![slot];
-        slot_with_ancestors.extend(ancestors.get(&slot).unwrap_or(&HashSet::new()));
+        slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
         for slot in slot_with_ancestors {
             let entry = &mut stake_lockouts.entry(slot).or_default();
             entry.stake += lamports;
@@ -381,9 +397,12 @@ impl Tower {
         vote_account_pubkey: &Pubkey,
     ) {
         if let Some(bank) = self.find_heaviest_bank(bank_forks) {
+            let root = bank_forks.root();
             if let Some((_stake, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
-                let vote_state = VoteState::deserialize(&vote_account.data)
+                let mut vote_state = VoteState::deserialize(&vote_account.data)
                     .expect("vote_account isn't a VoteState?");
+                vote_state.root_slot = Some(root);
+                vote_state.votes.retain(|v| v.slot > root);
                 trace!(
                     "{} lockouts initialized to {:?}",
                     self.node_pubkey,
