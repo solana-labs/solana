@@ -29,7 +29,7 @@ macro_rules! entrypoint {
     ($process_instruction:ident) => {
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u32 {
-               unsafe {
+            unsafe {
                 let (program_id, mut accounts, data) = $crate::entrypoint::deserialize(input);
                 $process_instruction(&program_id, &mut accounts, &data)
             }
@@ -39,9 +39,7 @@ macro_rules! entrypoint {
 
 /// Deserialize the input parameters
 #[allow(clippy::type_complexity)]
-pub unsafe fn deserialize<'a>(
-    input: *mut u8,
-) -> (&'a Pubkey, Vec<AccountInfo<'a>>, &'a [u8]) {
+pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a>>, &'a [u8]) {
     let mut offset: usize = 0;
 
     // Number of accounts present

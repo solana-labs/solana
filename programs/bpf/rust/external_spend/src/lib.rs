@@ -1,7 +1,7 @@
 //! @brief Example Rust-based BPF program that moves a lamport from one account to another
 
 extern crate solana_sdk;
-use solana_sdk::{account_info::AccountInfo, entrypoint, pubkey::Pubkey};
+use solana_sdk::{account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, pubkey::Pubkey};
 
 entrypoint!(process_instruction);
 fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], _data: &[u8]) -> u32 {

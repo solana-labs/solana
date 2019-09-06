@@ -2,7 +2,9 @@
 
 extern crate solana_sdk;
 use byteorder::{ByteOrder, LittleEndian};
-use solana_sdk::{account_info::AccountInfo, entrypoint, info, pubkey::Pubkey};
+use solana_sdk::{
+    account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, info, pubkey::Pubkey,
+};
 
 entrypoint!(process_instruction);
 fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], _data: &[u8]) -> u32 {
