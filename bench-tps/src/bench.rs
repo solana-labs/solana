@@ -10,6 +10,7 @@ use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_pr
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_sdk::client::Client;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -68,6 +69,18 @@ impl Default for Config {
 
 type LibraKeys = (Keypair, Pubkey, Pubkey, Vec<Keypair>);
 
+fn get_recent_blockhash<T: Client>(client: &T) -> (Hash, FeeCalculator) {
+    loop {
+        match client.get_recent_blockhash() {
+            Ok((blockhash, fee_calculator)) => return (blockhash, fee_calculator),
+            Err(err) => {
+                info!("Couldn't get recent blockhash: {:?}", err);
+                sleep(Duration::from_secs(1));
+            }
+        };
+    }
+}
+
 pub fn do_bench_tps<T>(
     clients: Vec<T>,
     config: Config,
@@ -94,7 +107,15 @@ where
     let start = gen_keypairs.len() - (tx_count * 2) as usize;
     let keypairs = &gen_keypairs[start..];
 
-    let first_tx_count = client.get_transaction_count().expect("transaction count");
+    let first_tx_count = loop {
+        match client.get_transaction_count() {
+            Ok(count) => break count,
+            Err(err) => {
+                info!("Couldn't get transaction count: {:?}", err);
+                sleep(Duration::from_secs(1));
+            }
+        }
+    };
     println!("Initial transaction count {}", first_tx_count);
 
     let exit_signal = Arc::new(AtomicBool::new(false));
@@ -510,7 +531,7 @@ pub fn fund_keys<T: Client>(
                     to_fund_txs.len(),
                 );
 
-                let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+                let (blockhash, _fee_calculator) = get_recent_blockhash(client);
 
                 // re-sign retained to_fund_txes with updated blockhash
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
@@ -560,7 +581,7 @@ pub fn airdrop_lamports<T: Client>(
             id.pubkey(),
         );
 
-        let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+        let (blockhash, _fee_calculator) = get_recent_blockhash(client);
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let signature = client.async_send_transaction(transaction).unwrap();
@@ -700,7 +721,7 @@ fn fund_move_keys<T: Client>(
     libra_mint_program_id: &Pubkey,
     libra_mint_key: &Keypair,
 ) {
-    let (mut blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+    let (mut blockhash, _fee_calculator) = get_recent_blockhash(client);
 
     info!("creating the libra funding account..");
     let libra_funding_key = Keypair::new();
@@ -840,7 +861,7 @@ fn fund_move_keys<T: Client>(
         }
 
         info!("funded: {} of {}", i, keypairs.len() / NUM_FUNDING_KEYS);
-        blockhash = client.get_recent_blockhash().unwrap().0;
+        blockhash = get_recent_blockhash(client).0;
     }
 
     info!("done funding keys..");
@@ -867,7 +888,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
     let mut move_keypairs_ret = None;
 
     if lamports_per_account > last_keypair_balance {
-        let (_blockhash, fee_calculator) = client.get_recent_blockhash().unwrap();
+        let (_blockhash, fee_calculator) = get_recent_blockhash(client);
         let account_desired_balance =
             lamports_per_account - last_keypair_balance + fee_calculator.max_lamports_per_signature;
         let extra_fees = extra * fee_calculator.max_lamports_per_signature;
