@@ -20,10 +20,7 @@ crate::solana_name_id!(ID, "SysvarS1otHashes111111111111111111111111111");
 pub const MAX_SLOT_HASHES: usize = 512; // 512 slots to get your vote in
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct SlotHashes {
-    // non-pub to keep control of size
-    inner: Vec<(Slot, Hash)>,
-}
+pub struct SlotHashes(Vec<(Slot, Hash)>);
 
 impl SlotHashes {
     pub fn from(account: &Account) -> Option<Self> {
@@ -34,26 +31,30 @@ impl SlotHashes {
     }
 
     pub fn size_of() -> usize {
-        serialized_size(&SlotHashes {
-            inner: vec![(0, Hash::default()); MAX_SLOT_HASHES],
-        })
-        .unwrap() as usize
+        serialized_size(&SlotHashes(vec![(0, Hash::default()); MAX_SLOT_HASHES])).unwrap() as usize
     }
     pub fn add(&mut self, slot: Slot, hash: Hash) {
-        self.inner.insert(0, (slot, hash));
-        self.inner.truncate(MAX_SLOT_HASHES);
+        match self.binary_search_by(|probe| slot.cmp(&probe.0)) {
+            Ok(index) => (self.0)[index] = (slot, hash),
+            Err(index) => (self.0).insert(index, (slot, hash)),
+        }
+        (self.0).truncate(MAX_SLOT_HASHES);
+    }
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    pub fn get(&self, slot: &Slot) -> Option<&Hash> {
+        self.binary_search_by(|probe| slot.cmp(&probe.0))
+            .ok()
+            .map(|index| &self[index].1)
     }
     pub fn new(slot_hashes: &[(Slot, Hash)]) -> Self {
-        Self {
-            inner: slot_hashes.to_vec(),
-        }
+        Self(slot_hashes.to_vec())
     }
 }
 
 impl Deref for SlotHashes {
     type Target = Vec<(u64, Hash)>;
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
@@ -83,7 +84,7 @@ mod tests {
         let account = create_account(lamports, &[]);
         assert_eq!(account.data.len(), SlotHashes::size_of());
         let slot_hashes = SlotHashes::from(&account);
-        assert_eq!(slot_hashes, Some(SlotHashes { inner: vec![] }));
+        assert_eq!(slot_hashes, Some(SlotHashes(vec![])));
         let mut slot_hashes = slot_hashes.unwrap();
         for i in 0..MAX_SLOT_HASHES + 1 {
             slot_hashes.add(

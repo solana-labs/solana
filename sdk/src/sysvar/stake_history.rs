@@ -2,13 +2,10 @@
 //!
 //! this account carries history about stake activations and de-activations
 //!
-use crate::account::Account;
-use crate::sysvar;
-use bincode::serialized_size;
-use std::collections::HashMap;
-use std::ops::Deref;
-
 pub use crate::clock::Epoch;
+use crate::{account::Account, sysvar};
+use bincode::serialized_size;
+use std::ops::Deref;
 
 const ID: [u8; 32] = [
     6, 167, 213, 23, 25, 53, 132, 208, 254, 237, 155, 179, 67, 29, 19, 32, 107, 229, 68, 40, 27,
@@ -27,9 +24,7 @@ pub struct StakeHistoryEntry {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
-pub struct StakeHistory {
-    inner: HashMap<Epoch, StakeHistoryEntry>,
-}
+pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
 
 impl StakeHistory {
     pub fn from(account: &Account) -> Option<Self> {
@@ -40,27 +35,33 @@ impl StakeHistory {
     }
 
     pub fn size_of() -> usize {
-        serialized_size(
-            &(0..MAX_STAKE_HISTORY)
-                .map(|i| (i as u64, StakeHistoryEntry::default()))
-                .collect::<HashMap<_, _>>(),
-        )
+        serialized_size(&StakeHistory(vec![
+            (0, StakeHistoryEntry::default());
+            MAX_STAKE_HISTORY
+        ]))
         .unwrap() as usize
     }
-    pub fn add(&mut self, epoch: Epoch, entry: StakeHistoryEntry) {
-        self.inner.insert(epoch, entry);
 
-        if self.len() > MAX_STAKE_HISTORY {
-            let oldest = *self.inner.keys().min().unwrap();
-            self.inner.remove(&oldest);
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    pub fn get(&self, epoch: &Epoch) -> Option<&StakeHistoryEntry> {
+        self.binary_search_by(|probe| epoch.cmp(&probe.0))
+            .ok()
+            .map(|index| &self[index].1)
+    }
+
+    pub fn add(&mut self, epoch: Epoch, entry: StakeHistoryEntry) {
+        match self.binary_search_by(|probe| epoch.cmp(&probe.0)) {
+            Ok(index) => (self.0)[index] = (epoch, entry),
+            Err(index) => (self.0).insert(index, (epoch, entry)),
         }
+        (self.0).truncate(MAX_STAKE_HISTORY);
     }
 }
 
 impl Deref for StakeHistory {
-    type Target = HashMap<Epoch, StakeHistoryEntry>;
+    type Target = Vec<(Epoch, StakeHistoryEntry)>;
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
@@ -103,7 +104,15 @@ mod tests {
             );
         }
         assert_eq!(stake_history.len(), MAX_STAKE_HISTORY);
-        assert_eq!(*stake_history.keys().min().unwrap(), 1);
+        assert_eq!(stake_history.iter().map(|entry| entry.0).min().unwrap(), 1);
+        assert_eq!(stake_history.get(&0), None);
+        assert_eq!(
+            stake_history.get(&1),
+            Some(&StakeHistoryEntry {
+                activating: 1,
+                ..StakeHistoryEntry::default()
+            })
+        );
         // verify the account can hold a full instance
         assert_eq!(
             StakeHistory::from(&create_account(lamports, &stake_history)),
