@@ -2,7 +2,7 @@
 //!
 use crate::account::Account;
 use crate::sysvar;
-use crate::sysvar::clock::{Clock, check_id};
+use crate::sysvar::clock::{check_id, Clock};
 use bincode::serialized_size;
 
 pub use crate::clock::{Epoch, Slot};
