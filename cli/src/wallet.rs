@@ -882,8 +882,8 @@ fn process_show_stake_account(
             println!("total stake: {}", stake_account.lamports);
             println!("credits observed: {}", stake.credits_observed);
             println!("delegated stake: {}", stake.stake);
-            if stake.voter_pubkey() != Pubkey::default() {
-                println!("delegated voter pubkey: {}", stake.voter_pubkey());
+            if stake.voter_pubkey != Pubkey::default() {
+                println!("delegated voter pubkey: {}", stake.voter_pubkey);
             }
             println!(
                 "stake activates starting from epoch: {}",

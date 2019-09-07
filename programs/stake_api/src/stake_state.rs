@@ -410,7 +410,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
             // the only valid use of current voter_pubkey, redelegation breaks
             //  rewards redemption for previous voter_pubkey
-            if stake.voter_pubkey != vote_account.unsigned_key() {
+            if stake.voter_pubkey != *vote_account.unsigned_key() {
                 return Err(InstructionError::InvalidArgument);
             }
 
