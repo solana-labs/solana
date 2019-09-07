@@ -39,7 +39,6 @@ SECONDS=0
 
 BIN_CRATES=(
   drone
-  genesis
   gossip
   install
   keygen
@@ -50,6 +49,10 @@ BIN_CRATES=(
   bench-exchange
   bench-tps
 )
+
+#XXX: Ensure `solana-genesis` is built LAST!
+# See https://github.com/solana-labs/solana/issues/5826
+BIN_CRATES+=( "genesis" )
 
 for crate in "${BIN_CRATES[@]}"; do
   (
