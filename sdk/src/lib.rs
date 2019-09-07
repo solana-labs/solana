@@ -3,6 +3,8 @@ pub mod pubkey;
 
 // On-chain program modules
 #[cfg(feature = "program")]
+pub mod account_info;
+#[cfg(feature = "program")]
 pub mod entrypoint;
 #[cfg(feature = "program")]
 pub mod log;

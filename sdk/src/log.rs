@@ -1,6 +1,6 @@
 //! @brief Solana Rust-based BPF program logging
 
-use crate::entrypoint::SolKeyedAccount;
+use crate::account_info::AccountInfo;
 
 /// Prints a string
 /// There are two forms and are fast
@@ -63,20 +63,20 @@ pub fn sol_log_slice(slice: &[u8]) {
 /// @param ka - A pointer to an array of `SolKeyedAccounts` to print
 /// @param data - A pointer to the instruction data to print
 #[allow(dead_code)]
-pub fn sol_log_params(ka: &[SolKeyedAccount], data: &[u8]) {
-    for (i, k) in ka.iter().enumerate() {
+pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
+    for (i, account) in accounts.iter().enumerate() {
         sol_log("SolKeyedAccount");
         sol_log_64(0, 0, 0, 0, i as u64);
         sol_log("- Is signer");
-        sol_log_64(0, 0, 0, 0, k.is_signer as u64);
+        sol_log_64(0, 0, 0, 0, account.is_signer as u64);
         sol_log("- Key");
-        k.key.log();
+        account.key.log();
         sol_log("- Lamports");
-        sol_log_64(0, 0, 0, 0, *k.lamports);
+        sol_log_64(0, 0, 0, 0, *account.lamports);
         sol_log("- AccountData");
-        sol_log_slice(k.data);
+        sol_log_slice(account.data);
         sol_log("- Owner");
-        k.owner.log();
+        account.owner.log();
     }
     sol_log("Instruction data");
     sol_log_slice(data);
