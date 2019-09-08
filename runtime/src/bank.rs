@@ -4,9 +4,7 @@
 //! already been signed and verified.
 use crate::transaction_utils::OrderedIterator;
 use crate::{
-    accounts::{
-        Accounts, TransactionAccounts, TransactionCredits, TransactionLoaders, TransactionRents,
-    },
+    accounts::{Accounts, TransactionLoadResult},
     accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
     accounts_index::Fork,
     blockhash_queue::BlockhashQueue,
@@ -797,14 +795,7 @@ impl Bank {
         txs_iteration_order: Option<&[usize]>,
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<
-        Result<(
-            TransactionAccounts,
-            TransactionLoaders,
-            TransactionCredits,
-            TransactionRents,
-        )>,
-    > {
+    ) -> Vec<Result<TransactionLoadResult>> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
@@ -969,14 +960,7 @@ impl Bank {
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> (
-        Vec<
-            Result<(
-                TransactionAccounts,
-                TransactionLoaders,
-                TransactionCredits,
-                TransactionRents,
-            )>,
-        >,
+        Vec<Result<TransactionLoadResult>>,
         Vec<Result<()>>,
         Vec<usize>,
         usize,
@@ -1106,12 +1090,7 @@ impl Bank {
         &self,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
-        loaded_accounts: &mut [Result<(
-            TransactionAccounts,
-            TransactionLoaders,
-            TransactionCredits,
-            TransactionRents,
-        )>],
+        loaded_accounts: &mut [Result<TransactionLoadResult>],
         executed: &[Result<()>],
         tx_count: usize,
         signature_count: usize,
@@ -1391,12 +1370,7 @@ impl Bank {
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
         res: &[Result<()>],
-        loaded: &[Result<(
-            TransactionAccounts,
-            TransactionLoaders,
-            TransactionCredits,
-            TransactionRents,
-        )>],
+        loaded: &[Result<TransactionLoadResult>],
     ) {
         for (i, (raccs, tx)) in loaded
             .iter()
@@ -1415,7 +1389,7 @@ impl Bank {
                     .account_keys
                     .iter()
                     .zip(acc.0.iter())
-                    .filter(|(_, account)| {
+                    .filter(|(_key, account)| {
                         (Stakes::is_stake(account)) || storage_utils::is_storage(account)
                     })
             {
