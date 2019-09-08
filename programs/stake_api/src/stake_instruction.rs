@@ -238,7 +238,7 @@ mod tests {
             .iter()
             .map(|meta| {
                 if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock_account::create_account(1, 0, 0, 0, 0)
+                    sysvar::clock_account::new(1, 0, 0, 0, 0)
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
                     sysvar::rewards::create_account(1, 0.0, 0.0)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
@@ -336,7 +336,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &mut sysvar::clock_account::create_account(1, 0, 0, 0, 0)
+                        &mut sysvar::clock_account::new(1, 0, 0, 0, 0)
                     ),
                     KeyedAccount::new(
                         &config::id(),

@@ -20,7 +20,7 @@ impl Clock {
     }
 }
 
-pub fn create_account(
+pub fn new(
     lamports: u64,
     slot: Slot,
     segment: Segment,
@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn test_create_account() {
-        let account = create_account(1, 0, 0, 0, 0);
+        let account = new(1, 0, 0, 0, 0);
         let clock = Clock::from(&account).unwrap();
         assert_eq!(clock, Clock::default());
     }

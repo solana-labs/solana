@@ -402,7 +402,7 @@ impl Bank {
     fn update_clock(&self) {
         self.store_account(
             &clock::id(),
-            &clock_account::create_account(
+            &clock_account::new(
                 1,
                 self.slot,
                 get_segment_from_slot(self.slot, self.slots_per_segment),
