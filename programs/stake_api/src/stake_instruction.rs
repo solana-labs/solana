@@ -336,7 +336,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &mut sysvar::clock::create_account(1, 0, 0, 0, 0)
+                        &mut sysvar::clock_account::create_account(1, 0, 0, 0, 0)
                     ),
                     KeyedAccount::new(
                         &config::id(),
