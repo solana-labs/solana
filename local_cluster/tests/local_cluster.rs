@@ -4,8 +4,9 @@ use log::*;
 use serial_test_derive::serial;
 use solana_core::{
     bank_forks::SnapshotConfig, blocktree::Blocktree, broadcast_stage::BroadcastStageType,
-    cluster::Cluster, gossip_service::discover_cluster, snapshot_utils, validator::ValidatorConfig,
+    gossip_service::discover_cluster, snapshot_utils, validator::ValidatorConfig,
 };
+use solana_local_cluster::cluster::Cluster;
 use solana_local_cluster::{
     cluster_tests,
     local_cluster::{ClusterConfig, LocalCluster},
@@ -270,7 +271,7 @@ fn test_restart_node() {
         clock::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
-    cluster.restart_node(nodes[0], &validator_config);
+    cluster.exit_restart_node(&nodes[0], validator_config);
     cluster_tests::sleep_n_epochs(
         0.5,
         &cluster.genesis_block.poh_config,
@@ -299,6 +300,92 @@ fn test_listener_startup() {
     let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
     assert_eq!(cluster_nodes.len(), 4);
 }
+
+/*#[allow(unused_attributes)]
+#[test]
+#[serial]
+fn test_snapshot_restart_locktower() {
+    // First set up the cluster with 2 nodes
+    let snapshot_interval_slots = 10;
+    let num_account_paths = 4;
+
+    let leader_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+    let validator_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+
+    let snapshot_package_output_path = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .snapshot_package_output_path;
+
+    let config = ClusterConfig {
+        node_stakes: vec![10000],
+        cluster_lamports: 100000,
+        validator_configs: vec![leader_snapshot_test_config.validator_config.clone()],
+        ..ClusterConfig::default()
+    };
+
+    let mut cluster = LocalCluster::new(&config);
+
+    // Let the nodes run for a while, then stop one of the validators
+    sleep(Duration::from_millis(5000));
+    cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
+
+    trace!("Waiting for snapshot tar to be generated with slot",);
+    let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
+    loop {
+        if tar.exists() {
+            trace!("snapshot tar exists");
+            break;
+        }
+        sleep(Duration::from_millis(5000));
+    }
+
+    // Copy tar to validator's snapshot output directory
+    let validator_tar_path =
+        snapshot_utils::get_snapshot_tar_path(&validator_snapshot_test_config.snapshot_output_path);
+    fs::hard_link(tar, &validator_tar_path).unwrap();
+    let slot_floor = snapshot_utils::bank_slot_from_archive(&validator_tar_path).unwrap();
+
+    // Start up a new node from a snapshot
+    let validator_stake = 5;
+    cluster.add_validator(
+        &validator_snapshot_test_config.validator_config,
+        validator_stake,
+    );
+    let all_pubkeys = cluster.get_node_pubkeys();
+    let validator_id = all_pubkeys
+        .into_iter()
+        .find(|x| *x != cluster.entry_point_info.id)
+        .unwrap();
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+    let mut current_slot = 0;
+
+    // Let this validator run a while with repair
+    let target_slot = slot_floor + 40;
+    while current_slot <= target_slot {
+        trace!("current_slot: {}", current_slot);
+        if let Ok(slot) = validator_client.get_slot() {
+            current_slot = slot;
+        } else {
+            continue;
+        }
+        sleep(Duration::from_secs(1));
+    }
+
+    // Check the validator ledger doesn't contain any slots < slot_floor
+    cluster.close_preserve_ledgers();
+    let validator_ledger_path = &cluster.fullnode_infos[&validator_id];
+    let blocktree = Blocktree::open(&validator_ledger_path.info.ledger_path).unwrap();
+
+    // Skip the zeroth slot in blocktree that the ledger is initialized with
+    let (first_slot, _) = blocktree.slot_meta_iterator(1).unwrap().next().unwrap();
+
+    assert_eq!(first_slot, slot_floor);
+}*/
 
 #[allow(unused_attributes)]
 #[test]
@@ -467,7 +554,7 @@ fn test_snapshots_restart_validity() {
         // Restart a node
         trace!("Restarting cluster from snapshot");
         let nodes = cluster.get_node_pubkeys();
-        cluster.restart_node(nodes[0], &snapshot_test_config.validator_config);
+        cluster.exit_restart_node(&nodes[0], snapshot_test_config.validator_config.clone());
 
         // Verify account balances on validator
         trace!("Verifying balances");
