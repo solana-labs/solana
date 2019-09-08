@@ -9,8 +9,9 @@ if [[ -n $APPVEYOR ]]; then
   source ci/rust-version.sh
 
   appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
+  export USERPROFILE="D:\\"
   ./rustup-init -yv --default-toolchain $rust_stable --default-host x86_64-pc-windows-msvc
-  export PATH="$PATH:$USERPROFILE/.cargo/bin"
+  export PATH="$PATH:/d/.cargo/bin"
   rustc -vV
   cargo -vV
 fi
