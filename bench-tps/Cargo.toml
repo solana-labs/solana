@@ -17,6 +17,7 @@ serde_derive = "1.0.99"
 serde_json = "1.0.40"
 serde_yaml = "0.8.9"
 solana-core = { path = "../core", version = "0.19.0-pre0" }
+solana-genesis = { path = "../genesis", version = "0.19.0-pre0" } 
 solana-local-cluster = { path = "../local_cluster", version = "0.19.0-pre0" }
 solana-client = { path = "../client", version = "0.19.0-pre0" }
 solana-drone = { path = "../drone", version = "0.19.0-pre0" }
