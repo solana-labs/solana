@@ -14,3 +14,7 @@ ureq = { version = "0.11.1", features = ["json"] }
 [[bin]]
 name = "blockheaders"
 path = "src/blockheade.rs"
+
+[[bin]]
+name = "transactions"
+path = "src/transaction.rs"

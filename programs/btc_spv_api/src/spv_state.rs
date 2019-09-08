@@ -103,6 +103,8 @@ pub struct Transaction {
     version: u32,
     //bitcoin network version
     locktime: u32,
+
+    bytes_len: usize,
 }
 
 impl Transaction {
@@ -111,63 +113,116 @@ impl Transaction {
         ver.copy_from_slice(&txbytes[..4]);
         let version = u32::from_le_bytes(ver);
 
-        let inputnum: u64 = decode_variable_int(&txbytes[4..13])?;
-        let vilen: u8 = measure_variable_int(&txbytes[4..13])?;
-        let inputstart:usize = 4 + vilen;
+        let inputnum: u64 = decode_variable_int(&txbytes[4..13]).unwrap();
+        let vinlen: usize = measure_variable_int(&txbytes[4..13]).unwrap();
 
+        let mut inputstart:usize = 4 + vinlen;
+        let mut inputs = Vec::new();
+        for i in 0..inputnum {
+            let mut input = Input::new(txbytes[inputstart..].to_vec());
+            inputstart += input.bytes_len;
+            inputs.push(input);
+        }
+        inputs.to_vec();
 
+        let outputnum: u64 = decode_variable_int(&txbytes[inputstart..9+inputstart]).unwrap();
+        let voutlen: usize = measure_variable_int(&txbytes[inputstart..9+inputstart]).unwrap();
 
+        let mut outputstart:usize = inputstart + voutlen;
+        let mut outputs = Vec::new();
+        for i in 1..outputnum {
+            let mut output = Output::new(txbytes[outputstart..].to_vec());
+            outputstart += output.bytes_len;
+            outputs.push(output);
+        }
 
+        let mut lt: [u8; 4] = [0;4];
+        lt.copy_from_slice(&txbytes[outputstart..4+outputstart]);
+        let locktime = u32::from_le_bytes(lt);
 
-
+        Transaction {
+            inputs,
+            outputs,
+            version,
+            locktime,
+            bytes_len: 4+outputstart,
+        }
     }
-    fn hexnew(hex: String) -> Self {
-        //reinsert later
+    fn hexnew(hex: String) -> Result<Transaction, SpvError> {
+        match decode_hex(&hex) {
+            Ok(txbytes) => {
+                Ok(Transaction::new(txbytes))
+            }
+            Err(e) => Err(SpvError::ParseError),
+        }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Input {
-    r#type: InputType,
+    itype: InputType,
     // Type of the input
     position: u32,
     // position of the tx in its Block
     txhash: BitcoinTxHash,
     // hash of the transaction
     script_length: u64,
-
+    // length of the spend script
     script: Vec<u8>,
+    // script bytes
     sequence: [u8; 4],
+    // length of the input in bytes
+    bytes_len: usize,
 }
 
 impl Input {
     fn new(ibytes: Vec<u8>) -> Self {
-        let txhash: [u8; 32] = [0;32];
+        let mut txhash: [u8; 32] = [0;32];
         txhash.copy_from_slice(&ibytes[..32]);
 
-        let tx_out_index: [u8; 32] = [0; 32];
+        let mut tx_out_index: [u8; 4] = [0; 4];
         tx_out_index.copy_from_slice(&ibytes[32..36]);
+        let position = u32::from_le_bytes(tx_out_index);
 
-        let script_length: u64 = decode_variable_int(&ibytes[36..45])?;
-        let script_length_len: usize = measure_variable_int(&ibytes[36..45])?;
+        let script_length: u64 = decode_variable_int(&ibytes[36..45]).unwrap();
+        let script_length_len: usize = measure_variable_int(&ibytes[36..45]).unwrap();
         let script_start = 36 + script_length_len; //checkc for correctness
-        let script_end = script_start + script_length;
+        let script_end = script_start + script_length as usize;
+        let input_end = script_end + 4;
 
-        let script: Vec<u8> = &ibytes[script_start..script_length];
+        let script: Vec<u8> = ibytes[script_start..script_length as usize].to_vec();
 
-        let sequence: [u8; 4] = [0; 4];
-        sequence.copy_from_slice(&ibytes[script_end..script_end + 4]);
+        let mut sequence: [u8; 4] = [0; 4];
+        sequence.copy_from_slice(&ibytes[script_end..input_end]);
 
-        let type: InputType = InputType::NONE // testing measure
+        let itype: InputType = InputType::NONE; // testing measure
 
-        let input = Input {
-            type,
-            position: tx_out_index,
+        let input = Self {
+            itype,
+            position,
             txhash,
             script_length,
             script,
-            sequence
-        }
+            sequence,
+            bytes_len: input_end,
+        };
+        input
+    }
+
+    fn default() -> Self {
+        let txh: [u8; 32] = [0;32];
+        let seq: [u8; 4] = [0; 4];
+
+        let input = Self {
+            itype: InputType::NONE,
+            position: 55,
+            txhash: txh,
+            script_length: 45,
+            script: txh.to_vec(),
+            sequence: seq,
+            bytes_len: 123,
+        };
+        input
     }
 }
 
@@ -181,13 +236,55 @@ pub enum InputType {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Output {
-    r#type: OutputType,
+    otype: OutputType,
     // type of the output
     value: u64,
     // amount of btc in sats
-    payload: Option<Vec<u8>>,
-    // data sent with the transaction (Op return)
+    script: Vec<u8>,
+
     script_length: u64,
+
+    bytes_len: usize,
+
+    // payload: Option<Vec<u8>>,
+    // // data sent with the transaction (Op return)
+}
+
+impl Output {
+    fn new(obytes: Vec<u8>) -> Self {
+        let mut val: [u8; 8] = [0;8];
+        val.copy_from_slice(&obytes[..8]);
+        let value: u64 = u64::from_le_bytes(val);
+
+        let script_start: usize = 8 + measure_variable_int(&obytes[8..17]).unwrap();
+        let script_length = decode_variable_int(&obytes[8..script_start]).unwrap();
+        let script_end: usize = script_start + script_length as usize;
+
+        let script = obytes[script_start..script_end].to_vec();
+
+        let otype = OutputType::WPKH; // temporary hardcode
+
+        Self {
+            otype,
+            value,
+            script,
+            script_length,
+            bytes_len: script_end,
+        }
+    }
+
+    fn default() -> Self {
+        let txh: [u8; 32] = [0;32];
+
+        let output = Self {
+            otype: OutputType::WPKH,
+            value: 55,
+            script: txh.to_vec(),
+            script_length: 45,
+            bytes_len: 123,
+        };
+        output
+    }
 }
 
 #[allow(non_camel_case_types)]

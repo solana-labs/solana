@@ -163,4 +163,9 @@ mod test {
 
         Ok(())
     }
+
+    // #[test]
+    // fn test_parse_transaction_hex() -> {
+    //     let testhash = ""
+    // }
 }
