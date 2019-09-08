@@ -5,6 +5,7 @@ use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
+use solana_sdk::sysvar::slot_hashes::SlotHash;
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
@@ -231,7 +232,7 @@ impl VoteState {
     pub fn process_vote(
         &mut self,
         vote: &Vote,
-        slot_hashes: &[(Slot, Hash)],
+        slot_hashes: &[SlotHash],
         epoch: Epoch,
     ) -> Result<(), VoteError> {
         if vote.slots.is_empty() {
@@ -407,7 +408,7 @@ pub fn initialize_account(
 
 pub fn process_vote(
     vote_account: &mut KeyedAccount,
-    slot_hashes: &[(Slot, Hash)],
+    slot_hashes: &[SlotHash],
     clock: &Clock,
     other_signers: &[KeyedAccount],
     vote: &Vote,
@@ -487,7 +488,7 @@ mod tests {
         vote_pubkey: &Pubkey,
         vote_account: &mut Account,
         vote: &Vote,
-        slot_hashes: &[(u64, Hash)],
+        slot_hashes: &[SlotHash],
         epoch: u64,
     ) -> Result<VoteState, InstructionError> {
         process_vote(

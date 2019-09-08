@@ -19,8 +19,10 @@ crate::solana_name_id!(ID, "SysvarS1otHashes111111111111111111111111111");
 
 pub const MAX_SLOT_HASHES: usize = 512; // 512 slots to get your vote in
 
+pub type SlotHash = (Slot, Hash);
+
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct SlotHashes(Vec<(Slot, Hash)>);
+pub struct SlotHashes(Vec<SlotHash>);
 
 impl SlotHashes {
     pub fn from(account: &Account) -> Option<Self> {
@@ -46,19 +48,19 @@ impl SlotHashes {
             .ok()
             .map(|index| &self[index].1)
     }
-    pub fn new(slot_hashes: &[(Slot, Hash)]) -> Self {
+    pub fn new(slot_hashes: &[SlotHash]) -> Self {
         Self(slot_hashes.to_vec())
     }
 }
 
 impl Deref for SlotHashes {
-    type Target = Vec<(u64, Hash)>;
+    type Target = Vec<SlotHash>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-pub fn create_account(lamports: u64, slot_hashes: &[(Slot, Hash)]) -> Account {
+pub fn create_account(lamports: u64, slot_hashes: &[SlotHash]) -> Account {
     let mut account = Account::new(lamports, SlotHashes::size_of(), &sysvar::id());
     SlotHashes::new(slot_hashes).to(&mut account).unwrap();
     account
