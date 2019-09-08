@@ -9,6 +9,8 @@ cache:
   - '%USERPROFILE%\.cargo'
   - '%APPVEYOR_BUILD_FOLDER%\target'
 
+clone_folder: d:\projects\solana
+
 build_script:
   - bash ci/publish-tarball.sh
 
