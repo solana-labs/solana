@@ -52,6 +52,13 @@ pub type TransactionCredits = Vec<u64>;
 pub type TransactionRents = Vec<u64>;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
+pub type TransactionLoadResult = (
+    TransactionAccounts,
+    TransactionLoaders,
+    TransactionCredits,
+    TransactionRents,
+);
+
 impl Accounts {
     pub fn new(paths: Option<String>) -> Self {
         let accounts_db = Arc::new(AccountsDB::new(paths));
@@ -217,14 +224,7 @@ impl Accounts {
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
-    ) -> Vec<
-        Result<(
-            TransactionAccounts,
-            TransactionLoaders,
-            TransactionCredits,
-            TransactionRents,
-        )>,
-    > {
+    ) -> Vec<Result<TransactionLoadResult>> {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
@@ -529,12 +529,7 @@ impl Accounts {
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
         res: &[Result<()>],
-        loaded: &mut [Result<(
-            TransactionAccounts,
-            TransactionLoaders,
-            TransactionCredits,
-            TransactionRents,
-        )>],
+        loaded: &mut [Result<TransactionLoadResult>],
     ) {
         let accounts_to_store =
             self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded);
@@ -611,12 +606,7 @@ impl Accounts {
         txs: &'a [Transaction],
         txs_iteration_order: Option<&'a [usize]>,
         res: &'a [Result<()>],
-        loaded: &'a mut [Result<(
-            TransactionAccounts,
-            TransactionLoaders,
-            TransactionCredits,
-            TransactionRents,
-        )>],
+        loaded: &'a mut [Result<TransactionLoadResult>],
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::new();
         for (i, (raccs, tx)) in loaded
@@ -693,14 +683,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<
-        Result<(
-            TransactionAccounts,
-            TransactionLoaders,
-            TransactionCredits,
-            TransactionRents,
-        )>,
-    > {
+    ) -> Vec<Result<TransactionLoadResult>> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(None);
@@ -726,14 +709,7 @@ mod tests {
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<
-        Result<(
-            TransactionAccounts,
-            TransactionLoaders,
-            TransactionCredits,
-            TransactionRents,
-        )>,
-    > {
+    ) -> Vec<Result<TransactionLoadResult>> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
