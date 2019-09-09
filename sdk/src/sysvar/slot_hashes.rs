@@ -68,7 +68,9 @@ impl Deref for SlotHashes {
 
 pub fn create_account(lamports: u64, slot_hashes: &[SlotHash]) -> Account {
     let mut account = Account::new(lamports, SlotHashes::size_of(), &sysvar::id());
-    SlotHashes::new(slot_hashes).to_account(&mut account).unwrap();
+    SlotHashes::new(slot_hashes)
+        .to_account(&mut account)
+        .unwrap();
     account
 }
 

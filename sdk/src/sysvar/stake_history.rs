@@ -2,9 +2,9 @@
 //!
 //! this account carries history about stake activations and de-activations
 //!
+use crate::account_info::AccountInfo;
 pub use crate::clock::Epoch;
 use crate::{account::Account, sysvar};
-use crate::account_info::AccountInfo;
 use bincode::serialized_size;
 use std::ops::Deref;
 
