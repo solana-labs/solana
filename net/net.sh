@@ -76,6 +76,9 @@ Operate a configured testnet
    --no-deploy
                                       - Don't deploy new software, use the
                                         existing deployment
+   --no-build
+                                      - Don't build new software, deploy the
+                                        existing binaries
 
 
  sanity/start/update-specific options:
@@ -125,6 +128,7 @@ maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 buildProfile="--release"
 debugBuild=false
+doBuild=true
 
 command=$1
 [[ -n $command ]] || usage
@@ -147,6 +151,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --no-deploy ]]; then
       deployMethod=skip
+      shift 1
+    elif [[ $1 = --no-build ]]; then
+      doBuild=false
       shift 1
     elif [[ $1 = --skip-ledger-verify ]]; then
       maybeSkipLedgerVerify="$1"
@@ -618,7 +625,11 @@ prepare_deploy() {
     )
     ;;
   local)
-    build
+    if $doBuild; then
+      build
+    else
+      echo "Build skipped due to --no-build"
+    fi
     ;;
   skip)
     ;;
