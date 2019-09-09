@@ -1,6 +1,5 @@
 use crate::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
 use crate::message::Message;
-#[cfg(not(feature = "program"))]
 use log::*;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
@@ -82,7 +81,6 @@ impl FeeCalculator {
                             / me.target_signatures_per_slot as u64,
                     ));
 
-            #[cfg(not(feature = "program"))]
             trace!(
                 "desired_lamports_per_signature: {}",
                 desired_lamports_per_signature
@@ -101,7 +99,6 @@ impl FeeCalculator {
                 let gap_adjust =
                     std::cmp::max(1, me.target_lamports_per_signature / 20) as i64 * gap.signum();
 
-                #[cfg(not(feature = "program"))]                
                 trace!(
                     "lamports_per_signature gap is {}, adjusting by {}",
                     gap,
@@ -119,7 +116,6 @@ impl FeeCalculator {
             me.min_lamports_per_signature = me.target_lamports_per_signature;
             me.max_lamports_per_signature = me.target_lamports_per_signature;
         }
-        #[cfg(not(feature = "program"))]
         debug!(
             "new_derived(): lamports_per_signature: {}",
             me.lamports_per_signature

@@ -2,6 +2,7 @@ pub mod account;
 pub mod account_utils;
 pub mod bpf_loader;
 pub mod clock;
+pub mod fee_calculator;
 pub mod hash;
 pub mod inflation;
 pub mod instruction;
@@ -23,11 +24,10 @@ pub mod timing;
 // On-chain program specific modules
 pub mod account_info;
 pub mod entrypoint;
-pub mod fee_calculator;
 pub mod log;
 pub mod program_test;
 
-// Modules not compatible with on-chain programs
+// Modules not usable by on-chain programs
 #[cfg(not(feature = "program"))]
 pub mod client;
 #[cfg(not(feature = "program"))]
