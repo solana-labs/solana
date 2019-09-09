@@ -22,7 +22,7 @@ clap = { version = "2.33.0" }
 console = "0.9.0"
 ctrlc = { version = "3.1.3", features = ["termination"] }
 dirs = "2.0.2"
-indicatif = "0.11.0"
+indicatif = "0.12.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
 nix = "0.15.0"
