@@ -11,7 +11,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
 use solana_exchange_api::id;
-use solana_genesis::account_details::PrimordialAccountDetails;
+use solana_genesis::PrimordialAccountDetails;
 use solana_metrics::datapoint_info;
 use solana_sdk::client::Client;
 use solana_sdk::client::SyncClient;
