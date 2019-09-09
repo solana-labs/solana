@@ -75,23 +75,25 @@ choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
-$ validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block --entrypoint testnet.solana.com
+$ solana-validator --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --entrypoint testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run validator.sh -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block --entrypoint testnet.solana.com
+$ solana-install run solana-validator -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --entrypoint testnet.solana.com
 ```
 
 If you built from source:
 ```bash
-$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --poll-for-new-genesis-block --entrypoint testnet.solana.com
+$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --entrypoint testnet.solana.com
 ```
 
 ### Enabling CUDA
-By default CUDA is disabled.  If your machine has a GPU with CUDA installed,
-define the SOLANA_CUDA flag in your environment *before* running any of the
+If your machine has a GPU with CUDA installed (Linux-only currently), use the `solana-validator-cuda`
+executable instead of `solana-validator`.
+
+Or if you built from source, define the SOLANA_CUDA flag in your environment *before* running any of the
 previusly mentioned commands
 ```bash
 $ export SOLANA_CUDA=1
@@ -103,7 +105,7 @@ When your validator is started look for the following log message to indicate th
 ### Controlling local network port allocation
 By default the validator will dynamically select available network ports in the
 8000-10000 range, and may be overridden with `--dynamic-port-range`.  For
-example, `validator.sh --dynamic-port-range 11000-11010 ...` will restrict the
+example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict the
 validator to ports 11000-11011.
 
 ### Limiting ledger size to conserve disk space
