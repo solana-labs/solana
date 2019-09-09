@@ -227,7 +227,7 @@ pub(crate) mod tests {
         let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, next_stakers_epoch);
         result.sort();
         let stake_history =
-            StakeHistory::from(&bank.get_account(&stake_history::id()).unwrap()).unwrap();
+            StakeHistory::from_account(&bank.get_account(&stake_history::id()).unwrap()).unwrap();
         let mut expected = vec![
             (leader_stake.stake(bank.epoch(), Some(&stake_history)), None),
             (other_stake.stake(bank.epoch(), Some(&stake_history)), None),

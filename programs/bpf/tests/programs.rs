@@ -82,7 +82,7 @@ mod bpf {
         use solana_sdk::instruction::{AccountMeta, Instruction};
         use solana_sdk::pubkey::Pubkey;
         use solana_sdk::signature::{Keypair, KeypairUtil};
-        use solana_sdk::sysvar::clock;
+        use solana_sdk::sysvar::{clock, fees, rewards, slot_hashes, stack_history};
         use std::io::Read;
         use std::sync::Arc;
 
@@ -125,6 +125,10 @@ mod bpf {
                     AccountMeta::new(mint_keypair.pubkey(), true),
                     AccountMeta::new(Keypair::new().pubkey(), false),
                     AccountMeta::new(clock::id(), false),
+                    AccountMeta::new(fees::id(), false),
+                    AccountMeta::new(rewards::id(), false),
+                    AccountMeta::new(slot_hashes::id(), false),
+                    AccountMeta::new(stake_history::id(), false),
                 ];
                 let instruction = Instruction::new(program_id, &1u8, account_metas);
                 let result = bank_client.send_instruction(&mint_keypair, instruction);

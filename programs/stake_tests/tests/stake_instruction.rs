@@ -147,7 +147,7 @@ fn test_stake_account_delegate() {
     let rewards_account = bank
         .get_account(&sysvar::rewards::id())
         .expect("account not found");
-    assert_matches!(Rewards::from(&rewards_account), Some(_));
+    assert_matches!(Rewards::from_account(&rewards_account), Some(_));
 
     // Redeem the credit
     let bank_client = BankClient::new_shared(&bank);

@@ -1,6 +1,7 @@
 //! This account contains the current cluster rewards point values
 //!
 use crate::account::Account;
+use crate::account_info::AccountInfo;
 use crate::sysvar;
 use bincode::serialized_size;
 
@@ -20,10 +21,16 @@ pub struct Rewards {
 }
 
 impl Rewards {
-    pub fn from(account: &Account) -> Option<Self> {
+    pub fn from_account(account: &Account) -> Option<Self> {
         account.deserialize_data().ok()
     }
-    pub fn to(&self, account: &mut Account) -> Option<()> {
+    pub fn to_account(&self, account: &mut Account) -> Option<()> {
+        account.serialize_data(self).ok()
+    }
+    pub fn from_account_info(account: &AccountInfo) -> Option<Self> {
+        account.deserialize_data().ok()
+    }
+    pub fn to_account_info(&self, account: &mut AccountInfo) -> Option<()> {
         account.serialize_data(self).ok()
     }
     pub fn size_of() -> usize {
@@ -54,7 +61,7 @@ pub fn from_keyed_account(account: &KeyedAccount) -> Result<Rewards, Instruction
         dbg!(account.unsigned_key());
         return Err(InstructionError::InvalidArgument);
     }
-    Rewards::from(account.account).ok_or(InstructionError::InvalidAccountData)
+    Rewards::from_account(account.account).ok_or(InstructionError::InvalidAccountData)
 }
 
 #[cfg(test)]
@@ -64,7 +71,7 @@ mod tests {
     #[test]
     fn test_create_account() {
         let account = create_account(1, 0.0, 0.0);
-        let rewards = Rewards::from(&account).unwrap();
+        let rewards = Rewards::from_account(&account).unwrap();
         assert_eq!(rewards, Rewards::default());
     }
 }

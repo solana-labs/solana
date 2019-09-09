@@ -1,6 +1,7 @@
 //! This account contains the current cluster fees
 //!
 use crate::account::Account;
+use crate::account_info::AccountInfo;
 use crate::fee_calculator::FeeCalculator;
 use crate::sysvar;
 use bincode::serialized_size;
@@ -20,13 +21,18 @@ pub struct Fees {
 }
 
 impl Fees {
-    pub fn from(account: &Account) -> Option<Self> {
+    pub fn from_account(account: &Account) -> Option<Self> {
         account.deserialize_data().ok()
     }
-    pub fn to(&self, account: &mut Account) -> Option<()> {
+    pub fn to_account(&self, account: &mut Account) -> Option<()> {
         account.serialize_data(self).ok()
     }
-
+    pub fn from_account_info(account: &AccountInfo) -> Option<Self> {
+        account.deserialize_data().ok()
+    }
+    pub fn to_account_info(&self, account: &mut AccountInfo) -> Option<()> {
+        account.serialize_data(self).ok()
+    }
     pub fn size_of() -> usize {
         serialized_size(&Fees::default()).unwrap() as usize
     }
@@ -51,7 +57,7 @@ mod tests {
     fn test_fees_create_account() {
         let lamports = 42;
         let account = create_account(lamports, &FeeCalculator::default());
-        let fees = Fees::from(&account).unwrap();
+        let fees = Fees::from_account(&account).unwrap();
         assert_eq!(fees.fee_calculator, FeeCalculator::default());
     }
 }
