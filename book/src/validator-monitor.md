@@ -1,14 +1,4 @@
 # Validator Monitoring
-When `validator.sh` starts, it will output a validator configuration that looks
-similar to:
-```bash
-======================[ validator configuration ]======================
-identity pubkey: 4ceWXsL3UJvn7NYZiRkw7NsryMpviaKBDYr8GK7J61Dm
-vote pubkey: 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
-ledger: ...
-accounts: ...
-======================================================================
-```
 
 ## Check Gossip
 The **identity pubkey** for your validator can also be found by running:

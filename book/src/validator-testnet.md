@@ -61,7 +61,7 @@ Solana-gossip and solana-validator commands already require an explicit
 `--entrypoint` argument. Simply replace testnet.solana.com in the examples with
 an alternate url to interact with a different testnet. For example:
 ```bash
-$ validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --poll-for-new-genesis-block beta.testnet.solana.com
+$ solana-validator --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 beta.testnet.solana.com
 ```
 
 You can also submit JSON-RPC requests to a different testnet, like:
