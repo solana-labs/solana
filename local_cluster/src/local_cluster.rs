@@ -1,7 +1,7 @@
+use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
     blocktree::create_new_tmp_ledger,
-    cluster::Cluster,
     cluster_info::{Node, FULLNODE_PORT_RANGE},
     contact_info::ContactInfo,
     genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
@@ -33,14 +33,6 @@ use std::{
     sync::Arc,
 };
 
-pub struct ValidatorInfo {
-    pub keypair: Arc<Keypair>,
-    pub voting_keypair: Arc<Keypair>,
-    pub storage_keypair: Arc<Keypair>,
-    pub ledger_path: PathBuf,
-    pub contact_info: ContactInfo,
-}
-
 pub struct ReplicatorInfo {
     pub replicator_storage_pubkey: Pubkey,
     pub ledger_path: PathBuf,
@@ -51,20 +43,6 @@ impl ReplicatorInfo {
         Self {
             replicator_storage_pubkey: storage_pubkey,
             ledger_path,
-        }
-    }
-}
-
-pub struct ClusterValidatorInfo {
-    pub info: ValidatorInfo,
-    pub config: ValidatorConfig,
-}
-
-impl ClusterValidatorInfo {
-    pub fn new(validator_info: ValidatorInfo, config: ValidatorConfig) -> Self {
-        Self {
-            info: validator_info,
-            config,
         }
     }
 }
@@ -585,27 +563,32 @@ impl Cluster for LocalCluster {
         })
     }
 
-    fn restart_node(&mut self, pubkey: Pubkey, config: &ValidatorConfig) {
-        // Shut down the fullnode
+    fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {
         let mut node = self.fullnodes.remove(&pubkey).unwrap();
+
+        // Shut down the fullnode
         node.exit();
         node.join().unwrap();
 
+        self.fullnode_infos.remove(&pubkey).unwrap()
+    }
+
+    fn restart_node(&mut self, pubkey: &Pubkey, mut cluster_validator_info: ClusterValidatorInfo) {
         // Update the stored ContactInfo for this node
-        let node_pubkey = &self.fullnode_infos[&pubkey].info.keypair.pubkey();
-        let node = Node::new_localhost_with_pubkey(&node_pubkey);
-        self.fullnode_infos
-            .get_mut(&pubkey)
-            .unwrap()
-            .info
-            .contact_info = node.info.clone();
-        if pubkey == self.entry_point_info.id {
-            self.entry_point_info = node.info.clone();
-        }
+        let node = Node::new_localhost_with_pubkey(&pubkey);
+        cluster_validator_info.info.contact_info = node.info.clone();
+
+        let entry_point_info = {
+            if *pubkey == self.entry_point_info.id {
+                self.entry_point_info = node.info.clone();
+                None
+            } else {
+                Some(&self.entry_point_info)
+            }
+        };
 
         // Restart the node
-        self.fullnode_infos.get_mut(&pubkey).unwrap().config = config.clone();
-        let fullnode_info = &self.fullnode_infos[&pubkey].info;
+        let fullnode_info = &cluster_validator_info.info;
 
         let restarted_node = Validator::new(
             node,
@@ -614,12 +597,19 @@ impl Cluster for LocalCluster {
             &fullnode_info.voting_keypair.pubkey(),
             &fullnode_info.voting_keypair,
             &fullnode_info.storage_keypair,
-            None,
+            entry_point_info,
             true,
-            config,
+            &cluster_validator_info.config,
         );
 
-        self.fullnodes.insert(pubkey, restarted_node);
+        self.fullnodes.insert(*pubkey, restarted_node);
+        self.fullnode_infos.insert(*pubkey, cluster_validator_info);
+    }
+
+    fn exit_restart_node(&mut self, pubkey: &Pubkey, validator_config: ValidatorConfig) {
+        let mut cluster_validator_info = self.exit_node(pubkey);
+        cluster_validator_info.config = validator_config;
+        self.restart_node(pubkey, cluster_validator_info);
     }
 }
 
