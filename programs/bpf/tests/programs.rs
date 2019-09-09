@@ -79,10 +79,12 @@ mod bpf {
         use super::*;
         use solana_sdk::bpf_loader;
         use solana_sdk::client::SyncClient;
-        use solana_sdk::hash;
         use solana_sdk::instruction::{AccountMeta, Instruction};
+        use solana_sdk::pubkey::Pubkey;
         use solana_sdk::signature::{Keypair, KeypairUtil};
+        use solana_sdk::sysvar::clock;
         use std::io::Read;
+        use std::sync::Arc;
 
         #[test]
         fn test_program_bpf_rust() {
@@ -91,10 +93,11 @@ mod bpf {
             let programs = [
                 ("solana_bpf_rust_128bit", true),
                 ("solana_bpf_rust_alloc", true),
+                ("solana_bpf_rust_clock", true),
                 ("solana_bpf_rust_dep_crate", true),
+                ("solana_bpf_rust_external_spend", false),
                 ("solana_bpf_rust_iter", true),
                 ("solana_bpf_rust_many_args", true),
-                ("solana_bpf_rust_external_spend", false),
                 ("solana_bpf_rust_noop", true),
                 ("solana_bpf_rust_panic", false),
                 ("solana_bpf_rust_param_passing", true),
@@ -111,12 +114,9 @@ mod bpf {
                     mint_keypair,
                     ..
                 } = create_genesis_block(50);
-                let bank = Bank::new(&genesis_block);
-
-                // register some ticks, used by solana_bpf_rust_tick_height
-                for i in 0..10 {
-                    bank.register_tick(&hash::hash(format!("hashing {}", i).as_bytes()));
-                }
+                let bank = Arc::new(Bank::new(&genesis_block));
+                // Create bank with specific slot, used by solana_bpf_rust_clock test
+                let bank = Bank::new_from_parent(&bank, &Pubkey::default(), 42);
                 let bank_client = BankClient::new(bank);
 
                 // Call user program
@@ -124,6 +124,7 @@ mod bpf {
                 let account_metas = vec![
                     AccountMeta::new(mint_keypair.pubkey(), true),
                     AccountMeta::new(Keypair::new().pubkey(), false),
+                    AccountMeta::new(clock::id(), false),
                 ];
                 let instruction = Instruction::new(program_id, &1u8, account_metas);
                 let result = bank_client.send_instruction(&mint_keypair, instruction);

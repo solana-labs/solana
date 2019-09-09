@@ -1,13 +1,25 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
+#[cfg(feature = "kitchen_sink")]
 use crate::pubkey::Pubkey;
 
 pub mod clock;
+
+#[cfg(feature = "program")]
+pub mod clock_account_info;
+
+#[cfg(feature = "kitchen_sink")]
+pub mod clock_account;
+#[cfg(feature = "kitchen_sink")]
 pub mod fees;
+#[cfg(feature = "kitchen_sink")]
 pub mod rewards;
+#[cfg(feature = "kitchen_sink")]
 pub mod slot_hashes;
+#[cfg(feature = "kitchen_sink")]
 pub mod stake_history;
 
+#[cfg(feature = "kitchen_sink")]
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     clock::check_id(id) || fees::check_id(id) || rewards::check_id(id) || slot_hashes::check_id(id)
 }

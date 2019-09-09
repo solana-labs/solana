@@ -70,6 +70,7 @@ fn main() {
         let rust_programs = [
             "128bit",
             "alloc",
+            "clock",
             "dep_crate",
             "iter",
             "many_args",
@@ -77,7 +78,6 @@ fn main() {
             "noop",
             "panic",
             "param_passing",
-            "tick_height",
         ];
         for program in rust_programs.iter() {
             println!(
