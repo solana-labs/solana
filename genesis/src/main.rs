@@ -3,7 +3,7 @@
 use base64;
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana_core::blocktree::create_new_ledger;
-use solana_genesis::account_details::PrimordialAccountDetails;
+use solana_genesis::PrimordialAccountDetails;
 use solana_sdk::account::Account;
 use solana_sdk::clock;
 use solana_sdk::fee_calculator::FeeCalculator;
