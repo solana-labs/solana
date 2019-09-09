@@ -910,7 +910,7 @@ impl Blocktree {
             if remaining_ticks_in_slot == 0 {
                 shredder.finalize_slot();
             } else {
-                shredder.finalize_fec_block();
+                shredder.finalize_data();
             }
         }
 
@@ -1060,7 +1060,7 @@ impl Blocktree {
             let mut shred_chunk = vec![];
             while look_for_last_shred && !shreds.is_empty() {
                 let shred = shreds.remove(0);
-                if let Shred::LastInFECSet(_) = shred {
+                if let Shred::DataComplete(_) = shred {
                     look_for_last_shred = false;
                 } else if let Shred::LastInSlot(_) = shred {
                     look_for_last_shred = false;
@@ -1706,7 +1706,7 @@ pub fn entries_to_test_shreds(
     if is_full_slot {
         shredder.finalize_slot();
     } else {
-        shredder.finalize_fec_block();
+        shredder.finalize_data();
     }
 
     let shreds: Vec<Shred> = shredder

@@ -98,7 +98,7 @@ pub(super) fn entries_to_shreds(
             if i == (num_ventries - 1) && last_tick == bank_max_tick {
                 shredder.finalize_slot();
             } else {
-                shredder.finalize_fec_block();
+                shredder.finalize_data();
             }
 
             let mut shreds: Vec<Shred> = shredder
