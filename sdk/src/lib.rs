@@ -1,67 +1,44 @@
+pub mod account;
+pub mod account_utils;
+pub mod bpf_loader;
 pub mod clock;
+pub mod fee_calculator;
+pub mod hash;
+pub mod inflation;
+pub mod instruction;
+pub mod instruction_processor_utils;
+pub mod loader_instruction;
+pub mod message;
+pub mod native_loader;
+pub mod packet;
+pub mod poh_config;
 pub mod pubkey;
+pub mod rent;
+pub mod rpc_port;
+pub mod short_vec;
+pub mod system_instruction;
+pub mod system_program;
 pub mod sysvar;
+pub mod timing;
 
-// On-chain program modules
-#[cfg(feature = "program")]
+// On-chain program specific modules
 pub mod account_info;
-#[cfg(feature = "program")]
 pub mod entrypoint;
-#[cfg(feature = "program")]
 pub mod log;
-#[cfg(feature = "program")]
 pub mod program_test;
 
-// Kitchen sink modules
-#[cfg(feature = "kitchen_sink")]
-pub mod account;
-#[cfg(feature = "kitchen_sink")]
-pub mod account_utils;
-#[cfg(feature = "kitchen_sink")]
-pub mod bpf_loader;
-#[cfg(feature = "kitchen_sink")]
+// Modules not usable by on-chain programs
+#[cfg(not(feature = "program"))]
 pub mod client;
-#[cfg(feature = "kitchen_sink")]
-pub mod fee_calculator;
-#[cfg(feature = "kitchen_sink")]
+#[cfg(not(feature = "program"))]
 pub mod genesis_block;
-#[cfg(feature = "kitchen_sink")]
-pub mod hash;
-#[cfg(feature = "kitchen_sink")]
-pub mod inflation;
-#[cfg(feature = "kitchen_sink")]
-pub mod instruction;
-#[cfg(feature = "kitchen_sink")]
-pub mod instruction_processor_utils;
-#[cfg(feature = "kitchen_sink")]
-pub mod loader_instruction;
-#[cfg(feature = "kitchen_sink")]
-pub mod message;
-#[cfg(feature = "kitchen_sink")]
-pub mod native_loader;
-#[cfg(feature = "kitchen_sink")]
-pub mod packet;
-#[cfg(feature = "kitchen_sink")]
-pub mod poh_config;
-#[cfg(feature = "kitchen_sink")]
-pub mod rent;
-#[cfg(feature = "kitchen_sink")]
-pub mod rpc_port;
-#[cfg(feature = "kitchen_sink")]
-pub mod short_vec;
-#[cfg(feature = "kitchen_sink")]
+#[cfg(not(feature = "program"))]
 pub mod signature;
-#[cfg(feature = "kitchen_sink")]
-pub mod system_instruction;
-#[cfg(feature = "kitchen_sink")]
-pub mod system_program;
-#[cfg(feature = "kitchen_sink")]
+#[cfg(not(feature = "program"))]
 pub mod system_transaction;
-#[cfg(feature = "kitchen_sink")]
-pub mod timing;
-#[cfg(feature = "kitchen_sink")]
+#[cfg(not(feature = "program"))]
 pub mod transaction;
-#[cfg(feature = "kitchen_sink")]
+#[cfg(not(feature = "program"))]
 pub mod transport;
 
 #[macro_use]

@@ -154,7 +154,7 @@ pub fn process_instruction(
             vote_state::process_vote(
                 me,
                 &sysvar::slot_hashes::from_keyed_account(&slot_hashes_and_clock[0])?,
-                &sysvar::clock_account::from_keyed_account(&slot_hashes_and_clock[1])?,
+                &sysvar::clock::from_keyed_account(&slot_hashes_and_clock[1])?,
                 other_signers,
                 &vote,
             )
@@ -188,7 +188,7 @@ mod tests {
             .iter()
             .map(|meta| {
                 if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock_account::new(1, 0, 0, 0, 0)
+                    sysvar::clock::new_account(1, 0, 0, 0, 0)
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
                     sysvar::slot_hashes::create_account(1, &[])
                 } else {

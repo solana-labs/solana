@@ -179,7 +179,7 @@ pub fn process_instruction(
             me.delegate_stake(
                 vote,
                 stake,
-                &sysvar::clock_account::from_keyed_account(&rest[1])?,
+                &sysvar::clock::from_keyed_account(&rest[1])?,
                 &config::from_keyed_account(&rest[2])?,
             )
         }
@@ -209,7 +209,7 @@ pub fn process_instruction(
             me.withdraw(
                 lamports,
                 &mut to,
-                &sysvar::clock_account::from_keyed_account(&sysvar[0])?,
+                &sysvar::clock::from_keyed_account(&sysvar[0])?,
                 &sysvar::stake_history::from_keyed_account(&sysvar[1])?,
             )
         }
@@ -221,7 +221,7 @@ pub fn process_instruction(
             let vote = &mut vote[0];
             let clock = &rest[0];
 
-            me.deactivate_stake(vote, &sysvar::clock_account::from_keyed_account(&clock)?)
+            me.deactivate_stake(vote, &sysvar::clock::from_keyed_account(&clock)?)
         }
     }
 }
@@ -238,7 +238,7 @@ mod tests {
             .iter()
             .map(|meta| {
                 if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock_account::new(1, 0, 0, 0, 0)
+                    sysvar::clock::new_account(1, 0, 0, 0, 0)
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
                     sysvar::rewards::create_account(1, 0.0, 0.0)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
@@ -336,7 +336,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &mut sysvar::clock_account::new(1, 0, 0, 0, 0)
+                        &mut sysvar::clock::new_account(1, 0, 0, 0, 0)
                     ),
                     KeyedAccount::new(
                         &config::id(),

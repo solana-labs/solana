@@ -8,7 +8,7 @@ use solana_sdk::{
 
 entrypoint!(process_instruction);
 fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], _data: &[u8]) -> u32 {
-    match Clock::from(&accounts[2]) {
+    match Clock::from_account_info(&accounts[2]) {
         Some(clock) => {
             info!("slot, segment, epoch, stakers_epoch");
             info!(

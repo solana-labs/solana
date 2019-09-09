@@ -52,7 +52,6 @@ impl Pubkey {
         Self::new(&rand::random::<[u8; 32]>())
     }
 
-    #[cfg(feature = "program")]
     pub fn log(&self) {
         use crate::log::sol_log_64;
         for (i, k) in self.0.iter().enumerate() {
