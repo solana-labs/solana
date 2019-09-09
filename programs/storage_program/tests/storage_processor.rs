@@ -15,8 +15,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction;
 use solana_sdk::sysvar::clock::{self, Clock};
-use solana_sdk::sysvar::rewards::Rewards;
-use solana_sdk::sysvar::{clock_account, rewards};
+use solana_sdk::sysvar::rewards::{self, Rewards};
 use solana_storage_api::id;
 use solana_storage_api::storage_contract::StorageAccount;
 use solana_storage_api::storage_contract::{ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE};
@@ -124,8 +123,8 @@ fn test_proof_bounds() {
         Hash::default(),
     );
     // the proof is for segment 0, need to move the slot into segment 2
-    let mut clock_account = clock_account::new(1, 0, 0, 0, 0);
-    Clock::to(
+    let mut clock_account = clock::new_account(1, 0, 0, 0, 0);
+    Clock::to_account(
         &Clock {
             slot: DEFAULT_SLOTS_PER_SEGMENT * 2,
             segment: 2,
@@ -152,7 +151,7 @@ fn test_serialize_overflow() {
     let clock_id = clock::id();
     let mut keyed_accounts = Vec::new();
     let mut user_account = Account::default();
-    let mut clock_account = clock_account::new(1, 0, 0, 0, 0);
+    let mut clock_account = clock::new_account(1, 0, 0, 0, 0);
     keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
     keyed_accounts.push(KeyedAccount::new(&clock_id, false, &mut clock_account));
 
@@ -177,8 +176,8 @@ fn test_invalid_accounts_len() {
         Hash::default(),
     );
     // move tick height into segment 1
-    let mut clock_account = clock_account::new(1, 0, 0, 0, 0);
-    Clock::to(
+    let mut clock_account = clock::new_account(1, 0, 0, 0, 0);
+    Clock::to_account(
         &Clock {
             slot: 16,
             segment: 1,
@@ -237,8 +236,8 @@ fn test_submit_mining_ok() {
         Hash::default(),
     );
     // move slot into segment 1
-    let mut clock_account = clock_account::new(1, 0, 0, 0, 0);
-    Clock::to(
+    let mut clock_account = clock::new_account(1, 0, 0, 0, 0);
+    Clock::to_account(
         &Clock {
             slot: DEFAULT_SLOTS_PER_SEGMENT,
             segment: 1,
