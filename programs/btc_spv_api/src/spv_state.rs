@@ -96,41 +96,43 @@ impl BlockHeader {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    inputs: Vec<Input>,
+    pub inputs: Vec<Input>,
     //input utxos
-    outputs: Vec<Output>,
+    pub outputs: Vec<Output>,
     //output utxos
-    version: u32,
+    pub version: u32,
     //bitcoin network version
-    locktime: u32,
+    pub locktime: u32,
 
-    bytes_len: usize,
+    pub bytes_len: usize,
 }
 
 impl Transaction {
-    fn new(txbytes: Vec<u8>) -> Self {
+    pub fn new(txbytes: Vec<u8>) -> Self {
         let mut ver:[u8; 4] = [0; 4];
         ver.copy_from_slice(&txbytes[..4]);
         let version = u32::from_le_bytes(ver);
 
         let inputnum: u64 = decode_variable_int(&txbytes[4..13]).unwrap();
         let vinlen: usize = measure_variable_int(&txbytes[4..13]).unwrap();
-
         let mut inputstart:usize = 4 + vinlen;
         let mut inputs = Vec::new();
-        for i in 0..inputnum {
-            let mut input = Input::new(txbytes[inputstart..].to_vec());
-            inputstart += input.bytes_len;
-            inputs.push(input);
+
+        if inputnum > 0 {
+            for i in 0..inputnum {
+                let mut input = Input::new(txbytes[inputstart..].to_vec());
+                inputstart += input.bytes_len;
+                inputs.push(input);
+            }
+            inputs.to_vec();
         }
-        inputs.to_vec();
 
         let outputnum: u64 = decode_variable_int(&txbytes[inputstart..9+inputstart]).unwrap();
         let voutlen: usize = measure_variable_int(&txbytes[inputstart..9+inputstart]).unwrap();
 
         let mut outputstart:usize = inputstart + voutlen;
         let mut outputs = Vec::new();
-        for i in 1..outputnum {
+        for i in 0..outputnum {
             let mut output = Output::new(txbytes[outputstart..].to_vec());
             outputstart += output.bytes_len;
             outputs.push(output);
@@ -140,6 +142,9 @@ impl Transaction {
         lt.copy_from_slice(&txbytes[outputstart..4+outputstart]);
         let locktime = u32::from_le_bytes(lt);
 
+        assert_eq!(inputs.len(), inputnum as usize);
+        assert_eq!(outputs.len(), outputnum as usize);
+
         Transaction {
             inputs,
             outputs,
@@ -148,7 +153,7 @@ impl Transaction {
             bytes_len: 4+outputstart,
         }
     }
-    fn hexnew(hex: String) -> Result<Transaction, SpvError> {
+    pub fn hexnew(hex: String) -> Result<Transaction, SpvError> {
         match decode_hex(&hex) {
             Ok(txbytes) => {
                 Ok(Transaction::new(txbytes))
@@ -160,19 +165,19 @@ impl Transaction {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Input {
-    itype: InputType,
+    pub itype: InputType,
     // Type of the input
-    position: u32,
+    pub position: u32,
     // position of the tx in its Block
-    txhash: BitcoinTxHash,
+    pub txhash: BitcoinTxHash,
     // hash of the transaction
-    script_length: u64,
+    pub script_length: u64,
     // length of the spend script
-    script: Vec<u8>,
+    pub script: Vec<u8>,
     // script bytes
-    sequence: [u8; 4],
+    pub sequence: [u8; 4],
     // length of the input in bytes
-    bytes_len: usize,
+    pub bytes_len: usize,
 }
 
 impl Input {
@@ -236,15 +241,15 @@ pub enum InputType {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Output {
-    otype: OutputType,
+    pub otype: OutputType,
     // type of the output
-    value: u64,
+    pub value: u64,
     // amount of btc in sats
-    script: Vec<u8>,
+    pub script: Vec<u8>,
 
-    script_length: u64,
+    pub script_length: u64,
 
-    bytes_len: usize,
+    pub bytes_len: usize,
 
     // payload: Option<Vec<u8>>,
     // // data sent with the transaction (Op return)
