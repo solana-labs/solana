@@ -90,7 +90,22 @@ echo --- Creating tarball
       cd validator
       cargo +"$rust_stable" install --path . --features=cuda --root ../solana-release-cuda
     )
-    cp solana-release-cuda/bin/solana-validator solana-release/bin/solana-validator-cuda
+
+    mkdir solana-release/.bin
+    cp solana-release-cuda/bin/solana-validator solana-release/.bin/solana-validator-cuda
+    cat > solana-release/bin/solana-validator-cuda <<'EOF'
+#!/usr/bin/env bash
+set -e
+cd "$(dirname "$0")"/..
+source target/perf-libs/env.sh
+if [[ -z $SOLANA_PERF_LIBS_CUDA ]]; then
+  echo
+  echo Error: CUDA not available
+  exit 1
+fi
+exec .bin/solana-validator-cuda "$@"
+EOF
+  chmod +x solana-release/bin/solana-validator-cuda
   fi
 
   cp -a scripts multinode-demo solana-release/
