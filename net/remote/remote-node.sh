@@ -110,10 +110,17 @@ local|tar|skip)
       rm -rf ./solana-node-balances
       mkdir ./solana-node-balances
       if [[ -n $internalNodesLamports ]]; then
+        echo "---" >> ./solana-node-balances/fullnode-balances.yml
         for i in $(seq 0 "$numNodes"); do
           solana-keygen new -o ./solana-node-keys/"$i"
           pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
-          echo "${pubkey}: $internalNodesLamports" >> ./solana-node-balances/fullnode-balances.yml
+          cat >> ./solana-node-balances/fullnode-balances.yml <<EOF
+$pubkey:
+  balance: $internalNodesLamports
+  owner: 11111111111111111111111111111111
+  data:
+  executable: false
+EOF
         done
       fi
 

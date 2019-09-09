@@ -11,14 +11,15 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
 use solana_exchange_api::id;
+use solana_genesis::PrimordialAccountDetails;
 use solana_metrics::datapoint_info;
 use solana_sdk::client::Client;
 use solana_sdk::client::SyncClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use solana_sdk::transaction::Transaction;
+use solana_sdk::{system_instruction, system_program};
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
@@ -88,7 +89,12 @@ pub fn create_client_accounts_file(
     keypairs.iter().for_each(|keypair| {
         accounts.insert(
             serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
-            fund_amount,
+            PrimordialAccountDetails {
+                balance: fund_amount,
+                executable: false,
+                owner: system_program::id().to_string(),
+                data: String::new(),
+            },
         );
     });
 
