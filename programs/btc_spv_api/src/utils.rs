@@ -1,6 +1,5 @@
-use std::{fmt, num::ParseIntError};
 use serde_derive::{Deserialize, Serialize};
-
+use std::{fmt, num::ParseIntError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DecodeHexError {
@@ -17,9 +16,15 @@ impl From<ParseIntError> for DecodeHexError {
 impl fmt::Display for DecodeHexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DecodeHexError::InvalidLength(LengthError::OddLength) => "input hex string length is odd ".fmt(f),
-            DecodeHexError::InvalidLength(LengthError::Maximum(e)) => "input exceeds the maximum length".fmt(f),
-            DecodeHexError::InvalidLength(LengthError::Minimum(e)) => "input does not meet the minimum length".fmt(f),
+            DecodeHexError::InvalidLength(LengthError::OddLength) => {
+                "input hex string length is odd ".fmt(f)
+            }
+            DecodeHexError::InvalidLength(LengthError::Maximum(e)) => {
+                "input exceeds the maximum length".fmt(f)
+            }
+            DecodeHexError::InvalidLength(LengthError::Minimum(e)) => {
+                "input does not meet the minimum length".fmt(f)
+            }
             DecodeHexError::ParseInt(e) => e.fmt(f),
         }
     }
@@ -65,18 +70,18 @@ pub fn decode_variable_int(vint: &[u8]) -> Result<u64, DecodeHexError> {
     }
 
     let val: u64 = match vint[0] {
-        0..=252 => vint[0] as u64,
-        253 => vint[1] as u64,
+        0..=252 => u64::from(vint[0]),
+        253 => u64::from(vint[1]),
         254 => {
-            let mut val: [u8; 4] = [0;4];
+            let mut val: [u8; 4] = [0; 4];
             val.copy_from_slice(&vint[1..5]);
-            u32::from_le_bytes(val) as u64
+            u64::from(u32::from_le_bytes(val))
         }
         255 => {
-            let mut val: [u8; 8] = [0;8];
+            let mut val: [u8; 8] = [0; 8];
             val.copy_from_slice(&vint[1..9]);
             u64::from_le_bytes(val)
-        },
+        }
     };
     Ok(val)
 }

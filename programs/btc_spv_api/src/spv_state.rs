@@ -109,13 +109,13 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn new(txbytes: Vec<u8>) -> Self {
-        let mut ver:[u8; 4] = [0; 4];
+        let mut ver: [u8; 4] = [0; 4];
         ver.copy_from_slice(&txbytes[..4]);
         let version = u32::from_le_bytes(ver);
 
         let inputnum: u64 = decode_variable_int(&txbytes[4..13]).unwrap();
         let vinlen: usize = measure_variable_int(&txbytes[4..13]).unwrap();
-        let mut inputstart:usize = 4 + vinlen;
+        let mut inputstart: usize = 4 + vinlen;
         let mut inputs = Vec::new();
 
         if inputnum > 0 {
@@ -127,10 +127,10 @@ impl Transaction {
             inputs.to_vec();
         }
 
-        let outputnum: u64 = decode_variable_int(&txbytes[inputstart..9+inputstart]).unwrap();
-        let voutlen: usize = measure_variable_int(&txbytes[inputstart..9+inputstart]).unwrap();
+        let outputnum: u64 = decode_variable_int(&txbytes[inputstart..9 + inputstart]).unwrap();
+        let voutlen: usize = measure_variable_int(&txbytes[inputstart..9 + inputstart]).unwrap();
 
-        let mut outputstart:usize = inputstart + voutlen;
+        let mut outputstart: usize = inputstart + voutlen;
         let mut outputs = Vec::new();
         for i in 0..outputnum {
             let mut output = Output::new(txbytes[outputstart..].to_vec());
@@ -138,8 +138,8 @@ impl Transaction {
             outputs.push(output);
         }
 
-        let mut lt: [u8; 4] = [0;4];
-        lt.copy_from_slice(&txbytes[outputstart..4+outputstart]);
+        let mut lt: [u8; 4] = [0; 4];
+        lt.copy_from_slice(&txbytes[outputstart..4 + outputstart]);
         let locktime = u32::from_le_bytes(lt);
 
         assert_eq!(inputs.len(), inputnum as usize);
@@ -150,14 +150,12 @@ impl Transaction {
             outputs,
             version,
             locktime,
-            bytes_len: 4+outputstart,
+            bytes_len: 4 + outputstart,
         }
     }
     pub fn hexnew(hex: String) -> Result<Transaction, SpvError> {
         match decode_hex(&hex) {
-            Ok(txbytes) => {
-                Ok(Transaction::new(txbytes))
-            }
+            Ok(txbytes) => Ok(Transaction::new(txbytes)),
             Err(e) => Err(SpvError::ParseError),
         }
     }
@@ -182,7 +180,7 @@ pub struct Input {
 
 impl Input {
     fn new(ibytes: Vec<u8>) -> Self {
-        let mut txhash: [u8; 32] = [0;32];
+        let mut txhash: [u8; 32] = [0; 32];
         txhash.copy_from_slice(&ibytes[..32]);
 
         let mut tx_out_index: [u8; 4] = [0; 4];
@@ -202,7 +200,7 @@ impl Input {
 
         let itype: InputType = InputType::NONE; // testing measure
 
-        let input = Self {
+        Self {
             itype,
             position,
             txhash,
@@ -210,15 +208,14 @@ impl Input {
             script,
             sequence,
             bytes_len: input_end,
-        };
-        input
+        }
     }
 
     fn default() -> Self {
-        let txh: [u8; 32] = [0;32];
+        let txh: [u8; 32] = [0; 32];
         let seq: [u8; 4] = [0; 4];
 
-        let input = Self {
+        Self {
             itype: InputType::NONE,
             position: 55,
             txhash: txh,
@@ -226,8 +223,7 @@ impl Input {
             script: txh.to_vec(),
             sequence: seq,
             bytes_len: 123,
-        };
-        input
+        }
     }
 }
 
@@ -250,14 +246,13 @@ pub struct Output {
     pub script_length: u64,
 
     pub bytes_len: usize,
-
     // payload: Option<Vec<u8>>,
     // // data sent with the transaction (Op return)
 }
 
 impl Output {
     fn new(obytes: Vec<u8>) -> Self {
-        let mut val: [u8; 8] = [0;8];
+        let mut val: [u8; 8] = [0; 8];
         val.copy_from_slice(&obytes[..8]);
         let value: u64 = u64::from_le_bytes(val);
 
@@ -279,16 +274,15 @@ impl Output {
     }
 
     fn default() -> Self {
-        let txh: [u8; 32] = [0;32];
+        let txh: [u8; 32] = [0; 32];
 
-        let output = Self {
+        Self {
             otype: OutputType::WPKH,
             value: 55,
             script: txh.to_vec(),
             script_length: 45,
             bytes_len: 123,
-        };
-        output
+        }
     }
 }
 
