@@ -167,8 +167,6 @@ cloud_CreateInstances() {
     --tags testnet
     --metadata "testnet=$networkName"
     --image "$imageName"
-    --maintenance-policy TERMINATE
-    --no-restart-on-failure
   )
 
   # shellcheck disable=SC2206 # Do not want to quote $imageName as it may contain extra args
