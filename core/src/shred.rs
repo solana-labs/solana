@@ -359,6 +359,7 @@ impl Shredder {
             Ok(Shredder {
                 slot,
                 index,
+                fec_set_index: index,
                 parent_offset: (slot - parent) as u16,
                 fec_rate,
                 signer: signer.clone(),
