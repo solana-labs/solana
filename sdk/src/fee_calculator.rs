@@ -97,7 +97,7 @@ impl FeeCalculator {
                 // TODO: Is this fee curve smooth enough or too smooth?
                 //
                 let gap_adjust =
-                    std::cmp::max(1, me.target_lamports_per_signature as i64 / 20) * gap.signum();
+                    std::cmp::max(1, me.target_lamports_per_signature / 20) as i64 * gap.signum();
 
                 trace!(
                     "lamports_per_signature gap is {}, adjusting by {}",
