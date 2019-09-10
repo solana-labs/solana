@@ -2893,7 +2893,7 @@ dependencies = [
  "serde 1.0.100 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
- "solana_rbpf 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2917,7 +2917,7 @@ dependencies = [
  "solana-logger 0.19.0-pre0",
  "solana-runtime 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
- "solana_rbpf 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4141,7 +4141,7 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5365,7 +5365,7 @@ dependencies = [
 "checksum solana_libra_vm_cache_map 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9f0abd2cc72c7d76ca9e0764e3f1fa01a01f49b9014a193f2a3fe735a034bf96"
 "checksum solana_libra_vm_genesis 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4dadfcf5fabfd28d09770d698c618a48d75819f6915bd8bdfa04b93b6e492530"
 "checksum solana_libra_vm_runtime 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "055a5de29d1b8a2b9f9e20293e07998b8e188164bbe6ac8a09260043f99379aa"
-"checksum solana_rbpf 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)" = "31bb26b38c7f84afa1fa266e8fd46ae93bec1ea7253f09a3288dfd118a0086e3"
+"checksum solana_rbpf 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)" = "7b5902653b9c19efe7821e1058836554786668438bf2ba048fbce04fb633e0c0"
 "checksum solicit 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "172382bac9424588d7840732b250faeeef88942e37b6e35317dce98cafdd75b2"
 "checksum spin 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)" = "ceac490aa12c567115b40b7b7fceca03a6c9d53d5defea066123debc83c5dc1f"
 "checksum spin 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "44363f6f51401c34e7be73db0db371c04705d35efbe9f7d6082e03a921a32c55"
