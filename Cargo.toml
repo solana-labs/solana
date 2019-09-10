@@ -57,7 +57,7 @@ members = [
     "fixed-buf",
     "vote-signer",
     "cli",
-    "raypon-threadlimit",
+    "rayon-threadlimit",
 ]
 
 exclude = [
