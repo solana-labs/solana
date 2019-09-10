@@ -1,4 +1,4 @@
-use crate::{display::println_name_value, input_validators::*, validator_info::*};
+use crate::{display::println_name_value, input_validators::*, lamports_to_sol, validator_info::*};
 use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
@@ -57,12 +57,19 @@ pub enum WalletCommand {
         drone_port: u16,
         lamports: u64,
     },
-    Balance(Pubkey),
+    Balance {
+        pubkey: Pubkey,
+        use_lamports_unit: bool,
+    },
     Cancel(Pubkey),
     Confirm(Signature),
     AuthorizeVoter(Pubkey, Keypair, Pubkey),
     CreateVoteAccount(Pubkey, Pubkey, u8, u64),
-    ShowAccount(Pubkey, Option<String>),
+    ShowAccount {
+        pubkey: Pubkey,
+        output_file: Option<String>,
+        use_lamports_unit: bool,
+    },
     ShowVoteAccount(Pubkey),
     DelegateStake(Keypair, Pubkey, u64, bool),
     WithdrawStake(Keypair, Pubkey, u64),
@@ -136,7 +143,10 @@ impl Default for WalletConfig {
         keypair_path.extend(&[".config", "solana", "id.json"]);
 
         WalletConfig {
-            command: WalletCommand::Balance(Pubkey::default()),
+            command: WalletCommand::Balance {
+                pubkey: Pubkey::default(),
+                use_lamports_unit: false,
+            },
             json_rpc_url: "http://127.0.0.1:8899".to_string(),
             keypair: Keypair::new(),
             keypair_path: keypair_path.to_str().unwrap().to_string(),
@@ -222,7 +232,11 @@ pub fn parse_command(
         }
         ("balance", Some(balance_matches)) => {
             let pubkey = pubkey_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
-            Ok(WalletCommand::Balance(pubkey))
+            let use_lamports_unit = balance_matches.is_present("lamports");
+            Ok(WalletCommand::Balance {
+                pubkey,
+                use_lamports_unit,
+            })
         }
         ("cancel", Some(cancel_matches)) => {
             let process_id = value_of(cancel_matches, "process_id").unwrap();
@@ -269,10 +283,12 @@ pub fn parse_command(
         ("show-account", Some(matches)) => {
             let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
             let output_file = matches.value_of("output_file");
-            Ok(WalletCommand::ShowAccount(
-                account_pubkey,
-                output_file.map(ToString::to_string),
-            ))
+            let use_lamports_unit = matches.is_present("lamports");
+            Ok(WalletCommand::ShowAccount {
+                pubkey: account_pubkey,
+                output_file: output_file.map(ToString::to_string),
+                use_lamports_unit,
+            })
         }
         ("show-vote-account", Some(matches)) => {
             let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
@@ -526,16 +542,21 @@ fn process_airdrop(
         .retry_get_balance(&config.keypair.pubkey(), 5)?
         .unwrap_or(previous_balance);
 
-    Ok(format!("Your balance is: {:?}", current_balance))
+    let ess = if current_balance == 1 { "" } else { "s" };
+    Ok(format!(
+        "Your balance is: {:?} lamport{}",
+        current_balance, ess
+    ))
 }
 
-fn process_balance(pubkey: &Pubkey, rpc_client: &RpcClient) -> ProcessResult {
+fn process_balance(
+    pubkey: &Pubkey,
+    rpc_client: &RpcClient,
+    use_lamports_unit: bool,
+) -> ProcessResult {
     let balance = rpc_client.retry_get_balance(pubkey, 5)?;
     match balance {
-        Some(lamports) => {
-            let ess = if lamports == 1 { "" } else { "s" };
-            Ok(format!("{:?} lamport{}", lamports, ess))
-        }
+        Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit)),
         None => Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
         ))?,
@@ -629,12 +650,16 @@ fn process_show_account(
     _config: &WalletConfig,
     account_pubkey: &Pubkey,
     output_file: &Option<String>,
+    use_lamports_unit: bool,
 ) -> ProcessResult {
     let account = rpc_client.get_account(account_pubkey)?;
 
     println!();
     println!("Public Key: {}", account_pubkey);
-    println!("Lamports: {}", account.lamports);
+    println!(
+        "{:?}",
+        build_balance_message(account.lamports, use_lamports_unit)
+    );
     println!("Owner: {}", account.owner);
     println!("Executable: {}", account.executable);
 
@@ -1403,7 +1428,10 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         }
 
         // Check client balance
-        WalletCommand::Balance(pubkey) => process_balance(&pubkey, &rpc_client),
+        WalletCommand::Balance {
+            pubkey,
+            use_lamports_unit,
+        } => process_balance(&pubkey, &rpc_client, *use_lamports_unit),
 
         // Cancel a contract by contract Pubkey
         WalletCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
@@ -1438,9 +1466,17 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             &new_authorized_voter_pubkey,
         ),
 
-        WalletCommand::ShowAccount(account_pubkey, output_file) => {
-            process_show_account(&rpc_client, config, &account_pubkey, &output_file)
-        }
+        WalletCommand::ShowAccount {
+            pubkey,
+            output_file,
+            use_lamports_unit,
+        } => process_show_account(
+            &rpc_client,
+            config,
+            &pubkey,
+            &output_file,
+            *use_lamports_unit,
+        ),
 
         WalletCommand::ShowVoteAccount(vote_account_pubkey) => {
             process_show_vote_account(&rpc_client, config, &vote_account_pubkey)
@@ -1667,6 +1703,16 @@ where
     }
 }
 
+fn build_balance_message(lamports: u64, use_lamports_unit: bool) -> String {
+    if use_lamports_unit {
+        let ess = if lamports == 1 { "" } else { "s" };
+        format!("{:?} lamport{}", lamports, ess)
+    } else {
+        let sol = lamports_to_sol(lamports);
+        format!("{:.8} SOL", sol)
+    }
+}
+
 pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
     App::new(name)
         .about(about)
@@ -1711,6 +1757,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
                         .help("The public key of the balance to check"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
@@ -1825,6 +1877,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("FILE")
                         .takes_value(true)
                         .help("Write the account data to this file"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
@@ -2336,15 +2394,23 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_balance).unwrap(),
-            WalletCommand::Balance(keypair.pubkey())
+            WalletCommand::Balance {
+                pubkey: keypair.pubkey(),
+                use_lamports_unit: false
+            }
         );
-        let test_balance =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "balance", &keypair_file]);
+        let test_balance = test_commands.clone().get_matches_from(vec![
+            "test",
+            "balance",
+            &keypair_file,
+            "--lamports",
+        ]);
         assert_eq!(
             parse_command(&pubkey, &test_balance).unwrap(),
-            WalletCommand::Balance(keypair.pubkey())
+            WalletCommand::Balance {
+                pubkey: keypair.pubkey(),
+                use_lamports_unit: true
+            }
         );
 
         // Test Cancel Subcommand
@@ -2629,8 +2695,17 @@ mod tests {
         config.command = WalletCommand::Address;
         assert_eq!(process_command(&config).unwrap(), pubkey);
 
-        config.command = WalletCommand::Balance(config.keypair.pubkey());
+        config.command = WalletCommand::Balance {
+            pubkey: config.keypair.pubkey(),
+            use_lamports_unit: true,
+        };
         assert_eq!(process_command(&config).unwrap(), "50 lamports");
+
+        config.command = WalletCommand::Balance {
+            pubkey: config.keypair.pubkey(),
+            use_lamports_unit: false,
+        };
+        assert_eq!(process_command(&config).unwrap(), "0.00000000 SOL");
 
         let process_id = Pubkey::new_rand();
         config.command = WalletCommand::Cancel(process_id);
@@ -2784,7 +2859,10 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::Balance(config.keypair.pubkey());
+        config.command = WalletCommand::Balance {
+            pubkey: config.keypair.pubkey(),
+            use_lamports_unit: false,
+        };
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_pubkey, 0, 10);

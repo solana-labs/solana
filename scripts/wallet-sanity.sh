@@ -23,7 +23,7 @@ check_balance_output() {
   exec 42>&1
   attempts=3
   while [[ $attempts -gt 0 ]]; do
-    output=$($solana_cli "${entrypoint[@]}" balance | tee >(cat - >&42))
+    output=$($solana_cli "${entrypoint[@]}" balance --lamports | tee >(cat - >&42))
     if [[ "$output" =~ $expected_output ]]; then
       break
     else
