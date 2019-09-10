@@ -66,14 +66,14 @@ fn test_wallet_timestamp_tx() {
     // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
     let date_string = "\"2018-09-19T17:30:59Z\"";
     let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
-    config_payer.command = WalletCommand::Pay(
-        10,
-        bob_pubkey,
-        Some(dt),
-        Some(config_witness.keypair.pubkey()),
-        None,
-        None,
-    );
+    config_payer.command = WalletCommand::Pay {
+        lamports: 10,
+        to: bob_pubkey,
+        timestamp: Some(dt),
+        timestamp_pubkey: Some(config_witness.keypair.pubkey()),
+        witnesses: None,
+        cancelable: None,
+    };
     let sig_response = process_command(&config_payer);
 
     let object: Value = serde_json::from_str(&sig_response.unwrap()).unwrap();
@@ -133,14 +133,14 @@ fn test_wallet_witness_tx() {
     .unwrap();
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
-    config_payer.command = WalletCommand::Pay(
-        10,
-        bob_pubkey,
-        None,
-        None,
-        Some(vec![config_witness.keypair.pubkey()]),
-        None,
-    );
+    config_payer.command = WalletCommand::Pay {
+        lamports: 10,
+        to: bob_pubkey,
+        timestamp: None,
+        timestamp_pubkey: None,
+        witnesses: Some(vec![config_witness.keypair.pubkey()]),
+        cancelable: None,
+    };
     let sig_response = process_command(&config_payer);
 
     let object: Value = serde_json::from_str(&sig_response.unwrap()).unwrap();
@@ -193,14 +193,14 @@ fn test_wallet_cancel_tx() {
         .unwrap();
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
-    config_payer.command = WalletCommand::Pay(
-        10,
-        bob_pubkey,
-        None,
-        None,
-        Some(vec![config_witness.keypair.pubkey()]),
-        Some(config_payer.keypair.pubkey()),
-    );
+    config_payer.command = WalletCommand::Pay {
+        lamports: 10,
+        to: bob_pubkey,
+        timestamp: None,
+        timestamp_pubkey: None,
+        witnesses: Some(vec![config_witness.keypair.pubkey()]),
+        cancelable: Some(config_payer.keypair.pubkey()),
+    };
     let sig_response = process_command(&config_payer).unwrap();
 
     let object: Value = serde_json::from_str(&sig_response).unwrap();

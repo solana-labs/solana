@@ -19,6 +19,7 @@ fn test_wallet_request_airdrop() {
         drone_host: None,
         drone_port: drone_addr.port(),
         lamports: 50,
+        use_lamports_unit: true,
     };
 
     let sig_response = process_command(&bob_config);

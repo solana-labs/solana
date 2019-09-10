@@ -1,4 +1,7 @@
-use crate::{display::println_name_value, input_validators::*, lamports_to_sol, validator_info::*};
+use crate::{
+    display::println_name_value, input_validators::*, lamports_to_sol, sol_to_lamports,
+    validator_info::*,
+};
 use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
@@ -56,6 +59,7 @@ pub enum WalletCommand {
         drone_host: Option<IpAddr>,
         drone_port: u16,
         lamports: u64,
+        use_lamports_unit: bool,
     },
     Balance {
         pubkey: Pubkey,
@@ -84,14 +88,14 @@ pub enum WalletCommand {
     GetSlot,
     GetTransactionCount,
     GetVersion,
-    Pay(
-        u64,                   // lamports
-        Pubkey,                // to
-        Option<DateTime<Utc>>, // timestamp
-        Option<Pubkey>,        // timestamp_pubkey
-        Option<Vec<Pubkey>>,   // witness(es)
-        Option<Pubkey>,        // cancelable
-    ),
+    Pay {
+        lamports: u64,
+        to: Pubkey,
+        timestamp: Option<DateTime<Utc>>,
+        timestamp_pubkey: Option<Pubkey>,
+        witnesses: Option<Vec<Pubkey>>,
+        cancelable: Option<Pubkey>,
+    },
     Ping {
         interval: Duration,
         count: Option<u64>,
@@ -223,11 +227,17 @@ pub fn parse_command(
             } else {
                 None
             };
-            let lamports = airdrop_matches.value_of("lamports").unwrap().parse()?;
+            let lamports = parse_amount_lamports(
+                airdrop_matches.value_of("amount").unwrap(),
+                airdrop_matches.value_of("unit"),
+            )?;
+            let use_lamports_unit = airdrop_matches.value_of("unit").is_some()
+                && airdrop_matches.value_of("unit").unwrap() == "lamports";
             Ok(WalletCommand::Airdrop {
                 drone_host,
                 drone_port,
                 lamports,
+                use_lamports_unit,
             })
         }
         ("balance", Some(balance_matches)) => {
@@ -297,12 +307,15 @@ pub fn parse_command(
         ("delegate-stake", Some(matches)) => {
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
             let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-            let lamports_to_stake = matches.value_of("lamports_to_stake").unwrap().parse()?;
+            let lamports = parse_amount_lamports(
+                matches.value_of("amount").unwrap(),
+                matches.value_of("unit"),
+            )?;
             let force = matches.is_present("force");
             Ok(WalletCommand::DelegateStake(
                 stake_account_keypair,
                 vote_account_pubkey,
-                lamports_to_stake,
+                lamports,
                 force,
             ))
         }
@@ -310,7 +323,10 @@ pub fn parse_command(
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
             let destination_account_pubkey =
                 pubkey_of(matches, "destination_account_pubkey").unwrap();
-            let lamports = matches.value_of("lamports").unwrap().parse()?;
+            let lamports = parse_amount_lamports(
+                matches.value_of("amount").unwrap(),
+                matches.value_of("unit"),
+            )?;
             Ok(WalletCommand::WithdrawStake(
                 stake_account_keypair,
                 destination_account_pubkey,
@@ -374,7 +390,10 @@ pub fn parse_command(
         ("get-slot", Some(_matches)) => Ok(WalletCommand::GetSlot),
         ("get-transaction-count", Some(_matches)) => Ok(WalletCommand::GetTransactionCount),
         ("pay", Some(pay_matches)) => {
-            let lamports = pay_matches.value_of("lamports").unwrap().parse()?;
+            let lamports = parse_amount_lamports(
+                pay_matches.value_of("amount").unwrap(),
+                pay_matches.value_of("unit"),
+            )?;
             let to = value_of(&pay_matches, "to").unwrap_or(*pubkey);
             let timestamp = if pay_matches.is_present("timestamp") {
                 // Parse input for serde_json
@@ -388,21 +407,21 @@ pub fn parse_command(
                 None
             };
             let timestamp_pubkey = value_of(&pay_matches, "timestamp_pubkey");
-            let witness_vec = values_of(&pay_matches, "witness");
+            let witnesses = values_of(&pay_matches, "witness");
             let cancelable = if pay_matches.is_present("cancelable") {
                 Some(*pubkey)
             } else {
                 None
             };
 
-            Ok(WalletCommand::Pay(
+            Ok(WalletCommand::Pay {
                 lamports,
                 to,
                 timestamp,
                 timestamp_pubkey,
-                witness_vec,
+                witnesses,
                 cancelable,
-            ))
+            })
         }
         ("ping", Some(ping_matches)) => {
             let interval = Duration::from_secs(value_t_or_exit!(ping_matches, "interval", u64));
@@ -524,6 +543,7 @@ fn process_airdrop(
     config: &WalletConfig,
     drone_addr: &SocketAddr,
     lamports: u64,
+    use_lamports_unit: bool,
 ) -> ProcessResult {
     println!(
         "Requesting airdrop of {:?} lamports from {}",
@@ -542,11 +562,7 @@ fn process_airdrop(
         .retry_get_balance(&config.keypair.pubkey(), 5)?
         .unwrap_or(previous_balance);
 
-    let ess = if current_balance == 1 { "" } else { "s" };
-    Ok(format!(
-        "Your balance is: {:?} lamport{}",
-        current_balance, ess
-    ))
+    Ok(build_balance_message(current_balance, use_lamports_unit))
 }
 
 fn process_balance(
@@ -1409,6 +1425,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             drone_host,
             drone_port,
             lamports,
+            use_lamports_unit,
         } => {
             let drone_addr = SocketAddr::new(
                 drone_host.unwrap_or_else(|| {
@@ -1424,7 +1441,13 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
                 *drone_port,
             );
 
-            process_airdrop(&rpc_client, config, &drone_addr, *lamports)
+            process_airdrop(
+                &rpc_client,
+                config,
+                &drone_addr,
+                *lamports,
+                *use_lamports_unit,
+            )
         }
 
         // Check client balance
@@ -1572,14 +1595,14 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
 
         // If client has positive balance, pay lamports to another address
-        WalletCommand::Pay(
+        WalletCommand::Pay {
             lamports,
             to,
             timestamp,
             timestamp_pubkey,
             ref witnesses,
             cancelable,
-        ) => process_pay(
+        } => process_pay(
             &rpc_client,
             config,
             *lamports,
@@ -1713,6 +1736,17 @@ fn build_balance_message(lamports: u64, use_lamports_unit: bool) -> String {
     }
 }
 
+fn parse_amount_lamports(
+    amount: &str,
+    use_lamports_unit: Option<&str>,
+) -> Result<u64, Box<dyn error::Error>> {
+    if use_lamports_unit.is_some() && use_lamports_unit.unwrap() == "lamports" {
+        Ok(amount.parse()?)
+    } else {
+        Ok(sol_to_lamports(amount.parse()?))
+    }
+}
+
 pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
     App::new(name)
         .about(about)
@@ -1739,12 +1773,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Drone port to use"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::with_name("amount")
                         .index(1)
-                        .value_name("LAMPORTS")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to request"),
+                        .help("The airdrop amount to request (default unit SOL)"),
+                )
+                .arg(
+                    Arg::with_name("unit")
+                        .index(2)
+                        .takes_value(true)
+                        .possible_values(&["SOL", "lamports"])
+                        .help("Specify unit to use for request and balance display"),
                 ),
         )
         .subcommand(
@@ -1848,7 +1889,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("LAMPORTS")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to send to the vote account"),
+                        .help("The amount of lamports to send to the vote account"),
                 )
                 .arg(
                     Arg::with_name("commission")
@@ -1927,12 +1968,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The vote account to which the stake will be delegated"),
                 )
                 .arg(
-                    Arg::with_name("lamports_to_stake")
+                    Arg::with_name("amount")
                         .index(3)
-                        .value_name("LAMPORTS")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to stake"),
+                        .help("The amount to delegate (default unit SOL)"),
+                )
+                .arg(
+                    Arg::with_name("unit")
+                        .index(4)
+                        .takes_value(true)
+                        .possible_values(&["SOL", "lamports"])
+                        .help("Specify unit to use for request"),
                 ),
         )
         .subcommand(
@@ -1978,12 +2026,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The account where the lamports should be transfered"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::with_name("amount")
                         .index(3)
-                        .value_name("LAMPORTS")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to withdraw from the stake account."),
+                        .help("The amount to withdraw from the stake account (default unit SOL)"),
+                )
+                .arg(
+                    Arg::with_name("unit")
+                        .index(4)
+                        .takes_value(true)
+                        .possible_values(&["SOL", "lamports"])
+                        .help("Specify unit to use for request"),
                 ),
         )
         .subcommand(
@@ -2034,12 +2089,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Storage mining pool account address to fund"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::with_name("amount")
                         .index(2)
-                        .value_name("LAMPORTS")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to assign to the storage mining pool account"),
+                        .help("The amount to assign to the storage mining pool account (default unit SOL)"),
+                )
+                .arg(
+                    Arg::with_name("unit")
+                        .index(3)
+                        .takes_value(true)
+                        .possible_values(&["SOL", "lamports"])
+                        .help("Specify unit to use for request"),
                 ),
         )
         .subcommand(
@@ -2149,12 +2211,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The pubkey of recipient"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::with_name("amount")
                         .index(2)
-                        .value_name("LAMPORTS")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of lamports to send"),
+                        .help("The amount to send (default unit SOL)"),
+                )
+                .arg(
+                    Arg::with_name("unit")
+                        .index(3)
+                        .takes_value(true)
+                        .possible_values(&["SOL", "lamports"])
+                        .help("Specify unit to use for request"),
                 )
                 .arg(
                     Arg::with_name("timestamp")
@@ -2369,13 +2438,14 @@ mod tests {
         // Test Airdrop Subcommand
         let test_airdrop = test_commands
             .clone()
-            .get_matches_from(vec!["test", "airdrop", "50"]);
+            .get_matches_from(vec!["test", "airdrop", "50", "lamports"]);
         assert_eq!(
             parse_command(&pubkey, &test_airdrop).unwrap(),
             WalletCommand::Airdrop {
                 drone_host: None,
                 drone_port: solana_drone::drone::DRONE_PORT,
-                lamports: 50
+                lamports: 50,
+                use_lamports_unit: true,
             }
         );
         let test_bad_airdrop = test_commands
@@ -2509,6 +2579,7 @@ mod tests {
             &keypair_file,
             &pubkey_string,
             "42",
+            "lamports",
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
@@ -2523,6 +2594,7 @@ mod tests {
             &keypair_file,
             &pubkey_string,
             "42",
+            "lamports",
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
@@ -2536,6 +2608,7 @@ mod tests {
             &keypair_file,
             &pubkey_string,
             "42",
+            "lamports",
         ]);
         let keypair = read_keypair(&keypair_file).unwrap();
         assert_eq!(
@@ -2569,13 +2642,23 @@ mod tests {
         );
 
         // Test Simple Pay Subcommand
-        let test_pay =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "pay", &pubkey_string, "50"]);
+        let test_pay = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "lamports",
+        ]);
         assert_eq!(
             parse_command(&pubkey, &test_pay).unwrap(),
-            WalletCommand::Pay(50, pubkey, None, None, None, None)
+            WalletCommand::Pay {
+                lamports: 50,
+                to: pubkey,
+                timestamp: None,
+                timestamp_pubkey: None,
+                witnesses: None,
+                cancelable: None
+            }
         );
 
         // Test Pay Subcommand w/ Witness
@@ -2584,6 +2667,7 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
+            "lamports",
             "--require-signature-from",
             &witness0_string,
             "--require-signature-from",
@@ -2591,19 +2675,34 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_pay_multiple_witnesses).unwrap(),
-            WalletCommand::Pay(50, pubkey, None, None, Some(vec![witness0, witness1]), None)
+            WalletCommand::Pay {
+                lamports: 50,
+                to: pubkey,
+                timestamp: None,
+                timestamp_pubkey: None,
+                witnesses: Some(vec![witness0, witness1]),
+                cancelable: None
+            }
         );
         let test_pay_single_witness = test_commands.clone().get_matches_from(vec![
             "test",
             "pay",
             &pubkey_string,
             "50",
+            "lamports",
             "--require-signature-from",
             &witness0_string,
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_pay_single_witness).unwrap(),
-            WalletCommand::Pay(50, pubkey, None, None, Some(vec![witness0]), None)
+            WalletCommand::Pay {
+                lamports: 50,
+                to: pubkey,
+                timestamp: None,
+                timestamp_pubkey: None,
+                witnesses: Some(vec![witness0]),
+                cancelable: None
+            }
         );
 
         // Test Pay Subcommand w/ Timestamp
@@ -2612,6 +2711,7 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
+            "lamports",
             "--after",
             "2018-09-19T17:30:59",
             "--require-timestamp-from",
@@ -2619,7 +2719,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_pay_timestamp).unwrap(),
-            WalletCommand::Pay(50, pubkey, Some(dt), Some(witness0), None, None)
+            WalletCommand::Pay {
+                lamports: 50,
+                to: pubkey,
+                timestamp: Some(dt),
+                timestamp_pubkey: Some(witness0),
+                witnesses: None,
+                cancelable: None
+            }
         );
 
         // Test Send-Signature Subcommand
@@ -2638,6 +2745,7 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
+            "lamports",
             "--after",
             "2018-09-19T17:30:59",
             "--require-signature-from",
@@ -2649,14 +2757,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_pay_multiple_witnesses).unwrap(),
-            WalletCommand::Pay(
-                50,
-                pubkey,
-                Some(dt),
-                Some(witness0),
-                Some(vec![witness0, witness1]),
-                None
-            )
+            WalletCommand::Pay {
+                lamports: 50,
+                to: pubkey,
+                timestamp: Some(dt),
+                timestamp_pubkey: Some(witness0),
+                witnesses: Some(vec![witness0, witness1]),
+                cancelable: None
+            }
         );
 
         // Test Send-Timestamp Subcommand
@@ -2756,20 +2864,27 @@ mod tests {
         config.command = WalletCommand::GetTransactionCount;
         assert_eq!(process_command(&config).unwrap(), "1234");
 
-        config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
+        config.command = WalletCommand::Pay {
+            lamports: 10,
+            to: bob_pubkey,
+            timestamp: None,
+            timestamp_pubkey: None,
+            witnesses: None,
+            cancelable: None,
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let date_string = "\"2018-09-19T17:30:59Z\"";
         let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
-        config.command = WalletCommand::Pay(
-            10,
-            bob_pubkey,
-            Some(dt),
-            Some(config.keypair.pubkey()),
-            None,
-            None,
-        );
+        config.command = WalletCommand::Pay {
+            lamports: 10,
+            to: bob_pubkey,
+            timestamp: Some(dt),
+            timestamp_pubkey: Some(config.keypair.pubkey()),
+            witnesses: None,
+            cancelable: None,
+        };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
         assert_eq!(
@@ -2783,14 +2898,14 @@ mod tests {
         );
 
         let witness = Pubkey::new_rand();
-        config.command = WalletCommand::Pay(
-            10,
-            bob_pubkey,
-            None,
-            None,
-            Some(vec![witness]),
-            Some(config.keypair.pubkey()),
-        );
+        config.command = WalletCommand::Pay {
+            lamports: 10,
+            to: bob_pubkey,
+            timestamp: None,
+            timestamp_pubkey: None,
+            witnesses: Some(vec![witness]),
+            cancelable: Some(config.keypair.pubkey()),
+        };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
         assert_eq!(
@@ -2818,6 +2933,7 @@ mod tests {
             drone_host: None,
             drone_port: 1234,
             lamports: 50,
+            use_lamports_unit: true,
         };
         assert!(process_command(&config).is_ok());
 
@@ -2856,6 +2972,7 @@ mod tests {
             drone_host: None,
             drone_port: 1234,
             lamports: 50,
+            use_lamports_unit: true,
         };
         assert!(process_command(&config).is_err());
 
@@ -2877,27 +2994,34 @@ mod tests {
         config.command = WalletCommand::GetTransactionCount;
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
+        config.command = WalletCommand::Pay {
+            lamports: 10,
+            to: bob_pubkey,
+            timestamp: None,
+            timestamp_pubkey: None,
+            witnesses: None,
+            cancelable: None,
+        };
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::Pay(
-            10,
-            bob_pubkey,
-            Some(dt),
-            Some(config.keypair.pubkey()),
-            None,
-            None,
-        );
+        config.command = WalletCommand::Pay {
+            lamports: 10,
+            to: bob_pubkey,
+            timestamp: Some(dt),
+            timestamp_pubkey: Some(config.keypair.pubkey()),
+            witnesses: None,
+            cancelable: None,
+        };
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::Pay(
-            10,
-            bob_pubkey,
-            None,
-            None,
-            Some(vec![witness]),
-            Some(config.keypair.pubkey()),
-        );
+        config.command = WalletCommand::Pay {
+            lamports: 10,
+            to: bob_pubkey,
+            timestamp: None,
+            timestamp_pubkey: None,
+            witnesses: Some(vec![witness]),
+            cancelable: Some(config.keypair.pubkey()),
+        };
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
