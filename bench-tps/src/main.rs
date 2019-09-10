@@ -5,9 +5,7 @@ extern crate solana_move_loader_program;
 mod bench;
 mod cli;
 
-use crate::bench::{
-    do_bench_tps, generate_and_fund_keypairs, generate_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT,
-};
+use crate::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
 use solana_core::gossip_service::{discover_cluster, get_multi_client};
 use solana_genesis::PrimordialAccountDetails;
 use solana_sdk::fee_calculator::FeeCalculator;
@@ -33,26 +31,24 @@ fn main() {
         entrypoint_addr,
         drone_addr,
         id,
-        threads,
         num_nodes,
-        duration,
         tx_count,
-        thread_batch_sleep_ms,
-        sustained,
         client_ids_and_stake_file,
         write_to_client_file,
         read_from_client_file,
         target_lamports_per_signature,
         use_move,
-    } = cli_config;
+        num_lamports_per_account,
+        ..
+    } = &cli_config;
 
-    if write_to_client_file {
-        let (keypairs, _) = generate_keypairs(&id, tx_count as u64 * 2);
+    if *write_to_client_file {
+        let (keypairs, _) = generate_keypairs(&id, *tx_count as u64 * 2);
         let num_accounts = keypairs.len() as u64;
-        let max_fee = FeeCalculator::new(target_lamports_per_signature).max_lamports_per_signature;
+        let max_fee = FeeCalculator::new(*target_lamports_per_signature).max_lamports_per_signature;
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
             / num_accounts
-            + NUM_LAMPORTS_PER_ACCOUNT;
+            + num_lamports_per_account;
         let mut accounts = HashMap::new();
         keypairs.iter().for_each(|keypair| {
             accounts.insert(
@@ -75,7 +71,7 @@ fn main() {
 
     println!("Connecting to the cluster");
     let (nodes, _replicators) =
-        discover_cluster(&entrypoint_addr, num_nodes).unwrap_or_else(|err| {
+        discover_cluster(&entrypoint_addr, *num_nodes).unwrap_or_else(|err| {
             eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
             exit(1);
         });
@@ -90,7 +86,7 @@ fn main() {
         exit(1);
     }
 
-    let (keypairs, move_keypairs, keypair_balance) = if read_from_client_file && !use_move {
+    let (keypairs, move_keypairs, keypair_balance) = if *read_from_client_file && !use_move {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
@@ -114,11 +110,11 @@ fn main() {
     } else {
         generate_and_fund_keypairs(
             &client,
-            Some(drone_addr),
+            Some(*drone_addr),
             &id,
-            tx_count,
-            NUM_LAMPORTS_PER_ACCOUNT,
-            use_move,
+            *tx_count,
+            *num_lamports_per_account,
+            *use_move,
         )
         .unwrap_or_else(|e| {
             eprintln!("Error could not fund keys: {:?}", e);
@@ -126,19 +122,9 @@ fn main() {
         })
     };
 
-    let config = Config {
-        id,
-        threads,
-        thread_batch_sleep_ms,
-        duration,
-        tx_count,
-        sustained,
-        use_move,
-    };
-
     do_bench_tps(
         vec![client],
-        config,
+        cli_config,
         keypairs,
         keypair_balance,
         move_keypairs,
