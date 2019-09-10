@@ -15,6 +15,7 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 
 [features]
 pin_gpu_memory = []
+move = []
 
 [dependencies]
 bincode = "1.2.0"
