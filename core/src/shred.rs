@@ -265,6 +265,7 @@ pub struct Shredder {
     fec_rate: f32,
     signer: Arc<Keypair>,
     pub shreds: Vec<Vec<u8>>,
+    fec_set_shred_start: usize,
     active_shred: Option<Shred>,
     active_offset: usize,
 }
@@ -424,8 +425,7 @@ impl Shredder {
 
             // All information after "reserved" field (coding shred header) in a data shred is encoded
             let coding_block_offset = CodingShred::overhead();
-            let data_ptrs: Vec<_> = self
-                .shreds
+            let data_ptrs: Vec<_> = self.shreds[self.fec_set_shred_start..]
                 .iter()
                 .map(|data| &data[coding_block_offset..])
                 .collect();
@@ -466,6 +466,7 @@ impl Shredder {
                 .into_iter()
                 .for_each(|code| self.finalize_shred(code, coding_header_offset));
             self.fec_set_index = self.index;
+            self.fec_set_shred_start = self.shreds.len();
         }
     }
 
