@@ -10,7 +10,7 @@ $ solana-keygen new -o ~/validator-config/stake-keypair.json
 ```
 and use the cli's `delegate-stake` command to stake your validator with 42 lamports:
 ```bash
-$ solana delegate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json 42
+$ solana delegate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json 42 lamports
 ```
 
 Note that stakes need to warm up, and warmup increments are applied at Epoch boundaries, so it can take an hour
@@ -20,7 +20,7 @@ Assuming your node is voting, now you're up and running and generating validator
 to periodically redeem/claim your rewards:
 
 ```bash
-$ solana-wallet redeem-vote-credits ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json
+$ solana redeem-vote-credits ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json
 ```
 
 The rewards lamports earned are split between your stake account and the vote account according to the

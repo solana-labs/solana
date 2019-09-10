@@ -25,10 +25,11 @@ $ solana show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ```
 
 ## Check Your Balance
-Your lamport balance should decrease by the transaction fee amount as your
-validator submits votes, and increase after serving as the leader:
+Your account balance should decrease by the transaction fee amount as your
+validator submits votes, and increase after serving as the leader. Pass the
+`--lamports` are to observe in finer detail:
 ```bash
-$ solana balance
+$ solana balance --lamports
 ```
 
 ## Check Slot Number
