@@ -956,7 +956,6 @@ pub fn generate_and_fund_keypairs<T: Client>(
 mod tests {
 
     use super::*;
-    use serial_test_derive::serial;
     use solana_client::thin_client::create_client;
     use solana_core::cluster_info::FULLNODE_PORT_RANGE;
     use solana_core::validator::ValidatorConfig;

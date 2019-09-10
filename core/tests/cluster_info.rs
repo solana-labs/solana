@@ -2,7 +2,6 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::*;
-use serial_test_derive::serial;
 use solana_core::cluster_info::{compute_retransmit_peers, ClusterInfo};
 use solana_core::contact_info::ContactInfo;
 use solana_sdk::pubkey::Pubkey;

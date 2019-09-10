@@ -1,7 +1,6 @@
 extern crate solana_core;
 
 use log::*;
-use serial_test_derive::serial;
 use solana_core::{
     bank_forks::SnapshotConfig, blocktree::Blocktree, broadcast_stage::BroadcastStageType,
     gossip_service::discover_cluster, snapshot_utils, validator::ValidatorConfig,

@@ -207,7 +207,6 @@ mod tests {
     use crate::counter::{Counter, DEFAULT_LOG_RATE, DEFAULT_METRICS_RATE};
     use log::Level;
     use log::*;
-    use serial_test_derive::serial;
     use std::env;
     use std::sync::atomic::Ordering;
     use std::sync::{Once, RwLock};
