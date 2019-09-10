@@ -54,7 +54,6 @@ fn process_instruction(program_id: &Pubkey, accounts: &mut [AccountInfo], data: 
         panic!();
     }
 
-    info!("Success");
     SUCCESS
 }
 

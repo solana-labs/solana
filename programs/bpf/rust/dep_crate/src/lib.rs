@@ -3,7 +3,6 @@
 extern crate solana_sdk;
 use byteorder::{ByteOrder, LittleEndian};
 use solana_sdk::entrypoint::SUCCESS;
-use solana_sdk::info;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
@@ -15,6 +14,5 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
     LittleEndian::write_i16(&mut buf, -5_000);
     assert_eq!(-5_000, LittleEndian::read_i16(&buf));
 
-    info!("Success");
     SUCCESS
 }
