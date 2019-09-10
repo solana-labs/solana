@@ -73,8 +73,8 @@ pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
         account.key.log();
         sol_log("- Lamports");
         sol_log_64(0, 0, 0, 0, *account.lamports);
-        sol_log("- AccountData");
-        sol_log_slice(account.data);
+        sol_log("- AccountData length");
+        sol_log_64(0, 0, 0, 0, account.data.len() as u64);
         sol_log("- Owner");
         account.owner.log();
     }
