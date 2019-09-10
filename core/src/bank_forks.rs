@@ -58,8 +58,14 @@ impl BankForks {
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
     pub fn ancestors(&self) -> HashMap<u64, HashSet<u64>> {
         let mut ancestors = HashMap::new();
+        let root = self.root;
         for bank in self.banks.values() {
-            let mut set: HashSet<u64> = bank.ancestors.keys().cloned().collect();
+            let mut set: HashSet<u64> = bank
+                .ancestors
+                .keys()
+                .filter(|k| **k >= root)
+                .cloned()
+                .collect();
             set.remove(&bank.slot());
             ancestors.insert(bank.slot(), set);
         }

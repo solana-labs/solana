@@ -16,7 +16,7 @@ use solana_runtime::{
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
 };
 use solana_sdk::{client::SyncClient, clock, poh_config::PohConfig};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -301,7 +301,7 @@ fn test_listener_startup() {
     assert_eq!(cluster_nodes.len(), 4);
 }
 
-/*#[allow(unused_attributes)]
+#[allow(unused_attributes)]
 #[test]
 #[serial]
 fn test_snapshot_restart_locktower() {
@@ -314,17 +314,13 @@ fn test_snapshot_restart_locktower() {
     let validator_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
-    let snapshot_package_output_path = &leader_snapshot_test_config
-        .validator_config
-        .snapshot_config
-        .as_ref()
-        .unwrap()
-        .snapshot_package_output_path;
-
     let config = ClusterConfig {
-        node_stakes: vec![10000],
+        node_stakes: vec![10000, 10],
         cluster_lamports: 100000,
-        validator_configs: vec![leader_snapshot_test_config.validator_config.clone()],
+        validator_configs: vec![
+            leader_snapshot_test_config.validator_config.clone(),
+            validator_snapshot_test_config.validator_config.clone(),
+        ],
         ..ClusterConfig::default()
     };
 
@@ -332,65 +328,44 @@ fn test_snapshot_restart_locktower() {
 
     // Let the nodes run for a while, then stop one of the validators
     sleep(Duration::from_millis(5000));
-    cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
-
-    trace!("Waiting for snapshot tar to be generated with slot",);
-    let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
-    loop {
-        if tar.exists() {
-            trace!("snapshot tar exists");
-            break;
-        }
-        sleep(Duration::from_millis(5000));
-    }
-
-    // Copy tar to validator's snapshot output directory
-    let validator_tar_path =
-        snapshot_utils::get_snapshot_tar_path(&validator_snapshot_test_config.snapshot_output_path);
-    fs::hard_link(tar, &validator_tar_path).unwrap();
-    let slot_floor = snapshot_utils::bank_slot_from_archive(&validator_tar_path).unwrap();
-
-    // Start up a new node from a snapshot
-    let validator_stake = 5;
-    cluster.add_validator(
-        &validator_snapshot_test_config.validator_config,
-        validator_stake,
-    );
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
         .into_iter()
         .find(|x| *x != cluster.entry_point_info.id)
         .unwrap();
-    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
-    let mut current_slot = 0;
+    let validator_info = cluster.exit_node(&validator_id);
 
-    // Let this validator run a while with repair
-    let target_slot = slot_floor + 40;
-    while current_slot <= target_slot {
-        trace!("current_slot: {}", current_slot);
-        if let Ok(slot) = validator_client.get_slot() {
-            current_slot = slot;
-        } else {
-            continue;
-        }
-        sleep(Duration::from_secs(1));
-    }
+    // Get slot after which this was generated
+    let snapshot_package_output_path = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .snapshot_package_output_path;
+    let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
+    wait_for_next_snapshot(&cluster, &tar);
 
-    // Check the validator ledger doesn't contain any slots < slot_floor
-    cluster.close_preserve_ledgers();
-    let validator_ledger_path = &cluster.fullnode_infos[&validator_id];
-    let blocktree = Blocktree::open(&validator_ledger_path.info.ledger_path).unwrap();
+    // Copy tar to validator's snapshot output directory
+    let validator_tar_path =
+        snapshot_utils::get_snapshot_tar_path(&validator_snapshot_test_config.snapshot_output_path);
+    fs::hard_link(tar, &validator_tar_path).unwrap();
 
-    // Skip the zeroth slot in blocktree that the ledger is initialized with
-    let (first_slot, _) = blocktree.slot_meta_iterator(1).unwrap().next().unwrap();
+    // Restart validator from snapshot, the validator's locktower state in this snapshot
+    // will contain slots < the root bank of the snapshot. Validator should not panic.
+    cluster.restart_node(&validator_id, validator_info);
 
-    assert_eq!(first_slot, slot_floor);
-}*/
+    // Test cluster can still make progress and get confirmations in locktower
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        1,
+        HashSet::new(),
+    );
+}
 
 #[allow(unused_attributes)]
 #[test]
 #[serial]
-#[ignore]
 fn test_snapshots_blocktree_floor() {
     // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
@@ -519,30 +494,8 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        // Get slot after which this was generated
-        let client = cluster
-            .get_validator_client(&cluster.entry_point_info.id)
-            .unwrap();
-        let last_slot = client.get_slot().expect("Couldn't get slot");
-
-        // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
-        // must include the transactions just pushed
         let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
-        trace!(
-            "Waiting for snapshot tar to be generated with slot > {}",
-            last_slot
-        );
-        loop {
-            if tar.exists() {
-                trace!("snapshot tar exists");
-                let slot = snapshot_utils::bank_slot_from_archive(&tar).unwrap();
-                if slot >= last_slot {
-                    break;
-                }
-                trace!("snapshot tar slot {} < last_slot {}", slot, last_slot);
-            }
-            sleep(Duration::from_millis(5000));
-        }
+        wait_for_next_snapshot(&cluster, &tar);
 
         // Create new account paths since fullnode exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point
@@ -551,7 +504,7 @@ fn test_snapshots_restart_validity() {
         all_account_storage_dirs.push(new_account_storage_dirs);
         snapshot_test_config.validator_config.account_paths = Some(new_account_storage_paths);
 
-        // Restart a node
+        // Restart node
         trace!("Restarting cluster from snapshot");
         let nodes = cluster.get_node_pubkeys();
         cluster.exit_restart_node(&nodes[0], snapshot_test_config.validator_config.clone());
@@ -732,6 +685,32 @@ fn run_repairman_catchup(num_repairmen: u64) {
             continue;
         }
         sleep(Duration::from_secs(1));
+    }
+}
+
+fn wait_for_next_snapshot<P: AsRef<Path>>(cluster: &LocalCluster, tar: P) {
+    // Get slot after which this was generated
+    let client = cluster
+        .get_validator_client(&cluster.entry_point_info.id)
+        .unwrap();
+    let last_slot = client.get_slot().expect("Couldn't get slot");
+
+    // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
+    // must include the transactions just pushed
+    trace!(
+        "Waiting for snapshot tar to be generated with slot > {}",
+        last_slot
+    );
+    loop {
+        if tar.as_ref().exists() {
+            trace!("snapshot tar exists");
+            let slot = snapshot_utils::bank_slot_from_archive(&tar).unwrap();
+            if slot >= last_slot {
+                break;
+            }
+            trace!("snapshot tar slot {} < last_slot {}", slot, last_slot);
+        }
+        sleep(Duration::from_millis(5000));
     }
 }
 

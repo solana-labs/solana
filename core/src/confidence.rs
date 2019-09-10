@@ -74,6 +74,9 @@ impl ForkConfidenceCache {
     }
 
     pub fn prune_confidence_cache(&mut self, ancestors: &HashMap<u64, HashSet<u64>>, root: u64) {
+        // For Every slot `s` in this cache must exist some bank `b` in BankForks with
+        // `b.slot() == s`, and because `ancestors` has an entry for every bank in BankForks,
+        // then there must be an entry in `ancestors` for every slot in `self.confidence`
         self.confidence
             .retain(|slot, _| slot == &root || ancestors[&slot].contains(&root));
     }
