@@ -49,9 +49,7 @@ pub const NUM_THREADS: u32 = 4;
 
 const TOTAL_BUFFERED_PACKETS: usize = 500_000;
 
-/// This is used for batching of transactions to process and record.
-/// (700K TPS ~= 70K Tx per Tick spread over NUM_THREADS)
-const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 64 * 1024 / NUM_THREADS as usize;
+const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 512;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
