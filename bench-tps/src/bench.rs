@@ -1,5 +1,6 @@
 use solana_metrics;
 
+use crate::cli::Config;
 use bincode;
 use log::*;
 use rayon::prelude::*;
@@ -32,7 +33,6 @@ use std::time::Instant;
 use solana_librapay_api::librapay_transaction;
 
 pub const MAX_SPENDS_PER_TX: u64 = 4;
-pub const NUM_LAMPORTS_PER_ACCOUNT: u64 = 128;
 
 #[derive(Debug)]
 pub enum BenchTpsError {
@@ -42,30 +42,6 @@ pub enum BenchTpsError {
 pub type Result<T> = std::result::Result<T, BenchTpsError>;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
-
-pub struct Config {
-    pub id: Keypair,
-    pub threads: usize,
-    pub thread_batch_sleep_ms: usize,
-    pub duration: Duration,
-    pub tx_count: usize,
-    pub sustained: bool,
-    pub use_move: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            id: Keypair::new(),
-            threads: 4,
-            thread_batch_sleep_ms: 0,
-            duration: Duration::new(std::u64::MAX, 0),
-            tx_count: 500_000,
-            sustained: false,
-            use_move: false,
-        }
-    }
-}
 
 type LibraKeys = (Keypair, Pubkey, Pubkey, Vec<Keypair>);
 
@@ -98,6 +74,7 @@ where
         duration,
         tx_count,
         sustained,
+        num_lamports_per_account,
         ..
     } = config;
 
@@ -210,7 +187,7 @@ where
         }
 
         i += 1;
-        if should_switch_directions(NUM_LAMPORTS_PER_ACCOUNT, i) {
+        if should_switch_directions(num_lamports_per_account, i) {
             reclaim_lamports_back_to_source_account = !reclaim_lamports_back_to_source_account;
         }
     }

@@ -7,6 +7,8 @@ use solana_drone::drone::DRONE_PORT;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 
+const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = 64 * 1024;
+
 /// Holds the configuration for a single run of the benchmark
 pub struct Config {
     pub entrypoint_addr: SocketAddr,
@@ -23,6 +25,7 @@ pub struct Config {
     pub read_from_client_file: bool,
     pub target_lamports_per_signature: u64,
     pub use_move: bool,
+    pub num_lamports_per_account: u64,
 }
 
 impl Default for Config {
@@ -42,6 +45,7 @@ impl Default for Config {
             read_from_client_file: false,
             target_lamports_per_signature: FeeCalculator::default().target_lamports_per_signature,
             use_move: false,
+            num_lamports_per_account: NUM_LAMPORTS_PER_ACCOUNT_DEFAULT,
         }
     }
 }
@@ -146,6 +150,15 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                      verification when the cluster is operating at target-signatures-per-slot",
                 ),
         )
+        .arg(
+            Arg::with_name("num_lamports_per_account")
+                .long("num-lamports-per-account")
+                .value_name("LAMPORTS")
+                .takes_value(true)
+                .help(
+                    "Number of lamports per account.",
+                ),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -219,6 +232,10 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     }
 
     args.use_move = matches.is_present("use-move");
+
+    if let Some(v) = matches.value_of("num_lamports_per_account") {
+        args.num_lamports_per_account = v.to_string().parse().expect("can't parse lamports");
+    }
 
     args
 }
