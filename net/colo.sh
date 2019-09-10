@@ -5,7 +5,7 @@ here=$(dirname "$0")
 # shellcheck source=net/common.sh
 source "$here"/common.sh
 
-declare -r LF="/home/solana/.solana.lock"
+declare -r SOLANA_LOCK_FILE="/home/solana/.solana.lock"
 
 # Load colo resource specs
 N_RES=0
@@ -106,9 +106,9 @@ _node_status_script() {
   cat <<EOF
   exec 3>&2
   exec 2>/dev/null  # Suppress stderr as the next call to exec fails most of
-                    # the time due to $LF not existing and is running from a
+                    # the time due to $SOLANA_LOCK_FILE not existing and is running from a
                     # subshell where normal redirection doesn't work
-  exec 9<"$LF" && flock -s 9 && . "$LF" && exec 9>&-
+  exec 9<"$SOLANA_LOCK_FILE" && flock -s 9 && . "$SOLANA_LOCK_FILE" && exec 9>&-
   echo -e "\$SOLANA_LOCK_USER\\v\$SOLANA_LOCK_ROLE\\v\$SOLANA_LOCK_NETNAME"
   exec 2>&3 # Restore stderr
 EOF
@@ -170,15 +170,15 @@ requisition_node() {
   declare ROLE=$2
   instance_run "$IP" "$(
 cat <<EOF
-  if [ ! -f "$LF" ]; then
-    exec 9>>"$LF"
+  if [ ! -f "$SOLANA_LOCK_FILE" ]; then
+    exec 9>>"$SOLANA_LOCK_FILE"
     flock -x -n 9 || exit 1
     [ -n "\$SOLANA_USER" ] && {
       echo "export SOLANA_LOCK_USER=\$SOLANA_USER"
       echo "export SOLANA_LOCK_ROLE=$ROLE"
       echo "export SOLANA_LOCK_NETNAME=$prefix"
       echo "[ -v SSH_TTY -a -f \"\${HOME}/.solana-motd\" ] && cat \"\${HOME}/.solana-motd\" 1>&2"
-    } >&9 || ( rm "$LF" && false )
+    } >&9 || ( rm "$SOLANA_LOCK_FILE" && false )
     9>&-
     cat > /solana-scratch/id_ecdsa <<EOK
 $(cat "$sshPrivateKey")
@@ -215,10 +215,10 @@ free_node() {
   instance_run "$IP" "$(
 cat <<EOF
   RC=false
-  if [ -f "$LF" ]; then
-    exec 9<>"$LF"
+  if [ -f "$SOLANA_LOCK_FILE" ]; then
+    exec 9<>"$SOLANA_LOCK_FILE"
     flock -x -n 9 || exit 1
-    . "$LF"
+    . "$SOLANA_LOCK_FILE"
     if [ "\$SOLANA_LOCK_USER" = "\$SOLANA_USER" ]; then
       git clean -qxdff
       rm -f /solana-scratch/* /solana-scratch/.[^.]*
