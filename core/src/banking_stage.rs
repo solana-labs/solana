@@ -3,10 +3,8 @@
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
-use crate::entry;
-use crate::entry::{hash_transactions, Entry};
+use crate::entry::hash_transactions;
 use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::packet;
 use crate::packet::PACKETS_PER_BATCH;
 use crate::packet::{Packet, Packets};
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
@@ -50,6 +48,8 @@ pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 4;
 pub const NUM_THREADS: u32 = 4;
 
 const TOTAL_BUFFERED_PACKETS: usize = 500_000;
+
+const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 512;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -578,12 +578,10 @@ impl BankingStage {
         let mut chunk_start = 0;
         let mut unprocessed_txs = vec![];
         while chunk_start != transactions.len() {
-            let chunk_end = chunk_start
-                + entry::num_will_fit(
-                    &transactions[chunk_start..],
-                    packet::BLOB_DATA_SIZE as u64,
-                    &Entry::serialized_to_blob_size,
-                );
+            let chunk_end = std::cmp::min(
+                transactions.len(),
+                chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH,
+            );
 
             let (result, retryable_txs_in_chunk) = Self::process_and_record_transactions(
                 bank,
@@ -959,11 +957,11 @@ mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::Node;
-    use crate::entry::EntrySlice;
+    use crate::entry::{Entry, EntrySlice};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
-    use crate::{get_tmp_ledger_path, tmp_ledger_name};
+    use crate::{entry, get_tmp_ledger_path, packet, tmp_ledger_name};
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_sdk::instruction::InstructionError;
