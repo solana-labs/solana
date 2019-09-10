@@ -225,7 +225,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_counter() {
         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
             .try_init()
@@ -257,7 +256,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_metricsrate() {
         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
             .try_init()
@@ -275,7 +273,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_metricsrate_env() {
         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
             .try_init()
@@ -290,7 +287,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_inc_new_counter() {
         let _readlock = get_env_lock().read();
         //make sure that macros are syntactically correct
@@ -301,7 +297,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_lograte() {
         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
             .try_init()
@@ -322,7 +317,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_lograte_env() {
         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
             .try_init()

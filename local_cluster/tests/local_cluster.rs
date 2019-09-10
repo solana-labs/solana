@@ -26,9 +26,6 @@ use std::{
 use tempfile::TempDir;
 
 #[test]
-#[serial]
-#[allow(unused_attributes)]
-#[ignore]
 fn test_ledger_cleanup_service() {
     solana_logger::setup();
     error!("test_ledger_cleanup_service");
@@ -67,7 +64,6 @@ fn test_ledger_cleanup_service() {
 }
 
 #[test]
-#[serial]
 fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_1");
@@ -82,7 +78,6 @@ fn test_spend_and_verify_all_nodes_1() {
 }
 
 #[test]
-#[serial]
 fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_2");
@@ -97,7 +92,6 @@ fn test_spend_and_verify_all_nodes_2() {
 }
 
 #[test]
-#[serial]
 fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_3");
@@ -111,9 +105,8 @@ fn test_spend_and_verify_all_nodes_3() {
     );
 }
 
-#[allow(unused_attributes)]
 #[test]
-#[serial]
+#[allow(unused_attributes)]
 #[ignore]
 fn test_spend_and_verify_all_nodes_env_num_nodes() {
     solana_logger::setup();
@@ -132,7 +125,6 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
 
 #[allow(unused_attributes)]
 #[test]
-#[serial]
 #[should_panic]
 fn test_fullnode_exit_default_config_should_panic() {
     solana_logger::setup();
@@ -143,7 +135,6 @@ fn test_fullnode_exit_default_config_should_panic() {
 }
 
 #[test]
-#[serial]
 fn test_fullnode_exit_2() {
     solana_logger::setup();
     error!("test_fullnode_exit_2");
@@ -161,10 +152,7 @@ fn test_fullnode_exit_2() {
 }
 
 // Cluster needs a supermajority to remain, so the minimum size for this test is 4
-#[allow(unused_attributes)]
 #[test]
-#[serial]
-#[ignore]
 fn test_leader_failure_4() {
     solana_logger::setup();
     error!("test_leader_failure_4");
@@ -186,7 +174,6 @@ fn test_leader_failure_4() {
     );
 }
 #[test]
-#[serial]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     error!("test_two_unbalanced_stakes");
@@ -222,14 +209,13 @@ fn test_two_unbalanced_stakes() {
 }
 
 #[test]
-#[ignore]
 fn test_forwarding() {
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
     let config = ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 2_000_000,
-        validator_configs: vec![ValidatorConfig::default(); 3],
+        validator_configs: vec![ValidatorConfig::default(); 2],
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&config);
@@ -249,7 +235,6 @@ fn test_forwarding() {
 }
 
 #[test]
-#[serial]
 fn test_restart_node() {
     solana_logger::setup();
     error!("test_restart_node");
@@ -287,7 +272,6 @@ fn test_restart_node() {
 }
 
 #[test]
-#[serial]
 fn test_listener_startup() {
     let config = ClusterConfig {
         node_stakes: vec![100; 1],
@@ -303,7 +287,6 @@ fn test_listener_startup() {
 
 #[allow(unused_attributes)]
 #[test]
-#[serial]
 fn test_snapshot_restart_locktower() {
     // First set up the cluster with 2 nodes
     let snapshot_interval_slots = 10;
@@ -363,9 +346,7 @@ fn test_snapshot_restart_locktower() {
     );
 }
 
-#[allow(unused_attributes)]
 #[test]
-#[serial]
 fn test_snapshots_blocktree_floor() {
     // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
@@ -447,7 +428,6 @@ fn test_snapshots_blocktree_floor() {
 }
 
 #[test]
-#[serial]
 fn test_snapshots_restart_validity() {
     solana_logger::setup();
     let snapshot_interval_slots = 10;
@@ -524,15 +504,13 @@ fn test_snapshots_restart_validity() {
     }
 }
 
-#[allow(unused_attributes)]
 #[test]
-#[serial]
-#[ignore]
 fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
 
 #[test]
+#[allow(unused_attributes)]
 #[ignore]
 fn test_fake_blobs_broadcast_leader() {
     test_faulty_node(BroadcastStageType::BroadcastFakeBlobs);
@@ -591,10 +569,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     );
 }
 
-#[allow(unused_attributes)]
 #[test]
-#[serial]
-#[ignore]
 fn test_repairman_catchup() {
     solana_logger::setup();
     error!("test_repairman_catchup");

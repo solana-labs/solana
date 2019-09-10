@@ -1028,7 +1028,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_bench_tps_local_cluster_solana() {
         let mut config = Config::default();
         config.tx_count = 100;
@@ -1038,7 +1037,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_bench_tps_local_cluster_move() {
         let mut config = Config::default();
         config.tx_count = 100;
