@@ -97,7 +97,7 @@ pub fn process_instruction(
                 }
                 let offset = offset as usize;
                 let len = bytes.len();
-                debug!("Write: offset={} length={}", offset, len);
+                trace!("Write: offset={} length={}", offset, len);
                 if keyed_accounts[0].account.data.len() < offset + len {
                     warn!(
                         "Write overflow: {} < {}",
@@ -126,7 +126,6 @@ pub fn process_instruction(
                 }
                 let (progs, params) = keyed_accounts.split_at_mut(1);
                 let prog = &progs[0].account.data;
-                info!("Call BPF program");
                 let (mut vm, heap_region) = match create_vm(prog) {
                     Ok(info) => info,
                     Err(e) => {
@@ -136,6 +135,7 @@ pub fn process_instruction(
                 };
                 let mut v = serialize_parameters(program_id, params, &data);
 
+                info!("Call BPF program");
                 match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
                     Ok(status) => match u32::try_from(status) {
                         Ok(status) => {
@@ -155,10 +155,7 @@ pub fn process_instruction(
                     }
                 }
                 deserialize_parameters(params, &v);
-                info!(
-                    "BPF program executed {} instructions",
-                    vm.get_last_instruction_count()
-                );
+                info!("BPF program success");
             }
         }
     } else {

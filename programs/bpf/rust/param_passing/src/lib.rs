@@ -20,5 +20,6 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
     let test_dep = TestDep::new(&data, 1, 2, 3, 4, 5);
     info!(0, 0, 0, 0, test_dep.thirty);
     assert!(test_dep.thirty == 30);
+
     SUCCESS
 }
