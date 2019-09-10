@@ -82,7 +82,8 @@ mod bpf {
         use solana_sdk::instruction::{AccountMeta, Instruction};
         use solana_sdk::pubkey::Pubkey;
         use solana_sdk::signature::{Keypair, KeypairUtil};
-        use solana_sdk::sysvar::{clock, fees, rewards, slot_hashes, stack_history};
+        use solana_sdk::sysvar::{clock, fees, rewards, slot_hashes, stake_history};
+        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         use std::io::Read;
         use std::sync::Arc;
 
@@ -91,16 +92,16 @@ mod bpf {
             solana_logger::setup();
 
             let programs = [
-                ("solana_bpf_rust_128bit", true),
-                ("solana_bpf_rust_alloc", true),
-                ("solana_bpf_rust_clock", true),
-                ("solana_bpf_rust_dep_crate", true),
-                ("solana_bpf_rust_external_spend", false),
-                ("solana_bpf_rust_iter", true),
-                ("solana_bpf_rust_many_args", true),
-                ("solana_bpf_rust_noop", true),
-                ("solana_bpf_rust_panic", false),
-                ("solana_bpf_rust_param_passing", true),
+                // ("solana_bpf_rust_128bit", true),
+                // ("solana_bpf_rust_alloc", true),
+                // ("solana_bpf_rust_dep_crate", true),
+                // ("solana_bpf_rust_external_spend", false),
+                // ("solana_bpf_rust_iter", true),
+                // ("solana_bpf_rust_many_args", true),
+                // ("solana_bpf_rust_noop", true),
+                // ("solana_bpf_rust_panic", false),
+                // ("solana_bpf_rust_param_passing", true),
+                ("solana_bpf_rust_sysval", true),
             ];
             for program in programs.iter() {
                 let filename = create_bpf_path(program.0);
@@ -110,13 +111,14 @@ mod bpf {
                 file.read_to_end(&mut elf).unwrap();
 
                 let GenesisBlockInfo {
-                    genesis_block,
+                    mut genesis_block,
                     mint_keypair,
                     ..
                 } = create_genesis_block(50);
+                genesis_block.epoch_warmup = false;
                 let bank = Arc::new(Bank::new(&genesis_block));
-                // Create bank with specific slot, used by solana_bpf_rust_clock test
-                let bank = Bank::new_from_parent(&bank, &Pubkey::default(), 42);
+                // Create bank with specific slot, used by solana_bpf_rust_sysvar test
+                let bank = Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
                 let bank_client = BankClient::new(bank);
 
                 // Call user program
