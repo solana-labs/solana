@@ -33,7 +33,6 @@ missing() {
 [[ -n $numNodes ]]       || missing numNodes
 [[ -n $failOnValidatorBootupFailure ]] || missing failOnValidatorBootupFailure
 
-ledgerVerify=true
 validatorSanity=true
 installCheck=true
 rejectExtraNodes=false
@@ -41,9 +40,6 @@ while [[ $1 = -o ]]; do
   opt="$2"
   shift 2
   case $opt in
-  noLedgerVerify)
-    ledgerVerify=false
-    ;;
   noValidatorSanity)
     validatorSanity=false
     ;;
@@ -78,11 +74,6 @@ local|tar|skip)
 
   solana_gossip=solana-gossip
   solana_install=solana-install
-  solana_keygen=solana-keygen
-  solana_ledger_tool=solana-ledger-tool
-
-  ledger=config/bootstrap-leader
-  client_id=config/client-id.json
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -102,7 +93,6 @@ fi
 echo "+++ $sanityTargetIp: node count ($numSanityNodes expected)"
 (
   set -x
-  $solana_keygen new -f -o "$client_id"
 
   nodeArg="num-nodes"
   if $rejectExtraNodes; then
@@ -132,26 +122,6 @@ else
   echo "^^^ +++"
   echo "Note: wallet sanity is disabled as airdrops are disabled"
 fi
-
-echo "--- $sanityTargetIp: verify ledger"
-if $ledgerVerify; then
-  if [[ -d $ledger ]]; then
-    (
-      set -x
-      rm -rf /var/tmp/ledger-verify
-      du -hs "$ledger"
-      time cp -r "$ledger" /var/tmp/ledger-verify
-      time $solana_ledger_tool --ledger /var/tmp/ledger-verify verify
-    )
-  else
-    echo "^^^ +++"
-    echo "Ledger verify skipped: directory does not exist: $ledger"
-  fi
-else
-  echo "^^^ +++"
-  echo "Note: ledger verify disabled"
-fi
-
 
 echo "--- $sanityTargetIp: validator sanity"
 if $validatorSanity; then

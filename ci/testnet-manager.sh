@@ -217,7 +217,6 @@ sanity() {
     (
       set -x
       NO_INSTALL_CHECK=1 \
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh edge-testnet-solana-com gce us-west1-b
     )
@@ -226,7 +225,6 @@ sanity() {
     (
       set -x
       REJECT_EXTRA_NODES=1 \
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh edge-perf-testnet-solana-com ec2 us-west-2b
     )
@@ -235,7 +233,6 @@ sanity() {
     (
       set -x
       NO_INSTALL_CHECK=1 \
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
     )
@@ -244,7 +241,6 @@ sanity() {
     (
       set -x
       REJECT_EXTRA_NODES=1 \
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-perf-testnet-solana-com ec2 us-west-2b
     )
@@ -252,7 +248,6 @@ sanity() {
   testnet)
     (
       set -x
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh testnet-solana-com gce us-west1-b
     )
@@ -261,7 +256,6 @@ sanity() {
     (
       set -x
       REJECT_EXTRA_NODES=1 \
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh perf-testnet-solana-com gce us-west1-b
       #ci/testnet-sanity.sh perf-testnet-solana-com ec2 us-east-1a
@@ -273,7 +267,6 @@ sanity() {
 
       ok=true
       if [[ -n $GCE_NODE_COUNT ]]; then
-        NO_LEDGER_VERIFY=1 \
         NO_VALIDATOR_SANITY=1 \
           ci/testnet-sanity.sh demo-testnet-solana-com gce "${GCE_ZONES[0]}" -f || ok=false
       else
@@ -286,7 +279,6 @@ sanity() {
   tds)
     (
       set -x
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh tds-solana-com gce "${GCE_ZONES[0]}" -f
     )
@@ -336,7 +328,6 @@ deploy() {
   testnet-edge-perf)
     (
       set -x
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=warn \
         ci/testnet-deploy.sh -p edge-perf-testnet-solana-com -C ec2 -z us-west-2b \
@@ -363,7 +354,6 @@ deploy() {
   testnet-beta-perf)
     (
       set -x
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=warn \
         ci/testnet-deploy.sh -p beta-perf-testnet-solana-com -C ec2 -z us-west-2b \
@@ -390,7 +380,6 @@ deploy() {
   testnet-perf)
     (
       set -x
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=warn \
         ci/testnet-deploy.sh -p perf-testnet-solana-com -C gce -z us-west1-b \
@@ -412,7 +401,6 @@ deploy() {
       fi
 
       # shellcheck disable=SC2068
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
@@ -426,7 +414,6 @@ deploy() {
 
       if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
-        NO_LEDGER_VERIFY=1 \
         NO_VALIDATOR_SANITY=1 \
           ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
             -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
@@ -532,7 +519,6 @@ deploy() {
       # Multiple V100 GPUs are available in us-west1, us-central1 and europe-west4
       # shellcheck disable=SC2068
       # shellcheck disable=SC2086
-      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p tds-solana-com -C gce \
           "${maybeGpu[@]}" \
