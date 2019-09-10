@@ -13,7 +13,7 @@ base64 = "0.10.1"
 bincode = "1.1.4"
 clap = "2.33.0"
 serde = "1.0.100"
-serde_derive = "1.0.99"
+serde_derive = "1.0.100"
 serde_json = "1.0.40"
 serde_yaml = "0.8.9"
 solana-core = { path = "../core", version = "0.19.0-pre0" }
