@@ -5,7 +5,7 @@ here=$(dirname "$0")
 # shellcheck source=net/common.sh
 source "$here"/common.sh
 
-declare -gr LF="/home/solana/.solana.lock"
+declare -r LF="/home/solana/.solana.lock"
 
 # Load colo resource specs
 N_RES=0
