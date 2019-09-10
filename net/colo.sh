@@ -620,13 +620,13 @@ create)
       echo -e "$blockstreamerMachineType\vblockstreamer"
     fi
     echo -e "$bootstrapLeaderMachineType\vbootstrap-leader"
-    for _ in $(seq "$additionalFullNodeCount"); do
+    for ((i=0; i < "$additionalFullNodeCount"; i++)); do
       echo -e "$fullNodeMachineType\vfullnode"
     done
-    for _ in $(seq "$clientNodeCount"); do
+    for ((i=0; i < "$clientNodeCount"; i++)); do
       echo -e "$clientMachineType\vclient"
     done
-    for _ in $(seq "$replicatorNodeCount"); do
+    for ((i=0; i < "$replicatorNodeCount"; i++)); do
       echo -e "$replicatorMachineType\vreplicator"
     done
   } | sort -rnt $'\v' -k1,1)"
