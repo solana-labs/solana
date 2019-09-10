@@ -63,11 +63,11 @@ fi
 
 $solana_cli "${entrypoint[@]}" address
 check_balance_output "0 lamports"
-$solana_cli "${entrypoint[@]}" airdrop 600
+$solana_cli "${entrypoint[@]}" airdrop 600 lamports
 check_balance_output "600 lamports"
-$solana_cli "${entrypoint[@]}" airdrop 400
+$solana_cli "${entrypoint[@]}" airdrop 400 lamports
 check_balance_output "1000 lamports"
-pay_and_confirm $garbage_address 50
+pay_and_confirm $garbage_address 50 lamports
 check_balance_output "lamports" # <-- exact number of lamports here depends on the current cluster fees
 
 echo PASS

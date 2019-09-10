@@ -63,7 +63,7 @@ if [[ ! -r $identity_keypair ]]; then
 
   # TODO: https://github.com/solana-labs/solminer/blob/9cd2289/src/replicator.js#L17-L18
   $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
-      airdrop 100000
+      airdrop 100000 lamports
 fi
 identity_pubkey=$($solana_keygen pubkey "$identity_keypair")
 

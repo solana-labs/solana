@@ -129,7 +129,7 @@ $ export STORAGE_IDENTITY=$(solana-keygen pubkey storage-keypair.json)
 ```
 Then set up the storage accounts for your replicator by running:
 ```bash
-$ solana --keypair replicator-keypair.json airdrop 100000
+$ solana --keypair replicator-keypair.json airdrop 100000 lamports
 $ solana --keypair replicator-keypair.json create-replicator-storage-account $REPLICATOR_IDENTITY $STORAGE_IDENTITY
 ```
 Note: Every time the testnet restarts, run the steps to setup the replicator accounts again.

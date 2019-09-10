@@ -24,8 +24,8 @@ airdrop of lamports from the testnet drone:
 ```bash
 $ solana set --url http://testnet.solana.com:8899
 $ solana get
-$ solana airdrop 123
-$ solana balance
+$ solana airdrop 123 lamports
+$ solana balance --lamports
 ```
 
 Also try running following command to join the gossip network and view all the
@@ -52,7 +52,7 @@ $ solana set --keypair ~/validator-keypair.json
 **your validator identity keypair.**
 If you haven't, you will need to add the `--keypair` argument to each command, like:
 ```bash
-$ solana --keypair ~/validator-keypair.json airdrop 1000
+$ solana --keypair ~/validator-keypair.json airdrop 1000 lamports
 ```
 (You can always override the set configuration by explicitly passing the
 `--keypair` argument with a command.)
@@ -60,7 +60,7 @@ $ solana --keypair ~/validator-keypair.json airdrop 1000
 ### Validator Start
 Airdrop yourself some lamports to get started:
 ```bash
-$ solana airdrop 1000
+$ solana airdrop 1000 lamports
 ```
 
 Your validator will need a vote account.  Create it now with the following

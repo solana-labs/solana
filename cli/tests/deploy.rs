@@ -34,6 +34,7 @@ fn test_wallet_deploy_program() {
         drone_host: None,
         drone_port: drone_addr.port(),
         lamports: 50,
+        use_lamports_unit: true,
     };
     process_command(&config).unwrap();
 
