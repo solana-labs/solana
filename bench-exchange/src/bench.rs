@@ -140,7 +140,8 @@ where
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
-        let accounts: HashMap<String, u64> = serde_yaml::from_reader(file).unwrap();
+        let accounts: HashMap<String, PrimordialAccountDetails> =
+            serde_yaml::from_reader(file).unwrap();
         accounts
             .into_iter()
             .map(|(keypair, _)| {
