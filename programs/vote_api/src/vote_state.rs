@@ -1,9 +1,8 @@
 //! Vote state, vote program
 //! Receive and processes votes from validators
-use crate::id;
+use crate::{id, vote_instruction::VoteError};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
-use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::sysvar::slot_hashes::SlotHash;
 use solana_sdk::{
@@ -12,7 +11,6 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     hash::Hash,
     instruction::InstructionError,
-    instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     sysvar::clock::Clock,
 };
@@ -25,36 +23,6 @@ pub const INITIAL_LOCKOUT: usize = 2;
 // Maximum number of credits history to keep around
 //  smaller numbers makes
 pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
-
-/// Reasons the stake might have had an error
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
-pub enum VoteError {
-    VoteTooOld,
-    SlotsMismatch,
-    SlotHashMismatch,
-    EmptySlots,
-}
-impl<E> DecodeError<E> for VoteError {
-    fn type_of() -> &'static str {
-        "VoteError"
-    }
-}
-
-impl std::fmt::Display for VoteError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                VoteError::VoteTooOld => "vote already recorded or not in slot hashes history",
-                VoteError::SlotsMismatch => "vote slots do not match bank history",
-                VoteError::SlotHashMismatch => "vote hash does not match bank hash",
-                VoteError::EmptySlots => "vote has no slots, invalid",
-            }
-        )
-    }
-}
-impl std::error::Error for VoteError {}
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {

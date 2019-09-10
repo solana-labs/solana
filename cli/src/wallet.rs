@@ -6,32 +6,34 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json;
 use serde_json::{json, Value};
-use solana_budget_api;
-use solana_budget_api::budget_instruction;
-use solana_budget_api::budget_state::BudgetError;
+use solana_budget_api::budget_instruction::{self, BudgetError};
 use solana_client::client_error::ClientError;
 use solana_client::rpc_client::RpcClient;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 #[cfg(test)]
 use solana_drone::drone_mock::request_airdrop_transaction;
-use solana_sdk::account_utils::State;
-use solana_sdk::bpf_loader;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::DecodeError;
-use solana_sdk::loader_instruction;
-use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil, Signature};
-use solana_sdk::system_instruction::SystemError;
-use solana_sdk::system_transaction;
-use solana_sdk::transaction::{Transaction, TransactionError};
-use solana_stake_api::{stake_instruction, stake_state::StakeError};
+use solana_sdk::{
+    account_utils::State,
+    bpf_loader,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    instruction::InstructionError,
+    instruction_processor_utils::DecodeError,
+    loader_instruction,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{read_keypair, Keypair, KeypairUtil, Signature},
+    system_instruction::SystemError,
+    system_transaction,
+    transaction::{Transaction, TransactionError},
+};
+use solana_stake_api::stake_instruction::{self, StakeError};
 use solana_storage_api::storage_instruction;
-use solana_vote_api::vote_instruction;
-use solana_vote_api::vote_state::VoteState;
+use solana_vote_api::{
+    vote_instruction::{self, VoteError},
+    vote_state::VoteState,
+};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -617,9 +619,9 @@ fn process_authorize_voter(
         recent_blockhash,
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_voter_keypair])?;
-    Ok(signature_str.to_string())
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_voter_keypair]);
+    log_instruction_custom_error::<VoteError>(result)
 }
 
 fn process_show_account(

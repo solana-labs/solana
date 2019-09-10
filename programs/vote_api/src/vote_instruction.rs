@@ -1,17 +1,52 @@
 //! Vote program
 //! Receive and processes votes from validators
 
-use crate::id;
-use crate::vote_state::{self, Vote, VoteState};
+use crate::{
+    id,
+    vote_state::{self, Vote, VoteState},
+};
 use bincode::deserialize;
 use log::*;
+use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_warn;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_instruction;
-use solana_sdk::sysvar;
+use solana_sdk::{
+    account::KeyedAccount,
+    instruction::{AccountMeta, Instruction, InstructionError},
+    instruction_processor_utils::DecodeError,
+    pubkey::Pubkey,
+    system_instruction, sysvar,
+};
+
+/// Reasons the stake might have had an error
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum VoteError {
+    VoteTooOld,
+    SlotsMismatch,
+    SlotHashMismatch,
+    EmptySlots,
+}
+impl<E> DecodeError<E> for VoteError {
+    fn type_of() -> &'static str {
+        "VoteError"
+    }
+}
+
+impl std::fmt::Display for VoteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                VoteError::VoteTooOld => "vote already recorded or not in slot hashes history",
+                VoteError::SlotsMismatch => "vote slots do not match bank history",
+                VoteError::SlotHashMismatch => "vote hash does not match bank hash",
+                VoteError::EmptySlots => "vote has no slots, invalid",
+            }
+        )
+    }
+}
+impl std::error::Error for VoteError {}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {

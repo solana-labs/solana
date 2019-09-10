@@ -4,14 +4,35 @@ use crate::{
 };
 use bincode::deserialize;
 use log::*;
+use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount,
     clock::Slot,
     instruction::{AccountMeta, Instruction, InstructionError},
+    instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction, sysvar,
 };
+
+/// Reasons the stake might have had an error
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum StakeError {
+    NoCreditsToRedeem,
+}
+impl<E> DecodeError<E> for StakeError {
+    fn type_of() -> &'static str {
+        "StakeError"
+    }
+}
+impl std::fmt::Display for StakeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            StakeError::NoCreditsToRedeem => write!(f, "not enough credits to redeem"),
+        }
+    }
+}
+impl std::error::Error for StakeError {}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
@@ -452,6 +473,32 @@ mod tests {
             ),
             Err(InstructionError::InvalidInstructionData),
         );
+    }
+
+    #[test]
+    fn test_custom_error_decode() {
+        use num_traits::FromPrimitive;
+        fn pretty_err<T>(err: InstructionError) -> String
+        where
+            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
+        {
+            if let InstructionError::CustomError(code) = err {
+                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
+                format!(
+                    "{:?}: {}::{:?} - {}",
+                    err,
+                    T::type_of(),
+                    specific_error,
+                    specific_error,
+                )
+            } else {
+                "".to_string()
+            }
+        }
+        assert_eq!(
+            "CustomError(0): StakeError::NoCreditsToRedeem - not enough credits to redeem",
+            pretty_err::<StakeError>(StakeError::NoCreditsToRedeem.into())
+        )
     }
 
 }

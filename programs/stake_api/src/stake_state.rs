@@ -3,15 +3,13 @@
 //! * keep track of rewards
 //! * own mining pools
 
-use crate::{config::Config, id};
-use num_derive::{FromPrimitive, ToPrimitive};
+use crate::{config::Config, id, stake_instruction::StakeError};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
     clock::{Epoch, Slot},
     instruction::InstructionError,
-    instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     sysvar::{
         self,
@@ -21,6 +19,7 @@ use solana_sdk::{
 use solana_vote_api::vote_state::VoteState;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum StakeState {
     Uninitialized,
     Lockup(Slot),
@@ -52,46 +51,46 @@ impl StakeState {
     }
 }
 
-/// Reasons the stake might have had an error
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
-pub enum StakeError {
-    NoCreditsToRedeem,
-}
-impl<E> DecodeError<E> for StakeError {
-    fn type_of() -> &'static str {
-        "StakeError"
-    }
-}
-impl std::fmt::Display for StakeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            StakeError::NoCreditsToRedeem => write!(f, "not enough credits to redeem"),
-        }
-    }
-}
-impl std::error::Error for StakeError {}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Stake {
+    /// most recently delegated vote account pubkey
     pub voter_pubkey: Pubkey,
+    /// the epoch when voter_pubkey was most recently set
+    pub voter_pubkey_epoch: Epoch,
+    /// credits observed is credits from vote account state when delegated or redeemed
     pub credits_observed: u64,
-    pub stake: u64,                // stake amount activated
-    pub activation_epoch: Epoch, // epoch the stake was activated, std::Epoch::MAX if is a bootstrap stake
-    pub deactivation_epoch: Epoch, // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
+    /// activated stake amount, set at delegate_stake() time
+    pub stake: u64,
+    /// epoch at which this stake was activated, std::Epoch::MAX if is a bootstrap stake
+    pub activation_epoch: Epoch,
+    /// epoch the stake was deactivated, std::Epoch::MAX if not deactivated
+    pub deactivation_epoch: Epoch,
+    /// stake config (warmup, etc.)
     pub config: Config,
+    /// the Slot at which this stake becomes available for withdrawal
     pub lockup: Slot,
+    /// history of prior delegates and the epoch ranges for which
+    ///  they were set, circular buffer
+    pub prior_delegates: [(Pubkey, Epoch, Epoch); MAX_PRIOR_DELEGATES],
+    /// next pointer
+    pub prior_delegates_idx: usize,
 }
+
+const MAX_PRIOR_DELEGATES: usize = 32;
 
 impl Default for Stake {
     fn default() -> Self {
         Self {
             voter_pubkey: Pubkey::default(),
+            voter_pubkey_epoch: 0,
             credits_observed: 0,
             stake: 0,
             activation_epoch: 0,
             deactivation_epoch: std::u64::MAX,
             config: Config::default(),
             lockup: 0,
+            prior_delegates: <[(Pubkey, Epoch, Epoch); MAX_PRIOR_DELEGATES]>::default(),
+            prior_delegates_idx: 0,
         }
     }
 }
@@ -103,6 +102,10 @@ impl Stake {
 
     pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
         self.stake_activating_and_deactivating(epoch, history).0
+    }
+
+    pub fn voter_pubkey(&self, _epoch: Epoch) -> &Pubkey {
+        &self.voter_pubkey
     }
 
     fn stake_activating_and_deactivating(
@@ -405,6 +408,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         {
             let vote_state: VoteState = vote_account.state()?;
 
+            // the only valid use of current voter_pubkey, redelegation breaks
+            //  rewards redemption for previous voter_pubkey
             if stake.voter_pubkey != *vote_account.unsigned_key() {
                 return Err(InstructionError::InvalidArgument);
             }
@@ -633,8 +638,7 @@ mod tests {
                 stake: stake_lamports,
                 activation_epoch: clock.epoch,
                 deactivation_epoch: std::u64::MAX,
-                config: Config::default(),
-                lockup: 0
+                ..Stake::default()
             })
         );
         // verify that delegate_stake can't be called twice StakeState::default()
@@ -1255,32 +1259,6 @@ mod tests {
             ),
             Ok(())
         );
-    }
-
-    #[test]
-    fn test_custom_error_decode() {
-        use num_traits::FromPrimitive;
-        fn pretty_err<T>(err: InstructionError) -> String
-        where
-            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
-        {
-            if let InstructionError::CustomError(code) = err {
-                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
-                format!(
-                    "{:?}: {}::{:?} - {}",
-                    err,
-                    T::type_of(),
-                    specific_error,
-                    specific_error,
-                )
-            } else {
-                "".to_string()
-            }
-        }
-        assert_eq!(
-            "CustomError(0): StakeError::NoCreditsToRedeem - not enough credits to redeem",
-            pretty_err::<StakeError>(StakeError::NoCreditsToRedeem.into())
-        )
     }
 
     #[test]
