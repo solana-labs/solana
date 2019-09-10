@@ -341,11 +341,6 @@ impl Stake {
 
 pub trait StakeAccount {
     fn lockup(&mut self, slot: Slot) -> Result<(), InstructionError>;
-    fn redelegate_stake(
-        &mut self,
-        vote_account: &KeyedAccount,
-        clock: &sysvar::clock::Clock,
-    ) -> Result<(), InstructionError>;
     fn delegate_stake(
         &mut self,
         vote_account: &KeyedAccount,
@@ -381,26 +376,6 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             Err(InstructionError::InvalidAccountData)
         }
     }
-    fn redelegate_stake(
-        &mut self,
-        vote_account: &KeyedAccount,
-        clock: &sysvar::clock::Clock,
-    ) -> Result<(), InstructionError> {
-        if self.signer_key().is_none() {
-            return Err(InstructionError::MissingRequiredSignature);
-        }
-
-        if let StakeState::Stake(mut stake) = self.state()? {
-            stake.redelegate(
-                vote_account.unsigned_key(),
-                &vote_account.state()?,
-                clock.epoch,
-            )?;
-            self.set_state(&StakeState::Stake(stake))
-        } else {
-            Err(InstructionError::InvalidAccountData)
-        }
-    }
     fn delegate_stake(
         &mut self,
         vote_account: &KeyedAccount,
@@ -421,6 +396,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 lockup,
             );
 
+            self.set_state(&StakeState::Stake(stake))
+        } else if let StakeState::Stake(mut stake) = self.state()? {
+            stake.redelegate(
+                vote_account.unsigned_key(),
+                &vote_account.state()?,
+                clock.epoch,
+            )?;
             self.set_state(&StakeState::Stake(stake))
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -686,12 +668,10 @@ mod tests {
             assert_eq!(stake.voter_pubkey(epoch), &vote_pubkey);
         }
 
-        // verify that delegate_stake can't be called twice StakeState::default()
-        // signed keyed account
-        assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, &clock, &Config::default()),
-            Err(InstructionError::InvalidAccountData)
-        );
+        // verify that delegate_stake can be called twice, 2nd is redelegate
+        assert!(stake_keyed_account
+            .delegate_stake(&vote_keyed_account, &clock, &Config::default())
+            .is_ok());
 
         // verify that non-stakes fail delegate_stake()
         let stake_state = StakeState::RewardsPool;
@@ -703,41 +683,10 @@ mod tests {
     }
 
     #[test]
-    fn test_stake_redelegate_stake() {
-        let clock = sysvar::clock::Clock::default();
-
-        let stake_pubkey = Pubkey::default();
-        let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
-            stake_lamports,
-            &StakeState::Lockup(0),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-
-        let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-        let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
-
-        // verify unsigned keyed account fails
-        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
-        assert_eq!(
-            stake_keyed_account.redelegate_stake(&vote_keyed_account, &clock),
-            Err(InstructionError::MissingRequiredSignature)
-        );
-
-        // verify that a bogus form of a stake fails
-        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
-        assert_eq!(
-            stake_keyed_account.redelegate_stake(&vote_keyed_account, &clock),
-            Err(InstructionError::InvalidAccountData)
-        );
-
+    fn test_stake_redelegate() {
         // what a freshly delegated stake looks like
         let mut stake = Stake {
-            voter_pubkey: vote_pubkey,
+            voter_pubkey: Pubkey::new_rand(),
             voter_pubkey_epoch: 0,
             ..Stake::default()
         };

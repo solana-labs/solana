@@ -54,18 +54,11 @@ pub enum StakeInstruction {
     ///    2 - Clock sysvar Account that carries clock bank epoch
     ///    3 - Config Account that carries stake config
     ///
-    /// The entire balance of the staking account is staked
+    /// The entire balance of the staking account is staked.  DelegateStake
+    ///   can be called multiple times, but re-delegation is delayed
+    ///   by one epoch
     ///
     DelegateStake,
-
-    /// `Re-delegate` a stake to a new vote account
-    ///
-    /// Expects 3 Accounts:
-    ///    0 - StakeAccount to be redelegated <= transaction must have this signature
-    ///    1 - VoteAccount to which this Stake will be redelegated
-    ///    2 - Clock sysvar Account that carries clock bank epoch
-    ///
-    RedelegateStake,
 
     /// Redeem credits in the stake account
     ///
@@ -161,15 +154,6 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instructio
     Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
 }
 
-pub fn redelegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*stake_pubkey, true),
-        AccountMeta::new_credit_only(*vote_pubkey, false),
-        AccountMeta::new_credit_only(sysvar::clock::id(), false),
-    ];
-    Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
-}
-
 pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
@@ -209,14 +193,6 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::Lockup(slot) => me.lockup(slot),
-        StakeInstruction::RedelegateStake => {
-            if rest.len() != 2 {
-                Err(InstructionError::InvalidInstructionData)?;
-            }
-            let vote = &rest[0];
-
-            me.redelegate_stake(vote, &sysvar::clock::from_keyed_account(&rest[1])?)
-        }
         StakeInstruction::DelegateStake => {
             if rest.len() != 3 {
                 Err(InstructionError::InvalidInstructionData)?;
@@ -368,34 +344,6 @@ mod tests {
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
-        );
-
-        // gets the check for number of args
-        assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut [KeyedAccount::new(
-                    &Pubkey::default(),
-                    false,
-                    &mut Account::default()
-                ),],
-                &serialize(&StakeInstruction::RedelegateStake).unwrap(),
-            ),
-            Err(InstructionError::InvalidInstructionData),
-        );
-
-        // gets the clock fail
-        assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
-                ],
-                &serialize(&StakeInstruction::RedelegateStake).unwrap(),
-            ),
-            Err(InstructionError::InvalidArgument),
         );
 
         // catches the number of args check
