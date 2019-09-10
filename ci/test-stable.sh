@@ -33,7 +33,7 @@ test-stable)
   echo "Executing $testName"
 
   _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --all ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --all ${V:+--verbose} -- --nocapture --test-threads=1
   ;;
 test-stable-perf)
   echo "Executing $testName"
