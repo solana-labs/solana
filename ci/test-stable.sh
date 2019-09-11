@@ -33,7 +33,7 @@ test-stable)
   echo "Executing $testName"
 
   _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test  --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
+  _ cargo +"$rust_stable" test  --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"
