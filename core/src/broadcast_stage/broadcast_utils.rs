@@ -101,16 +101,13 @@ pub(super) fn entries_to_shreds(
                 shredder.finalize_data();
             }
 
-            let mut shreds: Vec<Shred> = shredder
-                .shreds
-                .iter()
-                .map(|s| bincode::deserialize(s).unwrap())
-                .collect();
+            let (mut shreds, mut shred_bufs): (Vec<Shred>, Vec<Vec<u8>>) =
+                shredder.shred_tuples.into_iter().unzip();
 
             trace!("Inserting {:?} shreds in blocktree", shreds.len());
             latest_shred_index = u64::from(shredder.index);
             all_shreds.append(&mut shreds);
-            all_shred_bufs.append(&mut shredder.shreds);
+            all_shred_bufs.append(&mut shred_bufs);
         });
     (all_shreds, all_shred_bufs, latest_shred_index)
 }

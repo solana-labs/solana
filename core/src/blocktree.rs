@@ -890,11 +890,8 @@ impl Blocktree {
                 parent_slot = current_slot - 1;
                 remaining_ticks_in_slot = ticks_per_slot;
                 shredder.finalize_slot();
-                let shreds: Vec<Shred> = shredder
-                    .shreds
-                    .iter()
-                    .map(|s| bincode::deserialize(s).unwrap())
-                    .collect();
+                let shreds: Vec<Shred> =
+                    shredder.shred_tuples.into_iter().map(|(s, _)| s).collect();
                 all_shreds.extend(shreds);
                 shredder =
                     Shredder::new(current_slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0)
@@ -917,11 +914,7 @@ impl Blocktree {
         if is_full_slot && remaining_ticks_in_slot != 0 {
             shredder.finalize_slot();
         }
-        let shreds: Vec<Shred> = shredder
-            .shreds
-            .iter()
-            .map(|s| bincode::deserialize(s).unwrap())
-            .collect();
+        let shreds: Vec<Shred> = shredder.shred_tuples.into_iter().map(|(s, _)| s).collect();
         all_shreds.extend(shreds);
 
         let num_shreds = all_shreds.len();
@@ -1630,11 +1623,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     bincode::serialize_into(&mut shredder, &entries)
         .expect("Expect to write all entries to shreds");
     shredder.finalize_slot();
-    let shreds: Vec<Shred> = shredder
-        .shreds
-        .iter()
-        .map(|s| bincode::deserialize(s).unwrap())
-        .collect();
+    let shreds: Vec<Shred> = shredder.shred_tuples.into_iter().map(|(s, _)| s).collect();
 
     blocktree.insert_shreds(shreds, None)?;
     blocktree.set_roots(&[0])?;
@@ -1709,11 +1698,7 @@ pub fn entries_to_test_shreds(
         shredder.finalize_data();
     }
 
-    let shreds: Vec<Shred> = shredder
-        .shreds
-        .iter()
-        .map(|s| bincode::deserialize(s).unwrap())
-        .collect();
+    let shreds: Vec<Shred> = shredder.shred_tuples.into_iter().map(|(s, _)| s).collect();
 
     shreds
 }
