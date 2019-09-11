@@ -25,13 +25,13 @@ _ ci/order-crates-for-publishing.py
 _ book/build.sh
 
 for project in programs/bpf/rust/*/ ; do
-  echo "+++ do_bpf_check $project"
+  echo "+++ do_bpf_checks $project"
   (
     cd "$project"
-    _ cargo +"$rust_stable" fmt --all -- --check
-    _ cargo +"$rust_nightly" test --all
+    _ cargo +"$rust_stable" fmt -- --check
+    _ cargo +"$rust_nightly" test
     _ cargo +"$rust_nightly" clippy --version
-    _ cargo +"$rust_nightly" clippy --all -- --deny=warnings
+    _ cargo +"$rust_nightly" clippy -- --deny=warnings
     _ cargo +"$rust_stable" audit
   )
 done
