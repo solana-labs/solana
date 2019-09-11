@@ -18,9 +18,6 @@ solana-sdk = { path = "../../../../sdk/", version = "0.19.0-pre0", default-featu
 program = ["solana-sdk/program"]
 default = ["program"]
 
-[workspace]
-members = []
-
 [lib]
 crate-type = ["cdylib"]
 name = "solana_bpf_rust_iter"
