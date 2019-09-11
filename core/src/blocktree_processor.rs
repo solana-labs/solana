@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub const NUM_THREADS: u32 = 10;
-use solana_rayon_threadlimit::thread_count::get_thread_count;
+use solana_rayon_threadlimit::get_thread_count;
 use std::cell::RefCell;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()

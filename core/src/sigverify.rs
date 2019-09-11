@@ -21,7 +21,7 @@ use std::mem::size_of;
 
 #[cfg(feature = "cuda")]
 use core::ffi::c_void;
-use solana_rayon_threadlimit::thread_count::get_thread_count;
+use solana_rayon_threadlimit::get_thread_count;
 #[cfg(feature = "cuda")]
 use std::os::raw::{c_int, c_uint};
 pub const NUM_THREADS: u32 = 10;

@@ -10,7 +10,7 @@ use solana_core::{
     service::Service,
     validator::{Validator, ValidatorConfig},
 };
-use solana_rayon_threadlimit::thread_count::init_test_thread_count;
+use solana_rayon_threadlimit::set_thread_count;
 use solana_sdk::{
     client::SyncClient,
     clock::DEFAULT_TICKS_PER_SLOT,
@@ -117,7 +117,7 @@ impl LocalCluster {
     }
 
     pub fn new(config: &ClusterConfig) -> Self {
-        init_test_thread_count();
+        set_thread_count(1);
 
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
         let leader_keypair = Arc::new(Keypair::new());

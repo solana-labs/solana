@@ -12,7 +12,7 @@ use crate::streamer::{PacketReceiver, PacketSender};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rayon::ThreadPool;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
-use solana_rayon_threadlimit::thread_count::get_thread_count;
+use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;

@@ -23,7 +23,7 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "cuda")]
 use crate::sigverify::poh_verify_many;
-use solana_rayon_threadlimit::thread_count::get_thread_count;
+use solana_rayon_threadlimit::get_thread_count;
 #[cfg(feature = "cuda")]
 use std::sync::Mutex;
 #[cfg(feature = "cuda")]

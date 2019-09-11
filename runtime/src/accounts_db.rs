@@ -30,7 +30,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
-use solana_rayon_threadlimit::thread_count::get_thread_count;
+use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
