@@ -39,11 +39,11 @@ fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
 fn main() {
     let bpf_c = !env::var("CARGO_FEATURE_BPF_C").is_err();
     if bpf_c {
-        let install_dir = "OUT_DIR=../../../target/".to_string()
+        let install_dir = "OUT_DIR=../target/".to_string()
             + &env::var("PROFILE").unwrap()
             + &"/bpf".to_string();
 
-        println!("cargo:warning=(not a warning) Building C-based BPF programs");
+        println!("cargo:warning=(not a warning) Building C-based BPF programs: {:?}", install_dir);
         assert!(Command::new("make")
             .current_dir("c")
             .arg("programs")
