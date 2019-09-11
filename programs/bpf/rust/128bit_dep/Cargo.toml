@@ -17,6 +17,3 @@ solana-sdk = { path = "../../../../sdk/", version = "0.19.0-pre0", default-featu
 [features]
 program = ["solana-sdk/program"]
 default = ["program"]
-
-[workspace]
-members = []

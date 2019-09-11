@@ -19,9 +19,6 @@ solana-bpf-rust-128bit-dep = { path = "../128bit_dep", version = "0.19.0-pre0" }
 program = ["solana-sdk/program"]
 default = ["program"]
 
-[workspace]
-members = []
-
 [lib]
 crate-type = ["cdylib"]
 name = "solana_bpf_rust_128bit"

@@ -30,3 +30,20 @@ solana_rbpf = "=0.1.16"
 
 [[bench]]
 name = "bpf_loader"
+
+[workspace]
+members = [
+    "rust/128bit",
+    "rust/128bit_dep",
+    "rust/alloc",
+    "rust/dep_crate",
+    "rust/external_spend",
+    "rust/iter",
+    "rust/many_args",
+    "rust/many_args_dep",
+    "rust/noop",
+    "rust/panic",
+    "rust/param_passing",
+    "rust/param_passing_dep",
+    "rust/sysval",
+]

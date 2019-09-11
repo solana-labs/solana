@@ -39,7 +39,7 @@ fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
 fn main() {
     let bpf_c = !env::var("CARGO_FEATURE_BPF_C").is_err();
     if bpf_c {
-        let install_dir = "OUT_DIR=../../../target/".to_string()
+        let install_dir = "OUT_DIR=../target/".to_string()
             + &env::var("PROFILE").unwrap()
             + &"/bpf".to_string();
 
@@ -58,7 +58,7 @@ fn main() {
     let bpf_rust = !env::var("CARGO_FEATURE_BPF_RUST").is_err();
     if bpf_rust {
         let install_dir =
-            "../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
+            "target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
         assert!(Command::new("mkdir")
             .arg("-p")
@@ -95,8 +95,8 @@ fn main() {
                 ))
                 .success());
             let src = format!(
-                "rust/{}/target/bpfel-unknown-unknown/release/solana_bpf_rust_{}.so",
-                program, program,
+                "target/bpfel-unknown-unknown/release/solana_bpf_rust_{}.so",
+                program,
             );
             assert!(Command::new("cp")
                 .arg(&src)
