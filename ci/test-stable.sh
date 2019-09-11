@@ -33,7 +33,7 @@ test-stable)
   echo "Executing $testName"
 
   _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test  --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test  ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"
@@ -77,7 +77,7 @@ test-stable-perf)
 
   # Run root package library tests
   _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose} --features="$ROOT_FEATURES"
-  _ cargo +"$rust_stable" test  --package solana-local-cluster --test local_cluster --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
+  _ cargo +"$rust_stable" test  --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
 #  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
 #  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
   ;;
