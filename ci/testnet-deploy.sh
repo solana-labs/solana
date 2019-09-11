@@ -376,9 +376,6 @@ if ! $skipStart; then
     if [[ -n $NO_VALIDATOR_SANITY ]]; then
       args+=(-o noValidatorSanity)
     fi
-    if [[ -n $NO_LEDGER_VERIFY ]]; then
-      args+=(-o noLedgerVerify)
-    fi
     if [[ -n $NO_INSTALL_CHECK ]]; then
       args+=(-o noInstallCheck)
     fi
