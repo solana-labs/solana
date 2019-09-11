@@ -4,6 +4,7 @@ extern crate log;
 #[macro_use]
 extern crate solana_core;
 
+use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
 use solana_core::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
 use solana_core::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
