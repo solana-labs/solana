@@ -2,6 +2,7 @@
 //!
 //! this account carries history about stake activations and de-activations
 //!
+use crate::account_info::AccountInfo;
 pub use crate::clock::Epoch;
 use crate::{account::Account, sysvar};
 use bincode::serialized_size;
@@ -27,13 +28,18 @@ pub struct StakeHistoryEntry {
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
 
 impl StakeHistory {
-    pub fn from(account: &Account) -> Option<Self> {
+    pub fn from_account(account: &Account) -> Option<Self> {
         account.deserialize_data().ok()
     }
-    pub fn to(&self, account: &mut Account) -> Option<()> {
+    pub fn to_account(&self, account: &mut Account) -> Option<()> {
         account.serialize_data(self).ok()
     }
-
+    pub fn from_account_info(account: &AccountInfo) -> Option<Self> {
+        account.deserialize_data().ok()
+    }
+    pub fn to_account_info(&self, account: &mut AccountInfo) -> Option<()> {
+        account.serialize_data(self).ok()
+    }
     pub fn size_of() -> usize {
         serialized_size(&StakeHistory(vec![
             (0, StakeHistoryEntry::default());
@@ -67,7 +73,7 @@ impl Deref for StakeHistory {
 
 pub fn create_account(lamports: u64, stake_history: &StakeHistory) -> Account {
     let mut account = Account::new(lamports, StakeHistory::size_of(), &sysvar::id());
-    stake_history.to(&mut account).unwrap();
+    stake_history.to_account(&mut account).unwrap();
     account
 }
 
@@ -77,7 +83,7 @@ pub fn from_keyed_account(account: &KeyedAccount) -> Result<StakeHistory, Instru
     if !check_id(account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);
     }
-    StakeHistory::from(account.account).ok_or(InstructionError::InvalidArgument)
+    StakeHistory::from_account(account.account).ok_or(InstructionError::InvalidArgument)
 }
 
 #[cfg(test)]
@@ -90,7 +96,7 @@ mod tests {
         let account = create_account(lamports, &StakeHistory::default());
         assert_eq!(account.data.len(), StakeHistory::size_of());
 
-        let stake_history = StakeHistory::from(&account);
+        let stake_history = StakeHistory::from_account(&account);
         assert_eq!(stake_history, Some(StakeHistory::default()));
 
         let mut stake_history = stake_history.unwrap();
@@ -115,7 +121,7 @@ mod tests {
         );
         // verify the account can hold a full instance
         assert_eq!(
-            StakeHistory::from(&create_account(lamports, &stake_history)),
+            StakeHistory::from_account(&create_account(lamports, &stake_history)),
             Some(stake_history)
         );
     }

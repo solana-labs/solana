@@ -415,9 +415,9 @@ impl Bank {
             .get_account(&slot_hashes::id())
             .unwrap_or_else(|| slot_hashes::create_account(1, &[]));
 
-        let mut slot_hashes = SlotHashes::from(&account).unwrap();
+        let mut slot_hashes = SlotHashes::from_account(&account).unwrap();
         slot_hashes.add(self.slot(), self.hash());
-        slot_hashes.to(&mut account).unwrap();
+        slot_hashes.to_account(&mut account).unwrap();
 
         self.store_account(&slot_hashes::id(), &account);
     }
@@ -484,7 +484,7 @@ impl Bank {
         mut validator_point_value: f64,
         mut storage_point_value: f64,
     ) -> (f64, f64) {
-        let rewards = rewards::Rewards::from(
+        let rewards = rewards::Rewards::from_account(
             &self
                 .get_account(&rewards::id())
                 .unwrap_or_else(|| rewards::create_account(1, 0.0, 0.0)),
@@ -1620,7 +1620,7 @@ mod tests {
 
         let rewards = bank1
             .get_account(&rewards::id())
-            .map(|account| Rewards::from(&account).unwrap())
+            .map(|account| Rewards::from_account(&account).unwrap())
             .unwrap();
 
         assert!(
@@ -2755,7 +2755,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
 
         let fees_account = bank.get_account(&fees::id()).unwrap();
-        let fees = Fees::from(&fees_account).unwrap();
+        let fees = Fees::from_account(&fees_account).unwrap();
         assert_eq!(
             bank.fee_calculator.lamports_per_signature,
             fees.fee_calculator.lamports_per_signature

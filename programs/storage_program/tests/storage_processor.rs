@@ -401,7 +401,7 @@ fn test_validate_mining() {
 
     let rewards = bank
         .get_account(&rewards::id())
-        .map(|account| Rewards::from(&account).unwrap())
+        .map(|account| Rewards::from_account(&account).unwrap())
         .unwrap();
     let message = Message::new_with_payer(
         vec![storage_instruction::claim_reward(

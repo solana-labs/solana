@@ -60,7 +60,7 @@ pub fn sol_log_slice(slice: &[u8]) {
 
 /// Prints the hexadecimal representation of the program's input parameters
 ///
-/// @param ka - A pointer to an array of `SolKeyedAccounts` to print
+/// @param ka - A pointer to an array of `AccountInfo` to print
 /// @param data - A pointer to the instruction data to print
 #[allow(dead_code)]
 pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
@@ -73,8 +73,8 @@ pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
         account.key.log();
         sol_log("- Lamports");
         sol_log_64(0, 0, 0, 0, *account.lamports);
-        sol_log("- AccountData");
-        sol_log_slice(account.data);
+        sol_log("- Account data length");
+        sol_log_64(0, 0, 0, 0, account.data.len() as u64);
         sol_log("- Owner");
         account.owner.log();
     }
