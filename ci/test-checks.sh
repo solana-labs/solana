@@ -27,7 +27,7 @@ _ book/build.sh
 {
   cd programs/bpf
   _ cargo +"$rust_stable" audit
-  for project in programs/bpf/rust/*/ ; do
+  for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
       cd "$project"
