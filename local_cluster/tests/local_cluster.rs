@@ -1,6 +1,7 @@
 extern crate solana_core;
 
 use log::*;
+use serial_test_derive::serial;
 use solana_core::{
     bank_forks::SnapshotConfig, blocktree::Blocktree, broadcast_stage::BroadcastStageType,
     gossip_service::discover_cluster, snapshot_utils, validator::ValidatorConfig,
@@ -25,6 +26,7 @@ use std::{
 use tempfile::TempDir;
 
 #[test]
+#[serial]
 fn test_ledger_cleanup_service() {
     solana_logger::setup();
     error!("test_ledger_cleanup_service");
@@ -63,6 +65,7 @@ fn test_ledger_cleanup_service() {
 }
 
 #[test]
+#[serial]
 fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_1");
@@ -77,6 +80,7 @@ fn test_spend_and_verify_all_nodes_1() {
 }
 
 #[test]
+#[serial]
 fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_2");
@@ -134,6 +138,7 @@ fn test_fullnode_exit_default_config_should_panic() {
 }
 
 #[test]
+#[serial]
 fn test_fullnode_exit_2() {
     solana_logger::setup();
     error!("test_fullnode_exit_2");
@@ -173,6 +178,7 @@ fn test_leader_failure_4() {
     );
 }
 #[test]
+#[serial]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     error!("test_two_unbalanced_stakes");
@@ -208,6 +214,7 @@ fn test_two_unbalanced_stakes() {
 }
 
 #[test]
+#[serial]
 fn test_forwarding() {
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
@@ -234,6 +241,7 @@ fn test_forwarding() {
 }
 
 #[test]
+#[serial]
 fn test_restart_node() {
     solana_logger::setup();
     error!("test_restart_node");
@@ -271,6 +279,7 @@ fn test_restart_node() {
 }
 
 #[test]
+#[serial]
 fn test_listener_startup() {
     let config = ClusterConfig {
         node_stakes: vec![100; 1],
@@ -286,6 +295,7 @@ fn test_listener_startup() {
 
 #[allow(unused_attributes)]
 #[test]
+#[serial]
 fn test_snapshot_restart_locktower() {
     // First set up the cluster with 2 nodes
     let snapshot_interval_slots = 10;
@@ -346,6 +356,7 @@ fn test_snapshot_restart_locktower() {
 }
 
 #[test]
+#[serial]
 fn test_snapshots_blocktree_floor() {
     // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
@@ -427,6 +438,7 @@ fn test_snapshots_blocktree_floor() {
 }
 
 #[test]
+#[serial]
 fn test_snapshots_restart_validity() {
     solana_logger::setup();
     let snapshot_interval_slots = 10;
@@ -504,6 +516,7 @@ fn test_snapshots_restart_validity() {
 }
 
 #[test]
+#[serial]
 fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
