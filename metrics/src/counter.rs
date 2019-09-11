@@ -1,6 +1,5 @@
 use crate::metrics::submit_counter;
 use log::*;
-use serial_test_derive::serial;
 use solana_sdk::timing;
 use std::env;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -208,6 +207,7 @@ mod tests {
     use crate::counter::{Counter, DEFAULT_LOG_RATE, DEFAULT_METRICS_RATE};
     use log::Level;
     use log::*;
+    use serial_test_derive::serial;
     use std::env;
     use std::sync::atomic::Ordering;
     use std::sync::{Once, RwLock};
