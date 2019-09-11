@@ -40,6 +40,5 @@ fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], _data
     let stake_history = StakeHistory::from_account_info(&accounts[6]).unwrap();
     assert_eq!(stake_history.len(), 1);
 
-    info!("Success");
     SUCCESS
 }

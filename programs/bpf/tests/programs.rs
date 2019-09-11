@@ -79,11 +79,11 @@ mod bpf {
         use super::*;
         use solana_sdk::bpf_loader;
         use solana_sdk::client::SyncClient;
+        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         use solana_sdk::instruction::{AccountMeta, Instruction};
         use solana_sdk::pubkey::Pubkey;
         use solana_sdk::signature::{Keypair, KeypairUtil};
         use solana_sdk::sysvar::{clock, fees, rewards, slot_hashes, stake_history};
-        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         use std::io::Read;
         use std::sync::Arc;
 
@@ -118,7 +118,8 @@ mod bpf {
                 genesis_block.epoch_warmup = false;
                 let bank = Arc::new(Bank::new(&genesis_block));
                 // Create bank with specific slot, used by solana_bpf_rust_sysvar test
-                let bank = Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
+                let bank =
+                    Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
                 let bank_client = BankClient::new(bank);
 
                 // Call user program
