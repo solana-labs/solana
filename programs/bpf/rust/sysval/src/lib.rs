@@ -6,7 +6,6 @@ use solana_sdk::{
     clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
     entrypoint,
     entrypoint::SUCCESS,
-    info,
     pubkey::Pubkey,
     sysvar::{
         clock::Clock, fees::Fees, rewards::Rewards, slot_hashes::SlotHashes,
