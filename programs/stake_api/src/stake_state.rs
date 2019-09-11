@@ -76,7 +76,7 @@ pub struct Stake {
     pub prior_delegates_idx: usize,
 }
 
-const MAX_PRIOR_DELEGATES: usize = 32;
+const MAX_PRIOR_DELEGATES: usize = 32; // this is how many epochs a stake is exposed to a slashing condition
 
 impl Default for Stake {
     fn default() -> Self {
@@ -90,7 +90,7 @@ impl Default for Stake {
             config: Config::default(),
             lockup: 0,
             prior_delegates: <[(Pubkey, Epoch, Epoch); MAX_PRIOR_DELEGATES]>::default(),
-            prior_delegates_idx: 0,
+            prior_delegates_idx: MAX_PRIOR_DELEGATES - 1,
         }
     }
 }
@@ -104,8 +104,15 @@ impl Stake {
         self.stake_activating_and_deactivating(epoch, history).0
     }
 
-    pub fn voter_pubkey(&self, _epoch: Epoch) -> &Pubkey {
-        &self.voter_pubkey
+    pub fn voter_pubkey(&self, epoch: Epoch) -> &Pubkey {
+        let prior_delegate_pubkey = &self.prior_delegates[self.prior_delegates_idx].0;
+        // next epoch from re-delegation, or no redelegations
+        if epoch > self.voter_pubkey_epoch || *prior_delegate_pubkey == Pubkey::default() {
+            &self.voter_pubkey
+        } else {
+            assert!(epoch <= self.prior_delegates[self.prior_delegates_idx].2);
+            prior_delegate_pubkey
+        }
     }
 
     fn stake_activating_and_deactivating(
@@ -287,6 +294,26 @@ impl Stake {
         )
     }
 
+    fn redelegate(
+        &mut self,
+        voter_pubkey: &Pubkey,
+        vote_state: &VoteState,
+        epoch: Epoch,
+    ) -> Result<(), StakeError> {
+        // remember old delegate,
+        if epoch != self.voter_pubkey_epoch {
+            self.prior_delegates_idx += 1;
+            self.prior_delegates_idx %= MAX_PRIOR_DELEGATES;
+
+            self.prior_delegates[self.prior_delegates_idx] =
+                (self.voter_pubkey, self.voter_pubkey_epoch, epoch);
+        }
+        self.voter_pubkey = *voter_pubkey;
+        self.voter_pubkey_epoch = epoch;
+        self.credits_observed = vote_state.credits();
+        Ok(())
+    }
+
     fn new(
         stake: u64,
         voter_pubkey: &Pubkey,
@@ -299,6 +326,7 @@ impl Stake {
             stake,
             activation_epoch,
             voter_pubkey: *voter_pubkey,
+            voter_pubkey_epoch: activation_epoch,
             credits_observed: vote_state.credits(),
             config: *config,
             lockup,
@@ -316,7 +344,6 @@ pub trait StakeAccount {
     fn delegate_stake(
         &mut self,
         vote_account: &KeyedAccount,
-        stake: u64,
         clock: &sysvar::clock::Clock,
         config: &Config,
     ) -> Result<(), InstructionError>;
@@ -352,7 +379,6 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     fn delegate_stake(
         &mut self,
         vote_account: &KeyedAccount,
-        new_stake: u64,
         clock: &sysvar::clock::Clock,
         config: &Config,
     ) -> Result<(), InstructionError> {
@@ -360,13 +386,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             return Err(InstructionError::MissingRequiredSignature);
         }
 
-        if new_stake > self.account.lamports {
-            return Err(InstructionError::InsufficientFunds);
-        }
-
         if let StakeState::Lockup(lockup) = self.state()? {
             let stake = Stake::new(
-                new_stake,
+                self.account.lamports,
                 vote_account.unsigned_key(),
                 &vote_account.state()?,
                 clock.epoch,
@@ -374,6 +396,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 lockup,
             );
 
+            self.set_state(&StakeState::Stake(stake))
+        } else if let StakeState::Stake(mut stake) = self.state()? {
+            stake.redelegate(
+                vote_account.unsigned_key(),
+                &vote_account.state()?,
+                clock.epoch,
+            )?;
             self.set_state(&StakeState::Stake(stake))
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -538,10 +567,7 @@ pub fn create_account(voter_pubkey: &Pubkey, vote_account: &Account, lamports: u
 mod tests {
     use super::*;
     use crate::id;
-    use solana_sdk::account::Account;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_program;
+    use solana_sdk::{account::Account, pubkey::Pubkey, system_program};
     use solana_vote_api::vote_state;
 
     #[test]
@@ -582,13 +608,12 @@ mod tests {
             ..sysvar::clock::Clock::default()
         };
 
-        let vote_keypair = Keypair::new();
+        let vote_pubkey = Pubkey::new_rand();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
             vote_state.process_slot_vote_unchecked(i);
         }
 
-        let vote_pubkey = vote_keypair.pubkey();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
@@ -613,64 +638,86 @@ mod tests {
         }
 
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account, 0, &clock, &Config::default()),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, &clock, &Config::default()),
             Err(InstructionError::MissingRequiredSignature)
         );
 
         // signed keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert!(stake_keyed_account
-            .delegate_stake(
-                &vote_keyed_account,
-                stake_lamports,
-                &clock,
-                &Config::default()
-            )
+            .delegate_stake(&vote_keyed_account, &clock, &Config::default())
             .is_ok());
 
         // verify that delegate_stake() looks right, compare against hand-rolled
-        let stake_state: StakeState = stake_keyed_account.state().unwrap();
+        let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
         assert_eq!(
-            stake_state,
-            StakeState::Stake(Stake {
-                voter_pubkey: vote_keypair.pubkey(),
+            stake,
+            Stake {
+                voter_pubkey: vote_pubkey,
+                voter_pubkey_epoch: clock.epoch,
                 credits_observed: vote_state.credits(),
                 stake: stake_lamports,
                 activation_epoch: clock.epoch,
                 deactivation_epoch: std::u64::MAX,
                 ..Stake::default()
-            })
-        );
-        // verify that delegate_stake can't be called twice StakeState::default()
-        // signed keyed account
-        assert_eq!(
-            stake_keyed_account.delegate_stake(
-                &vote_keyed_account,
-                stake_lamports,
-                &clock,
-                &Config::default()
-            ),
-            Err(InstructionError::InvalidAccountData)
+            }
         );
 
-        // verify can only stake up to account lamports
-        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
-        assert_eq!(
-            stake_keyed_account.delegate_stake(
-                &vote_keyed_account,
-                stake_lamports + 1,
-                &clock,
-                &Config::default()
-            ),
-            Err(InstructionError::InsufficientFunds)
-        );
+        // verify that voter_pubkey() is right for all epochs, even ones that don't count (like 0)
+        for epoch in 0..=clock.epoch + 1 {
+            assert_eq!(stake.voter_pubkey(epoch), &vote_pubkey);
+        }
 
+        // verify that delegate_stake can be called twice, 2nd is redelegate
+        assert!(stake_keyed_account
+            .delegate_stake(&vote_keyed_account, &clock, &Config::default())
+            .is_ok());
+
+        // verify that non-stakes fail delegate_stake()
         let stake_state = StakeState::RewardsPool;
 
         stake_keyed_account.set_state(&stake_state).unwrap();
         assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account, 0, &clock, &Config::default())
+            .delegate_stake(&vote_keyed_account, &clock, &Config::default())
             .is_err());
+    }
+
+    #[test]
+    fn test_stake_redelegate() {
+        // what a freshly delegated stake looks like
+        let mut stake = Stake {
+            voter_pubkey: Pubkey::new_rand(),
+            voter_pubkey_epoch: 0,
+            ..Stake::default()
+        };
+        // verify that redelegation any number of times since first delegation works just fine,
+        //  and that the stake is delegated to the most recent vote account
+        for epoch in 0..=MAX_PRIOR_DELEGATES + 1 {
+            let voter_pubkey = Pubkey::new_rand();
+            let _ignored = stake.redelegate(&voter_pubkey, &VoteState::default(), 0);
+            assert_eq!(stake.voter_pubkey(epoch as u64), &voter_pubkey);
+        }
+
+        // get a new voter_pubkey
+        let voter_pubkey = Pubkey::new_rand();
+        // save off old voter_pubkey
+        let prior_voter_pubkey = stake.voter_pubkey;
+
+        // actually redelegate in epoch 1
+        let _ignored = stake.redelegate(&voter_pubkey, &VoteState::default(), 1);
+        // verify that delegation is delayed
+        assert_eq!(stake.voter_pubkey(0 as u64), &prior_voter_pubkey);
+        assert_eq!(stake.voter_pubkey(1 as u64), &prior_voter_pubkey);
+        assert_eq!(stake.voter_pubkey(2 as u64), &voter_pubkey);
+
+        // verify that prior_delegates wraps around safely...
+        for epoch in 0..=MAX_PRIOR_DELEGATES + 1 {
+            let voter_pubkey = Pubkey::new_rand();
+            let prior_voter_pubkey = stake.voter_pubkey;
+            let _ignored = stake.redelegate(&voter_pubkey, &VoteState::default(), epoch as u64);
+            assert_eq!(stake.voter_pubkey(epoch as u64), &prior_voter_pubkey);
+            assert_eq!(stake.voter_pubkey((epoch + 1) as u64), &voter_pubkey);
+        }
     }
 
     fn create_stake_history_from_stakes(
@@ -986,12 +1033,7 @@ mod tests {
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(
-                &vote_keyed_account,
-                stake_lamports,
-                &clock,
-                &Config::default()
-            ),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, &clock, &Config::default()),
             Ok(())
         );
 
@@ -1005,10 +1047,9 @@ mod tests {
     #[test]
     fn test_withdraw_stake() {
         let stake_pubkey = Pubkey::new_rand();
-        let total_lamports = 100;
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
-            total_lamports,
+            stake_lamports,
             &StakeState::Lockup(0),
             std::mem::size_of::<StakeState>(),
             &id(),
@@ -1025,7 +1066,7 @@ mod tests {
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                total_lamports,
+                stake_lamports,
                 &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default()
@@ -1037,7 +1078,7 @@ mod tests {
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                total_lamports,
+                stake_lamports,
                 &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default()
@@ -1047,13 +1088,13 @@ mod tests {
         assert_eq!(stake_account.lamports, 0);
 
         // reset balance
-        stake_account.lamports = total_lamports;
+        stake_account.lamports = stake_lamports;
 
         // signed keyed account and uninitialized, more than available should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                total_lamports + 1,
+                stake_lamports + 1,
                 &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default()
@@ -1061,41 +1102,38 @@ mod tests {
             Err(InstructionError::InsufficientFunds)
         );
 
-        // Stake some lamports (available lampoorts for withdrawals will reduce)
+        // Stake some lamports (available lamports for withdrawals will reduce to zero)
         let vote_pubkey = Pubkey::new_rand();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(
-                &vote_keyed_account,
-                stake_lamports,
-                &clock,
-                &Config::default()
-            ),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, &clock, &Config::default()),
             Ok(())
         );
 
-        // withdrawal before deactivate works for some portion
+        // simulate rewards
+        stake_account.lamports += 10;
+        // withdrawal before deactivate works for rewards amount
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                total_lamports - stake_lamports,
+                10,
                 &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default()
             ),
             Ok(())
         );
-        // reset balance
-        stake_account.lamports = total_lamports;
 
-        // withdrawal before deactivate fails if not in excess of stake
+        // simulate rewards
+        stake_account.lamports += 10;
+        // withdrawal of rewards fails if not in excess of stake
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                total_lamports - stake_lamports + 1,
+                10 + 1,
                 &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default()
@@ -1114,7 +1152,7 @@ mod tests {
         // Try to withdraw more than what's available
         assert_eq!(
             stake_keyed_account.withdraw(
-                total_lamports + 1,
+                stake_lamports + 10 + 1,
                 &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default()
@@ -1125,7 +1163,7 @@ mod tests {
         // Try to withdraw all lamports
         assert_eq!(
             stake_keyed_account.withdraw(
-                total_lamports,
+                stake_lamports + 10,
                 &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default()
@@ -1165,12 +1203,7 @@ mod tests {
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(
-                &vote_keyed_account,
-                stake_lamports,
-                &future,
-                &Config::default()
-            ),
+            stake_keyed_account.delegate_stake(&vote_keyed_account, &future, &Config::default()),
             Ok(())
         );
 
@@ -1382,12 +1415,7 @@ mod tests {
 
         // delegate the stake
         assert!(stake_keyed_account
-            .delegate_stake(
-                &vote_keyed_account,
-                stake_lamports,
-                &clock,
-                &Config::default()
-            )
+            .delegate_stake(&vote_keyed_account, &clock, &Config::default())
             .is_ok());
 
         let stake_history = create_stake_history_from_stakes(

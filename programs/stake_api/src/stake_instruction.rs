@@ -41,27 +41,28 @@ pub enum StakeInstruction {
     /// Expects 1 Account:
     ///    0 - Uninitialized StakeAccount to be lockup'd
     ///
-    /// The u64 is the portion of the Stake account balance to be activated,
-    ///    must be less than StakeAccount.lamports
+    /// The Slot parameter denotes slot height at which this stake
+    ///    will allow withdrawal from the stake account.
     ///
     Lockup(Slot),
 
-    /// `Delegate` a stake to a particular node
+    /// `Delegate` a stake to a particular vote account
     ///
-    /// Expects 3 Accounts:
-    ///    0 - Lockup'd StakeAccount to be delegated <= must have this signature
+    /// Expects 4 Accounts:
+    ///    0 - Lockup'd StakeAccount to be delegated <= transaction must have this signature
     ///    1 - VoteAccount to which this Stake will be delegated
     ///    2 - Clock sysvar Account that carries clock bank epoch
     ///    3 - Config Account that carries stake config
     ///
-    /// The u64 is the portion of the Stake account balance to be activated,
-    ///    must be less than StakeAccount.lamports
+    /// The entire balance of the staking account is staked.  DelegateStake
+    ///   can be called multiple times, but re-delegation is delayed
+    ///   by one epoch
     ///
-    DelegateStake(u64),
+    DelegateStake,
 
     /// Redeem credits in the stake account
     ///
-    /// Expects 4 Accounts:
+    /// Expects 5 Accounts:
     ///    0 - Delegate StakeAccount to be updated with rewards
     ///    1 - VoteAccount to which the Stake is delegated,
     ///    2 - RewardsPool Stake Account from which to redeem credits
@@ -71,8 +72,8 @@ pub enum StakeInstruction {
 
     /// Withdraw unstaked lamports from the stake account
     ///
-    /// Expects 3 Accounts:
-    ///    0 - Delegate StakeAccount
+    /// Expects 4 Accounts:
+    ///    0 - Delegate StakeAccount <= transaction must have this signature
     ///    1 - System account to which the lamports will be transferred,
     ///    2 - Syscall Account that carries epoch
     ///    3 - StakeHistory sysvar that carries stake warmup/cooldown history
@@ -83,10 +84,11 @@ pub enum StakeInstruction {
 
     /// Deactivates the stake in the account
     ///
-    /// Expects 2 Accounts:
-    ///    0 - Delegate StakeAccount
+    /// Expects 3 Accounts:
+    ///    0 - Delegate StakeAccount <= transaction must have this signature
     ///    1 - VoteAccount to which the Stake is delegated
     ///    2 - Syscall Account that carries epoch
+    ///
     Deactivate,
 }
 
@@ -127,7 +129,7 @@ pub fn create_stake_account_and_delegate_stake(
     lamports: u64,
 ) -> Vec<Instruction> {
     let mut instructions = create_stake_account(from_pubkey, stake_pubkey, lamports);
-    instructions.push(delegate_stake(stake_pubkey, vote_pubkey, lamports));
+    instructions.push(delegate_stake(stake_pubkey, vote_pubkey));
     instructions
 }
 
@@ -142,14 +144,14 @@ pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instr
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
 
-pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -> Instruction {
+pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
         AccountMeta::new_credit_only(*vote_pubkey, false),
         AccountMeta::new_credit_only(sysvar::clock::id(), false),
         AccountMeta::new_credit_only(crate::config::id(), false),
     ];
-    Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
+    Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
 }
 
 pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
@@ -191,7 +193,7 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::Lockup(slot) => me.lockup(slot),
-        StakeInstruction::DelegateStake(stake) => {
+        StakeInstruction::DelegateStake => {
             if rest.len() != 3 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
@@ -199,7 +201,6 @@ pub fn process_instruction(
 
             me.delegate_stake(
                 vote,
-                stake,
                 &sysvar::clock::from_keyed_account(&rest[1])?,
                 &config::from_keyed_account(&rest[2])?,
             )
@@ -290,7 +291,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&delegate_stake(&Pubkey::default(), &Pubkey::default(), 0)),
+            process_instruction(&delegate_stake(&Pubkey::default(), &Pubkey::default())),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
@@ -307,7 +308,17 @@ mod tests {
     fn test_stake_process_instruction_decode_bail() {
         // these will not call stake_state, have bogus contents
 
-        // gets the first check
+        // gets the "is_empty()" check
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [],
+                &serialize(&StakeInstruction::Lockup(0)).unwrap(),
+            ),
+            Err(InstructionError::InvalidInstructionData),
+        );
+
+        // gets the first check in delegate, wrong number of accounts
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
@@ -316,7 +327,7 @@ mod tests {
                     false,
                     &mut Account::default(),
                 )],
-                &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),
+                &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
         );
@@ -330,11 +341,12 @@ mod tests {
                     false,
                     &mut Account::default()
                 ),],
-                &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),
+                &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
         );
 
+        // catches the number of args check
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
@@ -345,6 +357,22 @@ mod tests {
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
+        );
+
+        // catches the type of args check
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                ],
+                &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
+            ),
+            Err(InstructionError::InvalidArgument),
         );
 
         // gets the check non-deserialize-able account in delegate_stake
@@ -365,7 +393,7 @@ mod tests {
                         &mut config::create_account(1, &config::Config::default())
                     ),
                 ],
-                &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),
+                &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
             Err(InstructionError::InvalidAccountData),
         );

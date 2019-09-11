@@ -24,8 +24,11 @@ pub const DEFAULT_SLASH_PENALTY: u8 = ((5 * std::u8::MAX as usize) / 100) as u8;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
 pub struct Config {
+    /// how much stake we can activate per-epoch as a fraction of currently effective stake
     pub warmup_rate: f64,
+    /// how much stake we can deactivate as a fraction of currently effective stake
     pub cooldown_rate: f64,
+    /// percentage of stake lost when slash, expressed as a portion of std::u8::MAX
     pub slash_penalty: u8,
 }
 
