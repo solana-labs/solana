@@ -95,6 +95,7 @@ fn test_spend_and_verify_all_nodes_2() {
 }
 
 #[test]
+#[serial]
 fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_3");
@@ -157,6 +158,7 @@ fn test_fullnode_exit_2() {
 
 // Cluster needs a supermajority to remain, so the minimum size for this test is 4
 #[test]
+#[serial]
 fn test_leader_failure_4() {
     solana_logger::setup();
     error!("test_leader_failure_4");
