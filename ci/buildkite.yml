@@ -26,11 +26,11 @@ steps:
     name: "coverage"
     timeout_in_minutes: 40
   # TODO: Fix and re-enable test-large-network.sh
-   - command: "ci/test-large-network.sh || true"
-     name: "large-network [ignored]"
-     timeout_in_minutes: 20
-     agents:
-       - "queue=large"
+  #   - command: "ci/test-large-network.sh || true"
+  #     name: "large-network [ignored]"
+  #     timeout_in_minutes: 20
+  #     agents:
+  #       - "queue=large"
   - wait
   - trigger: "solana-secondary"
     branches: "!pull/*"
