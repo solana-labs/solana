@@ -73,16 +73,19 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
 }
 
 #[test]
+#[serial]
 fn test_replicator_startup_1_node() {
     run_replicator_startup_basic(1, 1);
 }
 
 #[test]
+#[serial]
 fn test_replicator_startup_2_nodes() {
     run_replicator_startup_basic(2, 1);
 }
 
 #[test]
+#[serial]
 fn test_replicator_startup_leader_hang() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -121,6 +124,7 @@ fn test_replicator_startup_leader_hang() {
 }
 
 #[test]
+#[serial]
 fn test_replicator_startup_ledger_hang() {
     solana_logger::setup();
     info!("starting replicator test");
@@ -149,6 +153,7 @@ fn test_replicator_startup_ledger_hang() {
 }
 
 #[test]
+#[serial]
 fn test_account_setup() {
     let num_nodes = 1;
     let num_replicators = 1;
