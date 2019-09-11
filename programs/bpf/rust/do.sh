@@ -20,14 +20,18 @@ Supported actions:
 EOF
 }
 
+sdkDir=../../..
+targetDir=../../target
+profile=bpfel-unknown-unknown/release
+
 perform_action() {
     set -e
     case "$1" in
     build)
-         ./../../../sdk/bpf/rust/build.sh "$2"
+         "$sdkDir"/sdk/bpf/rust/build.sh "$2"
         ;;
     clean)
-         ./../../../sdk/bpf/rust/clean.sh "$2"
+         "$sdkDir"/sdk/bpf/rust/clean.sh "$2"
         ;;
     test)
         (
@@ -57,34 +61,29 @@ perform_action() {
         # - rustfilt
         (
             pwd
-            ./do.sh clean "$3"
             ./do.sh build "$3"
 
             cd "$3"
 
-            set +e
-            cp ./target/dump.txt ./targetdump-last.txt 2>/dev/null
-            set -e
-
             ls \
                 -la \
-                ./target/bpfel-unknown-unknown/release/solana_bpf_rust_"${3%/}".so \
-                > ./target/dump_mangled.txt
+                "$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so \
+                > "$targetDir"/"${3%/}"-dump-mangled.txt
             greadelf \
                 -aW \
-                ./target/bpfel-unknown-unknown/release/solana_bpf_rust_"${3%/}".so \
-                >> ./target/dump_mangled.txt
+                "$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so \
+                >> "$targetDir"/"${3%/}"-dump-mangled.txt
             llvm-objdump \
                 -print-imm-hex \
                 --source \
                 --disassemble \
-                ./target/bpfel-unknown-unknown/release/solana_bpf_rust_"${3%/}".so \
-                >> ./target/dump_mangled.txt
+                "$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so \
+                >> "$targetDir"/"${3%/}"-dump-mangled.txt
             sed \
                 s/://g \
-                < ./target/dump_mangled.txt \
+                < "$targetDir"/"${3%/}"-dump-mangled.txt \
                 | rustfilt \
-                > ./target/dump.txt
+                > "$targetDir"/"${3%/}"-dump.txt
         )
         ;;
     help)

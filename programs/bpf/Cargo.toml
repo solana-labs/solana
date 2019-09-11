@@ -45,5 +45,5 @@ members = [
     "rust/panic",
     "rust/param_passing",
     "rust/param_passing_dep",
-    # "rust/sysval",
+    "rust/sysval",
 ]
