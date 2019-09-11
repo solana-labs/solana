@@ -43,7 +43,7 @@ fn main() {
             + &env::var("PROFILE").unwrap()
             + &"/bpf".to_string();
 
-        println!("cargo:warning=(not a warning) Building C-based BPF programs: {:?}", install_dir);
+        println!("cargo:warning=(not a warning) Building C-based BPF programs);
         assert!(Command::new("make")
             .current_dir("c")
             .arg("programs")
