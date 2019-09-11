@@ -45,7 +45,11 @@ pub enum StakeInstruction {
     ///    will allow withdrawal from the stake account.
     ///
     Lockup(Slot),
-
+    /// Authorize a system account to manage stake
+    ///
+    /// Expects 1 Account:
+    ///     0 - Delegated StakeAccount to be updated with authorized staker
+    AuthorizeStaker(Pubkey),
     /// `Delegate` a stake to a particular vote account
     ///
     /// Expects 4 Accounts:
@@ -133,6 +137,45 @@ pub fn create_stake_account_and_delegate_stake(
     instructions
 }
 
+fn metas_for_authorized_staker(
+    stake_pubkey: &Pubkey,
+    authorized_staker_pubkey: &Pubkey, // currently authorized
+    other_params: &[AccountMeta],
+) -> Vec<AccountMeta> {
+    let is_own_signer = authorized_staker_pubkey == stake_pubkey;
+
+    // stake account
+    let mut account_metas = vec![AccountMeta::new(*stake_pubkey, is_own_signer)];
+
+    for meta in other_params {
+        account_metas.push(meta.clone());
+    }
+
+    // append signer at the end
+    if !is_own_signer {
+        account_metas.push(AccountMeta::new_credit_only(
+            *authorized_staker_pubkey,
+            true,
+        )) // signer
+    }
+
+    account_metas
+}
+
+pub fn authorize_staker(
+    stake_pubkey: &Pubkey,
+    authorized_staker_pubkey: &Pubkey,
+    new_authorized_staker_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = metas_for_authorized_staker(stake_pubkey, authorized_staker_pubkey, &[]);
+
+    Instruction::new(
+        id(),
+        &StakeInstruction::AuthorizeStaker(*new_authorized_staker_pubkey),
+        account_metas,
+    )
+}
+
 pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
@@ -193,8 +236,11 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::Lockup(slot) => me.lockup(slot),
+        StakeInstruction::AuthorizeStaker(authorized_staker_pubkey) => {
+            me.authorize_staker(&authorized_staker_pubkey)
+        }
         StakeInstruction::DelegateStake => {
-            if rest.len() != 3 {
+            if rest.len() < 3 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             let vote = &rest[0];
@@ -203,6 +249,7 @@ pub fn process_instruction(
                 vote,
                 &sysvar::clock::from_keyed_account(&rest[1])?,
                 &config::from_keyed_account(&rest[2])?,
+                &[],
             )
         }
         StakeInstruction::RedeemVoteCredits => {
@@ -222,28 +269,34 @@ pub fn process_instruction(
             )
         }
         StakeInstruction::Withdraw(lamports) => {
-            if rest.len() != 3 {
+            if rest.len() < 3 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            let (to, sysvar) = &mut rest.split_at_mut(1);
+            let (to, rest) = &mut rest.split_at_mut(1);
             let mut to = &mut to[0];
+            let (clock, rest) = rest.split_at_mut(1);
+            let clock = &clock[0];
+            let (stake_history, rest) = rest.split_at_mut(1);
+            let stake_history = &stake_history[0];
 
             me.withdraw(
                 lamports,
                 &mut to,
-                &sysvar::clock::from_keyed_account(&sysvar[0])?,
-                &sysvar::stake_history::from_keyed_account(&sysvar[1])?,
+                &sysvar::clock::from_keyed_account(clock)?,
+                &sysvar::stake_history::from_keyed_account(stake_history)?,
+                rest,
             )
         }
         StakeInstruction::Deactivate => {
-            if rest.len() != 2 {
+            if rest.len() < 2 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             let (vote, rest) = rest.split_at_mut(1);
             let vote = &mut vote[0];
-            let clock = &rest[0];
+            let (clock, rest) = rest.split_at_mut(1);
+            let clock = &clock[0];
 
-            me.deactivate_stake(vote, &sysvar::clock::from_keyed_account(&clock)?)
+            me.deactivate_stake(vote, &sysvar::clock::from_keyed_account(clock)?, rest)
         }
     }
 }
