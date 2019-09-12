@@ -79,14 +79,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Recover keypair from mnemonic phrase")
                 .setting(AppSettings::DisableVersion)
                 .arg(
-                    Arg::with_name("phrase")
-                        .index(1)
-                        .value_name("PHRASE")
-                        .takes_value(true)
-                        .required(true)
-                        .help("List of words as string: 'assault armed sense spell ..'"),
-                )
-                .arg(
                     Arg::with_name("outfile")
                         .short("o")
                         .long("outfile")
@@ -169,8 +161,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(&outfile, &matches);
             }
 
-            let phrase = matches.value_of("phrase").unwrap();
-            let mnemonic = Mnemonic::from_phrase(phrase, Language::English)?;
+            let phrase = rpassword::prompt_password_stdout("Mnemonic recovery phrase: ").unwrap();
+            let mnemonic = Mnemonic::from_phrase(phrase.trim(), Language::English)?;
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
