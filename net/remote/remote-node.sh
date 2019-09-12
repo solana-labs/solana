@@ -271,9 +271,11 @@ EOF
         ls -l .cert.pem .key.pem
       fi
 
+      cat > ~/solana/restart-explorer <<EOF
+#!/bin/bash -ex
+      cd ~/solana
       npm install @solana/blockexplorer@1
-
-cat >> ~/solana/on-reboot <<EOF
+      killall node || true
       export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
 
@@ -281,6 +283,17 @@ cat >> ~/solana/on-reboot <<EOF
       sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
       sudo iptables -A INPUT -p tcp --dport 5000 -j ACCEPT
       sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-port 5000
+
+      # Confirm the explorer is accessible
+      curl --head --retry 3 --retry-connrefused http://localhost:5000/
+
+      # Confirm the explorer is now globally accessible
+      curl --head "\$(curl ifconfig.io)"
+EOF
+      chmod +x ~/solana/restart-explorer
+
+cat >> ~/solana/on-reboot <<EOF
+      ~/solana/restart-explorer
 EOF
     fi
 
@@ -295,14 +308,6 @@ cat >> ~/solana/on-reboot <<EOF
 EOF
     ~/solana/on-reboot
     waitForNodeToInit
-
-    if [[ $nodeType = blockstreamer ]]; then
-      # Confirm the blockexplorer is accessible
-      curl --head --retry 3 --retry-connrefused http://localhost:5000/
-
-      # Confirm the blockexplorer is now globally accessible
-      curl --head "$(curl ifconfig.io)"
-    fi
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
       args=(
