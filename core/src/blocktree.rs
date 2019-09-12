@@ -4,7 +4,7 @@
 use crate::entry::Entry;
 use crate::erasure::ErasureConfig;
 use crate::result::{Error, Result};
-use crate::shred::{Shred, Shredder};
+use crate::shred::{Shred, ShredMetaBuf, Shredder};
 
 #[cfg(feature = "kvstore")]
 use solana_kvstore as kvstore;
@@ -320,8 +320,8 @@ impl Blocktree {
         db: &Database,
         erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
         index_working_set: &HashMap<u64, Index>,
-        prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
-        prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
+        prev_inserted_datas: &mut HashMap<(u64, u64), ShredMetaBuf>,
+        prev_inserted_codes: &mut HashMap<(u64, u64), ShredMetaBuf>,
     ) -> Vec<Shred> {
         let data_cf = db.column::<cf::ShredData>();
         let code_cf = db.column::<cf::ShredCode>();
@@ -357,7 +357,12 @@ impl Blocktree {
                                         .get_bytes((slot, i))
                                         .expect("Database failure, could not fetch data shred");
                                     if let Some(data) = some_data {
-                                        bincode::deserialize(&data).ok()
+                                        Some(ShredMetaBuf {
+                                            slot,
+                                            index: i as u32,
+                                            data_shred: true,
+                                            shred_buf: data,
+                                        })
                                     } else {
                                         warn!("Data shred deleted while reading for recovery");
                                         None
@@ -377,7 +382,12 @@ impl Blocktree {
                                             .get_bytes((slot, i))
                                             .expect("Database failure, could not fetch code shred");
                                         if let Some(code) = some_code {
-                                            bincode::deserialize(&code).ok()
+                                            Some(ShredMetaBuf {
+                                                slot,
+                                                index: i as u32,
+                                                data_shred: false,
+                                                shred_buf: code,
+                                            })
                                         } else {
                                             warn!("Code shred deleted while reading for recovery");
                                             None
@@ -390,7 +400,7 @@ impl Blocktree {
                         },
                     );
                     if let Ok(mut result) = Shredder::try_recovery(
-                        &available_shreds,
+                        available_shreds,
                         erasure_meta.config.num_data(),
                         erasure_meta.config.num_coding(),
                         set_index as usize,
@@ -513,7 +523,7 @@ impl Blocktree {
         erasure_metas: &mut HashMap<(u64, u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, Index>,
         write_batch: &mut WriteBatch,
-        just_inserted_coding_shreds: &mut HashMap<(u64, u64), Shred>,
+        just_inserted_coding_shreds: &mut HashMap<(u64, u64), ShredMetaBuf>,
     ) {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
@@ -524,15 +534,21 @@ impl Blocktree {
         let index_meta = index_meta.unwrap_or_else(|| new_index_meta.as_mut().unwrap());
         // This gives the index of first coding shred in this FEC block
         // So, all coding shreds in a given FEC block will have the same set index
-        if Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root)
-            && self
-                .insert_coding_shred(erasure_metas, index_meta, &shred, write_batch)
-                .is_ok()
-        {
-            just_inserted_coding_shreds
-                .entry((slot, shred_index))
-                .or_insert_with(|| shred);
-            new_index_meta.map(|n| index_working_set.insert(slot, n));
+        if Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root) {
+            if let Ok(shred_buf) =
+                self.insert_coding_shred(erasure_metas, index_meta, &shred, write_batch)
+            {
+                let shred_meta = ShredMetaBuf {
+                    slot,
+                    index: shred_index as u32,
+                    data_shred: false,
+                    shred_buf,
+                };
+                just_inserted_coding_shreds
+                    .entry((slot, shred_index))
+                    .or_insert_with(|| shred_meta);
+                new_index_meta.map(|n| index_working_set.insert(slot, n));
+            }
         }
     }
 
@@ -542,7 +558,7 @@ impl Blocktree {
         index_working_set: &mut HashMap<u64, Index>,
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
-        just_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
+        just_inserted_data_shreds: &mut HashMap<(u64, u64), ShredMetaBuf>,
     ) {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
@@ -562,16 +578,30 @@ impl Blocktree {
                 index_meta.data(),
                 &self.last_root,
             ) {
-                self.insert_data_shred(&mut slot_meta, index_meta.data_mut(), &shred, write_batch)
-                    .is_ok()
+                if let Ok(shred_buf) = self.insert_data_shred(
+                    &mut slot_meta,
+                    index_meta.data_mut(),
+                    &shred,
+                    write_batch,
+                ) {
+                    let shred_meta = ShredMetaBuf {
+                        slot,
+                        index: shred_index as u32,
+                        data_shred: true,
+                        shred_buf,
+                    };
+                    just_inserted_data_shreds.insert((slot, shred_index), shred_meta);
+                    new_index_meta.map(|n| index_working_set.insert(slot, n));
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
             }
         };
 
         if insert_success {
-            just_inserted_data_shreds.insert((slot, shred_index), shred);
-            new_index_meta.map(|n| index_working_set.insert(slot, n));
             new_slot_meta_entry.map(|n| slot_meta_working_set.insert(slot, n));
         }
     }
@@ -613,7 +643,7 @@ impl Blocktree {
         index_meta: &mut Index,
         shred: &Shred,
         write_batch: &mut WriteBatch,
-    ) -> Result<()> {
+    ) -> Result<Vec<u8>> {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
         let (num_data, num_coding, pos) = {
@@ -663,7 +693,7 @@ impl Blocktree {
         write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &serialized_shred)?;
         index_meta.coding_mut().set_present(shred_index, true);
 
-        Ok(())
+        Ok(serialized_shred)
     }
 
     fn should_insert_data_shred(
@@ -758,7 +788,7 @@ impl Blocktree {
         data_index: &mut DataIndex,
         shred: &Shred,
         write_batch: &mut WriteBatch,
-    ) -> Result<()> {
+    ) -> Result<Vec<u8>> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
         let parent = shred.parent();
@@ -802,7 +832,7 @@ impl Blocktree {
         update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
         data_index.set_present(index, true);
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
-        Ok(())
+        Ok(serialized_shred)
     }
 
     pub fn get_data_shred(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
