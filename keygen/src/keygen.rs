@@ -1,9 +1,7 @@
-use bip39::{Language, Mnemonic, Seed};
+use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{
     crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
-use rand::rngs::OsRng;
-use rand::RngCore;
 use solana_sdk::pubkey::write_pubkey;
 use solana_sdk::signature::{keypair_from_seed, read_keypair, write_keypair, KeypairUtil};
 use std::error;
@@ -129,9 +127,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(&outfile, &matches);
             }
 
-            let mut entropy = [0u8; 16];
-            OsRng::new().unwrap().fill_bytes(&mut entropy);
-            let mnemonic = Mnemonic::from_entropy(&entropy, Language::English)?;
+            let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
             let phrase: &str = mnemonic.phrase();
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;

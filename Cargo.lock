@@ -3326,7 +3326,6 @@ version = "0.19.0-pre0"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rpassword 4.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 0.19.0-pre0",
  "tiny-bip39 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
