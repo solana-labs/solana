@@ -48,8 +48,8 @@ pub enum StakeInstruction {
     /// Authorize a system account to manage stake
     ///
     /// Expects 1 Account:
-    ///     0 - Delegated StakeAccount to be updated with authorized staker
-    AuthorizeStaker(Pubkey),
+    ///     0 - Locked-up or delegated StakeAccount to be updated with authorized staker
+    Authorize(Pubkey),
     /// `Delegate` a stake to a particular vote account
     ///
     /// Expects 4 Accounts:
@@ -139,10 +139,10 @@ pub fn create_stake_account_and_delegate_stake(
 
 fn metas_for_authorized_staker(
     stake_pubkey: &Pubkey,
-    authorized_staker_pubkey: &Pubkey, // currently authorized
+    authorized_pubkey: &Pubkey, // currently authorized
     other_params: &[AccountMeta],
 ) -> Vec<AccountMeta> {
-    let is_own_signer = authorized_staker_pubkey == stake_pubkey;
+    let is_own_signer = authorized_pubkey == stake_pubkey;
 
     // stake account
     let mut account_metas = vec![AccountMeta::new(*stake_pubkey, is_own_signer)];
@@ -153,25 +153,22 @@ fn metas_for_authorized_staker(
 
     // append signer at the end
     if !is_own_signer {
-        account_metas.push(AccountMeta::new_credit_only(
-            *authorized_staker_pubkey,
-            true,
-        )) // signer
+        account_metas.push(AccountMeta::new_credit_only(*authorized_pubkey, true)) // signer
     }
 
     account_metas
 }
 
-pub fn authorize_staker(
+pub fn authorize(
     stake_pubkey: &Pubkey,
-    authorized_staker_pubkey: &Pubkey,
-    new_authorized_staker_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    new_authorized_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_staker(stake_pubkey, authorized_staker_pubkey, &[]);
+    let account_metas = metas_for_authorized_staker(stake_pubkey, authorized_pubkey, &[]);
 
     Instruction::new(
         id(),
-        &StakeInstruction::AuthorizeStaker(*new_authorized_staker_pubkey),
+        &StakeInstruction::Authorize(*new_authorized_pubkey),
         account_metas,
     )
 }
@@ -236,9 +233,7 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::Lockup(slot) => me.lockup(slot),
-        StakeInstruction::AuthorizeStaker(authorized_staker_pubkey) => {
-            me.authorize_staker(&authorized_staker_pubkey)
-        }
+        StakeInstruction::Authorize(authorized_pubkey) => me.authorize(&authorized_pubkey),
         StakeInstruction::DelegateStake => {
             if rest.len() < 3 {
                 Err(InstructionError::InvalidInstructionData)?;
@@ -249,7 +244,7 @@ pub fn process_instruction(
                 vote,
                 &sysvar::clock::from_keyed_account(&rest[1])?,
                 &config::from_keyed_account(&rest[2])?,
-                &[],
+                &rest[3..],
             )
         }
         StakeInstruction::RedeemVoteCredits => {
