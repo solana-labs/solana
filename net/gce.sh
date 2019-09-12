@@ -620,7 +620,7 @@ EOM
 
 # Place the generated private key at /solana-scratch/id_ecdsa so it's retrievable by anybody
 # who is able to log into this machine
-mkdir -p -m 0777 "/solana-scratch"
+mkdir -m 0777 /solana-scratch
 cat > /solana-scratch/id_ecdsa <<EOK
 $(cat "$sshPrivateKey")
 EOK
