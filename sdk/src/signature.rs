@@ -133,8 +133,8 @@ pub fn read_keypair(path: &str) -> Result<Keypair, Box<dyn error::Error>> {
     Ok(keypair)
 }
 
-pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<dyn error::Error>> {
-    let keypair_bytes = Keypair::new().to_bytes();
+pub fn write_keypair(keypair: &Keypair, outfile: &str) -> Result<String, Box<dyn error::Error>> {
+    let keypair_bytes = keypair.to_bytes();
     let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
 
     if outfile != "-" {
@@ -145,6 +145,21 @@ pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<dyn error::Error>> 
         f.write_all(&serialized.clone().into_bytes())?;
     }
     Ok(serialized)
+}
+
+pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> {
+    if seed.len() < ed25519_dalek::SECRET_KEY_LENGTH {
+        return Err("Seed is too short".into());
+    }
+    let secret = ed25519_dalek::SecretKey::from_bytes(&seed[..ed25519_dalek::SECRET_KEY_LENGTH])
+        .map_err(|e| e.to_string())?;
+    let public = ed25519_dalek::PublicKey::from(&secret);
+    let keypair = Keypair { secret, public };
+    Ok(keypair)
+}
+
+pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<dyn error::Error>> {
+    write_keypair(&Keypair::new(), outfile)
 }
 
 #[cfg(test)]
@@ -176,6 +191,15 @@ mod tests {
         );
         fs::remove_file(&outfile).unwrap();
         assert!(!Path::new(&outfile).exists());
+    }
+
+    #[test]
+    fn test_keypair_from_seed() {
+        let good_seed = vec![0; 32];
+        assert!(keypair_from_seed(&good_seed).is_ok());
+
+        let too_short_seed = vec![0; 31];
+        assert!(keypair_from_seed(&too_short_seed).is_err());
     }
 
     #[test]
