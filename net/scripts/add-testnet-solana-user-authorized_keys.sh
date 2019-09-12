@@ -6,7 +6,7 @@ set -ex
 
 [[ -d /home/solana/.ssh ]] || exit 1
 
-if [[ -z $SOLANA_PUBKEYS ]]; then
+if [[ ${#SOLANA_PUBKEYS[@]} -eq 0 ]]; then
   echo "Warning: source solana-user-authorized_keys.sh first"
 fi
 
