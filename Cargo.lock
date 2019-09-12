@@ -3451,7 +3451,7 @@ name = "solana-rayon-threadlimit"
 version = "0.19.0-pre0"
 dependencies = [
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sys-info 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sys-info 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
