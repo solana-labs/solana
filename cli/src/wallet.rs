@@ -114,6 +114,7 @@ pub enum WalletError {
     InsufficientFundsForFee,
     DynamicProgramError(String),
     RpcRequestError(String),
+    KeypairFileNotFound(String),
 }
 
 impl fmt::Display for WalletError {
