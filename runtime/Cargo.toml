@@ -37,6 +37,7 @@ solana-vote-api = { path = "../programs/vote_api", version = "0.19.0-pre0" }
 solana-vote-program = { path = "../programs/vote_program", version = "0.19.0-pre0" }
 sys-info = "0.5.8"
 tempfile = "3.1.0"
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.19.0-pre0" }
 
 [lib]
 crate-type = ["lib"]

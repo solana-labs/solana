@@ -2,6 +2,8 @@ use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, SlotMeta};
 use crate::entry::{Entry, EntrySlice};
 use crate::leader_schedule_cache::LeaderScheduleCache;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
@@ -16,16 +18,15 @@ use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-
 pub const NUM_THREADS: u32 = 10;
+use solana_rayon_threadlimit::get_thread_count;
 use std::cell::RefCell;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .num_threads(get_thread_count())
                     .build()
-                    .unwrap()));
+                    .unwrap())
+);
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {

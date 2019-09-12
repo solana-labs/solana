@@ -11,7 +11,7 @@ steps:
   - wait
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 40
     artifact_paths: "log-*.txt"
     agents:
       - "queue=cuda"

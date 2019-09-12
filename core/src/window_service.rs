@@ -12,6 +12,7 @@ use crate::streamer::{PacketReceiver, PacketSender};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rayon::ThreadPool;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
+use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -205,7 +206,7 @@ impl WindowService {
                 trace!("{}: RECV_WINDOW started", id);
                 let mut now = Instant::now();
                 let thread_pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .num_threads(get_thread_count())
                     .build()
                     .unwrap();
                 loop {

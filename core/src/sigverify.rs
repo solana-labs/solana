@@ -20,16 +20,15 @@ use solana_sdk::transaction::Transaction;
 use std::mem::size_of;
 
 #[cfg(feature = "cuda")]
-use std::os::raw::{c_int, c_uint};
-
-#[cfg(feature = "cuda")]
 use core::ffi::c_void;
-
+use solana_rayon_threadlimit::get_thread_count;
+#[cfg(feature = "cuda")]
+use std::os::raw::{c_int, c_uint};
 pub const NUM_THREADS: u32 = 10;
 use std::cell::RefCell;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .num_threads(get_thread_count())
                     .build()
                     .unwrap()));
 

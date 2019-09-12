@@ -56,6 +56,7 @@ members = [
     "fixed-buf",
     "vote-signer",
     "cli",
+    "rayon-threadlimit",
 ]
 exclude = [
     "programs/bpf",

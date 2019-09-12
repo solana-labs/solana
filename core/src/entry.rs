@@ -14,6 +14,7 @@ use solana_merkle_tree::MerkleTree;
 use solana_metrics::inc_new_counter_warn;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -22,7 +23,7 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "cuda")]
 use crate::sigverify::poh_verify_many;
-use solana_sdk::timing;
+use solana_rayon_threadlimit::get_thread_count;
 #[cfg(feature = "cuda")]
 use std::sync::Mutex;
 #[cfg(feature = "cuda")]
@@ -32,7 +33,7 @@ use std::time::Instant;
 pub const NUM_THREADS: u32 = 10;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .num_threads(get_thread_count())
                     .build()
                     .unwrap()));
 

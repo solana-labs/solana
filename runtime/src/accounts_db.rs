@@ -30,6 +30,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
+use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
@@ -39,7 +40,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-use sys_info;
 use tempfile::TempDir;
 
 pub const DEFAULT_FILE_SIZE: u64 = 4 * 1024 * 1024;
@@ -370,7 +370,7 @@ pub struct AccountsDB {
 
 impl Default for AccountsDB {
     fn default() -> Self {
-        let num_threads = sys_info::cpu_num().unwrap_or(DEFAULT_NUM_THREADS) as usize;
+        let num_threads = get_thread_count();
 
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),

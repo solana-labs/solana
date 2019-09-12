@@ -3084,6 +3084,7 @@ dependencies = [
  "solana-merkle-tree 0.19.0-pre0",
  "solana-metrics 0.19.0-pre0",
  "solana-netutil 0.19.0-pre0",
+ "solana-rayon-threadlimit 0.19.0-pre0",
  "solana-runtime 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
  "solana-stake-api 0.19.0-pre0",
@@ -3332,6 +3333,7 @@ dependencies = [
  "solana-client 0.19.0-pre0",
  "solana-core 0.19.0-pre0",
  "solana-logger 0.19.0-pre0",
+ "solana-rayon-threadlimit 0.19.0-pre0",
  "solana-runtime 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
  "solana-stake-api 0.19.0-pre0",
@@ -3445,6 +3447,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-rayon-threadlimit"
+version = "0.19.0-pre0"
+dependencies = [
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sys-info 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "solana-replicator"
 version = "0.19.0-pre0"
 dependencies = [
@@ -3482,6 +3492,7 @@ dependencies = [
  "solana-measure 0.19.0-pre0",
  "solana-metrics 0.19.0-pre0",
  "solana-noop-program 0.19.0-pre0",
+ "solana-rayon-threadlimit 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
  "solana-stake-api 0.19.0-pre0",
  "solana-stake-program 0.19.0-pre0",
