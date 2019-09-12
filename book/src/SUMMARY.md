@@ -63,6 +63,7 @@
   - [Cross-Program Invocation](cross-program-invocation.md)
   - [Rent](rent.md)
   - [Inter-chain Transaction Verification](interchain-transaction-verification.md)
+  - [Snapshot Verification](snapshot-verification.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Blocktree](blocktree.md)
