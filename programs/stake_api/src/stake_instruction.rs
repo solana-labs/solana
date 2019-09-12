@@ -233,7 +233,7 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::Lockup(slot) => me.lockup(slot),
-        StakeInstruction::Authorize(authorized_pubkey) => me.authorize(&authorized_pubkey),
+        StakeInstruction::Authorize(authorized_pubkey) => me.authorize(&authorized_pubkey, &rest),
         StakeInstruction::DelegateStake => {
             if rest.len() < 3 {
                 Err(InstructionError::InvalidInstructionData)?;
@@ -269,17 +269,13 @@ pub fn process_instruction(
             }
             let (to, rest) = &mut rest.split_at_mut(1);
             let mut to = &mut to[0];
-            let (clock, rest) = rest.split_at_mut(1);
-            let clock = &clock[0];
-            let (stake_history, rest) = rest.split_at_mut(1);
-            let stake_history = &stake_history[0];
 
             me.withdraw(
                 lamports,
                 &mut to,
-                &sysvar::clock::from_keyed_account(clock)?,
-                &sysvar::stake_history::from_keyed_account(stake_history)?,
-                rest,
+                &sysvar::clock::from_keyed_account(&rest[0])?,
+                &sysvar::stake_history::from_keyed_account(&rest[1])?,
+                &rest[2..],
             )
         }
         StakeInstruction::Deactivate => {
@@ -288,10 +284,12 @@ pub fn process_instruction(
             }
             let (vote, rest) = rest.split_at_mut(1);
             let vote = &mut vote[0];
-            let (clock, rest) = rest.split_at_mut(1);
-            let clock = &clock[0];
 
-            me.deactivate_stake(vote, &sysvar::clock::from_keyed_account(clock)?, rest)
+            me.deactivate_stake(
+                vote,
+                &sysvar::clock::from_keyed_account(&rest[0])?,
+                &rest[1..],
+            )
         }
     }
 }

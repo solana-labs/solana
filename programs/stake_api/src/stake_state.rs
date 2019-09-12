@@ -61,7 +61,7 @@ pub struct Lockup {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Stake {
-    /// alternate signer that is enabled to act on the Stake account after activation
+    /// alternate signer that is enabled to act on the Stake account
     pub authorized_pubkey: Pubkey,
     /// most recently delegated vote account pubkey
     pub voter_pubkey: Pubkey,
@@ -399,7 +399,11 @@ impl Authorized for Stake {
 
 pub trait StakeAccount {
     fn lockup(&mut self, slot: Slot) -> Result<(), InstructionError>;
-    fn authorize(&mut self, authorized_pubkey: &Pubkey) -> Result<(), InstructionError>;
+    fn authorize(
+        &mut self,
+        authorized_pubkey: &Pubkey,
+        other_signers: &[KeyedAccount],
+    ) -> Result<(), InstructionError>;
     fn delegate_stake(
         &mut self,
         vote_account: &KeyedAccount,
@@ -444,23 +448,18 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     /// Authorize the given pubkey to manage stake (deactivate, withdraw). This may be called
     /// multiple times, but will implicitly withdraw authorization from the previously authorized
     /// staker. The default staker is the owner of the stake account's pubkey.
-    fn authorize(&mut self, authorized_pubkey: &Pubkey) -> Result<(), InstructionError> {
-        if self.signer_key().is_none() {
-            return Err(InstructionError::MissingRequiredSignature);
-        }
+    fn authorize(
+        &mut self,
+        authorized_pubkey: &Pubkey,
+        other_signers: &[KeyedAccount],
+    ) -> Result<(), InstructionError> {
         let stake_state = self.state()?;
         if let StakeState::Stake(mut stake) = stake_state {
-            let authorized = Some(&stake.authorized_pubkey);
-            if self.signer_key() != authorized {
-                return Err(InstructionError::MissingRequiredSignature);
-            }
+            stake.check_authorized(self.signer_key(), other_signers)?;
             stake.authorized_pubkey = *authorized_pubkey;
             self.set_state(&StakeState::Stake(stake))
         } else if let StakeState::Lockup(mut lockup) = stake_state {
-            let authorized = Some(&lockup.authorized_pubkey);
-            if self.signer_key() != authorized {
-                return Err(InstructionError::MissingRequiredSignature);
-            }
+            lockup.check_authorized(self.signer_key(), other_signers)?;
             lockup.authorized_pubkey = *authorized_pubkey;
             self.set_state(&StakeState::Lockup(lockup))
         } else {
@@ -597,9 +596,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 }
             }
             StakeState::Lockup(lockup) => {
-                if self.signer_key().is_none() {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
+                lockup.check_authorized(self.signer_key(), other_signers)?;
                 if lockup.slot > clock.slot {
                     return Err(InstructionError::InsufficientFunds);
                 }
@@ -1171,10 +1168,7 @@ mod tests {
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
-            &StakeState::Lockup(Lockup {
-                slot: 0,
-                authorized_pubkey: stake_pubkey,
-            }),
+            &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -1216,7 +1210,11 @@ mod tests {
         // reset balance
         stake_account.lamports = stake_lamports;
 
-        // signed keyed account and uninitialized, more than available should fail
+        // lockup
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        stake_keyed_account.lockup(0).unwrap();
+
+        // signed keyed account and locked up, more than available should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
@@ -1675,24 +1673,45 @@ mod tests {
         let clock = sysvar::clock::Clock::default();
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
-        let new_staker_pubkey = Pubkey::new_rand();
-        assert_eq!(stake_keyed_account.authorize(&new_staker_pubkey), Ok(()));
+        let stake_pubkey0 = Pubkey::new_rand();
+        assert_eq!(stake_keyed_account.authorize(&stake_pubkey0, &[]), Ok(()));
         if let StakeState::Lockup(lockup) = StakeState::from(&stake_keyed_account.account).unwrap()
         {
-            assert_eq!(lockup.authorized_pubkey, new_staker_pubkey);
+            assert_eq!(lockup.authorized_pubkey, stake_pubkey0);
         }
 
-        let mut new_staker_account = Account::new(1, 0, &system_program::id());
-        let new_staker_keyed_account =
-            KeyedAccount::new(&new_staker_pubkey, true, &mut new_staker_account);
+        // A second authorization signed by the stake_keyed_account should fail
+        let stake_pubkey1 = Pubkey::new_rand();
+        assert_eq!(
+            stake_keyed_account.authorize(&stake_pubkey1, &[]),
+            Err(InstructionError::MissingRequiredSignature)
+        );
 
+        let mut staker_account0 = Account::new(1, 0, &system_program::id());
+        let staker_keyed_account0 = KeyedAccount::new(&stake_pubkey0, true, &mut staker_account0);
+
+        // Test a second authorization by the newly authorized pubkey
+        let stake_pubkey2 = Pubkey::new_rand();
+        assert_eq!(
+            stake_keyed_account.authorize(&stake_pubkey2, &[staker_keyed_account0]),
+            Ok(())
+        );
+        if let StakeState::Lockup(lockup) = StakeState::from(&stake_keyed_account.account).unwrap()
+        {
+            assert_eq!(lockup.authorized_pubkey, stake_pubkey2);
+        }
+
+        let mut staker_account2 = Account::new(1, 0, &system_program::id());
+        let staker_keyed_account2 = KeyedAccount::new(&stake_pubkey2, true, &mut staker_account2);
+
+        // Test an action by the currently authorized pubkey
         assert_eq!(
             stake_keyed_account.withdraw(
                 stake_lamports,
                 &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[new_staker_keyed_account],
+                &[staker_keyed_account2],
             ),
             Ok(())
         );
@@ -1726,7 +1745,10 @@ mod tests {
             .unwrap();
 
         let new_staker_pubkey = Pubkey::new_rand();
-        assert_eq!(stake_keyed_account.authorize(&new_staker_pubkey), Ok(()));
+        assert_eq!(
+            stake_keyed_account.authorize(&new_staker_pubkey, &[]),
+            Ok(())
+        );
         let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
         assert_eq!(stake.authorized_pubkey, new_staker_pubkey);
 
