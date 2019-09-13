@@ -1536,15 +1536,4 @@ mod tests {
             Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
     }
-
-    #[test]
-    fn test_bench_shredder() {
-        let kp = Arc::new(Keypair::new());
-        let data = vec![0u8; 10000 * 1000];
-        (0..10).for_each(|_| {
-            let mut shredder = Shredder::new(1, 0, 0.0, &kp, 0).unwrap();
-            let _ = bincode::serialize_into(&mut shredder, &data);
-            assert!(shredder.shred_tuples.len() >= 5000)
-        })
-    }
 }
