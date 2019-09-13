@@ -3082,6 +3082,7 @@ dependencies = [
  "jsonrpc-http-server 13.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-pubsub 13.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-ws-server 13.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "matches 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
