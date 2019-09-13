@@ -507,11 +507,10 @@ impl Shredder {
                 .encode(&data_ptrs, coding_ptrs.as_mut_slice())
                 .expect("Failed in erasure encode");
 
-            // Finalize the coding blocks (sign and append to the shred list)
+            // append to the shred list
             coding_shreds.into_iter().for_each(|code| {
                 let shred: Shred = bincode::deserialize(&code).unwrap();
                 self.shred_tuples.push((shred, code));
-                //self.finalize_shred(shred, code, coding_header_offset)
             });
             self.fec_set_index = self.index;
         }

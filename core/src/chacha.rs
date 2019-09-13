@@ -153,7 +153,7 @@ mod tests {
         hasher.hash(&buf[..size]);
 
         //  golden needs to be updated if blob stuff changes....
-        let golden: Hash = "2rAoJANqvtAVcPDcKjBficfUN3NA1fRbCjd3Y7YYGqnu"
+        let golden: Hash = "5YYF8Z1biTUissPK6BQue92RJT8v7du7Ltr8cHRBVoyD"
             .parse()
             .unwrap();
 
