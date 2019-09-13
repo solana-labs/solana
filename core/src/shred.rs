@@ -13,6 +13,14 @@ use std::sync::Arc;
 use std::{cmp, io};
 
 #[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+pub struct ShredMetaBuf {
+    pub slot: u64,
+    pub index: u32,
+    pub data_shred: bool,
+    pub shred_buf: Vec<u8>,
+}
+
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub enum Shred {
     FirstInSlot(DataShred),
     Data(DataShred),
@@ -140,6 +148,14 @@ impl Shred {
             as usize;
         self.signature()
             .verify(pubkey.as_ref(), &shred_buf[signed_payload_offset..])
+    }
+
+    pub fn is_data(&self) -> bool {
+        if let Shred::Coding(_) = self {
+            false
+        } else {
+            true
+        }
     }
 }
 
@@ -524,7 +540,7 @@ impl Shredder {
     }
 
     fn fill_in_missing_shreds(
-        shred: &Shred,
+        shred: &ShredMetaBuf,
         num_data: usize,
         num_coding: usize,
         slot: u64,
@@ -540,14 +556,12 @@ impl Shredder {
             return (vec![], index);
         }
 
-        let mut missing_blocks: Vec<Vec<u8>> = (expected_index..index)
+        let missing_blocks: Vec<Vec<u8>> = (expected_index..index)
             .map(|missing| {
                 present[missing.saturating_sub(first_index)] = false;
                 Shredder::new_empty_missing_shred(num_data, num_coding, slot, first_index, missing)
             })
             .collect();
-        let shred_buf = bincode::serialize(shred).unwrap();
-        missing_blocks.push(shred_buf);
         (missing_blocks, index)
     }
 
@@ -581,7 +595,7 @@ impl Shredder {
     }
 
     pub fn try_recovery(
-        shreds: &[Shred],
+        shreds: Vec<ShredMetaBuf>,
         num_data: usize,
         num_coding: usize,
         first_index: usize,
@@ -597,10 +611,10 @@ impl Shredder {
             let mut present = &mut vec![true; fec_set_size];
             let mut next_expected_index = first_index;
             let mut shred_bufs: Vec<Vec<u8>> = shreds
-                .iter()
+                .into_iter()
                 .flat_map(|shred| {
-                    let (blocks, last_index) = Self::fill_in_missing_shreds(
-                        shred,
+                    let (mut blocks, last_index) = Self::fill_in_missing_shreds(
+                        &shred,
                         num_data,
                         num_coding,
                         slot,
@@ -608,6 +622,7 @@ impl Shredder {
                         next_expected_index,
                         &mut present,
                     );
+                    blocks.push(shred.shred_buf);
                     next_expected_index = last_index + 1;
                     blocks
                 })
@@ -711,11 +726,11 @@ impl Shredder {
         Ok(Self::reassemble_payload(num_data, data_shred_bufs))
     }
 
-    fn get_shred_index(shred: &Shred, num_data: usize) -> usize {
-        if let Shred::Coding(_) = shred {
-            shred.index() as usize + num_data
+    fn get_shred_index(shred: &ShredMetaBuf, num_data: usize) -> usize {
+        if shred.data_shred {
+            shred.index as usize
         } else {
-            shred.index() as usize
+            shred.index as usize + num_data
         }
     }
 
@@ -1070,16 +1085,26 @@ mod tests {
         let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
         assert_eq!(shredder.shred_tuples.len(), expected_shred_count);
 
-        let shreds: Vec<Shred> = shredder
+        let (shreds, shred_meta_bufs): (Vec<Shred>, Vec<ShredMetaBuf>) = shredder
             .shred_tuples
             .iter()
-            .map(|(s, _)| s.clone())
-            .collect();
+            .map(|(s, b)| {
+                (
+                    s.clone(),
+                    ShredMetaBuf {
+                        slot: s.slot(),
+                        index: s.index(),
+                        data_shred: s.is_data(),
+                        shred_buf: b.clone(),
+                    },
+                )
+            })
+            .unzip();
 
         // Test0: Try recovery/reassembly with only data shreds, but not all data shreds. Hint: should fail
         assert_matches!(
             Shredder::try_recovery(
-                &shreds[..4],
+                shred_meta_bufs[..4].to_vec(),
                 expected_shred_count / 2,
                 expected_shred_count / 2,
                 0,
@@ -1090,7 +1115,7 @@ mod tests {
 
         // Test1: Try recovery/reassembly with only data shreds. Hint: should work
         let result = Shredder::try_recovery(
-            &shreds[..5],
+            shred_meta_bufs[..5].to_vec(),
             expected_shred_count / 2,
             expected_shred_count / 2,
             0,
@@ -1105,23 +1130,29 @@ mod tests {
         assert_eq!(data[..], result[..data.len()]);
 
         // Test2: Try recovery/reassembly with missing data shreds + coding shreds. Hint: should work
-        let mut shreds: Vec<Shred> = shredder
+        let (mut shreds, shred_meta_bufs): (Vec<Shred>, Vec<ShredMetaBuf>) = shredder
             .shred_tuples
             .iter()
             .enumerate()
-            .filter_map(
-                |(i, (s, _))| {
-                    if i % 2 == 0 {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect();
+            .filter_map(|(i, (s, b))| {
+                if i % 2 == 0 {
+                    Some((
+                        s.clone(),
+                        ShredMetaBuf {
+                            slot: s.slot(),
+                            index: s.index(),
+                            data_shred: s.is_data(),
+                            shred_buf: b.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            })
+            .unzip();
 
         let mut result = Shredder::try_recovery(
-            &shreds,
+            shred_meta_bufs,
             expected_shred_count / 2,
             expected_shred_count / 2,
             0,
@@ -1178,23 +1209,29 @@ mod tests {
         assert_eq!(data[..], result[..data.len()]);
 
         // Test3: Try recovery/reassembly with 3 missing data shreds + 2 coding shreds. Hint: should work
-        let mut shreds: Vec<Shred> = shredder
+        let (mut shreds, shred_meta_bufs): (Vec<Shred>, Vec<ShredMetaBuf>) = shredder
             .shred_tuples
             .iter()
             .enumerate()
-            .filter_map(
-                |(i, (s, _))| {
-                    if i % 2 != 0 {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect();
+            .filter_map(|(i, (s, b))| {
+                if i % 2 != 0 {
+                    Some((
+                        s.clone(),
+                        ShredMetaBuf {
+                            slot: s.slot(),
+                            index: s.index(),
+                            data_shred: s.is_data(),
+                            shred_buf: b.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            })
+            .unzip();
 
         let mut result = Shredder::try_recovery(
-            &shreds,
+            shred_meta_bufs,
             expected_shred_count / 2,
             expected_shred_count / 2,
             0,
@@ -1274,23 +1311,29 @@ mod tests {
         let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
         assert_eq!(shredder.shred_tuples.len(), expected_shred_count);
 
-        let mut shreds: Vec<Shred> = shredder
+        let (mut shreds, shred_meta_bufs): (Vec<Shred>, Vec<ShredMetaBuf>) = shredder
             .shred_tuples
             .iter()
             .enumerate()
-            .filter_map(
-                |(i, (s, _))| {
-                    if i % 2 != 0 {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect();
+            .filter_map(|(i, (s, b))| {
+                if i % 2 != 0 {
+                    Some((
+                        s.clone(),
+                        ShredMetaBuf {
+                            slot: s.slot(),
+                            index: s.index(),
+                            data_shred: s.is_data(),
+                            shred_buf: b.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            })
+            .unzip();
 
         let mut result = Shredder::try_recovery(
-            &shreds,
+            shred_meta_bufs,
             expected_shred_count / 2,
             expected_shred_count / 2,
             0,
@@ -1390,23 +1433,29 @@ mod tests {
         let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
         assert_eq!(shredder.shred_tuples.len(), expected_shred_count);
 
-        let mut shreds: Vec<Shred> = shredder
+        let (mut shreds, shred_meta_bufs): (Vec<Shred>, Vec<ShredMetaBuf>) = shredder
             .shred_tuples
             .iter()
             .enumerate()
-            .filter_map(
-                |(i, (s, _))| {
-                    if i % 2 != 0 {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect();
+            .filter_map(|(i, (s, b))| {
+                if i % 2 != 0 {
+                    Some((
+                        s.clone(),
+                        ShredMetaBuf {
+                            slot: s.slot(),
+                            index: s.index(),
+                            data_shred: s.is_data(),
+                            shred_buf: b.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            })
+            .unzip();
 
         let mut result = Shredder::try_recovery(
-            &shreds,
+            shred_meta_bufs.clone(),
             expected_shred_count / 2,
             expected_shred_count / 2,
             25,
@@ -1464,7 +1513,7 @@ mod tests {
 
         // Test7: Try recovery/reassembly with incorrect slot. Hint: does not recover any shreds
         let result = Shredder::try_recovery(
-            &shreds,
+            shred_meta_bufs.clone(),
             expected_shred_count / 2,
             expected_shred_count / 2,
             25,
@@ -1476,7 +1525,7 @@ mod tests {
         // Test8: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
         assert_matches!(
             Shredder::try_recovery(
-                &shreds,
+                shred_meta_bufs.clone(),
                 expected_shred_count / 2,
                 expected_shred_count / 2,
                 15,
@@ -1488,7 +1537,7 @@ mod tests {
         // Test9: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
         assert_matches!(
             Shredder::try_recovery(
-                &shreds,
+                shred_meta_bufs.clone(),
                 expected_shred_count / 2,
                 expected_shred_count / 2,
                 35,
