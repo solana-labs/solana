@@ -25,7 +25,7 @@ targetDir="$PWD"/../target
 profile=bpfel-unknown-unknown/release
 
 perform_action() {
-    set -e
+    set -ex
     case "$1" in
     build)
          "$sdkDir"/bpf/rust/build.sh "$2"
@@ -70,29 +70,29 @@ perform_action() {
             ./do.sh build "$3"
 
             cd "$3"
-            so=../"$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so
-            dump=../"$targetDir"/"${3%/}"-dump
+            so="$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so
+            dump="$targetDir"/"${3%/}"-dump
 
             if [ -f "$so" ]; then
                 ls \
                     -la \
-                    $so \
-                    > ${dump}-mangled.txt
+                    "$so" \
+                    > "${dump}-mangled.txt"
                 greadelf \
                     -aW \
-                    $so \
-                    >> ${dump}-mangled.txt
+                    "$so" \
+                    >> "${dump}-mangled.txt"
                 ../"$sdkDir"/bpf/dependencies/llvm-native/bin/llvm-objdump \
                     -print-imm-hex \
                     --source \
                     --disassemble \
-                    $so \
-                    >> ${dump}-mangled.txt
+                    "$so" \
+                    >> "${dump}-mangled.txt"
                 sed \
                     s/://g \
-                    < ${dump}-mangled.txt \
+                    < "${dump}-mangled.txt" \
                     | rustfilt \
-                    > ${dump}.txt
+                    > "${dump}.txt"
             fi
         )
         ;;
