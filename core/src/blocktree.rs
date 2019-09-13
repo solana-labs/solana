@@ -751,33 +751,7 @@ impl Blocktree {
         }
 
         let last_root = *last_root.read().unwrap();
-        if !is_valid_write_to_slot_0(slot, slot_meta.parent_slot, last_root) {
-            // Check that the parent_slot < slot
-            if slot_meta.parent_slot >= slot {
-                datapoint_error!(
-                    "blocktree_error",
-                    (
-                        "error",
-                        format!(
-                            "Received blob with parent_slot {} >= slot {}",
-                            slot_meta.parent_slot, slot
-                        ),
-                        String
-                    )
-                );
-                return false;
-            }
-
-            // Check that the blob is for a slot that is past the root
-            if slot <= last_root {
-                return false;
-            }
-
-            // Ignore blobs that chain to slots before the last root
-            if slot_meta.parent_slot < last_root {
-                return false;
-            }
-        }
+        verify_shred_slots(slot, slot_meta.parent_slot, last_root);
 
         true
     }
@@ -1697,6 +1671,24 @@ macro_rules! create_new_tmp_ledger {
     ($genesis_block:expr) => {
         create_new_tmp_ledger(tmp_ledger_name!(), $genesis_block)
     };
+}
+
+pub fn verify_shred_slots(slot: u64, parent_slot: u64, last_root: u64) -> bool {
+    if !is_valid_write_to_slot_0(slot, parent_slot, last_root) {
+        // Check that the parent_slot < slot
+        if parent_slot >= slot {
+            return false;
+        }
+
+        // Ignore blobs that chain to slots before the last root
+        if parent_slot < last_root {
+            return false;
+        }
+
+        // Above two checks guarantee that by this point, slot > last_root
+    }
+
+    true
 }
 
 // Same as `create_new_ledger()` but use a temporary ledger name based on the provided `name`
