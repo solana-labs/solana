@@ -97,6 +97,7 @@ To run a performance-enhanced full node on Linux,
 your system:
 
 ```bash
+$ sudo nvidia-smi -pm ENABLED
 $ ./fetch-perf-libs.sh
 $ SOLANA_CUDA=1 ./multinode-demo/bootstrap-leader.sh
 $ SOLANA_CUDA=1 ./multinode-demo/validator.sh
