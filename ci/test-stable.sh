@@ -32,8 +32,8 @@ case $testName in
 test-stable)
   echo "Executing $testName"
 
-  _ cargo +"$rust_stable" build --all --release --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --all ${V:+--verbose} --release -- --nocapture
+  _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose}
+  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"
@@ -44,6 +44,7 @@ test-stable-perf)
     Cargo.toml$ \
     ^ci/test-stable-perf.sh \
     ^ci/test-stable.sh \
+    ^ci/test-local-cluster.sh \
     ^core/build.rs \
     ^fetch-perf-libs.sh \
     ^programs/ \
@@ -78,6 +79,12 @@ test-stable-perf)
   # Run root package library tests
   _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose} --features="$ROOT_FEATURES"
   _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
+  ;;
+test-local-cluster)
+  echo "Executing $testName"
+  _ cargo +"$rust_stable" build --all --release --tests --bins ${V:+--verbose}
+  _ cargo +"$rust_stable" test --release --manifest-path=local_cluster/Cargo.toml  ${V:+--verbose} -- --nocapture
+  exit 0
   ;;
 *)
   echo "Error: Unknown test: $testName"
