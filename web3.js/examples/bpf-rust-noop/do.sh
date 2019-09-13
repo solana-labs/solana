@@ -20,26 +20,37 @@ Supported actions:
 EOF
 }
 
+sdkDir=../../bpf-sdk
+targetDir="$PWD"/target
+profile=bpfel-unknown-unknown/release
+
 perform_action() {
     set -e
     case "$1" in
     build)
-         ../../bpf-sdk/rust/build.sh "$PWD"
+        "$sdkDir"/rust/build.sh "$PWD"
+        
+        so_path="$targetDir/$profile"
+        so_name="solana_bpf_rust_noop"
+        if [ -f "$so_path/${so_name}.so" ]; then
+            cp "$so_path/${so_name}.so" "$so_path/${so_name}_debug.so"
+            "$sdkDir"/dependencies/llvm-native/bin/llvm-objcopy --strip-all "$so_path/${so_name}.so" "$so_path/$so_name.so"
+        fi
         ;;
     clean)
-         ../../bpf-sdk/rust/clean.sh "$PWD"
+        "$sdkDir"/rust/clean.sh "$PWD"
         ;;
     test)
-            echo "test $2"
-            cargo +nightly test
+        echo "test"
+        cargo +nightly test
         ;;
     clippy)
-            echo "clippy $2"
-            cargo +nightly clippy
+        echo "clippy"
+        cargo +nightly clippy
         ;;
     fmt)
-            echo "formatting $2"
-            cargo fmt
+        echo "formatting"
+        cargo fmt
         ;;
     help)
         usage
