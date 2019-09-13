@@ -6,7 +6,7 @@ use solana_cli::{
     input_validators::is_url,
     wallet::{app, parse_command, process_command, WalletConfig, WalletError},
 };
-use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
+use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
@@ -91,8 +91,9 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
     } else {
         let default = WalletConfig::default();
         if !std::path::Path::new(&default.keypair_path).exists() {
-            gen_keypair_file(&default.keypair_path)?;
-            println!("New keypair generated at: {}", default.keypair_path);
+            Err(WalletError::KeypairFileNotFound(
+                "Generate a new keypair with `solana-keygen new`".to_string(),
+            ))?;
         }
         default.keypair_path
     };
