@@ -381,6 +381,7 @@ impl ReplayStage {
                 bank.slot(),
                 result
             );
+            datapoint_warn!("replay-stage-mark_dead_slot", ("slot", bank.slot(), i64),);
             Self::mark_dead_slot(bank.slot(), blocktree, progress);
         }
 
@@ -705,7 +706,7 @@ impl ReplayStage {
         last_entry: &Hash,
     ) -> Result<()> {
         if !entries.verify(last_entry) {
-            trace!(
+            warn!(
                 "entry verification failed {} {} {} {}",
                 entries.len(),
                 bank.tick_height(),
