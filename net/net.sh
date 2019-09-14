@@ -125,7 +125,6 @@ internalNodesLamports=
 maybeNoSnapshot=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
-buildProfile="--release"
 debugBuild=false
 doBuild=true
 
@@ -276,8 +275,6 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
   esac
 done
 
-$debugBuild && buildProfile=""
-
 loadConfigFile
 
 if [[ -n $numFullnodesRequested ]]; then
@@ -332,9 +329,15 @@ build() {
       # shellcheck source=/dev/null
       source target/perf-libs/env.sh
     fi
+
+    buildVariant=
+    if $debugBuild; then
+      buildVariant=debug
+    fi
+
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf \"$cargoFeatures\" \"$buildProfile\"
+      scripts/cargo-install-all.sh farf \"$cargoFeatures\" \"$buildVariant\"
       if [[ -n \"$customPrograms\" ]]; then
         scripts/cargo-install-custom-programs.sh farf $customPrograms
       fi
