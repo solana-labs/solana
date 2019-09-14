@@ -16,6 +16,7 @@ use crate::rpc_pubsub_service::PubSubService;
 use crate::rpc_service::JsonRpcService;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
+use crate::sigverify;
 use crate::snapshot_utils;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
@@ -119,23 +120,12 @@ impl Validator {
         warn!("vote pubkey: {:?}", vote_account);
         warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
         info!("entrypoint: {:?}", entrypoint_info_option);
-        info!("{:?}", node.info);
-        info!(
-            "local gossip address: {}",
-            node.sockets.gossip.local_addr().unwrap()
-        );
-        info!(
-            "local broadcast address: {}",
-            node.sockets.broadcast.local_addr().unwrap()
-        );
-        info!(
-            "local repair address: {}",
-            node.sockets.repair.local_addr().unwrap()
-        );
-        info!(
-            "local retransmit address: {}",
-            node.sockets.retransmit.local_addr().unwrap()
-        );
+
+        Self::print_node_info(&node);
+
+        info!("Initializing sigverify, this could take a while...");
+        sigverify::init();
+        info!("Done.");
 
         info!("creating bank...");
         let (
@@ -364,6 +354,26 @@ impl Validator {
     pub fn close(mut self) -> Result<()> {
         self.exit();
         self.join()
+    }
+
+    fn print_node_info(node: &Node) {
+        info!("{:?}", node.info);
+        info!(
+            "local gossip address: {}",
+            node.sockets.gossip.local_addr().unwrap()
+        );
+        info!(
+            "local broadcast address: {}",
+            node.sockets.broadcast.local_addr().unwrap()
+        );
+        info!(
+            "local repair address: {}",
+            node.sockets.repair.local_addr().unwrap()
+        );
+        info!(
+            "local retransmit address: {}",
+            node.sockets.retransmit.local_addr().unwrap()
+        );
     }
 }
 
