@@ -206,7 +206,7 @@ impl MetricsAgent {
                         barrier.wait();
                     }
                     MetricsCommand::Submit(point, level) => {
-                        debug!("run: submit {:?}", point);
+                        log!(level, "{:?}", point);
                         let (_, _, points) = points_map.entry(level).or_insert((
                             last_write_time,
                             HashMap::new(),
@@ -215,7 +215,7 @@ impl MetricsAgent {
                         points.push(point);
                     }
                     MetricsCommand::SubmitCounter(counter, level, bucket) => {
-                        debug!("run: submit counter {:?}", counter);
+                        debug!("{:?}", counter);
                         let (_, counters, _) = points_map.entry(level).or_insert((
                             last_write_time,
                             HashMap::new(),
@@ -276,16 +276,14 @@ impl MetricsAgent {
     }
 
     pub fn submit(&self, point: DataPoint, level: log::Level) {
-        debug!("Submitting data point: {:?}", point);
         self.sender
             .send(MetricsCommand::Submit(point, level))
             .unwrap();
     }
 
-    pub fn submit_counter(&self, point: CounterPoint, level: log::Level, bucket: u64) {
-        debug!("Submitting counter point: {:?}", point);
+    pub fn submit_counter(&self, counter: CounterPoint, level: log::Level, bucket: u64) {
         self.sender
-            .send(MetricsCommand::SubmitCounter(point, level, bucket))
+            .send(MetricsCommand::SubmitCounter(counter, level, bucket))
             .unwrap();
     }
 
