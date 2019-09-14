@@ -40,7 +40,7 @@ export const PACKET_DATA_SIZE = 1280 - 40 - 8;
  * @property {?PublicKey} programId
  * @property {?Buffer} data
  */
-type TransactionInstructionCtorFields = {|
+export type TransactionInstructionCtorFields = {|
   keys?: Array<{pubkey: PublicKey, isSigner: boolean, isDebitable: boolean}>,
   programId?: PublicKey,
   data?: Buffer,
