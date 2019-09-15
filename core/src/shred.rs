@@ -520,6 +520,9 @@ impl Shredder {
     /// If there's an active data shred, morph it into the final shred
     /// If the current active data shred is first in slot, finalize it and create a new shred
     fn make_final_data_shred(&mut self, last_in_slot: u8) {
+        if let Shred::FirstInSlot(_) = &self.active_shred {
+            self.finalize_data_shred();
+        }
         self.active_shred = match self.active_shred.borrow_mut() {
             Shred::FirstInSlot(s)
             | Shred::Data(s)
@@ -926,13 +929,22 @@ mod tests {
         shredder.finalize_data();
 
         // We should have 1 shred now
-        assert_eq!(shredder.shred_tuples.len(), 1);
+        assert_eq!(shredder.shred_tuples.len(), 2);
+
+        let (_, shred) = shredder.shred_tuples.remove(0);
+        assert_eq!(shred.len(), PACKET_DATA_SIZE);
+        let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
+        assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
+        assert_eq!(deserialized_shred.index(), 0);
+        assert_eq!(deserialized_shred.slot(), slot);
+        assert_eq!(deserialized_shred.parent(), slot - 5);
+        assert!(deserialized_shred.verify(&keypair.pubkey()));
 
         let (_, shred) = shredder.shred_tuples.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
         assert_matches!(deserialized_shred, Shred::DataComplete(_));
-        assert_eq!(deserialized_shred.index(), 0);
+        assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
         assert!(deserialized_shred.verify(&keypair.pubkey()));
