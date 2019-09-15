@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 890,
-  "iteration": 1566963171536,
+  "id": 941,
+  "iteration": 1568388890146,
   "links": [
     {
       "asDropdown": true,
@@ -1801,7 +1801,7 @@
         "x": 0,
         "y": 15
       },
-      "id": 64,
+      "id": 16,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -1918,7 +1918,7 @@
         "x": 14,
         "y": 15
       },
-      "id": 65,
+      "id": 17,
       "legend": {
         "avg": false,
         "current": false,
@@ -2033,7 +2033,7 @@
         "x": 14,
         "y": 19
       },
-      "id": 66,
+      "id": 18,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -2145,7 +2145,7 @@
         "x": 0,
         "y": 23
       },
-      "id": 16,
+      "id": 19,
       "panels": [],
       "title": "Stability",
       "type": "row"
@@ -2174,7 +2174,7 @@
         "x": 0,
         "y": 24
       },
-      "id": 17,
+      "id": 20,
       "interval": null,
       "links": [
         {
@@ -2296,7 +2296,7 @@
         "x": 5,
         "y": 24
       },
-      "id": 18,
+      "id": 21,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2407,7 +2407,7 @@
         "x": 9,
         "y": 24
       },
-      "id": 19,
+      "id": 22,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2518,7 +2518,7 @@
         "x": 12,
         "y": 24
       },
-      "id": 20,
+      "id": 23,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2629,7 +2629,7 @@
         "x": 15,
         "y": 24
       },
-      "id": 21,
+      "id": 24,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2729,7 +2729,7 @@
         "x": 18,
         "y": 24
       },
-      "id": 22,
+      "id": 25,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -2847,7 +2847,7 @@
         "x": 0,
         "y": 26
       },
-      "id": 23,
+      "id": 26,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -3003,7 +3003,7 @@
         "x": 8,
         "y": 26
       },
-      "id": 24,
+      "id": 27,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -3160,7 +3160,7 @@
         "x": 18,
         "y": 28
       },
-      "id": 25,
+      "id": 28,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -3278,7 +3278,7 @@
         "x": 0,
         "y": 29
       },
-      "id": 26,
+      "id": 29,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -3427,11 +3427,11 @@
       "fontSize": "100%",
       "gridPos": {
         "h": 6,
-        "w": 24,
+        "w": 16,
         "x": 0,
         "y": 32
       },
-      "id": 27,
+      "id": 30,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3507,176 +3507,6 @@
       "type": "table"
     },
     {
-      "columns": [],
-      "datasource": "$datasource",
-      "fontSize": "100%",
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 0,
-        "y": 38
-      },
-      "id": 28,
-      "links": [],
-      "pageSize": null,
-      "scroll": true,
-      "showHeader": true,
-      "sort": {
-        "col": null,
-        "desc": false
-      },
-      "styles": [
-        {
-          "alias": "Time",
-          "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "pattern": "Time",
-          "type": "date"
-        },
-        {
-          "alias": "",
-          "colorMode": null,
-          "colors": [
-            "rgba(245, 54, 54, 0.9)",
-            "rgba(237, 129, 40, 0.89)",
-            "rgba(50, 172, 45, 0.97)"
-          ],
-          "decimals": 2,
-          "pattern": "/.*/",
-          "thresholds": [],
-          "type": "number",
-          "unit": "short"
-        }
-      ],
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT host_id,error FROM \"$testnet\".\"autogen\".\"validator_process_entry_error\"  WHERE $timeFilter ORDER BY time DESC ",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "table",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "title": "Unexpected Validator Process Entry Errors",
-      "transform": "table",
-      "type": "table"
-    },
-    {
-      "columns": [],
-      "datasource": "$datasource",
-      "fontSize": "100%",
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 8,
-        "y": 38
-      },
-      "id": 29,
-      "links": [],
-      "pageSize": null,
-      "scroll": true,
-      "showHeader": true,
-      "sort": {
-        "col": null,
-        "desc": false
-      },
-      "styles": [
-        {
-          "alias": "Time",
-          "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "pattern": "Time",
-          "type": "date"
-        },
-        {
-          "alias": "",
-          "colorMode": null,
-          "colors": [
-            "rgba(245, 54, 54, 0.9)",
-            "rgba(237, 129, 40, 0.89)",
-            "rgba(50, 172, 45, 0.97)"
-          ],
-          "decimals": 2,
-          "pattern": "/.*/",
-          "thresholds": [],
-          "type": "number",
-          "unit": "short"
-        }
-      ],
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT host_id,error FROM \"$testnet\".\"autogen\".\"blocktree_error\"  WHERE $timeFilter ORDER BY time DESC ",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "table",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "title": "Unexpected Blocktree Errors",
-      "transform": "table",
-      "type": "table"
-    },
-    {
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -3687,9 +3517,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 38
+        "y": 32
       },
-      "id": 30,
+      "id": 33,
       "legend": {
         "avg": false,
         "current": false,
@@ -4050,6 +3880,261 @@
       }
     },
     {
+      "columns": [],
+      "datasource": "$datasource",
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 38
+      },
+      "id": 31,
+      "links": [],
+      "pageSize": null,
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": null,
+        "desc": false
+      },
+      "styles": [
+        {
+          "alias": "Time",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "pattern": "Time",
+          "type": "date"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "decimals": 2,
+          "pattern": "/.*/",
+          "thresholds": [],
+          "type": "number",
+          "unit": "short"
+        }
+      ],
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT host_id,error FROM \"$testnet\".\"autogen\".\"validator_process_entry_error\"  WHERE $timeFilter ORDER BY time DESC ",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Unexpected Validator Process Entry Errors",
+      "transform": "table",
+      "type": "table"
+    },
+    {
+      "columns": [],
+      "datasource": "$datasource",
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 38
+      },
+      "id": 66,
+      "links": [],
+      "pageSize": null,
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": null,
+        "desc": false
+      },
+      "styles": [
+        {
+          "alias": "Time",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "pattern": "Time",
+          "type": "date"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "decimals": 2,
+          "pattern": "/.*/",
+          "thresholds": [],
+          "type": "number",
+          "unit": "short"
+        }
+      ],
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT host_id,error FROM \"$testnet\".\"autogen\".\"validator_process_entry_error\"  WHERE $timeFilter ORDER BY time DESC ",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Unexpected Validator Process Entry Errors",
+      "transform": "table",
+      "type": "table"
+    },
+    {
+      "columns": [],
+      "datasource": "$datasource",
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 38
+      },
+      "id": 32,
+      "links": [],
+      "pageSize": null,
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": null,
+        "desc": false
+      },
+      "styles": [
+        {
+          "alias": "Time",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "pattern": "Time",
+          "type": "date"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "decimals": 2,
+          "pattern": "/.*/",
+          "thresholds": [],
+          "type": "number",
+          "unit": "short"
+        }
+      ],
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT host_id, slot FROM \"$testnet\".\"autogen\".\"replay-stage-mark_dead_slot\"  WHERE $timeFilter ORDER BY time DESC ",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Dead Slots",
+      "transform": "table",
+      "type": "table"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -4057,7 +4142,7 @@
         "x": 0,
         "y": 44
       },
-      "id": 31,
+      "id": 34,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -4075,7 +4160,7 @@
         "x": 0,
         "y": 45
       },
-      "id": 32,
+      "id": 35,
       "legend": {
         "avg": false,
         "current": false,
@@ -4190,7 +4275,7 @@
         "x": 12,
         "y": 45
       },
-      "id": 33,
+      "id": 36,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4376,7 +4461,7 @@
         "x": 0,
         "y": 50
       },
-      "id": 34,
+      "id": 37,
       "panels": [],
       "title": "Bench Exchange",
       "type": "row"
@@ -4394,7 +4479,7 @@
         "x": 0,
         "y": 51
       },
-      "id": 35,
+      "id": 38,
       "legend": {
         "avg": false,
         "current": false,
@@ -4545,7 +4630,7 @@
         "x": 12,
         "y": 51
       },
-      "id": 36,
+      "id": 39,
       "legend": {
         "avg": false,
         "current": false,
@@ -4728,7 +4813,7 @@
         "x": 0,
         "y": 56
       },
-      "id": 37,
+      "id": 40,
       "panels": [],
       "title": "Fullnode Streamer",
       "type": "row"
@@ -4746,7 +4831,7 @@
         "x": 0,
         "y": 57
       },
-      "id": 38,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5160,7 +5245,7 @@
         "x": 8,
         "y": 57
       },
-      "id": 39,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5506,7 +5591,7 @@
         "x": 16,
         "y": 57
       },
-      "id": 40,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5715,7 +5800,7 @@
         "x": 0,
         "y": 63
       },
-      "id": 41,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6033,7 +6118,7 @@
         "x": 8,
         "y": 63
       },
-      "id": 42,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6222,7 +6307,7 @@
         "x": 16,
         "y": 63
       },
-      "id": 43,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6416,7 +6501,7 @@
         "x": 0,
         "y": 69
       },
-      "id": 44,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6572,7 +6657,7 @@
         "x": 8,
         "y": 69
       },
-      "id": 45,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6691,7 +6776,7 @@
         "x": 16,
         "y": 69
       },
-      "id": 46,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6843,7 +6928,7 @@
         "x": 0,
         "y": 74
       },
-      "id": 47,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6996,7 +7081,7 @@
         "x": 12,
         "y": 74
       },
-      "id": 48,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7146,7 +7231,7 @@
         "x": 0,
         "y": 79
       },
-      "id": 49,
+      "id": 52,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -7169,7 +7254,7 @@
         "x": 0,
         "y": 80
       },
-      "id": 50,
+      "id": 53,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7329,7 +7414,7 @@
         "x": 8,
         "y": 80
       },
-      "id": 51,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7489,7 +7574,7 @@
         "x": 16,
         "y": 80
       },
-      "id": 52,
+      "id": 55,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7674,7 +7759,7 @@
         "x": 0,
         "y": 85
       },
-      "id": 53,
+      "id": 56,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -7693,7 +7778,7 @@
         "x": 0,
         "y": 86
       },
-      "id": 54,
+      "id": 57,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7926,7 +8011,7 @@
         "x": 12,
         "y": 86
       },
-      "id": 55,
+      "id": 58,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8079,7 +8164,7 @@
         "x": 0,
         "y": 91
       },
-      "id": 56,
+      "id": 59,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -8097,7 +8182,7 @@
         "x": 0,
         "y": 92
       },
-      "id": 57,
+      "id": 60,
       "legend": {
         "avg": false,
         "current": false,
@@ -8218,7 +8303,7 @@
         "x": 12,
         "y": 92
       },
-      "id": 58,
+      "id": 61,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8367,7 +8452,7 @@
         "x": 0,
         "y": 97
       },
-      "id": 59,
+      "id": 62,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -8385,7 +8470,7 @@
         "x": 0,
         "y": 98
       },
-      "id": 60,
+      "id": 63,
       "legend": {
         "avg": false,
         "current": false,
@@ -8577,7 +8662,7 @@
         "x": 8,
         "y": 98
       },
-      "id": 61,
+      "id": 64,
       "legend": {
         "avg": false,
         "current": false,
@@ -8769,7 +8854,7 @@
         "x": 16,
         "y": 98
       },
-      "id": 62,
+      "id": 65,
       "legend": {
         "avg": false,
         "current": false,
@@ -9016,7 +9101,7 @@
     ]
   },
   "time": {
-    "from": "now-5m",
+    "from": "now-5h",
     "to": "now"
   },
   "timepicker": {
