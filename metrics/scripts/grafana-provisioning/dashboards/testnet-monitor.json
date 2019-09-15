@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 941,
-  "iteration": 1568388890146,
+  "id": 947,
+  "iteration": 1568522114558,
   "links": [
     {
       "asDropdown": true,
@@ -3519,7 +3519,7 @@
         "x": 16,
         "y": 32
       },
-      "id": 33,
+      "id": 31,
       "legend": {
         "avg": false,
         "current": false,
@@ -3889,7 +3889,7 @@
         "x": 0,
         "y": 38
       },
-      "id": 31,
+      "id": 32,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3974,7 +3974,7 @@
         "x": 8,
         "y": 38
       },
-      "id": 66,
+      "id": 33,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -4024,7 +4024,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT host_id,error FROM \"$testnet\".\"autogen\".\"validator_process_entry_error\"  WHERE $timeFilter ORDER BY time DESC ",
+          "query": "SELECT host_id,error FROM \"$testnet\".\"autogen\".\"blocktree_error\"  WHERE $timeFilter ORDER BY time DESC ",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
@@ -4045,7 +4045,7 @@
           "tags": []
         }
       ],
-      "title": "Unexpected Validator Process Entry Errors",
+      "title": "Unexpected Blocktree Errors",
       "transform": "table",
       "type": "table"
     },
@@ -4059,7 +4059,7 @@
         "x": 16,
         "y": 38
       },
-      "id": 32,
+      "id": 34,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -4142,7 +4142,7 @@
         "x": 0,
         "y": 44
       },
-      "id": 34,
+      "id": 35,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -4160,7 +4160,7 @@
         "x": 0,
         "y": 45
       },
-      "id": 35,
+      "id": 36,
       "legend": {
         "avg": false,
         "current": false,
@@ -4275,7 +4275,7 @@
         "x": 12,
         "y": 45
       },
-      "id": 36,
+      "id": 37,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4461,7 +4461,7 @@
         "x": 0,
         "y": 50
       },
-      "id": 37,
+      "id": 38,
       "panels": [],
       "title": "Bench Exchange",
       "type": "row"
@@ -4479,7 +4479,7 @@
         "x": 0,
         "y": 51
       },
-      "id": 38,
+      "id": 39,
       "legend": {
         "avg": false,
         "current": false,
@@ -4630,7 +4630,7 @@
         "x": 12,
         "y": 51
       },
-      "id": 39,
+      "id": 40,
       "legend": {
         "avg": false,
         "current": false,
@@ -4813,7 +4813,7 @@
         "x": 0,
         "y": 56
       },
-      "id": 40,
+      "id": 41,
       "panels": [],
       "title": "Fullnode Streamer",
       "type": "row"
@@ -4831,7 +4831,7 @@
         "x": 0,
         "y": 57
       },
-      "id": 41,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5245,7 +5245,7 @@
         "x": 8,
         "y": 57
       },
-      "id": 42,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5591,7 +5591,7 @@
         "x": 16,
         "y": 57
       },
-      "id": 43,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5800,7 +5800,7 @@
         "x": 0,
         "y": 63
       },
-      "id": 44,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6118,7 +6118,7 @@
         "x": 8,
         "y": 63
       },
-      "id": 45,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6307,7 +6307,7 @@
         "x": 16,
         "y": 63
       },
-      "id": 46,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6501,7 +6501,7 @@
         "x": 0,
         "y": 69
       },
-      "id": 47,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6657,7 +6657,7 @@
         "x": 8,
         "y": 69
       },
-      "id": 48,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6776,7 +6776,7 @@
         "x": 16,
         "y": 69
       },
-      "id": 49,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6928,7 +6928,7 @@
         "x": 0,
         "y": 74
       },
-      "id": 50,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7081,7 +7081,7 @@
         "x": 12,
         "y": 74
       },
-      "id": 51,
+      "id": 52,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7231,7 +7231,7 @@
         "x": 0,
         "y": 79
       },
-      "id": 52,
+      "id": 53,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -7254,7 +7254,7 @@
         "x": 0,
         "y": 80
       },
-      "id": 53,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7414,7 +7414,7 @@
         "x": 8,
         "y": 80
       },
-      "id": 54,
+      "id": 55,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7574,7 +7574,7 @@
         "x": 16,
         "y": 80
       },
-      "id": 55,
+      "id": 56,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7759,7 +7759,7 @@
         "x": 0,
         "y": 85
       },
-      "id": 56,
+      "id": 57,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -7778,7 +7778,7 @@
         "x": 0,
         "y": 86
       },
-      "id": 57,
+      "id": 58,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8011,7 +8011,7 @@
         "x": 12,
         "y": 86
       },
-      "id": 58,
+      "id": 59,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8164,7 +8164,7 @@
         "x": 0,
         "y": 91
       },
-      "id": 59,
+      "id": 60,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -8182,7 +8182,7 @@
         "x": 0,
         "y": 92
       },
-      "id": 60,
+      "id": 61,
       "legend": {
         "avg": false,
         "current": false,
@@ -8303,7 +8303,7 @@
         "x": 12,
         "y": 92
       },
-      "id": 61,
+      "id": 62,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8452,7 +8452,7 @@
         "x": 0,
         "y": 97
       },
-      "id": 62,
+      "id": 63,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -8470,7 +8470,7 @@
         "x": 0,
         "y": 98
       },
-      "id": 63,
+      "id": 64,
       "legend": {
         "avg": false,
         "current": false,
@@ -8662,7 +8662,7 @@
         "x": 8,
         "y": 98
       },
-      "id": 64,
+      "id": 65,
       "legend": {
         "avg": false,
         "current": false,
@@ -8854,7 +8854,7 @@
         "x": 16,
         "y": 98
       },
-      "id": 65,
+      "id": 66,
       "legend": {
         "avg": false,
         "current": false,
