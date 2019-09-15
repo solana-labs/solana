@@ -2435,7 +2435,7 @@ pub mod tests {
     pub fn test_handle_chaining_basic() {
         let blocktree_path = get_tmp_ledger_path("test_handle_chaining_basic");
         {
-            let entries_per_slot = 2;
+            let entries_per_slot = 5;
             let num_slots = 3;
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -2453,7 +2453,7 @@ pub mod tests {
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s1.is_connected);
             assert_eq!(s1.parent_slot, 0);
-            assert_eq!(s1.last_index, entries_per_slot - 1);
+            assert_eq!(s1.last_index, shreds_per_slot as u64 - 1);
 
             // 2) Write to the second slot
             let shreds2 = shreds
@@ -2465,7 +2465,7 @@ pub mod tests {
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s2.is_connected);
             assert_eq!(s2.parent_slot, 1);
-            assert_eq!(s2.last_index, entries_per_slot - 1);
+            assert_eq!(s2.last_index, shreds_per_slot as u64 - 1);
 
             // Check the first slot again, it should chain to the second slot,
             // but still isn't part of the trunk
@@ -2473,7 +2473,7 @@ pub mod tests {
             assert_eq!(s1.next_slots, vec![2]);
             assert!(!s1.is_connected);
             assert_eq!(s1.parent_slot, 0);
-            assert_eq!(s1.last_index, entries_per_slot - 1);
+            assert_eq!(s1.last_index, shreds_per_slot as u64 - 1);
 
             // 3) Write to the zeroth slot, check that every slot
             // is now part of the trunk
@@ -2489,7 +2489,7 @@ pub mod tests {
                 } else {
                     assert_eq!(s.parent_slot, i - 1);
                 }
-                assert_eq!(s.last_index, entries_per_slot - 1);
+                assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
                 assert!(s.is_connected);
             }
         }
@@ -2502,11 +2502,12 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 30;
-            let entries_per_slot = 2;
+            let entries_per_slot = 5;
 
             // Separate every other slot into two separate vectors
             let mut slots = vec![];
             let mut missing_slots = vec![];
+            let mut shreds_per_slot = 2;
             for slot in 0..num_slots {
                 let parent_slot = {
                     if slot == 0 {
@@ -2516,6 +2517,7 @@ pub mod tests {
                     }
                 };
                 let (slot_shreds, _) = make_slot_entries(slot, parent_slot, entries_per_slot);
+                shreds_per_slot = slot_shreds.len();
 
                 if slot % 2 == 1 {
                     slots.extend(slot_shreds);
@@ -2568,7 +2570,7 @@ pub mod tests {
                 } else {
                     assert_eq!(s.parent_slot, i - 1);
                 }
-                assert_eq!(s.last_index, entries_per_slot - 1);
+                assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
                 assert!(s.is_connected);
             }
         }
@@ -2582,7 +2584,7 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 15;
-            let entries_per_slot = 2;
+            let entries_per_slot = 5;
             assert!(entries_per_slot > 1);
 
             let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
@@ -2617,7 +2619,7 @@ pub mod tests {
                     assert_eq!(s.parent_slot, i - 1);
                 }
 
-                assert_eq!(s.last_index, entries_per_slot - 1);
+                assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
 
                 // Other than slot 0, no slots should be part of the trunk
                 if i != 0 {
@@ -2653,7 +2655,7 @@ pub mod tests {
                             assert_eq!(s.parent_slot, i - 1);
                         }
 
-                        assert_eq!(s.last_index, entries_per_slot - 1);
+                        assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
                     }
                 }
             }
