@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &RentCalculator::default().lamports_per_byte_year.to_string();
     let default_rent_exemption_threshold =
         &RentCalculator::default().exemption_threshold.to_string();
-    let default_rent_burn_percantage = &RentCalculator::default().burn_percent.to_string();
+    let default_rent_burn_percentage = &RentCalculator::default().burn_percent.to_string();
     let default_target_signatures_per_slot = &FeeCalculator::default()
         .target_signatures_per_slot
         .to_string();
@@ -200,11 +200,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("rent_burn_percantage")
-                .long("rent-burn-percantage")
+            Arg::with_name("rent_burn_percentage")
+                .long("rent-burn-percentage")
                 .value_name("NUMBER")
                 .takes_value(true)
-                .default_value(default_rent_burn_percantage)
+                .default_value(default_rent_burn_percentage)
                 .help("amount of rent to burn, as a fraction of std::u8::MAX."),
         )
         .arg(
@@ -341,7 +341,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let rent_calculator = RentCalculator {
         lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
         exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
-        burn_percent: value_t_or_exit!(matches, "rent_burn_percantage", u8),
+        burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
     };
     builder = builder.rent_calculator(rent_calculator);
 
