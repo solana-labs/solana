@@ -80,9 +80,9 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.19.0-pr
 
 # reed-solomon-erasure's simd_c feature fails to build for x86_64-pc-windows-msvc, use pure-rust
 [target.'cfg(windows)'.dependencies]
-reed-solomon-erasure = { version = "3.1.1", features = ["pure-rust"] }
+reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "3.1.1", features = ["pure-rust"] }
 [target.'cfg(not(windows))'.dependencies]
-reed-solomon-erasure = "3.1.1"
+reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "3.1.1" }
 
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
