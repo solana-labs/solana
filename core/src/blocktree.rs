@@ -704,7 +704,7 @@ impl Blocktree {
     ) -> bool {
         let shred_index = u64::from(shred.index());
         let slot = shred.slot();
-        let last_in_slot = if let Shred::LastInSlot(_) = shred {
+        let last_in_slot = if shred.last_in_slot() {
             debug!("got last in slot");
             true
         } else {
@@ -793,7 +793,7 @@ impl Blocktree {
         let index = u64::from(shred.index());
         let parent = shred.parent();
 
-        let last_in_slot = if let Shred::LastInSlot(_) = shred {
+        let last_in_slot = if shred.last_in_slot() {
             debug!("got last in slot");
             true
         } else {
@@ -1083,9 +1083,7 @@ impl Blocktree {
             let mut shred_chunk = vec![];
             while look_for_last_shred && !shreds.is_empty() {
                 let shred = shreds.remove(0);
-                if let Shred::DataComplete(_) = shred {
-                    look_for_last_shred = false;
-                } else if let Shred::LastInSlot(_) = shred {
+                if shred.data_complete() || shred.last_in_slot() {
                     look_for_last_shred = false;
                 }
                 shred_chunk.push(shred);
@@ -3133,7 +3131,9 @@ pub mod tests {
             assert_eq!(slot_meta.received, 9);
             let shred7 = {
                 if let Shred::Data(ref s) = shreds[7] {
-                    Shred::LastInSlot(s.clone())
+                    let mut shred = Shred::Data(s.clone());
+                    shred.set_last_in_slot();
+                    shred
                 } else {
                     panic!("Shred in unexpected format")
                 }
