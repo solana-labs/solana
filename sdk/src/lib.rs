@@ -13,7 +13,7 @@ pub mod native_loader;
 pub mod packet;
 pub mod poh_config;
 pub mod pubkey;
-pub mod rent;
+pub mod rent_calculator;
 pub mod rpc_port;
 pub mod short_vec;
 pub mod system_instruction;
