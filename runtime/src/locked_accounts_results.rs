@@ -6,6 +6,7 @@ pub struct LockedAccountsResults<'a, 'b> {
     locked_accounts_results: Vec<Result<()>>,
     bank: &'a Bank,
     transactions: &'b [Transaction],
+    txs_iteration_order: Option<Vec<usize>>,
     pub(crate) needs_unlock: bool,
 }
 
@@ -14,11 +15,13 @@ impl<'a, 'b> LockedAccountsResults<'a, 'b> {
         locked_accounts_results: Vec<Result<()>>,
         bank: &'a Bank,
         transactions: &'b [Transaction],
+        txs_iteration_order: Option<Vec<usize>>,
     ) -> Self {
         Self {
             locked_accounts_results,
             bank,
             transactions,
+            txs_iteration_order,
             needs_unlock: true,
         }
     }
@@ -29,6 +32,10 @@ impl<'a, 'b> LockedAccountsResults<'a, 'b> {
 
     pub fn transactions(&self) -> &[Transaction] {
         self.transactions
+    }
+
+    pub fn txs_iteration_order(&self) -> Option<&[usize]> {
+        self.txs_iteration_order.as_ref().map(|v| v.as_slice())
     }
 }
 

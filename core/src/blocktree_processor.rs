@@ -37,46 +37,35 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn par_execute_entries(
-    bank: &Bank,
-    entries: &[(&Entry, LockedAccountsResults, bool, Vec<usize>)],
-) -> Result<()> {
+fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)]) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", entries.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             entries
                 .into_par_iter()
-                .map(
-                    |(e, locked_accounts, randomize_tx_order, random_txs_execution_order)| {
-                        let tx_execution_order: Option<&[usize]> = if *randomize_tx_order {
-                            Some(random_txs_execution_order)
-                        } else {
-                            None
-                        };
-                        let results = bank.load_execute_and_commit_transactions(
-                            &e.transactions,
-                            tx_execution_order,
-                            locked_accounts,
-                            MAX_RECENT_BLOCKHASHES,
-                        );
-                        let mut first_err = None;
-                        for (r, tx) in results.iter().zip(e.transactions.iter()) {
-                            if let Err(ref e) = r {
-                                if first_err.is_none() {
-                                    first_err = Some(r.clone());
-                                }
-                                if !Bank::can_commit(&r) {
-                                    warn!("Unexpected validator error: {:?}, tx: {:?}", e, tx);
-                                    datapoint_error!(
-                                        "validator_process_entry_error",
-                                        ("error", format!("error: {:?}, tx: {:?}", e, tx), String)
-                                    );
-                                }
+                .map(|(e, locked_accounts)| {
+                    let results = bank.load_execute_and_commit_transactions(
+                        &e.transactions,
+                        locked_accounts,
+                        MAX_RECENT_BLOCKHASHES,
+                    );
+                    let mut first_err = None;
+                    for (r, tx) in results.iter().zip(e.transactions.iter()) {
+                        if let Err(ref e) = r {
+                            if first_err.is_none() {
+                                first_err = Some(r.clone());
+                            }
+                            if !Bank::can_commit(&r) {
+                                warn!("Unexpected validator error: {:?}, tx: {:?}", e, tx);
+                                datapoint_error!(
+                                    "validator_process_entry_error",
+                                    ("error", format!("error: {:?}, tx: {:?}", e, tx), String)
+                                );
                             }
                         }
-                        first_err.unwrap_or(Ok(()))
-                    },
-                )
+                    }
+                    first_err.unwrap_or(Ok(()))
+                })
                 .collect()
         })
     });
@@ -106,16 +95,11 @@ pub fn process_entries(
         }
         // else loop on processing the entry
         loop {
-            // random_txs_execution_order need to be seperately defined apart from txs_execution_order,
-            // to satisfy borrow checker.
-            let mut random_txs_execution_order: Vec<usize> = vec![];
-            if randomize_tx_execution_order {
-                random_txs_execution_order = (0..entry.transactions.len()).collect();
+            let txs_execution_order = if randomize_tx_execution_order {
+                let mut random_txs_execution_order: Vec<usize> =
+                    (0..entry.transactions.len()).collect();
                 random_txs_execution_order.shuffle(&mut thread_rng());
-            }
-
-            let txs_execution_order: Option<&[usize]> = if randomize_tx_execution_order {
-                Some(&random_txs_execution_order)
+                Some(random_txs_execution_order)
             } else {
                 None
             };
@@ -127,13 +111,7 @@ pub fn process_entries(
 
             // if locking worked
             if first_lock_err.is_ok() {
-                // push the entry to the mt_group
-                mt_group.push((
-                    entry,
-                    lock_results,
-                    randomize_tx_execution_order,
-                    random_txs_execution_order,
-                ));
+                mt_group.push((entry, lock_results));
                 // done with this entry
                 break;
             }
