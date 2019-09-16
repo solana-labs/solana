@@ -34,8 +34,8 @@ lazy_static! {
 }
 
 /// The constants that define if a shred is data or coding
-const DATA_SHRED: u8 = 0b10100101;
-const CODING_SHRED: u8 = 0b01011010;
+const DATA_SHRED: u8 = 0b1010_0101;
+const CODING_SHRED: u8 = 0b0101_1010;
 
 #[derive(Clone, Debug)]
 pub struct ShredInfo {
@@ -52,19 +52,20 @@ impl ShredInfo {
     }
 
     pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> Self {
-        let mut header = DataShredHeader::default();
         let header_offset = *SIZE_OF_SHRED_CODING_SHRED - *SIZE_OF_EMPTY_CODING_SHRED;
         let shred_type: u8 =
             bincode::deserialize(&shred_buf[header_offset..header_offset + *SIZE_OF_SHRED_TYPE])
                 .unwrap();
-        if shred_type == CODING_SHRED {
+        let header = if shred_type == CODING_SHRED {
             let end = *SIZE_OF_CODING_SHRED_HEADER;
+            let mut header = DataShredHeader::default();
             header.common_header.header =
                 bincode::deserialize(&shred_buf[header_offset..header_offset + end]).unwrap();
+            header
         } else {
             let end = *SIZE_OF_DATA_SHRED_HEADER;
-            header = bincode::deserialize(&shred_buf[header_offset..header_offset + end]).unwrap();
-        }
+            bincode::deserialize(&shred_buf[header_offset..header_offset + end]).unwrap()
+        };
         Self::new(header, shred_buf)
     }
 
@@ -169,8 +170,8 @@ pub enum Shred {
 /// a public constant defined for it.
 const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 4;
 
-const LAST_SHRED_IN_SLOT: u8 = 0b00000001;
-const DATA_COMPLETE_SHRED: u8 = 0b00000010;
+const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
+const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
 
 impl Shred {
     pub fn slot(&self) -> u64 {
