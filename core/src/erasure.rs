@@ -41,7 +41,7 @@
 //!
 //!
 
-use reed_solomon_erasure::ReedSolomon;
+use reed_solomon_erasure::{ParallelParam, ReedSolomon};
 
 //TODO(sakridge) pick these values
 /// Number of data blobs
@@ -90,13 +90,14 @@ pub struct Session(ReedSolomon);
 
 impl Session {
     pub fn new(data_count: usize, coding_count: usize) -> Result<Session> {
-        let rs = ReedSolomon::new(data_count, coding_count)?;
+        let rs = ReedSolomon::with_pparam(data_count, coding_count, ParallelParam::Disabled)?;
 
         Ok(Session(rs))
     }
 
     pub fn new_from_config(config: &ErasureConfig) -> Result<Session> {
-        let rs = ReedSolomon::new(config.num_data, config.num_coding)?;
+        let rs =
+            ReedSolomon::with_pparam(config.num_data, config.num_coding, ParallelParam::Disabled)?;
 
         Ok(Session(rs))
     }
