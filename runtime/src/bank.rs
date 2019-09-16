@@ -628,7 +628,7 @@ impl Bank {
 
         self.inflation = genesis_block.inflation;
 
-        let rent_calculator = genesis_block.rent_calculator.clone();
+        let rent_calculator = genesis_block.rent_calculator;
         self.rent_collector = RentCollector::new(
             self.epoch,
             &self.epoch_schedule,
