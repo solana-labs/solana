@@ -42,7 +42,7 @@ pub fn create_account(lamports: u64, rent_calculator: &RentCalculator) -> Accoun
     Account::new_data(
         lamports,
         &Rent {
-            rent_calculator: rent_calculator.clone(),
+            rent_calculator: *rent_calculator,
         },
         &sysvar::id(),
     )
