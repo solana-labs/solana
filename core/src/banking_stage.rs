@@ -961,7 +961,7 @@ mod tests {
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
-    use crate::{entry, get_tmp_ledger_path, packet, tmp_ledger_name};
+    use crate::{get_tmp_ledger_path, tmp_ledger_name};
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_sdk::instruction::InstructionError;
@@ -1769,27 +1769,11 @@ mod tests {
             ..
         } = create_genesis_block(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let mut transactions = vec![];
 
-        loop {
-            let pubkey = Pubkey::new_rand();
-            // Make enough transactions to span multiple entries
-            transactions.push(system_transaction::transfer(
-                &mint_keypair,
-                &pubkey,
-                1,
-                genesis_block.hash(),
-            ));
+        let pubkey = Pubkey::new_rand();
 
-            if entry::num_will_fit(
-                &transactions[0..],
-                packet::BLOB_DATA_SIZE as u64,
-                &Entry::serialized_to_blob_size,
-            ) < transactions.len()
-            {
-                break;
-            }
-        }
+        let transactions =
+            vec![system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(),); 3];
 
         let ledger_path = get_tmp_ledger_path!();
         {
