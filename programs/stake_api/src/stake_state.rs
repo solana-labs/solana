@@ -553,8 +553,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     stake.stake(clock.epoch, Some(stake_history))
                 } else {
                     // Assume full stake if the stake account hasn't been
-                    //  de-activated, because in the future the exposeed stake
-                    //  might be higher than stake.stake(), 'cuz warmup
+                    //  de-activated, because in the future the exposed stake
+                    //  might be higher than stake.stake() due to warmup
                     stake.stake
                 };
 
