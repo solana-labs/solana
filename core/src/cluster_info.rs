@@ -417,7 +417,7 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// all peers that have a valid tvu port.
+    /// all validators that have a valid tvu port.
     pub fn tvu_peers(&self) -> Vec<ContactInfo> {
         let me = self.my_data().id;
         self.gossip
@@ -426,6 +426,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .filter(|x| !ClusterInfo::is_replicator(x))
             .filter(|x| x.id != me)
             .cloned()
             .collect()
