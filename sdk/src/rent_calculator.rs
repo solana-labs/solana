@@ -1,7 +1,7 @@
 //! configuration for network rent
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
-pub struct Rent {
+pub struct RentCalculator {
     /// Rental rate
     pub lamports_per_byte_year: u64,
 
@@ -25,7 +25,7 @@ pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 /// default amount of rent to burn, as a fraction of std::u8::MAX
 pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
 
-impl Default for Rent {
+impl Default for RentCalculator {
     fn default() -> Self {
         Self {
             lamports_per_byte_year: DEFAULT_LAMPORTS_PER_BYTE_YEAR,
@@ -35,7 +35,7 @@ impl Default for Rent {
     }
 }
 
-impl Rent {
+impl RentCalculator {
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
@@ -66,17 +66,17 @@ mod tests {
 
     #[test]
     fn test_due() {
-        let rent = Rent::default();
+        let rent_calculator = RentCalculator::default();
 
         assert_eq!(
-            rent.due(0, 1, 1.0),
+            rent_calculator.due(0, 1, 1.0),
             (
                 DEFAULT_LAMPORTS_PER_BYTE_YEAR,
                 DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
             )
         );
         assert_eq!(
-            rent.due(
+            rent_calculator.due(
                 DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64,
                 1,
                 1.0
@@ -94,21 +94,21 @@ mod tests {
     //        const SLOTS_PER_YEAR: f64 =
     //            SECONDS_PER_YEAR / (DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64);
     //
-    //        let rent = Rent::default();
+    //        let rent_calculator = RentCalculator::default();
     //
     //        eprintln();
     //        // lamports charged per byte per slot at $1/MByear, rent per slot is zero
     //        eprintln(
-    //            "{} lamports per byte-slot, rent.due(): {}",
+    //            "{} lamports per byte-slot, rent_calculator.due(): {}",
     //            (1.0 / SLOTS_PER_YEAR) * DEFAULT_LAMPORTS_PER_BYTE_YEAR as f64,
-    //            rent.due(0, 1, 1.0 / SLOTS_PER_YEAR).0,
+    //            rent_calculator.due(0, 1, 1.0 / SLOTS_PER_YEAR).0,
     //        );
     //        // lamports charged per byte per _epoch_ starts to have some significant digits
     //        eprintln(
-    //            "{} lamports per byte-epoch, rent.due(): {}",
+    //            "{} lamports per byte-epoch, rent_calculator.due(): {}",
     //            (1.0 / SLOTS_PER_YEAR)
     //                * (DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_SLOTS_PER_EPOCH) as f64,
-    //            rent.due(
+    //            rent_calculator.due(
     //                0,
     //                1,
     //                (1.0 / SLOTS_PER_YEAR) * DEFAULT_SLOTS_PER_EPOCH as f64
@@ -119,7 +119,7 @@ mod tests {
     //        eprintln(
     //            "stake_history: {}kB == {} lamports per epoch",
     //            crate::sysvar::stake_history::StakeHistory::size_of() / 1024,
-    //            rent.due(
+    //            rent_calculator.due(
     //                0,
     //                crate::sysvar::stake_history::StakeHistory::size_of(),
     //                (1.0 / SLOTS_PER_YEAR) * DEFAULT_SLOTS_PER_EPOCH as f64
