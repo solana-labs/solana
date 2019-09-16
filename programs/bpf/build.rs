@@ -89,10 +89,7 @@ fn main() {
                 .arg("build")
                 .arg(program)
                 .status()
-                .expect(&format!(
-                    "Failed to call solana-bpf-rust-{}'s build.sh",
-                    program
-                ))
+                .expect("Failed to call do.sh")
                 .success());
             let src = format!(
                 "target/bpfel-unknown-unknown/release/solana_bpf_rust_{}.so",

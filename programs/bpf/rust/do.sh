@@ -20,18 +20,25 @@ Supported actions:
 EOF
 }
 
-sdkDir=../../..
-targetDir=../../target
+sdkDir=../../../sdk
+targetDir="$PWD"/../target
 profile=bpfel-unknown-unknown/release
 
 perform_action() {
-    set -e
+    set -ex
     case "$1" in
     build)
-         "$sdkDir"/sdk/bpf/rust/build.sh "$2"
+         "$sdkDir"/bpf/rust/build.sh "$2"
+
+         so_path="$targetDir/$profile/"
+         so_name="solana_bpf_rust_${3%/}"
+         if [ -f "$so_path/${so_name}.so" ]; then
+               cp "$so_path/${so_name}.so" "$so_path/${so_name}_debug.so"
+                "$sdkDir"/bpf/dependencies/llvm-native/bin/llvm-objcopy --strip-all "$so_path/${so_name}.so" "$so_path/$so_name.so"
+        fi
         ;;
     clean)
-         "$sdkDir"/sdk/bpf/rust/clean.sh "$2"
+         "$sdkDir"/bpf/rust/clean.sh "$2"
         ;;
     test)
         (
@@ -57,33 +64,36 @@ perform_action() {
     dump)
         # Dump depends on tools that are not installed by default and must be installed manually
         # - greadelf
-        # - llvm-objdump
         # - rustfilt
         (
             pwd
             ./do.sh build "$3"
 
             cd "$3"
+            so="$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so
+            dump="$targetDir"/"${3%/}"-dump
 
-            ls \
-                -la \
-                "$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so \
-                > "$targetDir"/"${3%/}"-dump-mangled.txt
-            greadelf \
-                -aW \
-                "$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so \
-                >> "$targetDir"/"${3%/}"-dump-mangled.txt
-            llvm-objdump \
-                -print-imm-hex \
-                --source \
-                --disassemble \
-                "$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so \
-                >> "$targetDir"/"${3%/}"-dump-mangled.txt
-            sed \
-                s/://g \
-                < "$targetDir"/"${3%/}"-dump-mangled.txt \
-                | rustfilt \
-                > "$targetDir"/"${3%/}"-dump.txt
+            if [ -f "$so" ]; then
+                ls \
+                    -la \
+                    "$so" \
+                    > "${dump}-mangled.txt"
+                greadelf \
+                    -aW \
+                    "$so" \
+                    >> "${dump}-mangled.txt"
+                ../"$sdkDir"/bpf/dependencies/llvm-native/bin/llvm-objdump \
+                    -print-imm-hex \
+                    --source \
+                    --disassemble \
+                    "$so" \
+                    >> "${dump}-mangled.txt"
+                sed \
+                    s/://g \
+                    < "${dump}-mangled.txt" \
+                    | rustfilt \
+                    > "${dump}.txt"
+            fi
         )
         ;;
     help)
