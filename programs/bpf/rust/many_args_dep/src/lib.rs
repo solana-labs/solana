@@ -14,7 +14,7 @@ pub fn many_args(
     arg8: u64,
     arg9: u64,
 ) -> u64 {
-    info!("Another package");
+    info!("Another package - many_args");
     info!(arg1, arg2, arg3, arg4, arg5);
     info!(arg6, arg7, arg8, arg9, 0);
     arg1 + arg2 + arg3 + arg4 + arg5 + arg6 + arg7 + arg8 + arg9
@@ -38,7 +38,7 @@ pub fn many_args_sret(
     arg8: u64,
     arg9: u64,
 ) -> Ret {
-    info!("Another package");
+    info!("Another package - many_args_sret");
     info!(arg1, arg2, arg3, arg4, arg5);
     info!(arg6, arg7, arg8, arg9, 0);
     Ret {
@@ -54,18 +54,19 @@ mod test {
     use super::*;
 
     #[test]
-    fn pull_in_externs() {
-        // Rust on Linux excludes the externs unless there is a
-        // direct dependency, use this test to force the pull in of the library.
-        // This is not necessary on macos and unfortunate on Linux
-        // Issue #4972
-        use solana_sdk::program_test::*;
-        unsafe { sol_log_("X".as_ptr(), 1) };
-        sol_log_64_(1, 2, 3, 4, 5);
+    fn test_many_args() {
+        assert_eq!(45, many_args(1, 2, 3, 4, 5, 6, 7, 8, 9));
     }
 
     #[test]
-    fn test_many_args() {
-        assert_eq!(45, many_args(1, 2, 3, 4, 5, 6, 7, 8, 9));
+    fn test_sret() {
+        assert_eq!(
+            Ret {
+                group1: 6,
+                group2: 15,
+                group3: 24
+            },
+            many_args_sret(1, 2, 3, 4, 5, 6, 7, 8, 9)
+        );
     }
 }
