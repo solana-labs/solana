@@ -67,9 +67,9 @@ test('SystemInstruction create', () => {
   const transaction = new Transaction({recentBlockhash}).add(create);
 
   const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
-  expect(systemInstruction.From).toEqual(from.publicKey);
-  expect(systemInstruction.To).toEqual(to.publicKey);
-  expect(systemInstruction.Amount).toEqual(amount);
+  expect(systemInstruction.fromPublicKey).toEqual(from.publicKey);
+  expect(systemInstruction.toPublicKey).toEqual(to.publicKey);
+  expect(systemInstruction.amount).toEqual(amount);
   expect(systemInstruction.programId).toEqual(SystemProgram.programId);
 });
 
@@ -83,9 +83,9 @@ test('SystemInstruction transfer', () => {
   transaction.sign(from);
 
   const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
-  expect(systemInstruction.From).toEqual(from.publicKey);
-  expect(systemInstruction.To).toEqual(to.publicKey);
-  expect(systemInstruction.Amount).toEqual(amount);
+  expect(systemInstruction.fromPublicKey).toEqual(from.publicKey);
+  expect(systemInstruction.toPublicKey).toEqual(to.publicKey);
+  expect(systemInstruction.amount).toEqual(amount);
   expect(systemInstruction.programId).toEqual(SystemProgram.programId);
 });
 
@@ -98,9 +98,9 @@ test('SystemInstruction assign', () => {
   transaction.sign(from);
 
   const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
-  expect(systemInstruction.From).toBeNull();
-  expect(systemInstruction.To).toBeNull();
-  expect(systemInstruction.Amount).toBeNull();
+  expect(systemInstruction.fromPublicKey).toBeNull();
+  expect(systemInstruction.toPublicKey).toBeNull();
+  expect(systemInstruction.amount).toBeNull();
   expect(systemInstruction.programId).toEqual(SystemProgram.programId);
 });
 
