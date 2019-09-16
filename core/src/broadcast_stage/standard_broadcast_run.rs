@@ -79,7 +79,7 @@ impl BroadcastRun for StandardBroadcastRun {
             0
         };
 
-        let (all_shreds, all_shred_bufs, latest_shred_index) = entries_to_shreds(
+        let (all_shreds, shred_infos, latest_shred_index) = entries_to_shreds(
             receive_results.ventries,
             bank.slot(),
             last_tick,
@@ -102,6 +102,7 @@ impl BroadcastRun for StandardBroadcastRun {
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
+        let all_shred_bufs: Vec<Vec<u8>> = shred_infos.into_iter().map(|s| s.shred).collect();
         trace!("Broadcasting {:?} shreds", all_shred_bufs.len());
         cluster_info.read().unwrap().broadcast_shreds(
             sock,

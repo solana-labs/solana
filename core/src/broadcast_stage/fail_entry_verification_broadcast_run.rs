@@ -41,7 +41,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        let (shreds, shred_bufs, _) = broadcast_utils::entries_to_shreds(
+        let (shreds, shred_infos, _) = broadcast_utils::entries_to_shreds(
             receive_results.ventries,
             bank.slot(),
             last_tick,
@@ -59,6 +59,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
+        let shred_bufs: Vec<Vec<u8>> = shred_infos.into_iter().map(|s| s.shred).collect();
         // Broadcast data + erasures
         cluster_info.read().unwrap().broadcast_shreds(
             sock,
