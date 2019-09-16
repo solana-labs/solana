@@ -38,10 +38,7 @@ pub struct ShredMetaBuf {
 
 #[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub enum Shred {
-    FirstInSlot(DataShred),
     Data(DataShred),
-    DataComplete(DataShred),
-    LastInSlot(DataShred),
     Coding(CodingShred),
 }
 
@@ -55,22 +52,14 @@ const DATA_COMPLETE_SHRED: u8 = 2;
 impl Shred {
     pub fn slot(&self) -> u64 {
         match self {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => s.header.common_header.slot,
+            Shred::Data(s) => s.header.common_header.slot,
             Shred::Coding(s) => s.header.common_header.slot,
         }
     }
 
     pub fn parent(&self) -> u64 {
         match self {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => {
-                s.header.common_header.slot - u64::from(s.header.parent_offset)
-            }
+            Shred::Data(s) => s.header.common_header.slot - u64::from(s.header.parent_offset),
             Shred::Coding(_) => std::u64::MAX,
         }
     }
@@ -78,10 +67,7 @@ impl Shred {
     pub fn set_slot(&mut self, slot: u64) {
         let parent = self.parent();
         match self {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => {
+            Shred::Data(s) => {
                 s.header.common_header.slot = slot;
                 s.header.parent_offset = (slot - parent) as u16;
             }
@@ -91,40 +77,28 @@ impl Shred {
 
     pub fn index(&self) -> u32 {
         match self {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => s.header.common_header.index,
+            Shred::Data(s) => s.header.common_header.index,
             Shred::Coding(s) => s.header.common_header.index,
         }
     }
 
     pub fn set_index(&mut self, index: u32) {
         match self {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => s.header.common_header.index = index,
+            Shred::Data(s) => s.header.common_header.index = index,
             Shred::Coding(s) => s.header.common_header.index = index,
         };
     }
 
     pub fn signature(&self) -> Signature {
         match self {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => s.header.common_header.signature,
+            Shred::Data(s) => s.header.common_header.signature,
             Shred::Coding(s) => s.header.common_header.signature,
         }
     }
 
     pub fn set_signature(&mut self, sig: Signature) {
         match self {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => s.header.common_header.signature = sig,
+            Shred::Data(s) => s.header.common_header.signature = sig,
             Shred::Coding(s) => s.header.common_header.signature = sig,
         };
     }
@@ -133,10 +107,7 @@ impl Shred {
         let mut seed = [0; 32];
         let seed_len = seed.len();
         let sig = match self {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => &s.header.common_header.signature,
+            Shred::Data(s) => &s.header.common_header.signature,
             Shred::Coding(s) => &s.header.common_header.signature,
         }
         .as_ref();
@@ -152,10 +123,7 @@ impl Shred {
 
     pub fn fast_verify(&self, shred_buf: &[u8], pubkey: &Pubkey) -> bool {
         let signed_payload_offset = match self {
-            Shred::FirstInSlot(_)
-            | Shred::Data(_)
-            | Shred::DataComplete(_)
-            | Shred::LastInSlot(_) => CodingShred::overhead(),
+            Shred::Data(_) => CodingShred::overhead(),
             Shred::Coding(_) => CodingShred::overhead() - *SIZE_OF_EMPTY_CODING_SHRED,
         } + *SIZE_OF_SIGNATURE;
         self.signature()
@@ -167,6 +135,27 @@ impl Shred {
             false
         } else {
             true
+        }
+    }
+
+    pub fn last_in_slot(&self) -> bool {
+        match self {
+            Shred::Data(s) => s.header.flags & LAST_SHRED_IN_SLOT == LAST_SHRED_IN_SLOT,
+            Shred::Coding(_) => false,
+        }
+    }
+
+    pub fn set_last_in_slot(&mut self) {
+        match self {
+            Shred::Data(s) => s.header.flags |= LAST_SHRED_IN_SLOT,
+            Shred::Coding(_) => {}
+        }
+    }
+
+    pub fn data_complete(&self) -> bool {
+        match self {
+            Shred::Data(s) => s.header.flags & DATA_COMPLETE_SHRED == DATA_COMPLETE_SHRED,
+            Shred::Coding(_) => false,
         }
     }
 }
@@ -309,10 +298,7 @@ impl Write for Shredder {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let written = self.active_offset;
         let (slice_len, capacity) = match self.active_shred.borrow_mut() {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => s.write_at(written, buf),
+            Shred::Data(s) => s.write_at(written, buf),
             Shred::Coding(s) => s.write_at(written, buf),
         };
 
@@ -376,12 +362,7 @@ impl Shredder {
             data_shred.header.common_header.slot = slot;
             data_shred.header.common_header.index = index;
             data_shred.header.parent_offset = (slot - parent) as u16;
-            let active_shred = if index == 0 {
-                // If index is 0, it's the first shred in slot
-                Shred::FirstInSlot(data_shred)
-            } else {
-                Shred::Data(data_shred)
-            };
+            let active_shred = Shred::Data(data_shred);
             Ok(Shredder {
                 slot,
                 index,
@@ -520,21 +501,16 @@ impl Shredder {
     /// If there's an active data shred, morph it into the final shred
     /// If the current active data shred is first in slot, finalize it and create a new shred
     fn make_final_data_shred(&mut self, last_in_slot: u8) {
-        if let Shred::FirstInSlot(_) = &self.active_shred {
+        if self.active_shred.index() == 0 {
             self.finalize_data_shred();
         }
         self.active_shred = match self.active_shred.borrow_mut() {
-            Shred::FirstInSlot(s)
-            | Shred::Data(s)
-            | Shred::DataComplete(s)
-            | Shred::LastInSlot(s) => {
+            Shred::Data(s) => {
                 s.header.flags |= DATA_COMPLETE_SHRED;
                 if last_in_slot == LAST_SHRED_IN_SLOT {
                     s.header.flags |= LAST_SHRED_IN_SLOT;
-                    Shred::LastInSlot(s.clone())
-                } else {
-                    Shred::DataComplete(s.clone())
                 }
+                Shred::Data(s.clone())
             }
             Shred::Coding(_) => unreachable!(),
         };
@@ -585,12 +561,7 @@ impl Shredder {
         first_index: usize,
         missing: usize,
     ) -> Vec<u8> {
-        let missing_shred = if missing == 0 {
-            let mut data_shred = DataShred::default();
-            data_shred.header.common_header.slot = slot;
-            data_shred.header.common_header.index = missing as u32;
-            Shred::FirstInSlot(data_shred)
-        } else if missing < first_index + num_data {
+        let missing_shred = if missing < first_index + num_data {
             let mut data_shred = DataShred::default();
             data_shred.header.common_header.slot = slot;
             data_shred.header.common_header.index = missing as u32;
@@ -679,22 +650,6 @@ impl Shredder {
                                 && (first_index..first_index + num_data).contains(&shred_index)
                             {
                                 // Also, a valid data shred must be indexed between first_index and first+num_data index
-
-                                // Check if the last recovered data shred is also last in Slot.
-                                // If so, it needs to be morphed into the correct type
-                                let shred = if let Shred::Data(s) = shred {
-                                    if s.header.flags & LAST_SHRED_IN_SLOT == LAST_SHRED_IN_SLOT {
-                                        Shred::LastInSlot(s)
-                                    } else if s.header.flags & DATA_COMPLETE_SHRED
-                                        == DATA_COMPLETE_SHRED
-                                    {
-                                        Shred::DataComplete(s)
-                                    } else {
-                                        Shred::Data(s)
-                                    }
-                                } else {
-                                    shred
-                                };
                                 recovered_data.push(shred)
                             } else if (first_index..first_index + num_coding).contains(&shred_index)
                             {
@@ -717,12 +672,11 @@ impl Shredder {
         let num_data = shreds.len();
         let data_shred_bufs = {
             let first_index = shreds.first().unwrap().index() as usize;
-
-            let last_index = match shreds.last().unwrap() {
-                Shred::DataComplete(s) | Shred::LastInSlot(s) => {
-                    s.header.common_header.index as usize
-                }
-                _ => 0,
+            let last_shred = shreds.last().unwrap();
+            let last_index = if last_shred.data_complete() || last_shred.last_in_slot() {
+                last_shred.index() as usize
+            } else {
+                0
             };
 
             if num_data.saturating_add(first_index) != last_index.saturating_add(1) {
@@ -815,7 +769,7 @@ mod tests {
         // Test4: Try deserialize the PDU and assert that it matches the original shred
         let deserialized_shred: Shred =
             bincode::deserialize(&shred).expect("Failed in deserializing the PDU");
-        assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
+        assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
@@ -840,7 +794,7 @@ mod tests {
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
-        assert_matches!(deserialized_shred, Shred::DataComplete(_));
+        assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
@@ -899,7 +853,7 @@ mod tests {
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
 
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
-        assert_matches!(deserialized_shred, Shred::LastInSlot(_));
+        assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 4);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
@@ -931,7 +885,7 @@ mod tests {
         let (_, shred) = shredder.shred_tuples.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
-        assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
+        assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
@@ -940,7 +894,7 @@ mod tests {
         let (_, shred) = shredder.shred_tuples.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
-        assert_matches!(deserialized_shred, Shred::DataComplete(_));
+        assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 1);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
@@ -966,7 +920,7 @@ mod tests {
         let (_, shred) = shredder.shred_tuples.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
-        assert_matches!(deserialized_shred, Shred::DataComplete(_));
+        assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
@@ -1003,7 +957,7 @@ mod tests {
         let (_, shred) = shredder.shred_tuples.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
-        assert_matches!(deserialized_shred, Shred::FirstInSlot(_));
+        assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 0);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
@@ -1021,7 +975,7 @@ mod tests {
         let (_, shred) = shredder.shred_tuples.remove(0);
         assert_eq!(shred.len(), PACKET_DATA_SIZE);
         let deserialized_shred: Shred = bincode::deserialize(&shred).unwrap();
-        assert_matches!(deserialized_shred, Shred::DataComplete(_));
+        assert_matches!(deserialized_shred, Shred::Data(_));
         assert_eq!(deserialized_shred.index(), 2);
         assert_eq!(deserialized_shred.slot(), slot);
         assert_eq!(deserialized_shred.parent(), slot - 5);
@@ -1170,7 +1124,7 @@ mod tests {
         shreds.insert(1, recovered_shred);
 
         let recovered_shred = result.recovered_data.remove(0);
-        assert_matches!(recovered_shred, Shred::DataComplete(_));
+        assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 3);
         assert_eq!(recovered_shred.slot(), slot);
         assert_eq!(recovered_shred.parent(), slot - 5);
@@ -1233,7 +1187,7 @@ mod tests {
 
         assert_eq!(result.recovered_data.len(), 2); // Data shreds 0, 2 were missing
         let recovered_shred = result.recovered_data.remove(0);
-        assert_matches!(recovered_shred, Shred::FirstInSlot(_));
+        assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 0);
         assert_eq!(recovered_shred.slot(), slot);
         assert_eq!(recovered_shred.parent(), slot - 5);
@@ -1327,7 +1281,7 @@ mod tests {
 
         assert_eq!(result.recovered_data.len(), 2); // Data shreds 0, 2 were missing
         let recovered_shred = result.recovered_data.remove(0);
-        assert_matches!(recovered_shred, Shred::FirstInSlot(_));
+        assert_matches!(recovered_shred, Shred::Data(_));
         assert_eq!(recovered_shred.index(), 0);
         assert_eq!(recovered_shred.slot(), slot);
         assert_eq!(recovered_shred.parent(), slot - 5);

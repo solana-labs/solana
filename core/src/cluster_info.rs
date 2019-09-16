@@ -1927,7 +1927,7 @@ mod tests {
                 0,
             );
             assert!(rv.is_empty());
-            let mut shred = Shred::FirstInSlot(DataShred::default());
+            let mut shred = Shred::Data(DataShred::default());
             shred.set_slot(2);
             shred.set_index(1);
 
