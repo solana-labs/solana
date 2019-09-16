@@ -9101,7 +9101,7 @@
     ]
   },
   "time": {
-    "from": "now-5h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {
