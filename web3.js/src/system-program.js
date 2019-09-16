@@ -41,9 +41,9 @@ export class SystemInstruction extends TransactionInstruction {
     const instructionTypeLayout = BufferLayout.u32('instruction');
     const typeIndex = instructionTypeLayout.decode(instruction.data);
     let type;
-    for (const t in SystemInstructionEnum) {
-      if (SystemInstructionEnum[t].index == typeIndex) {
-        type = SystemInstructionEnum[t];
+    for (const t in SystemInstructionLayout) {
+      if (SystemInstructionLayout[t].index == typeIndex) {
+        type = SystemInstructionLayout[t];
       }
     }
     if (!type) {
@@ -63,10 +63,10 @@ export class SystemInstruction extends TransactionInstruction {
    * The `from` public key of the instruction;
    * returns null if SystemInstructionType does not support this field
    */
-  get From(): PublicKey | null {
+  get fromPublicKey(): PublicKey | null {
     if (
-      this.type == SystemInstructionEnum.CREATE ||
-      this.type == SystemInstructionEnum.TRANSFER
+      this.type == SystemInstructionLayout.Create ||
+      this.type == SystemInstructionLayout.Transfer
     ) {
       return this.keys[0].pubkey;
     }
@@ -77,10 +77,10 @@ export class SystemInstruction extends TransactionInstruction {
    * The `to` public key of the instruction;
    * returns null if SystemInstructionType does not support this field
    */
-  get To(): PublicKey | null {
+  get toPublicKey(): PublicKey | null {
     if (
-      this.type == SystemInstructionEnum.CREATE ||
-      this.type == SystemInstructionEnum.TRANSFER
+      this.type == SystemInstructionLayout.Create ||
+      this.type == SystemInstructionLayout.Transfer
     ) {
       return this.keys[1].pubkey;
     }
@@ -91,11 +91,11 @@ export class SystemInstruction extends TransactionInstruction {
    * The `amount` or `lamports` of the instruction;
    * returns null if SystemInstructionType does not support this field
    */
-  get Amount(): number | null {
+  get amount(): number | null {
     const data = this.type.layout.decode(this.data);
-    if (this.type == SystemInstructionEnum.TRANSFER) {
+    if (this.type == SystemInstructionLayout.Transfer) {
       return data.amount;
-    } else if (this.type == SystemInstructionEnum.CREATE) {
+    } else if (this.type == SystemInstructionLayout.Create) {
       return data.lamports;
     }
     return null;
@@ -115,8 +115,8 @@ type SystemInstructionType = {|
 /**
  * An enumeration of valid SystemInstructionTypes
  */
-const SystemInstructionEnum = Object.freeze({
-  CREATE: {
+const SystemInstructionLayout = Object.freeze({
+  Create: {
     index: 0,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
@@ -125,14 +125,14 @@ const SystemInstructionEnum = Object.freeze({
       Layout.publicKey('programId'),
     ]),
   },
-  ASSIGN: {
+  Assign: {
     index: 1,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
       Layout.publicKey('programId'),
     ]),
   },
-  TRANSFER: {
+  Transfer: {
     index: 2,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
@@ -174,7 +174,7 @@ export class SystemProgram {
     space: number,
     programId: PublicKey,
   ): Transaction {
-    const type = SystemInstructionEnum.CREATE;
+    const type = SystemInstructionLayout.Create;
     const data = encodeData(type, {
       lamports,
       space,
@@ -195,7 +195,7 @@ export class SystemProgram {
    * Generate a Transaction that transfers lamports from one account to another
    */
   static transfer(from: PublicKey, to: PublicKey, amount: number): Transaction {
-    const type = SystemInstructionEnum.TRANSFER;
+    const type = SystemInstructionLayout.Transfer;
     const data = encodeData(type, {amount});
 
     return new Transaction().add({
@@ -212,7 +212,7 @@ export class SystemProgram {
    * Generate a Transaction that assigns an account to a program
    */
   static assign(from: PublicKey, programId: PublicKey): Transaction {
-    const type = SystemInstructionEnum.ASSIGN;
+    const type = SystemInstructionLayout.Assign;
     const data = encodeData(type, {programId: programId.toBuffer()});
 
     return new Transaction().add({
