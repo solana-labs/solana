@@ -433,6 +433,7 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::account_utils::State;
     use solana_sdk::hash::hash;
+    use solana_sdk::rent_calculator::RentCalculator;
 
     const MAX_RECENT_VOTES: usize = 16;
 
@@ -445,11 +446,21 @@ mod tests {
 
         //init should pass
         let mut vote_account = KeyedAccount::new(&vote_account_pubkey, false, &mut vote_account);
-        let res = initialize_account(&mut vote_account, &node_pubkey, 0);
+        let res = initialize_account(
+            &mut vote_account,
+            &RentCalculator::default(),
+            &node_pubkey,
+            0,
+        );
         assert_eq!(res, Ok(()));
 
         // reinit should fail
-        let res = initialize_account(&mut vote_account, &node_pubkey, 0);
+        let res = initialize_account(
+            &mut vote_account,
+            &RentCalculator::default(),
+            &node_pubkey,
+            0,
+        );
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
     }
 
