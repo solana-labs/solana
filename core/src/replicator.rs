@@ -874,7 +874,7 @@ impl Replicator {
                 let shreds: Vec<ShredInfo> = packets
                     .packets
                     .into_iter()
-                    .map(|p| ShredInfo::new_from_serialized_shred(p.data.to_vec()))
+                    .filter_map(|p| ShredInfo::new_from_serialized_shred(p.data.to_vec()).ok())
                     .collect();
                 blocktree.insert_shreds(shreds, None)?;
             }

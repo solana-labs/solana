@@ -86,11 +86,14 @@ where
             .par_iter_mut()
             .enumerate()
             .filter_map(|(i, packet)| {
-                let shred = ShredInfo::new_from_serialized_shred(packet.data.to_vec());
-                if shred_filter(&shred, last_root) {
-                    packet.meta.slot = shred.slot();
-                    packet.meta.seed = shred.seed();
-                    Some((shred, i))
+                if let Ok(shred) = ShredInfo::new_from_serialized_shred(packet.data.to_vec()) {
+                    if shred_filter(&shred, last_root) {
+                        packet.meta.slot = shred.slot();
+                        packet.meta.seed = shred.seed();
+                        Some((shred, i))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -416,7 +419,7 @@ mod test {
             &exit,
             RepairStrategy::RepairRange(RepairSlotRange { start: 0, end: 0 }),
             &Arc::new(LeaderScheduleCache::default()),
-            |_, _, _, _, _| true,
+            |_, _, _, _| true,
         );
         window
     }
@@ -430,10 +433,9 @@ mod test {
         let (shreds, _) = make_many_slot_entries(0, 5, 10);
         let packets: Vec<_> = shreds
             .into_iter()
-            .map(|s| {
+            .map(|mut s| {
                 let mut p = Packet::default();
-                p.data
-                    .copy_from_slice(&mut bincode::serialize(&s).unwrap().as_ref());
+                p.data.copy_from_slice(&mut s.shred);
                 p
             })
             .collect();
