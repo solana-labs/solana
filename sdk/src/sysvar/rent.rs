@@ -54,7 +54,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_fees_create_account() {
+    fn test_rent_create_account() {
         let lamports = 42;
         let account = create_account(lamports, &RentCalculator::default());
         let rent = Rent::from_account(&account).unwrap();
