@@ -9,8 +9,8 @@ instructions, and any signatures.
 
 ## Accounts and Signatures
 
-Each transaction explicitly lists all account pubkeys referenced by the
-transaction's instructions. A subset of those pubkeys are each accompanied
+Each transaction explicitly lists all account public keys referenced by the
+transaction's instructions. A subset of those public keys are each accompanied
 by a transaction signature. Those signatures signal on-chain programs that
 the account holder has authorized the transaction. Typically, the program
 uses the authorization to permit debiting the account or modifying its

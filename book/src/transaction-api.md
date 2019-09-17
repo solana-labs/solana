@@ -14,11 +14,11 @@
          by multiple parallel transactions, but their balance may only be
          increased, and their account data is read-only.
       *  **num_credit_only_unsigned_accounts:** The last
-         `num_credit_only_unsigned_accounts` pubkeys in `account_keys` refer
+         `num_credit_only_unsigned_accounts` public keys in `account_keys` refer
          to non-signing credit only accounts
-    * **account_keys:** List of pubkeys used by the transaction, including
+    * **account_keys:** List of public keys used by the transaction, including
       by the instructions and for signatures. The first
-      `num_required_signatures` pubkeys must sign the transaction.
+      `num_required_signatures` public keys must sign the transaction.
     * **recent_blockhash:** The ID of a recent ledger entry. Validators will
       reject transactions with a `recent_blockhash` that is too old.
     * **instructions:** A list of [instructions](instruction.md) that are
@@ -26,7 +26,7 @@
       succeed.
   * **signatures:** A list of signatures applied to the transaction. The
     list is always of length `num_required_signatures`, and the signature
-    at index `i` corresponds to the pubkey at index `i` in `account_keys`.
+    at index `i` corresponds to the public key at index `i` in `account_keys`.
     The list is initialized with empty signatures (i.e. zeros), and
     populated as signatures are added.
   
@@ -34,7 +34,7 @@
 
 A `Transaction` is signed by using an ed25519 keypair to sign the
 serialization of the `message`. The resulting signature is placed at the
-index of `signatures` matching the index of the keypair's pubkey in
+index of `signatures` matching the index of the keypair's public key in
 `account_keys`.
 
 ### Transaction Serialization
