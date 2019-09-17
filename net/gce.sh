@@ -107,6 +107,7 @@ Manage testnet instances
  config - configure the testnet and write a config file describing it
  delete - delete the testnet
  info   - display information about the currently configured testnet
+ status - display status information of all resources (colo-only)
 
  common options:
    -p [prefix]      - Optional common prefix for instance names to avoid
@@ -159,7 +160,7 @@ EOF
 command=$1
 [[ -n $command ]] || usage
 shift
-[[ $command = create || $command = config || $command = info || $command = delete ]] ||
+[[ $command = create || $command = config || $command = info || $command = delete || $command = status ]] ||
   usage "Invalid command: $command"
 
 shortArgs=()
@@ -786,6 +787,10 @@ info)
     zone=${replicatorIpListZone[$i]}
     printNode replicator "$ipAddress" "$ipAddressPrivate" "$zone"
   done
+  ;;
+status)
+  cloud_Initialize
+  cloud_StatusAll
   ;;
 *)
   usage "Unknown command: $command"
