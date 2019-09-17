@@ -71,9 +71,9 @@ impl BlockHeader {
             return Err(SpvError::InvalidBlockHeader);
         }
 
-        match decode_hex(header) {
+        match hex::decode(header) {
             Ok(header) => {
-                let bhbytes = decode_hex(blockhash)?;
+                let bhbytes = hex::decode(blockhash)?;
                 const SIZE: usize = 80;
                 let mut hh = [0; SIZE];
                 hh.copy_from_slice(&header[..header.len()]);
@@ -97,8 +97,12 @@ impl BlockHeader {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     pub inputs: Vec<Input>,
+
+    pub inputs_num: u64,
     //input utxos
     pub outputs: Vec<Output>,
+
+    pub outputs_num: u64,
     //output utxos
     pub version: u32,
     //bitcoin network version
@@ -113,13 +117,13 @@ impl Transaction {
         ver.copy_from_slice(&txbytes[..4]);
         let version = u32::from_le_bytes(ver);
 
-        let inputnum: u64 = decode_variable_int(&txbytes[4..13]).unwrap();
+        let inputs_num: u64 = decode_variable_int(&txbytes[4..13]).unwrap();
         let vinlen: usize = measure_variable_int(&txbytes[4..13]).unwrap();
         let mut inputstart: usize = 4 + vinlen;
         let mut inputs = Vec::new();
 
-        if inputnum > 0 {
-            for i in 0..inputnum {
+        if inputs_num > 0 {
+            for i in 0..inputs_num {
                 let mut input = Input::new(txbytes[inputstart..].to_vec());
                 inputstart += input.bytes_len;
                 inputs.push(input);
@@ -127,12 +131,12 @@ impl Transaction {
             inputs.to_vec();
         }
 
-        let outputnum: u64 = decode_variable_int(&txbytes[inputstart..9 + inputstart]).unwrap();
+        let outputs_num: u64 = decode_variable_int(&txbytes[inputstart..9 + inputstart]).unwrap();
         let voutlen: usize = measure_variable_int(&txbytes[inputstart..9 + inputstart]).unwrap();
 
         let mut outputstart: usize = inputstart + voutlen;
         let mut outputs = Vec::new();
-        for i in 0..outputnum {
+        for i in 0..outputs_num {
             let mut output = Output::new(txbytes[outputstart..].to_vec());
             outputstart += output.bytes_len;
             outputs.push(output);
@@ -142,19 +146,21 @@ impl Transaction {
         lt.copy_from_slice(&txbytes[outputstart..4 + outputstart]);
         let locktime = u32::from_le_bytes(lt);
 
-        assert_eq!(inputs.len(), inputnum as usize);
-        assert_eq!(outputs.len(), outputnum as usize);
+        assert_eq!(inputs.len(), inputs_num as usize);
+        assert_eq!(outputs.len(), outputs_num as usize);
 
         Transaction {
             inputs,
+            inputs_num,
             outputs,
+            outputs_num,
             version,
             locktime,
             bytes_len: 4 + outputstart,
         }
     }
     pub fn hexnew(hex: String) -> Result<Transaction, SpvError> {
-        match decode_hex(&hex) {
+        match hex::decode(&hex) {
             Ok(txbytes) => Ok(Transaction::new(txbytes)),
             Err(e) => Err(SpvError::ParseError),
         }
@@ -419,6 +425,12 @@ impl From<HeaderStoreError> for SpvError {
 
 impl From<DecodeHexError> for SpvError {
     fn from(e: DecodeHexError) -> Self {
+        SpvError::ParseError
+    }
+}
+
+impl From<hex::FromHexError> for SpvError {
+    fn from(e: hex::FromHexError) -> Self {
         SpvError::ParseError
     }
 }
