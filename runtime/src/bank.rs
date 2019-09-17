@@ -41,7 +41,7 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     system_transaction,
     sysvar::{
-        clock, fees, rewards,
+        clock, fees, rent, rewards,
         slot_hashes::{self, SlotHashes},
         stake_history,
     },
@@ -354,6 +354,7 @@ impl Bank {
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
         new.update_fees();
+        new.update_rent();
         new
     }
 
@@ -424,6 +425,13 @@ impl Bank {
 
     fn update_fees(&self) {
         self.store_account(&fees::id(), &fees::create_account(1, &self.fee_calculator));
+    }
+
+    fn update_rent(&self) {
+        self.store_account(
+            &rent::id(),
+            &rent::create_account(1, &self.rent_collector.rent_calculator),
+        );
     }
 
     fn update_stake_history(&self, epoch: Option<Epoch>) {
@@ -619,6 +627,14 @@ impl Bank {
         );
 
         self.inflation = genesis_block.inflation;
+
+        let rent_calculator = genesis_block.rent_calculator;
+        self.rent_collector = RentCollector::new(
+            self.epoch,
+            &self.epoch_schedule,
+            self.slots_per_year,
+            &rent_calculator,
+        );
 
         // Add additional native programs specified in the genesis block
         for (name, program_id) in &genesis_block.native_instruction_processors {

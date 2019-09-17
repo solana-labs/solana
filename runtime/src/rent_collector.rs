@@ -1,13 +1,13 @@
 //! calculate and collect rent from Accounts
 use crate::epoch_schedule::EpochSchedule;
-use solana_sdk::{account::Account, clock::Epoch, rent::Rent};
+use solana_sdk::{account::Account, clock::Epoch, rent_calculator::RentCalculator};
 
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct RentCollector {
     pub epoch: Epoch,
     pub epoch_schedule: EpochSchedule,
     pub slots_per_year: f64,
-    pub rent: Rent,
+    pub rent_calculator: RentCalculator,
 }
 
 impl RentCollector {
@@ -15,13 +15,13 @@ impl RentCollector {
         epoch: Epoch,
         epoch_schedule: &EpochSchedule,
         slots_per_year: f64,
-        rent: &Rent,
+        rent_calculator: &RentCalculator,
     ) -> Self {
         Self {
             epoch,
             epoch_schedule: *epoch_schedule,
             slots_per_year,
-            rent: *rent,
+            rent_calculator: *rent_calculator,
         }
     }
 
@@ -42,7 +42,7 @@ impl RentCollector {
                 .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
                 .sum();
 
-            let (rent_due, exempt) = self.rent.due(
+            let (rent_due, exempt) = self.rent_calculator.due(
                 account.lamports,
                 account.data.len(),
                 slots_elapsed as f64 / self.slots_per_year,

@@ -7,7 +7,7 @@ use crate::hash::{hash, Hash};
 use crate::inflation::Inflation;
 use crate::poh_config::PohConfig;
 use crate::pubkey::Pubkey;
-use crate::rent::Rent;
+use crate::rent_calculator::RentCalculator;
 use crate::signature::{Keypair, KeypairUtil};
 use crate::system_program::{self, solana_system_program};
 use bincode::{deserialize, serialize};
@@ -28,8 +28,8 @@ pub struct GenesisBlock {
     pub slots_per_segment: u64,
     pub poh_config: PohConfig,
     pub fee_calculator: FeeCalculator,
+    pub rent_calculator: RentCalculator,
     pub inflation: Inflation,
-    pub rent: Rent,
 }
 
 // useful for basic tests
@@ -61,7 +61,7 @@ impl Default for GenesisBlock {
             poh_config: PohConfig::default(),
             inflation: Inflation::default(),
             fee_calculator: FeeCalculator::default(),
-            rent: Rent::default(),
+            rent_calculator: RentCalculator::default(),
         }
     }
 }
@@ -145,6 +145,10 @@ impl Builder {
     }
     pub fn inflation(mut self, inflation: Inflation) -> Self {
         self.genesis_block.inflation = inflation;
+        self
+    }
+    pub fn rent_calculator(mut self, rent_calculator: RentCalculator) -> Self {
+        self.genesis_block.rent_calculator = rent_calculator;
         self
     }
 }

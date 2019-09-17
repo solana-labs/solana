@@ -4,6 +4,7 @@ use crate::pubkey::Pubkey;
 
 pub mod clock;
 pub mod fees;
+pub mod rent;
 pub mod rewards;
 pub mod slot_hashes;
 pub mod stake_history;
