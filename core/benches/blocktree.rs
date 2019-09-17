@@ -8,7 +8,7 @@ extern crate solana_core;
 
 use rand::Rng;
 use solana_core::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, Blocktree};
-use solana_core::entry::{make_large_test_entries, make_tiny_test_entries, Entry};
+use solana_core::entry::{create_ticks, Entry};
 use std::path::Path;
 use test::Bencher;
 
@@ -32,8 +32,7 @@ fn setup_read_bench(
     slot: u64,
 ) {
     // Make some big and small entries
-    let mut entries = make_large_test_entries(num_large_shreds as usize);
-    entries.extend(make_tiny_test_entries(num_small_shreds as usize));
+    let mut entries = create_ticks((num_large_shreds * 4) + (num_small_shreds * 2) as usize);
 
     // Convert the entries to shreds, write the shreds to the ledger
     let shreds = entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true);
