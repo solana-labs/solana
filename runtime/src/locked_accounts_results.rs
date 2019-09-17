@@ -17,6 +17,10 @@ impl<'a, 'b> LockedAccountsResults<'a, 'b> {
         transactions: &'b [Transaction],
         txs_iteration_order: Option<Vec<usize>>,
     ) -> Self {
+        assert_eq!(locked_accounts_results.len(), transactions.len());
+        if let Some(txs_iteration_order) = &txs_iteration_order {
+            assert_eq!(transactions.len(), txs_iteration_order.len());
+        }
         Self {
             locked_accounts_results,
             bank,

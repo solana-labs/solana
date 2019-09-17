@@ -975,7 +975,6 @@ impl Bank {
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
-        txs: &[Transaction],
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> (
@@ -985,6 +984,7 @@ impl Bank {
         usize,
         usize,
     ) {
+        let txs = lock_results.transactions();
         debug!("processing transactions: {}", txs.len());
         inc_new_counter_info!("bank-process_transactions", txs.len());
         let mut error_counters = ErrorCounters::default();
@@ -1161,15 +1161,14 @@ impl Bank {
     #[must_use]
     pub fn load_execute_and_commit_transactions(
         &self,
-        txs: &[Transaction],
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
         let (mut loaded_accounts, executed, _, tx_count, signature_count) =
-            self.load_and_execute_transactions(txs, lock_results, max_age);
+            self.load_and_execute_transactions(lock_results, max_age);
 
         self.commit_transactions(
-            txs,
+            lock_results.transactions(),
             lock_results.txs_iteration_order(),
             &mut loaded_accounts,
             &executed,
@@ -1181,7 +1180,7 @@ impl Bank {
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs, None);
-        self.load_execute_and_commit_transactions(txs, &lock_results, MAX_RECENT_BLOCKHASHES)
+        self.load_execute_and_commit_transactions(&lock_results, MAX_RECENT_BLOCKHASHES)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -2128,11 +2127,8 @@ mod tests {
         let pay_alice = vec![tx1];
 
         let lock_result = bank.lock_accounts(&pay_alice, None);
-        let results_alice = bank.load_execute_and_commit_transactions(
-            &pay_alice,
-            &lock_result,
-            MAX_RECENT_BLOCKHASHES,
-        );
+        let results_alice =
+            bank.load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES);
         assert_eq!(results_alice[0], Ok(()));
 
         // try executing an interleaved transfer twice
