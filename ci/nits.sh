@@ -44,24 +44,3 @@ fi
 if _ git --no-pager grep -n 'Default::default()' -- '*.rs'; then
     exit 1
 fi
-
-# Let's keep a .gitignore for every crate, ensure it's got
-#  /target/ and /farf/ in it
-declare gitignores_ok=true
-for i in $(git --no-pager ls-files \*/Cargo.toml ); do
-  dir=$(dirname "$i")
-  if [[ ! -f $dir/.gitignore ]]; then
-      echo 'error: nits.sh .gitnore missing for crate '"$dir" >&2
-      gitignores_ok=false
-  else
-    if ! grep -q -e '^/target/$' "$dir"/.gitignore; then
-      echo 'error: nits.sh "/target/" apparently missing from '"$dir"'/.gitignore' >&2
-      gitignores_ok=false
-    fi
-    if ! grep -q -e '^/farf/$' "$dir"/.gitignore ; then
-      echo 'error: nits.sh "/farf/" apparently missing from '"$dir"'/.gitignore' >&2
-      gitignores_ok=false
-    fi
-  fi
-done
-"$gitignores_ok"

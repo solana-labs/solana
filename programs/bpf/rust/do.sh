@@ -25,7 +25,7 @@ targetDir="$PWD"/../target
 profile=bpfel-unknown-unknown/release
 
 perform_action() {
-    set -ex
+    set -e
     case "$1" in
     build)
          "$sdkDir"/bpf/rust/build.sh "$2"

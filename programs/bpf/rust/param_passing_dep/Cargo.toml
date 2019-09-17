@@ -1,5 +1,5 @@
 
-# Note: This crate must be built using build.sh
+# Note: This crate must be built using do.sh
 
 [package]
 name = "solana-bpf-rust-param-passing-dep"
