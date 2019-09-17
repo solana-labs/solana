@@ -1,0 +1,4 @@
+root: ./book/src
+
+structure:
+    readme: introduction.md
