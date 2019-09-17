@@ -17,11 +17,6 @@ pub struct Inflation {
     /// Duration of foundation pool inflation, in years
     pub foundation_term: f64,
 
-    /// Percentage of total inflation allocated to grant pools
-    pub grant: f64,
-    /// Duration of grant pool inflation, in years
-    pub grant_term: f64,
-
     /// Percentage of total inflation allocated to storage rewards
     pub storage: f64,
 }
@@ -30,8 +25,7 @@ const DEFAULT_INITIAL: f64 = 0.15;
 const DEFAULT_TERMINAL: f64 = 0.015;
 const DEFAULT_TAPER: f64 = 0.15;
 const DEFAULT_FOUNDATION: f64 = 0.05;
-const DEFAULT_GRANT: f64 = 0.05;
-const DEFAULT_FOUNDATION_GRANT_TERM: f64 = 7.0;
+const DEFAULT_FOUNDATION_TERM: f64 = 7.0;
 const DEFAULT_STORAGE: f64 = 0.10;
 
 impl Default for Inflation {
@@ -41,9 +35,7 @@ impl Default for Inflation {
             terminal: DEFAULT_TERMINAL,
             taper: DEFAULT_TAPER,
             foundation: DEFAULT_FOUNDATION,
-            foundation_term: DEFAULT_FOUNDATION_GRANT_TERM,
-            grant: DEFAULT_GRANT,
-            grant_term: DEFAULT_FOUNDATION_GRANT_TERM,
+            foundation_term: DEFAULT_FOUNDATION_TERM,
             storage: DEFAULT_STORAGE,
         }
     }
@@ -63,21 +55,12 @@ impl Inflation {
 
     /// portion of total that goes to validators
     pub fn validator(&self, year: f64) -> f64 {
-        self.total(year) - self.storage(year) - self.grant(year) - self.foundation(year)
+        self.total(year) - self.storage(year) - self.foundation(year)
     }
 
     /// portion of total that goes to storage mining
     pub fn storage(&self, year: f64) -> f64 {
         self.total(year) * self.storage
-    }
-
-    /// portion of total that goes to grant pools
-    pub fn grant(&self, year: f64) -> f64 {
-        if year < self.grant_term {
-            self.total(year) * self.grant
-        } else {
-            0.0
-        }
     }
 
     /// portion of total that goes to foundation
@@ -100,14 +83,11 @@ mod tests {
 
         let mut last = inflation.total(0.0);
 
-        for year in &[0.1, 0.5, 1.0, DEFAULT_FOUNDATION_GRANT_TERM, 100.0] {
+        for year in &[0.1, 0.5, 1.0, DEFAULT_FOUNDATION_TERM, 100.0] {
             let total = inflation.total(*year);
             assert_eq!(
                 total,
-                inflation.validator(*year)
-                    + inflation.storage(*year)
-                    + inflation.grant(*year)
-                    + inflation.foundation(*year)
+                inflation.validator(*year) + inflation.storage(*year) + inflation.foundation(*year)
             );
             assert!(total < last);
             assert!(total >= inflation.terminal);
