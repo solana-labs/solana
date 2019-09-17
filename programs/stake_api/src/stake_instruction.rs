@@ -244,7 +244,7 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::Lockup((lockup, custodian)) => {
-            if rest.len() < 1 {
+            if rest.is_empty() {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             me.lockup(
