@@ -469,6 +469,7 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::account_utils::State;
     use solana_sdk::hash::hash;
+    use solana_sdk::rent_calculator::RentCalculator;
 
     const MAX_RECENT_VOTES: usize = 16;
 
