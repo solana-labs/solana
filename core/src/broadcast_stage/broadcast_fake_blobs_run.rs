@@ -79,11 +79,11 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             if i <= self.partition {
                 // Send fake blobs to the first N peers
                 fake_shred_bufs.iter().for_each(|b| {
-                    sock.send_to(b, &peer.tvu_forwards).unwrap();
+                    sock.send_to(&b.shred, &peer.tvu_forwards).unwrap();
                 });
             } else {
                 shred_bufs.iter().for_each(|b| {
-                    sock.send_to(b, &peer.tvu_forwards).unwrap();
+                    sock.send_to(&b.shred, &peer.tvu_forwards).unwrap();
                 });
             }
         });

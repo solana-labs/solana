@@ -1,7 +1,7 @@
 use crate::entry::Entry;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::Result;
-use crate::shred::{Shred, Shredder};
+use crate::shred::{Shred, ShredInfo, Shredder};
 use solana_runtime::bank::Bank;
 use solana_sdk::signature::Keypair;
 use std::sync::mpsc::Receiver;
@@ -78,7 +78,7 @@ pub(super) fn entries_to_shreds(
     keypair: &Arc<Keypair>,
     mut latest_shred_index: u64,
     parent_slot: u64,
-) -> (Vec<Shred>, Vec<Vec<u8>>, u64) {
+) -> (Vec<Shred>, Vec<ShredInfo>, u64) {
     let mut all_shred_bufs = vec![];
     let mut all_shreds = vec![];
     let num_ventries = ventries.len();
@@ -101,7 +101,7 @@ pub(super) fn entries_to_shreds(
                 shredder.finalize_data();
             }
 
-            let (mut shreds, mut shred_bufs): (Vec<Shred>, Vec<Vec<u8>>) =
+            let (mut shreds, mut shred_bufs): (Vec<Shred>, Vec<ShredInfo>) =
                 shredder.shred_tuples.into_iter().unzip();
 
             trace!("Inserting {:?} shreds in blocktree", shreds.len());
