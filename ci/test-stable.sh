@@ -33,7 +33,7 @@ test-stable)
   echo "Executing $testName"
 
   _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --all --exclude solana-local-cluster ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"
