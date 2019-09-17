@@ -243,11 +243,16 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StakeInstruction::Lockup((lockup, custodian)) => me.lockup(
-            lockup,
-            &rent::from_keyed_account(&rest[1])?.rent_calculator,
-            &custodian,
-        ),
+        StakeInstruction::Lockup((lockup, custodian)) => {
+            if rest.len() < 1 {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            me.lockup(
+                lockup,
+                &rent::from_keyed_account(&rest[0])?.rent_calculator,
+                &custodian,
+            )
+        }
         StakeInstruction::Authorize(authorized_pubkey) => me.authorize(&authorized_pubkey, &rest),
         StakeInstruction::DelegateStake => {
             if rest.len() < 3 {
