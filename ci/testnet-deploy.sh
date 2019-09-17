@@ -32,6 +32,7 @@ maybeLamports=
 maybeLetsEncrypt=
 maybeFullnodeAdditionalDiskSize=
 maybeNoSnapshot=
+maybeLimitLedgerSize=
 
 usage() {
   exitcode=0
@@ -111,7 +112,7 @@ while [[ -n $1 ]]; do
       maybeLamports="$1 $2"
       shift 2
     elif [[ $1 = --no-airdrop ]]; then
-      maybeDisableAirdrops="$1"
+      maybeDisableAirdrops=$1
       shift 1
     elif [[ $1 = --internal-nodes-stake-lamports ]]; then
       maybeInternalNodesStakeLamports="$1 $2"
@@ -138,7 +139,10 @@ while [[ -n $1 ]]; do
       shortArgs+=("$1")
       shift
     elif [[ $1 = --no-snapshot-fetch ]]; then
-      maybeNoSnapshot="$1"
+      maybeNoSnapshot=$1
+      shift 1
+    elif [[ $1 = --limit-ledger-size ]]; then
+      maybeLimitLedgerSize=$1
       shift 1
     else
       usage "Unknown long option: $1"
@@ -379,10 +383,6 @@ if ! $skipStart; then
     if [[ -n $NO_INSTALL_CHECK ]]; then
       args+=(-o noInstallCheck)
     fi
-    if [[ -n $maybeHashesPerTick ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeHashesPerTick
-      args+=($maybeHashesPerTick)
-    fi
     if $reuseLedger; then
       args+=(-r)
     fi
@@ -398,31 +398,17 @@ if ! $skipStart; then
       args+=(--deploy-update windows)
     fi
 
-    if [[ -n $maybeDisableAirdrops ]]; then
-      # shellcheck disable=SC2206
-      args+=($maybeDisableAirdrops)
-    fi
-    if [[ -n $maybeInternalNodesStakeLamports ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeInternalNodesStakeLamports
-      args+=($maybeInternalNodesStakeLamports)
-    fi
-    if [[ -n $maybeInternalNodesLamports ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeInternalNodesLamports
-      args+=($maybeInternalNodesLamports)
-    fi
-    if [[ -n $maybeExternalPrimordialAccountsFile ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeExternalPrimordialAccountsFile
-      args+=($maybeExternalPrimordialAccountsFile)
-    fi
-    if [[ -n $maybeLamports ]]; then
-      # shellcheck disable=SC2206 # Do not want to quote $maybeLamports
-      args+=($maybeLamports)
-    fi
-
-    if [[ -n $maybeNoSnapshot ]]; then
-      # shellcheck disable=SC2206
-      args+=($maybeNoSnapshot)
-    fi
+    # shellcheck disable=SC2206 # Do not want to quote
+    args+=(
+      $maybeHashesPerTick
+      $maybeDisableAirdrops
+      $maybeInternalNodesStakeLamports
+      $maybeInternalNodesLamports
+      $maybeExternalPrimordialAccountsFile
+      $maybeLamports
+      $maybeNoSnapshot
+      $maybeLimitLedgerSize
+    )
 
     time net/net.sh "${args[@]}"
   ) || ok=false
