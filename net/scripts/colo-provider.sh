@@ -7,6 +7,8 @@
 
 declare -r SOLANA_LOCK_FILE="/home/solana/.solana.lock"
 
+declare __COLO_TODO_PARALLELIZE=false
+
 # Load colo resource specs
 export N_RES=0
 export RES_HOSTNAME=()
@@ -37,7 +39,7 @@ load_resources() {
       RES_GPUS+=( "$G" )
       RES_ZONE+=( "$Z" )
       N_RES=$((N_RES+1))
-    done <"$here"/colo_nodes
+    done < <(sort -nt'|' -k10,10 "$here"/colo_nodes)
     __COLO_RESOURCES_LOADED=true
   fi
 }
@@ -65,6 +67,10 @@ load_availability() {
 
 print_availability() {
   declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME
+  if ! $__COLO_TODO_PARALLELIZE; then
+    load_resources
+    load_availability false
+  fi
   for AVAIL in "${__COLO_RES_AVAILABILITY[@]}"; do
     IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME <<<"$AVAIL"
     printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s net=%s role=%s inst=%s\n" "$HOST_NAME" "$IP" "$PRIV_IP" "$STATUS" "$ZONE" "$NETNAME" "$ROLE" "$INSTNAME"
@@ -177,6 +183,9 @@ node_status_all() {
   done < <(instance_run_foreach "$(_node_status_script)")
 }
 
+# TODO: As part of __COLO_TOOD_PARALLELIZE this list will need to be maintained
+# in a lockfile to work around `cloud_CreateInstance` being called in the
+# background for fullnodes
 export __COLO_RES_REQUISITIONED=()
 requisition_node() {
   declare IP=$1
@@ -307,6 +316,11 @@ __cloud_FindInstances() {
   declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME INSTANCES_TEXT
   declare filter=$1
   instances=()
+
+  if ! $__COLO_TODO_PARALLELIZE; then
+    load_resources
+    load_availability false
+  fi
   INSTANCES_TEXT="$(
     for AVAIL in "${__COLO_RES_AVAILABILITY[@]}"; do
       IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME <<<"$AVAIL"
@@ -374,7 +388,9 @@ cloud_Initialize() {
   networkName=$1
   zone=$2
   load_resources
-  load_availability
+  if $__COLO_TODO_PARALLELIZE; then
+    load_availability
+  fi
 }
 
 #
@@ -423,42 +439,59 @@ cloud_CreateInstances() {
     done
   fi
 
-  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME INDEX MACH RES LINE
-  declare -a AVAILABLE
-  declare AVAILABLE_TEXT
-  AVAILABLE_TEXT="$(
-    for RES in "${__COLO_RES_AVAILABILITY[@]}"; do
-      IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME <<<"$RES"
-      if [[ "FREE" = "$STATUS" ]]; then
-        INDEX=$(res_index_from_ip "$IP")
-        RES_MACH="${RES_GPUS[$INDEX]}"
-        if machine_types_compatible "$RES_MACH" "$machineType"; then
-          if ! node_is_requisitioned "$INDEX" "${__COLO_RES_REQUISITIONED[*]}"; then
-            echo -e "$RES_MACH\v$IP"
+  if $__COLO_TODO_PARALLELIZE; then
+    declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME INDEX MACH RES LINE
+    declare -a AVAILABLE
+    declare AVAILABLE_TEXT
+    AVAILABLE_TEXT="$(
+      for RES in "${__COLO_RES_AVAILABILITY[@]}"; do
+        IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME <<<"$RES"
+        if [[ "FREE" = "$STATUS" ]]; then
+          INDEX=$(res_index_from_ip "$IP")
+          RES_MACH="${RES_GPUS[$INDEX]}"
+          if machine_types_compatible "$RES_MACH" "$machineType"; then
+            if ! node_is_requisitioned "$INDEX" "${__COLO_RES_REQUISITIONED[*]}"; then
+              echo -e "$RES_MACH\v$IP"
+            fi
           fi
         fi
+      done | sort -nt $'\v' -k1,1
+    )"
+
+    if [[ -n "$AVAILABLE_TEXT" ]]; then
+      while read -r LINE; do
+        AVAILABLE+=("$LINE")
+      done <<<"$AVAILABLE_TEXT"
+    fi
+
+    if [[ ${#AVAILABLE[@]} -lt $numNodes ]]; then
+      echo "Insufficient resources available to allocate $numNodes $namePrefix" 1>&2
+      exit 1
+    fi
+
+    declare _RES_MACH node
+    declare AI=0
+    for node in "${nodes[@]}"; do
+      IFS=$'\v' read -r _RES_MACH IP <<<"${AVAILABLE[$AI]}"
+      requisition_node "$IP" role "$node" >/dev/null
+      AI=$((AI+1))
+    done
+  else
+    declare RES_MACH node
+    declare RI=0
+    declare NI=0
+    while [[ $NI -lt $numNodes && $RI -lt $N_RES ]]; do
+      node="${nodes[$NI]}"
+      RES_MACH="${RES_GPUS[$RI]}"
+      IP="${RES_IP_PRIV[$RI]}"
+      if machine_types_compatible "$RES_MACH" "$machineType"; then
+        if requisition_node "$IP" role "$node" >/dev/null; then
+          NI=$((NI+1))
+        fi
       fi
-    done | sort -nt $'\v' -k1,1
-  )"
-
-  if [[ -n "$AVAILABLE_TEXT" ]]; then
-    while read -r LINE; do
-      AVAILABLE+=("$LINE")
-    done <<<"$AVAILABLE_TEXT"
+      RI=$((RI+1))
+    done
   fi
-
-  if [[ ${#AVAILABLE[@]} -lt $numNodes ]]; then
-    echo "Insufficient resources available to allocate $numNodes $namePrefix" 1>&2
-    exit 1
-  fi
-
-  declare _RES_MACH node
-  declare AI=0
-  for node in "${nodes[@]}"; do
-    IFS=$'\v' read -r _RES_MACH IP <<<"${AVAILABLE[$AI]}"
-    requisition_node "$IP" role "$node" >/dev/null
-    AI=$((AI+1))
-  done
 }
 
 #

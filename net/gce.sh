@@ -561,7 +561,6 @@ delete() {
 
 case $command in
 delete)
-  cloud_Initialize
   delete
   ;;
 
@@ -711,7 +710,7 @@ EOF
       fi
       cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
         "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" #& FIXME: HACK!
+        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" &
     done
 
     wait
@@ -737,13 +736,10 @@ EOF
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
 
-  load_availability false
-
   prepareInstancesAndWriteConfigFile
   ;;
 
 config)
-  cloud_Initialize
   prepareInstancesAndWriteConfigFile
   ;;
 info)
@@ -789,7 +785,6 @@ info)
   done
   ;;
 status)
-  cloud_Initialize
   cloud_StatusAll
   ;;
 *)
