@@ -19,6 +19,7 @@ use solana_sdk::{
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum StakeError {
     NoCreditsToRedeem,
+    LockupInForce,
 }
 impl<E> DecodeError<E> for StakeError {
     fn type_of() -> &'static str {
@@ -29,6 +30,7 @@ impl std::fmt::Display for StakeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             StakeError::NoCreditsToRedeem => write!(f, "not enough credits to redeem"),
+            StakeError::LockupInForce => write!(f, "lockup has not yet expired"),
         }
     }
 }
@@ -43,8 +45,12 @@ pub enum StakeInstruction {
     ///
     /// The Slot parameter denotes slot height at which this stake
     ///    will allow withdrawal from the stake account.
+    /// The Pubkey parameter denotes a "custodian" account, the only
+    ///    account to which this stake will honor a withdrawal *before*
+    //     lockup expires.
     ///
-    Lockup(Slot),
+    Lockup((Slot, Pubkey)),
+
     /// Authorize a system account to manage stake
     ///
     /// Expects 1 Account:
@@ -101,6 +107,7 @@ pub fn create_stake_account_with_lockup(
     stake_pubkey: &Pubkey,
     lamports: u64,
     lockup: Slot,
+    custodian: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
         system_instruction::create_account(
@@ -112,7 +119,7 @@ pub fn create_stake_account_with_lockup(
         ),
         Instruction::new(
             id(),
-            &StakeInstruction::Lockup(lockup),
+            &StakeInstruction::Lockup((lockup, *custodian)),
             vec![AccountMeta::new(*stake_pubkey, false)],
         ),
     ]
@@ -123,7 +130,7 @@ pub fn create_stake_account(
     stake_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
-    create_stake_account_with_lockup(from_pubkey, stake_pubkey, lamports, 0)
+    create_stake_account_with_lockup(from_pubkey, stake_pubkey, lamports, 0, &Pubkey::default())
 }
 
 pub fn create_stake_account_and_delegate_stake(
@@ -232,7 +239,7 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StakeInstruction::Lockup(slot) => me.lockup(slot),
+        StakeInstruction::Lockup((lockup, custodian)) => me.lockup(lockup, &custodian),
         StakeInstruction::Authorize(authorized_pubkey) => me.authorize(&authorized_pubkey, &rest),
         StakeInstruction::DelegateStake => {
             if rest.len() < 3 {
@@ -359,7 +366,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&StakeInstruction::Lockup(0)).unwrap(),
+                &serialize(&StakeInstruction::Lockup((0, Pubkey::default()))).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
         );
