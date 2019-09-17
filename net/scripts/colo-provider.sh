@@ -7,7 +7,6 @@
 
 declare -r SOLANA_LOCK_FILE="/home/solana/.solana.lock"
 
-export __COLO_INITIALIZED=false
 # Load colo resource specs
 export N_RES=0
 export RES_HOSTNAME=()
@@ -21,22 +20,26 @@ export RES_ADD_STORAGE_TYPE=()
 export RES_ADD_STORAGE_CAP_GB=()
 export RES_GPUS=()
 
+export __COLO_RESOURCES_LOADED=false
 load_resources() {
-  while read -r LINE; do
-    IFS='|' read -r H I PI C M ST SC AST ASC G Z <<<"$LINE"
-    RES_HOSTNAME+=( "$H" )
-    RES_IP+=( "$I" )
-    RES_IP_PRIV+=( "$PI" )
-    RES_CPU_CORES+=( "$C" )
-    RES_RAM_GB+=( "$M" )
-    RES_STORAGE_TYPE+=( "$ST" )
-    RES_STORAGE_CAP_GB+=( "$SC" )
-    RES_ADD_STORAGE_TYPE+=( "$(tr ',' $'\v' <<<"$AST")" )
-    RES_ADD_STORAGE_CAP_GB+=( "$(tr ',' $'\v' <<<"$ASC")" )
-    RES_GPUS+=( "$G" )
-    RES_ZONE+=( "$Z" )
-    N_RES=$((N_RES+1))
-  done <"$here"/colo_nodes
+  if ! ${__COLO_RESOURCES_LOADED}; then
+    while read -r LINE; do
+      IFS='|' read -r H I PI C M ST SC AST ASC G Z <<<"$LINE"
+      RES_HOSTNAME+=( "$H" )
+      RES_IP+=( "$I" )
+      RES_IP_PRIV+=( "$PI" )
+      RES_CPU_CORES+=( "$C" )
+      RES_RAM_GB+=( "$M" )
+      RES_STORAGE_TYPE+=( "$ST" )
+      RES_STORAGE_CAP_GB+=( "$SC" )
+      RES_ADD_STORAGE_TYPE+=( "$(tr ',' $'\v' <<<"$AST")" )
+      RES_ADD_STORAGE_CAP_GB+=( "$(tr ',' $'\v' <<<"$ASC")" )
+      RES_GPUS+=( "$G" )
+      RES_ZONE+=( "$Z" )
+      N_RES=$((N_RES+1))
+    done <"$here"/colo_nodes
+    __COLO_RESOURCES_LOADED=true
+  fi
 }
 
 declare __COLO_RES_AVAILABILITY_CACHED=false
@@ -370,13 +373,8 @@ cloud_FindInstance() {
 cloud_Initialize() {
   networkName=$1
   zone=$2
-  if ! $__COLO_INITIALIZED; then
-    load_resources
-    load_availability
-
-    # XXX: Flag initialization last!
-    __COLO_INITIALIZED=true
-  fi
+  load_resources
+  load_availability
 }
 
 #
