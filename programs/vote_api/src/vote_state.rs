@@ -4,6 +4,7 @@ use crate::{id, vote_instruction::VoteError};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
+use solana_sdk::rent_calculator::RentCalculator;
 use solana_sdk::sysvar::slot_hashes::SlotHash;
 use solana_sdk::{
     account::{Account, KeyedAccount},

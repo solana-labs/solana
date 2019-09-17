@@ -65,7 +65,10 @@ pub enum VoteInstruction {
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*vote_pubkey, false)];
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new(sysvar::rent::id(), false),
+    ];
     Instruction::new(
         id(),
         &VoteInstruction::InitializeAccount(*vote_init),
