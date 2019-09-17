@@ -179,6 +179,9 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         VoteInstruction::InitializeAccount(vote_init) => {
+            if rest.len() < 1 {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
             vote_state::initialize_account(me, &vote_init)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {

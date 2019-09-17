@@ -285,7 +285,12 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StakeInstruction::Initialize(authorized, lockup) => me.initialize(&authorized, &lockup),
+        StakeInstruction::Initialize(authorized, lockup) => {
+            if rest.len() < 1 {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            me.initialize(&authorized, &lockup)
+        },
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&authorized_pubkey, stake_authorize, &rest)
         }
