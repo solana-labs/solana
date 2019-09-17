@@ -9,11 +9,12 @@ instructions, and any signatures.
 
 ## Accounts and Signatures
 
-Each transaction explicitly lists all account pubkeys referenced by in the
-transaction's instructions. Asubset of those pubkeys are each accompanied
+Each transaction explicitly lists all account pubkeys referenced by the
+transaction's instructions. A subset of those pubkeys are each accompanied
 by a transaction signature. Those signatures signal on-chain programs that
 the account holder has authorized the transaction. Typically, the program
-uses the authorization to permit account debits or modifying account data.
+uses the authorization to permit debiting the account or modifying its
+data.
 
 The transaction also marks some accounts as *credit-only accounts*. The
 runtime permits credit-only accounts to be credited concurrently. If a

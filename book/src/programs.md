@@ -49,9 +49,10 @@ read its data and credit the account.
 In the same way that a Linux user uses a path to look up a file, a Solana
 client uses public keys to look up accounts. To create an account, the client
 generates a *keypair* and registers its public key using the `CreateAccount`
-instruction. The account created by `CreateAccount` is called a *user account*
-and is owned by a built-in program called the System program. The System
-program allows clients to transfer lamports and assign account ownership.
+instruction. The account created by `CreateAccount` is called a *system
+account* and is owned by a built-in program called the System program. The
+System program allows clients to transfer lamports and assign account
+ownership.
 
 The runtime only permits the owner to debit the account or modify its data. The
 program then defines additional rules for whether the client can modify
