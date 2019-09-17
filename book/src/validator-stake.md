@@ -34,7 +34,8 @@ $ solana deactivate-stake ~/validator-config/stake-keypair.json ~/validator-vote
 ```
 
 The stake will cool down, deactivate over time.  While cooling down, your stake will continue to earn
-rewards.  Only after stake cool down is it safe to turn off your validator or withdraw it from the network.
+rewards.  Only after stake cooldown is it safe to turn off your validator or withdraw it from the network.
+Cooldown may take several epochs to complete, depending on active stake and the size of your stake.
 
 Note that a stake account may only be used once, so after deactivation, use the
 cli's `withdraw-stake` command to recover the previously staked lamports.
