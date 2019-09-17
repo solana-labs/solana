@@ -168,7 +168,9 @@ pub enum Shred {
 
 /// This limit comes from reed solomon library, but unfortunately they don't have
 /// a public constant defined for it.
-const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 4;
+const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
+/// Based on rse benchmarks, the optimal erasure config uses 16 data shreds and 4 coding shreds
+pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
 
 const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
 const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
