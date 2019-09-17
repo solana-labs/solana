@@ -352,7 +352,7 @@ impl Default for DataShredHeader {
                 },
                 payload: vec![],
             },
-            data_header: Default::default(),
+            data_header: ShredCommonHeader::default(),
             parent_offset: 0,
             flags: 0,
         }
