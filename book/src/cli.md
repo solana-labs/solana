@@ -80,7 +80,7 @@ $ solana pay <PUBKEY> 123 \
 // Return
 {signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
 ```
-*`require-timestamp-from` is optional. If not provided, the transaction will expect a timestamp signed by this wallet's secret key*
+*`require-timestamp-from` is optional. If not provided, the transaction will expect a timestamp signed by this wallet's private key*
 
 #### Authorized Transfer
 

@@ -136,7 +136,7 @@ in a [transaction](#instruction).
 
 #### keypair
 
-A [public key](#public-key) and corresponding [secret key](#secret-key).
+A [public key](#public-key) and corresponding [private key](#private-key).
 
 #### lamport
 
@@ -208,6 +208,10 @@ See [Proof of History](#proof-of-history).
 
 A weighted [credit](#credit) in a rewards regime.  In the validator [rewards regime](staking-rewards.md), the number of points owed to a stake during redemption is the product of the [vote credits](#vote-credit) earned and the number of lamports staked.
 
+#### private key
+
+The private key of a [keypair](#keypair).
+
 #### program
 
 The code that interprets [instructions](#instruction).
@@ -245,10 +249,6 @@ excluded from consideration for consensus and can be discarded.
 
 The component of a [fullnode](#fullnode) responsible for [program](#program)
 execution.
-
-#### secret key
-
-The private key of a [keypair](#keypair).
 
 #### slot
 

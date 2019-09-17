@@ -58,7 +58,7 @@ The runtime only permits the owner to debit the account or modify its data. The
 program then defines additional rules for whether the client can modify
 accounts it owns. In the case of the System program, it allows users to
 transfer lamports by recognizing transaction signatures. If it sees the client
-signed the transaction using the keypair's *secret key*, it knows the client
+signed the transaction using the keypair's *private key*, it knows the client
 authorized the token transfer.
 
 After the runtime executes each of the transaction's instructions, it uses the
