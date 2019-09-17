@@ -626,7 +626,8 @@ impl Shredder {
     fn generate_coding_shreds(&mut self) {
         if self.fec_rate != 0.0 {
             let num_data = (self.index - self.fec_set_index) as usize;
-            let num_coding = (self.fec_rate * num_data as f32) as usize;
+            // always generate at least 1 coding shred even if the fec_rate doesn't allow it
+            let num_coding = 1.max((self.fec_rate * num_data as f32) as usize);
             let session =
                 Session::new(num_data, num_coding).expect("Failed to create erasure session");
             let start_index = self.index - num_data as u32;
