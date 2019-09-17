@@ -184,7 +184,6 @@ mod tests {
         vm.set_verifier(bpf_verifier::check).unwrap();
         vm.set_max_instruction_count(10).unwrap();
         vm.set_program(prog).unwrap();
-        assert_eq!(1, 0);
         vm.execute_program(input, &[], &[]).unwrap();
     }
 }
