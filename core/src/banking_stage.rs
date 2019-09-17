@@ -490,7 +490,7 @@ impl BankingStage {
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
         let (mut loaded_accounts, results, mut retryable_txs, tx_count, signature_count) =
-            bank.load_and_execute_transactions(txs, None, lock_results, MAX_PROCESSING_AGE);
+            bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();

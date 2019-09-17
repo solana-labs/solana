@@ -768,15 +768,18 @@ impl Bank {
     pub fn lock_accounts<'a, 'b>(
         &'a self,
         txs: &'b [Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        txs_iteration_order: Option<Vec<usize>>,
     ) -> LockedAccountsResults<'a, 'b> {
         if self.is_frozen() {
             warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        let results = self.rc.accounts.lock_accounts(txs, txs_iteration_order);
-        LockedAccountsResults::new(results, &self, txs)
+        let results = self
+            .rc
+            .accounts
+            .lock_accounts(txs, txs_iteration_order.as_ref().map(|v| v.as_slice()));
+        LockedAccountsResults::new(results, &self, txs, txs_iteration_order)
     }
 
     pub fn unlock_accounts(&self, locked_accounts_results: &mut LockedAccountsResults) {
@@ -784,6 +787,7 @@ impl Bank {
             locked_accounts_results.needs_unlock = false;
             self.rc.accounts.unlock_accounts(
                 locked_accounts_results.transactions(),
+                locked_accounts_results.txs_iteration_order(),
                 locked_accounts_results.locked_accounts_results(),
             )
         }
@@ -956,7 +960,6 @@ impl Bank {
     pub fn load_and_execute_transactions(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> (
@@ -971,32 +974,41 @@ impl Bank {
         let mut error_counters = ErrorCounters::default();
         let mut load_time = Measure::start("accounts_load");
 
-        let retryable_txs: Vec<_> =
-            OrderedIterator::new(lock_results.locked_accounts_results(), txs_iteration_order)
-                .enumerate()
-                .filter_map(|(index, res)| match res {
-                    Err(TransactionError::AccountInUse) => Some(index),
-                    Ok(_) => None,
-                    Err(_) => None,
-                })
-                .collect();
+        let retryable_txs: Vec<_> = OrderedIterator::new(
+            lock_results.locked_accounts_results(),
+            lock_results.txs_iteration_order(),
+        )
+        .enumerate()
+        .filter_map(|(index, res)| match res {
+            Err(TransactionError::AccountInUse) => Some(index),
+            Ok(_) => None,
+            Err(_) => None,
+        })
+        .collect();
 
         let sig_results = self.check_transactions(
             txs,
-            txs_iteration_order,
+            lock_results.txs_iteration_order(),
             lock_results.locked_accounts_results(),
             max_age,
             &mut error_counters,
         );
-        let mut loaded_accounts =
-            self.load_accounts(txs, txs_iteration_order, sig_results, &mut error_counters);
+        let mut loaded_accounts = self.load_accounts(
+            txs,
+            lock_results.txs_iteration_order(),
+            sig_results,
+            &mut error_counters,
+        );
         load_time.stop();
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count = 0;
         let executed: Vec<Result<()>> = loaded_accounts
             .iter_mut()
-            .zip(OrderedIterator::new(txs, txs_iteration_order))
+            .zip(OrderedIterator::new(
+                txs,
+                lock_results.txs_iteration_order(),
+            ))
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders, ref mut credits, ref mut _rents)) => {
@@ -1134,16 +1146,15 @@ impl Bank {
     pub fn load_execute_and_commit_transactions(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
         lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
         let (mut loaded_accounts, executed, _, tx_count, signature_count) =
-            self.load_and_execute_transactions(txs, txs_iteration_order, lock_results, max_age);
+            self.load_and_execute_transactions(txs, lock_results, max_age);
 
         self.commit_transactions(
             txs,
-            txs_iteration_order,
+            lock_results.txs_iteration_order(),
             &mut loaded_accounts,
             &executed,
             tx_count,
@@ -1154,7 +1165,7 @@ impl Bank {
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs, None);
-        self.load_execute_and_commit_transactions(txs, None, &lock_results, MAX_RECENT_BLOCKHASHES)
+        self.load_execute_and_commit_transactions(txs, &lock_results, MAX_RECENT_BLOCKHASHES)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -2103,7 +2114,6 @@ mod tests {
         let lock_result = bank.lock_accounts(&pay_alice, None);
         let results_alice = bank.load_execute_and_commit_transactions(
             &pay_alice,
-            None,
             &lock_result,
             MAX_RECENT_BLOCKHASHES,
         );

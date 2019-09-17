@@ -382,14 +382,14 @@ impl Accounts {
                     .map_or(false, |lock| *lock.lock_count.lock().unwrap() > 0)
             {
                 error_counters.account_in_use += 1;
-                debug!("Account in use: {:?}", k);
+                debug!("CD Account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
         for k in credit_only_keys.iter() {
             if locks.contains(k) {
                 error_counters.account_in_use += 1;
-                debug!("Account in use: {:?}", k);
+                debug!("CO Account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
@@ -509,13 +509,21 @@ impl Accounts {
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
+    pub fn unlock_accounts(
+        &self,
+        txs: &[Transaction],
+        txs_iteration_order: Option<&[usize]>,
+        results: &[Result<()>],
+    ) {
         let mut account_locks = self.account_locks.lock().unwrap();
         let credit_only_locks = self.credit_only_account_locks.clone();
         debug!("bank unlock accounts");
-        txs.iter().zip(results.iter()).for_each(|(tx, result)| {
-            Self::unlock_account(tx, result, &mut account_locks, &credit_only_locks)
-        });
+
+        OrderedIterator::new(txs, txs_iteration_order)
+            .zip(results.iter())
+            .for_each(|(tx, result)| {
+                Self::unlock_account(tx, result, &mut account_locks, &credit_only_locks)
+            });
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
@@ -1324,8 +1332,8 @@ mod tests {
             2
         );
 
-        accounts.unlock_accounts(&[tx], &results0);
-        accounts.unlock_accounts(&txs, &results1);
+        accounts.unlock_accounts(&[tx], None, &results0);
+        accounts.unlock_accounts(&txs, None, &results1);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -1405,7 +1413,7 @@ mod tests {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                     }
                 }
-                accounts_clone.unlock_accounts(&txs, &results);
+                accounts_clone.unlock_accounts(&txs, None, &results);
                 if exit_clone.clone().load(Ordering::Relaxed) {
                     break;
                 }
@@ -1420,7 +1428,7 @@ mod tests {
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-            accounts_arc.unlock_accounts(&txs, &results);
+            accounts_arc.unlock_accounts(&txs, None, &results);
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);
