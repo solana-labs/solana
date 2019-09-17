@@ -190,7 +190,7 @@ mod tests {
     fn test_encrypt_file_many_keys_multiple_keys() {
         solana_logger::setup();
 
-        let entries = make_tiny_test_entries(32);
+        let entries = create_ticks(32, Hash::default());
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
