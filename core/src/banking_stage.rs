@@ -480,7 +480,6 @@ impl BankingStage {
 
     fn process_and_record_transactions_locked(
         bank: &Bank,
-        txs: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
         lock_results: &LockedAccountsResults,
     ) -> (Result<usize>, Vec<usize>) {
@@ -489,8 +488,9 @@ impl BankingStage {
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
+        let txs = lock_results.transactions();
         let (mut loaded_accounts, results, mut retryable_txs, tx_count, signature_count) =
-            bank.load_and_execute_transactions(txs, lock_results, MAX_PROCESSING_AGE);
+            bank.load_and_execute_transactions(lock_results, MAX_PROCESSING_AGE);
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();
@@ -547,7 +547,7 @@ impl BankingStage {
         lock_time.stop();
 
         let (result, mut retryable_txs) =
-            Self::process_and_record_transactions_locked(bank, txs, poh, &lock_results);
+            Self::process_and_record_transactions_locked(bank, poh, &lock_results);
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
         let mut unlock_time = Measure::start("unlock_time");
