@@ -123,6 +123,7 @@ remoteExternalPrimordialAccountsFile=
 internalNodesStakeLamports=
 internalNodesLamports=
 maybeNoSnapshot=""
+maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 debugBuild=false
@@ -152,6 +153,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --no-build ]]; then
       doBuild=false
+      shift 1
+    elif [[ $1 = --limit-ledger-size ]]; then
+      maybeLimitLedgerSize="$1"
       shift 1
     elif [[ $1 = --skip-ledger-verify ]]; then
       maybeSkipLedgerVerify="$1"
@@ -400,7 +404,6 @@ startBootstrapLeader() {
       ;;
     esac
 
-    # shellcheck disable=SC2086 # Don't want to double quote "$maybeNoSnapshot $maybeSkipLedgerVerify"
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
@@ -418,7 +421,7 @@ startBootstrapLeader() {
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         "$maybeNoSnapshot $maybeSkipLedgerVerify" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -482,7 +485,7 @@ startNode() {
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!

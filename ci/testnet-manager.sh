@@ -319,6 +319,7 @@ deploy() {
       ci/testnet-deploy.sh -p edge-testnet-solana-com -C gce -z us-west1-b \
         -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
         -a edge-testnet-solana-com --letsencrypt edge.testnet.solana.com \
+        --limit-ledger-size \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
@@ -341,14 +342,14 @@ deploy() {
   testnet-beta)
     (
       set -x
-      NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce -z us-west1-b \
-          -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
-          -a beta-testnet-solana-com --letsencrypt beta.testnet.solana.com \
-          ${skipCreate:+-e} \
-          ${skipStart:+-s} \
-          ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+      ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce -z us-west1-b \
+        -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
+        -a beta-testnet-solana-com --letsencrypt beta.testnet.solana.com \
+        --limit-ledger-size \
+        ${skipCreate:+-e} \
+        ${skipStart:+-s} \
+        ${maybeStop:+-S} \
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-beta-perf)
@@ -367,14 +368,14 @@ deploy() {
   testnet)
     (
       set -x
-      NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p testnet-solana-com -C gce -z us-west1-b \
-          -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
-          -a testnet-solana-com --letsencrypt testnet.solana.com \
-          ${skipCreate:+-e} \
-          ${skipStart:+-s} \
-          ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+      ci/testnet-deploy.sh -p testnet-solana-com -C gce -z us-west1-b \
+        -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
+        -a testnet-solana-com --letsencrypt testnet.solana.com \
+        --limit-ledger-size \
+        ${skipCreate:+-e} \
+        ${skipStart:+-s} \
+        ${maybeStop:+-S} \
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-perf)

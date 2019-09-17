@@ -384,7 +384,6 @@ fn main() {
             clap::Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
                 .takes_value(false)
-                .requires("snapshot_path")
                 .help("drop older slots in the ledger"),
         )
         .arg(
