@@ -168,7 +168,9 @@ pub enum Shred {
 
 /// This limit comes from reed solomon library, but unfortunately they don't have
 /// a public constant defined for it.
-const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 4;
+const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
+/// Based on rse benchmarks, the optimal erasure config uses 16 data shreds and 4 coding shreds
+pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
 
 const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
 const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
@@ -624,7 +626,8 @@ impl Shredder {
     fn generate_coding_shreds(&mut self) {
         if self.fec_rate != 0.0 {
             let num_data = (self.index - self.fec_set_index) as usize;
-            let num_coding = (self.fec_rate * num_data as f32) as usize;
+            // always generate at least 1 coding shred even if the fec_rate doesn't allow it
+            let num_coding = 1.max((self.fec_rate * num_data as f32) as usize);
             let session =
                 Session::new(num_data, num_coding).expect("Failed to create erasure session");
             let start_index = self.index - num_data as u32;

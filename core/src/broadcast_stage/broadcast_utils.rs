@@ -1,7 +1,7 @@
 use crate::entry::Entry;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::Result;
-use crate::shred::{Shred, ShredInfo, Shredder};
+use crate::shred::{Shred, ShredInfo, Shredder, RECOMMENDED_FEC_RATE};
 use solana_runtime::bank::Bank;
 use solana_sdk::signature::Keypair;
 use std::sync::mpsc::Receiver;
@@ -88,9 +88,14 @@ pub(super) fn entries_to_shreds(
         .for_each(|(i, entries_tuple)| {
             let (entries, _): (Vec<_>, Vec<_>) = entries_tuple.into_iter().unzip();
             //entries
-            let mut shredder =
-                Shredder::new(slot, parent_slot, 1.0, keypair, latest_shred_index as u32)
-                    .expect("Expected to create a new shredder");
+            let mut shredder = Shredder::new(
+                slot,
+                parent_slot,
+                RECOMMENDED_FEC_RATE,
+                keypair,
+                latest_shred_index as u32,
+            )
+            .expect("Expected to create a new shredder");
 
             bincode::serialize_into(&mut shredder, &entries)
                 .expect("Expect to write all entries to shreds");
