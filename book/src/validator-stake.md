@@ -24,7 +24,9 @@ $ solana redeem-vote-credits ~/validator-config/stake-keypair.json ~/validator-v
 ```
 
 The rewards lamports earned are split between your stake account and the vote account according to the
-commission rate set in the vote account.
+commission rate set in the vote account.  Rewards can only be earned while the validator is up and 
+running.  Further, once staked, the validator becomes an important part of the network.  In order to 
+safely remove a validator from the network, first deactivate its stake.
 
 Stake can be deactivated by running:
 ```bash
@@ -32,7 +34,8 @@ $ solana deactivate-stake ~/validator-config/stake-keypair.json ~/validator-vote
 ```
 
 The stake will cool down, deactivate over time.  While cooling down, your stake will continue to earn
-rewards.
+rewards.  Only after stake cooldown is it safe to turn off your validator or withdraw it from the network.
+Cooldown may take several epochs to complete, depending on active stake and the size of your stake.
 
 Note that a stake account may only be used once, so after deactivation, use the
 cli's `withdraw-stake` command to recover the previously staked lamports.
