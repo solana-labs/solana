@@ -5,8 +5,9 @@ The preceeding sections, outlined in the [Economic Design Overview](ed_overview.
 ### MVP Economic Features
 
 * Faucet to deliver testnet SOLs to validators for staking and dapp development.
-* Mechanism by which validators are rewarded in proportion to their stake. Interest rate mechansism (i.e. to be determined by total % staked) to come later.
-* Ability to delegate tokens to validator nodes.
+* Mechanism by which validators are rewarded via network inflation.
+* Ability to delegate tokens to validator nodes
+* Validator set commission fees on interest from delegated tokens.
 * Replicators to receive fixed, arbitrary reward for submitting validated PoReps. Reward size mechanism (i.e. PoRep reward as a function of total ledger redundancy) to come later.
 * Pooling of replicator PoRep transaction fees and weighted distribution to validators based on PoRep verification (see [Replication-validation Transaction Fees](ed_vce_replication_validation_transaction_fees.md). It will be useful to test this protection against attacks on testnet.
 * Nice-to-have: auto-delegation of replicator rewards to validator.
