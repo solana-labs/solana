@@ -49,6 +49,18 @@ azure)
   blockstreamerMachineType=Standard_D16s_v3
   replicatorMachineType=Standard_D4s_v3
   ;;
+colo)
+  # shellcheck source=net/scripts/colo-provider.sh
+  source "$here"/scripts/colo-provider.sh
+
+  cpuBootstrapLeaderMachineType=0
+  gpuBootstrapLeaderMachineType=1
+  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
+  fullNodeMachineType=$cpuBootstrapLeaderMachineType
+  clientMachineType=0
+  blockstreamerMachineType=0
+  replicatorMachineType=0
+  ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
   ;;
@@ -243,12 +255,7 @@ fi
 case $cloudProvider in
 gce)
   ;;
-ec2)
-  if [[ -n $fullNodeAdditionalDiskSizeInGb ]] ; then
-    usage "Error: --fullnode-additional-disk-size-gb currently only supported with cloud provider: gce"
-  fi
-  ;;
-azure)
+ec2|azure|colo)
   if [[ -n $fullNodeAdditionalDiskSizeInGb ]] ; then
     usage "Error: --fullnode-additional-disk-size-gb currently only supported with cloud provider: gce"
   fi
@@ -553,6 +560,7 @@ delete() {
 
 case $command in
 delete)
+  cloud_Initialize
   delete
   ;;
 
@@ -702,7 +710,7 @@ EOF
       fi
       cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
         "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" &
+        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" #& FIXME: HACK!
     done
 
     wait
@@ -728,10 +736,13 @@ EOF
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
 
+  load_availability false
+
   prepareInstancesAndWriteConfigFile
   ;;
 
 config)
+  cloud_Initialize
   prepareInstancesAndWriteConfigFile
   ;;
 info)
