@@ -598,11 +598,11 @@ impl Blocktree {
             .coding_params()
             .expect("should_insert_coding_shred called with non-coding shred");
 
-        if shred_index < pos as u32 {
+        if shred_index < u32::from(pos) {
             return false;
         }
 
-        let set_index = shred_index - pos as u32;
+        let set_index = shred_index - u32::from(pos);
         !(num_coding == 0
             || pos >= num_coding
             || std::u32::MAX - set_index < u32::from(num_coding) - 1
@@ -625,14 +625,14 @@ impl Blocktree {
 
         // Assert guaranteed by integrity checks on the shred that happen before
         // `insert_coding_shred` is called
-        if shred_index < pos as u64 {
+        if shred_index < u64::from(pos) {
             error!("Due to earlier validation, shred index must be >= pos");
             return Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(
                 Box::new(bincode::ErrorKind::Custom("shred index < pos".to_string())),
             )));
         }
 
-        let set_index = shred_index - pos as u64;
+        let set_index = shred_index - u64::from(pos);
         let erasure_config = ErasureConfig::new(num_data as usize, num_coding as usize);
 
         let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
