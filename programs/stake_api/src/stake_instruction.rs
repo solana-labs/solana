@@ -13,6 +13,7 @@ use solana_sdk::{
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction, sysvar,
+    sysvar::rent,
 };
 
 /// Reasons the stake might have had an error
@@ -120,7 +121,10 @@ pub fn create_stake_account_with_lockup(
         Instruction::new(
             id(),
             &StakeInstruction::Lockup((lockup, *custodian)),
-            vec![AccountMeta::new(*stake_pubkey, false)],
+            vec![
+                AccountMeta::new(*stake_pubkey, false),
+                AccountMeta::new(rent::id(), false),
+            ],
         ),
     ]
 }
@@ -239,7 +243,11 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StakeInstruction::Lockup((lockup, custodian)) => me.lockup(lockup, &custodian),
+        StakeInstruction::Lockup((lockup, custodian)) => me.lockup(
+            lockup,
+            &rent::from_keyed_account(&rest[1])?.rent_calculator,
+            &custodian,
+        ),
         StakeInstruction::Authorize(authorized_pubkey) => me.authorize(&authorized_pubkey, &rest),
         StakeInstruction::DelegateStake => {
             if rest.len() < 3 {
