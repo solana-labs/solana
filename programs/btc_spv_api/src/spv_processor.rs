@@ -167,7 +167,6 @@ mod test {
 
     #[test]
     fn test_parse_transaction_hex() {
-
         let testblockhash = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
         let testtxhash = "5b09bbb8d3cb2f8d4edbcf30664419fb7c9deaeeb1f62cb432e7741c80dbe5ba";
 

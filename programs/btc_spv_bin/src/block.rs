@@ -40,8 +40,7 @@ fn main() {
         let outf = hex::decode(&blockraw).unwrap();
         let arr = &outf[0..];
         write_file(fname, arr).unwrap();
-    }
-    else {
+    } else {
         println!("{}", blockraw);
     }
 }
