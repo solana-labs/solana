@@ -464,7 +464,7 @@ mod test {
             let num_slots = 2;
 
             // Create some blobs
-            let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 50 as u64);
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 150 as u64);
             let num_shreds = shreds.len() as u64;
             let num_shreds_per_slot = num_shreds / num_slots;
 
