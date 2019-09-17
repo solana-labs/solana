@@ -13,9 +13,9 @@ source ci/_
 reportName="lcov-${CI_COMMIT:0:9}"
 
 if [[ -n $1 ]]; then
-  crate=--manifest-path=$1/Cargo.toml
+  crate="--manifest-path=$1/Cargo.toml"
 else
-  crate=--all
+  crate="--all --exclude solana-local-cluster"
 fi
 
 coverageFlags=(-Zprofile)                # Enable coverage
@@ -36,8 +36,10 @@ fi
 rm -rf target/cov/$reportName
 
 source ci/rust-version.sh nightly
-_ cargo +$rust_nightly build --target-dir target/cov "$crate"
-_ cargo +$rust_nightly test --target-dir target/cov --lib "$crate"
+# shellcheck disable=SC2086 #
+_ cargo +$rust_nightly build --target-dir target/cov $crate
+# shellcheck disable=SC2086 #
+_ cargo +$rust_nightly test --target-dir target/cov --lib $crate
 
 echo "--- grcov"
 
