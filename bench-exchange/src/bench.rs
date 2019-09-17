@@ -970,7 +970,7 @@ pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypa
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use super::*;
     use solana_core::gossip_service::{discover_cluster, get_multi_client};
@@ -1068,4 +1068,4 @@ mod tests {
 
         do_bench_exchange(clients, config);
     }
-}
+}*/
