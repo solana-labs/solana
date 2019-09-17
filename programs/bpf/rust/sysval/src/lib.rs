@@ -5,10 +5,11 @@ use solana_sdk::{
     account_info::AccountInfo,
     clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
     entrypoint,
+    rent_calculator,
     entrypoint::SUCCESS,
     pubkey::Pubkey,
     sysvar::{
-        clock::Clock, fees::Fees, rewards::Rewards, slot_hashes::SlotHashes,
+        clock::Clock, fees::Fees, rent::Rent, rewards::Rewards, slot_hashes::SlotHashes,
         stake_history::StakeHistory,
     },
 };
@@ -38,6 +39,16 @@ fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], _data
     // Stake History
     let stake_history = StakeHistory::from_account_info(&accounts[6]).unwrap();
     assert_eq!(stake_history.len(), 1);
+
+    let rent = Rent::from_account_info(&accounts[7]).unwrap();
+    assert_eq!(
+        rent.rent_calculator.due(
+            rent_calculator::DEFAULT_LAMPORTS_PER_BYTE_YEAR * rent_calculator::DEFAULT_EXEMPTION_THRESHOLD as u64,
+            1,
+            1.0
+        ),
+        (0, true)
+    );
 
     SUCCESS
 }
