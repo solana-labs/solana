@@ -4,7 +4,7 @@
 use crate::entry::Entry;
 use crate::erasure::ErasureConfig;
 use crate::result::{Error, Result};
-use crate::shred::{Shred, ShredInfo, Shredder};
+use crate::shred::{ShredInfo, Shredder};
 
 #[cfg(feature = "kvstore")]
 use solana_kvstore as kvstore;
@@ -322,7 +322,7 @@ impl Blocktree {
         index_working_set: &HashMap<u64, Index>,
         prev_inserted_datas: &mut HashMap<(u64, u64), ShredInfo>,
         prev_inserted_codes: &mut HashMap<(u64, u64), ShredInfo>,
-    ) -> Vec<Shred> {
+    ) -> Vec<ShredInfo> {
         let data_cf = db.column::<cf::ShredData>();
         let code_cf = db.column::<cf::ShredCode>();
         let mut recovered_data_shreds = vec![];
@@ -415,7 +415,7 @@ impl Blocktree {
 
     pub fn insert_shreds(
         &self,
-        shreds: Vec<Shred>,
+        shreds: Vec<ShredInfo>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
     ) -> Result<()> {
         let db = &*self.db;
@@ -509,7 +509,7 @@ impl Blocktree {
 
     fn check_insert_coding_shred(
         &self,
-        shred: Shred,
+        shred: ShredInfo,
         erasure_metas: &mut HashMap<(u64, u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, Index>,
         write_batch: &mut WriteBatch,
@@ -525,13 +525,11 @@ impl Blocktree {
         // This gives the index of first coding shred in this FEC block
         // So, all coding shreds in a given FEC block will have the same set index
         if Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root) {
-            if let Ok(shred_buf) =
-                self.insert_coding_shred(erasure_metas, index_meta, &shred, write_batch)
+            if let Ok(()) = self.insert_coding_shred(erasure_metas, index_meta, &shred, write_batch)
             {
-                let shred_info = ShredInfo::new_from_shred(&shred, shred_buf);
                 just_inserted_coding_shreds
                     .entry((slot, shred_index))
-                    .or_insert_with(|| shred_info);
+                    .or_insert_with(|| shred);
                 new_index_meta.map(|n| index_working_set.insert(slot, n));
             }
         }
@@ -539,7 +537,7 @@ impl Blocktree {
 
     fn check_insert_data_shred(
         &self,
-        shred: Shred,
+        shred: ShredInfo,
         index_working_set: &mut HashMap<u64, Index>,
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
@@ -563,14 +561,13 @@ impl Blocktree {
                 index_meta.data(),
                 &self.last_root,
             ) {
-                if let Ok(shred_buf) = self.insert_data_shred(
+                if let Ok(()) = self.insert_data_shred(
                     &mut slot_meta,
                     index_meta.data_mut(),
                     &shred,
                     write_batch,
                 ) {
-                    let shred_info = ShredInfo::new_from_shred(&shred, shred_buf);
-                    just_inserted_data_shreds.insert((slot, shred_index), shred_info);
+                    just_inserted_data_shreds.insert((slot, shred_index), shred);
                     new_index_meta.map(|n| index_working_set.insert(slot, n));
                     true
                 } else {
@@ -587,7 +584,7 @@ impl Blocktree {
     }
 
     fn should_insert_coding_shred(
-        shred: &Shred,
+        shred: &ShredInfo,
         coding_index: &CodingIndex,
         last_root: &RwLock<u64>,
     ) -> bool {
@@ -614,9 +611,9 @@ impl Blocktree {
         &self,
         erasure_metas: &mut HashMap<(u64, u64), ErasureMeta>,
         index_meta: &mut Index,
-        shred: &Shred,
+        shred: &ShredInfo,
         write_batch: &mut WriteBatch,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<()> {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
         let (num_data, num_coding, pos) = shred
@@ -651,18 +648,16 @@ impl Blocktree {
             );
         }
 
-        let serialized_shred = bincode::serialize(shred).unwrap();
-
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
-        write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &serialized_shred)?;
+        write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &shred.shred)?;
         index_meta.coding_mut().set_present(shred_index, true);
 
-        Ok(serialized_shred)
+        Ok(())
     }
 
     fn should_insert_data_shred(
-        shred: &Shred,
+        shred: &ShredInfo,
         slot_meta: &SlotMeta,
         data_index: &DataIndex,
         last_root: &RwLock<u64>,
@@ -725,9 +720,9 @@ impl Blocktree {
         &self,
         slot_meta: &mut SlotMeta,
         data_index: &mut DataIndex,
-        shred: &Shred,
+        shred: &ShredInfo,
         write_batch: &mut WriteBatch,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<()> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
         let parent = shred.parent();
@@ -763,15 +758,13 @@ impl Blocktree {
             slot_meta.consumed
         };
 
-        let serialized_shred = bincode::serialize(shred).unwrap();
-
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
-        write_batch.put_bytes::<cf::ShredData>((slot, index), &serialized_shred)?;
+        write_batch.put_bytes::<cf::ShredData>((slot, index), &shred.shred)?;
         update_slot_meta(last_in_slot, slot_meta, index, new_consumed);
         data_index.set_present(index, true);
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
-        Ok(serialized_shred)
+        Ok(())
     }
 
     pub fn get_data_shred(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
@@ -859,8 +852,8 @@ impl Blocktree {
                 parent_slot = current_slot - 1;
                 remaining_ticks_in_slot = ticks_per_slot;
                 shredder.finalize_slot();
-                let shreds: Vec<Shred> =
-                    shredder.shred_tuples.into_iter().map(|(s, _)| s).collect();
+                let shreds: Vec<ShredInfo> =
+                    shredder.shred_tuples.into_iter().map(|(_, s)| s).collect();
                 all_shreds.extend(shreds);
                 shredder =
                     Shredder::new(current_slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0)
@@ -883,7 +876,7 @@ impl Blocktree {
         if is_full_slot && remaining_ticks_in_slot != 0 {
             shredder.finalize_slot();
         }
-        let shreds: Vec<Shred> = shredder.shred_tuples.into_iter().map(|(s, _)| s).collect();
+        let shreds: Vec<ShredInfo> = shredder.shred_tuples.into_iter().map(|(_, s)| s).collect();
         all_shreds.extend(shreds);
 
         let num_shreds = all_shreds.len();
@@ -996,22 +989,25 @@ impl Blocktree {
     pub fn get_slot_entries_with_shred_count(
         &self,
         slot: u64,
-        start_index: u64,
+        mut start_index: u64,
     ) -> Result<(Vec<Entry>, usize)> {
         // Find the next consecutive block of shreds.
-        let serialized_shreds = get_slot_consecutive_shreds(slot, &self.db, start_index)?;
+        let mut serialized_shreds: Vec<Vec<u8>> = vec![];
+        let data_cf = self.db.column::<cf::ShredData>();
+
+        while let Some(serialized_shred) = data_cf.get_bytes((slot, start_index))? {
+            serialized_shreds.push(serialized_shred);
+            start_index += 1;
+        }
+
         trace!(
             "Found {:?} shreds for slot {:?}",
             serialized_shreds.len(),
             slot
         );
-        let mut shreds: Vec<Shred> = serialized_shreds
-            .iter()
-            .map(|serialzied_shred| {
-                let shred: Shred =
-                    bincode::deserialize(serialzied_shred).expect("Failed to deserialize shred");
-                shred
-            })
+        let mut shreds: Vec<ShredInfo> = serialized_shreds
+            .into_iter()
+            .map(|serialized_shred| ShredInfo::new_from_serialized_shred(serialized_shred))
             .collect();
 
         let mut all_entries = vec![];
@@ -1387,22 +1383,6 @@ fn find_slot_meta_in_cached_state<'a>(
     }
 }
 
-fn get_slot_consecutive_shreds<'a>(
-    slot: u64,
-    db: &Database,
-    mut current_index: u64,
-) -> Result<Vec<Cow<'a, [u8]>>> {
-    let mut serialized_shreds: Vec<Cow<[u8]>> = vec![];
-    let data_cf = db.column::<cf::ShredData>();
-
-    while let Some(serialized_shred) = data_cf.get_bytes((slot, current_index))? {
-        serialized_shreds.push(Cow::Owned(serialized_shred));
-        current_index += 1;
-    }
-
-    Ok(serialized_shreds)
-}
-
 // Chaining based on latest discussion here: https://github.com/solana-labs/solana/pull/2253
 fn handle_chaining(
     db: &Database,
@@ -1590,7 +1570,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     bincode::serialize_into(&mut shredder, &entries)
         .expect("Expect to write all entries to shreds");
     shredder.finalize_slot();
-    let shreds: Vec<Shred> = shredder.shred_tuples.into_iter().map(|(s, _)| s).collect();
+    let shreds: Vec<ShredInfo> = shredder.shred_tuples.into_iter().map(|(_, s)| s).collect();
 
     blocktree.insert_shreds(shreds, None)?;
     blocktree.set_roots(&[0])?;
@@ -1671,7 +1651,7 @@ pub fn entries_to_test_shreds(
     slot: u64,
     parent_slot: u64,
     is_full_slot: bool,
-) -> Vec<Shred> {
+) -> Vec<ShredInfo> {
     let mut shredder = Shredder::new(slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0 as u32)
         .expect("Failed to create entry shredder");
 
@@ -1683,9 +1663,7 @@ pub fn entries_to_test_shreds(
         shredder.finalize_data();
     }
 
-    let shreds: Vec<Shred> = shredder.shred_tuples.into_iter().map(|(s, _)| s).collect();
-
-    shreds
+    shredder.shred_tuples.into_iter().map(|(_, s)| s).collect()
 }
 
 #[cfg(test)]
@@ -2255,7 +2233,7 @@ pub mod tests {
         // is missing the tick at shred index == slot index - 1. Thus, no consecutive blocks
         // will be formed
         let num_slots = shreds_per_slot;
-        let mut shreds: Vec<Shred> = vec![];
+        let mut shreds = vec![];
         let mut missing_shreds = vec![];
         for slot in 1..num_slots + 1 {
             let (mut slot_shreds, _) = make_slot_entries(slot, slot - 1, entries_per_slot);
@@ -3472,7 +3450,7 @@ pub mod tests {
         slot: u64,
         parent_slot: u64,
         num_entries: u64,
-    ) -> (Vec<Shred>, Vec<Entry>) {
+    ) -> (Vec<ShredInfo>, Vec<Entry>) {
         let entries = create_ticks(num_entries, Hash::default());
         let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true);
         (shreds, entries)
@@ -3482,7 +3460,7 @@ pub mod tests {
         start_slot: u64,
         num_slots: u64,
         entries_per_slot: u64,
-    ) -> (Vec<Shred>, Vec<Entry>) {
+    ) -> (Vec<ShredInfo>, Vec<Entry>) {
         let mut shreds = vec![];
         let mut entries = vec![];
         for slot in start_slot..start_slot + num_slots {
@@ -3501,7 +3479,7 @@ pub mod tests {
     pub fn make_chaining_slot_entries(
         chain: &[u64],
         entries_per_slot: u64,
-    ) -> Vec<(Vec<Shred>, Vec<Entry>)> {
+    ) -> Vec<(Vec<ShredInfo>, Vec<Entry>)> {
         let mut slots_shreds_and_entries = vec![];
         for (i, slot) in chain.iter().enumerate() {
             let parent_slot = {

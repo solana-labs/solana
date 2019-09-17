@@ -151,10 +151,9 @@ impl RetransmitStage {
             exit,
             repair_strategy,
             &leader_schedule_cache.clone(),
-            move |id, shred, shred_buf, working_bank, last_root| {
+            move |id, shred, working_bank, last_root| {
                 should_retransmit_and_persist(
                     shred,
-                    shred_buf,
                     working_bank,
                     &leader_schedule_cache,
                     id,

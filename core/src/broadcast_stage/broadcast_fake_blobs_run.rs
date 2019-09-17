@@ -36,7 +36,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        let (shreds, shred_bufs, _) = broadcast_utils::entries_to_shreds(
+        let (_, shred_bufs, _) = broadcast_utils::entries_to_shreds(
             receive_results.ventries,
             bank.slot(),
             receive_results.last_tick,
@@ -72,7 +72,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             self.last_blockhash = Hash::default();
         }
 
-        blocktree.insert_shreds(shreds, None)?;
+        blocktree.insert_shreds(shred_bufs.clone(), None)?;
         // 3) Start broadcast step
         let peers = cluster_info.read().unwrap().tvu_peers();
         peers.iter().enumerate().for_each(|(i, peer)| {
