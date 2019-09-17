@@ -255,6 +255,11 @@ The private key of a [keypair](#keypair).
 The period of time for which a [leader](#leader) ingests transactions and
 produces a [block](#block).
 
+#### smart contract
+
+A set of constraints that once satisfied, signal to a program that some
+predefined account updates are permitted.
+
 #### sol
 
 The [native token](#native-token) tracked by a [cluster](#cluster) recognized
