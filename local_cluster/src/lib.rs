@@ -12,6 +12,9 @@ mod tests;
 extern crate log;
 
 #[cfg(test)]
+extern crate solana_bench_exchange;
+
+#[cfg(test)]
 extern crate solana_bench_tps;
 
 #[macro_use]
@@ -20,6 +23,10 @@ extern crate solana_core;
 
 #[cfg(test)]
 extern crate solana_drone;
+
+#[macro_use]
+#[cfg(test)]
+extern crate solana_exchange_program;
 
 #[macro_use]
 #[cfg(test)]
