@@ -33,7 +33,7 @@ bs58 = "0.2.5"
 byteorder = { version = "1.3.2", optional = true }
 chrono = { version = "0.4.9", features = ["serde"], optional = true }
 generic-array = { version = "0.13.2", default-features = false, features = ["serde", "more_lengths"] }
-hex = "0.3.2"
+hex = "0.4.0"
 itertools = { version = "0.8.0" }
 log = { version = "0.4.8" }
 memmap = { version = "0.6.2", optional = true }
