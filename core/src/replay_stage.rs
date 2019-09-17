@@ -4,7 +4,9 @@ use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, BlocktreeError};
 use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
-use crate::confidence::ForkConfidenceCache;
+use crate::confidence::{
+    AggregateConfidenceService, ConfidenceAggregationData, ForkConfidenceCache,
+};
 use crate::consensus::{StakeLockout, Tower};
 use crate::entry::{Entry, EntrySlice};
 use crate::leader_schedule_cache::LeaderScheduleCache;
@@ -54,7 +56,7 @@ impl Drop for Finalizer {
 
 pub struct ReplayStage {
     t_replay: JoinHandle<Result<()>>,
-    t_lockouts: JoinHandle<()>,
+    confidence_service: AggregateConfidenceService,
 }
 
 #[derive(Default)]
@@ -113,7 +115,8 @@ impl ReplayStage {
         let vote_account = *vote_account;
         let voting_keypair = voting_keypair.cloned();
 
-        let (lockouts_sender, t_lockouts) = aggregate_stake_lockouts(exit, fork_confidence_cache);
+        let (lockouts_sender, confidence_service) =
+            AggregateConfidenceService::new(exit, fork_confidence_cache);
 
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -246,7 +249,7 @@ impl ReplayStage {
         (
             Self {
                 t_replay,
-                t_lockouts,
+                confidence_service,
             },
             root_bank_receiver,
         )
@@ -414,7 +417,7 @@ impl ReplayStage {
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         lockouts: HashMap<u64, StakeLockout>,
         total_staked: u64,
-        lockouts_sender: &Sender<LockoutAggregationData>,
+        lockouts_sender: &Sender<ConfidenceAggregationData>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
     ) -> Result<()>
     where
@@ -477,14 +480,14 @@ impl ReplayStage {
         tower: &Tower,
         lockouts: HashMap<u64, StakeLockout>,
         total_staked: u64,
-        lockouts_sender: &Sender<LockoutAggregationData>,
+        lockouts_sender: &Sender<ConfidenceAggregationData>,
     ) {
-        if let Err(e) = lockouts_sender.send(LockoutAggregationData {
+        if let Err(e) = lockouts_sender.send(ConfidenceAggregationData::new(
             lockouts,
-            root: tower.root(),
-            ancestors: ancestors.clone(),
+            tower.root(),
+            ancestors.clone(),
             total_staked,
-        }) {
+        )) {
             trace!("lockouts_sender failed: {:?}", e);
         }
     }
@@ -789,78 +792,9 @@ impl Service for ReplayStage {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.t_lockouts.join()?;
+        self.confidence_service.join()?;
         self.t_replay.join().map(|_| ())
     }
-}
-
-struct LockoutAggregationData {
-    lockouts: HashMap<u64, StakeLockout>,
-    root: Option<u64>,
-    ancestors: Arc<HashMap<u64, HashSet<u64>>>,
-    total_staked: u64,
-}
-
-fn aggregate_stake_lockouts(
-    exit: &Arc<AtomicBool>,
-    fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
-) -> (Sender<LockoutAggregationData>, JoinHandle<()>) {
-    let (lockouts_sender, lockouts_receiver): (
-        Sender<LockoutAggregationData>,
-        Receiver<LockoutAggregationData>,
-    ) = channel();
-    let exit_ = exit.clone();
-    (
-        lockouts_sender,
-        Builder::new()
-            .name("solana-aggregate-stake-lockouts".to_string())
-            .spawn(move || loop {
-                if exit_.load(Ordering::Relaxed) {
-                    break;
-                }
-                if let Ok(aggregation_data) = lockouts_receiver.try_recv() {
-                    let stake_weighted_lockouts = Tower::aggregate_stake_lockouts(
-                        aggregation_data.root,
-                        &aggregation_data.ancestors,
-                        &aggregation_data.lockouts,
-                    );
-
-                    let mut w_fork_confidence_cache = fork_confidence_cache.write().unwrap();
-
-                    // Cache the confidence values
-                    for (fork, stake_lockout) in aggregation_data.lockouts.iter() {
-                        if aggregation_data.root.is_none()
-                            || *fork >= aggregation_data.root.unwrap()
-                        {
-                            w_fork_confidence_cache.cache_fork_confidence(
-                                *fork,
-                                stake_lockout.stake(),
-                                aggregation_data.total_staked,
-                                stake_lockout.lockout(),
-                            );
-                        }
-                    }
-
-                    // Cache the stake weighted lockouts
-                    for (fork, stake_weighted_lockout) in stake_weighted_lockouts.iter() {
-                        if aggregation_data.root.is_none()
-                            || *fork >= aggregation_data.root.unwrap()
-                        {
-                            w_fork_confidence_cache
-                                .cache_stake_weighted_lockouts(*fork, *stake_weighted_lockout)
-                        }
-                    }
-
-                    if let Some(root) = aggregation_data.root {
-                        w_fork_confidence_cache
-                            .prune_confidence_cache(&aggregation_data.ancestors, root);
-                    }
-
-                    drop(w_fork_confidence_cache);
-                }
-            })
-            .unwrap(),
-    )
 }
 
 #[cfg(test)]
@@ -1064,7 +998,7 @@ mod test {
         }
 
         let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
-        let (lockouts_sender, _) = aggregate_stake_lockouts(
+        let (lockouts_sender, _) = AggregateConfidenceService::new(
             &Arc::new(AtomicBool::new(false)),
             fork_confidence_cache.clone(),
         );
