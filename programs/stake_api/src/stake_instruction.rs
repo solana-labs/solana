@@ -12,6 +12,7 @@ use solana_sdk::{
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction, sysvar,
+    sysvar::rent,
 };
 
 /// Reasons the stake might have had an error
@@ -125,7 +126,10 @@ pub fn create_stake_account_with_lockup(
         Instruction::new(
             id(),
             &StakeInstruction::Initialize(*authorized, *lockup),
-            vec![AccountMeta::new(*stake_pubkey, false)],
+            vec![
+                AccountMeta::new(*stake_pubkey, false),
+                AccountMeta::new(rent::id(), false),
+            ],
         ),
     ]
 }

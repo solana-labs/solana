@@ -11,6 +11,7 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     instruction::InstructionError,
     pubkey::Pubkey,
+    rent_calculator::RentCalculator,
     sysvar::{
         self,
         stake_history::{StakeHistory, StakeHistoryEntry},
