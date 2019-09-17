@@ -5,9 +5,9 @@ use solana_sdk::{
     account_info::AccountInfo,
     clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
     entrypoint,
-    rent_calculator,
     entrypoint::SUCCESS,
     pubkey::Pubkey,
+    rent_calculator,
     sysvar::{
         clock::Clock, fees::Fees, rent::Rent, rewards::Rewards, slot_hashes::SlotHashes,
         stake_history::StakeHistory,
@@ -43,7 +43,8 @@ fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], _data
     let rent = Rent::from_account_info(&accounts[7]).unwrap();
     assert_eq!(
         rent.rent_calculator.due(
-            rent_calculator::DEFAULT_LAMPORTS_PER_BYTE_YEAR * rent_calculator::DEFAULT_EXEMPTION_THRESHOLD as u64,
+            rent_calculator::DEFAULT_LAMPORTS_PER_BYTE_YEAR
+                * rent_calculator::DEFAULT_EXEMPTION_THRESHOLD as u64,
             1,
             1.0
         ),
