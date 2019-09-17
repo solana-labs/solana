@@ -1691,7 +1691,7 @@ pub fn entries_to_test_shreds(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::entry::{create_ticks, make_tiny_test_entries, Entry};
+    use crate::entry::{create_ticks, Entry};
     use crate::shred::CodingShred;
     use itertools::Itertools;
     use rand::seq::SliceRandom;
@@ -1890,12 +1890,14 @@ pub mod tests {
         assert_eq!(bytes4, bytes);
 
         let mut buf = vec![0; bytes * 2];
-        let (last_index, bytes6) = ledger.get_data_shreds(slot, 9, 10, &mut buf).unwrap();
-        assert_eq!(last_index, 9);
+        let (last_index, bytes6) = ledger
+            .get_data_shreds(slot, num_shreds - 1, num_shreds, &mut buf)
+            .unwrap();
+        assert_eq!(last_index, num_shreds - 1);
 
         {
             let shred_data = &buf[..bytes6];
-            assert_eq!(shred_data, &shred_bufs[9][..bytes6]);
+            assert_eq!(shred_data, &shred_bufs[(num_shreds - 1) as usize][..bytes6]);
         }
 
         // Read out of range
@@ -2042,7 +2044,7 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path("test_get_slot_entries1");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let entries = make_tiny_test_entries(8);
+            let entries = create_ticks(8, Hash::default());
             let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false);
             blocktree
                 .insert_shreds(shreds, None)
@@ -2077,7 +2079,7 @@ pub mod tests {
             let num_slots = 5 as u64;
             let mut index = 0;
             for slot in 0..num_slots {
-                let entries = make_tiny_test_entries(slot as usize + 1);
+                let entries = create_ticks(slot + 1, Hash::default());
                 let last_entry = entries.last().unwrap().clone();
                 let mut shreds =
                     entries_to_test_shreds(entries, slot, slot.saturating_sub(1), false);
@@ -2109,13 +2111,13 @@ pub mod tests {
             let num_slots = 5 as u64;
             let shreds_per_slot = 5 as u64;
             let entry_serialized_size =
-                bincode::serialized_size(&make_tiny_test_entries(1)).unwrap();
+                bincode::serialized_size(&create_ticks(1, Hash::default())).unwrap();
             let entries_per_slot =
                 (shreds_per_slot * PACKET_DATA_SIZE as u64) / entry_serialized_size;
 
             // Write entries
             for slot in 0..num_slots {
-                let entries = make_tiny_test_entries(entries_per_slot as usize);
+                let entries = create_ticks(entries_per_slot, Hash::default());
                 let shreds =
                     entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false);
                 assert!(shreds.len() as u64 >= shreds_per_slot);
@@ -2888,7 +2890,7 @@ pub mod tests {
         let gap: u64 = 10;
         assert!(gap > 3);
         let num_entries = 10;
-        let entries = make_tiny_test_entries(num_entries);
+        let entries = create_ticks(num_entries, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
         let num_shreds = shreds.len();
         for (i, b) in shreds.iter_mut().enumerate() {
@@ -2978,7 +2980,7 @@ pub mod tests {
         assert_eq!(blocktree.find_missing_data_indexes(slot, 4, 3, 1), empty);
         assert_eq!(blocktree.find_missing_data_indexes(slot, 1, 2, 0), empty);
 
-        let entries = make_tiny_test_entries(20);
+        let entries = create_ticks(20, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
         shreds.drain(2..);
 
@@ -3019,7 +3021,7 @@ pub mod tests {
 
         // Write entries
         let num_entries = 10;
-        let entries = make_tiny_test_entries(num_entries);
+        let entries = create_ticks(num_entries, Hash::default());
         let shreds = entries_to_test_shreds(entries, slot, 0, true);
         let num_shreds = shreds.len();
 
@@ -3041,7 +3043,7 @@ pub mod tests {
 
     #[test]
     pub fn test_should_insert_data_shred() {
-        let (mut shreds, _) = make_slot_entries(0, 0, 100);
+        let (mut shreds, _) = make_slot_entries(0, 0, 200);
         let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -3057,12 +3059,15 @@ pub mod tests {
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
             assert_eq!(slot_meta.consumed, 5);
-            assert!(!Blocktree::should_insert_data_shred(
-                &shreds[1],
-                &slot_meta,
-                index.data(),
-                &last_root
-            ));
+            assert_eq!(
+                Blocktree::should_insert_data_shred(
+                    &shreds[1],
+                    &slot_meta,
+                    index.data(),
+                    &last_root
+                ),
+                false
+            );
 
             // Trying to insert the same shred again should fail
             // skip over shred 5 so the `slot_meta.consumed` doesn't increment
@@ -3071,12 +3076,15 @@ pub mod tests {
                 .unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
-            assert!(!Blocktree::should_insert_data_shred(
-                &shreds[6],
-                &slot_meta,
-                index.data(),
-                &last_root
-            ));
+            assert_eq!(
+                Blocktree::should_insert_data_shred(
+                    &shreds[6],
+                    &slot_meta,
+                    index.data(),
+                    &last_root
+                ),
+                false
+            );
 
             // Trying to insert another "is_last" shred with index < the received index should fail
             // skip over shred 7
@@ -3094,12 +3102,10 @@ pub mod tests {
                     panic!("Shred in unexpected format")
                 }
             };
-            assert!(!Blocktree::should_insert_data_shred(
-                &shred7,
-                &slot_meta,
-                index.data(),
-                &last_root
-            ));
+            assert_eq!(
+                Blocktree::should_insert_data_shred(&shred7, &slot_meta, index.data(), &last_root),
+                false
+            );
 
             // Insert all pending shreds
             let mut shred8 = shreds[8].clone();
@@ -3113,12 +3119,10 @@ pub mod tests {
             } else {
                 panic!("Shred in unexpected format")
             }
-            assert!(!Blocktree::should_insert_data_shred(
-                &shred7,
-                &slot_meta,
-                index.data(),
-                &last_root
-            ));
+            assert_eq!(
+                Blocktree::should_insert_data_shred(&shred7, &slot_meta, index.data(), &last_root),
+                false
+            );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
@@ -3469,7 +3473,7 @@ pub mod tests {
         parent_slot: u64,
         num_entries: u64,
     ) -> (Vec<Shred>, Vec<Entry>) {
-        let entries = make_tiny_test_entries(num_entries as usize);
+        let entries = create_ticks(num_entries, Hash::default());
         let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true);
         (shreds, entries)
     }

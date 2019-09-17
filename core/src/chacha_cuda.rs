@@ -118,7 +118,7 @@ mod tests {
     use crate::blocktree::Blocktree;
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-    use crate::entry::make_tiny_test_entries;
+    use crate::entry::create_ticks;
     use crate::replicator::sample_file;
     use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;
     use solana_sdk::hash::Hash;
@@ -132,7 +132,7 @@ mod tests {
         solana_logger::setup();
 
         let slots_per_segment = 32;
-        let entries = make_tiny_test_entries(slots_per_segment);
+        let entries = create_ticks(slots_per_segment, Hash::default());
         let ledger_dir = "test_encrypt_file_many_keys_single";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
@@ -190,7 +190,7 @@ mod tests {
     fn test_encrypt_file_many_keys_multiple_keys() {
         solana_logger::setup();
 
-        let entries = make_tiny_test_entries(32);
+        let entries = create_ticks(32, Hash::default());
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;

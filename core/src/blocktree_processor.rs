@@ -1231,6 +1231,57 @@ pub mod tests {
     }
 
     #[test]
+    fn test_process_entry_tx_random_execution_with_error() {
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(1_000_000_000);
+        let bank = Bank::new(&genesis_block);
+
+        const NUM_TRANSFERS_PER_ENTRY: usize = 8;
+        const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
+        // large enough to scramble locks and results
+
+        let keypairs: Vec<_> = (0..NUM_TRANSFERS * 2).map(|_| Keypair::new()).collect();
+
+        // give everybody one lamport
+        for keypair in &keypairs {
+            bank.transfer(1, &mint_keypair, &keypair.pubkey())
+                .expect("funding failed");
+        }
+        let mut hash = bank.last_blockhash();
+
+        let entries: Vec<_> = (0..NUM_TRANSFERS)
+            .step_by(NUM_TRANSFERS_PER_ENTRY)
+            .map(|i| {
+                let mut transactions = (0..NUM_TRANSFERS_PER_ENTRY)
+                    .map(|j| {
+                        system_transaction::transfer(
+                            &keypairs[i + j],
+                            &keypairs[i + j + NUM_TRANSFERS].pubkey(),
+                            1,
+                            bank.last_blockhash(),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+
+                transactions.push(system_transaction::create_account(
+                    &mint_keypair,
+                    &solana_sdk::sysvar::clock::id(), // puts a TX error in results
+                    bank.last_blockhash(),
+                    1,
+                    0,
+                    &Pubkey::new_rand(),
+                ));
+
+                next_entry_mut(&mut hash, 0, transactions)
+            })
+            .collect();
+        assert_eq!(process_entries(&bank, &entries, true), Ok(()));
+    }
+
+    #[test]
     fn test_process_entry_tx_random_execution_no_error() {
         // entropy multiplier should be big enough to provide sufficient entropy
         // but small enough to not take too much time while executing the test.
@@ -1551,7 +1602,9 @@ pub mod tests {
         } = create_genesis_block(1_000_000_000);
         let mut bank = Bank::new(&genesis_block);
 
-        const NUM_TRANSFERS: usize = 128;
+        const NUM_TRANSFERS_PER_ENTRY: usize = 8;
+        const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
+
         let keypairs: Vec<_> = (0..NUM_TRANSFERS * 2).map(|_| Keypair::new()).collect();
 
         // give everybody one lamport
@@ -1565,33 +1618,51 @@ pub mod tests {
         let mut root: Option<Arc<Bank>> = None;
         loop {
             let entries: Vec<_> = (0..NUM_TRANSFERS)
+                .step_by(NUM_TRANSFERS_PER_ENTRY)
                 .map(|i| {
-                    next_entry_mut(
-                        &mut hash,
-                        0,
-                        vec![system_transaction::transfer(
-                            &keypairs[i],
-                            &keypairs[i + NUM_TRANSFERS].pubkey(),
-                            1,
+                    next_entry_mut(&mut hash, 0, {
+                        let mut transactions = (i..i + NUM_TRANSFERS_PER_ENTRY)
+                            .map(|i| {
+                                system_transaction::transfer(
+                                    &keypairs[i],
+                                    &keypairs[i + NUM_TRANSFERS].pubkey(),
+                                    1,
+                                    bank.last_blockhash(),
+                                )
+                            })
+                            .collect::<Vec<_>>();
+
+                        transactions.push(system_transaction::create_account(
+                            &mint_keypair,
+                            &solana_sdk::sysvar::clock::id(), // puts a TX error in results
                             bank.last_blockhash(),
-                        )],
-                    )
+                            100,
+                            100,
+                            &Pubkey::new_rand(),
+                        ));
+                        transactions
+                    })
                 })
                 .collect();
             info!("paying iteration {}", i);
             process_entries(&bank, &entries, true).expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
+                .step_by(NUM_TRANSFERS_PER_ENTRY)
                 .map(|i| {
                     next_entry_mut(
                         &mut hash,
                         0,
-                        vec![system_transaction::transfer(
-                            &keypairs[i + NUM_TRANSFERS],
-                            &keypairs[i].pubkey(),
-                            1,
-                            bank.last_blockhash(),
-                        )],
+                        (i..i + NUM_TRANSFERS_PER_ENTRY)
+                            .map(|i| {
+                                system_transaction::transfer(
+                                    &keypairs[i + NUM_TRANSFERS],
+                                    &keypairs[i].pubkey(),
+                                    1,
+                                    bank.last_blockhash(),
+                                )
+                            })
+                            .collect::<Vec<_>>(),
                     )
                 })
                 .collect();
