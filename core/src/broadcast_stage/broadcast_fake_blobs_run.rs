@@ -37,7 +37,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             .unwrap_or(0);
 
         let num_entries = receive_results.entries.len();
-        let (_, shred_bufs, _) = broadcast_utils::entries_to_shreds(
+        let (shred_bufs, _) = broadcast_utils::entries_to_shreds(
             receive_results.entries,
             bank.slot(),
             receive_results.last_tick,
@@ -57,10 +57,10 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             .map(|_| Entry::new(&self.last_blockhash, 0, vec![]))
             .collect();
 
-        let (_fake_shreds, fake_shred_bufs, _) = broadcast_utils::entries_to_shreds(
+        let (fake_shred_bufs, _) = broadcast_utils::entries_to_shreds(
             fake_entries,
-            bank.slot(),
             receive_results.last_tick,
+            bank.slot(),
             bank.max_tick_height(),
             keypair,
             latest_blob_index,
@@ -80,11 +80,11 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             if i <= self.partition {
                 // Send fake blobs to the first N peers
                 fake_shred_bufs.iter().for_each(|b| {
-                    sock.send_to(&b.shred, &peer.tvu_forwards).unwrap();
+                    sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
                 });
             } else {
                 shred_bufs.iter().for_each(|b| {
-                    sock.send_to(&b.shred, &peer.tvu_forwards).unwrap();
+                    sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
                 });
             }
         });

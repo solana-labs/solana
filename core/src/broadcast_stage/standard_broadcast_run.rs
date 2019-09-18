@@ -79,7 +79,7 @@ impl BroadcastRun for StandardBroadcastRun {
             0
         };
 
-        let (all_shreds, shred_infos, latest_shred_index) = entries_to_shreds(
+        let (shred_infos, latest_shred_index) = entries_to_shreds(
             receive_results.entries,
             last_tick,
             bank.slot(),
@@ -90,7 +90,7 @@ impl BroadcastRun for StandardBroadcastRun {
         );
 
         let all_seeds: Vec<[u8; 32]> = shred_infos.iter().map(|s| s.seed()).collect();
-        let num_shreds = all_shreds.len();
+        let num_shreds = shred_infos.len();
         blocktree
             .insert_shreds(shred_infos.clone(), None)
             .expect("Failed to insert shreds in blocktree");
@@ -102,7 +102,7 @@ impl BroadcastRun for StandardBroadcastRun {
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        let all_shred_bufs: Vec<Vec<u8>> = shred_infos.into_iter().map(|s| s.shred).collect();
+        let all_shred_bufs: Vec<Vec<u8>> = shred_infos.into_iter().map(|s| s.payload).collect();
         trace!("Broadcasting {:?} shreds", all_shred_bufs.len());
         cluster_info.read().unwrap().broadcast_shreds(
             sock,

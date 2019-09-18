@@ -26,9 +26,8 @@ fn bench_deshredder(bencher: &mut Bencher) {
     let mut shredded = Shredder::new(1, 0, 0.0, &kp, 0).unwrap();
     let _ = bincode::serialize_into(&mut shredded, &data);
     shredded.finalize_data();
-    let (_, shreds): (Vec<_>, Vec<_>) = shredded.shred_tuples.into_iter().unzip();
     bencher.iter(|| {
-        let raw = &mut Shredder::deshred(&shreds).unwrap();
+        let raw = &mut Shredder::deshred(&shredded.shreds).unwrap();
         assert_ne!(raw.len(), 0);
     })
 }

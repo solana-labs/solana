@@ -11,7 +11,7 @@ use crate::repair_service;
 use crate::repair_service::{RepairService, RepairSlotRange, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::shred::ShredInfo;
+use crate::shred::Shred;
 use crate::storage_stage::NUM_STORAGE_SAMPLES;
 use crate::streamer::{receiver, responder, PacketReceiver};
 use crate::window_service::WindowService;
@@ -871,10 +871,10 @@ impl Replicator {
                 while let Ok(mut more) = r_reader.try_recv() {
                     packets.packets.append(&mut more.packets);
                 }
-                let shreds: Vec<ShredInfo> = packets
+                let shreds: Vec<Shred> = packets
                     .packets
                     .into_iter()
-                    .filter_map(|p| ShredInfo::new_from_serialized_shred(p.data.to_vec()).ok())
+                    .filter_map(|p| Shred::new_from_serialized_shred(p.data.to_vec()).ok())
                     .collect();
                 blocktree.insert_shreds(shreds, None)?;
             }

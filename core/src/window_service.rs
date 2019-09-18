@@ -7,7 +7,7 @@ use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::shred::ShredInfo;
+use crate::shred::Shred;
 use crate::streamer::{PacketReceiver, PacketSender};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rayon::ThreadPool;
@@ -28,7 +28,7 @@ pub const NUM_THREADS: u32 = 10;
 /// drop blobs that are from myself or not from the correct leader for the
 /// blob's slot
 pub fn should_retransmit_and_persist(
-    shred: &ShredInfo,
+    shred: &Shred,
     bank: Option<Arc<Bank>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     my_pubkey: &Pubkey,
@@ -67,7 +67,7 @@ fn recv_window<F>(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
 ) -> Result<()>
 where
-    F: Fn(&ShredInfo, u64) -> bool,
+    F: Fn(&Shred, u64) -> bool,
     F: Sync,
 {
     let timer = Duration::from_millis(200);
@@ -86,7 +86,7 @@ where
             .par_iter_mut()
             .enumerate()
             .filter_map(|(i, packet)| {
-                if let Ok(shred) = ShredInfo::new_from_serialized_shred(packet.data.to_vec()) {
+                if let Ok(shred) = Shred::new_from_serialized_shred(packet.data.to_vec()) {
                     if shred_filter(&shred, last_root) {
                         packet.meta.slot = shred.slot();
                         packet.meta.seed = shred.seed();
@@ -177,7 +177,7 @@ impl WindowService {
     ) -> WindowService
     where
         F: 'static
-            + Fn(&Pubkey, &ShredInfo, Option<Arc<Bank>>, u64) -> bool
+            + Fn(&Pubkey, &Shred, Option<Arc<Bank>>, u64) -> bool
             + std::marker::Send
             + std::marker::Sync,
     {
@@ -305,13 +305,13 @@ mod test {
         slot: u64,
         parent: u64,
         keypair: &Arc<Keypair>,
-    ) -> Vec<ShredInfo> {
+    ) -> Vec<Shred> {
         let mut shredder =
             Shredder::new(slot, parent, 0.0, keypair, 0).expect("Failed to create entry shredder");
         bincode::serialize_into(&mut shredder, &entries)
             .expect("Expect to write all entries to shreds");
         shredder.finalize_slot();
-        shredder.shred_tuples.into_iter().map(|(_, s)| s).collect()
+        shredder.shreds.drain(..).collect()
     }
 
     #[test]
@@ -435,7 +435,7 @@ mod test {
             .into_iter()
             .map(|mut s| {
                 let mut p = Packet::default();
-                p.data.copy_from_slice(&mut s.shred);
+                p.data.copy_from_slice(&mut s.payload);
                 p
             })
             .collect();
