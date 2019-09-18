@@ -1,0 +1,238 @@
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1"
+ width="1320px" height="487px"
+ viewBox="0 0 1320 487"
+ xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"
+ stroke-width="1" text-rendering="geometricPrecision">
+<polygon fill="white" points="101,7 161,7 161,16 101,16"/>
+<text x="132" y="16" textLength="59" font-family="Helvetica" font-size="12" fill="black" text-anchor="middle">
+
+VoteSigner
+</text>
+<polygon fill="white" points="371,7 419,7 419,16 371,16"/>
+<text x="396" y="16" textLength="47" font-family="Helvetica" font-size="12" fill="black" text-anchor="middle">
+
+Validator
+</text>
+<polygon fill="white" points="639,7 679,7 679,16 639,16"/>
+<text x="660" y="16" textLength="38" font-family="Helvetica" font-size="12" fill="black" text-anchor="middle">
+
+Cluster
+</text>
+<polygon fill="white" points="901,7 945,7 945,16 901,16"/>
+<text x="924" y="16" textLength="43" font-family="Helvetica" font-size="12" fill="black" text-anchor="middle">
+
+StakerX
+</text>
+<polygon fill="white" points="1165,7 1209,7 1209,16 1165,16"/>
+<text x="1188" y="16" textLength="43" font-family="Helvetica" font-size="12" fill="black" text-anchor="middle">
+
+StakerY
+</text>
+<line x1="132" y1="22" x2="132" y2="39" stroke="black"/>
+<line x1="396" y1="22" x2="396" y2="39" stroke="black"/>
+<line x1="660" y1="22" x2="660" y2="39" stroke="black"/>
+<line x1="924" y1="22" x2="924" y2="39" stroke="black"/>
+<line x1="1188" y1="22" x2="1188" y2="39" stroke="black"/>
+<line x1="132" y1="39" x2="132" y2="67" stroke="black"/>
+<line x1="396" y1="39" x2="396" y2="67" stroke="black"/>
+<line x1="660" y1="39" x2="660" y2="67" stroke="black"/>
+<line x1="924" y1="39" x2="924" y2="67" stroke="black"/>
+<line x1="1188" y1="39" x2="1188" y2="67" stroke="black"/>
+<polygon fill="white" points="272,39 520,39 520,61 272,61"/>
+<line x1="272" y1="39" x2="520" y2="39" stroke="black"/>
+<line x1="272" y1="61" x2="520" y2="61" stroke="black"/>
+<line x1="272" y1="39" x2="272" y2="61" stroke="black"/>
+<line x1="520" y1="39" x2="520" y2="61" stroke="black"/>
+<polygon fill="white" points="379,46 411,46 411,55 379,55"/>
+<text x="380" y="55" textLength="30" font-family="Helvetica" font-size="12" fill="black">
+boot..
+</text>
+<line x1="132" y1="67" x2="132" y2="106" stroke="black"/>
+<line x1="396" y1="67" x2="396" y2="106" stroke="black"/>
+<line x1="660" y1="67" x2="660" y2="106" stroke="black"/>
+<line x1="924" y1="67" x2="924" y2="106" stroke="black"/>
+<line x1="1188" y1="67" x2="1188" y2="106" stroke="black"/>
+<line x1="132" y1="82" x2="396" y2="82" stroke="black"/>
+<line x1="132" y1="84" x2="396" y2="84" stroke="black"/>
+<polygon fill="black" points="396,83 386,89 386,77"/>
+<polygon fill="black" points="132,83 142,89 142,77"/>
+<polygon fill="white" points="242,68 284,68 284,77 242,77"/>
+<text x="243" y="77" textLength="40" font-family="Helvetica" font-size="12" fill="black">
+register
+</text>
+<polygon fill="white" points="262,79 264,79 264,88 262,88"/>
+<text x="263" y="88" textLength="0" font-family="Helvetica" font-size="12" fill="black">
+
+</text>
+<polygon fill="white" points="237,90 289,90 289,99 237,99"/>
+<text x="238" y="99" textLength="50" font-family="Helvetica" font-size="12" fill="black">
+(optional)
+</text>
+<line x1="132" y1="106" x2="132" y2="134" stroke="black"/>
+<line x1="396" y1="106" x2="396" y2="134" stroke="black"/>
+<line x1="660" y1="106" x2="660" y2="134" stroke="black"/>
+<line x1="924" y1="106" x2="924" y2="134" stroke="black"/>
+<line x1="1188" y1="106" x2="1188" y2="134" stroke="black"/>
+<line x1="396" y1="117" x2="660" y2="117" stroke="black"/>
+<polygon fill="black" points="660,117 650,123 650,111"/>
+<polygon fill="white" points="441,107 613,107 613,116 441,116"/>
+<text x="442" y="116" textLength="170" font-family="Helvetica" font-size="12" fill="black">
+VoteState::Initialize(VoteSigner)
+</text>
+<line x1="132" y1="134" x2="132" y2="162" stroke="black"/>
+<line x1="396" y1="134" x2="396" y2="162" stroke="black"/>
+<line x1="660" y1="134" x2="660" y2="162" stroke="black"/>
+<line x1="924" y1="134" x2="924" y2="162" stroke="black"/>
+<line x1="1188" y1="134" x2="1188" y2="162" stroke="black"/>
+<line x1="924" y1="145" x2="660" y2="145" stroke="black"/>
+<polygon fill="black" points="660,145 670,151 670,139"/>
+<polygon fill="white" points="706,135 877,135 877,144 706,144"/>
+<text x="707" y="144" textLength="169" font-family="Helvetica" font-size="12" fill="black">
+StakeState::Delegate(Validator)
+</text>
+<line x1="132" y1="162" x2="132" y2="190" stroke="black"/>
+<line x1="396" y1="162" x2="396" y2="190" stroke="black"/>
+<line x1="660" y1="162" x2="660" y2="190" stroke="black"/>
+<line x1="924" y1="162" x2="924" y2="190" stroke="black"/>
+<line x1="1188" y1="162" x2="1188" y2="190" stroke="black"/>
+<line x1="1188" y1="173" x2="660" y2="173" stroke="black"/>
+<polygon fill="black" points="660,173 670,179 670,167"/>
+<polygon fill="white" points="838,163 1009,163 1009,172 838,172"/>
+<text x="839" y="172" textLength="169" font-family="Helvetica" font-size="12" fill="black">
+StakeState::Delegate(Validator)
+</text>
+<line x1="132" y1="190" x2="132" y2="207" stroke="black"/>
+<line x1="396" y1="190" x2="396" y2="207" stroke="black"/>
+<line x1="660" y1="190" x2="660" y2="207" stroke="black"/>
+<line x1="924" y1="190" x2="924" y2="207" stroke="black"/>
+<line x1="1188" y1="190" x2="1188" y2="207" stroke="black"/>
+<line x1="132" y1="207" x2="132" y2="246" stroke="black"/>
+<line x1="396" y1="207" x2="396" y2="246" stroke="black"/>
+<line x1="660" y1="207" x2="660" y2="246" stroke="black"/>
+<line x1="924" y1="207" x2="924" y2="246" stroke="black"/>
+<line x1="1188" y1="207" x2="1188" y2="246" stroke="black"/>
+<polygon fill="white" points="272,207 784,207 784,240 272,240"/>
+<line x1="272" y1="207" x2="784" y2="207" stroke="black"/>
+<line x1="272" y1="240" x2="784" y2="240" stroke="black"/>
+<line x1="272" y1="207" x2="272" y2="240" stroke="black"/>
+<line x1="784" y1="207" x2="784" y2="240" stroke="black"/>
+<polygon fill="white" points="526,208 528,208 528,217 526,217"/>
+<text x="527" y="217" textLength="0" font-family="Helvetica" font-size="12" fill="black">
+
+</text>
+<polygon fill="white" points="506,219 549,219 549,228 506,228"/>
+<text x="507" y="228" textLength="41" font-family="Helvetica" font-size="12" fill="black">
+validate
+</text>
+<polygon fill="white" points="526,230 528,230 528,239 526,239"/>
+<text x="527" y="239" textLength="0" font-family="Helvetica" font-size="12" fill="black">
+
+</text>
+<line x1="132" y1="246" x2="132" y2="274" stroke="black"/>
+<line x1="396" y1="246" x2="396" y2="274" stroke="black"/>
+<line x1="660" y1="246" x2="660" y2="274" stroke="black"/>
+<line x1="924" y1="246" x2="924" y2="274" stroke="black"/>
+<line x1="1188" y1="246" x2="1188" y2="274" stroke="black"/>
+<line x1="396" y1="257" x2="132" y2="257" stroke="black"/>
+<polygon fill="black" points="132,257 142,263 142,251"/>
+<polygon fill="white" points="236,247 291,247 291,256 236,256"/>
+<text x="237" y="256" textLength="53" font-family="Helvetica" font-size="12" fill="black">
+sign(vote)
+</text>
+<line x1="132" y1="274" x2="132" y2="302" stroke="black"/>
+<line x1="396" y1="274" x2="396" y2="302" stroke="black"/>
+<line x1="660" y1="274" x2="660" y2="302" stroke="black"/>
+<line x1="924" y1="274" x2="924" y2="302" stroke="black"/>
+<line x1="1188" y1="274" x2="1188" y2="302" stroke="black"/>
+<line x1="132" y1="285" x2="396" y2="285" stroke="black" stroke-dasharray="2,2"/>
+<polygon fill="black" points="396,285 386,291 386,279"/>
+<polygon fill="white" points="232,275 295,275 295,284 232,284"/>
+<text x="233" y="284" textLength="61" font-family="Helvetica" font-size="12" fill="black">
+signed vote
+</text>
+<line x1="132" y1="302" x2="132" y2="330" stroke="black"/>
+<line x1="396" y1="302" x2="396" y2="330" stroke="black"/>
+<line x1="660" y1="302" x2="660" y2="330" stroke="black"/>
+<line x1="924" y1="302" x2="924" y2="330" stroke="black"/>
+<line x1="1188" y1="302" x2="1188" y2="330" stroke="black"/>
+<line x1="396" y1="313" x2="660" y2="313" stroke="black"/>
+<polygon fill="black" points="660,313 650,319 650,307"/>
+<polygon fill="white" points="494,303 561,303 561,312 494,312"/>
+<text x="495" y="312" textLength="65" font-family="Helvetica" font-size="12" fill="black">
+gossip(vote)
+</text>
+<line x1="132" y1="330" x2="132" y2="347" stroke="black" stroke-dasharray="2,2"/>
+<line x1="396" y1="330" x2="396" y2="347" stroke="black" stroke-dasharray="2,2"/>
+<line x1="660" y1="330" x2="660" y2="347" stroke="black" stroke-dasharray="2,2"/>
+<line x1="924" y1="330" x2="924" y2="347" stroke="black" stroke-dasharray="2,2"/>
+<line x1="1188" y1="330" x2="1188" y2="347" stroke="black" stroke-dasharray="2,2"/>
+<line x1="132" y1="347" x2="132" y2="364" stroke="black" stroke-dasharray="2,2"/>
+<line x1="396" y1="347" x2="396" y2="364" stroke="black" stroke-dasharray="2,2"/>
+<line x1="660" y1="347" x2="660" y2="364" stroke="black" stroke-dasharray="2,2"/>
+<line x1="924" y1="347" x2="924" y2="364" stroke="black" stroke-dasharray="2,2"/>
+<line x1="1188" y1="347" x2="1188" y2="364" stroke="black" stroke-dasharray="2,2"/>
+<line x1="132" y1="364" x2="132" y2="414" stroke="black"/>
+<line x1="396" y1="364" x2="396" y2="414" stroke="black"/>
+<line x1="660" y1="364" x2="660" y2="414" stroke="black"/>
+<line x1="924" y1="364" x2="924" y2="414" stroke="black"/>
+<line x1="1188" y1="364" x2="1188" y2="414" stroke="black"/>
+<polygon fill="white" points="278,364 514,364 514,408 278,408"/>
+<polygon fill="white" points="278,364 278,408 272,386"/>
+<polygon fill="white" points="514,364 514,408 520,386"/>
+<line x1="278" y1="364" x2="514" y2="364" stroke="black"/>
+<line x1="278" y1="408" x2="514" y2="408" stroke="black"/>
+<line x1="278" y1="364" x2="272" y2="386" stroke="black"/>
+<line x1="272" y1="386" x2="278" y2="408" stroke="black"/>
+<line x1="514" y1="364" x2="520" y2="386" stroke="black"/>
+<line x1="520" y1="386" x2="514" y2="408" stroke="black"/>
+<polygon fill="white" points="394,365 396,365 396,374 394,374"/>
+<text x="395" y="374" textLength="0" font-family="Helvetica" font-size="12" fill="black">
+
+</text>
+<polygon fill="white" points="383,376 408,376 408,385 383,385"/>
+<text x="384" y="385" textLength="23" font-family="Helvetica" font-size="12" fill="black">
+max
+</text>
+<polygon fill="white" points="375,387 415,387 415,396 375,396"/>
+<text x="376" y="396" textLength="38" font-family="Helvetica" font-size="12" fill="black">
+lockout
+</text>
+<polygon fill="white" points="394,398 396,398 396,407 394,407"/>
+<text x="395" y="407" textLength="0" font-family="Helvetica" font-size="12" fill="black">
+
+</text>
+<line x1="132" y1="414" x2="132" y2="431" stroke="black"/>
+<line x1="396" y1="414" x2="396" y2="431" stroke="black"/>
+<line x1="660" y1="414" x2="660" y2="431" stroke="black"/>
+<line x1="924" y1="414" x2="924" y2="431" stroke="black"/>
+<line x1="1188" y1="414" x2="1188" y2="431" stroke="black"/>
+<line x1="132" y1="431" x2="132" y2="459" stroke="black"/>
+<line x1="396" y1="431" x2="396" y2="459" stroke="black"/>
+<line x1="660" y1="431" x2="660" y2="459" stroke="black"/>
+<line x1="924" y1="431" x2="924" y2="459" stroke="black"/>
+<line x1="1188" y1="431" x2="1188" y2="459" stroke="black"/>
+<line x1="924" y1="442" x2="660" y2="442" stroke="black"/>
+<polygon fill="black" points="660,442 670,448 670,436"/>
+<polygon fill="white" points="712,432 871,432 871,441 712,441"/>
+<text x="713" y="441" textLength="157" font-family="Helvetica" font-size="12" fill="black">
+StakeState::RedeemCredits()
+</text>
+<line x1="132" y1="459" x2="132" y2="487" stroke="black"/>
+<line x1="396" y1="459" x2="396" y2="487" stroke="black"/>
+<line x1="660" y1="459" x2="660" y2="487" stroke="black"/>
+<line x1="924" y1="459" x2="924" y2="487" stroke="black"/>
+<line x1="1188" y1="459" x2="1188" y2="487" stroke="black"/>
+<line x1="1188" y1="470" x2="660" y2="470" stroke="black"/>
+<polygon fill="black" points="660,470 670,476 670,464"/>
+<polygon fill="white" points="844,460 1003,460 1003,469 844,469"/>
+<text x="845" y="469" textLength="157" font-family="Helvetica" font-size="12" fill="black">
+StakeState::RedeemCredits()
+</text>
+<line x1="132" y1="481" x2="132" y2="487" stroke="black"/>
+<line x1="396" y1="481" x2="396" y2="487" stroke="black"/>
+<line x1="660" y1="481" x2="660" y2="487" stroke="black"/>
+<line x1="924" y1="481" x2="924" y2="487" stroke="black"/>
+<line x1="1188" y1="481" x2="1188" y2="487" stroke="black"/>
+</svg>
