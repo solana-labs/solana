@@ -1,4 +1,5 @@
-root: book/src
+root: ./book/src
 
 structure:
     readme: introduction.md
+    summary: SUMMARY.md
