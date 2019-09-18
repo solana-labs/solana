@@ -35,14 +35,6 @@ impl std::fmt::Display for BudgetError {
 }
 impl std::error::Error for BudgetError {}
 
-/// A smart contract.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Contract {
-    /// The number of lamports allocated to the `BudgetExpr` and any transaction fees.
-    pub lamports: u64,
-    pub budget_expr: BudgetExpr,
-}
-
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum BudgetInstruction {
