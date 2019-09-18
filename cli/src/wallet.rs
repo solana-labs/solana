@@ -1734,7 +1734,9 @@ fn build_balance_message(lamports: u64, use_lamports_unit: bool) -> String {
         format!("{:?} lamport{}", lamports, ess)
     } else {
         let sol = lamports_to_sol(lamports);
-        format!("{:.8} SOL", sol)
+        let sol_str = format!("{:.8}", sol);
+        let pretty_sol = sol_str.trim_end_matches('0').trim_end_matches('.');
+        format!("{} SOL", pretty_sol)
     }
 }
 
@@ -2815,7 +2817,7 @@ mod tests {
             pubkey: config.keypair.pubkey(),
             use_lamports_unit: false,
         };
-        assert_eq!(process_command(&config).unwrap(), "0.00000000 SOL");
+        assert_eq!(process_command(&config).unwrap(), "0 SOL");
 
         let process_id = Pubkey::new_rand();
         config.command = WalletCommand::Cancel(process_id);
