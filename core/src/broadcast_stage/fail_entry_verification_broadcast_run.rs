@@ -36,7 +36,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        let (shreds, shred_infos, _) = broadcast_utils::entries_to_shreds(
+        let (_, shred_infos, _) = broadcast_utils::entries_to_shreds(
             receive_results.entries,
             last_tick,
             bank.slot(),
@@ -46,7 +46,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             bank.parent().unwrap().slot(),
         );
 
-        let seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
+        let seeds: Vec<[u8; 32]> = shred_infos.iter().map(|s| s.seed()).collect();
 
         blocktree.insert_shreds(shred_infos.clone(), None)?;
 

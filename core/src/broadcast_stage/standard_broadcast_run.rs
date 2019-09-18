@@ -89,7 +89,7 @@ impl BroadcastRun for StandardBroadcastRun {
             parent_slot,
         );
 
-        let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
+        let all_seeds: Vec<[u8; 32]> = shred_infos.iter().map(|s| s.seed()).collect();
         let num_shreds = all_shreds.len();
         blocktree
             .insert_shreds(shred_infos.clone(), None)
