@@ -1,6 +1,6 @@
 use crate::{
-    display::println_name_value, input_validators::*, lamports_to_sol, sol_to_lamports,
-    validator_info::*,
+    display::println_name_value, input_parsers::*, input_validators::*, lamports_to_sol,
+    sol_to_lamports, validator_info::*, vote::*,
 };
 use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -26,17 +26,14 @@ use solana_sdk::{
     loader_instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{read_keypair, Keypair, KeypairUtil, Signature},
+    signature::{Keypair, KeypairUtil, Signature},
     system_instruction::SystemError,
     system_transaction,
     transaction::{Transaction, TransactionError},
 };
 use solana_stake_api::stake_instruction::{self, StakeError};
 use solana_storage_api::storage_instruction;
-use solana_vote_api::{
-    vote_instruction::{self, VoteError},
-    vote_state::VoteState,
-};
+use solana_vote_api::vote_state::VoteState;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -75,6 +72,11 @@ pub enum WalletCommand {
         use_lamports_unit: bool,
     },
     ShowVoteAccount(Pubkey),
+    Uptime {
+        pubkey: Pubkey,
+        aggregate: bool,
+        span: Option<u64>,
+    },
     DelegateStake(Keypair, Pubkey, u64, bool),
     WithdrawStake(Keypair, Pubkey, u64),
     DeactivateStake(Keypair, Pubkey),
@@ -160,45 +162,6 @@ impl Default for WalletConfig {
     }
 }
 
-// Return parsed values from matches at `name`
-fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
-where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    matches
-        .values_of(name)
-        .map(|xs| xs.map(|x| x.parse::<T>().unwrap()).collect())
-}
-
-// Return a parsed value from matches at `name`
-fn value_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<T>
-where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    if let Some(value) = matches.value_of(name) {
-        value.parse::<T>().ok()
-    } else {
-        None
-    }
-}
-
-// Return the keypair for an argument with filename `name` or None if not present.
-fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
-    if let Some(value) = matches.value_of(name) {
-        read_keypair(value).ok()
-    } else {
-        None
-    }
-}
-
-// Return a pubkey for an argument that can itself be parsed into a pubkey,
-// or is a filename that can be read as a keypair
-fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
-    value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
-}
-
 pub fn parse_command(
     pubkey: &Pubkey,
     matches: &ArgMatches<'_>,
@@ -262,35 +225,6 @@ pub fn parse_command(
                 }
             }
         }
-        ("create-vote-account", Some(matches)) => {
-            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-            let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
-            let commission = if let Some(commission) = matches.value_of("commission") {
-                commission.parse()?
-            } else {
-                0
-            };
-            let lamports = matches.value_of("lamports").unwrap().parse()?;
-            Ok(WalletCommand::CreateVoteAccount(
-                vote_account_pubkey,
-                node_pubkey,
-                commission,
-                lamports,
-            ))
-        }
-        ("authorize-voter", Some(matches)) => {
-            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-            let authorized_voter_keypair =
-                keypair_of(matches, "authorized_voter_keypair_file").unwrap();
-            let new_authorized_voter_pubkey =
-                pubkey_of(matches, "new_authorized_voter_pubkey").unwrap();
-
-            Ok(WalletCommand::AuthorizeVoter(
-                vote_account_pubkey,
-                authorized_voter_keypair,
-                new_authorized_voter_pubkey,
-            ))
-        }
         ("show-account", Some(matches)) => {
             let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
             let output_file = matches.value_of("output_file");
@@ -301,10 +235,10 @@ pub fn parse_command(
                 use_lamports_unit,
             })
         }
-        ("show-vote-account", Some(matches)) => {
-            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-            Ok(WalletCommand::ShowVoteAccount(vote_account_pubkey))
-        }
+        ("create-vote-account", Some(matches)) => parse_vote_create_account(matches),
+        ("authorize-voter", Some(matches)) => parse_vote_authorize_voter(matches),
+        ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
+        ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         ("delegate-stake", Some(matches)) => {
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
             let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
@@ -517,7 +451,7 @@ fn check_account_for_multiple_fees(
     Err(WalletError::InsufficientFundsForFee)?
 }
 
-fn check_unique_pubkeys(
+pub fn check_unique_pubkeys(
     pubkey0: (&Pubkey, String),
     pubkey1: (&Pubkey, String),
 ) -> Result<(), WalletError> {
@@ -600,69 +534,6 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
     }
 }
 
-fn process_create_vote_account(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    vote_account_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
-    commission: u8,
-    lamports: u64,
-) -> ProcessResult {
-    check_unique_pubkeys(
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
-        (node_pubkey, "node_pubkey".to_string()),
-    )?;
-    check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
-    )?;
-    let ixs = vote_instruction::create_account(
-        &config.keypair.pubkey(),
-        vote_account_pubkey,
-        node_pubkey,
-        commission,
-        lamports,
-    );
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<SystemError>(result)
-}
-
-fn process_authorize_voter(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    vote_account_pubkey: &Pubkey,
-    authorized_voter_keypair: &Keypair,
-    new_authorized_voter_pubkey: &Pubkey,
-) -> ProcessResult {
-    check_unique_pubkeys(
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
-        (
-            new_authorized_voter_pubkey,
-            "new_authorized_voter_pubkey".to_string(),
-        ),
-    )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![vote_instruction::authorize_voter(
-        vote_account_pubkey,                // vote account to update
-        &authorized_voter_keypair.pubkey(), // current authorized voter (often the vote account itself)
-        new_authorized_voter_pubkey,        // new vote signer
-    )];
-
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair, &authorized_voter_keypair],
-        recent_blockhash,
-    );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_voter_keypair]);
-    log_instruction_custom_error::<VoteError>(result)
-}
-
 fn process_show_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
@@ -691,73 +562,6 @@ fn process_show_account(
         println!("{:?}", account.data.hex_dump());
     }
 
-    Ok("".to_string())
-}
-
-fn process_show_vote_account(
-    rpc_client: &RpcClient,
-    _config: &WalletConfig,
-    vote_account_pubkey: &Pubkey,
-) -> ProcessResult {
-    let vote_account = rpc_client.get_account(vote_account_pubkey)?;
-
-    if vote_account.owner != solana_vote_api::id() {
-        Err(WalletError::RpcRequestError(
-            format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
-        ))?;
-    }
-
-    let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
-        WalletError::RpcRequestError(
-            "Account data could not be deserialized to vote state".to_string(),
-        )
-    })?;
-
-    println!("account lamports: {}", vote_account.lamports);
-    println!("node id: {}", vote_state.node_pubkey);
-    println!(
-        "authorized voter pubkey: {}",
-        vote_state.authorized_voter_pubkey
-    );
-    println!("credits: {}", vote_state.credits());
-    println!(
-        "commission: {}%",
-        f64::from(vote_state.commission) / f64::from(std::u32::MAX)
-    );
-    println!(
-        "root slot: {}",
-        match vote_state.root_slot {
-            Some(slot) => slot.to_string(),
-            None => "~".to_string(),
-        }
-    );
-    if !vote_state.votes.is_empty() {
-        println!("recent votes:");
-        for vote in &vote_state.votes {
-            println!(
-                "- slot: {}\n  confirmation count: {}",
-                vote.slot, vote.confirmation_count
-            );
-        }
-
-        // TODO: Use the real GenesisBlock from the cluster.
-        let genesis_block = solana_sdk::genesis_block::GenesisBlock::default();
-        let epoch_schedule = solana_runtime::epoch_schedule::EpochSchedule::new(
-            genesis_block.slots_per_epoch,
-            genesis_block.stakers_slot_offset,
-            genesis_block.epoch_warmup,
-        );
-
-        println!("epoch voting history:");
-        for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
-            let credits_earned = credits - prev_credits;
-            let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
-            println!(
-                "- epoch: {}\n  slots in epoch: {}\n  credits earned: {}",
-                epoch, slots_in_epoch, credits_earned,
-            );
-        }
-    }
     Ok("".to_string())
 }
 
@@ -1507,6 +1311,12 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_show_vote_account(&rpc_client, config, &vote_account_pubkey)
         }
 
+        WalletCommand::Uptime {
+            pubkey: vote_account_pubkey,
+            aggregate,
+            span,
+        } => process_uptime(&rpc_client, config, &vote_account_pubkey, *aggregate, *span),
+
         WalletCommand::DelegateStake(
             stake_account_keypair,
             vote_account_pubkey,
@@ -1705,7 +1515,7 @@ pub fn request_and_confirm_airdrop(
     log_instruction_custom_error::<SystemError>(result)
 }
 
-fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
+pub fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
@@ -1941,6 +1751,31 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Vote account pubkey"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("uptime")
+                .about("Show the uptime of a validator, based on epoch voting history")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("span")
+                        .long("span")
+                        .value_name("NUM OF EPOCHS")
+                        .takes_value(true)
+                        .help("Number of recent epochs to examine")
+                )
+                .arg(
+                    Arg::with_name("aggregate")
+                        .long("aggregate")
+                        .help("Aggregate uptime data across span")
                 ),
         )
         .subcommand(
@@ -2423,8 +2258,10 @@ mod tests {
     use super::*;
     use serde_json::Value;
     use solana_client::mock_rpc_client_request::SIGNATURE;
-    use solana_sdk::signature::gen_keypair_file;
-    use solana_sdk::transaction::TransactionError;
+    use solana_sdk::{
+        signature::{gen_keypair_file, read_keypair},
+        transaction::TransactionError,
+    };
     use std::path::PathBuf;
 
     #[test]
@@ -2512,51 +2349,6 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
         assert!(parse_command(&pubkey, &test_bad_signature).is_err());
-
-        // Test AuthorizeVoter Subcommand
-        let keypair_file = make_tmp_path("keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let keypair = read_keypair(&keypair_file).unwrap();
-
-        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
-            "test",
-            "authorize-voter",
-            &pubkey_string,
-            &keypair_file,
-            &pubkey_string,
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_authorize_voter).unwrap(),
-            WalletCommand::AuthorizeVoter(pubkey, keypair, pubkey)
-        );
-
-        // Test CreateVoteAccount SubCommand
-        let node_pubkey = Pubkey::new_rand();
-        let node_pubkey_string = format!("{}", node_pubkey);
-        let test_create_vote_account = test_commands.clone().get_matches_from(vec![
-            "test",
-            "create-vote-account",
-            &pubkey_string,
-            &node_pubkey_string,
-            "50",
-            "--commission",
-            "10",
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_create_vote_account).unwrap(),
-            WalletCommand::CreateVoteAccount(pubkey, node_pubkey, 10, 50)
-        );
-        let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
-            "test",
-            "create-vote-account",
-            &pubkey_string,
-            &node_pubkey_string,
-            "50",
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_create_vote_account2).unwrap(),
-            WalletCommand::CreateVoteAccount(pubkey, node_pubkey, 0, 50)
-        );
 
         // Test DelegateStake Subcommand
         fn make_tmp_path(name: &str) -> String {
