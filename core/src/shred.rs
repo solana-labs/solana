@@ -33,16 +33,16 @@ pub const DATA_SHRED: u8 = 0b1010_0101;
 pub const CODING_SHRED: u8 = 0b0101_1010;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ShredInfo {
+pub struct Shred {
     pub headers: DataShredHeader,
-    pub shred: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
-impl ShredInfo {
+impl Shred {
     fn new(header: DataShredHeader, shred_buf: Vec<u8>) -> Self {
-        ShredInfo {
+        Shred {
             headers: header,
-            shred: shred_buf,
+            payload: shred_buf,
         }
     }
 
@@ -64,9 +64,9 @@ impl ShredInfo {
         let mut payload = vec![0; PACKET_DATA_SIZE];
         let mut wr = io::Cursor::new(&mut payload[..*SIZE_OF_DATA_SHRED_HEADER]);
         bincode::serialize_into(&mut wr, &header).expect("Failed to serialize shred");
-        ShredInfo {
+        Shred {
             headers: header,
-            shred: payload,
+            payload: payload,
         }
     }
 
@@ -174,7 +174,7 @@ impl ShredInfo {
             *SIZE_OF_SHRED_TYPE
         } + *SIZE_OF_SIGNATURE;
         self.signature()
-            .verify(pubkey.as_ref(), &self.shred[signed_payload_offset..])
+            .verify(pubkey.as_ref(), &self.payload[signed_payload_offset..])
     }
 }
 
@@ -342,7 +342,7 @@ pub struct Shredder {
     parent_offset: u16,
     fec_rate: f32,
     signer: Arc<Keypair>,
-    pub shreds: Vec<ShredInfo>,
+    pub shreds: Vec<Shred>,
     fec_set_shred_start: usize,
     active_shred: DataShred,
     active_offset: usize,
@@ -373,8 +373,8 @@ impl Write for Shredder {
 
 #[derive(Default, Debug, PartialEq)]
 pub struct RecoveryResult {
-    pub recovered_data: Vec<ShredInfo>,
-    pub recovered_code: Vec<ShredInfo>,
+    pub recovered_data: Vec<Shred>,
+    pub recovered_code: Vec<Shred>,
 }
 
 impl Shredder {
@@ -422,12 +422,12 @@ impl Shredder {
         }
     }
 
-    fn sign_shred(signer: &Arc<Keypair>, shred_info: &mut ShredInfo, signature_offset: usize) {
+    fn sign_shred(signer: &Arc<Keypair>, shred_info: &mut Shred, signature_offset: usize) {
         let data_offset = signature_offset + *SIZE_OF_SIGNATURE;
-        let signature = signer.sign_message(&shred_info.shred[data_offset..]);
+        let signature = signer.sign_message(&shred_info.payload[data_offset..]);
         let serialized_signature =
             bincode::serialize(&signature).expect("Failed to generate serialized signature");
-        shred_info.shred[signature_offset..signature_offset + serialized_signature.len()]
+        shred_info.payload[signature_offset..signature_offset + serialized_signature.len()]
             .copy_from_slice(&serialized_signature);
         shred_info.header_mut().signature = signature;
     }
@@ -458,7 +458,7 @@ impl Shredder {
 
         let mut shred = self.new_data_shred();
         std::mem::swap(&mut shred, &mut self.active_shred);
-        let shred_info = ShredInfo::new(shred.header, data);
+        let shred_info = Shred::new(shred.header, data);
         self.shreds.push(shred_info);
     }
 
@@ -501,7 +501,7 @@ impl Shredder {
             let coding_block_offset = CodingShred::overhead();
             let data_ptrs: Vec<_> = self.shreds[self.fec_set_shred_start..]
                 .iter()
-                .map(|data| &data.shred[coding_block_offset..])
+                .map(|data| &data.payload[coding_block_offset..])
                 .collect();
 
             // Create empty coding shreds, with correctly populated headers
@@ -538,7 +538,7 @@ impl Shredder {
                 header.common_header.header.num_coding_shreds = num_coding as u16;
                 header.common_header.header.num_data_shreds = num_data as u16;
                 header.common_header.header.position = i as u16;
-                let shred_info = ShredInfo::new(header, code);
+                let shred_info = Shred::new(header, code);
                 self.shreds.push(shred_info);
             });
             self.fec_set_index = self.index;
@@ -571,7 +571,7 @@ impl Shredder {
     }
 
     fn fill_in_missing_shreds(
-        shred: &ShredInfo,
+        shred: &Shred,
         num_data: usize,
         num_coding: usize,
         slot: u64,
@@ -621,7 +621,7 @@ impl Shredder {
     }
 
     pub fn try_recovery(
-        shreds: Vec<ShredInfo>,
+        shreds: Vec<Shred>,
         num_data: usize,
         num_coding: usize,
         first_index: usize,
@@ -648,7 +648,7 @@ impl Shredder {
                         next_expected_index,
                         &mut present,
                     );
-                    blocks.push(shred.shred);
+                    blocks.push(shred.payload);
                     next_expected_index = last_index + 1;
                     blocks
                 })
@@ -686,7 +686,7 @@ impl Shredder {
                         let drain_this = position - num_drained;
                         let shred_buf = shred_bufs.remove(drain_this);
                         num_drained += 1;
-                        if let Ok(shred) = ShredInfo::new_from_serialized_shred(shred_buf) {
+                        if let Ok(shred) = Shred::new_from_serialized_shred(shred_buf) {
                             let shred_index = shred.index() as usize;
                             // Valid shred must be in the same slot as the original shreds
                             if shred.slot() == slot {
@@ -716,7 +716,7 @@ impl Shredder {
     }
 
     /// Combines all shreds to recreate the original buffer
-    pub fn deshred(shreds: &[ShredInfo]) -> Result<Vec<u8>, reed_solomon_erasure::Error> {
+    pub fn deshred(shreds: &[Shred]) -> Result<Vec<u8>, reed_solomon_erasure::Error> {
         let num_data = shreds.len();
         let data_shred_bufs = {
             let first_index = shreds.first().unwrap().index() as usize;
@@ -731,13 +731,13 @@ impl Shredder {
                 Err(reed_solomon_erasure::Error::TooFewDataShards)?;
             }
 
-            shreds.iter().map(|shred| &shred.shred).collect()
+            shreds.iter().map(|shred| &shred.payload).collect()
         };
 
         Ok(Self::reassemble_payload(num_data, data_shred_bufs))
     }
 
-    fn get_shred_index(shred: &ShredInfo, num_data: usize) -> usize {
+    fn get_shred_index(shred: &Shred, num_data: usize) -> usize {
         if shred.is_data() {
             shred.index() as usize
         } else {
@@ -762,14 +762,14 @@ mod tests {
     use super::*;
 
     fn verify_test_data_shred(
-        shred: &ShredInfo,
+        shred: &Shred,
         index: u32,
         slot: u64,
         parent: u64,
         pk: &Pubkey,
         verify: bool,
     ) {
-        assert_eq!(shred.shred.len(), PACKET_DATA_SIZE);
+        assert_eq!(shred.payload.len(), PACKET_DATA_SIZE);
         assert!(shred.is_data());
         assert_eq!(shred.index(), index);
         assert_eq!(shred.slot(), slot);
@@ -777,8 +777,8 @@ mod tests {
         assert_eq!(verify, shred.verify(pk));
     }
 
-    fn verify_test_code_shred(shred: &ShredInfo, index: u32, slot: u64, pk: &Pubkey, verify: bool) {
-        assert_eq!(shred.shred.len(), PACKET_DATA_SIZE);
+    fn verify_test_code_shred(shred: &Shred, index: u32, slot: u64, pk: &Pubkey, verify: bool) {
+        assert_eq!(shred.payload.len(), PACKET_DATA_SIZE);
         assert!(!shred.is_data());
         assert_eq!(shred.index(), index);
         assert_eq!(shred.slot(), slot);
@@ -1053,7 +1053,7 @@ mod tests {
         assert_eq!(data[..], result[..data.len()]);
 
         // Test2: Try recovery/reassembly with missing data shreds + coding shreds. Hint: should work
-        let mut shred_info: Vec<ShredInfo> = shredder
+        let mut shred_info: Vec<Shred> = shredder
             .shreds
             .iter()
             .enumerate()
@@ -1093,7 +1093,7 @@ mod tests {
         assert_eq!(data[..], result[..data.len()]);
 
         // Test3: Try recovery/reassembly with 3 missing data shreds + 2 coding shreds. Hint: should work
-        let mut shred_info: Vec<ShredInfo> = shredder
+        let mut shred_info: Vec<Shred> = shredder
             .shreds
             .iter()
             .enumerate()
@@ -1156,7 +1156,7 @@ mod tests {
         let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
         assert_eq!(shredder.shreds.len(), expected_shred_count);
 
-        let mut shred_info: Vec<ShredInfo> = shredder
+        let mut shred_info: Vec<Shred> = shredder
             .shreds
             .iter()
             .enumerate()
@@ -1196,7 +1196,7 @@ mod tests {
         assert_eq!(data[..], result[..data.len()]);
 
         // Test5: Try recovery/reassembly with 3 missing data shreds + 3 coding shreds. Hint: should fail
-        let shreds: Vec<ShredInfo> = shredder
+        let shreds: Vec<Shred> = shredder
             .shreds
             .iter()
             .enumerate()
@@ -1239,7 +1239,7 @@ mod tests {
         let expected_shred_count = ((data.len() / approx_shred_payload_size) + 1) * 2;
         assert_eq!(shredder.shreds.len(), expected_shred_count);
 
-        let mut shred_info: Vec<ShredInfo> = shredder
+        let mut shred_info: Vec<Shred> = shredder
             .shreds
             .iter()
             .enumerate()
