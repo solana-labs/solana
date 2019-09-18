@@ -60,14 +60,11 @@ impl Shred {
         Ok(Self::new(header, shred_buf))
     }
 
-    pub fn new_empty_from_header(header: DataShredHeader) -> Self {
+    pub fn new_empty_from_header(headers: DataShredHeader) -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
         let mut wr = io::Cursor::new(&mut payload[..*SIZE_OF_DATA_SHRED_HEADER]);
-        bincode::serialize_into(&mut wr, &header).expect("Failed to serialize shred");
-        Shred {
-            headers: header,
-            payload: payload,
-        }
+        bincode::serialize_into(&mut wr, &headers).expect("Failed to serialize shred");
+        Shred { headers, payload }
     }
 
     fn header(&self) -> &ShredCommonHeader {
