@@ -852,9 +852,7 @@ impl Blocktree {
                 parent_slot = current_slot - 1;
                 remaining_ticks_in_slot = ticks_per_slot;
                 shredder.finalize_slot();
-                let shreds: Vec<ShredInfo> =
-                    shredder.shred_tuples.into_iter().map(|(_, s)| s).collect();
-                all_shreds.extend(shreds);
+                all_shreds.append(&mut shredder.shreds);
                 shredder =
                     Shredder::new(current_slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0)
                         .expect("Failed to create entry shredder");
@@ -876,8 +874,7 @@ impl Blocktree {
         if is_full_slot && remaining_ticks_in_slot != 0 {
             shredder.finalize_slot();
         }
-        let shreds: Vec<ShredInfo> = shredder.shred_tuples.into_iter().map(|(_, s)| s).collect();
-        all_shreds.extend(shreds);
+        all_shreds.append(&mut shredder.shreds);
 
         let num_shreds = all_shreds.len();
         self.insert_shreds(all_shreds, None)?;
@@ -1572,7 +1569,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     bincode::serialize_into(&mut shredder, &entries)
         .expect("Expect to write all entries to shreds");
     shredder.finalize_slot();
-    let shreds: Vec<ShredInfo> = shredder.shred_tuples.into_iter().map(|(_, s)| s).collect();
+    let shreds: Vec<ShredInfo> = shredder.shreds.drain(..).collect();
 
     blocktree.insert_shreds(shreds, None)?;
     blocktree.set_roots(&[0])?;
@@ -1665,14 +1662,14 @@ pub fn entries_to_test_shreds(
         shredder.finalize_data();
     }
 
-    shredder.shred_tuples.into_iter().map(|(_, s)| s).collect()
+    shredder.shreds.drain(..).collect()
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
     use crate::entry::{create_ticks, Entry};
-    use crate::shred::{CodingShred, Shred};
+    use crate::shred::{DataShredHeader, CODING_SHRED};
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
@@ -3112,13 +3109,14 @@ pub mod tests {
             let index_cf = blocktree.db.column::<cf::Index>();
             let last_root = RwLock::new(0);
 
-            let mut shred = CodingShred::default();
+            let mut shred = DataShredHeader::default();
             let slot = 1;
-            shred.header.position = 10;
-            shred.header.coding_header.index = 11;
-            shred.header.coding_header.slot = 1;
-            shred.header.num_coding_shreds = shred.header.position + 1;
-            let coding_shred = ShredInfo::new_from_shred(&Shred::Coding(shred.clone()));
+            shred.common_header.header.shred_type = CODING_SHRED;
+            shred.common_header.header.position = 10;
+            shred.common_header.header.coding_header.index = 11;
+            shred.common_header.header.coding_header.slot = 1;
+            shred.common_header.header.num_coding_shreds = shred.common_header.header.position + 1;
+            let coding_shred = ShredInfo::new_empty_from_header(shred.clone());
 
             // Insert a good coding shred
             assert!(Blocktree::should_insert_coding_shred(
@@ -3135,7 +3133,7 @@ pub mod tests {
             // Trying to insert the same shred again should fail
             {
                 let index = index_cf
-                    .get(shred.header.coding_header.slot)
+                    .get(shred.common_header.header.coding_header.slot)
                     .unwrap()
                     .unwrap();
                 assert!(!Blocktree::should_insert_coding_shred(
@@ -3145,13 +3143,13 @@ pub mod tests {
                 ));
             }
 
-            shred.header.coding_header.index += 1;
+            shred.common_header.header.coding_header.index += 1;
 
             // Establish a baseline that works
             {
-                let coding_shred = ShredInfo::new_from_shred(&Shred::Coding(shred.clone()));
+                let coding_shred = ShredInfo::new_empty_from_header(shred.clone());
                 let index = index_cf
-                    .get(shred.header.coding_header.slot)
+                    .get(shred.common_header.header.coding_header.slot)
                     .unwrap()
                     .unwrap();
                 assert!(Blocktree::should_insert_coding_shred(
@@ -3163,7 +3161,7 @@ pub mod tests {
 
             // Trying to insert a shred with index < position should fail
             {
-                let mut coding_shred = ShredInfo::new_from_shred(&Shred::Coding(shred.clone()));
+                let mut coding_shred = ShredInfo::new_empty_from_header(shred.clone());
                 let index = coding_shred.headers.common_header.header.position - 1;
                 coding_shred.set_index(index as u32);
 
@@ -3177,7 +3175,7 @@ pub mod tests {
 
             // Trying to insert shred with num_coding == 0 should fail
             {
-                let mut coding_shred = ShredInfo::new_from_shred(&Shred::Coding(shred.clone()));
+                let mut coding_shred = ShredInfo::new_empty_from_header(shred.clone());
                 coding_shred.headers.common_header.header.num_coding_shreds = 0;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 assert!(!Blocktree::should_insert_coding_shred(
@@ -3189,7 +3187,7 @@ pub mod tests {
 
             // Trying to insert shred with pos >= num_coding should fail
             {
-                let mut coding_shred = ShredInfo::new_from_shred(&Shred::Coding(shred.clone()));
+                let mut coding_shred = ShredInfo::new_empty_from_header(shred.clone());
                 coding_shred.headers.common_header.header.num_coding_shreds =
                     coding_shred.headers.common_header.header.position;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
@@ -3203,7 +3201,7 @@ pub mod tests {
             // Trying to insert with set_index with num_coding that would imply the last blob
             // has index > u32::MAX should fail
             {
-                let mut coding_shred = ShredInfo::new_from_shred(&Shred::Coding(shred.clone()));
+                let mut coding_shred = ShredInfo::new_empty_from_header(shred.clone());
                 coding_shred.headers.common_header.header.num_coding_shreds = 3;
                 coding_shred
                     .headers
@@ -3233,7 +3231,7 @@ pub mod tests {
 
             // Trying to insert value into slot <= than last root should fail
             {
-                let mut coding_shred = ShredInfo::new_from_shred(&Shred::Coding(shred.clone()));
+                let mut coding_shred = ShredInfo::new_empty_from_header(shred.clone());
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 coding_shred.set_slot(*last_root.read().unwrap());
                 assert!(!Blocktree::should_insert_coding_shred(

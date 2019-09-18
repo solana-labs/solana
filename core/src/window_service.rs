@@ -311,7 +311,7 @@ mod test {
         bincode::serialize_into(&mut shredder, &entries)
             .expect("Expect to write all entries to shreds");
         shredder.finalize_slot();
-        shredder.shred_tuples.into_iter().map(|(_, s)| s).collect()
+        shredder.shreds.drain(..).collect()
     }
 
     #[test]

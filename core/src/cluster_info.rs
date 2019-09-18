@@ -1768,7 +1768,7 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
-    use crate::shred::{DataShred, Shred, ShredInfo};
+    use crate::shred::{DataShredHeader, ShredInfo};
     use crate::test_tx::test_tx;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::Hash;
@@ -1928,12 +1928,11 @@ mod tests {
                 0,
             );
             assert!(rv.is_empty());
-            let mut data_shred = DataShred::default();
-            data_shred.header.data_header.slot = 2;
-            data_shred.header.parent_offset = 1;
-            data_shred.header.data_header.index = 1;
-            let shred = Shred::Data(data_shred);
-            let shred_info = ShredInfo::new_from_shred(&shred);
+            let mut data_shred = DataShredHeader::default();
+            data_shred.data_header.slot = 2;
+            data_shred.parent_offset = 1;
+            data_shred.data_header.index = 1;
+            let shred_info = ShredInfo::new_empty_from_header(data_shred);
 
             blocktree
                 .insert_shreds(vec![shred_info], None)

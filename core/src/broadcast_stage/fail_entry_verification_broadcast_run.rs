@@ -36,7 +36,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        let (_, shred_infos, _) = broadcast_utils::entries_to_shreds(
+        let (shred_infos, _) = broadcast_utils::entries_to_shreds(
             receive_results.entries,
             last_tick,
             bank.slot(),
