@@ -38,7 +38,7 @@ via a system instruction.  This field would be available to programs for simple 
 and would be protected from modification by the runtime (only the system program may modify).
 
 ### Runtime changes ###
-```rust 
+```rust,ignore
 fn verify_instruction(
     is_debitable: bool,
     program_id: &Pubkey,
