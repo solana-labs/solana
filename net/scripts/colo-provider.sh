@@ -34,12 +34,12 @@ __cloud_FindInstances() {
   declare filter=$1
   instances=()
 
-  if ! $__COLO_TODO_PARALLELIZE; then
-    __colo_load_resources
-    __colo_load_availability false
+  if ! $COLO_TODO_PARALLELIZE; then
+    colo_load_resources
+    colo_load_availability false
   fi
   INSTANCES_TEXT="$(
-    for AVAIL in "${__COLO_RES_AVAILABILITY[@]}"; do
+    for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
       IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
       if [[ $INSTNAME =~ $filter ]]; then
         IP=$PRIV_IP  # Colo public IPs are firewalled to only allow UDP(8000-10000).  Reuse private IP as public and require VPN
@@ -104,9 +104,9 @@ cloud_FindInstance() {
 cloud_Initialize() {
   networkName=$1
   zone=$2
-  __colo_load_resources
-  if $__COLO_TODO_PARALLELIZE; then
-    __colo_load_availability
+  colo_load_resources
+  if $COLO_TODO_PARALLELIZE; then
+    colo_load_availability
   fi
 }
 
@@ -156,18 +156,18 @@ cloud_CreateInstances() {
     done
   fi
 
-  if $__COLO_TODO_PARALLELIZE; then
+  if $COLO_TODO_PARALLELIZE; then
     declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME INDEX MACH RES LINE
     declare -a AVAILABLE
     declare AVAILABLE_TEXT
     AVAILABLE_TEXT="$(
-      for RES in "${__COLO_RES_AVAILABILITY[@]}"; do
+      for RES in "${COLO_RES_AVAILABILITY[@]}"; do
         IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$RES"
         if [[ "FREE" = "$STATUS" ]]; then
-          INDEX=$(__colo_res_index_from_ip "$IP")
-          RES_MACH="${__COLO_RES_MACHINE[$INDEX]}"
-          if __colo_machine_types_compatible "$RES_MACH" "$machineType"; then
-            if ! __colo_node_is_requisitioned "$INDEX" "${__COLO_RES_REQUISITIONED[*]}"; then
+          INDEX=$(colo_res_index_from_ip "$IP")
+          RES_MACH="${COLO_RES_MACHINE[$INDEX]}"
+          if colo_machine_types_compatible "$RES_MACH" "$machineType"; then
+            if ! colo_node_is_requisitioned "$INDEX" "${COLO_RES_REQUISITIONED[*]}"; then
               echo -e "$RES_MACH\v$IP"
             fi
           fi
@@ -190,19 +190,19 @@ cloud_CreateInstances() {
     declare AI=0
     for node in "${nodes[@]}"; do
       IFS=$'\v' read -r _RES_MACH IP <<<"${AVAILABLE[$AI]}"
-      __colo_node_requisition "$IP" "$node" >/dev/null
+      colo_node_requisition "$IP" "$node" >/dev/null
       AI=$((AI+1))
     done
   else
     declare RES_MACH node
     declare RI=0
     declare NI=0
-    while [[ $NI -lt $numNodes && $RI -lt $__COLO_RES_N ]]; do
+    while [[ $NI -lt $numNodes && $RI -lt $COLO_RES_N ]]; do
       node="${nodes[$NI]}"
-      RES_MACH="${__COLO_RES_MACHINE[$RI]}"
-      IP="${__COLO_RES_IP_PRIV[$RI]}"
-      if __colo_machine_types_compatible "$RES_MACH" "$machineType"; then
-        if __colo_node_requisition "$IP" "$node" >/dev/null; then
+      RES_MACH="${COLO_RES_MACHINE[$RI]}"
+      IP="${COLO_RES_IP_PRIV[$RI]}"
+      if colo_machine_types_compatible "$RES_MACH" "$machineType"; then
+        if colo_node_requisition "$IP" "$node" >/dev/null; then
           NI=$((NI+1))
         fi
       fi
@@ -220,7 +220,7 @@ cloud_DeleteInstances() {
   declare _INSTNAME IP _PRIV_IP _ZONE
   for instance in "${instances[@]}"; do
     IFS=':' read -r _INSTNAME IP _PRIV_IP _ZONE <<< "$instance"
-    __colo_node_free "$IP" >/dev/null
+    colo_node_free "$IP" >/dev/null
   done
 }
 
@@ -259,5 +259,5 @@ cloud_FetchFile() {
 }
 
 cloud_StatusAll() {
-  __colo_print_availability
+  colo_print_availability
 }
