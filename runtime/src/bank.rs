@@ -9,7 +9,6 @@ use crate::{
     accounts_index::Fork,
     blockhash_queue::BlockhashQueue,
     epoch_schedule::EpochSchedule,
-    locked_accounts_results::LockedAccountsResults,
     message_processor::{MessageProcessor, ProcessInstruction},
     rent_collector::RentCollector,
     serde_utils::{
@@ -20,6 +19,7 @@ use crate::{
     status_cache::{SlotDelta, StatusCache},
     storage_utils,
     storage_utils::StorageAccounts,
+    transaction_batch::TransactionBatch,
 };
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
@@ -693,11 +693,11 @@ impl Bank {
     fn update_transaction_statuses(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         res: &[Result<()>],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
-        for (i, tx) in OrderedIterator::new(txs, txs_iteration_order).enumerate() {
+        for (i, tx) in OrderedIterator::new(txs, iteration_order).enumerate() {
             if Self::can_commit(&res[i]) && !tx.signatures.is_empty() {
                 status_cache.insert(
                     &tx.message().recent_blockhash,
@@ -781,11 +781,11 @@ impl Bank {
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
-    pub fn lock_accounts<'a, 'b>(
+    pub fn prepare_batch<'a, 'b>(
         &'a self,
         txs: &'b [Transaction],
-        txs_iteration_order: Option<Vec<usize>>,
-    ) -> LockedAccountsResults<'a, 'b> {
+        iteration_order: Option<Vec<usize>>,
+    ) -> TransactionBatch<'a, 'b> {
         if self.is_frozen() {
             warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
         }
@@ -794,17 +794,17 @@ impl Bank {
         let results = self
             .rc
             .accounts
-            .lock_accounts(txs, txs_iteration_order.as_ref().map(|v| v.as_slice()));
-        LockedAccountsResults::new(results, &self, txs, txs_iteration_order)
+            .lock_accounts(txs, iteration_order.as_ref().map(|v| v.as_slice()));
+        TransactionBatch::new(results, &self, txs, iteration_order)
     }
 
-    pub fn unlock_accounts(&self, locked_accounts_results: &mut LockedAccountsResults) {
-        if locked_accounts_results.needs_unlock {
-            locked_accounts_results.needs_unlock = false;
+    pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
+        if batch.needs_unlock {
+            batch.needs_unlock = false;
             self.rc.accounts.unlock_accounts(
-                locked_accounts_results.transactions(),
-                locked_accounts_results.txs_iteration_order(),
-                locked_accounts_results.locked_accounts_results(),
+                batch.transactions(),
+                batch.iteration_order(),
+                batch.lock_results(),
             )
         }
     }
@@ -812,14 +812,14 @@ impl Bank {
     fn load_accounts(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<TransactionLoadResult>> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
-            txs_iteration_order,
+            iteration_order,
             results,
             &self.blockhash_queue.read().unwrap(),
             error_counters,
@@ -829,11 +829,11 @@ impl Bank {
     fn check_refs(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         lock_results: &[Result<()>],
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        OrderedIterator::new(txs, txs_iteration_order)
+        OrderedIterator::new(txs, iteration_order)
             .zip(lock_results)
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && !tx.verify_refs() {
@@ -848,13 +848,13 @@ impl Bank {
     fn check_age(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
-        OrderedIterator::new(txs, txs_iteration_order)
+        OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok()
@@ -871,12 +871,12 @@ impl Bank {
     fn check_signatures(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         let rcache = self.src.status_cache.read().unwrap();
-        OrderedIterator::new(txs, txs_iteration_order)
+        OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if tx.signatures.is_empty() {
@@ -910,21 +910,20 @@ impl Bank {
     pub fn check_transactions(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let refs_results =
-            self.check_refs(txs, txs_iteration_order, lock_results, &mut error_counters);
+        let refs_results = self.check_refs(txs, iteration_order, lock_results, &mut error_counters);
         let age_results = self.check_age(
             txs,
-            txs_iteration_order,
+            iteration_order,
             refs_results,
             max_age,
             &mut error_counters,
         );
-        self.check_signatures(txs, txs_iteration_order, age_results, &mut error_counters)
+        self.check_signatures(txs, iteration_order, age_results, &mut error_counters)
     }
 
     fn update_error_counters(error_counters: &ErrorCounters) {
@@ -975,7 +974,7 @@ impl Bank {
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
-        lock_results: &LockedAccountsResults,
+        batch: &TransactionBatch,
         max_age: usize,
     ) -> (
         Vec<Result<TransactionLoadResult>>,
@@ -984,34 +983,32 @@ impl Bank {
         usize,
         usize,
     ) {
-        let txs = lock_results.transactions();
+        let txs = batch.transactions();
         debug!("processing transactions: {}", txs.len());
         inc_new_counter_info!("bank-process_transactions", txs.len());
         let mut error_counters = ErrorCounters::default();
         let mut load_time = Measure::start("accounts_load");
 
-        let retryable_txs: Vec<_> = OrderedIterator::new(
-            lock_results.locked_accounts_results(),
-            lock_results.txs_iteration_order(),
-        )
-        .enumerate()
-        .filter_map(|(index, res)| match res {
-            Err(TransactionError::AccountInUse) => Some(index),
-            Ok(_) => None,
-            Err(_) => None,
-        })
-        .collect();
+        let retryable_txs: Vec<_> =
+            OrderedIterator::new(batch.lock_results(), batch.iteration_order())
+                .enumerate()
+                .filter_map(|(index, res)| match res {
+                    Err(TransactionError::AccountInUse) => Some(index),
+                    Ok(_) => None,
+                    Err(_) => None,
+                })
+                .collect();
 
         let sig_results = self.check_transactions(
             txs,
-            lock_results.txs_iteration_order(),
-            lock_results.locked_accounts_results(),
+            batch.iteration_order(),
+            batch.lock_results(),
             max_age,
             &mut error_counters,
         );
         let mut loaded_accounts = self.load_accounts(
             txs,
-            lock_results.txs_iteration_order(),
+            batch.iteration_order(),
             sig_results,
             &mut error_counters,
         );
@@ -1021,10 +1018,7 @@ impl Bank {
         let mut signature_count = 0;
         let executed: Vec<Result<()>> = loaded_accounts
             .iter_mut()
-            .zip(OrderedIterator::new(
-                txs,
-                lock_results.txs_iteration_order(),
-            ))
+            .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders, ref mut credits, ref mut _rents)) => {
@@ -1077,12 +1071,12 @@ impl Bank {
     fn filter_program_errors_and_collect_fee(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
-        let results = OrderedIterator::new(txs, txs_iteration_order)
+        let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|(tx, res)| {
                 let fee_calculator = hash_queue
@@ -1117,7 +1111,7 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         loaded_accounts: &mut [Result<TransactionLoadResult>],
         executed: &[Result<()>],
         tx_count: usize,
@@ -1143,33 +1137,33 @@ impl Bank {
         self.rc.accounts.store_accounts(
             self.slot(),
             txs,
-            txs_iteration_order,
+            iteration_order,
             executed,
             loaded_accounts,
         );
 
-        self.update_cached_accounts(txs, txs_iteration_order, executed, loaded_accounts);
+        self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         write_time.stop();
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
-        self.update_transaction_statuses(txs, txs_iteration_order, &executed);
-        self.filter_program_errors_and_collect_fee(txs, txs_iteration_order, executed)
+        self.update_transaction_statuses(txs, iteration_order, &executed);
+        self.filter_program_errors_and_collect_fee(txs, iteration_order, executed)
     }
 
     /// Process a batch of transactions.
     #[must_use]
     pub fn load_execute_and_commit_transactions(
         &self,
-        lock_results: &LockedAccountsResults,
+        batch: &TransactionBatch,
         max_age: usize,
     ) -> Vec<Result<()>> {
         let (mut loaded_accounts, executed, _, tx_count, signature_count) =
-            self.load_and_execute_transactions(lock_results, max_age);
+            self.load_and_execute_transactions(batch, max_age);
 
         self.commit_transactions(
-            lock_results.transactions(),
-            lock_results.txs_iteration_order(),
+            batch.transactions(),
+            batch.iteration_order(),
             &mut loaded_accounts,
             &executed,
             tx_count,
@@ -1179,8 +1173,8 @@ impl Bank {
 
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
-        let lock_results = self.lock_accounts(txs, None);
-        self.load_execute_and_commit_transactions(&lock_results, MAX_RECENT_BLOCKHASHES)
+        let batch = self.prepare_batch(txs, None);
+        self.load_execute_and_commit_transactions(&batch, MAX_RECENT_BLOCKHASHES)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1394,13 +1388,13 @@ impl Bank {
     fn update_cached_accounts(
         &self,
         txs: &[Transaction],
-        txs_iteration_order: Option<&[usize]>,
+        iteration_order: Option<&[usize]>,
         res: &[Result<()>],
         loaded: &[Result<TransactionLoadResult>],
     ) {
         for (i, (raccs, tx)) in loaded
             .iter()
-            .zip(OrderedIterator::new(txs, txs_iteration_order))
+            .zip(OrderedIterator::new(txs, iteration_order))
             .enumerate()
         {
             if res[i].is_err() || raccs.is_err() {
@@ -2126,7 +2120,7 @@ mod tests {
         );
         let pay_alice = vec![tx1];
 
-        let lock_result = bank.lock_accounts(&pay_alice, None);
+        let lock_result = bank.prepare_batch(&pay_alice, None);
         let results_alice =
             bank.load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES);
         assert_eq!(results_alice[0], Ok(()));
@@ -2172,8 +2166,8 @@ mod tests {
         let tx = Transaction::new(&[&key0], message, genesis_block.hash());
         let txs = vec![tx];
 
-        let lock_result0 = bank.lock_accounts(&txs, None);
-        assert!(lock_result0.locked_accounts_results()[0].is_ok());
+        let batch0 = bank.prepare_batch(&txs, None);
+        assert!(batch0.lock_results()[0].is_ok());
 
         // Try locking accounts, locking a previously credit-only account as credit-debit
         // should fail
@@ -2190,8 +2184,8 @@ mod tests {
         let tx = Transaction::new(&[&key1], message, genesis_block.hash());
         let txs = vec![tx];
 
-        let lock_result1 = bank.lock_accounts(&txs, None);
-        assert!(lock_result1.locked_accounts_results()[0].is_err());
+        let batch1 = bank.prepare_batch(&txs, None);
+        assert!(batch1.lock_results()[0].is_err());
 
         // Try locking a previously credit-only account a 2nd time; should succeed
         let message = Message {
@@ -2207,8 +2201,8 @@ mod tests {
         let tx = Transaction::new(&[&key2], message, genesis_block.hash());
         let txs = vec![tx];
 
-        let lock_result2 = bank.lock_accounts(&txs, None);
-        assert!(lock_result2.locked_accounts_results()[0].is_ok());
+        let batch2 = bank.prepare_batch(&txs, None);
+        assert!(batch2.lock_results()[0].is_ok());
     }
 
     #[test]
