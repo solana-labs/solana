@@ -94,8 +94,7 @@ perform_action() {
                     | rustfilt \
                     > "${dump}.txt"
             else
-                echo "Error: Cannot find debug version of shared object: $so"
-                exit 1
+                echo "Warning: No dump created, cannot find: $so"
             fi
         )
         ;;
