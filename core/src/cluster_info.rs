@@ -1930,6 +1930,7 @@ mod tests {
             assert!(rv.is_empty());
             let mut data_shred = DataShred::default();
             data_shred.header.data_header.slot = 2;
+            data_shred.header.parent_offset = 1;
             data_shred.header.data_header.index = 1;
             let shred = Shred::Data(data_shred);
             let shred_info = ShredInfo::new_from_shred(&shred);
