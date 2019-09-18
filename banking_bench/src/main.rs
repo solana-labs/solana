@@ -14,7 +14,7 @@ use solana_core::cluster_info::Node;
 use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
 use solana_core::packet::to_packets_chunked;
 use solana_core::poh_recorder::PohRecorder;
-use solana_core::poh_recorder::WorkingBankEntries;
+use solana_core::poh_recorder::WorkingBankEntry;
 use solana_core::service::Service;
 use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
@@ -33,7 +33,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 fn check_txs(
-    receiver: &Arc<Receiver<WorkingBankEntries>>,
+    receiver: &Arc<Receiver<WorkingBankEntry>>,
     ref_tx_count: usize,
     poh_recorder: &Arc<Mutex<PohRecorder>>,
 ) -> bool {
@@ -41,11 +41,9 @@ fn check_txs(
     let now = Instant::now();
     let mut no_bank = false;
     loop {
-        let entries = receiver.recv_timeout(Duration::from_millis(10));
-        if let Ok((_, entries)) = entries {
-            for (entry, _) in &entries {
-                total += entry.transactions.len();
-            }
+        if let Ok((_bank, (entry, _tick_count))) = receiver.recv_timeout(Duration::from_millis(10))
+        {
+            total += entry.transactions.len();
         }
         if total >= ref_tx_count {
             break;

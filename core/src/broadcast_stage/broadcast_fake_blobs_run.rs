@@ -36,6 +36,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
+        let num_entries = receive_results.entries.len();
         let (_, shred_bufs, _) = broadcast_utils::entries_to_shreds(
             receive_results.entries,
             bank.slot(),
