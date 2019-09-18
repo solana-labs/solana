@@ -1,7 +1,6 @@
 # Account Authority #
 
 ## Problem ##
-
 There's no extant general facility to re-key or to delegate authority of an account in Solana. This manifests as a problem in several ways:
 
 * programs that wish to support re-keying or alternative authority must implement this on their own, leading to replicode and 
@@ -17,7 +16,14 @@ making them inaccessible to wallets that can only handle one keypair
 implement alt-authority, or require big, costly re-keying efforts (e.g. multiple stakes pointing at a vote account, if the vote account
 is re-keyed, *all* delegating stakes must be updated)
 
+
+### Authority vs. Address ###
+Solana currently conflows account _address_, (i.e. its name, where it lives in the bank) with its _authority_ (i.e. who needs to sign transactions that modify the state of the account).
+
+
 ## Proposed Solution ##
 Add an `authority` field to `Account` that defaults to `None`, `Pukey::default()` (or the Account's address) that can be updated 
 via a system instruction.  This field would be available to programs for simple authority checks during instruction processing, 
 and would be protected from modification by the runtime (only the system program may modify).
+
+
