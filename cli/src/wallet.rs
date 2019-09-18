@@ -547,8 +547,9 @@ fn process_airdrop(
     use_lamports_unit: bool,
 ) -> ProcessResult {
     println!(
-        "Requesting airdrop of {:?} lamports from {}",
-        lamports, drone_addr
+        "Requesting airdrop of {} from {}",
+        build_balance_message(lamports, use_lamports_unit),
+        drone_addr
     );
     let previous_balance = match rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)? {
         Some(lamports) => lamports,
