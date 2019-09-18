@@ -1,4 +1,4 @@
-//! The `validator` module hosts all the validator microservices.
+//! The `fullnode` module hosts all the fullnode microservices.
 
 use crate::broadcast_stage::BroadcastStageType;
 use crate::cluster_info::{ClusterInfo, Node};
@@ -29,11 +29,15 @@ use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
+use solana_vote_api::vote_state::VoteState;
+use ctrlc::set_handler;
+
+
 
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::Result;
@@ -51,6 +55,7 @@ pub struct ValidatorConfig {
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
+    pub enable_ctrl_c_handler: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -67,6 +72,7 @@ impl Default for ValidatorConfig {
             rpc_config: JsonRpcConfig::default(),
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
+            enable_ctrl_c_handler: false,
         }
     }
 }
@@ -176,7 +182,32 @@ impl Validator {
             config.storage_slots_per_turn,
             bank.slots_per_segment(),
         );
-
+        if config. enable_ctrl_c_handler {
+            let bank_forks = bank_forks.clone();
+            let counter = Arc::new(AtomicUsize::new(0));
+            set_handler(move || {
+                if counter.fetch_add(1, Ordering::Relaxed) > 0 {
+                    warn!("Validator aborting on second ^C");
+                    std::process::exit(1);
+                }
+                let bank = bank_forks.read().unwrap().working_bank();
+                let stake: Option<u64> = bank
+                    .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0) //Option<&HashMap<Pubkey, (u64, Account)>>
+                    .and_then(|account| {
+                        account.iter().find(|(pubkey, (stake, account))| {
+                            **pubkey == id
+                                && *stake > 0
+                                && VoteState::deserialize(&account.data).is_ok()
+                        })
+                    })
+                    .map(|(_, (n, _))| *n);
+                match stake {
+                    Some(_val) => warn!("Validator with stake is exiting on first ^C"),
+                    None => std::process::exit(1),
+                }
+            })
+            .expect("Error setting Ctrl-C handler");
+        }
         let rpc_service = if node.info.rpc.port() == 0 {
             None
         } else {
