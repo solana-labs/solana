@@ -37,4 +37,20 @@ Add an `authority` field to `Account` that defaults to `None`, `Pukey::default()
 via a system instruction.  This field would be available to programs for simple authority checks during instruction processing, 
 and would be protected from modification by the runtime (only the system program may modify).
 
-
+### Runtime changes ###
+```rust 
+fn verify_instruction(
+    is_debitable: bool,
+    program_id: &Pubkey,
+    pre: &Account,
+    post: &Account,
+) -> Result<(), InstructionError> {
+    // Verify the transaction
+    ...
+    // Make sure that authority` is still the same or this was just assigned by the system program,
+    //  but even the system program can't touch a credit-only account
+    if pre.authority != post.authority && (!is_debitable || !system_program::check_id(&program_id)) {
+        return Err(InstructionError::ModifiedAuthority);
+    }
+    ...
+```
