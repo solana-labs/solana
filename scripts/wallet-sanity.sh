@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Wallet sanity test
+# solana-cli integration sanity test
 #
 set -e
 
@@ -10,45 +10,17 @@ cd "$(dirname "$0")"/..
 source multinode-demo/common.sh
 
 if [[ -z $1 ]]; then # no network argument, use localhost by default
-  entrypoint=(--url http://127.0.0.1:8899)
+  args=(--url http://127.0.0.1:8899)
 else
-  entrypoint=("$@")
+  args=("$@")
 fi
-
-# Tokens transferred to this address are lost forever...
-garbage_address=vS3ngn1TfQmpsW1Z4NkLuqNAQFF3dYQw8UZ6TCx9bmq
-
-check_balance_output() {
-  declare expected_output="$1"
-  exec 42>&1
-  attempts=3
-  while [[ $attempts -gt 0 ]]; do
-    output=$($solana_cli "${entrypoint[@]}" balance --lamports | tee >(cat - >&42))
-    if [[ "$output" =~ $expected_output ]]; then
-      break
-    else
-      sleep 1
-      (( attempts=attempts-1 ))
-      if [[ $attempts -eq 0 ]]; then
-        echo "Balance is incorrect.  Expected: $expected_output"
-        exit 1
-      fi
-    fi
-  done
-}
-
-pay_and_confirm() {
-  exec 42>&1
-  signature=$($solana_cli "${entrypoint[@]}" pay "$@" | tail -c 88 | tee >(cat - >&42))
-  $solana_cli "${entrypoint[@]}" confirm "$signature"
-}
 
 $solana_keygen new -f
 
 node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
-  output=$($solana_cli "${entrypoint[@]}" get-transaction-count)
+  output=$($solana_cli "${args[@]}" get-transaction-count)
   if [[ -n $output ]]; then
     node_readiness=true
     break
@@ -61,14 +33,14 @@ if ! "$node_readiness"; then
   exit 1
 fi
 
-$solana_cli "${entrypoint[@]}" address
-check_balance_output "0 lamports"
-$solana_cli "${entrypoint[@]}" airdrop 600 lamports
-check_balance_output "600 lamports"
-$solana_cli "${entrypoint[@]}" airdrop 400 lamports
-check_balance_output "1000 lamports"
-pay_and_confirm $garbage_address 50 lamports
-check_balance_output "lamports" # <-- exact number of lamports here depends on the current cluster fees
+(
+  set -x
+  $solana_cli "${args[@]}" address
+  $solana_cli "${args[@]}" airdrop 1000 lamports
+  $solana_cli "${args[@]}" balance --lamports
+  $solana_cli "${args[@]}" ping --count 5 --interval 0
+  $solana_cli "${args[@]}" balance --lamports
+)
 
 echo PASS
 exit 0
