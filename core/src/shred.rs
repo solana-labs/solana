@@ -648,9 +648,8 @@ impl Shredder {
 
     /// Finalize a data shred. Update the shred index for the next shred
     fn finalize_data_shred(&mut self) {
-        let mut data = vec![0; PACKET_DATA_SIZE];
-        let mut wr = io::Cursor::new(&mut data[..]);
-        bincode::serialize_into(&mut wr, &self.active_shred).expect("Failed to serialize shred");
+        let mut data = Vec::with_capacity(PACKET_DATA_SIZE);
+        bincode::serialize_into(&mut data, &self.active_shred).expect("Failed to serialize shred");
 
         self.active_offset = 0;
         self.index += 1;
