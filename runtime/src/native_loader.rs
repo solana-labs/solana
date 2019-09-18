@@ -29,7 +29,26 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "so";
 #[cfg(windows)]
 const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 
-fn create_path(name: &str) -> PathBuf {
+// Cargo adds a hash in the file name of git and crates.io dependencies so we can deterministically
+// build a path, we have to search for it.
+fn find_library(root: PathBuf, prefix: &str) -> Option<PathBuf> {
+    let files = root.read_dir().expect("Failed to read library files");
+    for file in files.filter_map(Result::ok) {
+        let file_path = file.path();
+        if let Some(file_name) = file_path.file_name() {
+            if let Some(file_name) = file_name.to_str() {
+                if file_name.ends_with(PLATFORM_FILE_EXTENSION_NATIVE)
+                    && file_name.starts_with(&prefix)
+                {
+                    return Some(file_path);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn create_library_path(name: &str) -> Option<PathBuf> {
     let current_exe = env::current_exe()
         .unwrap_or_else(|e| panic!("create_path(\"{}\"): current exe not found: {:?}", name, e));
     let current_exe_directory = PathBuf::from(current_exe.parent().unwrap_or_else(|| {
@@ -39,18 +58,11 @@ fn create_path(name: &str) -> PathBuf {
         )
     }));
 
-    let library_file_name = PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name)
-        .with_extension(PLATFORM_FILE_EXTENSION_NATIVE);
+    let library_path_prefix = PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name);
+    let library_prefix = library_path_prefix.to_str().unwrap();
 
-    // Check the current_exe directory for the library as `cargo tests` are run
-    // from the deps/ subdirectory
-    let file_path = current_exe_directory.join(&library_file_name);
-    if file_path.exists() {
-        file_path
-    } else {
-        // `cargo build` places dependent libraries in the deps/ subdirectory
-        current_exe_directory.join("deps").join(library_file_name)
-    }
+    find_library(current_exe_directory.clone(), library_prefix)
+        .or_else(|| find_library(current_exe_directory.join("deps"), library_prefix))
 }
 
 #[cfg(windows)]
@@ -86,31 +98,74 @@ pub fn invoke_entrypoint(
         }
     };
     trace!("Call native {:?}", name);
-    let path = create_path(&name);
-    match library_open(&path) {
-        Ok(library) => unsafe {
-            let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
-                match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        warn!(
-                            "{:?}: Unable to find {:?} in program",
-                            e,
-                            instruction_processor_utils::ENTRYPOINT
-                        );
-                        return Err(InstructionError::GenericError);
-                    }
-                };
-            let ret = entrypoint(program_id, params, ix_data);
-            symbol_cache
-                .write()
-                .unwrap()
-                .insert(name_vec.to_vec(), entrypoint);
-            ret
-        },
-        Err(e) => {
-            warn!("Unable to load: {:?}", e);
-            Err(InstructionError::GenericError)
+    if let Some(path) = create_library_path(&name) {
+        match library_open(&path) {
+            Ok(library) => unsafe {
+                let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
+                    match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            warn!(
+                                "{:?}: Unable to find {:?} in program",
+                                e,
+                                instruction_processor_utils::ENTRYPOINT
+                            );
+                            return Err(InstructionError::GenericError);
+                        }
+                    };
+                let ret = entrypoint(program_id, params, ix_data);
+                symbol_cache
+                    .write()
+                    .unwrap()
+                    .insert(name_vec.to_vec(), entrypoint);
+                ret
+            },
+            Err(e) => {
+                warn!("Unable to load: {:?}", e);
+                Err(InstructionError::GenericError)
+            }
         }
+    } else {
+        warn!("Unable to find native program: {}", name);
+        Err(InstructionError::GenericError)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_find_library() {
+        let root = tempdir().unwrap();
+        let prefix = "libsolana_bpf_loader_program";
+        let file_path = root.path().join(format!(
+            "libsolana_bpf_loader_program.{}",
+            PLATFORM_FILE_EXTENSION_NATIVE
+        ));
+        File::create(file_path.clone()).unwrap();
+        assert_eq!(
+            find_library(root.path().to_path_buf(), prefix),
+            Some(file_path)
+        );
+
+        let root = tempdir().unwrap();
+        let prefix = "libsolana_bpf_loader_program";
+        let file_path = root.path().join(format!(
+            "libsolana_bpf_loader_program-674c49511f17b07f.{}",
+            PLATFORM_FILE_EXTENSION_NATIVE
+        ));
+        File::create(file_path.clone()).unwrap();
+        assert_eq!(
+            find_library(root.path().to_path_buf(), prefix),
+            Some(file_path)
+        );
+
+        assert_eq!(
+            find_library(root.path().to_path_buf(), "libsolana_doesnt_exist"),
+            None
+        );
     }
 }
