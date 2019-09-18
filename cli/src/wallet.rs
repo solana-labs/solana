@@ -1,6 +1,6 @@
 use crate::{
-    display::println_name_value, input_validators::*, lamports_to_sol, sol_to_lamports,
-    validator_info::*,
+    display::println_name_value, input_parsers::*, input_validators::*, lamports_to_sol,
+    sol_to_lamports, validator_info::*, vote::*,
 };
 use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -26,7 +26,7 @@ use solana_sdk::{
     loader_instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{read_keypair, Keypair, KeypairUtil, Signature},
+    signature::{Keypair, KeypairUtil, Signature},
     system_instruction::SystemError,
     system_transaction,
     transaction::{Transaction, TransactionError},
@@ -165,45 +165,6 @@ impl Default for WalletConfig {
     }
 }
 
-// Return parsed values from matches at `name`
-fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
-where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    matches
-        .values_of(name)
-        .map(|xs| xs.map(|x| x.parse::<T>().unwrap()).collect())
-}
-
-// Return a parsed value from matches at `name`
-fn value_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<T>
-where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    if let Some(value) = matches.value_of(name) {
-        value.parse::<T>().ok()
-    } else {
-        None
-    }
-}
-
-// Return the keypair for an argument with filename `name` or None if not present.
-fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
-    if let Some(value) = matches.value_of(name) {
-        read_keypair(value).ok()
-    } else {
-        None
-    }
-}
-
-// Return a pubkey for an argument that can itself be parsed into a pubkey,
-// or is a filename that can be read as a keypair
-fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
-    value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
-}
-
 pub fn parse_command(
     pubkey: &Pubkey,
     matches: &ArgMatches<'_>,
@@ -306,24 +267,8 @@ pub fn parse_command(
                 use_lamports_unit,
             })
         }
-        ("show-vote-account", Some(matches)) => {
-            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-            Ok(WalletCommand::ShowVoteAccount(vote_account_pubkey))
-        }
-        ("uptime", Some(matches)) => {
-            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-            let aggregate = matches.is_present("aggregate");
-            let span = if matches.is_present("span") {
-                Some(value_t_or_exit!(matches, "span", u64))
-            } else {
-                None
-            };
-            Ok(WalletCommand::Uptime {
-                pubkey: vote_account_pubkey,
-                aggregate,
-                span,
-            })
-        }
+        ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
+        ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         ("delegate-stake", Some(matches)) => {
             let stake_account_keypair = keypair_of(matches, "stake_account_keypair_file").unwrap();
             let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
@@ -709,144 +654,6 @@ fn process_show_account(
         println!("{:?}", account.data.hex_dump());
     }
 
-    Ok("".to_string())
-}
-
-fn process_show_vote_account(
-    rpc_client: &RpcClient,
-    _config: &WalletConfig,
-    vote_account_pubkey: &Pubkey,
-) -> ProcessResult {
-    let vote_account = rpc_client.get_account(vote_account_pubkey)?;
-
-    if vote_account.owner != solana_vote_api::id() {
-        Err(WalletError::RpcRequestError(
-            format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
-        ))?;
-    }
-
-    let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
-        WalletError::RpcRequestError(
-            "Account data could not be deserialized to vote state".to_string(),
-        )
-    })?;
-
-    println!("account lamports: {}", vote_account.lamports);
-    println!("node id: {}", vote_state.node_pubkey);
-    println!(
-        "authorized voter pubkey: {}",
-        vote_state.authorized_voter_pubkey
-    );
-    println!("credits: {}", vote_state.credits());
-    println!(
-        "commission: {}%",
-        f64::from(vote_state.commission) / f64::from(std::u32::MAX)
-    );
-    println!(
-        "root slot: {}",
-        match vote_state.root_slot {
-            Some(slot) => slot.to_string(),
-            None => "~".to_string(),
-        }
-    );
-    if !vote_state.votes.is_empty() {
-        println!("recent votes:");
-        for vote in &vote_state.votes {
-            println!(
-                "- slot: {}\n  confirmation count: {}",
-                vote.slot, vote.confirmation_count
-            );
-        }
-
-        // TODO: Use the real GenesisBlock from the cluster.
-        let genesis_block = solana_sdk::genesis_block::GenesisBlock::default();
-        let epoch_schedule = solana_runtime::epoch_schedule::EpochSchedule::new(
-            genesis_block.slots_per_epoch,
-            genesis_block.stakers_slot_offset,
-            genesis_block.epoch_warmup,
-        );
-
-        println!("epoch voting history:");
-        for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
-            let credits_earned = credits - prev_credits;
-            let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
-            println!(
-                "- epoch: {}\n  slots in epoch: {}\n  credits earned: {}",
-                epoch, slots_in_epoch, credits_earned,
-            );
-        }
-    }
-    Ok("".to_string())
-}
-
-fn process_uptime(
-    rpc_client: &RpcClient,
-    _config: &WalletConfig,
-    vote_account_pubkey: &Pubkey,
-    aggregate: bool,
-    span: Option<u64>,
-) -> ProcessResult {
-    let vote_account = rpc_client.get_account(vote_account_pubkey)?;
-
-    if vote_account.owner != solana_vote_api::id() {
-        Err(WalletError::RpcRequestError(
-            format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
-        ))?;
-    }
-
-    let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
-        WalletError::RpcRequestError(
-            "Account data could not be deserialized to vote state".to_string(),
-        )
-    })?;
-
-    println!("Node id: {}", vote_state.node_pubkey);
-    println!(
-        "Authorized voter pubkey: {}",
-        vote_state.authorized_voter_pubkey
-    );
-    if !vote_state.votes.is_empty() {
-        println!("Uptime:");
-
-        // TODO: Use the real GenesisBlock from the cluster.
-        let genesis_block = solana_sdk::genesis_block::GenesisBlock::default();
-        let epoch_schedule = solana_runtime::epoch_schedule::EpochSchedule::new(
-            genesis_block.slots_per_epoch,
-            genesis_block.stakers_slot_offset,
-            genesis_block.epoch_warmup,
-        );
-
-        let epoch_credits_vec: Vec<(u64, u64, u64)> =
-            vote_state.epoch_credits().map(|&item| item).collect();
-
-        let epoch_credits = if let Some(x) = span {
-            epoch_credits_vec.iter().rev().take(x as usize)
-        } else {
-            epoch_credits_vec.iter().rev().take(epoch_credits_vec.len())
-        };
-
-        if aggregate {
-            let (credits_earned, slots_in_epoch): (u64, u64) =
-                epoch_credits.fold((0, 0), |acc, (epoch, credits, prev_credits)| {
-                    let credits_earned = credits - prev_credits;
-                    let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
-                    (acc.0 + credits_earned, acc.1 + slots_in_epoch)
-                });
-            let total_uptime = credits_earned as f64 / slots_in_epoch as f64;
-            println!(
-                "{:.2}% over {} epochs",
-                total_uptime * 100 as f64,
-                span.unwrap_or(epoch_credits_vec.len() as u64)
-            );
-        } else {
-            for (epoch, credits, prev_credits) in epoch_credits {
-                let credits_earned = credits - prev_credits;
-                let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
-                let uptime = credits_earned as f64 / slots_in_epoch as f64;
-                println!("- epoch: {} {:.2}% uptime", epoch, uptime * 100 as f64,);
-            }
-        }
-    }
     Ok("".to_string())
 }
 
@@ -2541,8 +2348,10 @@ mod tests {
     use super::*;
     use serde_json::Value;
     use solana_client::mock_rpc_client_request::SIGNATURE;
-    use solana_sdk::signature::gen_keypair_file;
-    use solana_sdk::transaction::TransactionError;
+    use solana_sdk::{
+        signature::{gen_keypair_file, read_keypair},
+        transaction::TransactionError,
+    };
     use std::path::PathBuf;
 
     #[test]
