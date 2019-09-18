@@ -48,32 +48,31 @@ declare __COLO_RES_AVAILABILITY_CACHED=false
 declare -ax __COLO_RES_AVAILABILITY
 load_availability() {
   declare USE_CACHE=${1:-${__COLO_RES_AVAILABILITY_CACHED}}
-  declare LINE PRIV_IP STATUS LOCK_USER ROLE NETNAME I IP HOST_NAME ZONE INSTNAME
+  declare LINE PRIV_IP STATUS LOCK_USER I IP HOST_NAME ZONE INSTNAME
   if ! $USE_CACHE; then
     __COLO_RES_AVAILABILITY=()
     __COLO_RES_REQUISITIONED=()
     while read -r LINE; do
-      IFS=$'\v' read -r PRIV_IP STATUS LOCK_USER INSTNAME ROLE NETNAME <<< "$LINE"
+      IFS=$'\v' read -r PRIV_IP STATUS LOCK_USER INSTNAME <<< "$LINE"
       I=$(res_index_from_ip "$PRIV_IP")
       IP="${RES_IP[$I]}"
       HOST_NAME="${RES_HOSTNAME[$I]}"
       ZONE="${RES_ZONE[$I]}"
-      IP=$PRIV_IP  # Colo public IPs are firewalled to only allow UDP(8000-10000).  Reuse private IP as public and require VPN
-      __COLO_RES_AVAILABILITY+=( "$(echo -e "$HOST_NAME\v$IP\v$PRIV_IP\v$STATUS\v$ZONE\v$LOCK_USER\v$ROLE\v$NETNAME\v$INSTNAME")" )
+      __COLO_RES_AVAILABILITY+=( "$(echo -e "$HOST_NAME\v$IP\v$PRIV_IP\v$STATUS\v$ZONE\v$LOCK_USER\v$INSTNAME")" )
     done < <(node_status_all | sort -t $'\v' -k1)
     __COLO_RES_AVAILABILITY_CACHED=true
   fi
 }
 
 print_availability() {
-  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME
+  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME
   if ! $__COLO_TODO_PARALLELIZE; then
     load_resources
     load_availability false
   fi
   for AVAIL in "${__COLO_RES_AVAILABILITY[@]}"; do
-    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME <<<"$AVAIL"
-    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s net=%s role=%s inst=%s\n" "$HOST_NAME" "$IP" "$PRIV_IP" "$STATUS" "$ZONE" "$NETNAME" "$ROLE" "$INSTNAME"
+    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
+    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s inst=%s\n" "$HOST_NAME" "$IP" "$PRIV_IP" "$STATUS" "$ZONE" "$INSTNAME"
   done
 }
 
@@ -151,15 +150,15 @@ _node_status_script() {
                     # the time due to $SOLANA_LOCK_FILE not existing and is running from a
                     # subshell where normal redirection doesn't work
   exec 9<"$SOLANA_LOCK_FILE" && flock -s 9 && . "$SOLANA_LOCK_FILE" && exec 9>&-
-  echo -e "\$SOLANA_LOCK_USER\\v\$SOLANA_LOCK_INSTANCENAME\\v\$SOLANA_LOCK_ROLE\\v\$SOLANA_LOCK_NETNAME"
+  echo -e "\$SOLANA_LOCK_USER\\v\$SOLANA_LOCK_INSTANCENAME"
   exec 2>&3 # Restore stderr
 EOF
 }
 
 _node_status_result_normalize() {
-  declare IP RC US RL NETNAME BY INSTNAME
+  declare IP RC US BY INSTNAME
   declare ST="DOWN"
-  IFS=$'\v' read -r IP RC US INSTNAME RL NETNAME <<< "$1"
+  IFS=$'\v' read -r IP RC US INSTNAME <<< "$1"
   if [ "$RC" -eq 0 ]; then
     if [ -n "$US" ]; then
       BY="$US"
@@ -168,7 +167,7 @@ _node_status_result_normalize() {
       ST="FREE"
     fi
   fi
-  echo -e $"$IP\v$ST\v$BY\v$INSTNAME\v$RL\v$NETNAME"
+  echo -e $"$IP\v$ST\v$BY\v$INSTNAME"
 }
 
 node_status() {
@@ -189,8 +188,7 @@ node_status_all() {
 export __COLO_RES_REQUISITIONED=()
 requisition_node() {
   declare IP=$1
-  declare ROLE=$2
-  declare INSTANCE_NAME=$3
+  declare INSTANCE_NAME=$2
 
   declare INDEX=$(res_index_from_ip "$IP")
   declare RC=false
@@ -203,8 +201,6 @@ cat <<EOF
     [ -n "\$SOLANA_USER" ] && {
       echo "export SOLANA_LOCK_USER=\$SOLANA_USER"
       echo "export SOLANA_LOCK_INSTANCENAME=$INSTANCE_NAME"
-      echo "export SOLANA_LOCK_ROLE=$ROLE"
-      echo "export SOLANA_LOCK_NETNAME=$prefix"
       echo "[ -v SSH_TTY -a -f \"\${HOME}/.solana-motd\" ] && cat \"\${HOME}/.solana-motd\" 1>&2"
     } >&9 || ( rm "$SOLANA_LOCK_FILE" && false )
     9>&-
@@ -313,7 +309,7 @@ cloud_DefaultZone() {
 #   $ __cloud_FindInstances "name~^all-machines-with-a-common-machine-prefix"
 #
 __cloud_FindInstances() {
-  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME INSTANCES_TEXT
+  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME INSTANCES_TEXT
   declare filter=$1
   instances=()
 
@@ -323,10 +319,10 @@ __cloud_FindInstances() {
   fi
   INSTANCES_TEXT="$(
     for AVAIL in "${__COLO_RES_AVAILABILITY[@]}"; do
-      IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME <<<"$AVAIL"
+      IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
       if [[ $INSTNAME =~ $filter ]]; then
         IP=$PRIV_IP  # Colo public IPs are firewalled to only allow UDP(8000-10000).  Reuse private IP as public and require VPN
-        printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s net=%s role=%s inst=%s\n" "$HOST_NAME" "$IP" "$PRIV_IP" "$STATUS" "$ZONE" "$NETNAME" "$ROLE" "$INSTNAME" 1>&2
+        printf "%-40s | publicIp=%-16s privateIp=%s zone=%s\n" "$INSTNAME" "$IP" "$PRIV_IP" "$ZONE" 1>&2
         echo -e "${INSTNAME}:${IP}:${PRIV_IP}:$ZONE"
       fi
     done | sort -t $'\v' -k1
@@ -440,12 +436,12 @@ cloud_CreateInstances() {
   fi
 
   if $__COLO_TODO_PARALLELIZE; then
-    declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME INDEX MACH RES LINE
+    declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME INDEX MACH RES LINE
     declare -a AVAILABLE
     declare AVAILABLE_TEXT
     AVAILABLE_TEXT="$(
       for RES in "${__COLO_RES_AVAILABILITY[@]}"; do
-        IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER ROLE NETNAME INSTNAME <<<"$RES"
+        IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$RES"
         if [[ "FREE" = "$STATUS" ]]; then
           INDEX=$(res_index_from_ip "$IP")
           RES_MACH="${RES_GPUS[$INDEX]}"
@@ -473,7 +469,7 @@ cloud_CreateInstances() {
     declare AI=0
     for node in "${nodes[@]}"; do
       IFS=$'\v' read -r _RES_MACH IP <<<"${AVAILABLE[$AI]}"
-      requisition_node "$IP" role "$node" >/dev/null
+      requisition_node "$IP" "$node" >/dev/null
       AI=$((AI+1))
     done
   else
@@ -485,7 +481,7 @@ cloud_CreateInstances() {
       RES_MACH="${RES_GPUS[$RI]}"
       IP="${RES_IP_PRIV[$RI]}"
       if machine_types_compatible "$RES_MACH" "$machineType"; then
-        if requisition_node "$IP" role "$node" >/dev/null; then
+        if requisition_node "$IP" "$node" >/dev/null; then
           NI=$((NI+1))
         fi
       fi
