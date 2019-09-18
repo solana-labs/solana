@@ -73,8 +73,10 @@ colo_instance_run() {
   declare IP=$1
   declare CMD="$2"
   declare OUT
-  OUT=$(ssh -l solana -o "ConnectTimeout=10" "$IP" "$CMD" 2>&1)
+  set +e
+  OUT=$(ssh -l solana -o "ConnectTimeout=3" -n "$IP" "$CMD" 2>&1)
   declare RC=$?
+  set -e
   while read -r LINE; do
     echo -e "$IP\v$RC\v$LINE"
   done <<< "$OUT"
