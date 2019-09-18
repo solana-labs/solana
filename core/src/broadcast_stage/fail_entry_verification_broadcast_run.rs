@@ -13,25 +13,20 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntries>,
+        receiver: &Receiver<WorkingBankEntry>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let mut receive_results = broadcast_utils::recv_slot_shreds(receiver)?;
+        let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
         let last_tick = receive_results.last_tick;
 
         // 2) Convert entries to blobs + generate coding blobs. Set a garbage PoH on the last entry
         // in the slot to make verification fail on validators
         if last_tick == bank.max_tick_height() {
-            let mut last_entry = receive_results
-                .ventries
-                .last_mut()
-                .unwrap()
-                .last_mut()
-                .unwrap();
-            last_entry.0.hash = Hash::default();
+            let mut last_entry = receive_results.entries.last_mut().unwrap();
+            last_entry.hash = Hash::default();
         }
 
         let keypair = &cluster_info.read().unwrap().keypair.clone();
@@ -42,9 +37,9 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             .unwrap_or(0);
 
         let (shreds, shred_infos, _) = broadcast_utils::entries_to_shreds(
-            receive_results.ventries,
-            bank.slot(),
+            receive_results.entries,
             last_tick,
+            bank.slot(),
             bank.max_tick_height(),
             keypair,
             latest_blob_index,

@@ -20,12 +20,12 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
     fn run(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntries>,
+        receiver: &Receiver<WorkingBankEntry>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let receive_results = broadcast_utils::recv_slot_shreds(receiver)?;
+        let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
         let last_tick = receive_results.last_tick;
 
@@ -36,8 +36,9 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
+        let num_entries = receive_results.entries.len();
         let (_, shred_bufs, _) = broadcast_utils::entries_to_shreds(
-            receive_results.ventries,
+            receive_results.entries,
             bank.slot(),
             receive_results.last_tick,
             bank.max_tick_height(),
@@ -52,12 +53,12 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             self.last_blockhash = bank.parent().unwrap().last_blockhash();
         }
 
-        let fake_ventries: Vec<_> = (0..receive_results.num_entries)
-            .map(|_| vec![(Entry::new(&self.last_blockhash, 0, vec![]), 0)])
+        let fake_entries: Vec<_> = (0..num_entries)
+            .map(|_| Entry::new(&self.last_blockhash, 0, vec![]))
             .collect();
 
         let (_fake_shreds, fake_shred_bufs, _) = broadcast_utils::entries_to_shreds(
-            fake_ventries,
+            fake_entries,
             bank.slot(),
             receive_results.last_tick,
             bank.max_tick_height(),

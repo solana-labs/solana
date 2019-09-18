@@ -162,34 +162,33 @@ mod tests {
             let mut need_partial = true;
 
             while need_tick || need_entry || need_partial {
-                for entry in entry_receiver.recv().unwrap().1 {
-                    let entry = &entry.0;
-                    if entry.is_tick() {
-                        assert!(
-                            entry.num_hashes <= poh_config.hashes_per_tick.unwrap(),
-                            format!(
-                                "{} <= {}",
-                                entry.num_hashes,
-                                poh_config.hashes_per_tick.unwrap()
-                            )
-                        );
+                let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
 
-                        if entry.num_hashes == poh_config.hashes_per_tick.unwrap() {
-                            need_tick = false;
-                        } else {
-                            need_partial = false;
-                        }
+                if entry.is_tick() {
+                    assert!(
+                        entry.num_hashes <= poh_config.hashes_per_tick.unwrap(),
+                        format!(
+                            "{} <= {}",
+                            entry.num_hashes,
+                            poh_config.hashes_per_tick.unwrap()
+                        )
+                    );
 
-                        hashes += entry.num_hashes;
-
-                        assert_eq!(hashes, poh_config.hashes_per_tick.unwrap());
-
-                        hashes = 0;
+                    if entry.num_hashes == poh_config.hashes_per_tick.unwrap() {
+                        need_tick = false;
                     } else {
-                        assert!(entry.num_hashes >= 1);
-                        need_entry = false;
-                        hashes += entry.num_hashes;
+                        need_partial = false;
                     }
+
+                    hashes += entry.num_hashes;
+
+                    assert_eq!(hashes, poh_config.hashes_per_tick.unwrap());
+
+                    hashes = 0;
+                } else {
+                    assert!(entry.num_hashes >= 1);
+                    need_entry = false;
+                    hashes += entry.num_hashes;
                 }
             }
             exit.store(true, Ordering::Relaxed);

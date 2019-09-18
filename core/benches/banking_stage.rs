@@ -17,7 +17,7 @@ use solana_core::entry::next_hash;
 use solana_core::entry::Entry;
 use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
 use solana_core::packet::to_packets_chunked;
-use solana_core::poh_recorder::WorkingBankEntries;
+use solana_core::poh_recorder::WorkingBankEntry;
 use solana_core::service::Service;
 use solana_core::test_tx::test_tx;
 use solana_runtime::bank::Bank;
@@ -38,15 +38,12 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
 
-fn check_txs(receiver: &Arc<Receiver<WorkingBankEntries>>, ref_tx_count: usize) {
+fn check_txs(receiver: &Arc<Receiver<WorkingBankEntry>>, ref_tx_count: usize) {
     let mut total = 0;
     let now = Instant::now();
     loop {
-        let entries = receiver.recv_timeout(Duration::new(1, 0));
-        if let Ok((_, entries)) = entries {
-            for (entry, _) in &entries {
-                total += entry.transactions.len();
-            }
+        if let Ok((_bank, (entry, _tick_height))) = receiver.recv_timeout(Duration::new(1, 0)) {
+            total += entry.transactions.len();
         }
         if total >= ref_tx_count {
             break;
