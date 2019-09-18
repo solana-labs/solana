@@ -1768,7 +1768,7 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
-    use crate::shred::{DataShred, Shred};
+    use crate::shred::{DataShred, Shred, ShredInfo};
     use crate::test_tx::test_tx;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::Hash;
@@ -1931,9 +1931,10 @@ mod tests {
             let mut shred = Shred::Data(DataShred::default());
             shred.set_slot(2);
             shred.set_index(1);
+            let shred_info = ShredInfo::new_from_shred(&shred);
 
             blocktree
-                .insert_shreds(vec![shred], None)
+                .insert_shreds(vec![shred_info], None)
                 .expect("Expect successful ledger write");
 
             let rv = ClusterInfo::run_window_request(
@@ -2008,10 +2009,10 @@ mod tests {
             assert!(rv.is_empty());
 
             // Create slots 1, 2, 3 with 5 blobs apiece
-            let (blobs, _) = make_many_slot_entries(1, 3, 5);
+            let (shreds, _) = make_many_slot_entries(1, 3, 5);
 
             blocktree
-                .insert_shreds(blobs, None)
+                .insert_shreds(shreds, None)
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset

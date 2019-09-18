@@ -7,7 +7,7 @@ use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::shred::Shred;
+use crate::shred::ShredInfo;
 use crate::streamer::{PacketReceiver, PacketSender};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rayon::ThreadPool;
@@ -28,8 +28,7 @@ pub const NUM_THREADS: u32 = 10;
 /// drop blobs that are from myself or not from the correct leader for the
 /// blob's slot
 pub fn should_retransmit_and_persist(
-    shred: &Shred,
-    shred_buf: &[u8],
+    shred: &ShredInfo,
     bank: Option<Arc<Bank>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     my_pubkey: &Pubkey,
@@ -46,7 +45,7 @@ pub fn should_retransmit_and_persist(
         } else if !blocktree::verify_shred_slots(shred.slot(), shred.parent(), root) {
             inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
             false
-        } else if !shred.fast_verify(&shred_buf, &leader_id) {
+        } else if !shred.verify(&leader_id) {
             inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
             false
         } else {
@@ -68,7 +67,7 @@ fn recv_window<F>(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
 ) -> Result<()>
 where
-    F: Fn(&Shred, &[u8], u64) -> bool,
+    F: Fn(&ShredInfo, u64) -> bool,
     F: Sync,
 {
     let timer = Duration::from_millis(200);
@@ -87,9 +86,8 @@ where
             .par_iter_mut()
             .enumerate()
             .filter_map(|(i, packet)| {
-                if let Ok(s) = bincode::deserialize(&packet.data) {
-                    let shred: Shred = s;
-                    if shred_filter(&shred, &packet.data, last_root) {
+                if let Ok(shred) = ShredInfo::new_from_serialized_shred(packet.data.to_vec()) {
+                    if shred_filter(&shred, last_root) {
                         packet.meta.slot = shred.slot();
                         packet.meta.seed = shred.seed();
                         Some((shred, i))
@@ -179,7 +177,7 @@ impl WindowService {
     ) -> WindowService
     where
         F: 'static
-            + Fn(&Pubkey, &Shred, &[u8], Option<Arc<Bank>>, u64) -> bool
+            + Fn(&Pubkey, &ShredInfo, Option<Arc<Bank>>, u64) -> bool
             + std::marker::Send
             + std::marker::Sync,
     {
@@ -223,11 +221,10 @@ impl WindowService {
                         &id,
                         &r,
                         &retransmit,
-                        |shred, shred_buf, last_root| {
+                        |shred, last_root| {
                             shred_filter(
                                 &id,
                                 shred,
-                                shred_buf,
                                 bank_forks
                                     .as_ref()
                                     .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
@@ -308,13 +305,13 @@ mod test {
         slot: u64,
         parent: u64,
         keypair: &Arc<Keypair>,
-    ) -> Vec<Shred> {
+    ) -> Vec<ShredInfo> {
         let mut shredder =
             Shredder::new(slot, parent, 0.0, keypair, 0).expect("Failed to create entry shredder");
         bincode::serialize_into(&mut shredder, &entries)
             .expect("Expect to write all entries to shreds");
         shredder.finalize_slot();
-        shredder.shred_tuples.into_iter().map(|(s, _)| s).collect()
+        shredder.shred_tuples.into_iter().map(|(_, s)| s).collect()
     }
 
     #[test]
@@ -350,21 +347,10 @@ mod test {
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         let mut shreds = local_entries_to_shred(vec![Entry::default()], 0, 0, &leader_keypair);
-        let shred_bufs: Vec<_> = shreds
-            .iter()
-            .map(|s| bincode::serialize(s).unwrap())
-            .collect();
 
         // with a Bank for slot 0, blob continues
         assert_eq!(
-            should_retransmit_and_persist(
-                &shreds[0],
-                &shred_bufs[0],
-                Some(bank.clone()),
-                &cache,
-                &me_id,
-                0,
-            ),
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0,),
             true
         );
 
@@ -379,14 +365,7 @@ mod test {
         // with a Bank and no idea who leader is, blob gets thrown out
         shreds[0].set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
         assert_eq!(
-            should_retransmit_and_persist(
-                &shreds[0],
-                &shred_bufs[0],
-                Some(bank.clone()),
-                &cache,
-                &me_id,
-                0
-            ),
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0),
             false
         );
 
@@ -395,14 +374,7 @@ mod test {
         let shreds =
             local_entries_to_shred(vec![Entry::default()], slot, slot - 1, &leader_keypair);
         assert_eq!(
-            should_retransmit_and_persist(
-                &shreds[0],
-                &shred_bufs[0],
-                Some(bank.clone()),
-                &cache,
-                &me_id,
-                slot
-            ),
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot),
             false
         );
 
@@ -411,14 +383,7 @@ mod test {
         let shreds =
             local_entries_to_shred(vec![Entry::default()], slot + 1, slot - 1, &leader_keypair);
         assert_eq!(
-            should_retransmit_and_persist(
-                &shreds[0],
-                &shred_bufs[0],
-                Some(bank.clone()),
-                &cache,
-                &me_id,
-                slot
-            ),
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot),
             false
         );
 
@@ -454,7 +419,7 @@ mod test {
             &exit,
             RepairStrategy::RepairRange(RepairSlotRange { start: 0, end: 0 }),
             &Arc::new(LeaderScheduleCache::default()),
-            |_, _, _, _, _| true,
+            |_, _, _, _| true,
         );
         window
     }
@@ -468,10 +433,9 @@ mod test {
         let (shreds, _) = make_many_slot_entries(0, 5, 10);
         let packets: Vec<_> = shreds
             .into_iter()
-            .map(|s| {
+            .map(|mut s| {
                 let mut p = Packet::default();
-                p.data
-                    .copy_from_slice(&mut bincode::serialize(&s).unwrap().as_ref());
+                p.data.copy_from_slice(&mut s.shred);
                 p
             })
             .collect();

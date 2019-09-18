@@ -872,7 +872,7 @@ mod test {
     use crate::entry;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::replay_stage::ReplayStage;
-    use crate::shred::Shred;
+    use crate::shred::ShredInfo;
     use solana_runtime::genesis_utils::GenesisBlockInfo;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -1022,7 +1022,7 @@ mod test {
     // marked as dead. Returns the error for caller to verify.
     fn check_dead_fork<F>(shred_to_insert: F) -> Result<()>
     where
-        F: Fn(&Hash, u64) -> Vec<Shred>,
+        F: Fn(&Hash, u64) -> Vec<ShredInfo>,
     {
         let ledger_path = get_tmp_ledger_path!();
         let res = {
