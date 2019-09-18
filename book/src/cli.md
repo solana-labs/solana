@@ -80,7 +80,7 @@ $ solana pay <PUBKEY> 123 \
 // Return
 {signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
 ```
-*`require-timestamp-from` is optional. If not provided, the transaction will expect a timestamp signed by this wallet's secret key*
+*`require-timestamp-from` is optional. If not provided, the transaction will expect a timestamp signed by this wallet's private key*
 
 #### Authorized Transfer
 
@@ -630,7 +630,7 @@ OPTIONS:
         --require-signature-from <PUBKEY>...    Any third party signatures required to unlock the lamports
 
 ARGS:
-    <PUBKEY>    The pubkey of recipient
+    <PUBKEY>    The public key of recipient
     <AMOUNT>    The amount to send (default unit SOL)
     <unit>      Specify unit to use for request [possible values: SOL, lamports]
 ```
@@ -694,7 +694,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <PUBKEY>        The pubkey of recipient
+    <PUBKEY>        The public key of recipient
     <PROCESS ID>    The process id of the transfer to authorize
 ```
 
@@ -716,7 +716,7 @@ OPTIONS:
     -k, --keypair <PATH>     /path/to/id.json
 
 ARGS:
-    <PUBKEY>        The pubkey of recipient
+    <PUBKEY>        The public key of recipient
     <PROCESS ID>    The process id of the transfer to unlock
 ```
 
@@ -756,7 +756,7 @@ OPTIONS:
     -o, --output <FILE>     Write the account data to this file
 
 ARGS:
-    <ACCOUNT PUBKEY>    Account pubkey
+    <ACCOUNT PUBKEY>    Account public key
 ```
 
 ```manpage
@@ -776,7 +776,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STAKE ACCOUNT PUBKEY>    Stake account pubkey
+    <STAKE ACCOUNT PUBKEY>    Stake account public key
 ```
 
 ```manpage
@@ -796,7 +796,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT PUBKEY>    Storage account pubkey
+    <STORAGE ACCOUNT PUBKEY>    Storage account public key
 ```
 
 ```manpage
@@ -816,7 +816,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <VOTE ACCOUNT PUBKEY>    Vote account pubkey
+    <VOTE ACCOUNT PUBKEY>    Vote account public key
 ```
 
 ```manpage

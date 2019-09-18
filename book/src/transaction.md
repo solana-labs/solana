@@ -2,26 +2,24 @@
 
 Transactions encode lists of instructions that are executed
 sequentially, and only committed if all the instructions complete
-successfully. All account states are reverted upon the failure of a
-transaction. Each Transaction details the accounts used, including which
+successfully. All account updates are reverted upon the failure of a
+transaction. Each transaction details the accounts used, including which
 must sign and which are credit only, a recent blockhash, the
 instructions, and any signatures.
 
 ## Accounts and Signatures
 
-Each transaction explicitly lists all accounts that it needs access to.
-This includes accounts that are transferring tokens, accounts whose user
-data is being modified, and the program accounts that are being called
-by the instructions. Each account that is not an executable program can
-be marked as a requiring a signature and/or as credit only. All accounts
-marked as signers must have a valid signature in the transaction's list
-of signatures before the transaction is considered valid. Any accounts
-marked as credit only may only have their token value increased, and
-their user data is read only. Accounts are locked by the runtime,
-ensuring that they are not modified by a concurrent program while the
-transaction is running. Credit only accounts can safely be shared, so
-the runtime will allow multiple concurrent credit only locks on an
-account.
+Each transaction explicitly lists all account public keys referenced by the
+transaction's instructions. A subset of those public keys are each accompanied
+by a transaction signature. Those signatures signal on-chain programs that
+the account holder has authorized the transaction. Typically, the program
+uses the authorization to permit debiting the account or modifying its
+data.
+
+The transaction also marks some accounts as *credit-only accounts*. The
+runtime permits credit-only accounts to be credited concurrently. If a
+program attempts to debit a credit-only account or modify its account
+data, the transaction is rejected by the runtime.
 
 ## Recent Blockhash
 

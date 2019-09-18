@@ -13,7 +13,7 @@ buggy and malicious nodes.
 
 Before starting any fullnodes, one first needs to create a *genesis block*.
 The block contains entries referencing two public keys, a *mint* and a
-*bootstrap leader*. The fullnode holding the bootstrap leader's secret key is
+*bootstrap leader*. The fullnode holding the bootstrap leader's private key is
 responsible for appending the first entries to the ledger. It initializes its
 internal state with the mint's account. That account will hold the number of
 native tokens defined by the genesis block. The second fullnode then contacts

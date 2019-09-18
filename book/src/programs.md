@@ -48,18 +48,30 @@ read its data and credit the account.
 
 In the same way that a Linux user uses a path to look up a file, a Solana
 client uses public keys to look up accounts. To create an account, the client
-generates a *keypair* and registers its public key using the CreateAccount
-instruction. Once registered, transactions reference account keys to grant
-programs access to accounts. The runtime grants programs read access by
-default. To grant write access, the client must either assign the account to a
-program or sign the transaction using the keypair's *secret key*. Since only
-the holder of the secret key can produce valid signatures matching the
-account's public key, the runtime recognizes the signature as authorization to
-modify account data or debit the account.
+generates a *keypair* and registers its public key using the `CreateAccount`
+instruction. The account created by `CreateAccount` is called a *system
+account* and is owned by a built-in program called the System program. The
+System program allows clients to transfer lamports and assign account
+ownership.
+
+The runtime only permits the owner to debit the account or modify its data. The
+program then defines additional rules for whether the client can modify
+accounts it owns. In the case of the System program, it allows users to
+transfer lamports by recognizing transaction signatures. If it sees the client
+signed the transaction using the keypair's *private key*, it knows the client
+authorized the token transfer.
 
 After the runtime executes each of the transaction's instructions, it uses the
-account metadata and transaction signatures to verify that none of the access
-rules were violated. If a program violates an access rule, the runtime discards
-all account changes made by all instructions and marks the transaction as
-failed.
+account metadata to verify that none of the access rules were violated. If a
+program violates an access rule, the runtime discards all account changes made
+by all instructions and marks the transaction as failed.
 
+## Smart Contracts
+
+Programs don't always require transaction signatures, as the System program
+does. Instead, the program may manage *smart contracts*. A smart contract is a
+set of constraints that once satisfied, signal to a program that a token
+transfer or account update is permitted. For example, one could use the Budget
+program to create a smart contract that authorizes a token transfer only after
+some date. Once evidence that the date has past, the contract progresses, and
+token transfer completes.
