@@ -54,6 +54,7 @@
   - [solana CLI](cli.md)
 
 - [Accepted Design Proposals](proposals.md)
+  - [Account Authority](account-authority.md)
   - [Ledger Replication](ledger-replication-to-implement.md)
   - [Secure Vote Signing](vote-signing-to-implement.md)
   - [Staking Rewards](staking-rewards.md)
