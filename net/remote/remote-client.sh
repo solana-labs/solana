@@ -50,7 +50,7 @@ esac
 case $clientToRun in
 solana-bench-tps)
   net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/solana-client-accounts/bench-tps"$clientIndex".yml ./client-accounts.yml
+    "$entrypointIp":~/solana/config/bench-tps"$clientIndex".yml ./client-accounts.yml
   clientCommand="\
     solana-bench-tps \
       --entrypoint $entrypointIp:8001 \
@@ -65,7 +65,7 @@ solana-bench-tps)
 solana-bench-exchange)
   solana-keygen new -f -o bench.keypair
   net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/solana-client-accounts/bench-exchange"$clientIndex".yml ./client-accounts.yml
+    "$entrypointIp":~/solana/config/bench-exchange"$clientIndex".yml ./client-accounts.yml
   clientCommand="\
     solana-bench-exchange \
       --entrypoint $entrypointIp:8001 \
@@ -97,11 +97,11 @@ echo "$(date) | $0 $*" >> client.log
 (
   sudo SOLANA_METRICS_CONFIG="$SOLANA_METRICS_CONFIG" scripts/oom-monitor.sh
 ) > oom-monitor.log 2>&1 &
-echo $! > oom-monitor.pid
+echo \$! > oom-monitor.pid
 scripts/fd-monitor.sh > fd-monitor.log 2>&1 &
-echo $! > fd-monitor.pid
+echo \$! > fd-monitor.pid
 scripts/net-stats.sh  > net-stats.log 2>&1 &
-echo $! > net-stats.pid
+echo \$! > net-stats.pid
 ! tmux list-sessions || tmux kill-session
 
 tmux new -s "$clientToRun" -d "
