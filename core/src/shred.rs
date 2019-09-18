@@ -341,14 +341,17 @@ pub struct Shredder {
     signer: Arc<Keypair>,
     pub shreds: Vec<Shred>,
     fec_set_shred_start: usize,
-    active_shred: DataShred,
+    active_shred: Vec<u8>,
+    active_shred_header: DataShredHeader,
     active_offset: usize,
 }
 
 impl Write for Shredder {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let written = self.active_offset;
-        let (slice_len, capacity) = self.active_shred.write_at(written, buf);
+        let offset = self.active_offset + *SIZE_OF_DATA_SHRED_HEADER;
+        let slice_len = std::cmp::min(buf.len(), PACKET_DATA_SIZE - offset);
+        self.active_shred[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
+        let capacity = PACKET_DATA_SIZE - offset - slice_len;
 
         if buf.len() > slice_len || capacity == 0 {
             self.finalize_data_shred();
@@ -399,11 +402,11 @@ impl Shredder {
                 ),
             )))
         } else {
-            let mut data_shred = DataShred::default();
-            data_shred.header.data_header.slot = slot;
-            data_shred.header.data_header.index = index;
-            data_shred.header.parent_offset = (slot - parent) as u16;
-            let active_shred = data_shred;
+            let mut header = DataShredHeader::default();
+            header.data_header.slot = slot;
+            header.data_header.index = index;
+            header.parent_offset = (slot - parent) as u16;
+            let active_shred = vec![0; PACKET_DATA_SIZE];
             Ok(Shredder {
                 slot,
                 index,
@@ -414,6 +417,7 @@ impl Shredder {
                 shreds: vec![],
                 fec_set_shred_start: 0,
                 active_shred,
+                active_shred_header: header,
                 active_offset: 0,
             })
         }
@@ -447,25 +451,26 @@ impl Shredder {
 
     /// Finalize a data shred. Update the shred index for the next shred
     fn finalize_data_shred(&mut self) {
-        let mut data = Vec::with_capacity(PACKET_DATA_SIZE);
-        bincode::serialize_into(&mut data, &self.active_shred).expect("Failed to serialize shred");
-
         self.active_offset = 0;
         self.index += 1;
 
-        let mut shred = self.new_data_shred();
-        std::mem::swap(&mut shred, &mut self.active_shred);
-        let shred_info = Shred::new(shred.header, data);
-        self.shreds.push(shred_info);
-    }
+        // Swap header
+        let mut header = DataShredHeader::default();
+        header.data_header.slot = self.slot;
+        header.data_header.index = self.index;
+        header.parent_offset = self.parent_offset;
+        std::mem::swap(&mut header, &mut self.active_shred_header);
 
-    /// Creates a new data shred
-    fn new_data_shred(&self) -> DataShred {
-        let mut data_shred = DataShred::default();
-        data_shred.header.data_header.slot = self.slot;
-        data_shred.header.data_header.index = self.index;
-        data_shred.header.parent_offset = self.parent_offset;
-        data_shred
+        // Swap shred buffer
+        let mut shred_buf = vec![0; PACKET_DATA_SIZE];
+        std::mem::swap(&mut shred_buf, &mut self.active_shred);
+
+        let mut wr = io::Cursor::new(&mut shred_buf[..*SIZE_OF_DATA_SHRED_HEADER]);
+        bincode::serialize_into(&mut wr, &header)
+            .expect("Failed to write header into shred buffer");
+
+        let shred = Shred::new(header, shred_buf);
+        self.shreds.push(shred);
     }
 
     pub fn new_coding_shred(
@@ -546,12 +551,12 @@ impl Shredder {
     /// If there's an active data shred, morph it into the final shred
     /// If the current active data shred is first in slot, finalize it and create a new shred
     fn make_final_data_shred(&mut self, last_in_slot: u8) {
-        if self.active_shred.header.data_header.index == 0 {
+        if self.active_shred_header.data_header.index == 0 {
             self.finalize_data_shred();
         }
-        self.active_shred.header.flags |= DATA_COMPLETE_SHRED;
+        self.active_shred_header.flags |= DATA_COMPLETE_SHRED;
         if last_in_slot == LAST_SHRED_IN_SLOT {
-            self.active_shred.header.flags |= LAST_SHRED_IN_SLOT;
+            self.active_shred_header.flags |= LAST_SHRED_IN_SLOT;
         }
         self.finalize_data_shred();
         self.sign_unsigned_shreds_and_generate_codes();
@@ -746,7 +751,7 @@ impl Shredder {
         data_shred_bufs[..num_data]
             .iter()
             .flat_map(|data| {
-                let offset = *SIZE_OF_EMPTY_DATA_SHRED;
+                let offset = *SIZE_OF_DATA_SHRED_HEADER;
                 data[offset as usize..].iter()
             })
             .cloned()
