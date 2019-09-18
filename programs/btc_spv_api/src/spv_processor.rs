@@ -174,23 +174,17 @@ mod test {
         let mut headerbytes = hex::encode(&testdatabytes[0..]);
         let hbc = &headerbytes[0..80];
 
-        let i: usize = 5;
-
         let mut txdata = &testdatabytes[80..];
 
         let vilen = measure_variable_int(&txdata[0..9]).unwrap();
         let txnum = decode_variable_int(&txdata[0..9]).unwrap();
 
         txdata = &txdata[vilen..];
-        let tx = Transaction::new(txdata.to_vec());
-        println!("tx_num: {}", txnum);
-        println!("tx_bytes_len: {}", tx.bytes_len);
-        println!("inputs_num: {}", tx.inputs_num);
-        println!("outputs_num: {}", tx.outputs_num);
+        let tx = BitcoinTransaction::new(txdata.to_vec());
+
         assert_eq!(tx.inputs.len(), 1);
-
+        assert_eq!(txnum, 22);
         assert_eq!(tx.outputs.len(), 1);
-
         assert_eq!(tx.version, 1);
     }
 }

@@ -95,7 +95,7 @@ impl BlockHeader {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Transaction {
+pub struct BitcoinTransaction {
     pub inputs: Vec<Input>,
 
     pub inputs_num: u64,
@@ -106,12 +106,12 @@ pub struct Transaction {
     //output utxos
     pub version: u32,
     //bitcoin network version
-    pub locktime: u32,
+    pub lock_time: u32,
 
     pub bytes_len: usize,
 }
 
-impl Transaction {
+impl BitcoinTransaction {
     pub fn new(txbytes: Vec<u8>) -> Self {
         let mut ver: [u8; 4] = [0; 4];
         ver.copy_from_slice(&txbytes[..4]);
@@ -144,24 +144,24 @@ impl Transaction {
 
         let mut lt: [u8; 4] = [0; 4];
         lt.copy_from_slice(&txbytes[outputstart..4 + outputstart]);
-        let locktime = u32::from_le_bytes(lt);
+        let lock_time = u32::from_le_bytes(lt);
 
         assert_eq!(inputs.len(), inputs_num as usize);
         assert_eq!(outputs.len(), outputs_num as usize);
 
-        Transaction {
+        BitcoinTransaction {
             inputs,
             inputs_num,
             outputs,
             outputs_num,
             version,
-            locktime,
+            lock_time,
             bytes_len: 4 + outputstart,
         }
     }
-    pub fn hexnew(hex: String) -> Result<Transaction, SpvError> {
+    pub fn hexnew(hex: String) -> Result<BitcoinTransaction, SpvError> {
         match hex::decode(&hex) {
-            Ok(txbytes) => Ok(Transaction::new(txbytes)),
+            Ok(txbytes) => Ok(BitcoinTransaction::new(txbytes)),
             Err(e) => Err(SpvError::ParseError),
         }
     }
@@ -169,7 +169,7 @@ impl Transaction {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Input {
-    pub itype: InputType,
+    pub input_type: InputType,
     // Type of the input
     pub position: u32,
     // position of the tx in its Block
@@ -204,10 +204,10 @@ impl Input {
         let mut sequence: [u8; 4] = [0; 4];
         sequence.copy_from_slice(&ibytes[script_end..input_end]);
 
-        let itype: InputType = InputType::NONE; // testing measure
+        let input_type: InputType = InputType::NONE; // testing measure
 
         Self {
-            itype,
+            input_type,
             position,
             txhash,
             script_length,
@@ -222,7 +222,7 @@ impl Input {
         let seq: [u8; 4] = [0; 4];
 
         Self {
-            itype: InputType::NONE,
+            input_type: InputType::NONE,
             position: 55,
             txhash: txh,
             script_length: 45,
@@ -243,7 +243,7 @@ pub enum InputType {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Output {
-    pub otype: OutputType,
+    pub output_type: OutputType,
     // type of the output
     pub value: u64,
     // amount of btc in sats
@@ -268,10 +268,10 @@ impl Output {
 
         let script = obytes[script_start..script_end].to_vec();
 
-        let otype = OutputType::WPKH; // temporary hardcode
+        let output_type = OutputType::WPKH; // temporary hardcode
 
         Self {
-            otype,
+            output_type,
             value,
             script,
             script_length,
@@ -280,12 +280,12 @@ impl Output {
     }
 
     fn default() -> Self {
-        let txh: [u8; 32] = [0; 32];
+        let transaction_hash: [u8; 32] = [0; 32];
 
         Self {
-            otype: OutputType::WPKH,
+            output_type: OutputType::WPKH,
             value: 55,
-            script: txh.to_vec(),
+            script: transaction_hash.to_vec(),
             script_length: 45,
             bytes_len: 123,
         }
@@ -373,7 +373,7 @@ pub struct Proof {
     // chain of bitcoin headers provifing context for the proof
     pub headers: HeaderChain,
     // transaction associated with the Proof
-    pub transaction: Transaction,
+    pub transaction: BitcoinTransaction,
     // public key of the request this proof corresponds to
     pub request: Pubkey,
 }

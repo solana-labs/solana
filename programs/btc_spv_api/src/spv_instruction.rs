@@ -57,7 +57,7 @@ pub fn submit_proof(
     submitter: &Pubkey,
     proof: MerkleProof,
     headers: HeaderChain,
-    transaction: Transaction,
+    transaction: BitcoinTransaction,
     request: &Pubkey,
 ) -> Instruction {
     let account_meta = vec![
