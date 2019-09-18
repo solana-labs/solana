@@ -5,6 +5,7 @@
 # Utilities for working with Colo instances
 #
 
+declare COLO_TODO_PARALLELIZE=false
 
 __cloud_colo_here="$(dirname "$BASH_SOURCE")"
 source "${__cloud_colo_here}/colo-utils.sh"
@@ -259,5 +260,13 @@ cloud_FetchFile() {
 }
 
 cloud_StatusAll() {
-  colo_print_availability
+  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME
+  if ! $COLO_TODO_PARALLELIZE; then
+    colo_load_resources
+    colo_load_availability false
+  fi
+  for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
+    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
+    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s inst=%s\n" "$HOST_NAME" "$IP" "$PRIV_IP" "$STATUS" "$ZONE" "$INSTNAME"
+  done
 }

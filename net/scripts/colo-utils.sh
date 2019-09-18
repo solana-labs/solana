@@ -2,8 +2,6 @@
 
 declare -r SOLANA_LOCK_FILE="/home/solana/.solana.lock"
 
-declare COLO_TODO_PARALLELIZE=false
-
 __colo_here="$(dirname "$BASH_SOURCE")"
 # Load colo resource specs
 export COLO_RES_N=0
@@ -58,18 +56,6 @@ colo_load_availability() {
     done < <(colo_node_status_all | sort -t $'\v' -k1)
     COLO_RES_AVAILABILITY_CACHED=true
   fi
-}
-
-colo_print_availability() {
-  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME
-  if ! $COLO_TODO_PARALLELIZE; then
-    colo_load_resources
-    colo_load_availability false
-  fi
-  for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
-    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
-    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s inst=%s\n" "$HOST_NAME" "$IP" "$PRIV_IP" "$STATUS" "$ZONE" "$INSTNAME"
-  done
 }
 
 colo_res_index_from_ip() {
