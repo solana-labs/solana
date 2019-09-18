@@ -10,35 +10,35 @@ declare -r SOLANA_LOCK_FILE="/home/solana/.solana.lock"
 declare __COLO_TODO_PARALLELIZE=false
 
 # Load colo resource specs
-export N_RES=0
-export RES_HOSTNAME=()
-export RES_IP=()
-export RES_IP_PRIV=()
-export RES_CPU_CORES=()
-export RES_RAM_GB=()
-export RES_STORAGE_TYPE=()
-export RES_STORAGE_CAP_GB=()
-export RES_ADD_STORAGE_TYPE=()
-export RES_ADD_STORAGE_CAP_GB=()
-export RES_GPUS=()
+export __COLO_RES_N=0
+export __COLO_RES_HOSTNAME=()
+export __COLO_RES_IP=()
+export __COLO_RES_IP_PRIV=()
+export __COLO_RES_CPU_CORES=()
+export __COLO_RES_RAM_GB=()
+export __COLO_RES_STORAGE_TYPE=()
+export __COLO_RES_STORAGE_CAP_GB=()
+export __COLO_RES_ADD_STORAGE_TYPE=()
+export __COLO_RES_ADD_STORAGE_CAP_GB=()
+export __COLO_RES_MACHINE=()
 
 export __COLO_RESOURCES_LOADED=false
-load_resources() {
+__colo_load_resources() {
   if ! ${__COLO_RESOURCES_LOADED}; then
     while read -r LINE; do
       IFS='|' read -r H I PI C M ST SC AST ASC G Z <<<"$LINE"
-      RES_HOSTNAME+=( "$H" )
-      RES_IP+=( "$I" )
-      RES_IP_PRIV+=( "$PI" )
-      RES_CPU_CORES+=( "$C" )
-      RES_RAM_GB+=( "$M" )
-      RES_STORAGE_TYPE+=( "$ST" )
-      RES_STORAGE_CAP_GB+=( "$SC" )
-      RES_ADD_STORAGE_TYPE+=( "$(tr ',' $'\v' <<<"$AST")" )
-      RES_ADD_STORAGE_CAP_GB+=( "$(tr ',' $'\v' <<<"$ASC")" )
-      RES_GPUS+=( "$G" )
-      RES_ZONE+=( "$Z" )
-      N_RES=$((N_RES+1))
+      __COLO_RES_HOSTNAME+=( "$H" )
+      __COLO_RES_IP+=( "$I" )
+      __COLO_RES_IP_PRIV+=( "$PI" )
+      __COLO_RES_CPU_CORES+=( "$C" )
+      __COLO_RES_RAM_GB+=( "$M" )
+      __COLO_RES_STORAGE_TYPE+=( "$ST" )
+      __COLO_RES_STORAGE_CAP_GB+=( "$SC" )
+      __COLO_RES_ADD_STORAGE_TYPE+=( "$(tr ',' $'\v' <<<"$AST")" )
+      __COLO_RES_ADD_STORAGE_CAP_GB+=( "$(tr ',' $'\v' <<<"$ASC")" )
+      __COLO_RES_MACHINE+=( "$G" )
+      __COLO_RES_ZONE+=( "$Z" )
+      __COLO_RES_N=$((__COLO_RES_N+1))
     done < <(sort -nt'|' -k10,10 "$here"/colo_nodes)
     __COLO_RESOURCES_LOADED=true
   fi
@@ -46,7 +46,7 @@ load_resources() {
 
 declare __COLO_RES_AVAILABILITY_CACHED=false
 declare -ax __COLO_RES_AVAILABILITY
-load_availability() {
+__colo_load_availability() {
   declare USE_CACHE=${1:-${__COLO_RES_AVAILABILITY_CACHED}}
   declare LINE PRIV_IP STATUS LOCK_USER I IP HOST_NAME ZONE INSTNAME
   if ! $USE_CACHE; then
@@ -54,21 +54,21 @@ load_availability() {
     __COLO_RES_REQUISITIONED=()
     while read -r LINE; do
       IFS=$'\v' read -r PRIV_IP STATUS LOCK_USER INSTNAME <<< "$LINE"
-      I=$(res_index_from_ip "$PRIV_IP")
-      IP="${RES_IP[$I]}"
-      HOST_NAME="${RES_HOSTNAME[$I]}"
-      ZONE="${RES_ZONE[$I]}"
+      I=$(__colo_res_index_from_ip "$PRIV_IP")
+      IP="${__COLO_RES_IP[$I]}"
+      HOST_NAME="${__COLO_RES_HOSTNAME[$I]}"
+      ZONE="${__COLO_RES_ZONE[$I]}"
       __COLO_RES_AVAILABILITY+=( "$(echo -e "$HOST_NAME\v$IP\v$PRIV_IP\v$STATUS\v$ZONE\v$LOCK_USER\v$INSTNAME")" )
-    done < <(node_status_all | sort -t $'\v' -k1)
+    done < <(__colo_node_status_all | sort -t $'\v' -k1)
     __COLO_RES_AVAILABILITY_CACHED=true
   fi
 }
 
-print_availability() {
+__colo_print_availability() {
   declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME
   if ! $__COLO_TODO_PARALLELIZE; then
-    load_resources
-    load_availability false
+    __colo_load_resources
+    __colo_load_availability false
   fi
   for AVAIL in "${__COLO_RES_AVAILABILITY[@]}"; do
     IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
@@ -76,10 +76,10 @@ print_availability() {
   done
 }
 
-res_index_from_ip() {
+__colo_res_index_from_ip() {
   declare IP="$1"
-  for i in "${!RES_IP_PRIV[@]}"; do
-    if [ "$IP" = "${RES_IP_PRIV[$i]}" ]; then
+  for i in "${!__COLO_RES_IP_PRIV[@]}"; do
+    if [ "$IP" = "${__COLO_RES_IP_PRIV[$i]}" ]; then
       echo "$i"
       return 0
     fi
@@ -87,7 +87,7 @@ res_index_from_ip() {
   return 1
 }
 
-instance_run() {
+__colo_instance_run() {
   declare IP=$1
   declare CMD="$2"
   declare OUT
@@ -99,27 +99,27 @@ instance_run() {
   return $RC
 }
 
-instance_run_foreach() {
+__colo_instance_run_foreach() {
   declare CMD
   if test 1 -eq $#; then
     CMD="$1"
     declare IPS=()
-    for I in $(seq 0 $((N_RES-1))); do
-      IPS+=( "${RES_IP_PRIV[$I]}" )
+    for I in $(seq 0 $((__COLO_RES_N-1))); do
+      IPS+=( "${__COLO_RES_IP_PRIV[$I]}" )
     done
     set "${IPS[@]}" "$CMD"
   fi
   CMD="${*: -1}"
   for I in $(seq 0 $(($#-2))); do
     declare IP="$1"
-    instance_run "$IP" "$CMD" &
+    __colo_instance_run "$IP" "$CMD" &
     shift
   done
 
   wait
 }
 
-colo_whoami() {
+__colo_whoami() {
   declare ME LINE SOL_USER
   while read -r LINE; do
     declare IP RC
@@ -131,19 +131,19 @@ colo_whoami() {
         echo "Found conflicting username \"$SOL_USER\" on $IP, expected \"$ME\"" 1>&2
       fi
     fi
-  done < <(instance_run_foreach "[ -n \"\$SOLANA_USER\" ] && echo \"\$SOLANA_USER\"")
+  done < <(__colo_instance_run_foreach "[ -n \"\$SOLANA_USER\" ] && echo \"\$SOLANA_USER\"")
   echo "$ME"
 }
 
-__SOLANA_USER=""
-get_solana_user() {
-  if [ -z "$__SOLANA_USER" ]; then
-    __SOLANA_USER=$(colo_whoami)
+__COLO_SOLANA_USER=""
+__colo_get_solana_user() {
+  if [ -z "$__COLO_SOLANA_USER" ]; then
+    __COLO_SOLANA_USER=$(__colo_whoami)
   fi
-  echo "$__SOLANA_USER"
+  echo "$__COLO_SOLANA_USER"
 }
 
-_node_status_script() {
+___colo_node_status_script() {
   cat <<EOF
   exec 3>&2
   exec 2>/dev/null  # Suppress stderr as the next call to exec fails most of
@@ -155,7 +155,7 @@ _node_status_script() {
 EOF
 }
 
-_node_status_result_normalize() {
+___colo_node_status_result_normalize() {
   declare IP RC US BY INSTNAME
   declare ST="DOWN"
   IFS=$'\v' read -r IP RC US INSTNAME <<< "$1"
@@ -170,30 +170,30 @@ _node_status_result_normalize() {
   echo -e $"$IP\v$ST\v$BY\v$INSTNAME"
 }
 
-node_status() {
+__colo_node_status() {
   declare IP="$1"
-  _node_status_result_normalize "$(instance_run "$IP" "$(_node_status_script)")"
+  ___colo_node_status_result_normalize "$(__colo_instance_run "$IP" "$(___colo_node_status_script)")"
 }
 
-node_status_all() {
+__colo_node_status_all() {
   declare LINE
   while read -r LINE; do
-    _node_status_result_normalize "$LINE"
-  done < <(instance_run_foreach "$(_node_status_script)")
+    ___colo_node_status_result_normalize "$LINE"
+  done < <(__colo_instance_run_foreach "$(___colo_node_status_script)")
 }
 
 # TODO: As part of __COLO_TOOD_PARALLELIZE this list will need to be maintained
 # in a lockfile to work around `cloud_CreateInstance` being called in the
 # background for fullnodes
 export __COLO_RES_REQUISITIONED=()
-requisition_node() {
+__colo_node_requisition() {
   declare IP=$1
   declare INSTANCE_NAME=$2
 
-  declare INDEX=$(res_index_from_ip "$IP")
+  declare INDEX=$(__colo_res_index_from_ip "$IP")
   declare RC=false
 
-  instance_run "$IP" "$(
+  __colo_instance_run "$IP" "$(
 cat <<EOF
   if [ ! -f "$SOLANA_LOCK_FILE" ]; then
     exec 9>>"$SOLANA_LOCK_FILE"
@@ -239,7 +239,7 @@ EOF
   $RC
 }
 
-node_is_requisitioned() {
+__colo_node_is_requisitioned() {
   declare INDEX="$1"
   declare REQ
   declare RC=false
@@ -252,7 +252,7 @@ node_is_requisitioned() {
   $RC
 }
 
-machine_types_compatible() {
+__colo_machine_types_compatible() {
   declare MAYBE_MACH="$1"
   declare WANT_MACH="$2"
   declare COMPATIBLE=false
@@ -263,9 +263,9 @@ machine_types_compatible() {
   $COMPATIBLE
 }
 
-free_node() {
+__colo_node_free() {
   declare IP=$1
-  instance_run "$IP" "$(
+  __colo_instance_run "$IP" "$(
 cat <<EOF
   RC=false
   if [ -f "$SOLANA_LOCK_FILE" ]; then
@@ -314,8 +314,8 @@ __cloud_FindInstances() {
   instances=()
 
   if ! $__COLO_TODO_PARALLELIZE; then
-    load_resources
-    load_availability false
+    __colo_load_resources
+    __colo_load_availability false
   fi
   INSTANCES_TEXT="$(
     for AVAIL in "${__COLO_RES_AVAILABILITY[@]}"; do
@@ -383,9 +383,9 @@ cloud_FindInstance() {
 cloud_Initialize() {
   networkName=$1
   zone=$2
-  load_resources
+  __colo_load_resources
   if $__COLO_TODO_PARALLELIZE; then
-    load_availability
+    __colo_load_availability
   fi
 }
 
@@ -443,10 +443,10 @@ cloud_CreateInstances() {
       for RES in "${__COLO_RES_AVAILABILITY[@]}"; do
         IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$RES"
         if [[ "FREE" = "$STATUS" ]]; then
-          INDEX=$(res_index_from_ip "$IP")
-          RES_MACH="${RES_GPUS[$INDEX]}"
-          if machine_types_compatible "$RES_MACH" "$machineType"; then
-            if ! node_is_requisitioned "$INDEX" "${__COLO_RES_REQUISITIONED[*]}"; then
+          INDEX=$(__colo_res_index_from_ip "$IP")
+          RES_MACH="${__COLO_RES_MACHINE[$INDEX]}"
+          if __colo_machine_types_compatible "$RES_MACH" "$machineType"; then
+            if ! __colo_node_is_requisitioned "$INDEX" "${__COLO_RES_REQUISITIONED[*]}"; then
               echo -e "$RES_MACH\v$IP"
             fi
           fi
@@ -469,19 +469,19 @@ cloud_CreateInstances() {
     declare AI=0
     for node in "${nodes[@]}"; do
       IFS=$'\v' read -r _RES_MACH IP <<<"${AVAILABLE[$AI]}"
-      requisition_node "$IP" "$node" >/dev/null
+      __colo_node_requisition "$IP" "$node" >/dev/null
       AI=$((AI+1))
     done
   else
     declare RES_MACH node
     declare RI=0
     declare NI=0
-    while [[ $NI -lt $numNodes && $RI -lt $N_RES ]]; do
+    while [[ $NI -lt $numNodes && $RI -lt $__COLO_RES_N ]]; do
       node="${nodes[$NI]}"
-      RES_MACH="${RES_GPUS[$RI]}"
-      IP="${RES_IP_PRIV[$RI]}"
-      if machine_types_compatible "$RES_MACH" "$machineType"; then
-        if requisition_node "$IP" "$node" >/dev/null; then
+      RES_MACH="${__COLO_RES_MACHINE[$RI]}"
+      IP="${__COLO_RES_IP_PRIV[$RI]}"
+      if __colo_machine_types_compatible "$RES_MACH" "$machineType"; then
+        if __colo_node_requisition "$IP" "$node" >/dev/null; then
           NI=$((NI+1))
         fi
       fi
@@ -499,7 +499,7 @@ cloud_DeleteInstances() {
   declare _INSTNAME IP _PRIV_IP _ZONE
   for instance in "${instances[@]}"; do
     IFS=':' read -r _INSTNAME IP _PRIV_IP _ZONE <<< "$instance"
-    free_node "$IP" >/dev/null
+    __colo_node_free "$IP" >/dev/null
   done
 }
 
@@ -538,5 +538,5 @@ cloud_FetchFile() {
 }
 
 cloud_StatusAll() {
-  print_availability
+  __colo_print_availability
 }
