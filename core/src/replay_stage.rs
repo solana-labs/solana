@@ -156,7 +156,7 @@ impl ReplayStage {
                         &mut progress,
                     );
 
-                    if let Some((_, bank, lockouts, total_staked)) = votable.into_iter().last() {
+                    if let Some((_, bank, _, total_staked)) = votable.into_iter().last() {
                         subscriptions.notify_subscribers(bank.slot(), &bank_forks);
 
                         if let Some(votable_leader) =
@@ -193,7 +193,6 @@ impl ReplayStage {
                             &blocktree,
                             &leader_schedule_cache,
                             &root_bank_sender,
-                            lockouts,
                             total_staked,
                             &lockouts_sender,
                             &snapshot_package_sender,
@@ -415,7 +414,6 @@ impl ReplayStage {
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
-        lockouts: HashMap<u64, StakeLockout>,
         total_staked: u64,
         lockouts_sender: &Sender<ConfidenceAggregationData>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
@@ -455,7 +453,12 @@ impl ReplayStage {
                 Err(e)?;
             }
         }
-        Self::update_confidence_cache(ancestors, tower, lockouts, total_staked, lockouts_sender);
+        Self::update_confidence_cache(
+            Arc::new(vec![1]),
+            bank.clone(),
+            total_staked,
+            lockouts_sender,
+        );
 
         if let Some(ref voting_keypair) = voting_keypair {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
@@ -476,16 +479,14 @@ impl ReplayStage {
     }
 
     fn update_confidence_cache(
-        ancestors: &Arc<HashMap<u64, HashSet<u64>>>,
-        tower: &Tower,
-        lockouts: HashMap<u64, StakeLockout>,
+        ancestors: Arc<Vec<u64>>,
+        bank: Arc<Bank>,
         total_staked: u64,
         lockouts_sender: &Sender<ConfidenceAggregationData>,
     ) {
         if let Err(e) = lockouts_sender.send(ConfidenceAggregationData::new(
-            lockouts,
-            tower.root(),
             ancestors.clone(),
+            bank,
             total_staked,
         )) {
             trace!("lockouts_sender failed: {:?}", e);

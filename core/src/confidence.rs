@@ -1,111 +1,67 @@
-use crate::consensus::StakeLockout;
+use crate::result::{Error, Result};
 use crate::service::Service;
-use std::collections::{HashMap, HashSet};
+use solana_runtime::bank::Bank;
+use solana_vote_api::vote_state::VoteState;
+use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
+use std::time::Duration;
 
-#[derive(Debug, Default, PartialEq)]
-pub struct Confidence {
-    fork_stakes: u64,
-    total_stake: u64,
-    lockouts: u64,
-    stake_weighted_lockouts: u128,
+pub struct BankConfidence {
+    confidence: Vec<u64>,
 }
 
-impl Confidence {
-    pub fn new(fork_stakes: u64, total_stake: u64, lockouts: u64) -> Self {
+impl BankConfidence {
+    pub fn new() -> Self {
         Self {
-            fork_stakes,
-            total_stake,
-            lockouts,
-            stake_weighted_lockouts: 0,
+            confidence: vec![0u64; MAX_LOCKOUT_HISTORY],
         }
     }
-    pub fn new_with_stake_weighted(
-        fork_stakes: u64,
-        total_stake: u64,
-        lockouts: u64,
-        stake_weighted_lockouts: u128,
-    ) -> Self {
-        Self {
-            fork_stakes,
-            total_stake,
-            lockouts,
-            stake_weighted_lockouts,
-        }
+
+    pub fn increase_confirmation_count(&mut self, confirmation_count: usize, stake: u64) {
+        assert!(confirmation_count > 0 && confirmation_count <= MAX_LOCKOUT_HISTORY);
+        self.confidence[confirmation_count - 1] += stake;
+    }
+
+    pub fn get_confirmation_stake(&mut self, confirmation_count: usize) -> u64 {
+        assert!(confirmation_count > 0 && confirmation_count <= MAX_LOCKOUT_HISTORY);
+        self.confidence[confirmation_count - 1]
     }
 }
 
-#[derive(Default, PartialEq)]
+#[derive(Default)]
 pub struct ForkConfidenceCache {
-    confidence: HashMap<u64, Confidence>,
+    bank_confidence: HashMap<u64, BankConfidence>,
+    total_stake: u64,
 }
 
 impl ForkConfidenceCache {
-    pub fn cache_fork_confidence(
-        &mut self,
-        fork: u64,
-        fork_stakes: u64,
-        total_stake: u64,
-        lockouts: u64,
-    ) {
-        self.confidence
-            .entry(fork)
-            .and_modify(|entry| {
-                entry.fork_stakes = fork_stakes;
-                entry.total_stake = total_stake;
-                entry.lockouts = lockouts;
-            })
-            .or_insert_with(|| Confidence::new(fork_stakes, total_stake, lockouts));
+    pub fn new(bank_confidence: HashMap<u64, BankConfidence>, total_stake: u64) -> Self {
+        Self {
+            bank_confidence,
+            total_stake,
+        }
     }
 
-    pub fn cache_stake_weighted_lockouts(&mut self, fork: u64, stake_weighted_lockouts: u128) {
-        self.confidence
-            .entry(fork)
-            .and_modify(|entry| {
-                entry.stake_weighted_lockouts = stake_weighted_lockouts;
-            })
-            .or_insert(Confidence {
-                fork_stakes: 0,
-                total_stake: 0,
-                lockouts: 0,
-                stake_weighted_lockouts,
-            });
-    }
-
-    pub fn get_fork_confidence(&self, fork: u64) -> Option<&Confidence> {
-        self.confidence.get(&fork)
-    }
-
-    pub fn prune_confidence_cache(&mut self, ancestors: &HashMap<u64, HashSet<u64>>, root: u64) {
-        // For Every slot `s` in this cache must exist some bank `b` in BankForks with
-        // `b.slot() == s`, and because `ancestors` has an entry for every bank in BankForks,
-        // then there must be an entry in `ancestors` for every slot in `self.confidence`
-        self.confidence
-            .retain(|slot, _| slot == &root || ancestors[&slot].contains(&root));
+    pub fn get_fork_confidence(&self, fork: u64) -> Option<&BankConfidence> {
+        self.bank_confidence.get(&fork)
     }
 }
 
 pub struct ConfidenceAggregationData {
-    lockouts: HashMap<u64, StakeLockout>,
-    root: Option<u64>,
-    ancestors: Arc<HashMap<u64, HashSet<u64>>>,
+    ancestors: Arc<Vec<u64>>,
+    bank: Arc<Bank>,
     total_staked: u64,
 }
 
 impl ConfidenceAggregationData {
-    pub fn new(
-        lockouts: HashMap<u64, StakeLockout>,
-        root: Option<u64>,
-        ancestors: Arc<HashMap<u64, HashSet<u64>>>,
-        total_staked: u64,
-    ) -> Self {
+    pub fn new(ancestors: Arc<Vec<u64>>, bank: Arc<Bank>, total_staked: u64) -> Self {
         Self {
-            lockouts,
-            root,
             ancestors,
+            bank,
             total_staked,
         }
     }
@@ -116,38 +72,17 @@ pub struct AggregateConfidenceService {
 }
 
 impl AggregateConfidenceService {
-    pub fn aggregate_confidence(
-        root: Option<u64>,
-        ancestors: &HashMap<u64, HashSet<u64>>,
-        stake_lockouts: &HashMap<u64, StakeLockout>,
-    ) -> HashMap<u64, u128> {
-        let mut stake_weighted_lockouts: HashMap<u64, u128> = HashMap::new();
-        for (fork, lockout) in stake_lockouts.iter() {
-            if root.is_none() || *fork >= root.unwrap() {
-                let mut slot_with_ancestors = vec![*fork];
-                slot_with_ancestors.extend(ancestors.get(&fork).unwrap_or(&HashSet::new()));
-                for slot in slot_with_ancestors {
-                    if root.is_none() || slot >= root.unwrap() {
-                        let entry = stake_weighted_lockouts.entry(slot).or_default();
-                        *entry += u128::from(lockout.lockout()) * u128::from(lockout.stake());
-                    }
-                }
-            }
-        }
-        stake_weighted_lockouts
-    }
-
     pub fn new(
         exit: &Arc<AtomicBool>,
         fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
     ) -> (Sender<ConfidenceAggregationData>, Self) {
-        let (lockouts_sender, lockouts_receiver): (
+        let (sender, receiver): (
             Sender<ConfidenceAggregationData>,
             Receiver<ConfidenceAggregationData>,
         ) = channel();
         let exit_ = exit.clone();
         (
-            lockouts_sender,
+            sender,
             Self {
                 t_confidence: Builder::new()
                     .name("solana-aggregate-stake-lockouts".to_string())
@@ -155,53 +90,120 @@ impl AggregateConfidenceService {
                         if exit_.load(Ordering::Relaxed) {
                             break;
                         }
-                        if let Ok(aggregation_data) = lockouts_receiver.try_recv() {
-                            let stake_weighted_lockouts = Self::aggregate_confidence(
-                                aggregation_data.root,
-                                &aggregation_data.ancestors,
-                                &aggregation_data.lockouts,
-                            );
 
-                            let mut w_fork_confidence_cache =
-                                fork_confidence_cache.write().unwrap();
-
-                            // Cache the confidence values
-                            for (fork, stake_lockout) in aggregation_data.lockouts.iter() {
-                                if aggregation_data.root.is_none()
-                                    || *fork >= aggregation_data.root.unwrap()
-                                {
-                                    w_fork_confidence_cache.cache_fork_confidence(
-                                        *fork,
-                                        stake_lockout.stake(),
-                                        aggregation_data.total_staked,
-                                        stake_lockout.lockout(),
-                                    );
-                                }
+                        if let Err(e) = Self::run(&receiver, &fork_confidence_cache, &exit_) {
+                            match e {
+                                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                                _ => info!(
+                                    "Unexpected error from AggregateConfidenceService: {:?}",
+                                    e
+                                ),
                             }
-
-                            // Cache the stake weighted lockouts
-                            for (fork, stake_weighted_lockout) in stake_weighted_lockouts.iter() {
-                                if aggregation_data.root.is_none()
-                                    || *fork >= aggregation_data.root.unwrap()
-                                {
-                                    w_fork_confidence_cache.cache_stake_weighted_lockouts(
-                                        *fork,
-                                        *stake_weighted_lockout,
-                                    )
-                                }
-                            }
-
-                            if let Some(root) = aggregation_data.root {
-                                w_fork_confidence_cache
-                                    .prune_confidence_cache(&aggregation_data.ancestors, root);
-                            }
-
-                            drop(w_fork_confidence_cache);
                         }
                     })
                     .unwrap(),
             },
         )
+    }
+
+    fn run(
+        receiver: &Receiver<ConfidenceAggregationData>,
+        fork_confidence_cache: &RwLock<ForkConfidenceCache>,
+        exit: &Arc<AtomicBool>,
+    ) -> Result<()> {
+        loop {
+            if exit.load(Ordering::Relaxed) {
+                return Ok(());
+            }
+
+            let mut aggregation_data = receiver.recv_timeout(Duration::from_secs(1))?;
+
+            while let Ok(new_data) = receiver.try_recv() {
+                aggregation_data = new_data;
+            }
+
+            if aggregation_data.ancestors.len() == 0 {
+                continue;
+            }
+
+            let bank_confidence =
+                Self::aggregate_confidence(&aggregation_data.ancestors, &aggregation_data.bank);
+
+            let mut new_fork_confidence =
+                ForkConfidenceCache::new(bank_confidence, aggregation_data.total_staked);
+
+            let mut w_fork_confidence_cache = fork_confidence_cache.write().unwrap();
+
+            std::mem::swap(&mut *w_fork_confidence_cache, &mut new_fork_confidence);
+        }
+    }
+
+    pub fn aggregate_confidence(ancestors: &[u64], bank: &Bank) -> HashMap<u64, BankConfidence> {
+        assert!(ancestors.len() > 0);
+
+        // Check ancestors is sorted
+        for a in ancestors.windows(2) {
+            assert!(a[0] < a[1]);
+        }
+
+        let mut confidence = HashMap::new();
+        for (_, (lamports, account)) in bank.vote_accounts().into_iter() {
+            if lamports == 0 {
+                continue;
+            }
+            let vote_state = VoteState::from(&account);
+            if vote_state.is_none() {
+                continue;
+            }
+
+            let vote_state = vote_state.unwrap();
+            Self::aggregate_confidence_for_vote_account(
+                &mut confidence,
+                &vote_state,
+                ancestors,
+                lamports,
+            );
+        }
+
+        confidence
+    }
+
+    fn aggregate_confidence_for_vote_account(
+        confidence: &mut HashMap<u64, BankConfidence>,
+        vote_state: &VoteState,
+        ancestors: &[u64],
+        lamports: u64,
+    ) {
+        assert!(ancestors.len() > 0);
+        let mut ancestors_index = 0;
+        if let Some(root) = vote_state.root_slot {
+            for (i, a) in ancestors.iter().enumerate() {
+                if *a <= root {
+                    confidence
+                        .entry(*a)
+                        .or_insert(BankConfidence::new())
+                        .increase_confirmation_count(MAX_LOCKOUT_HISTORY, lamports);
+                } else {
+                    ancestors_index = i;
+                    break;
+                }
+            }
+        }
+
+        for vote in &vote_state.votes {
+            while ancestors[ancestors_index] <= vote.slot {
+                confidence
+                    .entry(ancestors[ancestors_index])
+                    .or_insert(BankConfidence::new())
+                    .increase_confirmation_count(vote.confirmation_count as usize, lamports);
+                ancestors_index += 1;
+
+                if ancestors_index == ancestors.len() - 1 {
+                    return;
+                }
+            }
+        }
     }
 }
 
@@ -216,6 +218,7 @@ impl Service for AggregateConfidenceService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consensus::StakeLockout;
 
     #[test]
     fn test_fork_confidence_cache() {
