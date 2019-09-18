@@ -9,6 +9,7 @@ declare -r SOLANA_LOCK_FILE="/home/solana/.solana.lock"
 
 declare __COLO_TODO_PARALLELIZE=false
 
+__colo_here="$(dirname "$BASH_SOURCE")"
 # Load colo resource specs
 export __COLO_RES_N=0
 export __COLO_RES_HOSTNAME=()
@@ -39,7 +40,7 @@ __colo_load_resources() {
       __COLO_RES_MACHINE+=( "$G" )
       __COLO_RES_ZONE+=( "$Z" )
       __COLO_RES_N=$((__COLO_RES_N+1))
-    done < <(sort -nt'|' -k10,10 "$here"/colo_nodes)
+    done < <(sort -nt'|' -k10,10 "$__colo_here"/colo_nodes)
     __COLO_RESOURCES_LOADED=true
   fi
 }
@@ -212,7 +213,7 @@ $(cat "${sshPrivateKey}.pub")
 EOK
     chmod 0600 /solana-scratch/id_ecdsa
     cat > /solana-scratch/authorized_keys <<EOAK
-$("$here"/scripts/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
+$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
 $(cat "${sshPrivateKey}.pub")
 EOAK
     cp /solana-scratch/id_ecdsa "\${HOME}/.ssh/id_ecdsa"
@@ -276,7 +277,7 @@ cat <<EOF
       git clean -qxdff
       rm -f /solana-scratch/* /solana-scratch/.[^.]*
       cat > "\${HOME}/.ssh/authorized_keys" <<EOAK
-$("$here"/scripts/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
+$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
 EOAK
       RC=true
     fi
