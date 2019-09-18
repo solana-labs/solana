@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
   echo --- downloading tar from build artifacts
-  buildkite-agent artifact download "solana*.tar.bz2" .
+  buildkite-agent artifact download "solana-release*.tar.bz2" .
 fi
 
 # shellcheck disable=SC1091
@@ -41,7 +41,7 @@ launchTestnet() {
   if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
     net/net.sh start -f "cuda" -o noValidatorSanity -t "$CHANNEL"
   else
-    net/net.sh start -f "cuda" -o noValidatorSanity -T solana*.tar.bz2
+    net/net.sh start -f "cuda" -o noValidatorSanity -T solana-release*.tar.bz2
   fi
 
   echo --- wait "$ITERATION_WAIT" seconds to complete test
