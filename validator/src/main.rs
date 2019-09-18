@@ -487,7 +487,11 @@ fn main() {
         let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)
             .expect("failed to parse entrypoint address");
         let ip_addr = solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-            panic!("Unable to contact entrypoint {}: {}", entrypoint_addr, err)
+            eprintln!(
+                "Failed to contact cluster entrypoint {} ({}): {}",
+                entrypoint, entrypoint_addr, err
+            );
+            exit(1);
         });
         gossip_addr.set_ip(ip_addr);
 
@@ -588,7 +592,10 @@ fn main() {
     );
 
     if let Some(filename) = init_complete_file {
-        File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
+        File::create(filename).unwrap_or_else(|_| {
+            eprintln!("Unable to create: {}", filename);
+            exit(1);
+        });
     }
     info!("Validator initialized");
     validator.join().expect("validator exit");
