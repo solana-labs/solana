@@ -18,7 +18,17 @@ is re-keyed, *all* delegating stakes must be updated)
 
 
 ### Authority vs. Address ###
-Solana currently conflows account _address_, (i.e. its name, where it lives in the bank) with its _authority_ (i.e. who needs to sign transactions that modify the state of the account).
+Solana currently conflows account _address_, (i.e. its name, where it lives in the bank) with its _authority_ (i.e. who needs to 
+sign transactions that modify the state of the account).  Under this proposal, these concepts would be separate, or separable.  
+Changing an account's authority would require the signature of the current authority (aka _re-keying_).
+
+### Re-keying today ###
+Account rekeying is currently unimplemented in Solana, but some programs partially implement this by holding the notion of 
+authority or partial authority in account state.  Examples:
+* Vote program: vote program holds an `authorized_voter` initialized to the account's address, but updatable with an transaction 
+signed by the current `authorized_voter`.  This allows for rekeying of the voting keypair, but does not allow rekeying of the vote account itself.  The vote account requires the signature of the account address keypair to effect withdrawal
+* Stake program: the stake program holds an `authority` pubkey, initialized to the account's address and updatable by the current `authority`.  The intended use is to allow system programs (those that can issue transactions) to be able to do authorization-required operations like delegate, deactivate, and withdraw.
+* Config program: contains a list of pubkeys authorized to change account state (including update the authorized set).
 
 
 ## Proposed Solution ##
