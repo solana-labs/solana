@@ -1,15 +1,13 @@
-extern crate solana_core;
-
+use crate::{
+    cluster::Cluster,
+    cluster_tests,
+    local_cluster::{ClusterConfig, LocalCluster},
+};
 use log::*;
 use serial_test_derive::serial;
 use solana_core::{
     bank_forks::SnapshotConfig, blocktree::Blocktree, broadcast_stage::BroadcastStageType,
     gossip_service::discover_cluster, snapshot_utils, validator::ValidatorConfig,
-};
-use solana_local_cluster::cluster::Cluster;
-use solana_local_cluster::{
-    cluster_tests,
-    local_cluster::{ClusterConfig, LocalCluster},
 };
 use solana_runtime::{
     accounts_db::AccountsDB,
@@ -584,7 +582,6 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 }
 
 #[test]
-#[ignore]
 fn test_repairman_catchup() {
     solana_logger::setup();
     error!("test_repairman_catchup");

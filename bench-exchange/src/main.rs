@@ -2,10 +2,6 @@ pub mod bench;
 mod cli;
 pub mod order_book;
 
-#[cfg(test)]
-#[macro_use]
-extern crate solana_exchange_program;
-
 use crate::bench::{airdrop_lamports, create_client_accounts_file, do_bench_exchange, Config};
 use log::*;
 use solana_core::gossip_service::{discover_cluster, get_multi_client};

@@ -1,11 +1,5 @@
-#[cfg(test)]
-#[macro_use]
-extern crate solana_move_loader_program;
-
-mod bench;
-mod cli;
-
-use crate::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
+use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
+use solana_bench_tps::cli;
 use solana_core::gossip_service::{discover_cluster, get_multi_client};
 use solana_genesis::PrimordialAccountDetails;
 use solana_sdk::fee_calculator::FeeCalculator;

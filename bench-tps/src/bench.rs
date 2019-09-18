@@ -931,20 +931,12 @@ pub fn generate_and_fund_keypairs<T: Client>(
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use serial_test_derive::serial;
-    use solana_client::thin_client::create_client;
-    use solana_core::cluster_info::FULLNODE_PORT_RANGE;
-    use solana_core::validator::ValidatorConfig;
-    use solana_drone::drone::run_local_drone;
-    use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
     use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::genesis_block::create_genesis_block;
-    use std::sync::mpsc::channel;
 
     #[test]
     fn test_switch_directions() {
@@ -959,70 +951,6 @@ mod tests {
         assert_eq!(should_switch_directions(20, 99), false);
         assert_eq!(should_switch_directions(20, 100), true);
         assert_eq!(should_switch_directions(20, 101), false);
-    }
-
-    fn test_bench_tps_local_cluster(config: Config) {
-        solana_logger::setup();
-        const NUM_NODES: usize = 1;
-        let cluster = LocalCluster::new(&ClusterConfig {
-            node_stakes: vec![999_990; NUM_NODES],
-            cluster_lamports: 200_000_000,
-            validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
-            native_instruction_processors: vec![solana_move_loader_program!()],
-            ..ClusterConfig::default()
-        });
-
-        let drone_keypair = Keypair::new();
-        cluster.transfer(
-            &cluster.funding_keypair,
-            &drone_keypair.pubkey(),
-            100_000_000,
-        );
-
-        let client = create_client(
-            (cluster.entry_point_info.rpc, cluster.entry_point_info.tpu),
-            FULLNODE_PORT_RANGE,
-        );
-
-        let (addr_sender, addr_receiver) = channel();
-        run_local_drone(drone_keypair, addr_sender, None);
-        let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
-
-        let lamports_per_account = 100;
-
-        let (keypairs, move_keypairs, _keypair_balance) = generate_and_fund_keypairs(
-            &client,
-            Some(drone_addr),
-            &config.id,
-            config.tx_count,
-            lamports_per_account,
-            config.use_move,
-        )
-        .unwrap();
-
-        let total = do_bench_tps(vec![client], config, keypairs, 0, move_keypairs);
-        assert!(total > 100);
-    }
-
-    #[test]
-    #[serial]
-    fn test_bench_tps_local_cluster_solana() {
-        let mut config = Config::default();
-        config.tx_count = 100;
-        config.duration = Duration::from_secs(10);
-
-        test_bench_tps_local_cluster(config);
-    }
-
-    #[test]
-    #[serial]
-    fn test_bench_tps_local_cluster_move() {
-        let mut config = Config::default();
-        config.tx_count = 100;
-        config.duration = Duration::from_secs(20);
-        config.use_move = true;
-
-        test_bench_tps_local_cluster(config);
     }
 
     #[test]

@@ -1,9 +1,4 @@
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate solana_core;
-
+use crate::local_cluster::{ClusterConfig, LocalCluster};
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
 use solana_core::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
@@ -13,7 +8,6 @@ use solana_core::gossip_service::discover_cluster;
 use solana_core::replicator::Replicator;
 use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
 use solana_core::validator::ValidatorConfig;
-use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::remove_dir_all;
