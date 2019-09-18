@@ -4,7 +4,7 @@ use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastR
 use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
-use crate::poh_recorder::WorkingBankEntries;
+use crate::poh_recorder::WorkingBankEntry;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
@@ -40,7 +40,7 @@ impl BroadcastStageType {
         &self,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        receiver: Receiver<WorkingBankEntries>,
+        receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> BroadcastStage {
@@ -79,7 +79,7 @@ trait BroadcastRun {
     fn run(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntries>,
+        receiver: &Receiver<WorkingBankEntry>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()>;
@@ -112,7 +112,7 @@ impl BroadcastStage {
     fn run(
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntries>,
+        receiver: &Receiver<WorkingBankEntry>,
         blocktree: &Arc<Blocktree>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
@@ -152,7 +152,7 @@ impl BroadcastStage {
     fn new(
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        receiver: Receiver<WorkingBankEntries>,
+        receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static,
@@ -213,7 +213,7 @@ mod test {
     fn setup_dummy_broadcast_service(
         leader_pubkey: &Pubkey,
         ledger_path: &Path,
-        entry_receiver: Receiver<WorkingBankEntries>,
+        entry_receiver: Receiver<WorkingBankEntry>,
     ) -> MockBroadcastStage {
         // Make the database ledger
         let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());
@@ -280,7 +280,7 @@ mod test {
                 let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
                 for (i, tick) in ticks.into_iter().enumerate() {
                     entry_sender
-                        .send((bank.clone(), vec![(tick, i as u64 + 1)]))
+                        .send((bank.clone(), (tick, i as u64 + 1)))
                         .expect("Expect successful send to broadcast service");
                 }
             }

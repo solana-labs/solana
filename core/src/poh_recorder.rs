@@ -24,7 +24,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::cmp;
-use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
+use std::sync::mpsc::{channel, Receiver, SendError, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -38,7 +38,7 @@ pub enum PohRecorderError {
     MinHeightNotReached,
 }
 
-pub type WorkingBankEntries = (Arc<Bank>, Vec<(Entry, u64)>);
+pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
 
 #[derive(Clone)]
 pub struct WorkingBank {
@@ -55,7 +55,7 @@ pub struct PohRecorder {
     start_tick: u64,  // first tick this recorder will observe
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
-    sender: Sender<WorkingBankEntries>,
+    sender: Sender<WorkingBankEntry>,
     start_leader_at_tick: Option<u64>,
     last_leader_tick: u64, // zero if none
     grace_ticks: u64,
@@ -254,7 +254,7 @@ impl PohRecorder {
             .iter()
             .take_while(|x| x.1 <= working_bank.max_tick_height)
             .count();
-        let send_result = if entry_count > 0 {
+        let send_result: std::result::Result<(), SendError<WorkingBankEntry>> = if entry_count > 0 {
             trace!(
                 "flush_cache: bank_slot: {} tick_height: {} max: {} sending: {}",
                 working_bank.bank.slot(),
@@ -262,12 +262,13 @@ impl PohRecorder {
                 working_bank.max_tick_height,
                 entry_count,
             );
-            let cache = &self.tick_cache[..entry_count];
-            for t in cache {
-                working_bank.bank.register_tick(&t.0.hash);
+
+            for tick in &self.tick_cache[..entry_count] {
+                working_bank.bank.register_tick(&tick.0.hash);
+                self.sender
+                    .send((working_bank.bank.clone(), tick.clone()))?;
             }
-            self.sender
-                .send((working_bank.bank.clone(), cache.to_vec()))
+            Ok(())
         } else {
             Ok(())
         };
@@ -360,7 +361,7 @@ impl PohRecorder {
                     transactions,
                 };
                 self.sender
-                    .send((working_bank.bank.clone(), vec![(entry, self.tick_height)]))?;
+                    .send((working_bank.bank.clone(), (entry, self.tick_height)))?;
                 return Ok(());
             }
             // record() might fail if the next PoH hash needs to be a tick.  But that's ok, tick()
@@ -381,7 +382,7 @@ impl PohRecorder {
         clear_bank_signal: Option<SyncSender<bool>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
-    ) -> (Self, Receiver<WorkingBankEntries>) {
+    ) -> (Self, Receiver<WorkingBankEntry>) {
         let poh = Arc::new(Mutex::new(Poh::new(
             last_entry_hash,
             poh_config.hashes_per_tick,
@@ -425,7 +426,7 @@ impl PohRecorder {
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
-    ) -> (Self, Receiver<WorkingBankEntries>) {
+    ) -> (Self, Receiver<WorkingBankEntry>) {
         Self::new_with_clear_signal(
             tick_height,
             last_entry_hash,
@@ -603,9 +604,11 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_height, 3);
             assert_eq!(poh_recorder.tick_cache.len(), 0);
-            let (bank_, e) = entry_receiver.recv().expect("recv 1");
-            assert_eq!(e.len(), 3);
-            assert_eq!(bank_.slot(), bank.slot());
+            let wbentries = entry_receiver.iter().collect::<Vec<_>>();
+            assert_eq!(wbentries.len(), 3);
+            for (wbank, (_entry, _tick_height)) in wbentries {
+                assert_eq!(wbank.slot(), bank.slot());
+            }
             assert!(poh_recorder.working_bank.is_none());
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -649,7 +652,7 @@ mod tests {
 
             assert_eq!(poh_recorder.tick_height, 5);
             assert!(poh_recorder.working_bank.is_none());
-            let (_, e) = entry_receiver.recv().expect("recv 1");
+            let e = entry_receiver.iter().collect::<Vec<_>>();
             assert_eq!(e.len(), 3);
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -771,11 +774,10 @@ mod tests {
             assert_eq!(poh_recorder.tick_cache.len(), 0);
 
             //tick in the cache + entry
-            let (_b, e) = entry_receiver.recv().expect("recv 1");
-            assert_eq!(e.len(), 1);
-            assert!(e[0].0.is_tick());
-            let (_b, e) = entry_receiver.recv().expect("recv 2");
-            assert!(!e[0].0.is_tick());
+            let (_bank, (e, _tick_height)) = entry_receiver.recv().expect("recv 1");
+            assert!(e.is_tick());
+            let (_bank, (e, _tick_height)) = entry_receiver.recv().expect("recv 2");
+            assert!(!e.is_tick());
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
@@ -816,10 +818,10 @@ mod tests {
                 .record(bank.slot(), h1, vec![tx.clone()])
                 .is_err());
 
-            let (_bank, e) = entry_receiver.recv().expect("recv 1");
+            let e = entry_receiver.iter().collect::<Vec<_>>();
             assert_eq!(e.len(), 2);
-            assert!(e[0].0.is_tick());
-            assert!(e[1].0.is_tick());
+            assert!((e[0].1).0.is_tick());
+            assert!((e[1].1).0.is_tick());
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }

@@ -1,5 +1,5 @@
 use crate::entry::Entry;
-use crate::poh_recorder::WorkingBankEntries;
+use crate::poh_recorder::WorkingBankEntry;
 use crate::result::Result;
 use crate::shred::{Shred, ShredInfo, Shredder, RECOMMENDED_FEC_RATE};
 use solana_runtime::bank::Bank;
@@ -9,110 +9,82 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub(super) struct ReceiveResults {
-    pub ventries: Vec<Vec<(Entry, u64)>>,
-    pub num_entries: usize,
+    pub entries: Vec<Entry>,
     pub time_elapsed: Duration,
     pub bank: Arc<Bank>,
     pub last_tick: u64,
 }
 
-impl ReceiveResults {
-    pub fn new(
-        ventries: Vec<Vec<(Entry, u64)>>,
-        num_entries: usize,
-        time_elapsed: Duration,
-        bank: Arc<Bank>,
-        last_tick: u64,
-    ) -> Self {
-        Self {
-            ventries,
-            num_entries,
-            time_elapsed,
-            bank,
-            last_tick,
-        }
-    }
-}
-
-pub(super) fn recv_slot_shreds(receiver: &Receiver<WorkingBankEntries>) -> Result<ReceiveResults> {
+pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result<ReceiveResults> {
     let timer = Duration::new(1, 0);
-    let (mut bank, entries) = receiver.recv_timeout(timer)?;
+    let (bank, (entry, mut last_tick)) = receiver.recv_timeout(timer)?;
     let recv_start = Instant::now();
+
+    let mut entries = vec![entry];
+    let mut slot = bank.slot();
     let mut max_tick_height = bank.max_tick_height();
-    let mut num_entries = entries.len();
-    let mut ventries = Vec::new();
-    let mut last_tick = entries.last().map(|v| v.1).unwrap_or(0);
-    ventries.push(entries);
 
     assert!(last_tick <= max_tick_height);
+
     if last_tick != max_tick_height {
-        while let Ok((same_bank, entries)) = receiver.try_recv() {
+        while let Ok((bank, (entry, tick_height))) = receiver.try_recv() {
             // If the bank changed, that implies the previous slot was interrupted and we do not have to
             // broadcast its entries.
-            if same_bank.slot() != bank.slot() {
-                num_entries = 0;
-                ventries.clear();
-                bank = same_bank.clone();
+            if bank.slot() != slot {
+                entries.clear();
+                slot = bank.slot();
                 max_tick_height = bank.max_tick_height();
             }
-            num_entries += entries.len();
-            last_tick = entries.last().map(|v| v.1).unwrap_or(0);
-            ventries.push(entries);
-            assert!(last_tick <= max_tick_height,);
+            last_tick = tick_height;
+            entries.push(entry);
+
+            assert!(last_tick <= max_tick_height);
             if last_tick == max_tick_height {
                 break;
             }
         }
     }
 
-    let recv_end = recv_start.elapsed();
-    let receive_results = ReceiveResults::new(ventries, num_entries, recv_end, bank, last_tick);
-    Ok(receive_results)
+    let time_elapsed = recv_start.elapsed();
+    Ok(ReceiveResults {
+        entries,
+        time_elapsed,
+        bank,
+        last_tick,
+    })
 }
 
 pub(super) fn entries_to_shreds(
-    ventries: Vec<Vec<(Entry, u64)>>,
-    slot: u64,
+    entries: Vec<Entry>,
     last_tick: u64,
+    slot: u64,
     bank_max_tick: u64,
     keypair: &Arc<Keypair>,
-    mut latest_shred_index: u64,
+    latest_shred_index: u64,
     parent_slot: u64,
 ) -> (Vec<Shred>, Vec<ShredInfo>, u64) {
-    let mut all_shred_bufs = vec![];
-    let mut all_shreds = vec![];
-    let num_ventries = ventries.len();
-    ventries
-        .into_iter()
-        .enumerate()
-        .for_each(|(i, entries_tuple)| {
-            let (entries, _): (Vec<_>, Vec<_>) = entries_tuple.into_iter().unzip();
-            //entries
-            let mut shredder = Shredder::new(
-                slot,
-                parent_slot,
-                RECOMMENDED_FEC_RATE,
-                keypair,
-                latest_shred_index as u32,
-            )
-            .expect("Expected to create a new shredder");
+    let mut shredder = Shredder::new(
+        slot,
+        parent_slot,
+        RECOMMENDED_FEC_RATE,
+        keypair,
+        latest_shred_index as u32,
+    )
+    .expect("Expected to create a new shredder");
 
-            bincode::serialize_into(&mut shredder, &entries)
-                .expect("Expect to write all entries to shreds");
+    bincode::serialize_into(&mut shredder, &entries)
+        .expect("Expect to write all entries to shreds");
 
-            if i == (num_ventries - 1) && last_tick == bank_max_tick {
-                shredder.finalize_slot();
-            } else {
-                shredder.finalize_data();
-            }
+    if last_tick == bank_max_tick {
+        shredder.finalize_slot();
+    } else {
+        shredder.finalize_data();
+    }
 
-            let (mut shreds, mut shred_bufs): (Vec<Shred>, Vec<ShredInfo>) =
-                shredder.shred_tuples.into_iter().unzip();
+    let (shreds, shred_infos): (Vec<Shred>, Vec<ShredInfo>) =
+        shredder.shred_tuples.into_iter().unzip();
 
-            trace!("Inserting {:?} shreds in blocktree", shreds.len());
-            latest_shred_index = u64::from(shredder.index);
-            all_shreds.append(&mut shreds);
-            all_shred_bufs.append(&mut shred_bufs);
-        });
-    (all_shreds, all_shred_bufs, latest_shred_index)
+    trace!("Inserting {:?} shreds in blocktree", shreds.len());
+
+    (shreds, shred_infos, u64::from(shredder.index))
 }

@@ -162,8 +162,7 @@ mod tests {
             let mut need_partial = true;
 
             while need_tick || need_entry || need_partial {
-                for entry in entry_receiver.recv().unwrap().1 {
-                    let entry = &entry.0;
+                for (_bank, (entry, _tick_height)) in entry_receiver.iter() {
                     if entry.is_tick() {
                         assert!(
                             entry.num_hashes <= poh_config.hashes_per_tick.unwrap(),

@@ -52,14 +52,14 @@ impl BroadcastRun for StandardBroadcastRun {
     fn run(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntries>,
+        receiver: &Receiver<WorkingBankEntry>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let receive_results = broadcast_utils::recv_slot_shreds(receiver)?;
+        let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let receive_elapsed = receive_results.time_elapsed;
-        let num_entries = receive_results.num_entries;
+        let num_entries = receive_results.entries.len();
         let bank = receive_results.bank.clone();
         let last_tick = receive_results.last_tick;
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
@@ -80,9 +80,9 @@ impl BroadcastRun for StandardBroadcastRun {
         };
 
         let (all_shreds, shred_infos, latest_shred_index) = entries_to_shreds(
-            receive_results.ventries,
-            bank.slot(),
+            receive_results.entries,
             last_tick,
+            bank.slot(),
             bank.max_tick_height(),
             keypair,
             latest_shred_index,

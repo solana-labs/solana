@@ -7,7 +7,7 @@ use crate::broadcast_stage::{BroadcastStage, BroadcastStageType};
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
-use crate::poh_recorder::{PohRecorder, WorkingBankEntries};
+use crate::poh_recorder::{PohRecorder, WorkingBankEntry};
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
 use crossbeam_channel::unbounded;
@@ -30,7 +30,7 @@ impl Tpu {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        entry_receiver: Receiver<WorkingBankEntries>,
+        entry_receiver: Receiver<WorkingBankEntry>,
         transactions_sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,

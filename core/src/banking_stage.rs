@@ -7,7 +7,7 @@ use crate::entry::hash_transactions;
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::packet::PACKETS_PER_BATCH;
 use crate::packet::{Packet, Packets};
-use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
+use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry};
 use crate::poh_service::PohService;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -929,7 +929,7 @@ pub fn create_test_recorder(
     Arc<AtomicBool>,
     Arc<Mutex<PohRecorder>>,
     PohService,
-    Receiver<WorkingBankEntries>,
+    Receiver<WorkingBankEntry>,
 ) {
     let exit = Arc::new(AtomicBool::new(false));
     let poh_config = Arc::new(PohConfig::default());
@@ -1038,7 +1038,7 @@ mod tests {
             trace!("getting entries");
             let entries: Vec<_> = entry_receiver
                 .iter()
-                .flat_map(|x| x.1.into_iter().map(|e| e.0))
+                .map(|(_bank, (entry, _tick_height))| entry)
                 .collect();
             trace!("done");
             assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize - 1);
@@ -1126,19 +1126,17 @@ mod tests {
             bank.process_transaction(&fund_tx).unwrap();
             //receive entries + ticks
             for _ in 0..10 {
-                let ventries: Vec<Vec<Entry>> = entry_receiver
+                let entries: Vec<Entry> = entry_receiver
                     .iter()
-                    .map(|x| x.1.into_iter().map(|e| e.0).collect())
+                    .map(|(_bank, (entry, _tick_height))| entry)
                     .collect();
 
-                for entries in &ventries {
-                    for entry in entries {
-                        bank.process_transactions(&entry.transactions)
-                            .iter()
-                            .for_each(|x| assert_eq!(*x, Ok(())));
-                    }
-                    assert!(entries.verify(&blockhash));
-                    blockhash = entries.last().unwrap().hash;
+                assert!(entries.verify(&blockhash));
+                blockhash = entries.last().unwrap().hash;
+                for entry in entries {
+                    bank.process_transactions(&entry.transactions)
+                        .iter()
+                        .for_each(|x| assert_eq!(*x, Ok(())));
                 }
 
                 if bank.get_balance(&to) == 1 {
@@ -1239,7 +1237,7 @@ mod tests {
             // check that the balance is what we expect.
             let entries: Vec<_> = entry_receiver
                 .iter()
-                .flat_map(|x| x.1.into_iter().map(|e| e.0))
+                .map(|(_bank, (entry, _tick_height))| entry)
                 .collect();
 
             let bank = Bank::new(&genesis_block);
@@ -1304,8 +1302,8 @@ mod tests {
                 &results,
                 &poh_recorder,
             );
-            let (_, entries) = entry_receiver.recv().unwrap();
-            assert_eq!(entries[0].0.transactions.len(), transactions.len());
+            let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
+            assert_eq!(entry.transactions.len(), transactions.len());
 
             // InstructionErrors should still be recorded
             results[0] = Err(TransactionError::InstructionError(
@@ -1320,8 +1318,8 @@ mod tests {
             );
             res.unwrap();
             assert!(retryable.is_empty());
-            let (_, entries) = entry_receiver.recv().unwrap();
-            assert_eq!(entries[0].0.transactions.len(), transactions.len());
+            let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
+            assert_eq!(entry.transactions.len(), transactions.len());
 
             // Other TransactionErrors should not be recorded
             results[0] = Err(TransactionError::AccountNotFound);
@@ -1333,8 +1331,8 @@ mod tests {
             );
             res.unwrap();
             assert!(retryable.is_empty());
-            let (_, entries) = entry_receiver.recv().unwrap();
-            assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
+            let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
+            assert_eq!(entry.transactions.len(), transactions.len() - 1);
 
             // Once bank is set to a new bank (setting bank.slot() + 1 in record_transactions),
             // record_transactions should throw MaxHeightReached and return the set of retryable
@@ -1629,14 +1627,12 @@ mod tests {
 
             let mut done = false;
             // read entries until I find mine, might be ticks...
-            while let Ok((_, entries)) = entry_receiver.recv() {
-                for (entry, _) in entries {
-                    if !entry.is_tick() {
-                        trace!("got entry");
-                        assert_eq!(entry.transactions.len(), transactions.len());
-                        assert_eq!(bank.get_balance(&pubkey), 1);
-                        done = true;
-                    }
+            while let Ok((_bank, (entry, _tick_height))) = entry_receiver.recv() {
+                if !entry.is_tick() {
+                    trace!("got entry");
+                    assert_eq!(entry.transactions.len(), transactions.len());
+                    assert_eq!(bank.get_balance(&pubkey), 1);
+                    done = true;
                 }
                 if done {
                     break;
