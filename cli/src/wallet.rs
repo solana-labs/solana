@@ -33,10 +33,7 @@ use solana_sdk::{
 };
 use solana_stake_api::stake_instruction::{self, StakeError};
 use solana_storage_api::storage_instruction;
-use solana_vote_api::{
-    vote_instruction::{self, VoteError},
-    vote_state::VoteState,
-};
+use solana_vote_api::vote_state::VoteState;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -228,35 +225,6 @@ pub fn parse_command(
                 }
             }
         }
-        ("create-vote-account", Some(matches)) => {
-            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-            let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
-            let commission = if let Some(commission) = matches.value_of("commission") {
-                commission.parse()?
-            } else {
-                0
-            };
-            let lamports = matches.value_of("lamports").unwrap().parse()?;
-            Ok(WalletCommand::CreateVoteAccount(
-                vote_account_pubkey,
-                node_pubkey,
-                commission,
-                lamports,
-            ))
-        }
-        ("authorize-voter", Some(matches)) => {
-            let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-            let authorized_voter_keypair =
-                keypair_of(matches, "authorized_voter_keypair_file").unwrap();
-            let new_authorized_voter_pubkey =
-                pubkey_of(matches, "new_authorized_voter_pubkey").unwrap();
-
-            Ok(WalletCommand::AuthorizeVoter(
-                vote_account_pubkey,
-                authorized_voter_keypair,
-                new_authorized_voter_pubkey,
-            ))
-        }
         ("show-account", Some(matches)) => {
             let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
             let output_file = matches.value_of("output_file");
@@ -267,6 +235,8 @@ pub fn parse_command(
                 use_lamports_unit,
             })
         }
+        ("create-vote-account", Some(matches)) => parse_vote_create_account(matches),
+        ("authorize-voter", Some(matches)) => parse_vote_authorize_voter(matches),
         ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         ("delegate-stake", Some(matches)) => {
@@ -481,7 +451,7 @@ fn check_account_for_multiple_fees(
     Err(WalletError::InsufficientFundsForFee)?
 }
 
-fn check_unique_pubkeys(
+pub fn check_unique_pubkeys(
     pubkey0: (&Pubkey, String),
     pubkey1: (&Pubkey, String),
 ) -> Result<(), WalletError> {
@@ -561,69 +531,6 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
             err
         )))?,
     }
-}
-
-fn process_create_vote_account(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    vote_account_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
-    commission: u8,
-    lamports: u64,
-) -> ProcessResult {
-    check_unique_pubkeys(
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
-        (node_pubkey, "node_pubkey".to_string()),
-    )?;
-    check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
-    )?;
-    let ixs = vote_instruction::create_account(
-        &config.keypair.pubkey(),
-        vote_account_pubkey,
-        node_pubkey,
-        commission,
-        lamports,
-    );
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<SystemError>(result)
-}
-
-fn process_authorize_voter(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    vote_account_pubkey: &Pubkey,
-    authorized_voter_keypair: &Keypair,
-    new_authorized_voter_pubkey: &Pubkey,
-) -> ProcessResult {
-    check_unique_pubkeys(
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
-        (
-            new_authorized_voter_pubkey,
-            "new_authorized_voter_pubkey".to_string(),
-        ),
-    )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![vote_instruction::authorize_voter(
-        vote_account_pubkey,                // vote account to update
-        &authorized_voter_keypair.pubkey(), // current authorized voter (often the vote account itself)
-        new_authorized_voter_pubkey,        // new vote signer
-    )];
-
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair, &authorized_voter_keypair],
-        recent_blockhash,
-    );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_voter_keypair]);
-    log_instruction_custom_error::<VoteError>(result)
 }
 
 fn process_show_account(
@@ -1607,7 +1514,7 @@ pub fn request_and_confirm_airdrop(
     log_instruction_custom_error::<SystemError>(result)
 }
 
-fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
+pub fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
@@ -2439,51 +2346,6 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
         assert!(parse_command(&pubkey, &test_bad_signature).is_err());
-
-        // Test AuthorizeVoter Subcommand
-        let keypair_file = make_tmp_path("keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let keypair = read_keypair(&keypair_file).unwrap();
-
-        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
-            "test",
-            "authorize-voter",
-            &pubkey_string,
-            &keypair_file,
-            &pubkey_string,
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_authorize_voter).unwrap(),
-            WalletCommand::AuthorizeVoter(pubkey, keypair, pubkey)
-        );
-
-        // Test CreateVoteAccount SubCommand
-        let node_pubkey = Pubkey::new_rand();
-        let node_pubkey_string = format!("{}", node_pubkey);
-        let test_create_vote_account = test_commands.clone().get_matches_from(vec![
-            "test",
-            "create-vote-account",
-            &pubkey_string,
-            &node_pubkey_string,
-            "50",
-            "--commission",
-            "10",
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_create_vote_account).unwrap(),
-            WalletCommand::CreateVoteAccount(pubkey, node_pubkey, 10, 50)
-        );
-        let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
-            "test",
-            "create-vote-account",
-            &pubkey_string,
-            &node_pubkey_string,
-            "50",
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_create_vote_account2).unwrap(),
-            WalletCommand::CreateVoteAccount(pubkey, node_pubkey, 0, 50)
-        );
 
         // Test DelegateStake Subcommand
         fn make_tmp_path(name: &str) -> String {

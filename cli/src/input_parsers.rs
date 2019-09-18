@@ -58,11 +58,7 @@ mod tests {
                     .takes_value(true)
                     .multiple(true),
             )
-            .arg(
-                Arg::with_name("single")
-                    .takes_value(true)
-                    .long("single")
-            )
+            .arg(Arg::with_name("single").takes_value(true).long("single"))
     }
 
     fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
@@ -74,27 +70,39 @@ mod tests {
 
     #[test]
     fn test_values_of() {
-        let matches = app().clone()
-            .get_matches_from(vec!["test", "--multiple", "50", "--multiple", "39"]);
+        let matches =
+            app()
+                .clone()
+                .get_matches_from(vec!["test", "--multiple", "50", "--multiple", "39"]);
         assert_eq!(values_of(&matches, "multiple"), Some(vec![50, 39]));
         assert_eq!(values_of::<u64>(&matches, "single"), None);
 
         let pubkey0 = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
-        let matches = app().clone()
-            .get_matches_from(vec!["test", "--multiple", &pubkey0.to_string(), "--multiple", &pubkey1.to_string()]);
-        assert_eq!(values_of(&matches, "multiple"), Some(vec![pubkey0, pubkey1]));
+        let matches = app().clone().get_matches_from(vec![
+            "test",
+            "--multiple",
+            &pubkey0.to_string(),
+            "--multiple",
+            &pubkey1.to_string(),
+        ]);
+        assert_eq!(
+            values_of(&matches, "multiple"),
+            Some(vec![pubkey0, pubkey1])
+        );
     }
 
     #[test]
     fn test_value_of() {
-        let matches = app().clone()
+        let matches = app()
+            .clone()
             .get_matches_from(vec!["test", "--single", "50"]);
         assert_eq!(value_of(&matches, "single"), Some(50));
         assert_eq!(value_of::<u64>(&matches, "multiple"), None);
 
         let pubkey = Pubkey::new_rand();
-        let matches = app().clone()
+        let matches = app()
+            .clone()
             .get_matches_from(vec!["test", "--single", &pubkey.to_string()]);
         assert_eq!(value_of(&matches, "single"), Some(pubkey));
     }
@@ -105,13 +113,16 @@ mod tests {
         let outfile = tmp_file_path("test_gen_keypair_file.json", &keypair.pubkey());
         let _ = write_keypair(&keypair, &outfile).unwrap();
 
-        let matches = app().clone()
+        let matches = app()
+            .clone()
             .get_matches_from(vec!["test", "--single", &outfile]);
         assert_eq!(keypair_of(&matches, "single"), Some(keypair));
         assert_eq!(keypair_of(&matches, "multiple"), None);
 
-        let matches = app().clone()
-            .get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
+        let matches =
+            app()
+                .clone()
+                .get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
         assert_eq!(keypair_of(&matches, "single"), None);
 
         fs::remove_file(&outfile).unwrap();
@@ -123,17 +134,22 @@ mod tests {
         let outfile = tmp_file_path("test_gen_keypair_file.json", &keypair.pubkey());
         let _ = write_keypair(&keypair, &outfile).unwrap();
 
-        let matches = app().clone()
+        let matches = app()
+            .clone()
             .get_matches_from(vec!["test", "--single", &outfile]);
         assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
         assert_eq!(pubkey_of(&matches, "multiple"), None);
 
-        let matches = app().clone()
-            .get_matches_from(vec!["test", "--single", &keypair.pubkey().to_string()]);
+        let matches =
+            app()
+                .clone()
+                .get_matches_from(vec!["test", "--single", &keypair.pubkey().to_string()]);
         assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
 
-        let matches = app().clone()
-            .get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
+        let matches =
+            app()
+                .clone()
+                .get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
         assert_eq!(pubkey_of(&matches, "single"), None);
 
         fs::remove_file(&outfile).unwrap();
