@@ -930,8 +930,7 @@ impl Shredder {
                 Err(reed_solomon_erasure::Error::TooFewDataShards)?;
             }
 
-            let shred_bufs = shreds.iter().map(|shred| &shred.shred).collect();
-            shred_bufs
+            shreds.iter().map(|shred| &shred.shred).collect()
         };
 
         Ok(Self::reassemble_payload(num_data, data_shred_bufs))
