@@ -2,291 +2,356 @@
 
 The following terms are used throughout this book.
 
-## account
+#### account
 
-A persistent file addressed by [public key](terminology.md#public-key) and with [lamports](terminology.md#lamport) tracking its lifetime.
+A persistent file addressed by [public key](#public-key) and with
+[lamports](#lamport) tracking its lifetime.
 
-## app
+#### app
 
 A front-end application that interacts with a Solana cluster.
 
-## blob
+#### blob
 
-A fraction of a [block](terminology.md#block); the smallest unit sent between [fullnodes](terminology.md#fullnode).
+A fraction of a [block](#block); the smallest unit sent between
+[fullnodes](#fullnode).
 
-## block
+#### block
 
-A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [vote](terminology.md#ledger-vote). A [leader](terminology.md#leader) produces at most one block per [slot](terminology.md#slot).
+A contiguous set of [entries](#entry) on the ledger covered by a
+[vote](#ledger-vote). A [leader](#leader) produces at most one block per
+[slot](#slot).
 
-## block height
+#### block height
 
-The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height zero.
+The number of [blocks](#block) beneath the current block. The first block after
+the [genesis block](#genesis-block) has height zero.
 
-## block id
+#### block id
 
-The [entry id](terminology.md#entry-id) of the last entry in a [block](terminology.md#block).
+The [entry id](#entry-id) of the last entry in a [block](#block).
 
-## bootstrap leader
+#### bootstrap leader
 
-The first [fullnode](terminology.md#fullnode) to take the [leader](terminology.md#leader) role.
+The first [fullnode](#fullnode) to take the [leader](#leader) role.
 
-## CBC block
+#### CBC block
 
-Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of
+many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
 
-## client
+#### client
 
-A [node](terminology.md#node) that utilizes the [cluster](terminology.md#cluster).
+A [node](#node) that utilizes the [cluster](#cluster).
 
-## cluster
+#### cluster
 
-A set of [fullnodes](terminology.md#fullnode) maintaining a single [ledger](terminology.md#ledger).
+A set of [fullnodes](#fullnode) maintaining a single [ledger](#ledger).
 
-## confirmation
+#### confirmation
 
-The wallclock duration between a [leader](terminology.md#leader) creating a [tick entry](terminology.md#tick) and recognizing a supermajority of [ledger votes](terminology.md#ledger-vote) with a ledger interpretation that matches the leader's.
+The wallclock duration between a [leader](#leader) creating a [tick
+entry](#tick) and recognizing a supermajority of [ledger votes](#ledger-vote)
+with a ledger interpretation that matches the leader's.
 
-## control plane
+#### control plane
 
-A gossip network connecting all [nodes](terminology.md#node) of a [cluster](terminology.md#cluster).
+A gossip network connecting all [nodes](#node) of a [cluster](#cluster).
 
-## cooldown period
+#### cooldown period
 
-Some number of epochs after stake has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of epochs after stake has been deactivated while it progressively
+becomes available for withdrawal. During this period, the stake is considered to
+be "deactivating". More info about:
+[warmup and cooldown](stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
 
-## credit
+#### credit
 
-See [vote credit](terminology.md#vote-credit).
+See [vote credit](#vote-credit).
 
-## data plane
+#### data plane
 
-A multicast network used to efficiently validate [entries](terminology.md#entry) and gain consensus.
+A multicast network used to efficiently validate [entries](#entry) and gain
+consensus.
 
-## drone
+#### drone
 
-An off-chain service that acts as a custodian for a user's private key. It typically serves to validate and sign transactions.
+An off-chain service that acts as a custodian for a user's private key. It
+typically serves to validate and sign transactions.
 
-## fake storage proof
+#### fake storage proof
 
-A proof which has the same format as a storage proof, but the sha state is actually from hashing a known ledger value which the storage client can reveal and is also easily verifiable by the network on-chain.
+A proof which has the same format as a storage proof, but the sha state is
+actually from hashing a known ledger value which the storage client can reveal
+and is also easily verifiable by the network on-chain.
 
-## entry
+#### entry
 
-An entry on the [ledger](terminology.md#ledger) either a [tick](terminology.md#tick) or a [transactions entry](terminology.md#transactions-entry).
+An entry on the [ledger](#ledger) either a [tick](#tick) or a [transactions
+entry](#transactions-entry).
 
-## entry id
+#### entry id
 
-A globally unique identifier that is also a proof that the [entry](terminology.md#entry) was generated after a duration of time, all [transactions](terminology.md#transaction) included in the entry, and all previous entries on the [ledger](terminology.md#ledger). See [Proof of History](terminology.md#proof-of-history).
+A globally unique identifier that is also a proof that the [entry](#entry) was
+generated after a duration of time, all [transactions](#transaction) included
+in the entry, and all previous entries on the [ledger](#ledger). See [Proof of
+History](#proof-of-history).
 
-## epoch
+#### epoch
 
-The time, i.e. number of [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid.
+The time, i.e. number of [slots](#slot), for which a [leader
+schedule](#leader-schedule) is valid.
 
-## finality
+#### finality
 
-When nodes representing 2/3rd of the stake have a common [root](terminology.md#root).
+When nodes representing 2/3rd of the stake have a common [root](#root).
 
-## fork
+#### fork
 
-A [ledger](terminology.md#ledger) derived from common entries but then diverged.
+A [ledger](#ledger) derived from common entries but then diverged.
 
-## fullnode
+#### fullnode
 
-A full participant in the [cluster](terminology.md#cluster) either a [leader](terminology.md#leader) or [validator](terminology.md#validator) node.
+A full participant in the [cluster](#cluster) either a [leader](#leader) or
+[validator](#validator) node.
 
-## fullnode state
+#### fullnode state
 
-The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-tokens).
+The result of interpreting all programs on the ledger at a given [tick
+height](#tick-height). It includes at least the set of all [accounts](#account)
+holding nonzero [native tokens](#native-tokens).
 
-## genesis block
+#### genesis block
 
-The configuration file that prepares the [ledger](terminology.md#ledger) for the first [block](terminology.md#block).
+The configuration file that prepares the [ledger](#ledger) for the first [block](#block).
 
-## hash
+#### hash
 
 A digital fingerprint of a sequence of bytes.
 
-## instruction
+#### instruction
 
-The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#instruction).
+The smallest unit of a [program](#program) that a [client](#client) can include
+in a [transaction](#instruction).
 
-## keypair
+#### keypair
 
-A [public key](terminology.md#public-key) and corresponding [secret key](terminology.md#secret-key).
+A [public key](#public-key) and corresponding [secret key](#secret-key).
 
-## lamport
+#### lamport
 
-A fractional [native token](terminology.md#native-token) with the value of approximately 0.0000000000582 [sol](terminology.md#sol) \(2^-34\).
+A fractional [native token](#native-token) with the value of approximately
+0.0000000000582 [sol](#sol) (2^-34).
 
-## loader
+#### loader
 
-A [program](terminology.md#program) with the ability to interpret the binary encoding of other on-chain programs.
+A [program](#program) with the ability to interpret the binary encoding of
+other on-chain programs.
 
-## leader
+#### leader
 
-The role of a [fullnode](terminology.md#fullnode) when it is appending [entries](terminology.md#entry) to the [ledger](terminology.md#ledger).
+The role of a [fullnode](#fullnode) when it is appending [entries](#entry) to
+the [ledger](#ledger).
 
-## leader schedule
+#### leader schedule
 
-A sequence of [fullnode](terminology.md#fullnode) [public keys](terminology.md#public-key). The cluster uses the leader schedule to determine which fullnode is the [leader](terminology.md#leader) at any moment in time.
+A sequence of [fullnode](#fullnode) [public keys](#public-key). The cluster
+uses the leader schedule to determine which fullnode is the [leader](#leader)
+at any moment in time.
 
-## ledger
+#### ledger
 
-A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
+A list of [entries](#entry) containing [transactions](#transaction) signed by
+[clients](#client).
 
-## ledger segment
+#### ledger segment
 
-Portion of the ledger which is downloaded by the replicator where storage proof data is derived.
+Portion of the ledger which is downloaded by the replicator where storage proof
+data is derived.
 
-## ledger vote
+#### ledger vote
 
-A [hash](terminology.md#hash) of the [fullnode's state](terminology.md#fullnode-state) at a given [tick height](terminology.md#tick-height). It comprises a validator's affirmation that a [block](terminology.md#block) it has received has been verified, as well as a promise not to vote for a conflicting [block](terminology.md#block) \(i.e. [fork](terminology.md#fork)\) for a specific amount of time, the [lockout](terminology.md#lockout) period.
+A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
+height](#tick-height). It comprises a validator's affirmation that a
+[block](#block) it has received has been verified, as well as a promise not to
+vote for a conflicting [block](#block) (i.e. [fork](#fork)) for a specific
+amount of time, the [lockout](#lockout) period.
 
-## light client
+#### light client
 
-A type of [client](terminology.md#client) that can verify it's pointing to a valid [cluster](terminology.md#cluster). It performs more ledger verification than a [thin client](terminology.md#thin-client) and less than a [fullnode](terminology.md#fullnode).
+A type of [client](#client) that can verify it's pointing to a valid
+[cluster](#cluster). It performs more ledger verification than a [thin
+client](#thin-client) and less than a [fullnode](#fullnode).
 
-## lockout
+#### lockout
 
-The duration of time for which a [fullnode](terminology.md#fullnode) is unable to [vote](terminology.md#ledger-vote) on another [fork](terminology.md#fork).
+The duration of time for which a [fullnode](#fullnode) is unable to
+[vote](#ledger-vote) on another [fork](#fork).
 
-## native token
+#### native token
 
-The [token](terminology.md#token) used to track work done by [nodes](terminology.md#node) in a cluster.
+The [token](#token) used to track work done by [nodes](#node) in a cluster.
 
-## node
+#### node
 
-A computer participating in a [cluster](terminology.md#cluster).
+A computer participating in a [cluster](#cluster).
 
-## node count
+#### node count
 
-The number of [fullnodes](terminology.md#fullnode) participating in a [cluster](terminology.md#cluster).
+The number of [fullnodes](#fullnode) participating in a [cluster](#cluster).
 
-## PoH
+#### PoH
 
-See [Proof of History](terminology.md#proof-of-history).
+See [Proof of History](#proof-of-history).
 
-## point
+#### point
 
-A weighted [credit](terminology.md#credit) in a rewards regime. In the validator [rewards regime](proposals/staking-rewards.md), the number of points owed to a stake during redemption is the product of the [vote credits](terminology.md#vote-credit) earned and the number of lamports staked.
+A weighted [credit](#credit) in a rewards regime.  In the validator [rewards regime](staking-rewards.md), the number of points owed to a stake during redemption is the product of the [vote credits](#vote-credit) earned and the number of lamports staked.
 
-## program
+#### program
 
-The code that interprets [instructions](terminology.md#instruction).
+The code that interprets [instructions](#instruction).
 
-## program id
+#### program id
 
-The public key of the [account](terminology.md#account) containing a [program](terminology.md#program).
+The public key of the [account](#account) containing a [program](#program).
 
-## Proof of History
+#### Proof of History
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
+A stack of proofs, each which proves that some data existed before the proof
+was created and that a precise duration of time passed before the previous
+proof. Like a [VDF](#verifiable-delay-function), a Proof of History can be
+verified in less time than it took to produce.
 
-## public key
+#### public key
 
-The public key of a [keypair](terminology.md#keypair).
+The public key of a [keypair](#keypair).
 
-## replicator
+#### replicator
 
-Storage mining client, stores some part of the ledger enumerated in blocks and submits storage proofs to the chain. Not a full-node.
+Storage mining client, stores some part of the ledger enumerated in blocks and
+submits storage proofs to the chain. Not a full-node.
 
-## root
+#### root
 
-A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a validator. The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor and not a descendant of the root are excluded from consideration for consensus and can be discarded.
+A [block](#block) or [slot](#slot) that has reached maximum [lockout](#lockout)
+on a validator.  The root is the highest block that is an ancestor of all active
+forks on a validator.  All ancestor blocks of a root are also transitively a
+root.  Blocks that are not an ancestor and not a descendant of the root are
+excluded from consideration for consensus and can be discarded.
 
-## runtime
 
-The component of a [fullnode](terminology.md#fullnode) responsible for [program](terminology.md#program) execution.
+#### runtime
 
-## secret key
+The component of a [fullnode](#fullnode) responsible for [program](#program)
+execution.
 
-The private key of a [keypair](terminology.md#keypair).
+#### secret key
 
-## slot
+The private key of a [keypair](#keypair).
 
-The period of time for which a [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
+#### slot
 
-## sol
+The period of time for which a [leader](#leader) ingests transactions and
+produces a [block](#block).
 
-The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
+#### sol
 
-## stake
+The [native token](#native-token) tracked by a [cluster](#cluster) recognized
+by the company Solana.
 
-Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [fullnode](terminology.md#fullnode) behavior can be proven.
+#### stake
 
-## storage proof
+Tokens forfeit to the [cluster](#cluster) if malicious [fullnode](#fullnode)
+behavior can be proven.
 
-A set of sha hash state which is constructed by sampling the encrypted version of the stored ledger segment at certain offsets.
+#### storage proof
 
-## storage proof challenge
+A set of sha hash state which is constructed by sampling the encrypted version
+of the stored ledger segment at certain offsets.
 
-A transaction from a replicator that verifiably proves that a validator confirmed a fake proof.
+#### storage proof challenge
 
-## storage proof claim
+A transaction from a replicator that verifiably proves that a validator
+confirmed a fake proof.
 
-A transaction from a validator which is after the timeout period given from the storage proof confirmation and which no successful challenges have been observed which rewards the parties of the storage proofs and confirmations.
+#### storage proof claim
 
-## storage proof confirmation
+A transaction from a validator which is after the timeout period given from the
+storage proof confirmation and which no successful challenges have been
+observed which rewards the parties of the storage proofs and confirmations.
 
-A transaction by a validator which indicates the set of real and fake proofs submitted by a storage miner. The transaction would contain a list of proof hash values and a bit which says if this hash is valid or fake.
+#### storage proof confirmation
 
-## storage validation capacity
+A transaction by a validator which indicates the set of real and fake proofs
+submitted by a storage miner. The transaction would contain a list of proof
+hash values and a bit which says if this hash is valid or fake.
+
+#### storage validation capacity
 
 The number of keys and samples that a validator can verify each storage epoch.
 
-## sysvar
+#### sysvar
 
-A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
+A synthetic [account](#account) provided by the runtime to allow programs to
+access network state such as current tick height, rewards [points](#point) values, etc.
 
-## thin client
+#### thin client
 
-A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
+A type of [client](#client) that trusts it is communicating with a valid
+[cluster](#cluster).
 
-## tick
+#### tick
 
-A ledger [entry](terminology.md#entry) that estimates wallclock duration.
+A ledger [entry](#entry) that estimates wallclock duration.
 
-## tick height
+#### tick height
 
-The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
+The Nth [tick](#tick) in the [ledger](#ledger).
 
-## token
+#### token
 
 A scarce, fungible member of a set of tokens.
 
-## tps
+#### tps
 
-[Transactions](terminology.md#transaction) per second.
+[Transactions](#transaction) per second.
 
-## transaction
+#### transaction
 
-One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) and executed atomically.
+One or more [instructions](#instruction) signed by the [client](#client) and
+executed atomically.
 
-## transactions entry
+#### transactions entry
 
-A set of [transactions](terminology.md#transaction) that may be executed in parallel.
+A set of [transactions](#transaction) that may be executed in parallel.
 
-## validator
+#### validator
 
-The role of a [fullnode](terminology.md#fullnode) when it is validating the [leader's](terminology.md#leader) latest [entries](terminology.md#entry).
+The role of a [fullnode](#fullnode) when it is validating the
+[leader's](#leader) latest [entries](#entry).
 
-## VDF
+#### VDF
 
-See [verifiable delay function](terminology.md#verifiable-delay-function).
+See [verifiable delay function](#verifiable-delay-function).
 
-## verifiable delay function
+#### verifiable delay function
 
-A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
+A function that takes a fixed amount of time to execute that produces a proof
+that it ran, which can then be verified in less time than it took to produce.
 
-## vote
+#### vote
 
-See [ledger vote](terminology.md#ledger-vote).
+See [ledger vote](#ledger-vote).
 
-## vote credit
+#### vote credit
 
-A reward tally for validators. A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
+A reward tally for validators.  A vote credit is awarded to a validator in its
+vote account when the validator reaches a [root](#root).
 
-## warmup period
+#### warmup period
 
-Some number of epochs after stake has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
-
+Some number of epochs after stake has been delegated while it progressively
+becomes effective. During this period, the stake is considered to be
+"activating". More info about:
+[warmup and cooldown](stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

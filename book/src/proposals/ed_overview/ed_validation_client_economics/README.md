@@ -1,4 +1,0 @@
-# Validation-client Economics
-
-Validator-clients are eligible to receive protocol-based \(i.e. via inflation\) rewards issued via stake-based annual interest rates \(calculated per epoch\) by providing compute \(CPU+GPU\) resources to validate and vote on a given PoH state. These protocol-based rewards are determined through an algorithmic disinflationary schedule as a function of total amount of circulating tokens. Additionally, these clients may earn revenue through fees via state-validation transactions and Proof-of-Replication \(PoRep\) transactions. For clarity, we separately describe the design and motivation of these revenue distriubutions for validation-clients below: state-validation protocol-based rewards, state-validation transaction fees and rent, and PoRep-validation transaction fees.
-
