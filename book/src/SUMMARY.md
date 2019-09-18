@@ -84,7 +84,6 @@
   - [Tower BFT](tower-bft.md)
   - [Leader-to-Leader Transition](leader-leader-transition.md)
   - [Leader-to-Validator Transition](leader-validator-transition.md)
-  - [Passive Stake Delegation and Rewards](passive-stake-delegation-and-rewards.md)
   - [Persistent Account Storage](persistent-account-storage.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Repair Service](repair-service.md)
