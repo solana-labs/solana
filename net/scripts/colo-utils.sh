@@ -2,7 +2,7 @@
 
 declare -r SOLANA_LOCK_FILE="/home/solana/.solana.lock"
 
-__colo_here="$(dirname "$BASH_SOURCE")"
+__colo_here="$(dirname "${BASH_SOURCE[0]}")"
 # Load colo resource specs
 export COLO_RES_N=0
 export COLO_RES_HOSTNAME=()
@@ -172,7 +172,8 @@ colo_node_requisition() {
   declare IP=$1
   declare INSTANCE_NAME=$2
 
-  declare INDEX=$(colo_res_index_from_ip "$IP")
+  declare INDEX
+  INDEX=$(colo_res_index_from_ip "$IP")
   declare RC=false
 
   colo_instance_run "$IP" "$(
@@ -214,6 +215,7 @@ EOM
   fi
 EOF
   )"
+  # shellcheck disable=SC2181
   if [[ 0 -eq $? ]]; then
     COLO_RES_REQUISITIONED+=("$INDEX")
     RC=true
