@@ -18,9 +18,10 @@ is re-keyed, *all* delegating stakes must be updated)
 
 
 ### Authority vs. Address ###
-Solana currently conflows account _address_, (i.e. its name, where it lives in the bank) with its _authority_ (i.e. who needs to 
-sign transactions that modify the state of the account).  Under this proposal, these concepts would be separate, or separable.  
-Changing an account's authority would require the signature of the current authority (aka _re-keying_).
+Programs on Solana often conflow an account's _address_, (i.e. its name, where it lives in the bank) with its _authority_ 
+(i.e. who needs to sign transactions that modify the state of the account).  Under this proposal, these concepts would 
+be separate, or separable and supported by the runtime.  Changing an account's authority would require the signature 
+of the current authority.
 
 ### Re-keying today ###
 Account rekeying is currently unimplemented in Solana, but some programs partially implement this by holding the notion of 
