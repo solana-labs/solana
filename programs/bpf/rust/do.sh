@@ -70,7 +70,7 @@ perform_action() {
             ./do.sh build "$3"
 
             cd "$3"
-            so="$targetDir"/"$profile"/solana_bpf_rust_"${3%/}".so
+            so="$targetDir"/"$profile"/solana_bpf_rust_"${3%/}"_debug.so
             dump="$targetDir"/"${3%/}"-dump
 
             if [ -f "$so" ]; then
@@ -93,6 +93,8 @@ perform_action() {
                     < "${dump}-mangled.txt" \
                     | rustfilt \
                     > "${dump}.txt"
+            else
+                echo "Warning: No dump created, cannot find: $so"
             fi
         )
         ;;
