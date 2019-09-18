@@ -50,8 +50,8 @@ pub fn many_args_sret(
 
 #[cfg(test)]
 mod test {
-    extern crate std;
     use super::*;
+    extern crate solana_sdk_bpf_test;
 
     #[test]
     fn test_many_args() {

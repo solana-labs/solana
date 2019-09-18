@@ -1227,6 +1227,7 @@ version = "0.19.0-pre0"
 dependencies = [
  "solana-bpf-rust-128bit-dep 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1234,6 +1235,7 @@ name = "solana-bpf-rust-128bit-dep"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1241,6 +1243,7 @@ name = "solana-bpf-rust-alloc"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1249,6 +1252,7 @@ version = "0.19.0-pre0"
 dependencies = [
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1256,6 +1260,7 @@ name = "solana-bpf-rust-external-spend"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1263,6 +1268,7 @@ name = "solana-bpf-rust-iter"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1271,6 +1277,7 @@ version = "0.19.0-pre0"
 dependencies = [
  "solana-bpf-rust-many-args-dep 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1278,6 +1285,7 @@ name = "solana-bpf-rust-many-args-dep"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1285,6 +1293,7 @@ name = "solana-bpf-rust-noop"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1292,6 +1301,7 @@ name = "solana-bpf-rust-panic"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1300,6 +1310,7 @@ version = "0.19.0-pre0"
 dependencies = [
  "solana-bpf-rust-param-passing-dep 0.19.0-pre0",
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1307,6 +1318,7 @@ name = "solana-bpf-rust-param-passing-dep"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1314,6 +1326,7 @@ name = "solana-bpf-rust-sysval"
 version = "0.19.0-pre0"
 dependencies = [
  "solana-sdk 0.19.0-pre0",
+ "solana-sdk-bpf-test 0.19.0-pre0",
 ]
 
 [[package]]
@@ -1459,6 +1472,10 @@ dependencies = [
  "solana-logger 0.19.0-pre0",
  "untrusted 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "solana-sdk-bpf-test"
+version = "0.19.0-pre0"
 
 [[package]]
 name = "solana-stake-api"

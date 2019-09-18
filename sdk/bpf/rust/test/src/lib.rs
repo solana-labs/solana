@@ -1,4 +1,4 @@
-//! @brief Solana Rust-based BPF program utility functions and types
+  //! @brief Solana Rust-based BPF program utility functions and types
 
 #[no_mangle]
 pub unsafe fn sol_log_(message: *const u8, length: u64) {

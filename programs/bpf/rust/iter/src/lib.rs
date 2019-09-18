@@ -18,3 +18,14 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
 
     SUCCESS
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    extern crate solana_sdk_bpf_test;
+
+    #[test]
+    fn test_entrypoint() {
+        assert_eq!(SUCCESS, entrypoint(std::ptr::null_mut()));
+    }
+}

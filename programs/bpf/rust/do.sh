@@ -28,17 +28,17 @@ perform_action() {
     set -e
     case "$1" in
     build)
-         "$sdkDir"/bpf/rust/build.sh "$2"
+        "$sdkDir"/bpf/rust/build.sh "$2"
 
-         so_path="$targetDir/$profile/"
-         so_name="solana_bpf_rust_${3%/}"
-         if [ -f "$so_path/${so_name}.so" ]; then
-               cp "$so_path/${so_name}.so" "$so_path/${so_name}_debug.so"
-                "$sdkDir"/bpf/dependencies/llvm-native/bin/llvm-objcopy --strip-all "$so_path/${so_name}.so" "$so_path/$so_name.so"
+        so_path="$targetDir/$profile/"
+        so_name="solana_bpf_rust_${3%/}"
+        if [ -f "$so_path/${so_name}.so" ]; then
+            cp "$so_path/${so_name}.so" "$so_path/${so_name}_debug.so"
+            "$sdkDir"/bpf/dependencies/llvm-native/bin/llvm-objcopy --strip-all "$so_path/${so_name}.so" "$so_path/$so_name.so"
         fi
         ;;
     clean)
-         "$sdkDir"/bpf/rust/clean.sh "$2"
+        "$sdkDir"/bpf/rust/clean.sh "$2"
         ;;
     test)
         (
@@ -77,17 +77,17 @@ perform_action() {
                 ls \
                     -la \
                     "$so" \
-                    > "${dump}-mangled.txt"
+                    >"${dump}-mangled.txt"
                 greadelf \
                     -aW \
                     "$so" \
-                    >> "${dump}-mangled.txt"
+                    >>"${dump}-mangled.txt"
                 ../"$sdkDir"/bpf/dependencies/llvm-native/bin/llvm-objdump \
                     -print-imm-hex \
                     --source \
                     --disassemble \
                     "$so" \
-                    >> "${dump}-mangled.txt"
+                    >>"${dump}-mangled.txt"
                 sed \
                     s/://g \
                     < "${dump}-mangled.txt" \
@@ -114,7 +114,7 @@ set -e
 
 if [ "$#" -ne 2 ]; then
     # Build all projects
-    for project in */ ; do
+    for project in */; do
         perform_action "$1" "$PWD/$project" "$project"
     done
 else

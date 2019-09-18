@@ -25,7 +25,6 @@ pub mod timing;
 pub mod account_info;
 pub mod entrypoint;
 pub mod log;
-pub mod program_test;
 
 // Modules not usable by on-chain programs
 #[cfg(not(feature = "program"))]
