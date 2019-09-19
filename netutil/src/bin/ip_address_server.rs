@@ -1,4 +1,5 @@
 use clap::{crate_version, App, Arg};
+use tokio::net::TcpListener;
 
 fn main() {
     solana_logger::setup();
@@ -16,7 +17,8 @@ fn main() {
     let port = port
         .parse()
         .unwrap_or_else(|_| panic!("Unable to parse {}", port));
-    let _runtime = solana_netutil::ip_echo_server(port);
+    let tcp_listener = TcpListener::bind(&port).expect("unable to start tcp listener");
+    let _runtime = solana_netutil::ip_echo_server(tcp_listener);
     loop {
         std::thread::park();
     }
