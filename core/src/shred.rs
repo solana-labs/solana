@@ -23,8 +23,6 @@ lazy_static! {
         { serialized_size(&DataShredHeader::default()).unwrap() as usize };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
-    static ref SIZE_OF_EMPTY_VEC: usize =
-        { bincode::serialized_size(&vec![0u8; 0]).unwrap() as usize };
     static ref SIZE_OF_SHRED_TYPE: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
 }
 
@@ -36,6 +34,69 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
 /// The constants that define if a shred is data or coding
 pub const DATA_SHRED: u8 = 0b1010_0101;
 pub const CODING_SHRED: u8 = 0b0101_1010;
+
+/// This limit comes from reed solomon library, but unfortunately they don't have
+/// a public constant defined for it.
+const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
+
+/// Based on rse benchmarks, the optimal erasure config uses 16 data shreds and 4 coding shreds
+pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
+
+const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
+const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
+
+/// A common header that is present at start of every shred
+#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
+pub struct ShredCommonHeader {
+    pub signature: Signature,
+    pub slot: u64,
+    pub index: u32,
+}
+
+/// A common header that is present at start of every data shred
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+pub struct DataShredHeader {
+    pub common_header: CodingShredHeader,
+    pub data_header: ShredCommonHeader,
+    pub parent_offset: u16,
+    pub flags: u8,
+}
+
+/// The coding shred header has FEC information
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+pub struct CodingShredHeader {
+    pub shred_type: u8,
+    pub coding_header: ShredCommonHeader,
+    pub num_data_shreds: u16,
+    pub num_coding_shreds: u16,
+    pub position: u16,
+}
+
+impl Default for DataShredHeader {
+    fn default() -> Self {
+        DataShredHeader {
+            common_header: CodingShredHeader {
+                shred_type: DATA_SHRED,
+                ..CodingShredHeader::default()
+            },
+            data_header: ShredCommonHeader::default(),
+            parent_offset: 0,
+            flags: 0,
+        }
+    }
+}
+
+impl Default for CodingShredHeader {
+    fn default() -> Self {
+        CodingShredHeader {
+            shred_type: CODING_SHRED,
+            coding_header: ShredCommonHeader::default(),
+            num_data_shreds: 0,
+            num_coding_shreds: 0,
+            position: 0,
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Shred {
@@ -177,69 +238,6 @@ impl Shred {
         } + *SIZE_OF_SIGNATURE;
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[signed_payload_offset..])
-    }
-}
-
-/// This limit comes from reed solomon library, but unfortunately they don't have
-/// a public constant defined for it.
-const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
-
-/// Based on rse benchmarks, the optimal erasure config uses 16 data shreds and 4 coding shreds
-pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
-
-const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
-const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
-
-/// A common header that is present at start of every shred
-#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
-pub struct ShredCommonHeader {
-    pub signature: Signature,
-    pub slot: u64,
-    pub index: u32,
-}
-
-/// A common header that is present at start of every data shred
-#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
-pub struct DataShredHeader {
-    pub common_header: CodingShredHeader,
-    pub data_header: ShredCommonHeader,
-    pub parent_offset: u16,
-    pub flags: u8,
-}
-
-/// The coding shred header has FEC information
-#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
-pub struct CodingShredHeader {
-    pub shred_type: u8,
-    pub coding_header: ShredCommonHeader,
-    pub num_data_shreds: u16,
-    pub num_coding_shreds: u16,
-    pub position: u16,
-}
-
-impl Default for DataShredHeader {
-    fn default() -> Self {
-        DataShredHeader {
-            common_header: CodingShredHeader {
-                shred_type: DATA_SHRED,
-                ..CodingShredHeader::default()
-            },
-            data_header: ShredCommonHeader::default(),
-            parent_offset: 0,
-            flags: 0,
-        }
-    }
-}
-
-impl Default for CodingShredHeader {
-    fn default() -> Self {
-        CodingShredHeader {
-            shred_type: CODING_SHRED,
-            coding_header: ShredCommonHeader::default(),
-            num_data_shreds: 0,
-            num_coding_shreds: 0,
-            position: 0,
-        }
     }
 }
 
