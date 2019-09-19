@@ -11,7 +11,6 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     instruction::InstructionError,
     pubkey::Pubkey,
-    rent_calculator::RentCalculator,
     sysvar::{
         self,
         stake_history::{StakeHistory, StakeHistoryEntry},
@@ -379,12 +378,7 @@ impl Lockup {
 }
 
 pub trait StakeAccount {
-    fn lockup(
-        &mut self,
-        slot: Slot,
-        rent_calculator: &RentCalculator,
-        custodian: &Pubkey,
-    ) -> Result<(), InstructionError>;
+    fn lockup(&mut self, slot: Slot, custodian: &Pubkey) -> Result<(), InstructionError>;
     fn authorize(
         &mut self,
         authorized_pubkey: &Pubkey,
@@ -421,17 +415,8 @@ pub trait StakeAccount {
 }
 
 impl<'a> StakeAccount for KeyedAccount<'a> {
-    fn lockup(
-        &mut self,
-        slot: Slot,
-        rent_calculator: &RentCalculator,
-        custodian: &Pubkey,
-    ) -> Result<(), InstructionError> {
+    fn lockup(&mut self, slot: Slot, custodian: &Pubkey) -> Result<(), InstructionError> {
         if let StakeState::Uninitialized = self.state()? {
-            if !rent_calculator.is_exempt(self.account.lamports, self.account.data.len()) {
-                return Err(InstructionError::InsufficientFunds);
-            }
-
             self.set_state(&StakeState::Lockup(Lockup {
                 slot,
                 custodian: *custodian,
@@ -650,9 +635,7 @@ pub fn create_account(voter_pubkey: &Pubkey, vote_account: &Account, lamports: u
 mod tests {
     use super::*;
     use crate::id;
-    use solana_sdk::{
-        account::Account, pubkey::Pubkey, rent_calculator::RentCalculator, system_program,
-    };
+    use solana_sdk::{account::Account, pubkey::Pubkey, system_program};
     use solana_vote_api::vote_state;
 
     #[test]
@@ -1079,10 +1062,7 @@ mod tests {
         // unsigned keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         let custodian = Pubkey::new_rand();
-        assert_eq!(
-            stake_keyed_account.lockup(1, &RentCalculator::default(), &custodian),
-            Ok(())
-        );
+        assert_eq!(stake_keyed_account.lockup(1, &custodian), Ok(()));
 
         // first time works, as is uninit
         assert_eq!(
@@ -1096,7 +1076,7 @@ mod tests {
 
         // 2nd time fails, can't move it from anything other than uninit->lockup
         assert_eq!(
-            stake_keyed_account.lockup(1, &RentCalculator::default(), &Pubkey::default()),
+            stake_keyed_account.lockup(1, &Pubkey::default()),
             Err(InstructionError::InvalidAccountData)
         );
     }
@@ -1215,9 +1195,7 @@ mod tests {
         // lockup
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         let custodian = Pubkey::new_rand();
-        stake_keyed_account
-            .lockup(0, &RentCalculator::default(), &custodian)
-            .unwrap();
+        stake_keyed_account.lockup(0, &custodian).unwrap();
 
         // signed keyed account and locked up, more than available should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);

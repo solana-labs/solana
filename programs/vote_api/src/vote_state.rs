@@ -4,7 +4,6 @@ use crate::{id, vote_instruction::VoteError};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::rent_calculator::RentCalculator;
 use solana_sdk::sysvar::slot_hashes::SlotHash;
 use solana_sdk::{
     account::{Account, KeyedAccount},
@@ -360,18 +359,10 @@ pub fn withdraw(
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account(
     vote_account: &mut KeyedAccount,
-    rent_calculator: &RentCalculator,
     node_pubkey: &Pubkey,
     commission: u8,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
-
-    if !rent_calculator.is_exempt(
-        vote_account.account.lamports,
-        vote_account.account.data.len(),
-    ) {
-        return Err(InstructionError::InsufficientFunds);
-    }
 
     if vote_state.authorized_voter_pubkey != Pubkey::default() {
         return Err(InstructionError::AccountAlreadyInitialized);
@@ -433,7 +424,6 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::account_utils::State;
     use solana_sdk::hash::hash;
-    use solana_sdk::rent_calculator::RentCalculator;
 
     const MAX_RECENT_VOTES: usize = 16;
 
@@ -446,21 +436,11 @@ mod tests {
 
         //init should pass
         let mut vote_account = KeyedAccount::new(&vote_account_pubkey, false, &mut vote_account);
-        let res = initialize_account(
-            &mut vote_account,
-            &RentCalculator::default(),
-            &node_pubkey,
-            0,
-        );
+        let res = initialize_account(&mut vote_account, &node_pubkey, 0);
         assert_eq!(res, Ok(()));
 
         // reinit should fail
-        let res = initialize_account(
-            &mut vote_account,
-            &RentCalculator::default(),
-            &node_pubkey,
-            0,
-        );
+        let res = initialize_account(&mut vote_account, &node_pubkey, 0);
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
     }
 

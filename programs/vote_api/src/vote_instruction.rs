@@ -65,10 +65,7 @@ pub enum VoteInstruction {
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u8) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new(sysvar::rent::id(), false),
-    ];
+    let account_metas = vec![AccountMeta::new(*vote_pubkey, false)];
     Instruction::new(
         id(),
         &VoteInstruction::InitializeAccount(*node_pubkey, commission),
@@ -90,8 +87,13 @@ pub fn create_account(
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;
-    let create_ix =
-        system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
+    let create_ix = system_instruction::create_rent_exempted_account(
+        from_pubkey,
+        vote_pubkey,
+        lamports,
+        space,
+        &id(),
+    );
     let init_ix = initialize_account(vote_pubkey, node_pubkey, commission);
     vec![create_ix, init_ix]
 }
@@ -177,15 +179,7 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         VoteInstruction::InitializeAccount(node_pubkey, commission) => {
-            if rest.is_empty() {
-                Err(InstructionError::InvalidInstructionData)?;
-            }
-            vote_state::initialize_account(
-                me,
-                &sysvar::rent::from_keyed_account(&rest[0])?.rent_calculator,
-                &node_pubkey,
-                commission,
-            )
+            vote_state::initialize_account(me, &node_pubkey, commission)
         }
         VoteInstruction::AuthorizeVoter(voter_pubkey) => {
             vote_state::authorize_voter(me, rest, &voter_pubkey)
