@@ -23,16 +23,19 @@ impl StandardBroadcastRun {
 
     fn update_broadcast_stats(
         &mut self,
+        receive_entries_elapsed: u64,
+        shredding_elapsed: u64,
+        insert_shreds_elapsed: u64,
         broadcast_elapsed: u64,
         run_elapsed: u64,
         num_entries: usize,
-        to_blobs_elapsed: u64,
+        num_shreds: usize,
         blob_index: u64,
     ) {
         inc_new_counter_info!("broadcast_service-time_ms", broadcast_elapsed as usize);
 
         self.stats.num_entries.push(num_entries);
-        self.stats.to_blobs_elapsed.push(to_blobs_elapsed);
+        self.stats.to_blobs_elapsed.push(shredding_elapsed);
         self.stats.run_elapsed.push(run_elapsed);
         if self.stats.num_entries.len() >= 16 {
             info!(
@@ -44,7 +47,16 @@ impl StandardBroadcastRun {
             self.stats.run_elapsed.clear();
         }
 
-        datapoint!("broadcast-service", ("transmit-index", blob_index, i64));
+        datapoint_info!(
+            "broadcast-service",
+            ("num_entries", num_entries as i64, i64),
+            ("num_shreds", num_shreds as i64, i64),
+            ("receive_time", receive_entries_elapsed as i64, i64),
+            ("shredding_time", shredding_elapsed as i64, i64),
+            ("insert_shred_time", insert_shreds_elapsed as i64, i64),
+            ("broadcast_time", broadcast_elapsed as i64, i64),
+            ("transmit-index", blob_index as i64, i64),
+        );
     }
 }
 
@@ -65,7 +77,6 @@ impl BroadcastRun for StandardBroadcastRun {
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 
         // 2) Convert entries to blobs + generate coding blobs
-        let to_blobs_start = Instant::now();
         let keypair = &cluster_info.read().unwrap().keypair.clone();
         let latest_shred_index = blocktree
             .meta(bank.slot())
@@ -79,6 +90,7 @@ impl BroadcastRun for StandardBroadcastRun {
             0
         };
 
+        let to_shreds_start = Instant::now();
         let (shred_infos, latest_shred_index) = entries_to_shreds(
             receive_results.entries,
             last_tick,
@@ -88,14 +100,15 @@ impl BroadcastRun for StandardBroadcastRun {
             latest_shred_index,
             parent_slot,
         );
+        let to_shreds_elapsed = to_shreds_start.elapsed();
 
         let all_seeds: Vec<[u8; 32]> = shred_infos.iter().map(|s| s.seed()).collect();
         let num_shreds = shred_infos.len();
+        let insert_shreds_start = Instant::now();
         blocktree
             .insert_shreds(shred_infos.clone(), None)
             .expect("Failed to insert shreds in blocktree");
-
-        let to_blobs_elapsed = to_blobs_start.elapsed();
+        let insert_shreds_elapsed = insert_shreds_start.elapsed();
 
         // 3) Start broadcast step
         let broadcast_start = Instant::now();
@@ -111,14 +124,17 @@ impl BroadcastRun for StandardBroadcastRun {
             stakes.as_ref(),
         )?;
 
-        inc_new_counter_debug!("streamer-broadcast-sent", num_shreds);
-
         let broadcast_elapsed = broadcast_start.elapsed();
         self.update_broadcast_stats(
+            duration_as_ms(&receive_elapsed),
+            duration_as_ms(&to_shreds_elapsed),
+            duration_as_ms(&insert_shreds_elapsed),
             duration_as_ms(&broadcast_elapsed),
-            duration_as_ms(&(receive_elapsed + to_blobs_elapsed + broadcast_elapsed)),
+            duration_as_ms(
+                &(receive_elapsed + to_shreds_elapsed + insert_shreds_elapsed + broadcast_elapsed),
+            ),
             num_entries,
-            duration_as_ms(&to_blobs_elapsed),
+            num_shreds,
             latest_shred_index,
         );
 

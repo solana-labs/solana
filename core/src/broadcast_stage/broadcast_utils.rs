@@ -15,6 +15,11 @@ pub(super) struct ReceiveResults {
     pub last_tick: u64,
 }
 
+/// Theis parameter tunes how many entries are received in one iteration of recv loop
+/// This will prevent broadcast stage from consuming more entries, that could have led
+/// to delays in shredding, and broadcasting shreds to peer validators
+const RECEIVE_ENTRY_COUNT_THRESHOLD: usize = 8;
+
 pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result<ReceiveResults> {
     let timer = Duration::new(1, 0);
     let (bank, (entry, mut last_tick)) = receiver.recv_timeout(timer)?;
@@ -37,6 +42,10 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
             }
             last_tick = tick_height;
             entries.push(entry);
+
+            if entries.len() >= RECEIVE_ENTRY_COUNT_THRESHOLD {
+                break;
+            }
 
             assert!(last_tick <= max_tick_height);
             if last_tick == max_tick_height {

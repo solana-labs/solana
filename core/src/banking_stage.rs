@@ -52,7 +52,7 @@ pub const NUM_THREADS: u32 = 4;
 
 const TOTAL_BUFFERED_PACKETS: usize = 500_000;
 
-const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 512;
+const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {

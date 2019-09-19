@@ -694,7 +694,12 @@ impl ReplayStage {
         let bank_progress = &mut progress
             .entry(bank.slot())
             .or_insert_with(|| ForkProgress::new(bank.last_blockhash()));
-        let result = Self::verify_and_process_entries(&bank, &entries, &bank_progress.last_entry);
+        let result = Self::verify_and_process_entries(
+            &bank,
+            &entries,
+            &bank_progress.last_entry,
+            bank_progress.num_blobs,
+        );
         bank_progress.num_blobs += num;
         if let Some(last_entry) = entries.last() {
             bank_progress.last_entry = last_entry.hash;
@@ -707,14 +712,16 @@ impl ReplayStage {
         bank: &Bank,
         entries: &[Entry],
         last_entry: &Hash,
+        shred_index: usize,
     ) -> Result<()> {
         if !entries.verify(last_entry) {
             warn!(
-                "entry verification failed {} {} {} {}",
+                "entry verification failed {} {} {} {} {}",
                 entries.len(),
                 bank.tick_height(),
                 last_entry,
-                bank.last_blockhash()
+                bank.last_blockhash(),
+                shred_index
             );
 
             datapoint_error!(
