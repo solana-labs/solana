@@ -27,26 +27,35 @@ macro_rules! info {
 /// Prints a string to stdout
 ///
 /// @param message - Message to print
+#[cfg(feature = "program")]
 pub fn sol_log(message: &str) {
     unsafe {
         sol_log_(message.as_ptr(), message.len() as u64);
     }
 }
+#[cfg(feature = "program")]
 extern "C" {
     fn sol_log_(message: *const u8, length: u64);
 }
+#[cfg(not(feature = "program"))]
+pub fn sol_log(_message: &str) {}
 
 /// Prints 64 bit values represented as hexadecimal to stdout
 ///
 /// @param argx - integer arguments to print
+
+#[cfg(feature = "program")]
 pub fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
     unsafe {
         sol_log_64_(arg1, arg2, arg3, arg4, arg5);
     }
 }
+#[cfg(feature = "program")]
 extern "C" {
     fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64);
 }
+#[cfg(not(feature = "program"))]
+pub fn sol_log_64(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) {}
 
 /// Prints the hexadecimal representation of a slice
 ///
@@ -65,7 +74,7 @@ pub fn sol_log_slice(slice: &[u8]) {
 #[allow(dead_code)]
 pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     for (i, account) in accounts.iter().enumerate() {
-        sol_log("SolKeyedAccount");
+        sol_log("AccountInfo");
         sol_log_64(0, 0, 0, 0, i as u64);
         sol_log("- Is signer");
         sol_log_64(0, 0, 0, 0, account.is_signer as u64);
