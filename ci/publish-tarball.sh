@@ -126,6 +126,7 @@ EOF
   tar cvf solana-release-$TARGET.tar solana-release
   bzip2 solana-release-$TARGET.tar
   cp solana-release/bin/solana-install-init solana-install-init-$TARGET
+  cp solana-release/version.yml solana-release-$TARGET.yml
 )
 
 # Metrics tarball is platform agnostic, only publish it from Linux
@@ -137,7 +138,7 @@ fi
 
 source ci/upload-ci-artifact.sh
 
-for file in solana-release-$TARGET.tar.bz2 solana-install-init-"$TARGET"* $MAYBE_METRICS_TARBALL; do
+for file in solana-release-$TARGET.tar.bz2 solana-release-$TARGET.yml solana-install-init-"$TARGET"* $MAYBE_METRICS_TARBALL; do
   upload-ci-artifact "$file"
 
   if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
