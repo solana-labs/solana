@@ -3,8 +3,12 @@ use crate::erasure::Session;
 use crate::result;
 use crate::result::Error;
 use bincode::serialized_size;
+use core::cell::RefCell;
 use lazy_static::lazy_static;
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
+use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -27,6 +31,11 @@ lazy_static! {
         { bincode::serialized_size(&vec![0u8; 0]).unwrap() as usize };
     static ref SIZE_OF_SHRED_TYPE: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
 }
+
+thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+                    .num_threads(get_thread_count())
+                    .build()
+                    .unwrap()));
 
 /// The constants that define if a shred is data or coding
 pub const DATA_SHRED: u8 = 0b1010_0101;
@@ -432,16 +441,25 @@ impl Shredder {
     fn sign_unsigned_shreds_and_generate_codes(&mut self) {
         let signature_offset = CodingShred::overhead();
         let signer = self.signer.clone();
-        self.shreds[self.fec_set_shred_start..]
-            .iter_mut()
-            .for_each(|d| Self::sign_shred(&signer, d, signature_offset));
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                self.shreds[self.fec_set_shred_start..]
+                    .par_iter_mut()
+                    .for_each(|d| Self::sign_shred(&signer, d, signature_offset));
+            })
+        });
         let unsigned_coding_shred_start = self.shreds.len();
 
         self.generate_coding_shreds();
         let signature_offset = *SIZE_OF_SHRED_TYPE;
-        self.shreds[unsigned_coding_shred_start..]
-            .iter_mut()
-            .for_each(|d| Self::sign_shred(&signer, d, signature_offset));
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                self.shreds[unsigned_coding_shred_start..]
+                    .par_iter_mut()
+                    .for_each(|d| Self::sign_shred(&signer, d, signature_offset));
+            })
+        });
+
         self.fec_set_shred_start = self.shreds.len();
     }
 
