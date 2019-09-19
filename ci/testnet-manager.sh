@@ -219,6 +219,10 @@ sanity() {
       NO_INSTALL_CHECK=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh edge-testnet-solana-com gce us-west1-b
+    )
+    (
+      echo "--- net.sh restart"
+      set -x
       time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
     )
     ;;
@@ -236,6 +240,10 @@ sanity() {
       NO_INSTALL_CHECK=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
+    )
+    (
+      echo "--- net.sh restart"
+      set -x
       time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
     )
     ;;
@@ -378,6 +386,10 @@ deploy() {
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
         ${maybeDelete:+-D}
+    )
+    (
+      echo "--- net.sh update"
+      set -x
       time net/net.sh update -t "$CHANNEL_OR_TAG" --platform\ {linux,osx,windows}
     )
     ;;
