@@ -711,19 +711,19 @@ EOF
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$enableGpu" "$clientMachineType" "${zones[0]}" "$clientBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType"
+      "$startupScript" "" "$bootDiskType" ""
   fi
 
   if $blockstreamer; then
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
       "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$blockstreamerAddress" "$bootDiskType"
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType" ""
   fi
 
   if [[ $replicatorNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-replicator" "$replicatorNodeCount" \
       false "$replicatorMachineType" "${zones[0]}" "$replicatorBootDiskSizeInGb" \
-      "$startupScript" "" ""
+      "$startupScript" "" "" ""
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
