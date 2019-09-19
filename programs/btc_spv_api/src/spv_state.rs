@@ -71,9 +71,9 @@ impl BlockHeader {
             return Err(SpvError::InvalidBlockHeader);
         }
 
-        match decode_hex(header) {
+        match hex::decode(header) {
             Ok(header) => {
-                let bhbytes = decode_hex(blockhash)?;
+                let bhbytes = hex::decode(blockhash)?;
                 const SIZE: usize = 80;
                 let mut hh = [0; SIZE];
                 hh.copy_from_slice(&header[..header.len()]);
@@ -95,33 +95,142 @@ impl BlockHeader {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Transaction {
-    inputs: Vec<Input>,
+pub struct BitcoinTransaction {
+    pub inputs: Vec<Input>,
+
+    pub inputs_num: u64,
     //input utxos
-    outputs: Vec<Output>,
+    pub outputs: Vec<Output>,
+
+    pub outputs_num: u64,
     //output utxos
-    version: u32,
+    pub version: u32,
     //bitcoin network version
-    locktime: u32,
+    pub lock_time: u32,
+
+    pub bytes_len: usize,
 }
 
-// impl Transaction {
-//     fn new(bytes: Vec<u8>) -> Self {
-//         //reinsert later
-//     }
-//     fn hexnew(hex: String) -> Self {
-//         //reinsert later
-//     }
-// }
+impl BitcoinTransaction {
+    pub fn new(txbytes: Vec<u8>) -> Self {
+        let mut ver: [u8; 4] = [0; 4];
+        ver.copy_from_slice(&txbytes[..4]);
+        let version = u32::from_le_bytes(ver);
+
+        let inputs_num: u64 = decode_variable_int(&txbytes[4..13]).unwrap();
+        let vinlen: usize = measure_variable_int(&txbytes[4..13]).unwrap();
+        let mut inputstart: usize = 4 + vinlen;
+        let mut inputs = Vec::new();
+
+        if inputs_num > 0 {
+            for i in 0..inputs_num {
+                let mut input = Input::new(txbytes[inputstart..].to_vec());
+                inputstart += input.bytes_len;
+                inputs.push(input);
+            }
+            inputs.to_vec();
+        }
+
+        let outputs_num: u64 = decode_variable_int(&txbytes[inputstart..9 + inputstart]).unwrap();
+        let voutlen: usize = measure_variable_int(&txbytes[inputstart..9 + inputstart]).unwrap();
+
+        let mut outputstart: usize = inputstart + voutlen;
+        let mut outputs = Vec::new();
+        for i in 0..outputs_num {
+            let mut output = Output::new(txbytes[outputstart..].to_vec());
+            outputstart += output.bytes_len;
+            outputs.push(output);
+        }
+
+        let mut lt: [u8; 4] = [0; 4];
+        lt.copy_from_slice(&txbytes[outputstart..4 + outputstart]);
+        let lock_time = u32::from_le_bytes(lt);
+
+        assert_eq!(inputs.len(), inputs_num as usize);
+        assert_eq!(outputs.len(), outputs_num as usize);
+
+        BitcoinTransaction {
+            inputs,
+            inputs_num,
+            outputs,
+            outputs_num,
+            version,
+            lock_time,
+            bytes_len: 4 + outputstart,
+        }
+    }
+    pub fn hexnew(hex: String) -> Result<BitcoinTransaction, SpvError> {
+        match hex::decode(&hex) {
+            Ok(txbytes) => Ok(BitcoinTransaction::new(txbytes)),
+            Err(e) => Err(SpvError::ParseError),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Input {
-    r#type: InputType,
+    pub input_type: InputType,
     // Type of the input
-    position: u32,
+    pub position: u32,
     // position of the tx in its Block
-    txhash: BitcoinTxHash,
+    pub txhash: BitcoinTxHash,
     // hash of the transaction
+    pub script_length: u64,
+    // length of the spend script
+    pub script: Vec<u8>,
+    // script bytes
+    pub sequence: [u8; 4],
+    // length of the input in bytes
+    pub bytes_len: usize,
+}
+
+impl Input {
+    fn new(ibytes: Vec<u8>) -> Self {
+        let mut txhash: [u8; 32] = [0; 32];
+        txhash.copy_from_slice(&ibytes[..32]);
+
+        let mut tx_out_index: [u8; 4] = [0; 4];
+        tx_out_index.copy_from_slice(&ibytes[32..36]);
+        let position = u32::from_le_bytes(tx_out_index);
+
+        let script_length: u64 = decode_variable_int(&ibytes[36..45]).unwrap();
+        let script_length_len: usize = measure_variable_int(&ibytes[36..45]).unwrap();
+        let script_start = 36 + script_length_len; //checkc for correctness
+        let script_end = script_start + script_length as usize;
+        let input_end = script_end + 4;
+
+        let script: Vec<u8> = ibytes[script_start..script_length as usize].to_vec();
+
+        let mut sequence: [u8; 4] = [0; 4];
+        sequence.copy_from_slice(&ibytes[script_end..input_end]);
+
+        let input_type: InputType = InputType::NONE; // testing measure
+
+        Self {
+            input_type,
+            position,
+            txhash,
+            script_length,
+            script,
+            sequence,
+            bytes_len: input_end,
+        }
+    }
+
+    fn default() -> Self {
+        let txh: [u8; 32] = [0; 32];
+        let seq: [u8; 4] = [0; 4];
+
+        Self {
+            input_type: InputType::NONE,
+            position: 55,
+            txhash: txh,
+            script_length: 45,
+            script: txh.to_vec(),
+            sequence: seq,
+            bytes_len: 123,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -134,11 +243,53 @@ pub enum InputType {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Output {
-    r#type: OutputType,
+    pub output_type: OutputType,
     // type of the output
-    value: u64,
+    pub value: u64,
     // amount of btc in sats
-    payload: Vec<u8>, // data sent with the transaction
+    pub script: Vec<u8>,
+
+    pub script_length: u64,
+
+    pub bytes_len: usize,
+    // payload: Option<Vec<u8>>,
+    // // data sent with the transaction (Op return)
+}
+
+impl Output {
+    fn new(obytes: Vec<u8>) -> Self {
+        let mut val: [u8; 8] = [0; 8];
+        val.copy_from_slice(&obytes[..8]);
+        let value: u64 = u64::from_le_bytes(val);
+
+        let script_start: usize = 8 + measure_variable_int(&obytes[8..17]).unwrap();
+        let script_length = decode_variable_int(&obytes[8..script_start]).unwrap();
+        let script_end: usize = script_start + script_length as usize;
+
+        let script = obytes[script_start..script_end].to_vec();
+
+        let output_type = OutputType::WPKH; // temporary hardcode
+
+        Self {
+            output_type,
+            value,
+            script,
+            script_length,
+            bytes_len: script_end,
+        }
+    }
+
+    fn default() -> Self {
+        let transaction_hash: [u8; 32] = [0; 32];
+
+        Self {
+            output_type: OutputType::WPKH,
+            value: 55,
+            script: transaction_hash.to_vec(),
+            script_length: 45,
+            bytes_len: 123,
+        }
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -150,6 +301,7 @@ pub enum OutputType {
     PKH,
     SH,
     NONSTANDARD,
+    // https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md
 }
 
 pub type HeaderChain = Vec<BlockHeader>;
@@ -221,7 +373,7 @@ pub struct Proof {
     // chain of bitcoin headers provifing context for the proof
     pub headers: HeaderChain,
     // transaction associated with the Proof
-    pub transaction: Transaction,
+    pub transaction: BitcoinTransaction,
     // public key of the request this proof corresponds to
     pub request: Pubkey,
 }
@@ -232,6 +384,8 @@ pub enum AccountState {
     Request(ClientRequestInfo),
     // Verified Proof
     Verification(Proof),
+    // Account holds a HeaderStore structure
+    Headers(HeaderAccountInfo),
     // Account's userdata is Unallocated
     Unallocated,
     // Invalid
@@ -253,6 +407,7 @@ pub enum SpvError {
     // header store write/read result is invalid
     ParseError,
     // other errors with parsing inputs
+    InvalidAccount,
 }
 
 impl error::Error for SpvError {
@@ -274,6 +429,12 @@ impl From<DecodeHexError> for SpvError {
     }
 }
 
+impl From<hex::FromHexError> for SpvError {
+    fn from(e: hex::FromHexError) -> Self {
+        SpvError::ParseError
+    }
+}
+
 // impl fmt::Debug for SpvError {
 //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result{
 //         match self {
@@ -290,6 +451,7 @@ impl fmt::Display for SpvError {
             SpvError::InvalidBlockHeader => "BlockHeader is malformed or does not apply ".fmt(f),
             SpvError::HeaderStoreError => "Placeholder headerstore error text".fmt(f),
             SpvError::ParseError => "Error parsing blockheaders placceholder text".fmt(f),
+            SpvError::InvalidAccount => "Provided account is not usable or does not exist".fmt(f),
         }
     }
 }

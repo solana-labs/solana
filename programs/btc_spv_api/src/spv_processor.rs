@@ -3,7 +3,8 @@
 use crate::spv_instruction::*;
 use crate::spv_state::*;
 #[allow(unused_imports)]
-use crate::utils::decode_hex;
+use crate::utils::*;
+use hex;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
@@ -129,8 +130,8 @@ mod test {
     fn test_parse_header_hex() -> Result<(), SpvError> {
         let testheader = "010000008a730974ac39042e95f82d719550e224c1a680a8dc9e8df9d007000000000000f50b20e8720a552dd36eb2ebdb7dceec9569e0395c990c1eb8a4292eeda05a931e1fce4e9a110e1a7a58aeb0";
         let testhash = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
-        let testheaderbytes = decode_hex(&testheader)?;
-        let testhashbytes = decode_hex(&testhash)?;
+        let testheaderbytes = hex::decode(&testheader)?;
+        let testhashbytes = hex::decode(&testhash)?;
 
         let mut blockhash: [u8; 32] = [0; 32];
         blockhash.copy_from_slice(&testhashbytes[..32]);
@@ -162,5 +163,28 @@ mod test {
         assert_eq!(bh.nonce, test_nonce);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_transaction_hex() {
+        let testblockhash = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
+        let testtxhash = "5b09bbb8d3cb2f8d4edbcf30664419fb7c9deaeeb1f62cb432e7741c80dbe5ba";
+
+        let mut testdatabytes = include_bytes!("testblock.in");
+        let mut headerbytes = hex::encode(&testdatabytes[0..]);
+        let hbc = &headerbytes[0..80];
+
+        let mut txdata = &testdatabytes[80..];
+
+        let vilen = measure_variable_int(&txdata[0..9]).unwrap();
+        let txnum = decode_variable_int(&txdata[0..9]).unwrap();
+
+        txdata = &txdata[vilen..];
+        let tx = BitcoinTransaction::new(txdata.to_vec());
+
+        assert_eq!(tx.inputs.len(), 1);
+        assert_eq!(txnum, 22);
+        assert_eq!(tx.outputs.len(), 1);
+        assert_eq!(tx.version, 1);
     }
 }
