@@ -52,18 +52,13 @@ impl ForkConfidenceCache {
 }
 
 pub struct ConfidenceAggregationData {
-    ancestors: Arc<Vec<u64>>,
     bank: Arc<Bank>,
     total_staked: u64,
 }
 
 impl ConfidenceAggregationData {
-    pub fn new(ancestors: Arc<Vec<u64>>, bank: Arc<Bank>, total_staked: u64) -> Self {
-        Self {
-            ancestors,
-            bank,
-            total_staked,
-        }
+    pub fn new(bank: Arc<Bank>, total_staked: u64) -> Self {
+        Self { bank, total_staked }
     }
 }
 
@@ -123,12 +118,12 @@ impl AggregateConfidenceService {
                 aggregation_data = new_data;
             }
 
-            if aggregation_data.ancestors.len() == 0 {
+            let ancestors = aggregation_data.bank.status_cache_ancestors();
+            if ancestors.len() == 0 {
                 continue;
             }
 
-            let bank_confidence =
-                Self::aggregate_confidence(&aggregation_data.ancestors, &aggregation_data.bank);
+            let bank_confidence = Self::aggregate_confidence(&ancestors, &aggregation_data.bank);
 
             let mut new_fork_confidence =
                 ForkConfidenceCache::new(bank_confidence, aggregation_data.total_staked);

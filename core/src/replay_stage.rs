@@ -453,12 +453,7 @@ impl ReplayStage {
                 Err(e)?;
             }
         }
-        Self::update_confidence_cache(
-            Arc::new(vec![1]),
-            bank.clone(),
-            total_staked,
-            lockouts_sender,
-        );
+        Self::update_confidence_cache(bank.clone(), total_staked, lockouts_sender);
 
         if let Some(ref voting_keypair) = voting_keypair {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
@@ -479,16 +474,11 @@ impl ReplayStage {
     }
 
     fn update_confidence_cache(
-        ancestors: Arc<Vec<u64>>,
         bank: Arc<Bank>,
         total_staked: u64,
         lockouts_sender: &Sender<ConfidenceAggregationData>,
     ) {
-        if let Err(e) = lockouts_sender.send(ConfidenceAggregationData::new(
-            ancestors.clone(),
-            bank,
-            total_staked,
-        )) {
+        if let Err(e) = lockouts_sender.send(ConfidenceAggregationData::new(bank, total_staked)) {
             trace!("lockouts_sender failed: {:?}", e);
         }
     }
@@ -1032,13 +1022,7 @@ mod test {
         let votable =
             ReplayStage::generate_votable_banks(&ancestors, &bank_forks, &tower, &mut progress);
         if let Some((_, _, lockouts, total_staked)) = votable.into_iter().last() {
-            ReplayStage::update_confidence_cache(
-                &ancestors,
-                &tower,
-                lockouts,
-                total_staked,
-                &lockouts_sender,
-            );
+            ReplayStage::update_confidence_cache(&tower, lockouts, total_staked, &lockouts_sender);
         }
 
         thread::sleep(Duration::from_millis(200));

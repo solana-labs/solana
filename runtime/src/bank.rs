@@ -398,6 +398,20 @@ impl Bank {
         *self.hash.read().unwrap() != Hash::default()
     }
 
+    pub fn status_cache_ancestors(&self) -> Vec<u64> {
+        let mut roots = self.src.status_cache.read().unwrap().roots().clone();
+        let min = roots.iter().min().cloned().unwrap_or(0);
+        for ancestor in self.ancestors.keys() {
+            if *ancestor >= min {
+                roots.insert(*ancestor);
+            }
+        }
+
+        let mut ancestors: Vec<_> = roots.into_iter().collect();
+        ancestors.sort();
+        ancestors
+    }
+
     fn update_clock(&self) {
         self.store_account(
             &clock::id(),
