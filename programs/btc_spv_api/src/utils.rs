@@ -71,7 +71,11 @@ pub fn decode_variable_int(vint: &[u8]) -> Result<u64, DecodeHexError> {
 
     let val: u64 = match vint[0] {
         0..=252 => u64::from(vint[0]),
-        253 => u64::from(vint[1]),
+        253 => {
+            let mut val: [u8; 2] = [0; 2];
+            val.copy_from_slice(&vint[1..3]);
+            u64::from(u16::from_le_bytes(val))
+        }
         254 => {
             let mut val: [u8; 4] = [0; 4];
             val.copy_from_slice(&vint[1..5]);
