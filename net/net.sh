@@ -78,6 +78,8 @@ Operate a configured testnet
                                       - Don't build new software, deploy the
                                         existing binaries
 
+   --deploy-if-newer                  - Only deploy if newer software is
+                                        available (requires -t or -T)
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -107,6 +109,7 @@ EOF
 
 releaseChannel=
 deployMethod=local
+deployIfNewer=
 sanityExtraArgs=
 cargoFeatures=
 skipSetup=false
@@ -149,6 +152,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --no-snapshot-fetch ]]; then
       maybeNoSnapshot="$1"
+      shift 1
+    elif [[ $1 = --deploy-if-newer ]]; then
+      deployIfNewer=1
       shift 1
     elif [[ $1 = --no-deploy ]]; then
       deployMethod=skip
@@ -398,9 +404,11 @@ startBootstrapLeader() {
     case $deployMethod in
     tar)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/version.yml "$ipAddress:~/"
       ;;
     local)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
+      ssh "${sshOptions[@]}" -n "$ipAddress" "rm -f ~/version.yml; touch ~/version.yml"
       ;;
     skip)
       ;;
@@ -646,6 +654,26 @@ prepare_deploy() {
     usage "Internal error: invalid deployMethod: $deployMethod"
     ;;
   esac
+
+  if [[ -n $deployIfNewer ]]; then
+    if [[ $deployMethod != tar ]]; then
+      echo "Error: --deploy-if-newer only supported for tar deployments"
+      exit 1
+    fi
+
+    echo "Fetching current software version"
+    (
+      set -x
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "${fullnodeIpList[0]}":~/version.yml current-version.yml
+    )
+    cat current-version.yml
+    if ! diff -q current-version.yml "$SOLANA_ROOT"/solana-release/version.yml; then
+      echo "Cluster software version is old.  Update required"
+    else
+      echo "Cluster software version is current.  No update required"
+      exit 0
+    fi
+  fi
 }
 
 deploy() {

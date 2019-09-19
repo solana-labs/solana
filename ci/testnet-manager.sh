@@ -219,6 +219,7 @@ sanity() {
       NO_INSTALL_CHECK=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh edge-testnet-solana-com gce us-west1-b
+      time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
     )
     ;;
   testnet-edge-perf)
@@ -235,6 +236,7 @@ sanity() {
       NO_INSTALL_CHECK=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
+      time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
     )
     ;;
   testnet-beta-perf)
