@@ -75,18 +75,18 @@ nodes=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh \
     --init-complete-file init-complete-node1.log \
-    --dynamic-port-range 8000-8019"
+    --dynamic-port-range 8000-8050"
   "multinode-demo/validator.sh \
     --enable-rpc-exit \
     --no-restart \
-    --dynamic-port-range 8020-8039
+    --dynamic-port-range 8050-8100
     --init-complete-file init-complete-node2.log \
     --rpc-port 18899"
 )
 
 for i in $(seq 1 $extraNodes); do
-  portStart=$((8040 + i * 20))
-  portEnd=$((portStart + 19))
+  portStart=$((8100 + i * 50))
+  portEnd=$((portStart + 49))
   nodes+=(
     "multinode-demo/validator.sh \
       --no-restart \

@@ -17,7 +17,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::{self, File};
 use std::io::{self, Read};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::Arc;
@@ -530,8 +530,7 @@ fn main() {
     );
     solana_metrics::set_host_id(keypair.pubkey().to_string());
 
-    let mut tcp_ports = vec![gossip_addr.port()];
-
+    let mut tcp_ports = vec![];
     let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
     if let Some(port) = matches.value_of("rpc_port") {
         let port_number = port.to_string().parse().expect("integer");
@@ -539,9 +538,9 @@ fn main() {
             eprintln!("Invalid RPC port requested: {:?}", port);
             exit(1);
         }
-        node.info.rpc = SocketAddr::new(gossip_addr.ip(), port_number);
-        node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
-        tcp_ports.extend_from_slice(&[port_number, port_number + 1]);
+        node.info.rpc = SocketAddr::new(node.info.gossip.ip(), port_number);
+        node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), port_number + 1);
+        tcp_ports = vec![port_number, port_number + 1];
     };
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
@@ -552,9 +551,27 @@ fn main() {
             &node.sockets.retransmit,
         ];
 
+        let mut tcp_listeners: Vec<(_, _)> = tcp_ports
+            .iter()
+            .map(|port| {
+                (
+                    *port,
+                    TcpListener::bind(&SocketAddr::from(([0, 0, 0, 0], *port))).unwrap_or_else(
+                        |err| {
+                            error!("Unable to bind to tcp/{}: {}", port, err);
+                            std::process::exit(1);
+                        },
+                    ),
+                )
+            })
+            .collect();
+        if let Some(ip_echo) = &node.sockets.ip_echo {
+            let ip_echo = ip_echo.try_clone().expect("unable to clone tcp_listener");
+            tcp_listeners.push((node.info.gossip.port(), ip_echo));
+        }
         solana_netutil::verify_reachable_ports(
             &cluster_entrypoint.gossip,
-            &tcp_ports,
+            tcp_listeners,
             &udp_sockets,
         );
 

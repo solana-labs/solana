@@ -58,22 +58,9 @@ pub fn get_public_ip_addr(ip_echo_server_addr: &SocketAddr) -> Result<IpAddr, St
 // `ip_echo_server_addr`
 pub fn verify_reachable_ports(
     ip_echo_server_addr: &SocketAddr,
-    tcp_ports: &[u16],
+    tcp_listeners: Vec<(u16, TcpListener)>,
     udp_sockets: &[&UdpSocket],
 ) {
-    let tcp: Vec<(_, _)> = tcp_ports
-        .iter()
-        .map(|port| {
-            (
-                port,
-                TcpListener::bind(&SocketAddr::from(([0, 0, 0, 0], *port))).unwrap_or_else(|err| {
-                    error!("Unable to bind to tcp/{}: {}", port, err);
-                    std::process::exit(1);
-                }),
-            )
-        })
-        .collect();
-
     let udp: Vec<(_, _)> = udp_sockets
         .iter()
         .map(|udp_socket| {
@@ -88,9 +75,10 @@ pub fn verify_reachable_ports(
 
     info!(
         "Checking that tcp ports {:?} and udp ports {:?} are reachable from {:?}",
-        tcp_ports, udp_ports, ip_echo_server_addr
+        tcp_listeners, udp_ports, ip_echo_server_addr
     );
 
+    let tcp_ports: Vec<_> = tcp_listeners.iter().map(|(port, _)| *port).collect();
     let _ = ip_echo_server_request(
         ip_echo_server_addr,
         IpEchoServerMessage::new(&tcp_ports, &udp_ports),
@@ -98,9 +86,8 @@ pub fn verify_reachable_ports(
     .map_err(|err| warn!("ip_echo_server request failed: {}", err));
 
     // Wait for a connection to open on each TCP port
-    for (port, tcp_listener) in tcp {
+    for (port, tcp_listener) in tcp_listeners {
         let (sender, receiver) = channel();
-        let port = *port;
         std::thread::spawn(move || {
             debug!("Waiting for incoming connection on tcp/{}", port);
             let _ = tcp_listener.incoming().next().expect("tcp incoming failed");
