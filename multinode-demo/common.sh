@@ -56,7 +56,7 @@ else
       maybe_release=--release
     fi
     declare manifest_path="--manifest-path=$SOLANA_ROOT/$crate/Cargo.toml"
-    printf "cargo run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program" "$features"
+    printf "cargo $CARGO_TOOLCHAIN run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program" "$features"
   }
 fi
 
