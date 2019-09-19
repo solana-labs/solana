@@ -101,7 +101,9 @@ pub(crate) mod tests {
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::rent_calculator::RentCalculator;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::sysvar::rent;
     use solana_sdk::sysvar::stake_history::{self, StakeHistory};
     use solana_sdk::transaction::Transaction;
     use solana_stake_api::stake_instruction;
@@ -125,6 +127,10 @@ pub(crate) mod tests {
             keypairs: &[&T],
             ixs: Vec<Instruction>,
         ) {
+            bank.store_account(
+                &rent::id(),
+                &rent::create_account(1, &RentCalculator::default()),
+            );
             bank.process_transaction(&Transaction::new_signed_with_payer(
                 ixs,
                 Some(&keypairs[0].pubkey()),
