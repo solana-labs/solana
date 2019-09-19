@@ -32,16 +32,17 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 // Cargo adds a hash in the filename of git and crates.io dependencies so we cannot
 // deterministically build a path, we have to search for it.
 fn find_library(root: PathBuf, library_name: &str) -> Option<PathBuf> {
-    let files = root.read_dir().expect("Failed to read library files");
-    for file in files.filter_map(Result::ok) {
-        let file_path = file.path();
-        if let Some(file_name) = file_path.file_name() {
-            if let Some(file_name) = file_name.to_str() {
-                if file_name.ends_with(PLATFORM_FILE_EXTENSION_NATIVE)
-                    && file_name.starts_with(&library_name)
-                    && file_name.split(&['-', '.'][..]).next() == Some(library_name)
-                {
-                    return Some(file_path);
+    if let Ok(files) = root.read_dir() {
+        for file in files.filter_map(Result::ok) {
+            let file_path = file.path();
+            if let Some(file_name) = file_path.file_name() {
+                if let Some(file_name) = file_name.to_str() {
+                    if file_name.ends_with(PLATFORM_FILE_EXTENSION_NATIVE)
+                        && file_name.starts_with(&library_name)
+                        && file_name.split(&['-', '.'][..]).next() == Some(library_name)
+                    {
+                        return Some(file_path);
+                    }
                 }
             }
         }
