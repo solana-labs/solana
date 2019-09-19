@@ -187,4 +187,35 @@ mod test {
         assert_eq!(tx.outputs.len(), 1);
         assert_eq!(tx.version, 1);
     }
+
+    #[test]
+    fn test_parse_variable_int() {
+        let var_int_a = hex::decode("6a32a4").unwrap();
+        let var_int_b = hex::decode("fd26021d32").unwrap();
+        let var_int_c = hex::decode("fe703a0f00").unwrap();
+
+        let value_a = decode_variable_int(&var_int_a[0..]).unwrap();
+        let value_b = decode_variable_int(&var_int_b[0..]).unwrap();
+        let value_c = decode_variable_int(&var_int_c[0..]).unwrap();
+
+        assert_eq!(106, value_a);
+        assert_eq!(550, value_b);
+        assert_eq!(998000, value_c);
+
+    }
+
+    #[test]
+    fn test_measure_variable_int() {
+        let var_int_a = hex::decode("6a32a4").unwrap();
+        let var_int_b = hex::decode("fd26021d32").unwrap();
+        let var_int_c = hex::decode("fe703a0f00").unwrap();
+
+        let len_a = measure_variable_int(&var_int_a[0..]).unwrap();
+        let len_b = measure_variable_int(&var_int_b[0..]).unwrap();
+        let len_c = measure_variable_int(&var_int_c[0..]).unwrap();
+
+        assert_eq!(len_a, 1);
+        assert_eq!(len_b, 3);
+        assert_eq!(len_c, 5);
+    }
 }

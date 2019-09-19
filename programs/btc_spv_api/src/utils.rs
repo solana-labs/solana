@@ -56,7 +56,7 @@ pub fn measure_variable_int(vint: &[u8]) -> Result<usize, DecodeHexError> {
 
     let val: usize = match vint[0] {
         0..=252 => 1,
-        253 => 2,
+        253 => 3,
         254 => 5,
         255 => 9,
     };
