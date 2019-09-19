@@ -143,6 +143,12 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
+    fn test_create_library_path() {
+        assert!(create_library_path("solana_bpf_loader_program").is_some());
+        assert!(create_library_path("solana_bpf_loader").is_none());
+    }
+
+    #[test]
     fn test_find_library() {
         let root = tempdir().unwrap();
         let prefix = "libsolana_bpf_loader_program";
