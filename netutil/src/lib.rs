@@ -323,7 +323,7 @@ pub fn bind_common(port: u16, reuseaddr: bool) -> io::Result<(UdpSocket, tokio::
     let sock = udp_socket(reuseaddr)?;
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
-    let sock_addr = SockAddr::from(addr.clone());
+    let sock_addr = SockAddr::from(addr);
     match sock.bind(&sock_addr) {
         Ok(_) => match tokio::net::TcpListener::bind(&addr) {
             Ok(listener) => Result::Ok((sock.into_udp_socket(), listener)),
