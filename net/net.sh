@@ -22,12 +22,11 @@ Operate a configured testnet
  sanity   - Sanity check the network
  stop     - Stop the network
  restart  - Shortcut for stop then start
- update   - Live update all network nodes
  logs     - Fetch remote logs from each network node
  startnode- Start an individual node (previously stopped with stopNode)
  stopnode - Stop an individual node
 
- start/update-specific options:
+ start-specific options:
    -T [tarFilename]                   - Deploy the specified release tarball
    -t edge|beta|stable|vX.Y.Z         - Deploy the latest tarball release for the
                                         specified release channel (edge|beta|stable) or release tag
@@ -37,7 +36,7 @@ Operate a configured testnet
                                         (-t option must be supplied as well)
    -f [cargoFeatures]                 - List of |cargo --feaures=| to activate
                                         (ignored if -s or -S is specified)
-   -r                                 - Reuse existing node/ledger configuration from a
+   -r / --skip-setup                  - Reuse existing node/ledger configuration from a
                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -d / --debug                       - Build/deploy the testnet with debug binaries
    -D /path/to/programs               - Deploy custom programs from this location
@@ -66,7 +65,8 @@ Operate a configured testnet
    --internal-nodes-lamports NUM_LAMPORTS_PER_NODE
                                       - Amount to fund internal nodes in genesis block.
    --external-accounts-file FILE_PATH
-                                      - A YML file with a list of account pubkeys and corresponding lamport balances in genesis block for external nodes
+                                      - A YML file with a list of account pubkeys and corresponding lamport balances
+                                        in genesis block for external nodes
    --no-snapshot-fetch
                                       - If set, disables booting validators from a snapshot
    --skip-ledger-verify
@@ -81,7 +81,7 @@ Operate a configured testnet
                                         existing binaries
 
 
- sanity/start/update-specific options:
+ sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noValidatorSanity - Skip fullnode sanity
    -o noInstallCheck    - Skip solana-install sanity
@@ -107,7 +107,6 @@ deployMethod=local
 sanityExtraArgs=
 cargoFeatures=
 skipSetup=false
-updateNodes=false
 customPrograms=
 updatePlatforms=
 nodeAddress=
@@ -159,6 +158,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --skip-ledger-verify ]]; then
       maybeSkipLedgerVerify="$1"
+      shift 1
+    elif [[ $1 = --skip-setup ]]; then
+      skipSetup=true
       shift 1
     elif [[ $1 = --deploy-update ]]; then
       updatePlatforms="$updatePlatforms $2"
@@ -356,12 +358,12 @@ startCommon() {
   if $skipSetup; then
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
-      mkdir -p ~/solana/config{,-local}
-      rm -rf ~/config{,-local};
-      mv ~/solana/config{,-local} ~;
+      mkdir -p ~/solana/config;
+      rm -rf ~/config;
+      mv ~/solana/config ~;
       rm -rf ~/solana;
       mkdir -p ~/solana ~/.cargo/bin;
-      mv ~/config{,-local} ~/solana/
+      mv ~/config ~/solana/
     "
   else
     ssh "${sshOptions[@]}" "$ipAddress" "
@@ -646,11 +648,7 @@ prepare_deploy() {
 
 deploy() {
   echo "Deployment started at $(date)"
-  if $updateNodes; then
-    $metricsWriteDatapoint "testnet-deploy net-update-begin=1"
-  else
-    $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
-  fi
+  $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
   declare bootstrapLeader=true
   for nodeAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${replicatorIpList[@]}"; do
@@ -699,11 +697,6 @@ deploy() {
 
   annotateBlockexplorerUrl
 
-  if $updateNodes; then
-    for ipAddress in "${clientIpList[@]}"; do
-      stopNode "$ipAddress" true
-    done
-  fi
   sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
                                  # have caught up to the bootstrap leader yet
 
@@ -717,11 +710,7 @@ deploy() {
   done
   clientDeployTime=$SECONDS
 
-  if $updateNodes; then
-    $metricsWriteDatapoint "testnet-deploy net-update-complete=1"
-  else
-    $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
-  fi
+  $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
 
   declare networkVersion=unknown
   case $deployMethod in
@@ -768,7 +757,7 @@ stopNode() {
       PS4=\"$PS4\"
       set -x
       ! tmux list-sessions || tmux kill-session
-      for pid in solana/{net-stats,fd-monitor,oom-monitor}.pid; do
+      for pid in solana/{blockexplorer,net-stats,fd-monitor,oom-monitor}.pid; do
         pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
         if [[ -n \$pgid ]]; then
           sudo kill -- -\$pgid
@@ -823,11 +812,6 @@ restart)
 start)
   prepare_deploy
   deploy
-  ;;
-update)
-  skipSetup=true
-  updateNodes=true
-  start
   ;;
 sanity)
   sanity

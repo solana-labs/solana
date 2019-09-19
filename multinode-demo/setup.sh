@@ -6,12 +6,13 @@ source "$here"/common.sh
 setup_secondary_mount
 
 set -e
-"$here"/clear-config.sh
+
+rm -rf "$SOLANA_CONFIG_DIR"/bootstrap-leader
+mkdir -p "$SOLANA_CONFIG_DIR"/bootstrap-leader
 
 # Create genesis ledger
-$solana_keygen new -o "$SOLANA_CONFIG_DIR"/mint-keypair.json
+$solana_keygen new -f -o "$SOLANA_CONFIG_DIR"/mint-keypair.json
 
-mkdir "$SOLANA_CONFIG_DIR"/bootstrap-leader
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json

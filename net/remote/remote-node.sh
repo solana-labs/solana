@@ -107,11 +107,11 @@ cat >> ~/solana/on-reboot <<EOF
   (
     sudo SOLANA_METRICS_CONFIG="$SOLANA_METRICS_CONFIG" scripts/oom-monitor.sh
   ) > oom-monitor.log 2>&1 &
-  echo $! > oom-monitor.pid
+  echo \$! > oom-monitor.pid
   scripts/fd-monitor.sh > fd-monitor.log 2>&1 &
-  echo $! > fd-monitor.pid
+  echo \$! > fd-monitor.pid
   scripts/net-stats.sh  > net-stats.log 2>&1 &
-  echo $! > net-stats.pid
+  echo \$! > net-stats.pid
 
   if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
     echo Selecting solana-validator-cuda
@@ -123,15 +123,14 @@ EOF
   bootstrap-leader)
     set -x
     if [[ $skipSetup != true ]]; then
-      rm -rf ./solana-node-keys
-      rm -rf ./solana-node-balances
-      mkdir ./solana-node-balances
+      multinode-demo/clear-config.sh
+
       if [[ -n $internalNodesLamports ]]; then
-        echo "---" >> ./solana-node-balances/fullnode-balances.yml
+        echo "---" >> config/fullnode-balances.yml
         for i in $(seq 0 "$numNodes"); do
-          solana-keygen new -o ./solana-node-keys/"$i"
-          pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
-          cat >> ./solana-node-balances/fullnode-balances.yml <<EOF
+          solana-keygen new -o config/fullnode-"$i"-identity.json
+          pubkey="$(solana-keygen pubkey config/fullnode-"$i"-identity.json)"
+          cat >> config/fullnode-balances.yml <<EOF
 $pubkey:
   balance: $internalNodesLamports
   owner: 11111111111111111111111111111111
@@ -151,29 +150,29 @@ EOF
         fi
       done
 
-      rm -rf ./solana-client-accounts
-      mkdir ./solana-client-accounts
       for i in $(seq 0 $((numBenchTpsClients-1))); do
         # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
-        solana-bench-tps --write-client-keys ./solana-client-accounts/bench-tps"$i".yml \
+        solana-bench-tps --write-client-keys config/bench-tps"$i".yml \
           --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
         # Skip first line, as it contains header
-        tail -n +2 -q ./solana-client-accounts/bench-tps"$i".yml >> ./solana-client-accounts/client-accounts.yml
-        echo "" >> ./solana-client-accounts/client-accounts.yml
+        tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
+        echo "" >> config/client-accounts.yml
       done
       for i in $(seq 0 $((numBenchExchangeClients-1))); do
         # shellcheck disable=SC2086 # Do not want to quote $benchExchangeExtraArgs
         solana-bench-exchange --batch-size 1000 --fund-amount 20000 \
-          --write-client-keys ./solana-client-accounts/bench-exchange"$i".yml $benchExchangeExtraArgs
-        tail -n +2 -q ./solana-client-accounts/bench-exchange"$i".yml >> ./solana-client-accounts/client-accounts.yml
-        echo "" >> ./solana-client-accounts/client-accounts.yml
+          --write-client-keys config/bench-exchange"$i".yml $benchExchangeExtraArgs
+        tail -n +2 -q config/bench-exchange"$i".yml >> config/client-accounts.yml
+        echo "" >> config/client-accounts.yml
       done
-      [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-balances/fullnode-balances.yml
-      if [ -f ./solana-node-balances/fullnode-balances.yml ]; then
-        genesisOptions+=" --primordial-accounts-file ./solana-node-balances/fullnode-balances.yml"
+      if [[ -f $externalPrimordialAccountsFile ]]; then
+        cat "$externalPrimordialAccountsFile" >> config/fullnode-balances.yml
       fi
-      if [ -f ./solana-client-accounts/client-accounts.yml ]; then
-        genesisOptions+=" --primordial-keypairs-file ./solana-client-accounts/client-accounts.yml"
+      if [[ -f config/fullnode-balances.yml ]]; then
+        genesisOptions+=" --primordial-accounts-file config/fullnode-balances.yml"
+      fi
+      if [[ -f config/client-accounts.yml ]]; then
+        genesisOptions+=" --primordial-keypairs-file config/client-accounts.yml"
       fi
 
       args=(
@@ -184,7 +183,7 @@ EOF
       fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
-      ./multinode-demo/setup.sh "${args[@]}"
+      multinode-demo/setup.sh "${args[@]}"
     fi
     args=(
       --gossip-port "$entrypointIp":8001
@@ -208,18 +207,20 @@ EOF
     ~/solana/on-reboot
     waitForNodeToInit
 
-    solana --url http://"$entrypointIp":8899 \
-      --keypair ~/solana/config/bootstrap-leader/identity-keypair.json \
-      validator-info publish "$(hostname)" -n team/solana --force || true
+    if [[ $skipSetup != true ]]; then
+      solana --url http://"$entrypointIp":8899 \
+        --keypair ~/solana/config/bootstrap-leader/identity-keypair.json \
+        validator-info publish "$(hostname)" -n team/solana --force || true
+    fi
     ;;
   validator|blockstreamer)
     if [[ $deployMethod != skip ]]; then
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
     fi
     if [[ $skipSetup != true ]]; then
-      rm -f ~/solana/fullnode-identity.json
+      multinode-demo/clear-config.sh
       [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
-      "$entrypointIp":~/solana/solana-node-keys/"$nodeIndex" ~/solana/fullnode-identity.json
+      "$entrypointIp":~/solana/config/fullnode-"$nodeIndex"-identity.json config/fullnode-identity.json
     fi
 
     args=(
@@ -239,20 +240,16 @@ EOF
       fi
     fi
 
-    if [[ ! -f ~/solana/fullnode-identity.json ]]; then
-      solana-keygen new -o ~/solana/fullnode-identity.json
+    if [[ ! -f config/fullnode-identity.json ]]; then
+      solana-keygen new -o config/fullnode-identity.json
     fi
-    args+=(--identity ~/solana/fullnode-identity.json)
+    args+=(--identity config/fullnode-identity.json)
 
     if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
     fi
 
     set -x
-    if [[ $skipSetup != true ]]; then
-      ./multinode-demo/clear-config.sh
-    fi
-
     if [[ $nodeType = blockstreamer ]]; then
       # Sneak the mint-keypair.json from the bootstrap leader and run another drone
       # with it on the blockstreamer node.  Typically the blockstreamer node has
@@ -261,7 +258,7 @@ EOF
       scp "$entrypointIp":~/solana/config/mint-keypair.json config/
       if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
-        ./multinode-demo/drone.sh > drone.log 2>&1 &
+        multinode-demo/drone.sh > drone.log 2>&1 &
 EOF
       fi
 
@@ -278,6 +275,7 @@ EOF
       killall node || true
       export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
+      echo \$! > blockexplorer.pid
 
       # Redirect port 80 to port 5000
       sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
@@ -301,7 +299,7 @@ EOF
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
 cat >> ~/solana/on-reboot <<EOF
-    nohup ./multinode-demo/validator.sh ${args[@]} > fullnode.log 2>&1 &
+    nohup multinode-demo/validator.sh ${args[@]} > fullnode.log 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
@@ -318,16 +316,18 @@ EOF
       if [[ $airdropsEnabled != true ]]; then
         args+=(--no-airdrop)
       fi
-      if [[ -f ~/solana/fullnode-identity.json ]]; then
-        args+=(--keypair ~/solana/fullnode-identity.json)
+      if [[ -f config/fullnode-identity.json ]]; then
+        args+=(--keypair config/fullnode-identity.json)
       fi
 
-      ./multinode-demo/delegate-stake.sh "${args[@]}"
+      multinode-demo/delegate-stake.sh "${args[@]}"
     fi
 
-    solana --url http://"$entrypointIp":8899 \
-      --keypair ~/solana/fullnode-identity.json \
-      validator-info publish "$(hostname)" -n team/solana --force || true
+    if [[ $skipSetup != true ]]; then
+      solana --url http://"$entrypointIp":8899 \
+        --keypair config/fullnode-identity.json \
+        validator-info publish "$(hostname)" -n team/solana --force || true
+    fi
     ;;
   replicator)
     if [[ $deployMethod != skip ]]; then
@@ -346,7 +346,7 @@ EOF
     fi
 
 cat >> ~/solana/on-reboot <<EOF
-    nohup ./multinode-demo/replicator.sh ${args[@]} > fullnode.log 2>&1 &
+    nohup multinode-demo/replicator.sh ${args[@]} > fullnode.log 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
