@@ -8,8 +8,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 edition = "2018"
 
-[features]
-cuda = []
+
 
 
 [dependencies]

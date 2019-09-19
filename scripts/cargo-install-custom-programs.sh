@@ -13,7 +13,7 @@ programDir="$2"
 (
   set -x
   cd "$programDir"
-  cargo build --all --release
+  cargo build --release
 )
 
 for dir in "$programDir"/*; do

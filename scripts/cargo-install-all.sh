@@ -20,6 +20,11 @@ cargo=cargo
 cargoFeatures="$2"
 debugBuild="$3"
 
+if [[ -n $cargoFeatures && $cargoFeatures != cuda ]]; then
+  echo "Unsupported feature flag: $cargoFeatures"
+  exit 1
+fi
+
 buildVariant=release
 maybeReleaseFlag=--release
 if [[ -n "$debugBuild" ]]; then
@@ -36,10 +41,13 @@ SECONDS=0
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $rust_version build --all $maybeReleaseFlag --features="$cargoFeatures"
+  $cargo $rust_version build --all $maybeReleaseFlag
 )
 
 BINS=(
+  solana
+  solana-bench-exchange
+  solana-bench-tps
   solana-drone
   solana-gossip
   solana-install
@@ -48,9 +56,6 @@ BINS=(
   solana-ledger-tool
   solana-replicator
   solana-validator
-  solana
-  solana-bench-exchange
-  solana-bench-tps
 )
 
 #XXX: Ensure `solana-genesis` is built LAST!
@@ -65,13 +70,29 @@ done
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $rust_version build $maybeReleaseFlag "${binArgs[@]}" --features="$cargoFeatures"
+  $cargo $rust_version build $maybeReleaseFlag "${binArgs[@]}"
 )
 
 mkdir -p "$installDir/bin"
 for bin in "${BINS[@]}"; do
   cp -fv "target/$buildVariant/$bin" "$installDir"/bin
 done
+
+
+if [[ "$cargoFeatures" = cuda ]]; then
+  (
+    set -x
+    ./fetch-perf-libs.sh
+
+    # shellcheck source=/dev/null
+    source ./target/perf-libs/env.sh
+
+    cd validator-cuda
+    # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+    cargo $rust_version build $maybeReleaseFlag
+  )
+  cp -fv "target/$buildVariant/solana-validator-cuda" "$installDir"/bin
+fi
 
 for dir in programs/*; do
   for program in echo target/$buildVariant/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do

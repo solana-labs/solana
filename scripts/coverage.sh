@@ -15,7 +15,7 @@ reportName="lcov-${CI_COMMIT:0:9}"
 if [[ -n $1 ]]; then
   crate="--manifest-path=$1/Cargo.toml"
 else
-  crate="--all --exclude solana-local-cluster"
+  crate="--all --exclude solana-local-cluster --exclude solana-validator-cuda"
 fi
 
 coverageFlags=(-Zprofile)                # Enable coverage
