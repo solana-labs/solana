@@ -25,6 +25,7 @@ static LOOKING_GLASS: Emoji = Emoji("🔍 ", "");
 static BULLET: Emoji = Emoji("• ", "* ");
 static SPARKLE: Emoji = Emoji("✨ ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
+static INFORMATION: Emoji = Emoji("ℹ️  ", "");
 
 /// Creates a new process bar for processing that will take an unknown amount of time
 fn new_spinner_progress_bar() -> ProgressBar {
@@ -626,6 +627,12 @@ pub fn deploy(
     let update_manifest_keypair = read_keypair(update_manifest_keypair_file)
         .map_err(|err| format!("Unable to read {}: {}", update_manifest_keypair_file, err))?;
 
+    println_name_value("JSON RPC URL:", json_rpc_url);
+    println_name_value(
+        "Update manifest pubkey:",
+        &update_manifest_keypair.pubkey().to_string(),
+    );
+
     // Confirm the `json_rpc_url` is good and that `from_keypair` is a valid account
     let rpc_client = RpcClient::new(json_rpc_url.to_string());
     let progress_bar = new_spinner_progress_bar();
@@ -648,6 +655,18 @@ pub fn deploy(
         download_to_temp_archive(download_url, None)
             .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
 
+    if let Ok(update_manifest) = get_update_manifest(&rpc_client, &update_manifest_keypair.pubkey())
+    {
+        if temp_archive_sha256 == update_manifest.download_sha256 {
+            println!(
+                "  {}{}",
+                INFORMATION,
+                style("Update is already deployed").bold()
+            );
+            return Ok(());
+        }
+    }
+
     // Extract it and load the release version metadata
     let temp_release_dir = temp_dir.path().join("archive");
     extract_release_archive(&temp_archive, &temp_release_dir).map_err(|err| {
@@ -664,12 +683,7 @@ pub fn deploy(
         )
     })?;
 
-    println_name_value("JSON RPC URL:", json_rpc_url);
     println_name_value("Update target:", &release_target);
-    println_name_value(
-        "Update manifest pubkey:",
-        &update_manifest_keypair.pubkey().to_string(),
-    );
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Deploying update...", PACKAGE));
