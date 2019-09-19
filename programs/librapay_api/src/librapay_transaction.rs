@@ -141,12 +141,12 @@ mod tests {
     use crate::{create_genesis, upload_mint_program, upload_payment_program};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::genesis_block::create_basic_genesis_block;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Arc<Bank>, Keypair, Keypair, Pubkey, Pubkey) {
-        let (genesis_block, mint_keypair) = create_genesis_block(lamports);
+        let (genesis_block, mint_keypair) = create_basic_genesis_block(lamports);
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(
             solana_move_loader_api::id(),

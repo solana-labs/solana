@@ -8,7 +8,7 @@ use solana_core::gossip_service::discover_cluster;
 use solana_core::replicator::Replicator;
 use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
 use solana_core::validator::ValidatorConfig;
-use solana_sdk::genesis_block::create_genesis_block;
+use solana_sdk::genesis_block::create_basic_genesis_block;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::remove_dir_all;
 use std::sync::{Arc, RwLock};
@@ -88,7 +88,7 @@ fn test_replicator_startup_leader_hang() {
     info!("starting replicator test");
 
     let leader_ledger_path = std::path::PathBuf::from("replicator_test_leader_ledger");
-    let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
+    let (genesis_block, _mint_keypair) = create_basic_genesis_block(10_000);
     let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     {

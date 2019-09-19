@@ -9,7 +9,7 @@ use solana_runtime::loader_utils::create_invoke_instruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::AsyncClient;
 use solana_sdk::client::SyncClient;
-use solana_sdk::genesis_block::create_genesis_block;
+use solana_sdk::genesis_block::create_basic_genesis_block;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -120,7 +120,7 @@ fn do_bench_transactions(
 ) {
     solana_logger::setup();
     let ns_per_s = 1_000_000_000;
-    let (mut genesis_block, mint_keypair) = create_genesis_block(100_000_000);
+    let (mut genesis_block, mint_keypair) = create_basic_genesis_block(100_000_000);
     genesis_block.ticks_per_slot = 100;
     let mut bank = Bank::new(&genesis_block);
     bank.add_instruction_processor(Pubkey::new(&BUILTIN_PROGRAM_ID), process_instruction);

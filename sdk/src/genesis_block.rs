@@ -33,7 +33,7 @@ pub struct GenesisBlock {
 }
 
 // useful for basic tests
-pub fn create_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
+pub fn create_basic_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
     let mint_keypair = Keypair::new();
     (
         GenesisBlock::new(

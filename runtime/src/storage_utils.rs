@@ -83,7 +83,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::genesis_block::create_basic_genesis_block;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_storage_api::storage_contract::{StorageAccount, STORAGE_ACCOUNT_SPACE};
@@ -92,7 +92,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_store_and_recover() {
-        let (genesis_block, mint_keypair) = create_genesis_block(1000);
+        let (genesis_block, mint_keypair) = create_basic_genesis_block(1000);
         let mint_pubkey = mint_keypair.pubkey();
         let replicator_keypair = Keypair::new();
         let replicator_pubkey = replicator_keypair.pubkey();

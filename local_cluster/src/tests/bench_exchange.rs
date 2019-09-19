@@ -7,7 +7,7 @@ use solana_exchange_api::exchange_processor::process_instruction;
 use solana_exchange_api::id;
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
-use solana_sdk::genesis_block::create_genesis_block;
+use solana_sdk::genesis_block::create_basic_genesis_block;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::process::exit;
 use std::sync::mpsc::channel;
@@ -81,7 +81,7 @@ fn test_exchange_local_cluster() {
 #[test]
 fn test_exchange_bank_client() {
     solana_logger::setup();
-    let (genesis_block, identity) = create_genesis_block(100_000_000_000_000);
+    let (genesis_block, identity) = create_basic_genesis_block(100_000_000_000_000);
     let mut bank = Bank::new(&genesis_block);
     bank.add_instruction_processor(id(), process_instruction);
     let clients = vec![BankClient::new(bank)];
