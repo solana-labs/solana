@@ -308,7 +308,7 @@ impl Accounts {
 
     pub fn load_by_program_fork(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
         self.scan_fork(fork, |stored_account| {
-            if stored_account.balance.owner == *program_id {
+            if stored_account.account_meta.owner == *program_id {
                 Some((stored_account.meta.pubkey, stored_account.clone_account()))
             } else {
                 None
