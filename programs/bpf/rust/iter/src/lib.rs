@@ -18,3 +18,15 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
 
     SUCCESS
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    // Pulls in the stubs requried for `info!()`
+    solana_sdk_bpf_test::stubs!();
+
+    #[test]
+    fn test_entrypoint() {
+        assert_eq!(SUCCESS, entrypoint(std::ptr::null_mut()));
+    }
+}

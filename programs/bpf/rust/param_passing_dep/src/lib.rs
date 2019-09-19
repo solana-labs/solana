@@ -2,6 +2,7 @@
 
 extern crate solana_sdk;
 
+#[derive(Debug)]
 pub struct Data<'a> {
     pub twentyone: u64,
     pub twentytwo: u64,
@@ -11,6 +12,7 @@ pub struct Data<'a> {
     pub array: &'a [u8],
 }
 
+#[derive(PartialEq, Debug)]
 pub struct TestDep {
     pub thirty: u32,
 }
@@ -19,5 +21,26 @@ impl<'a> TestDep {
         Self {
             thirty: data.twentyfive + five as u32,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    // Pulls in the stubs requried for `info!()`
+    solana_sdk_bpf_test::stubs!();
+
+    #[test]
+    fn test_dep() {
+        let array = [0xA, 0xB, 0xC, 0xD, 0xE, 0xF];
+        let data = Data {
+            twentyone: 21u64,
+            twentytwo: 22u64,
+            twentythree: 23u64,
+            twentyfour: 24u64,
+            twentyfive: 25u32,
+            array: &array,
+        };
+        assert_eq!(TestDep { thirty: 30 }, TestDep::new(&data, 1, 2, 3, 4, 5));
     }
 }
