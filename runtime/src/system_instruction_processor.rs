@@ -2,6 +2,7 @@ use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::rent_calculator::RentCalculator;
 use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
 use solana_sdk::sysvar;
@@ -16,7 +17,7 @@ fn create_system_account(
     lamports: u64,
     space: u64,
     program_id: &Pubkey,
-    should_rent_exempt: bool,
+    rent_exemption_calculator: Option<RentCalculator>,
 ) -> Result<(), SystemError> {
     if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
         debug!(
@@ -60,14 +61,14 @@ fn create_system_account(
         Err(SystemError::ResultWithNegativeLamports)?;
     }
 
-    if should_rent_exempt {
-        let rent_calculator = rent::from_keyed_account(&keyed_accounts[RENT_SYSVAR_ACCOUNT_INDEX])
-            .unwrap()
-            .rent_calculator;
-        if !rent_calculator.is_exempt(lamports, space as usize) {
-            Err(SystemError::InvalidInstructionData)?;
+   match rent_exemption_calculator {
+            Some(calculator) => {
+                if !calculator.is_exempt(lamports, space as usize) {
+                    Err(SystemError::InsufficientFunds)?;
+                }
+            }
+            None => {},
         }
-    }
 
     keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
     keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
@@ -120,17 +121,24 @@ pub fn process_instruction(
                 lamports,
                 space,
                 program_id,
-                should_rent_exempt,
+                require_rent_exemption,
             } => {
-                if should_rent_exempt && keyed_accounts.len() < (RENT_SYSVAR_ACCOUNT_INDEX + 1) {
-                    Err(InstructionError::InvalidInstructionData)?;
+                let mut rent_exemption_calculator: Option<RentCalculator> = None;
+                if require_rent_exemption {
+                    if keyed_accounts.len() < (RENT_SYSVAR_ACCOUNT_INDEX + 1) {
+                        Err(InstructionError::InvalidInstructionData)?;
+                    }
+                    rent_exemption_calculator = Some(
+                        rent::from_keyed_account(&keyed_accounts[RENT_SYSVAR_ACCOUNT_INDEX])?
+                            .rent_calculator,
+                    );
                 }
                 create_system_account(
                     keyed_accounts,
                     lamports,
                     space,
                     &program_id,
-                    should_rent_exempt,
+                    rent_exemption_calculator,
                 )
             }
             SystemInstruction::Assign { program_id } => {
@@ -176,7 +184,7 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner, false).unwrap();
+        create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner, None).unwrap();
         let from_lamports = from_account.lamports;
         let to_lamports = to_account.lamports;
         let to_owner = to_account.owner;
@@ -202,7 +210,7 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        let result = create_system_account(&mut keyed_accounts, 150, 2, &new_program_owner, false);
+        let result = create_system_account(&mut keyed_accounts, 150, 2, &new_program_owner, None);
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports));
         let from_lamports = from_account.lamports;
         assert_eq!(from_lamports, 100);
@@ -225,7 +233,7 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&owned_key, false, &mut owned_account),
         ];
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner, false);
+        let result = create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner, None);
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
         let from_lamports = from_account.lamports;
         assert_eq!(from_lamports, 100);
@@ -246,7 +254,7 @@ mod tests {
             KeyedAccount::new(&to, false, &mut to_account),
         ];
         // fail to create a sysvar::id() owned account
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &sysvar::id(), false);
+        let result = create_system_account(&mut keyed_accounts, 50, 2, &sysvar::id(), None);
         assert_eq!(result, Err(SystemError::InvalidProgramId));
 
         let to = sysvar::fees::id();
@@ -258,7 +266,7 @@ mod tests {
         ];
         // fail to create an account with a sysvar id
         let result =
-            create_system_account(&mut keyed_accounts, 50, 2, &system_program::id(), false);
+            create_system_account(&mut keyed_accounts, 50, 2, &system_program::id(), None);
         assert_eq!(result, Err(SystemError::InvalidAccountId));
 
         let from_lamports = from_account.lamports;
@@ -283,7 +291,7 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&populated_key, false, &mut populated_account),
         ];
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner, false);
+        let result = create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner, None);
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
         assert_eq!(from_account.lamports, 100);
         assert_eq!(populated_account, unchanged_account);
@@ -311,7 +319,7 @@ mod tests {
         ];
 
         // if rent exemption flag is false, then account will be created successfully.
-        let result = create_system_account(&mut keyed_accounts, 0, 2, &other_program, false);
+        let result = create_system_account(&mut keyed_accounts, 0, 2, &other_program, None);
         assert_eq!(result, Ok(()));
 
         let to = Pubkey::new_rand();
@@ -319,15 +327,15 @@ mod tests {
         keyed_accounts[1] = KeyedAccount::new(&to, false, &mut to_account);
 
         // there must be sufficient amount of lamport in account to be created as rent exempted
-        let result = create_system_account(&mut keyed_accounts, 0, 2, &other_program, true);
-        assert_eq!(result, Err(SystemError::InvalidInstructionData));
+        let result = create_system_account(&mut keyed_accounts, 0, 2, &other_program, Some(rent_calculator));
+        assert_eq!(result, Err(SystemError::InsufficientFunds));
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
         keyed_accounts[1] = KeyedAccount::new(&to, false, &mut to_account);
 
         // amount of lamports must be sufficient for account to be rent exempt
-        let result = create_system_account(&mut keyed_accounts, 500, 2, &other_program, true);
+        let result = create_system_account(&mut keyed_accounts, 500, 2, &other_program, Some(rent_calculator));
         assert_eq!(result, Ok(()));
     }
 
@@ -343,7 +351,7 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &other_program, false);
+        let result = create_system_account(&mut keyed_accounts, 50, 2, &other_program, None);
         assert_eq!(result, Err(SystemError::SourceNotSystemAccount));
     }
 
