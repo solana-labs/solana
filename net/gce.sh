@@ -690,7 +690,8 @@ EOF
   else
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb"
+      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" \
+      "$sshPrivateKey"
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
@@ -710,7 +711,8 @@ EOF
       fi
       cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
         "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" &
+        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" \
+        "$sshPrivateKey" &
     done
 
     wait
@@ -719,19 +721,19 @@ EOF
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$enableGpu" "$clientMachineType" "${zones[0]}" "$clientBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType" ""
+      "$startupScript" "" "$bootDiskType" "" "$sshPrivateKey"
   fi
 
   if $blockstreamer; then
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
       "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$blockstreamerAddress" "$bootDiskType" ""
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$sshPrivateKey"
   fi
 
   if [[ $replicatorNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-replicator" "$replicatorNodeCount" \
       false "$replicatorMachineType" "${zones[0]}" "$replicatorBootDiskSizeInGb" \
-      "$startupScript" "" "" ""
+      "$startupScript" "" "" "" "$sshPrivateKey"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"

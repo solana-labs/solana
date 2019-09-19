@@ -133,6 +133,8 @@ cloud_Initialize() {
 # address       - Optional name of the GCE static IP address to attach to the
 #                 instance.  Requires that |numNodes| = 1 and that addressName
 #                 has been provisioned in the GCE region that is hosting `$zone`
+# bootDiskType  - Optional specify SSD or HDD boot disk
+# additionalDiskSize - Optional specify size of additional storage volume
 #
 # Tip: use cloud_FindInstances to locate the instances once this function
 #      returns
@@ -148,6 +150,7 @@ cloud_CreateInstances() {
   #declare optionalAddress="$9" # unused
   #declare optionalBootDiskType="${10}" # unused
   #declare optionalAdditionalDiskSize="${11}" # unused
+  declare sshPrivateKey="${12}"
 
   declare -a nodes
   if [[ $numNodes = 1 ]]; then
@@ -204,7 +207,7 @@ cloud_CreateInstances() {
       RES_MACH="${COLO_RES_MACHINE[$RI]}"
       IP="${COLO_RES_IP_PRIV[$RI]}"
       if colo_machine_types_compatible "$RES_MACH" "$machineType"; then
-        if colo_node_requisition "$IP" "$node" >/dev/null; then
+        if colo_node_requisition "$IP" "$node" "$sshPrivateKey" >/dev/null; then
           NI=$((NI+1))
         fi
       fi

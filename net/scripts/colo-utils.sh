@@ -173,6 +173,7 @@ export COLO_RES_REQUISITIONED=()
 colo_node_requisition() {
   declare IP=$1
   declare INSTANCE_NAME=$2
+  declare SSH_PRIVATE_KEY="$3"
 
   declare INDEX
   INDEX=$(colo_res_index_from_ip "$IP")
@@ -190,15 +191,15 @@ cat <<EOF
     } >&9 || ( rm "$SOLANA_LOCK_FILE" && false )
     9>&-
     cat > /solana-scratch/id_ecdsa <<EOK
-$(cat "$sshPrivateKey")
+$(cat "$SSH_PRIVATE_KEY")
 EOK
     cat > /solana-scratch/id_ecdsa.pub <<EOK
-$(cat "${sshPrivateKey}.pub")
+$(cat "${SSH_PRIVATE_KEY}.pub")
 EOK
     chmod 0600 /solana-scratch/id_ecdsa
     cat > /solana-scratch/authorized_keys <<EOAK
 $("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
-$(cat "${sshPrivateKey}.pub")
+$(cat "${SSH_PRIVATE_KEY}.pub")
 EOAK
     cp /solana-scratch/id_ecdsa "\${HOME}/.ssh/id_ecdsa"
     cp /solana-scratch/id_ecdsa.pub "\${HOME}/.ssh/id_ecdsa.pub"
