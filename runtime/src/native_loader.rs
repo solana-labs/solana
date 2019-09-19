@@ -29,16 +29,17 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "so";
 #[cfg(windows)]
 const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 
-// Cargo adds a hash in the file name of git and crates.io dependencies so we can deterministically
-// build a path, we have to search for it.
-fn find_library(root: PathBuf, prefix: &str) -> Option<PathBuf> {
+// Cargo adds a hash in the filename of git and crates.io dependencies so we cannot
+// deterministically build a path, we have to search for it.
+fn find_library(root: PathBuf, library_name: &str) -> Option<PathBuf> {
     let files = root.read_dir().expect("Failed to read library files");
     for file in files.filter_map(Result::ok) {
         let file_path = file.path();
         if let Some(file_name) = file_path.file_name() {
             if let Some(file_name) = file_name.to_str() {
                 if file_name.ends_with(PLATFORM_FILE_EXTENSION_NATIVE)
-                    && file_name.starts_with(&prefix)
+                    && file_name.starts_with(&library_name)
+                    && file_name.split(&['-', '.'][..]).next() == Some(library_name)
                 {
                     return Some(file_path);
                 }
@@ -58,11 +59,14 @@ fn create_library_path(name: &str) -> Option<PathBuf> {
         )
     }));
 
-    let library_path_prefix = PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name);
-    let library_prefix = library_path_prefix.to_str().unwrap();
+    let library_path = PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name);
+    let library_name = library_path.to_str().unwrap();
 
-    find_library(current_exe_directory.clone(), library_prefix)
-        .or_else(|| find_library(current_exe_directory.join("deps"), library_prefix))
+    // Check the current_exe directory for the library as `cargo tests` are run
+    // from the deps/ subdirectory
+    find_library(current_exe_directory.clone(), library_name)
+        // `cargo build` places dependent libraries in the deps/ subdirectory
+        .or_else(|| find_library(current_exe_directory.join("deps"), library_name))
 }
 
 #[cfg(windows)]
@@ -150,22 +154,34 @@ mod tests {
             find_library(root.path().to_path_buf(), prefix),
             Some(file_path)
         );
-
-        let root = tempdir().unwrap();
-        let prefix = "libsolana_bpf_loader_program";
-        let file_path = root.path().join(format!(
-            "libsolana_bpf_loader_program-674c49511f17b07f.{}",
-            PLATFORM_FILE_EXTENSION_NATIVE
-        ));
-        File::create(file_path.clone()).unwrap();
         assert_eq!(
-            find_library(root.path().to_path_buf(), prefix),
-            Some(file_path)
+            find_library(root.path().to_path_buf(), "libsolana_bpf"),
+            None,
+            "Library name must match completely"
         );
-
         assert_eq!(
             find_library(root.path().to_path_buf(), "libsolana_doesnt_exist"),
             None
+        );
+    }
+
+    #[test]
+    fn test_find_library_with_hash() {
+        let root = tempdir().unwrap();
+        let prefix = "libsolana_bpf_loader_program";
+        let hashed_file_path = root.path().join(format!(
+            "libsolana_bpf_loader_program-674c49511f17b07f.{}",
+            PLATFORM_FILE_EXTENSION_NATIVE
+        ));
+        File::create(hashed_file_path.clone()).unwrap();
+        assert_eq!(
+            find_library(root.path().to_path_buf(), prefix),
+            Some(hashed_file_path)
+        );
+        assert_eq!(
+            find_library(root.path().to_path_buf(), "libsolana_bpf"),
+            None,
+            "Library name must match completely"
         );
     }
 }
