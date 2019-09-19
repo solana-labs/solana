@@ -376,6 +376,7 @@ deploy() {
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
         ${maybeDelete:+-D}
+      time net/net.sh update -t "$CHANNEL_OR_TAG" --platform\ {linux,osx,windows}
     )
     ;;
   testnet-perf)
@@ -405,7 +406,6 @@ deploy() {
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
-          --skip-deploy-update \
           --skip-remote-log-retrieval \
           -a demo-testnet-solana-com \
           ${skipCreate:+-e} \
@@ -418,7 +418,6 @@ deploy() {
         NO_VALIDATOR_SANITY=1 \
           ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
             -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
-            --skip-deploy-update \
             --skip-remote-log-retrieval \
             ${skipCreate:+-e} \
             ${skipStart:+-s} \
@@ -540,8 +539,7 @@ deploy() {
           ${maybeInternalNodesLamports} \
           ${maybeExternalAccountsFile} \
           ${maybeLamports} \
-          ${maybeAdditionalDisk} \
-          --skip-deploy-update
+          ${maybeAdditionalDisk}
     )
     ;;
   *)

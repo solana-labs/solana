@@ -21,7 +21,6 @@ delete=false
 enableGpu=false
 bootDiskType=""
 blockstreamer=false
-deployUpdateManifest=true
 fetchLogs=true
 maybeHashesPerTick=
 maybeDisableAirdrops=
@@ -123,9 +122,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --external-accounts-file ]]; then
       maybeExternalPrimordialAccountsFile="$1 $2"
       shift 2
-    elif [[ $1 = --skip-deploy-update ]]; then
-      deployUpdateManifest=false
-      shift 1
     elif [[ $1 = --skip-remote-log-retrieval ]]; then
       fetchLogs=false
       shift 1
@@ -153,7 +149,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[@]}"; do
+while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfe" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -222,10 +218,6 @@ while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[@]}"; do
     ;;
   S)
     stopNetwork=true
-    ;;
-  w)
-    fetchLogs=false
-    deployUpdateManifest=false
     ;;
   *)
     usage "Unknown option: $opt"
@@ -365,8 +357,6 @@ ok=true
 if ! $skipStart; then
   (
     if $skipCreate; then
-      # TODO: Enable rolling updates
-      #op=update
       op=restart
     else
       op=start
@@ -389,13 +379,6 @@ if ! $skipStart; then
 
     if ! $failOnValidatorBootupFailure; then
       args+=(-F)
-    fi
-
-    if $deployUpdateManifest; then
-      rm -f update_manifest_keypair.json
-      args+=(--deploy-update linux)
-      args+=(--deploy-update osx)
-      args+=(--deploy-update windows)
     fi
 
     # shellcheck disable=SC2206 # Do not want to quote

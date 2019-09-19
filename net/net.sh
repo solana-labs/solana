@@ -25,15 +25,13 @@ Operate a configured testnet
  logs     - Fetch remote logs from each network node
  startnode- Start an individual node (previously stopped with stopNode)
  stopnode - Stop an individual node
+ update   - Deploy a new software update to the cluster
 
  start-specific options:
    -T [tarFilename]                   - Deploy the specified release tarball
    -t edge|beta|stable|vX.Y.Z         - Deploy the latest tarball release for the
                                         specified release channel (edge|beta|stable) or release tag
                                         (vX.Y.Z)
-   --deploy-update linux|osx|windows  - Deploy the tarball using 'solana-install deploy ...' for the
-                                        given platform (multiple platforms may be specified)
-                                        (-t option must be supplied as well)
    -f [cargoFeatures]                 - List of |cargo --feaures=| to activate
                                         (ignored if -s or -S is specified)
    -r / --skip-setup                  - Reuse existing node/ledger configuration from a
@@ -92,6 +90,11 @@ Operate a configured testnet
 
  logs-specific options:
    none
+
+ update-specific options:
+   --platform linux|osx|windows       - Deploy the tarball using 'solana-install deploy ...' for the
+                                        given platform (multiple platforms may be specified)
+                                        (-t option must be supplied as well)
 
  startnode/stopnode-specific options:
    -i [ip address]                    - IP Address of the node to start or stop
@@ -162,7 +165,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-setup ]]; then
       skipSetup=true
       shift 1
-    elif [[ $1 = --deploy-update ]]; then
+    elif [[ $1 = --platform ]]; then
       updatePlatforms="$updatePlatforms $2"
       shift 2
     elif [[ $1 = --internal-nodes-stake-lamports ]]; then
@@ -552,9 +555,13 @@ sanity() {
 
 deployUpdate() {
   if [[ -z $updatePlatforms ]]; then
+    echo "No update platforms"
     return
   fi
-  [[ $deployMethod = tar ]] || exit 1
+  if [[ -z $releaseChannel ]]; then
+    echo "Release channel not specified (use -t option)"
+    exit 1
+  fi
 
   declare ok=true
   declare bootstrapLeader=${fullnodeIpList[0]}
@@ -618,11 +625,6 @@ prepare_deploy() {
           -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
       )
       tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
-    else
-      if [[ -n $updatePlatforms ]]; then
-        echo "Error: --deploy-update argument was provided but -t was not"
-        exit 1
-      fi
     fi
     (
       set -x
@@ -733,8 +735,6 @@ deploy() {
   esac
   $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
 
-  deployUpdate
-
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
@@ -818,6 +818,9 @@ sanity)
   ;;
 stop)
   stop
+  ;;
+update)
+  deployUpdate
   ;;
 stopnode)
   if [[ -z $nodeAddress ]]; then
