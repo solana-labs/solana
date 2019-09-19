@@ -66,21 +66,21 @@ mod tests {
         let (bank, txs) = setup();
 
         // Test getting locked accounts
-        let transaction_batch = bank.lock_accounts(&txs, None);
+        let batch = bank.prepare_batch(&txs, None);
 
         // Grab locks
-        assert!(transaction_batch.lock_results().iter().all(|x| x.is_ok()));
+        assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Trying to grab locks again should fail
-        let transaction_batch2 = bank.lock_accounts(&txs, None);
-        assert!(transaction_batch2.lock_results().iter().all(|x| x.is_err()));
+        let batch2 = bank.prepare_batch(&txs, None);
+        assert!(batch2.lock_results().iter().all(|x| x.is_err()));
 
         // Drop the first set of locks
-        drop(transaction_batch);
+        drop(batch);
 
         // Now grabbing locks should work again
-        let transaction_batch2 = bank.lock_accounts(&txs, None);
-        assert!(transaction_batch2.lock_results().iter().all(|x| x.is_ok()));
+        let batch2 = bank.prepare_batch(&txs, None);
+        assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
     }
 
     fn setup() -> (Bank, Vec<Transaction>) {
