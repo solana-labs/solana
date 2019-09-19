@@ -74,6 +74,7 @@ test-stable-perf)
     # shellcheck source=/dev/null
     source ./target/perf-libs/env.sh
     ROOT_FEATURES=cuda
+    export SOLANA_CUDA=1
   fi
 
   # Run root package library tests
@@ -91,11 +92,9 @@ test-local-cluster)
   ;;
 esac
 
-# Assumes target/debug is populated. Ensure last build command
-# leaves target/debug in the state intended for localnet-sanity
 echo --- ci/localnet-sanity.sh
+export CARGO_TOOLCHAIN=+"$rust_stable"
 (
   set -x
-  export PATH=$PWD/target/debug:$PATH
-  USE_INSTALL=1 ci/localnet-sanity.sh -x
+  ci/localnet-sanity.sh -x
 )
