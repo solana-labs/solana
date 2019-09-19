@@ -49,6 +49,18 @@ azure)
   blockstreamerMachineType=Standard_D16s_v3
   replicatorMachineType=Standard_D4s_v3
   ;;
+colo)
+  # shellcheck source=net/scripts/colo-provider.sh
+  source "$here"/scripts/colo-provider.sh
+
+  cpuBootstrapLeaderMachineType=0
+  gpuBootstrapLeaderMachineType=1
+  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
+  fullNodeMachineType=$cpuBootstrapLeaderMachineType
+  clientMachineType=0
+  blockstreamerMachineType=0
+  replicatorMachineType=0
+  ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
   ;;
@@ -95,6 +107,7 @@ Manage testnet instances
  config - configure the testnet and write a config file describing it
  delete - delete the testnet
  info   - display information about the currently configured testnet
+ status - display status information of all resources
 
  common options:
    -p [prefix]      - Optional common prefix for instance names to avoid
@@ -147,7 +160,7 @@ EOF
 command=$1
 [[ -n $command ]] || usage
 shift
-[[ $command = create || $command = config || $command = info || $command = delete ]] ||
+[[ $command = create || $command = config || $command = info || $command = delete || $command = status ]] ||
   usage "Invalid command: $command"
 
 shortArgs=()
@@ -243,12 +256,7 @@ fi
 case $cloudProvider in
 gce)
   ;;
-ec2)
-  if [[ -n $fullNodeAdditionalDiskSizeInGb ]] ; then
-    usage "Error: --fullnode-additional-disk-size-gb currently only supported with cloud provider: gce"
-  fi
-  ;;
-azure)
+ec2|azure|colo)
   if [[ -n $fullNodeAdditionalDiskSizeInGb ]] ; then
     usage "Error: --fullnode-additional-disk-size-gb currently only supported with cloud provider: gce"
   fi
@@ -682,7 +690,8 @@ EOF
   else
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb"
+      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" \
+      "$sshPrivateKey"
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
@@ -702,7 +711,8 @@ EOF
       fi
       cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
         "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" &
+        "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" \
+        "$sshPrivateKey" &
     done
 
     wait
@@ -711,19 +721,19 @@ EOF
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$enableGpu" "$clientMachineType" "${zones[0]}" "$clientBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType" ""
+      "$startupScript" "" "$bootDiskType" "" "$sshPrivateKey"
   fi
 
   if $blockstreamer; then
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
       "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$blockstreamerAddress" "$bootDiskType" ""
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$sshPrivateKey"
   fi
 
   if [[ $replicatorNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-replicator" "$replicatorNodeCount" \
       false "$replicatorMachineType" "${zones[0]}" "$replicatorBootDiskSizeInGb" \
-      "$startupScript" "" "" ""
+      "$startupScript" "" "" "" "$sshPrivateKey"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
@@ -775,6 +785,9 @@ info)
     zone=${replicatorIpListZone[$i]}
     printNode replicator "$ipAddress" "$ipAddressPrivate" "$zone"
   done
+  ;;
+status)
+  cloud_StatusAll
   ;;
 *)
   usage "Unknown command: $command"

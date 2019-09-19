@@ -321,3 +321,11 @@ cloud_CreateAndAttachPersistentDisk() {
     --zone "$zone" \
     --auto-delete
 }
+
+#
+# cloud_StatusAll
+#
+# Not yet implemented for this cloud provider
+cloud_StatusAll() {
+  echo "ERROR: cloud_StatusAll is not yet implemented for GCE"
+}
