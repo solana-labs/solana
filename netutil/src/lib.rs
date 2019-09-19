@@ -231,9 +231,7 @@ fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
 }
 
 // Find a port in the given range that is available for both TCP and UDP
-pub fn bind_common_in_range(
-    range: PortRange,
-) -> io::Result<(u16, (UdpSocket, tokio::net::TcpListener))> {
+pub fn bind_common_in_range(range: PortRange) -> io::Result<(u16, (UdpSocket, TcpListener))> {
     let (start, end) = range;
     let mut tries_left = end - start;
     let mut rand_port = thread_rng().gen_range(start, end);
@@ -319,13 +317,13 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
 }
 
 // binds both a UdpSocket and a TcpListener
-pub fn bind_common(port: u16, reuseaddr: bool) -> io::Result<(UdpSocket, tokio::net::TcpListener)> {
+pub fn bind_common(port: u16, reuseaddr: bool) -> io::Result<(UdpSocket, TcpListener)> {
     let sock = udp_socket(reuseaddr)?;
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
     let sock_addr = SockAddr::from(addr);
     match sock.bind(&sock_addr) {
-        Ok(_) => match tokio::net::TcpListener::bind(&addr) {
+        Ok(_) => match TcpListener::bind(&addr) {
             Ok(listener) => Result::Ok((sock.into_udp_socket(), listener)),
             Err(err) => Err(err),
         },

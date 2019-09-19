@@ -47,12 +47,11 @@ use std::borrow::Cow;
 use std::cmp::min;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
-use tokio::net::TcpListener;
 
 pub const FULLNODE_PORT_RANGE: PortRange = (8000, 10_000);
 
