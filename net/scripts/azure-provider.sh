@@ -146,6 +146,8 @@ cloud_Initialize() {
 # address       - Optional name of the GCE static IP address to attach to the
 #                 instance.  Requires that |numNodes| = 1 and that addressName
 #                 has been provisioned in the GCE region that is hosting `$zone`
+# bootDiskType  - Optional specify SSD or HDD boot disk
+# additionalDiskSize - Optional specify size of additional storage volume
 #
 # Tip: use cloud_FindInstances to locate the instances once this function
 #      returns
