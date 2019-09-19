@@ -2,53 +2,54 @@ use crate::bank::Bank;
 use solana_sdk::transaction::{Result, Transaction};
 
 // Represents the results of trying to lock a set of accounts
-pub struct LockedAccountsResults<'a, 'b> {
-    locked_accounts_results: Vec<Result<()>>,
+pub struct TransactionBatch<'a, 'b> {
+    lock_results: Vec<Result<()>>,
     bank: &'a Bank,
     transactions: &'b [Transaction],
-    txs_iteration_order: Option<Vec<usize>>,
+    iteration_order: Option<Vec<usize>>,
     pub(crate) needs_unlock: bool,
 }
 
-impl<'a, 'b> LockedAccountsResults<'a, 'b> {
+impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
-        locked_accounts_results: Vec<Result<()>>,
+        lock_results: Vec<Result<()>>,
         bank: &'a Bank,
         transactions: &'b [Transaction],
-        txs_iteration_order: Option<Vec<usize>>,
+        iteration_order: Option<Vec<usize>>,
     ) -> Self {
-        assert_eq!(locked_accounts_results.len(), transactions.len());
-        if let Some(txs_iteration_order) = &txs_iteration_order {
-            assert_eq!(transactions.len(), txs_iteration_order.len());
+        assert_eq!(lock_results.len(), transactions.len());
+        if let Some(iteration_order) = &iteration_order {
+            assert_eq!(transactions.len(), iteration_order.len());
         }
         Self {
-            locked_accounts_results,
+            lock_results,
             bank,
             transactions,
-            txs_iteration_order,
+            iteration_order,
             needs_unlock: true,
         }
     }
 
-    pub fn locked_accounts_results(&self) -> &Vec<Result<()>> {
-        &self.locked_accounts_results
+    pub fn lock_results(&self) -> &Vec<Result<()>> {
+        &self.lock_results
     }
 
     pub fn transactions(&self) -> &[Transaction] {
         self.transactions
     }
 
-    pub fn txs_iteration_order(&self) -> Option<&[usize]> {
-        self.txs_iteration_order.as_ref().map(|v| v.as_slice())
+    pub fn iteration_order(&self) -> Option<&[usize]> {
+        self.iteration_order.as_ref().map(|v| v.as_slice())
+    }
+    pub fn bank(&self) -> &Bank {
+        self.bank
     }
 }
 
 // Unlock all locked accounts in destructor.
-impl<'a, 'b> Drop for LockedAccountsResults<'a, 'b> {
+impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
     fn drop(&mut self) {
-        if self.needs_unlock {
-            self.bank.unlock_accounts(self)
-        }
+        self.bank.unlock_accounts(self)
     }
 }
 
@@ -61,34 +62,25 @@ mod tests {
     use solana_sdk::system_transaction;
 
     #[test]
-    fn test_account_locks() {
+    fn test_transaction_batch() {
         let (bank, txs) = setup();
 
         // Test getting locked accounts
-        let lock_results = bank.lock_accounts(&txs, None);
+        let batch = bank.prepare_batch(&txs, None);
 
         // Grab locks
-        assert!(lock_results
-            .locked_accounts_results()
-            .iter()
-            .all(|x| x.is_ok()));
+        assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Trying to grab locks again should fail
-        let lock_results2 = bank.lock_accounts(&txs, None);
-        assert!(lock_results2
-            .locked_accounts_results()
-            .iter()
-            .all(|x| x.is_err()));
+        let batch2 = bank.prepare_batch(&txs, None);
+        assert!(batch2.lock_results().iter().all(|x| x.is_err()));
 
         // Drop the first set of locks
-        drop(lock_results);
+        drop(batch);
 
         // Now grabbing locks should work again
-        let lock_results2 = bank.lock_accounts(&txs, None);
-        assert!(lock_results2
-            .locked_accounts_results()
-            .iter()
-            .all(|x| x.is_ok()));
+        let batch2 = bank.prepare_batch(&txs, None);
+        assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
     }
 
     fn setup() -> (Bank, Vec<Transaction>) {

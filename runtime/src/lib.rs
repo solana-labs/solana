@@ -9,7 +9,6 @@ pub mod bloom;
 pub mod epoch_schedule;
 pub mod genesis_utils;
 pub mod loader_utils;
-pub mod locked_accounts_results;
 pub mod message_processor;
 mod native_loader;
 pub mod rent_collector;
@@ -18,6 +17,7 @@ pub mod stakes;
 pub mod status_cache;
 pub mod storage_utils;
 mod system_instruction_processor;
+pub mod transaction_batch;
 pub mod transaction_utils;
 
 #[macro_use]

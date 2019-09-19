@@ -1,42 +1,45 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-use crate::blocktree::Blocktree;
-use crate::cluster_info::ClusterInfo;
-use crate::entry::hash_transactions;
-use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::packet::PACKETS_PER_BATCH;
-use crate::packet::{Packet, Packets};
-use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry};
-use crate::poh_service::PohService;
-use crate::result::{Error, Result};
-use crate::service::Service;
-use crate::sigverify_stage::VerifiedPackets;
+use crate::{
+    blocktree::Blocktree,
+    cluster_info::ClusterInfo,
+    entry::hash_transactions,
+    leader_schedule_cache::LeaderScheduleCache,
+    packet::PACKETS_PER_BATCH,
+    packet::{Packet, Packets},
+    poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
+    poh_service::PohService,
+    result::{Error, Result},
+    service::Service,
+    sigverify_stage::VerifiedPackets,
+};
 use bincode::deserialize;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
-use solana_runtime::accounts_db::ErrorCounters;
-use solana_runtime::bank::Bank;
-use solana_runtime::locked_accounts_results::LockedAccountsResults;
-use solana_sdk::clock::{
-    DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
-    MAX_TRANSACTION_FORWARDING_DELAY,
+use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};
+use solana_sdk::{
+    clock::{
+        DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
+        MAX_TRANSACTION_FORWARDING_DELAY,
+    },
+    poh_config::PohConfig,
+    pubkey::Pubkey,
+    timing::{duration_as_ms, timestamp},
+    transaction::{self, Transaction, TransactionError},
 };
-use solana_sdk::poh_config::PohConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::{duration_as_ms, timestamp};
-use solana_sdk::transaction::{self, Transaction, TransactionError};
-use std::cmp;
-use std::env;
-use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
-use std::time::Instant;
+use std::{
+    cmp, env,
+    net::UdpSocket,
+    sync::atomic::AtomicBool,
+    sync::mpsc::Receiver,
+    sync::{Arc, Mutex, RwLock},
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
+    time::Instant,
+};
 
 type PacketsAndOffsets = (Packets, Vec<usize>);
 pub type UnprocessedPackets = Vec<PacketsAndOffsets>;
@@ -481,16 +484,16 @@ impl BankingStage {
     fn process_and_record_transactions_locked(
         bank: &Bank,
         poh: &Arc<Mutex<PohRecorder>>,
-        lock_results: &LockedAccountsResults,
+        batch: &TransactionBatch,
     ) -> (Result<usize>, Vec<usize>) {
         let mut load_execute_time = Measure::start("load_execute_time");
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let txs = lock_results.transactions();
+        let txs = batch.transactions();
         let (mut loaded_accounts, results, mut retryable_txs, tx_count, signature_count) =
-            bank.load_and_execute_transactions(lock_results, MAX_PROCESSING_AGE);
+            bank.load_and_execute_transactions(batch, MAX_PROCESSING_AGE);
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();
@@ -543,16 +546,16 @@ impl BankingStage {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let lock_results = bank.lock_accounts(txs, None);
+        let batch = bank.prepare_batch(txs, None);
         lock_time.stop();
 
         let (result, mut retryable_txs) =
-            Self::process_and_record_transactions_locked(bank, poh, &lock_results);
+            Self::process_and_record_transactions_locked(bank, poh, &batch);
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
         let mut unlock_time = Measure::start("unlock_time");
         // Once the accounts are new transactions can enter the pipeline to process them
-        drop(lock_results);
+        drop(batch);
         unlock_time.stop();
 
         debug!(

@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_runtime::bank::Bank;
-use solana_runtime::locked_accounts_results::LockedAccountsResults;
+use solana_runtime::transaction_batch::TransactionBatch;
 use solana_sdk::clock::{Slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -37,34 +37,41 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)]) -> Result<()> {
-    inc_new_counter_debug!("bank-par_execute_entries-count", entries.len());
+fn execute_batch(batch: &TransactionBatch) -> Result<()> {
+    let results = batch
+        .bank()
+        .load_execute_and_commit_transactions(batch, MAX_RECENT_BLOCKHASHES);
+
+    let mut first_err = None;
+    for (result, transaction) in results.iter().zip(batch.transactions()) {
+        if let Err(ref err) = result {
+            if first_err.is_none() {
+                first_err = Some(result.clone());
+            }
+            warn!(
+                "Unexpected validator error: {:?}, transaction: {:?}",
+                err, transaction
+            );
+            datapoint_error!(
+                "validator_process_entry_error",
+                (
+                    "error",
+                    format!("error: {:?}, transaction: {:?}", err, transaction),
+                    String
+                )
+            );
+        }
+    }
+    first_err.unwrap_or(Ok(()))
+}
+
+fn execute_batches(batches: &[TransactionBatch]) -> Result<()> {
+    inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
-            entries
+            batches
                 .into_par_iter()
-                .map(|(entry, locked_accounts)| {
-                    let results = bank.load_execute_and_commit_transactions(
-                        locked_accounts,
-                        MAX_RECENT_BLOCKHASHES,
-                    );
-                    let mut first_err = None;
-                    for (r, tx) in results.iter().zip(entry.transactions.iter()) {
-                        if let Err(ref entry) = r {
-                            if first_err.is_none() {
-                                first_err = Some(r.clone());
-                            }
-                            if !Bank::can_commit(&r) {
-                                warn!("Unexpected validator error: {:?}, tx: {:?}", entry, tx);
-                                datapoint_error!(
-                                    "validator_process_entry_error",
-                                    ("error", format!("error: {:?}, tx: {:?}", entry, tx), String)
-                                );
-                            }
-                        }
-                    }
-                    first_err.unwrap_or(Ok(()))
-                })
+                .map(|batch| execute_batch(batch))
                 .collect()
         })
     });
@@ -77,45 +84,40 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)])
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-pub fn process_entries(
-    bank: &Bank,
-    entries: &[Entry],
-    randomize_tx_execution_order: bool,
-) -> Result<()> {
+pub fn process_entries(bank: &Bank, entries: &[Entry], randomize: bool) -> Result<()> {
     // accumulator for entries that can be processed in parallel
-    let mut mt_group = vec![];
+    let mut batches = vec![];
     for entry in entries {
         if entry.is_tick() {
             // if its a tick, execute the group and register the tick
-            par_execute_entries(bank, &mt_group)?;
-            mt_group = vec![];
+            execute_batches(&batches)?;
+            batches.clear();
             bank.register_tick(&entry.hash);
             continue;
         }
         // else loop on processing the entry
         loop {
-            let txs_execution_order = if randomize_tx_execution_order {
-                let mut random_txs_execution_order: Vec<usize> =
-                    (0..entry.transactions.len()).collect();
-                random_txs_execution_order.shuffle(&mut thread_rng());
-                Some(random_txs_execution_order)
+            let iteration_order = if randomize {
+                let mut iteration_order: Vec<usize> = (0..entry.transactions.len()).collect();
+                iteration_order.shuffle(&mut thread_rng());
+                Some(iteration_order)
             } else {
                 None
             };
 
             // try to lock the accounts
-            let lock_results = bank.lock_accounts(&entry.transactions, txs_execution_order);
+            let batch = bank.prepare_batch(&entry.transactions, iteration_order);
 
-            let first_lock_err = first_err(lock_results.locked_accounts_results());
+            let first_lock_err = first_err(batch.lock_results());
 
             // if locking worked
             if first_lock_err.is_ok() {
-                mt_group.push((entry, lock_results));
+                batches.push(batch);
                 // done with this entry
                 break;
             }
             // else we failed to lock, 2 possible reasons
-            if mt_group.is_empty() {
+            if batches.is_empty() {
                 // An entry has account lock conflicts with *itself*, which should not happen
                 // if generated by a properly functioning leader
                 datapoint!(
@@ -134,12 +136,12 @@ pub fn process_entries(
             } else {
                 // else we have an entry that conflicts with a prior entry
                 // execute the current queue and try to process this entry again
-                par_execute_entries(bank, &mt_group)?;
-                mt_group = vec![];
+                execute_batches(&batches)?;
+                batches.clear();
             }
         }
     }
-    par_execute_entries(bank, &mt_group)?;
+    execute_batches(&batches)?;
     Ok(())
 }
 
@@ -1070,14 +1072,14 @@ pub mod tests {
         // Check all accounts are unlocked
         let txs1 = &entry_1_to_mint.transactions[..];
         let txs2 = &entry_2_to_3_mint_to_1.transactions[..];
-        let locked_accounts1 = bank.lock_accounts(txs1, None);
-        for result in locked_accounts1.locked_accounts_results() {
+        let batch1 = bank.prepare_batch(txs1, None);
+        for result in batch1.lock_results() {
             assert!(result.is_ok());
         }
         // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
-        drop(locked_accounts1);
-        let locked_accounts2 = bank.lock_accounts(txs2, None);
-        for result in locked_accounts2.locked_accounts_results() {
+        drop(batch1);
+        let batch2 = bank.prepare_batch(txs2, None);
+        for result in batch2.lock_results() {
             assert!(result.is_ok());
         }
     }
