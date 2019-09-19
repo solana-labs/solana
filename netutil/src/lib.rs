@@ -234,26 +234,14 @@ fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
 pub fn bind_common_in_range(
     range: PortRange,
 ) -> io::Result<(u16, (UdpSocket, tokio::net::TcpListener))> {
-    let sock = udp_socket(false)?;
-
     let (start, end) = range;
     let mut tries_left = end - start;
     let mut rand_port = thread_rng().gen_range(start, end);
     loop {
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rand_port);
-        let sock_addr = SockAddr::from(addr.clone());
-        match sock.bind(&sock_addr) {
-            Ok(_) => match tokio::net::TcpListener::bind(&addr) {
-                Ok(listener) => {
-                    let sock = sock.into_udp_socket();
-                    break Result::Ok((sock.local_addr().unwrap().port(), (sock, listener)));
-                }
-                Err(err) => {
-                    if tries_left == 0 {
-                        return Err(err);
-                    }
-                }
-            },
+        match bind_common(rand_port, false) {
+            Ok((sock, listener)) => {
+                break Result::Ok((sock.local_addr().unwrap().port(), (sock, listener)));
+            }
             Err(err) => {
                 if tries_left == 0 {
                     return Err(err);
@@ -330,6 +318,7 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
     }
 }
 
+// binds both a UdpSocket and a TcpListener
 pub fn bind_common(port: u16, reuseaddr: bool) -> io::Result<(UdpSocket, tokio::net::TcpListener)> {
     let sock = udp_socket(reuseaddr)?;
 
@@ -441,7 +430,6 @@ mod tests {
 
     #[test]
     fn test_bind_common_in_range() {
-        assert_eq!(bind_common_in_range((3000, 3001)).unwrap().0, 3000);
         let (port, _) = bind_common_in_range((3000, 3050)).unwrap();
         assert!(3000 <= port && port < 3050);
     }
