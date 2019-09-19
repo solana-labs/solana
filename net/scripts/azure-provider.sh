@@ -320,3 +320,11 @@ cloud_CreateAndAttachPersistentDisk() {
   echo "ERROR: cloud_CreateAndAttachPersistentDisk is not yet implemented for azure"
   exit 1
 }
+
+#
+# cloud_StatusAll
+#
+# Not yet implemented for this cloud provider
+cloud_StatusAll() {
+  echo "ERROR: cloud_StatusAll is not yet implemented for azure"
+}
