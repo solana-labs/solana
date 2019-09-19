@@ -303,6 +303,7 @@ flag_error() {
 }
 
 if ! $skipSetup; then
+  multinode-demo/clear-config.sh
   multinode-demo/setup.sh
 else
   verifyLedger
