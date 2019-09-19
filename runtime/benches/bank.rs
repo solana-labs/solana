@@ -115,8 +115,8 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &Vec<
 
 fn do_bench_transactions(
     bencher: &mut Bencher,
-    bench_work: &Fn(&Arc<Bank>, &BankClient, &Vec<Transaction>),
-    create_transactions: &Fn(&BankClient, &Keypair) -> Vec<Transaction>,
+    bench_work: &dyn Fn(&Arc<Bank>, &BankClient, &Vec<Transaction>),
+    create_transactions: &dyn Fn(&BankClient, &Keypair) -> Vec<Transaction>,
 ) {
     solana_logger::setup();
     let ns_per_s = 1_000_000_000;
