@@ -1667,7 +1667,6 @@ pub fn entries_to_test_shreds(
 pub mod tests {
     use super::*;
     use crate::entry::{create_ticks, Entry};
-    use crate::shred::{DataShredHeader, CODING_SHRED};
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
@@ -3107,13 +3106,8 @@ pub mod tests {
             let index_cf = blocktree.db.column::<cf::Index>();
             let last_root = RwLock::new(0);
 
-            let mut shred = DataShredHeader::default();
             let slot = 1;
-            shred.common_header.header.shred_type = CODING_SHRED;
-            shred.common_header.header.position = 10;
-            shred.common_header.header.coding_header.index = 11;
-            shred.common_header.header.coding_header.slot = 1;
-            shred.common_header.header.num_coding_shreds = shred.common_header.header.position + 1;
+            let mut shred = Shredder::new_coding_shred_header(slot, 11, 11, 11, 10);
             let coding_shred = Shred::new_empty_from_header(shred.clone());
 
             // Insert a good coding shred
@@ -3131,7 +3125,7 @@ pub mod tests {
             // Trying to insert the same shred again should fail
             {
                 let index = index_cf
-                    .get(shred.common_header.header.coding_header.slot)
+                    .get(shred.common_header.coding_header.slot)
                     .unwrap()
                     .unwrap();
                 assert!(!Blocktree::should_insert_coding_shred(
@@ -3141,13 +3135,13 @@ pub mod tests {
                 ));
             }
 
-            shred.common_header.header.coding_header.index += 1;
+            shred.common_header.coding_header.index += 1;
 
             // Establish a baseline that works
             {
                 let coding_shred = Shred::new_empty_from_header(shred.clone());
                 let index = index_cf
-                    .get(shred.common_header.header.coding_header.slot)
+                    .get(shred.common_header.coding_header.slot)
                     .unwrap()
                     .unwrap();
                 assert!(Blocktree::should_insert_coding_shred(
@@ -3160,7 +3154,7 @@ pub mod tests {
             // Trying to insert a shred with index < position should fail
             {
                 let mut coding_shred = Shred::new_empty_from_header(shred.clone());
-                let index = coding_shred.headers.common_header.header.position - 1;
+                let index = coding_shred.headers.common_header.position - 1;
                 coding_shred.set_index(index as u32);
 
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
@@ -3174,7 +3168,7 @@ pub mod tests {
             // Trying to insert shred with num_coding == 0 should fail
             {
                 let mut coding_shred = Shred::new_empty_from_header(shred.clone());
-                coding_shred.headers.common_header.header.num_coding_shreds = 0;
+                coding_shred.headers.common_header.num_coding_shreds = 0;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 assert!(!Blocktree::should_insert_coding_shred(
                     &coding_shred,
@@ -3186,8 +3180,8 @@ pub mod tests {
             // Trying to insert shred with pos >= num_coding should fail
             {
                 let mut coding_shred = Shred::new_empty_from_header(shred.clone());
-                coding_shred.headers.common_header.header.num_coding_shreds =
-                    coding_shred.headers.common_header.header.position;
+                coding_shred.headers.common_header.num_coding_shreds =
+                    coding_shred.headers.common_header.position;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 assert!(!Blocktree::should_insert_coding_shred(
                     &coding_shred,
@@ -3200,14 +3194,9 @@ pub mod tests {
             // has index > u32::MAX should fail
             {
                 let mut coding_shred = Shred::new_empty_from_header(shred.clone());
-                coding_shred.headers.common_header.header.num_coding_shreds = 3;
-                coding_shred
-                    .headers
-                    .common_header
-                    .header
-                    .coding_header
-                    .index = std::u32::MAX - 1;
-                coding_shred.headers.common_header.header.position = 0;
+                coding_shred.headers.common_header.num_coding_shreds = 3;
+                coding_shred.headers.common_header.coding_header.index = std::u32::MAX - 1;
+                coding_shred.headers.common_header.position = 0;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 assert!(!Blocktree::should_insert_coding_shred(
                     &coding_shred,
@@ -3216,7 +3205,7 @@ pub mod tests {
                 ));
 
                 // Decreasing the number of num_coding_shreds will put it within the allowed limit
-                coding_shred.headers.common_header.header.num_coding_shreds = 2;
+                coding_shred.headers.common_header.num_coding_shreds = 2;
                 assert!(Blocktree::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
