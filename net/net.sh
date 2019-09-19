@@ -25,15 +25,13 @@ Operate a configured testnet
  logs     - Fetch remote logs from each network node
  startnode- Start an individual node (previously stopped with stopNode)
  stopnode - Stop an individual node
+ update   - Deploy a new software update to the cluster
 
  start-specific options:
    -T [tarFilename]                   - Deploy the specified release tarball
    -t edge|beta|stable|vX.Y.Z         - Deploy the latest tarball release for the
                                         specified release channel (edge|beta|stable) or release tag
                                         (vX.Y.Z)
-   --deploy-update linux|osx|windows  - Deploy the tarball using 'solana-install deploy ...' for the
-                                        given platform (multiple platforms may be specified)
-                                        (-t option must be supplied as well)
    -f [cargoFeatures]                 - List of |cargo --feaures=| to activate
                                         (ignored if -s or -S is specified)
    -r / --skip-setup                  - Reuse existing node/ledger configuration from a
@@ -80,6 +78,8 @@ Operate a configured testnet
                                       - Don't build new software, deploy the
                                         existing binaries
 
+   --deploy-if-newer                  - Only deploy if newer software is
+                                        available (requires -t or -T)
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -93,6 +93,11 @@ Operate a configured testnet
  logs-specific options:
    none
 
+ update-specific options:
+   --platform linux|osx|windows       - Deploy the tarball using 'solana-install deploy ...' for the
+                                        given platform (multiple platforms may be specified)
+                                        (-t option must be supplied as well)
+
  startnode/stopnode-specific options:
    -i [ip address]                    - IP Address of the node to start or stop
 
@@ -104,6 +109,7 @@ EOF
 
 releaseChannel=
 deployMethod=local
+deployIfNewer=
 sanityExtraArgs=
 cargoFeatures=
 skipSetup=false
@@ -147,6 +153,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-snapshot-fetch ]]; then
       maybeNoSnapshot="$1"
       shift 1
+    elif [[ $1 = --deploy-if-newer ]]; then
+      deployIfNewer=1
+      shift 1
     elif [[ $1 = --no-deploy ]]; then
       deployMethod=skip
       shift 1
@@ -162,7 +171,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-setup ]]; then
       skipSetup=true
       shift 1
-    elif [[ $1 = --deploy-update ]]; then
+    elif [[ $1 = --platform ]]; then
       updatePlatforms="$updatePlatforms $2"
       shift 2
     elif [[ $1 = --internal-nodes-stake-lamports ]]; then
@@ -395,9 +404,11 @@ startBootstrapLeader() {
     case $deployMethod in
     tar)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/version.yml "$ipAddress:~/"
       ;;
     local)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
+      ssh "${sshOptions[@]}" -n "$ipAddress" "rm -f ~/version.yml; touch ~/version.yml"
       ;;
     skip)
       ;;
@@ -552,9 +563,13 @@ sanity() {
 
 deployUpdate() {
   if [[ -z $updatePlatforms ]]; then
+    echo "No update platforms"
     return
   fi
-  [[ $deployMethod = tar ]] || exit 1
+  if [[ -z $releaseChannel ]]; then
+    echo "Release channel not specified (use -t option)"
+    exit 1
+  fi
 
   declare ok=true
   declare bootstrapLeader=${fullnodeIpList[0]}
@@ -618,11 +633,6 @@ prepare_deploy() {
           -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
       )
       tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
-    else
-      if [[ -n $updatePlatforms ]]; then
-        echo "Error: --deploy-update argument was provided but -t was not"
-        exit 1
-      fi
     fi
     (
       set -x
@@ -644,6 +654,26 @@ prepare_deploy() {
     usage "Internal error: invalid deployMethod: $deployMethod"
     ;;
   esac
+
+  if [[ -n $deployIfNewer ]]; then
+    if [[ $deployMethod != tar ]]; then
+      echo "Error: --deploy-if-newer only supported for tar deployments"
+      exit 1
+    fi
+
+    echo "Fetching current software version"
+    (
+      set -x
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "${fullnodeIpList[0]}":~/version.yml current-version.yml
+    )
+    cat current-version.yml
+    if ! diff -q current-version.yml "$SOLANA_ROOT"/solana-release/version.yml; then
+      echo "Cluster software version is old.  Update required"
+    else
+      echo "Cluster software version is current.  No update required"
+      exit 0
+    fi
+  fi
 }
 
 deploy() {
@@ -733,8 +763,6 @@ deploy() {
   esac
   $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
 
-  deployUpdate
-
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
@@ -818,6 +846,9 @@ sanity)
   ;;
 stop)
   stop
+  ;;
+update)
+  deployUpdate
   ;;
 stopnode)
   if [[ -z $nodeAddress ]]; then

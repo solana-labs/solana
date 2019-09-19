@@ -219,6 +219,7 @@ sanity() {
       NO_INSTALL_CHECK=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh edge-testnet-solana-com gce us-west1-b
+      time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
     )
     ;;
   testnet-edge-perf)
@@ -235,6 +236,7 @@ sanity() {
       NO_INSTALL_CHECK=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
+      time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
     )
     ;;
   testnet-beta-perf)
@@ -376,6 +378,7 @@ deploy() {
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
         ${maybeDelete:+-D}
+      time net/net.sh update -t "$CHANNEL_OR_TAG" --platform\ {linux,osx,windows}
     )
     ;;
   testnet-perf)
@@ -405,7 +408,6 @@ deploy() {
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
-          --skip-deploy-update \
           --skip-remote-log-retrieval \
           -a demo-testnet-solana-com \
           ${skipCreate:+-e} \
@@ -418,7 +420,6 @@ deploy() {
         NO_VALIDATOR_SANITY=1 \
           ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
             -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
-            --skip-deploy-update \
             --skip-remote-log-retrieval \
             ${skipCreate:+-e} \
             ${skipStart:+-s} \
@@ -540,8 +541,7 @@ deploy() {
           ${maybeInternalNodesLamports} \
           ${maybeExternalAccountsFile} \
           ${maybeLamports} \
-          ${maybeAdditionalDisk} \
-          --skip-deploy-update
+          ${maybeAdditionalDisk}
     )
     ;;
   *)

@@ -216,6 +216,7 @@ EOF
   validator|blockstreamer)
     if [[ $deployMethod != skip ]]; then
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
+      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml version.yml
     fi
     if [[ $skipSetup != true ]]; then
       multinode-demo/clear-config.sh
