@@ -12,7 +12,7 @@ pub enum SystemError {
     SourceNotSystemAccount,
     InvalidProgramId,
     InvalidAccountId,
-    InvalidInstructionData,
+    InsufficientFunds,
 }
 
 impl<T> DecodeError<T> for SystemError {
@@ -33,16 +33,16 @@ pub enum SystemInstruction {
     /// Create a new account
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - new account key
-    /// * Transaction::keys[2] - rent sysvar account key (Only required if should_rent_exempt is true)
+    /// * Transaction::keys[2] - rent sysvar account key (Only required if require_rent_exemption is true)
     /// * lamports - number of lamports to transfer to the new account
     /// * space - memory to allocate if greater then zero
     /// * program_id - the program id of the new account
-    /// * should_rent_exempt - if set to true, only allow account creation if it's rent exempt
+    /// * require_rent_exemption - if set to true, only allow account creation if it's rent exempt
     CreateAccount {
         lamports: u64,
         space: u64,
         program_id: Pubkey,
-        should_rent_exempt: bool,
+        require_rent_exemption: bool,
     },
     /// Assign account to a program
     /// * Transaction::keys[0] - account to assign
@@ -79,14 +79,14 @@ fn generate_create_account_instruction(
     lamports: u64,
     space: u64,
     program_id: &Pubkey,
-    should_rent_exempt: bool,
+    require_rent_exemption: bool,
 ) -> Instruction {
     let mut account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
     ];
 
-    if should_rent_exempt {
+    if require_rent_exemption {
         account_metas.push(AccountMeta::new(rent::id(), false));
     }
 
@@ -96,7 +96,7 @@ fn generate_create_account_instruction(
             lamports,
             space,
             program_id: *program_id,
-            should_rent_exempt,
+            require_rent_exemption,
         },
         account_metas,
     )

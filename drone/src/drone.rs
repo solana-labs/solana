@@ -397,7 +397,7 @@ mod tests {
                 lamports: 2,
                 space: 0,
                 program_id: Pubkey::default(),
-                should_rent_exempt: false
+                require_rent_exemption: false
             }
         );
 

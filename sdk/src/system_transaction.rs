@@ -53,10 +53,10 @@ fn generate_create_account_tx(
     lamports: u64,
     space: u64,
     program_id: &Pubkey,
-    should_rent_exempt: bool,
+    require_rent_exemption: bool,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let create_instruction = if should_rent_exempt {
+    let create_instruction = if require_rent_exemption {
         system_instruction::create_rent_exempted_account(
             &from_pubkey,
             to,
