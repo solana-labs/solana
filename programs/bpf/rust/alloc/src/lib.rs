@@ -106,19 +106,8 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
 #[cfg(test)]
 mod test {
     use super::*;
-    extern crate solana_sdk_bpf_test;
-
-    #[test]
-    fn pull_in_externs() {
-        // Rust on Linux excludes the solana_sdk_bpf_test library unless there is a
-        // direct dependency, use this test to force the pull in of the library.
-        // This is not necessary on macos and unfortunate on Linux
-        // Issue #4972
-        extern crate solana_sdk_bpf_test;
-        use solana_sdk_bpf_test::*;
-        unsafe { sol_log_("X".as_ptr(), 1) };
-        sol_log_64_(1, 2, 3, 4, 5);
-    }
+    // Pulls in the stubs requried for `info!()`
+    solana_sdk_bpf_test::stubs!();
 
     #[test]
     fn test_entrypoint() {

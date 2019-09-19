@@ -60,6 +60,8 @@ fn process_instruction(program_id: &Pubkey, accounts: &mut [AccountInfo], data: 
 #[cfg(test)]
 mod test {
     use super::*;
+    // Pulls in the stubs requried for `info!()`
+    solana_sdk_bpf_test::stubs!();
 
     #[test]
     fn test_return_sstruct() {

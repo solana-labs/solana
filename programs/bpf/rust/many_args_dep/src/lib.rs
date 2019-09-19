@@ -51,7 +51,8 @@ pub fn many_args_sret(
 #[cfg(test)]
 mod test {
     use super::*;
-    extern crate solana_sdk_bpf_test;
+    // Pulls in the stubs requried for `info!()`
+    solana_sdk_bpf_test::stubs!();
 
     #[test]
     fn test_many_args() {

@@ -27,7 +27,8 @@ impl<'a> TestDep {
 #[cfg(test)]
 mod test {
     use super::*;
-    extern crate solana_sdk_bpf_test;
+    // Pulls in the stubs requried for `info!()`
+    solana_sdk_bpf_test::stubs!();
 
     #[test]
     fn test_dep() {
