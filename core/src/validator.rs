@@ -240,8 +240,7 @@ impl Validator {
             "New blob signal for the TVU should be the same as the clear bank signal."
         );
 
-        let ip_echo_server =
-            solana_netutil::ip_echo_server(node.sockets.gossip.local_addr().unwrap().port());
+        let ip_echo_server = solana_netutil::ip_echo_server(node.sockets.ip_echo.unwrap());
 
         let gossip_service = GossipService::new(
             &cluster_info,
