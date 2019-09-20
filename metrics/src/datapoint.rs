@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Clone, Debug)]
 pub struct DataPoint {
     pub name: &'static str,
@@ -36,6 +38,15 @@ impl DataPoint {
     }
 }
 
+impl fmt::Display for DataPoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "datapoint: {}", self.name)?;
+        for field in &self.fields {
+            write!(f, " {}={}", field.0, field.1)?;
+        }
+        Ok(())
+    }
+}
 #[macro_export]
 macro_rules! datapoint {
     (@field $point:ident $name:expr, $string:expr, String) => {
