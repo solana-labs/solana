@@ -285,7 +285,11 @@ impl Bank {
         assert_ne!(slot, parent.slot());
 
         let rc = BankRc {
-            accounts: Arc::new(Accounts::new_from_parent(&parent.rc.accounts)),
+            accounts: Arc::new(Accounts::new_from_parent(
+                &parent.rc.accounts,
+                slot,
+                parent.slot(),
+            )),
             parent: RwLock::new(Some(parent.clone())),
             slot,
         };
@@ -1338,6 +1342,14 @@ impl Bank {
         }
     }
 
+    /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
+    /// snaphsot.
+    pub fn verify_hash_internal_state(&self) -> bool {
+        self.rc
+            .accounts
+            .verify_hash_internal_state(self.slot(), &self.ancestors)
+    }
+
     /// Return the number of ticks per slot
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
@@ -1807,6 +1819,7 @@ mod tests {
 
     #[test]
     fn test_transfer_to_newb() {
+        solana_logger::setup();
         let (genesis_block, mint_keypair) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let pubkey = Pubkey::new_rand();
@@ -2316,6 +2329,55 @@ mod tests {
         // Checkpointing should not change its state
         let bank2 = new_from_parent(&Arc::new(bank1));
         assert_eq!(bank0.hash_internal_state(), bank2.hash_internal_state());
+
+        let pubkey2 = Pubkey::new_rand();
+        info!("transfer 2 {}", pubkey2);
+        bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
+        assert!(bank2.verify_hash_internal_state());
+    }
+
+    #[test]
+    fn test_bank_hash_internal_state_verify() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = create_genesis_block(2_000);
+        let bank0 = Bank::new(&genesis_block);
+
+        let pubkey = Pubkey::new_rand();
+        info!("transfer 0 {} mint: {}", pubkey, mint_keypair.pubkey());
+        bank0.transfer(1_000, &mint_keypair, &pubkey).unwrap();
+
+        let bank0_state = bank0.hash_internal_state();
+        // Checkpointing should not change its state
+        let bank2 = new_from_parent(&Arc::new(bank0));
+        assert_eq!(bank0_state, bank2.hash_internal_state());
+
+        let pubkey2 = Pubkey::new_rand();
+        info!("transfer 2 {}", pubkey2);
+        bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
+        assert!(bank2.verify_hash_internal_state());
+    }
+
+    // Test that two bank forks with the same accounts should not hash to the same value.
+    #[test]
+    fn test_bank_hash_internal_state_same_account_different_fork() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = create_genesis_block(2_000);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let initial_state = bank0.hash_internal_state();
+        let bank1 = Bank::new_from_parent(&bank0.clone(), &Pubkey::default(), 1);
+        assert_eq!(bank1.hash_internal_state(), initial_state);
+
+        info!("transfer bank1");
+        let pubkey = Pubkey::new_rand();
+        bank1.transfer(1_000, &mint_keypair, &pubkey).unwrap();
+        assert_ne!(bank1.hash_internal_state(), initial_state);
+
+        info!("transfer bank2");
+        // bank2 should not hash the same as bank1
+        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+        bank2.transfer(1_000, &mint_keypair, &pubkey).unwrap();
+        assert_ne!(bank2.hash_internal_state(), initial_state);
+        assert_ne!(bank1.hash_internal_state(), bank2.hash_internal_state());
     }
 
     #[test]
@@ -2323,6 +2385,44 @@ mod tests {
         let bank0 = Bank::new(&create_genesis_block(10).0);
         let bank1 = Bank::new(&create_genesis_block(20).0);
         assert_ne!(bank0.hash_internal_state(), bank1.hash_internal_state());
+    }
+
+    // See that the order of two transfers does not affect the result
+    // of hash_internal_state
+    #[test]
+    fn test_hash_internal_state_order() {
+        let (genesis_block, mint_keypair) = create_genesis_block(100);
+        let bank0 = Bank::new(&genesis_block);
+        let bank1 = Bank::new(&genesis_block);
+        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
+        let key0 = Pubkey::new_rand();
+        let key1 = Pubkey::new_rand();
+        bank0.transfer(10, &mint_keypair, &key0).unwrap();
+        bank0.transfer(20, &mint_keypair, &key1).unwrap();
+
+        bank1.transfer(20, &mint_keypair, &key1).unwrap();
+        bank1.transfer(10, &mint_keypair, &key0).unwrap();
+
+        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
+    }
+
+    #[test]
+    fn test_hash_internal_state_error() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = create_genesis_block(100);
+        let bank = Bank::new(&genesis_block);
+        let key0 = Pubkey::new_rand();
+        bank.transfer(10, &mint_keypair, &key0).unwrap();
+        let orig = bank.hash_internal_state();
+
+        // Transfer will error but still take a fee
+        assert!(bank.transfer(1000, &mint_keypair, &key0).is_err());
+        assert_ne!(orig, bank.hash_internal_state());
+
+        let orig = bank.hash_internal_state();
+        let empty_keypair = Keypair::new();
+        assert!(bank.transfer(1000, &empty_keypair, &key0).is_err());
+        assert_eq!(orig, bank.hash_internal_state());
     }
 
     #[test]

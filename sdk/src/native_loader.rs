@@ -1,4 +1,5 @@
 use crate::account::Account;
+use crate::hash::Hash;
 
 const ID: [u8; 32] = [
     5, 135, 132, 191, 20, 139, 164, 40, 47, 176, 18, 87, 72, 136, 169, 241, 83, 160, 125, 173, 247,
@@ -15,5 +16,6 @@ pub fn create_loadable_account(name: &str) -> Account {
         data: name.as_bytes().to_vec(),
         executable: true,
         rent_epoch: 0,
+        hash: Hash::default(),
     }
 }

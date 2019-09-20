@@ -1,7 +1,7 @@
 use bincode::{deserialize_from, serialize_into, serialized_size};
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
-use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
+use solana_sdk::{account::Account, clock::Epoch, hash::Hash, pubkey::Pubkey};
 use std::fmt;
 use std::fs::{create_dir_all, remove_file, OpenOptions};
 use std::io;
@@ -50,6 +50,7 @@ pub struct StoredAccount<'a> {
     pub balance: &'a AccountBalance,
     pub data: &'a [u8],
     pub offset: usize,
+    pub hash: &'a Hash,
 }
 
 impl<'a> StoredAccount<'a> {
@@ -60,6 +61,7 @@ impl<'a> StoredAccount<'a> {
             executable: self.balance.executable,
             rent_epoch: self.balance.rent_epoch,
             data: self.data.to_vec(),
+            hash: *self.hash,
         }
     }
 }
@@ -243,6 +245,7 @@ impl AppendVec {
     pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccount<'a>, usize)> {
         let (meta, next): (&'a StorageMeta, _) = self.get_type(offset)?;
         let (balance, next): (&'a AccountBalance, _) = self.get_type(next)?;
+        let (hash, next): (&'a Hash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         Some((
             StoredAccount {
@@ -250,6 +253,7 @@ impl AppendVec {
                 balance,
                 data,
                 offset,
+                hash,
             },
             next,
         ))
@@ -274,10 +278,14 @@ impl AppendVec {
     }
 
     #[allow(clippy::mutex_atomic)]
-    pub fn append_accounts(&self, accounts: &[(StorageMeta, &Account)]) -> Vec<usize> {
+    pub fn append_accounts(
+        &self,
+        accounts: &[(StorageMeta, &Account)],
+        hashes: &[Hash],
+    ) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
         let mut rv = vec![];
-        for (storage_meta, account) in accounts {
+        for ((storage_meta, account), hash) in accounts.iter().zip(hashes) {
             let meta_ptr = storage_meta as *const StorageMeta;
             let balance = AccountBalance {
                 lamports: account.lamports,
@@ -288,9 +296,11 @@ impl AppendVec {
             let balance_ptr = &balance as *const AccountBalance;
             let data_len = storage_meta.data_len as usize;
             let data_ptr = account.data.as_ptr();
+            let hash_ptr = hash.as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StorageMeta>()),
                 (balance_ptr as *const u8, mem::size_of::<AccountBalance>()),
+                (hash_ptr as *const u8, mem::size_of::<Hash>()),
                 (data_ptr, data_len),
             ];
             if let Some(res) = self.append_ptrs_locked(&mut offset, &ptrs) {
@@ -302,14 +312,19 @@ impl AppendVec {
         rv
     }
 
-    pub fn append_account(&self, storage_meta: StorageMeta, account: &Account) -> Option<usize> {
-        self.append_accounts(&[(storage_meta, account)])
+    pub fn append_account(
+        &self,
+        storage_meta: StorageMeta,
+        account: &Account,
+        hash: Hash,
+    ) -> Option<usize> {
+        self.append_accounts(&[(storage_meta, account)], &[hash])
             .first()
             .cloned()
     }
 
     pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
-        self.append_account(data.0.clone(), &data.1)
+        self.append_account(data.0.clone(), &data.1, Hash::default())
     }
 }
 

@@ -220,6 +220,12 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     let snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
     let bank = rebuild_bank_from_snapshots(account_paths, &snapshot_paths, unpacked_accounts_dir)?;
 
+    if !bank.verify_hash_internal_state() {
+        warn!("Invalid snapshot hash value!");
+    } else {
+        info!("Snapshot hash value matches.");
+    }
+
     // Move the unpacked snapshots into `snapshot_config.snapshot_path`
     let dir_files = fs::read_dir(&unpacked_snapshots_dir).unwrap_or_else(|err| {
         panic!(

@@ -1,9 +1,10 @@
+use crate::hash::Hash;
 use crate::{clock::Epoch, pubkey::Pubkey};
 use std::{cmp, fmt};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
-#[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct Account {
     /// lamports in the account
     pub lamports: u64,
@@ -15,7 +16,25 @@ pub struct Account {
     pub executable: bool,
     /// the epoch at which this account will next owe rent
     pub rent_epoch: Epoch,
+    /// Hash of this account's state, skip serializing as to not expose to external api
+    /// Used for keeping the accounts state hash updated.
+    #[serde(skip_serializing, skip_deserializing)]
+    pub hash: Hash,
 }
+
+/// skip comparison of account.hash, since it is only meaningful when the account is loaded in a
+/// given fork and some tests do not have that.
+impl PartialEq for Account {
+    fn eq(&self, other: &Self) -> bool {
+        self.lamports == other.lamports
+            && self.data == other.data
+            && self.owner == other.owner
+            && self.executable == other.executable
+            && self.rent_epoch == other.rent_epoch
+    }
+}
+
+impl Eq for Account {}
 
 impl fmt::Debug for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -27,13 +46,14 @@ impl fmt::Debug for Account {
         };
         write!(
             f,
-            "Account {{ lamports: {} data.len: {} owner: {} executable: {} rent_epoch: {}{} }}",
+            "Account {{ lamports: {} data.len: {} owner: {} executable: {} rent_epoch: {}{} hash: {} }}",
             self.lamports,
             self.data.len(),
             self.owner,
             self.executable,
             self.rent_epoch,
             data_str,
+            self.hash,
         )
     }
 }

@@ -4,17 +4,15 @@ use crate::append_vec::StoredAccount;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use crate::rent_collector::RentCollector;
-use bincode::serialize;
 use log::*;
 use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
-use solana_sdk::hash::{Hash, Hasher};
+use solana_sdk::bank_hash::BankHash;
 use solana_sdk::message::Message;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
-use solana_sdk::sysvar;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
@@ -69,8 +67,9 @@ impl Accounts {
             credit_only_account_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
         }
     }
-    pub fn new_from_parent(parent: &Accounts) -> Self {
+    pub fn new_from_parent(parent: &Accounts, slot: Fork, parent_slot: Fork) -> Self {
         let accounts_db = parent.accounts_db.clone();
+        accounts_db.set_hash(slot, parent_slot);
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
@@ -317,6 +316,10 @@ impl Accounts {
         })
     }
 
+    pub fn verify_hash_internal_state(&self, fork: Fork, ancestors: &HashMap<Fork, usize>) -> bool {
+        self.accounts_db.verify_hash_internal_state(fork, ancestors)
+    }
+
     pub fn load_by_program(
         &self,
         ancestors: &HashMap<Fork, usize>,
@@ -450,30 +453,13 @@ impl Accounts {
         }
     }
 
-    fn hash_account(stored_account: &StoredAccount) -> Hash {
-        let mut hasher = Hasher::default();
-        hasher.hash(&serialize(&stored_account.balance).unwrap());
-        hasher.hash(stored_account.data);
-        hasher.result()
-    }
-
-    pub fn hash_internal_state(&self, fork_id: Fork) -> Option<Hash> {
-        let account_hashes = self.scan_fork(fork_id, |stored_account| {
-            if !sysvar::check_id(&stored_account.balance.owner) {
-                Some(Self::hash_account(stored_account))
-            } else {
-                None
-            }
-        });
-
-        if account_hashes.is_empty() {
-            None
+    pub fn hash_internal_state(&self, fork_id: Fork) -> Option<BankHash> {
+        let fork_hashes = self.accounts_db.fork_hashes.read().unwrap();
+        let fork_hash = fork_hashes.get(&fork_id)?;
+        if fork_hash.0 {
+            Some(fork_hash.1)
         } else {
-            let mut hasher = Hasher::default();
-            for hash in account_hashes {
-                hasher.hash(hash.as_ref());
-            }
-            Some(hasher.result())
+            None
         }
     }
 

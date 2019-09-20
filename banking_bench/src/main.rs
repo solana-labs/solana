@@ -236,26 +236,30 @@ fn main() {
                 assert!(txs_processed < bank.transaction_count());
                 txs_processed = bank.transaction_count();
                 tx_total += duration_as_us(&now.elapsed());
-                let mut new_bank_time = Measure::start("new_bank");
-                new_bank_time.stop();
-                let mut insert_time = Measure::start("insert_time");
-                insert_time.stop();
+
                 let mut poh_time = Measure::start("poh_time");
                 poh_recorder.lock().unwrap().reset(
                     bank.last_blockhash(),
                     bank.slot(),
                     Some((bank.slot(), bank.slot() + 1)),
                 );
+                poh_time.stop();
+
+                let mut new_bank_time = Measure::start("new_bank");
                 let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
+                new_bank_time.stop();
+
+                let mut insert_time = Measure::start("insert_time");
                 bank_forks.insert(new_bank);
                 bank = bank_forks.working_bank();
+                insert_time.stop();
+
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());
                 if bank.slot() > 32 {
                     bank_forks.set_root(root, &None);
                     root += 1;
                 }
-                poh_time.stop();
                 debug!(
                     "new_bank_time: {}us insert_time: {}us poh_time: {}us",
                     new_bank_time.as_us(),
