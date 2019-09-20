@@ -103,7 +103,7 @@ Solana's architecture is described by a book generated from markdown files in
 the `book/src/` directory, maintained by an *editor* (currently @garious). To
 add a design proposal, you'll need to at least propose a change the content
 under the [Accepted Design
-Proposals](https://solana-labs.github.io/book-edge/proposals.html) chapter.
+Proposals](https://docs.solana.com/book/v/master/proposals) chapter.
 Here's the full process:
 
 1. Propose a design by creating a PR that adds a markdown document to the

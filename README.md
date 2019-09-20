@@ -26,9 +26,9 @@ Furthermore, and much to our surprise, it can be implemented using a mechanism t
 Architecture
 ===
 
-Before you jump into the code, review the online book [Solana: Blockchain Rebuilt for Scale](https://solana-labs.github.io/book/).
+Before you jump into the code, review the online book [Solana: Blockchain Rebuilt for Scale](https://docs.solana.com/book/).
 
-(The _latest_ development version of the online book is also [available here](https://solana-labs.github.io/book-edge/).)
+(The _latest_ development version of the online book is also [available here](https://docs.solana.com/book/v/master/).)
 
 Release Binaries
 ===
@@ -120,7 +120,7 @@ $ cargo test
 Local Testnet
 ---
 
-Start your own testnet locally, instructions are in the book [Solana: Blockchain Rebuild for Scale: Getting Started](https://solana-labs.github.io/book/getting-started.html).
+Start your own testnet locally, instructions are in the book [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/book/getting-started).
 
 Remote Testnets
 ---

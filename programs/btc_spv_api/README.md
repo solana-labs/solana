@@ -61,4 +61,4 @@ Client Request - Transaction from the client to the SPV Program to trigger creat
 Sub-account - A Solana account owned by another contract account, without its own private key.
 
 For more information on the Inter-chain SPV system, see the book section at:
-https://solana-labs.github.io/book/interchain-transaction-verification.html
+https://docs.solana.com/book/v/master/proposals/interchain-transaction-verification
