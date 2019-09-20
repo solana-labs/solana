@@ -56,7 +56,7 @@ pub fn measure_variable_int(vint: &[u8]) -> Result<usize, DecodeHexError> {
 
     let val: usize = match vint[0] {
         0..=252 => 1,
-        253 => 2,
+        253 => 3,
         254 => 5,
         255 => 9,
     };
@@ -71,7 +71,11 @@ pub fn decode_variable_int(vint: &[u8]) -> Result<u64, DecodeHexError> {
 
     let val: u64 = match vint[0] {
         0..=252 => u64::from(vint[0]),
-        253 => u64::from(vint[1]),
+        253 => {
+            let mut val: [u8; 2] = [0; 2];
+            val.copy_from_slice(&vint[1..3]);
+            u64::from(u16::from_le_bytes(val))
+        }
         254 => {
             let mut val: [u8; 4] = [0; 4];
             val.copy_from_slice(&vint[1..5]);
@@ -84,4 +88,39 @@ pub fn decode_variable_int(vint: &[u8]) -> Result<u64, DecodeHexError> {
         }
     };
     Ok(val)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::utils::*;
+
+    #[test]
+    fn test_parse_variable_int() {
+        let var_int_a = hex::decode("6a32a4").unwrap();
+        let var_int_b = hex::decode("fd26021d32").unwrap();
+        let var_int_c = hex::decode("fe703a0f00").unwrap();
+
+        let value_a = decode_variable_int(&var_int_a[0..]).unwrap();
+        let value_b = decode_variable_int(&var_int_b[0..]).unwrap();
+        let value_c = decode_variable_int(&var_int_c[0..]).unwrap();
+
+        assert_eq!(106, value_a);
+        assert_eq!(550, value_b);
+        assert_eq!(998000, value_c);
+    }
+
+    #[test]
+    fn test_measure_variable_int() {
+        let var_int_a = hex::decode("6a32a4").unwrap();
+        let var_int_b = hex::decode("fd26021d32").unwrap();
+        let var_int_c = hex::decode("fe703a0f00").unwrap();
+
+        let len_a = measure_variable_int(&var_int_a[0..]).unwrap();
+        let len_b = measure_variable_int(&var_int_b[0..]).unwrap();
+        let len_c = measure_variable_int(&var_int_c[0..]).unwrap();
+
+        assert_eq!(len_a, 1);
+        assert_eq!(len_b, 3);
+        assert_eq!(len_c, 5);
+    }
 }
