@@ -396,7 +396,8 @@ mod tests {
             SystemInstruction::CreateAccount {
                 lamports: 2,
                 space: 0,
-                program_id: Pubkey::default()
+                program_id: Pubkey::default(),
+                require_rent_exemption: false
             }
         );
 

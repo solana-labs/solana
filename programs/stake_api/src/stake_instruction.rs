@@ -110,7 +110,7 @@ pub fn create_stake_account_with_lockup(
     custodian: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::create_account(
+        system_instruction::create_rent_exempted_account(
             from_pubkey,
             stake_pubkey,
             lamports,

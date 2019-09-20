@@ -49,6 +49,16 @@ pub fn create_account(lamports: u64, rent_calculator: &RentCalculator) -> Accoun
     .unwrap()
 }
 
+use crate::account::KeyedAccount;
+use crate::instruction::InstructionError;
+
+pub fn from_keyed_account(account: &KeyedAccount) -> Result<Rent, InstructionError> {
+    if !check_id(account.unsigned_key()) {
+        return Err(InstructionError::InvalidArgument);
+    }
+    Rent::from_account(account.account).ok_or(InstructionError::InvalidArgument)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

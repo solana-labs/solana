@@ -16,9 +16,54 @@ pub fn create_account(
     space: u64,
     program_id: &Pubkey,
 ) -> Transaction {
+    generate_create_account_tx(
+        from_keypair,
+        to,
+        recent_blockhash,
+        lamports,
+        space,
+        program_id,
+        false,
+    )
+}
+
+pub fn create_rent_exempted_account(
+    from_keypair: &Keypair,
+    to: &Pubkey,
+    recent_blockhash: Hash,
+    lamports: u64,
+    space: u64,
+    program_id: &Pubkey,
+) -> Transaction {
+    generate_create_account_tx(
+        from_keypair,
+        to,
+        recent_blockhash,
+        lamports,
+        space,
+        program_id,
+        true,
+    )
+}
+
+fn generate_create_account_tx(
+    from_keypair: &Keypair,
+    to: &Pubkey,
+    recent_blockhash: Hash,
+    lamports: u64,
+    space: u64,
+    program_id: &Pubkey,
+    require_rent_exemption: bool,
+) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let create_instruction =
-        system_instruction::create_account(&from_pubkey, to, lamports, space, program_id);
+    let create_instruction = system_instruction::generate_create_account_instruction(
+        &from_pubkey,
+        to,
+        lamports,
+        space,
+        program_id,
+        require_rent_exemption,
+    );
     let instructions = vec![create_instruction];
     Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
 }

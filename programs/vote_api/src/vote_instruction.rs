@@ -87,8 +87,13 @@ pub fn create_account(
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;
-    let create_ix =
-        system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
+    let create_ix = system_instruction::create_rent_exempted_account(
+        from_pubkey,
+        vote_pubkey,
+        lamports,
+        space,
+        &id(),
+    );
     let init_ix = initialize_account(vote_pubkey, node_pubkey, commission);
     vec![create_ix, init_ix]
 }
