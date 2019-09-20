@@ -83,7 +83,7 @@ echo --- Creating tarball
     # automatically if possible
     cp -a target/perf-libs solana-release/target/
     mkdir solana-release/bin/_
-    cp solana-release-cuda/bin/solana-validator solana-release/bin/_/solana-validator-cuda
+    cp solana-release/bin/solana-validator-cuda solana-release/bin/_/solana-validator-cuda
     cat > solana-release/bin/solana-validator-cuda <<'EOF'
 #!/usr/bin/env bash
 set -e
