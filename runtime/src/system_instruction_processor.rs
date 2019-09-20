@@ -61,14 +61,14 @@ fn create_system_account(
         Err(SystemError::ResultWithNegativeLamports)?;
     }
 
-   match rent_exemption_calculator {
-            Some(calculator) => {
-                if !calculator.is_exempt(lamports, space as usize) {
-                    Err(SystemError::InsufficientFunds)?;
-                }
+    match rent_exemption_calculator {
+        Some(calculator) => {
+            if !calculator.is_exempt(lamports, space as usize) {
+                Err(SystemError::InsufficientFunds)?;
             }
-            None => {},
         }
+        None => {}
+    }
 
     keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
     keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
@@ -265,8 +265,7 @@ mod tests {
             KeyedAccount::new(&to, false, &mut to_account),
         ];
         // fail to create an account with a sysvar id
-        let result =
-            create_system_account(&mut keyed_accounts, 50, 2, &system_program::id(), None);
+        let result = create_system_account(&mut keyed_accounts, 50, 2, &system_program::id(), None);
         assert_eq!(result, Err(SystemError::InvalidAccountId));
 
         let from_lamports = from_account.lamports;
@@ -327,7 +326,13 @@ mod tests {
         keyed_accounts[1] = KeyedAccount::new(&to, false, &mut to_account);
 
         // there must be sufficient amount of lamport in account to be created as rent exempted
-        let result = create_system_account(&mut keyed_accounts, 0, 2, &other_program, Some(rent_calculator));
+        let result = create_system_account(
+            &mut keyed_accounts,
+            0,
+            2,
+            &other_program,
+            Some(rent_calculator),
+        );
         assert_eq!(result, Err(SystemError::InsufficientFunds));
 
         let to = Pubkey::new_rand();
@@ -335,7 +340,13 @@ mod tests {
         keyed_accounts[1] = KeyedAccount::new(&to, false, &mut to_account);
 
         // amount of lamports must be sufficient for account to be rent exempt
-        let result = create_system_account(&mut keyed_accounts, 500, 2, &other_program, Some(rent_calculator));
+        let result = create_system_account(
+            &mut keyed_accounts,
+            500,
+            2,
+            &other_program,
+            Some(rent_calculator),
+        );
         assert_eq!(result, Ok(()));
     }
 

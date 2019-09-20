@@ -30,6 +30,8 @@ mod bpf {
         use solana_sdk::bpf_loader;
         use solana_sdk::client::SyncClient;
         use solana_sdk::signature::KeypairUtil;
+        use solana_sdk::rent_calculator::RentCalculator;
+        use solana_sdk::sysvar::rent;
         use std::io::Read;
 
         #[test]
@@ -58,6 +60,10 @@ mod bpf {
                     ..
                 } = create_genesis_block(50);
                 let bank = Bank::new(&genesis_block);
+                bank.store_account(
+                &rent::id(),
+                &rent::create_account(1, &RentCalculator::default()),
+            );
                 let bank_client = BankClient::new(bank);
 
                 // Call user program
