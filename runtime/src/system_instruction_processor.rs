@@ -61,13 +61,10 @@ fn create_system_account(
         Err(SystemError::ResultWithNegativeLamports)?;
     }
 
-    match rent_exemption_calculator {
-        Some(calculator) => {
-            if !calculator.is_exempt(lamports, space as usize) {
-                Err(SystemError::InsufficientFunds)?;
-            }
+    if let Some(calculator) = rent_exemption_calculator {
+        if !calculator.is_exempt(lamports, space as usize) {
+            Err(SystemError::InsufficientFunds)?;
         }
-        None => {}
     }
 
     keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
@@ -123,16 +120,18 @@ pub fn process_instruction(
                 program_id,
                 require_rent_exemption,
             } => {
-                let mut rent_exemption_calculator: Option<RentCalculator> = None;
-                if require_rent_exemption {
+                let rent_exemption_calculator: Option<RentCalculator> = if require_rent_exemption {
                     if keyed_accounts.len() < (RENT_SYSVAR_ACCOUNT_INDEX + 1) {
                         Err(InstructionError::InvalidInstructionData)?;
                     }
-                    rent_exemption_calculator = Some(
+                    Some(
                         rent::from_keyed_account(&keyed_accounts[RENT_SYSVAR_ACCOUNT_INDEX])?
                             .rent_calculator,
-                    );
-                }
+                    )
+                } else {
+                    None
+                };
+
                 create_system_account(
                     keyed_accounts,
                     lamports,
