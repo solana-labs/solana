@@ -180,8 +180,9 @@ impl Accounts {
             }
 
             // add loader to chain
-            program_id = program.owner;
+            let program_owner = program.owner;
             accounts.insert(0, (program_id, program));
+            program_id = program_owner;
         }
         Ok(accounts)
     }
@@ -1049,7 +1050,6 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
         let key2 = Pubkey::new(&[6u8; 32]);
-        let key3 = Pubkey::new(&[7u8; 32]);
 
         let mut account = Account::new(1, 1, &Pubkey::default());
         account.rent_epoch = 1;
@@ -1066,12 +1066,6 @@ mod tests {
         account.rent_epoch = 1;
         account.owner = key1;
         accounts.push((key2, account));
-
-        let mut account = Account::new(42, 1, &Pubkey::default());
-        account.executable = true;
-        account.rent_epoch = 1;
-        account.owner = key2;
-        accounts.push((key3, account));
 
         let instructions = vec![
             CompiledInstruction::new(1, &(), vec![0]),
@@ -1106,7 +1100,7 @@ mod tests {
                 for loaders in transaction_loaders.iter() {
                     for (i, accounts_subset) in loaders.iter().enumerate() {
                         // +1 to skip first not loader account
-                        assert_eq![accounts_subset.1, accounts[i + 1].1];
+                        assert_eq!(*accounts_subset, accounts[i + 1]);
                     }
                 }
             }
