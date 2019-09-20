@@ -397,6 +397,7 @@ impl RpcClient {
 
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
         let mut num_retries = 10;
+        let start = Instant::now();
         while num_retries > 0 {
             if let Ok((new_blockhash, fee_calculator)) = self.get_recent_blockhash() {
                 if new_blockhash != *blockhash {
@@ -413,7 +414,11 @@ impl RpcClient {
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "Unable to get new blockhash, too many retries",
+            format!(
+                "Unable to get new blockhash after {}ms, stuck at {}",
+                start.elapsed().as_millis(),
+                blockhash
+            ),
         ))
     }
 
