@@ -73,7 +73,7 @@ pub fn create_rent_exempted_account(
     generate_create_account_instruction(from_pubkey, to_pubkey, lamports, space, program_id, true)
 }
 
-fn generate_create_account_instruction(
+pub(crate) fn generate_create_account_instruction(
     from_pubkey: &Pubkey,
     to_pubkey: &Pubkey,
     lamports: u64,

@@ -56,17 +56,14 @@ fn generate_create_account_tx(
     require_rent_exemption: bool,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let create_instruction = if require_rent_exemption {
-        system_instruction::create_rent_exempted_account(
-            &from_pubkey,
-            to,
-            lamports,
-            space,
-            program_id,
-        )
-    } else {
-        system_instruction::create_account(&from_pubkey, to, lamports, space, program_id)
-    };
+    let create_instruction = system_instruction::generate_create_account_instruction(
+        &from_pubkey,
+        to,
+        lamports,
+        space,
+        program_id,
+        require_rent_exemption,
+    );
     let instructions = vec![create_instruction];
     Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
 }
