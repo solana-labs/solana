@@ -82,8 +82,6 @@ type VoteAccountStatus = {
 const GetInflationResult = struct({
   foundation: 'number',
   foundation_term: 'number',
-  grant: 'number',
-  grant_term: 'number',
   initial: 'number',
   storage: 'number',
   taper: 'number',
