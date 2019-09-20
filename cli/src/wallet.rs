@@ -871,7 +871,7 @@ fn process_deploy(
     // Build transactions to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut create_account_tx = system_transaction::create_rent_exempted_account(
+    let mut create_account_tx = system_transaction::create_account(
         &config.keypair,
         &program_id.pubkey(),
         blockhash,

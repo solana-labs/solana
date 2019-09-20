@@ -16,7 +16,7 @@ pub fn load_program<T: Client>(
     let program_keypair = Keypair::new();
     let program_pubkey = program_keypair.pubkey();
 
-    let instruction = system_instruction::create_rent_exempted_account(
+    let instruction = system_instruction::create_account(
         &from_keypair.pubkey(),
         &program_pubkey,
         1,
