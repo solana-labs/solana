@@ -8,9 +8,6 @@ repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
-
-
-
 [dependencies]
 atty = "0.2.11"
 bincode = "1.1.4"
