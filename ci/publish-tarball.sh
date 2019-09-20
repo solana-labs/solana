@@ -78,7 +78,7 @@ echo --- Creating tarball
     rm -f solana-release/bin/solana-validator.exe solana-release/bin/solana-bench-exchange.exe
   fi
 
-  if $maybeCUDA; then
+  if [[ -n $maybeCUDA ]]; then
     # Wrap `solana-validator-cuda` with a script that loads perf-libs
     # automatically
     cp -a target/perf-libs solana-release/target/
