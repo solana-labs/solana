@@ -275,7 +275,6 @@ impl Bank {
             bank.update_stake_history(None);
         }
         bank.update_clock();
-        bank.update_rent();
         bank
     }
 

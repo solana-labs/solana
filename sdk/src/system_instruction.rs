@@ -2,7 +2,6 @@ use crate::instruction::{AccountMeta, Instruction};
 use crate::instruction_processor_utils::DecodeError;
 use crate::pubkey::Pubkey;
 use crate::system_program;
-use crate::sysvar::rent;
 use num_derive::FromPrimitive;
 
 #[derive(Serialize, Debug, Clone, PartialEq, FromPrimitive)]
@@ -12,7 +11,6 @@ pub enum SystemError {
     SourceNotSystemAccount,
     InvalidProgramId,
     InvalidAccountId,
-    InsufficientFunds,
 }
 
 impl<T> DecodeError<T> for SystemError {
@@ -33,16 +31,13 @@ pub enum SystemInstruction {
     /// Create a new account
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - new account key
-    /// * Transaction::keys[2] - rent sysvar account key (Only required if require_rent_exemption is true)
     /// * lamports - number of lamports to transfer to the new account
     /// * space - memory to allocate if greater then zero
     /// * program_id - the program id of the new account
-    /// * require_rent_exemption - if set to true, only allow account creation if it's rent exempt
     CreateAccount {
         lamports: u64,
         space: u64,
         program_id: Pubkey,
-        require_rent_exemption: bool,
     },
     /// Assign account to a program
     /// * Transaction::keys[0] - account to assign
@@ -60,43 +55,16 @@ pub fn create_account(
     space: u64,
     program_id: &Pubkey,
 ) -> Instruction {
-    generate_create_account_instruction(from_pubkey, to_pubkey, lamports, space, program_id, false)
-}
-
-pub fn create_rent_exempted_account(
-    from_pubkey: &Pubkey,
-    to_pubkey: &Pubkey,
-    lamports: u64,
-    space: u64,
-    program_id: &Pubkey,
-) -> Instruction {
-    generate_create_account_instruction(from_pubkey, to_pubkey, lamports, space, program_id, true)
-}
-
-pub(crate) fn generate_create_account_instruction(
-    from_pubkey: &Pubkey,
-    to_pubkey: &Pubkey,
-    lamports: u64,
-    space: u64,
-    program_id: &Pubkey,
-    require_rent_exemption: bool,
-) -> Instruction {
-    let mut account_metas = vec![
+    let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
     ];
-
-    if require_rent_exemption {
-        account_metas.push(AccountMeta::new(rent::id(), false));
-    }
-
     Instruction::new(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
             space,
             program_id: *program_id,
-            require_rent_exemption,
         },
         account_metas,
     )
