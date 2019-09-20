@@ -37,14 +37,14 @@ if [[ -z $CHANNEL_OR_TAG ]]; then
   exit 1
 fi
 
-PERF_LIBS=false
+maybeCUDA=
 case "$CI_OS_NAME" in
 osx)
   TARGET=x86_64-apple-darwin
   ;;
 linux)
   TARGET=x86_64-unknown-linux-gnu
-  PERF_LIBS=true
+  maybeCUDA=cuda
   ;;
 windows)
   TARGET=x86_64-pc-windows-msvc
@@ -70,27 +70,18 @@ echo --- Creating tarball
   ) > solana-release/version.yml
 
   source ci/rust-version.sh stable
-  scripts/cargo-install-all.sh +"$rust_stable" solana-release
+  scripts/cargo-install-all.sh +"$rust_stable" solana-release $maybeCUDA
 
-  # Reduce the archive size until
+  # Reduce the Windows archive size until
   # https://github.com/appveyor/ci/issues/2997 is fixed
   if [[ -n $APPVEYOR ]]; then
     rm -f solana-release/bin/solana-validator.exe solana-release/bin/solana-bench-exchange.exe
   fi
 
-  if $PERF_LIBS; then
-    rm -rf target/perf-libs
-    ./fetch-perf-libs.sh
-    mkdir solana-release/target
+  if $maybeCUDA; then
+    # Wrap `solana-validator-cuda` with a script that loads perf-libs
+    # automatically
     cp -a target/perf-libs solana-release/target/
-
-    # shellcheck source=/dev/null
-    source ./target/perf-libs/env.sh
-    (
-      cd validator
-      cargo +"$rust_stable" install --path . --features=cuda --root ../solana-release-cuda
-    )
-
     mkdir solana-release/.bin
     cp solana-release-cuda/bin/solana-validator solana-release/.bin/solana-validator-cuda
     cat > solana-release/bin/solana-validator-cuda <<'EOF'
@@ -105,9 +96,10 @@ if [[ -z $SOLANA_PERF_LIBS_CUDA ]]; then
 fi
 exec .bin/solana-validator-cuda "$@"
 EOF
-  chmod +x solana-release/bin/solana-validator-cuda
+    chmod +x solana-release/bin/solana-validator-cuda
   fi
 
+  # TODO: Remove scripts/ and multinode/... from tarball
   cp -a scripts multinode-demo solana-release/
 
   # Add a wrapper script for validator.sh

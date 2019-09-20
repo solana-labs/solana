@@ -45,7 +45,7 @@ test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
 test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 
 # Ensure all dependencies are built
-_ cargo +$rust_nightly build --all --release
+_ cargo +$rust_nightly build --release
 
 # Remove "BENCH_FILE", if it exists so that the following commands can append
 rm -f "$BENCH_FILE"

@@ -3,11 +3,11 @@
 # Run a minimal Solana cluster.  Ctrl-C to exit.
 #
 # Before running this script ensure standard Solana programs are available
-# in the PATH, or that `cargo build --all` ran successfully
+# in the PATH, or that `cargo build` ran successfully
 #
 set -e
 
-# Prefer possible `cargo build --all` binaries over PATH binaries
+# Prefer possible `cargo build` binaries over PATH binaries
 cd "$(dirname "$0")/"
 PATH=$PWD/target/debug:$PATH
 

@@ -1,0 +1,14 @@
+[package]
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+edition = "2018"
+name = "solana-validator-cuda"
+description = "Blockchain, Rebuilt for Scale"
+version = "0.19.0-pre0"
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+publish = false
+
+[dependencies]
+solana-core = { path = "../core", version = "0.19.0-pre0", features=["cuda"] }
+solana-validator = { path = "../validator", version = "0.19.0-pre0" }

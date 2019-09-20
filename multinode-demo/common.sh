@@ -35,12 +35,6 @@ if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
 else
   solana_program() {
     declare program="$1"
-    declare features="--features="
-    if [[ "$program" =~ ^(.*)-cuda$ ]]; then
-      program=${BASH_REMATCH[1]}
-      features+="cuda"
-    fi
-
     declare crate="$program"
     if [[ -z $program ]]; then
       crate="cli"
@@ -56,7 +50,7 @@ else
       maybe_release=--release
     fi
     declare manifest_path="--manifest-path=$SOLANA_ROOT/$crate/Cargo.toml"
-    printf "cargo $CARGO_TOOLCHAIN run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program" "$features"
+    printf "cargo $CARGO_TOOLCHAIN run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program"
   }
 fi
 

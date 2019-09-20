@@ -32,8 +32,8 @@ case $testName in
 test-stable)
   echo "Executing $testName"
 
-  _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --all --exclude solana-local-cluster ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
+  _ cargo +"$rust_stable" build --tests --bins ${V:+--verbose}
+  _ cargo +"$rust_stable" test --all --exclude solana-local-cluster --exclude solana-validator-cuda ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"
@@ -62,7 +62,7 @@ test-stable-perf)
     --no-default-features --features=bpf_c,bpf_rust
 
   # Run root package tests with these features
-  ROOT_FEATURES=
+  maybeCuda=
   if [[ $(uname) = Linux ]]; then
     # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a
     # lengthy and unexpected delay the first time CUDA is involved when the driver
@@ -73,17 +73,17 @@ test-stable-perf)
     ./fetch-perf-libs.sh
     # shellcheck source=/dev/null
     source ./target/perf-libs/env.sh
-    ROOT_FEATURES=cuda
+    maybeCuda=--features=cuda
     export SOLANA_CUDA=1
   fi
 
   # Run root package library tests
-  _ cargo +"$rust_stable" build --all --tests --bins ${V:+--verbose} --features="$ROOT_FEATURES"
-  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture
+  _ cargo +"$rust_stable" build --tests --bins ${V:+--verbose}
+  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} $maybeCuda -- --nocapture
   ;;
 test-local-cluster)
   echo "Executing $testName"
-  _ cargo +"$rust_stable" build --all --release --tests --bins ${V:+--verbose}
+  _ cargo +"$rust_stable" build --release --tests --bins ${V:+--verbose}
   _ cargo +"$rust_stable" test --release --manifest-path=local_cluster/Cargo.toml  ${V:+--verbose} -- --nocapture
   exit 0
   ;;

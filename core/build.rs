@@ -1,11 +1,16 @@
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::process::exit;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     if env::var("CARGO_FEATURE_CUDA").is_ok() {
+        if cfg!(not(target_os = "linux")) {
+            eprintln!("Error: CUDA feature is only available on Linux");
+            exit(1);
+        }
         println!("cargo:rustc-cfg=cuda");
 
         let perf_libs_dir = {
@@ -13,10 +18,10 @@ fn main() {
             let mut path = Path::new(&manifest_dir);
             path = path.parent().unwrap();
             let mut path = path.join(Path::new("target/perf-libs"));
-            path.push(
-                env::var("SOLANA_PERF_LIBS_CUDA")
-                    .unwrap_or_else(|err| panic!("SOLANA_PERF_LIBS_CUDA not defined: {}", err)),
-            );
+            path.push(env::var("SOLANA_PERF_LIBS_CUDA").unwrap_or_else(|err| {
+                eprintln!("Error: SOLANA_PERF_LIBS_CUDA not defined: {}", err);
+                exit(1);
+            }));
             path
         };
         let perf_libs_dir = perf_libs_dir.to_str().unwrap();
