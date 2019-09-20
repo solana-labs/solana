@@ -87,9 +87,8 @@ if [[ "$cargoFeatures" = cuda ]]; then
     # shellcheck source=/dev/null
     source ./target/perf-libs/env.sh
 
-    cd validator-cuda
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    cargo $rust_version build $maybeReleaseFlag
+    cargo $rust_version build $maybeReleaseFlag --package solana-validator-cuda
   )
   cp -fv "target/$buildVariant/solana-validator-cuda" "$installDir"/bin
 fi
