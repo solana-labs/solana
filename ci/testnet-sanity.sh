@@ -30,6 +30,12 @@ cloudProvider=$2
 [[ -n $netName ]] || usage ""
 [[ -n $cloudProvider ]] || usage "Cloud provider not specified"
 shift 2
+
+maybePublicNetwork=
+if [[ $1 = -P ]]; then
+  maybePublicNetwork=-P
+  shift
+fi
 [[ -n $1 ]] || usage "zone1 not specified"
 
 shutdown() {
@@ -54,7 +60,7 @@ trap shutdown EXIT INT
 set -x
 for zone in "$@"; do
   echo "--- $cloudProvider config [$zone]"
-  timeout 5m net/"$cloudProvider".sh config -p "$netName" -z "$zone"
+  timeout 5m net/"$cloudProvider".sh config $maybePublicNetwork -p "$netName" -z "$zone"
   net/init-metrics.sh -e
   echo "+++ $cloudProvider.sh info"
   net/"$cloudProvider".sh info
