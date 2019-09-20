@@ -30,7 +30,7 @@
 
 # Solana JavaScript API
 
-This is the Solana Javascript API built on the Solana [JSON RPC API](https://solana-labs.github.io/solana/jsonrpc-api.html)
+This is the Solana Javascript API built on the Solana [JSON RPC API](https://docs.solana.com/book/api-reference/jsonrpc-api)
 
 [Latest API Documentation](https://solana-labs.github.io/solana-web3.js/)
 
