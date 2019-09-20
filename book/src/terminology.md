@@ -11,11 +11,6 @@ A persistent file addressed by [public key](#public-key) and with
 
 A front-end application that interacts with a Solana cluster.
 
-#### shred
-
-A fraction of a [block](#block); the smallest unit sent between
-[fullnodes](#fullnode).
-
 #### block
 
 A contiguous set of [entries](#entry) on the ledger covered by a
@@ -79,12 +74,6 @@ consensus.
 An off-chain service that acts as a custodian for a user's private key. It
 typically serves to validate and sign transactions.
 
-#### fake storage proof
-
-A proof which has the same format as a storage proof, but the sha state is
-actually from hashing a known ledger value which the storage client can reveal
-and is also easily verifiable by the network on-chain.
-
 #### entry
 
 An entry on the [ledger](#ledger) either a [tick](#tick) or a [transactions
@@ -101,6 +90,12 @@ History](#proof-of-history).
 
 The time, i.e. number of [slots](#slot), for which a [leader
 schedule](#leader-schedule) is valid.
+
+#### fake storage proof
+
+A proof which has the same format as a storage proof, but the sha state is
+actually from hashing a known ledger value which the storage client can reveal
+and is also easily verifiable by the network on-chain.
 
 #### finality
 
@@ -249,6 +244,11 @@ excluded from consideration for consensus and can be discarded.
 
 The component of a [fullnode](#fullnode) responsible for [program](#program)
 execution.
+
+#### shred
+
+A fraction of a [block](#block); the smallest unit sent between
+[fullnodes](#fullnode).
 
 #### slot
 
