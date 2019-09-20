@@ -142,8 +142,6 @@ test('get inflation', async () => {
       result: {
         foundation: 0.05,
         foundation_term: 7.0,
-        grant: 0.05,
-        grant_term: 7.0,
         initial: 0.15,
         storage: 0.1,
         taper: 0.15,
@@ -153,9 +151,18 @@ test('get inflation', async () => {
   ]);
 
   const inflation = await connection.getInflation();
-  expect(inflation.initial).toBeGreaterThan(0);
-  expect(inflation.storage).toBeGreaterThan(0);
-  expect(inflation.terminal).toBeGreaterThan(0);
+
+  for (const key of [
+    'initial',
+    'terminal',
+    'taper',
+    'foundation',
+    'foundation_term',
+    'storage',
+  ]) {
+    expect(inflation).toHaveProperty(key);
+    expect(inflation[key]).toBeGreaterThan(0);
+  }
 });
 
 test('get slot', async () => {
