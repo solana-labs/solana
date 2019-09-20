@@ -591,6 +591,13 @@ impl ReplayStage {
                 !has_voted
             })
             .filter(|b| {
+                if let Some(root_slot) = tower.root() {
+                    b.slot() > root_slot
+                } else {
+                    true
+                }
+            })
+            .filter(|b| {
                 let is_locked_out = tower.is_locked_out(b.slot(), &ancestors);
                 trace!("bank is is_locked_out: {} {}", b.slot(), is_locked_out);
                 !is_locked_out
