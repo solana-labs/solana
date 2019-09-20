@@ -72,6 +72,8 @@ for zone in "$@"; do
     ${NO_INSTALL_CHECK:+-o noInstallCheck} \
     $zone || ok=false
 
-  net/net.sh logs
+  if ! $ok; then
+    net/net.sh logs
+  fi
   $ok
 done
