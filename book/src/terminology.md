@@ -11,7 +11,7 @@ A persistent file addressed by [public key](#public-key) and with
 
 A front-end application that interacts with a Solana cluster.
 
-#### blob
+#### shred
 
 A fraction of a [block](#block); the smallest unit sent between
 [fullnodes](#fullnode).
