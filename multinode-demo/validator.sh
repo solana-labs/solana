@@ -272,18 +272,12 @@ wallet() {
 setup_validator_accounts() {
   declare node_lamports=$1
 
-  if ((airdrops_enabled)); then
-    echo "Adding $node_lamports to validator identity account:"
-    (
-      declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
-      wallet airdrop $((node_lamports+fees)) lamports
-    ) || return $?
-  else
-    echo "Validator identity account balance:"
-    wallet balance --lamports || return $?
-  fi
-
   if ! wallet show-vote-account "$voting_keypair_path"; then
+    if ((airdrops_enabled)); then
+      echo "Adding $node_lamports to validator identity account:"
+      wallet airdrop "$node_lamports" lamports || return $?
+    fi
+
     echo "Creating validator vote account"
     wallet create-vote-account "$voting_keypair_path" "$identity_keypair_path" 1 --commission 127 || return $?
   fi
@@ -294,6 +288,9 @@ setup_validator_accounts() {
     wallet create-validator-storage-account "$identity_keypair_path" "$storage_keypair_path" || return $?
   fi
   echo "Validator storage account configured"
+
+  echo "Validator identity account balance:"
+  wallet balance --lamports || return $?
 
   return 0
 }
