@@ -88,16 +88,16 @@ echo --- Creating tarball
     cat > solana-release/bin/solana-validator-cuda <<'EOF'
 #!/usr/bin/env bash
 set -e
-cd "$(dirname "$0")"/..
-if [[ -f target/perf-libs/env.sh ]]; then
-  source target/perf-libs/env.sh
+SOLANA_ROOT="$(dirname "$0")"/..
+if [[ -f "$SOLANA_ROOT"/target/perf-libs/env.sh ]]; then
+  source "$SOLANA_ROOT"/target/perf-libs/env.sh
 fi
 if [[ -z $SOLANA_PERF_LIBS_CUDA ]]; then
   echo
   echo Error: SOLANA_PERF_LIBS_CUDA environment variable undefined
   exit 1
 fi
-exec bin/_/solana-validator-cuda "$@"
+exec "$SOLANA_ROOT"/bin/_/solana-validator-cuda "$@"
 EOF
     chmod +x solana-release/bin/solana-validator-cuda
   fi
