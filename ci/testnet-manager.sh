@@ -210,6 +210,19 @@ EOF
   fi
 fi
 
+maybe_deploy_software() {
+  declare ok=true
+  (
+    echo "--- net.sh restart"
+    set -x
+    time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
+  ) || ok=false
+  if ! $ok; then
+    net/net.sh logs
+  fi
+  $ok
+}
+
 sanity() {
   echo "--- sanity $TESTNET"
   case $TESTNET in
@@ -220,11 +233,7 @@ sanity() {
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh edge-testnet-solana-com gce -P us-west1-b
     )
-    (
-      echo "--- net.sh restart"
-      set -x
-      time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
-    )
+    maybe_deploy_software
     ;;
   testnet-edge-perf)
     (
@@ -241,11 +250,7 @@ sanity() {
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
     )
-    (
-      echo "--- net.sh restart"
-      set -x
-      time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
-    )
+    maybe_deploy_software
     ;;
   testnet-beta-perf)
     (
