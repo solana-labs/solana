@@ -157,7 +157,6 @@ mod tests {
         let genesis_keypair = create_genesis(&mint_keypair, &bank_client, 1_000_000);
         let mint_program_pubkey = upload_mint_program(&mint_keypair, &bank_client);
         let program_pubkey = upload_payment_program(&mint_keypair, &bank_client);
-
         (
             shared_bank,
             mint_keypair,
