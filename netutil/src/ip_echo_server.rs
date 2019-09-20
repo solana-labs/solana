@@ -7,6 +7,7 @@ use std::time::Duration;
 use tokio;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
+use tokio::reactor::Handle;
 use tokio::runtime::Runtime;
 use tokio_codec::{BytesCodec, Decoder};
 
@@ -32,11 +33,10 @@ impl IpEchoServerMessage {
 
 /// Starts a simple TCP server on the given port that echos the IP address of any peer that
 /// connects.  Used by |get_public_ip_addr|
-pub fn ip_echo_server(port: u16) -> IpEchoServer {
-    let bind_addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let tcp = TcpListener::bind(&bind_addr)
-        .unwrap_or_else(|err| panic!("Unable to bind to {}: {}", bind_addr, err));
-    info!("bound to {:?}", bind_addr);
+pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
+    info!("bound to {:?}", tcp.local_addr());
+    let tcp =
+        TcpListener::from_std(tcp, &Handle::default()).expect("Failed to convert std::TcpListener");
 
     let server = tcp
         .incoming()

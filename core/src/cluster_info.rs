@@ -34,7 +34,8 @@ use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_netutil::{
-    bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
+    bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
+    multi_bind_in_range, PortRange,
 };
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
@@ -46,7 +47,7 @@ use std::borrow::Cow;
 use std::cmp::min;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
@@ -1485,7 +1486,7 @@ impl ClusterInfo {
 
     /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
     pub fn gossip_node(id: &Pubkey, gossip_addr: &SocketAddr) -> (ContactInfo, UdpSocket) {
-        let (port, gossip_socket) = Node::get_gossip_port(gossip_addr, FULLNODE_PORT_RANGE);
+        let (port, (gossip_socket, _)) = Node::get_gossip_port(gossip_addr, FULLNODE_PORT_RANGE);
         let daddr = socketaddr_any!();
 
         let node = ContactInfo::new(
@@ -1563,6 +1564,7 @@ pub fn compute_retransmit_peers(
 #[derive(Debug)]
 pub struct Sockets {
     pub gossip: UdpSocket,
+    pub ip_echo: Option<TcpListener>,
     pub tvu: Vec<UdpSocket>,
     pub tvu_forwards: Vec<UdpSocket>,
     pub tpu: Vec<UdpSocket>,
@@ -1619,12 +1621,14 @@ impl Node {
                 repair,
                 retransmit,
                 storage: Some(storage),
+                ip_echo: None,
             },
         }
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
         let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let (gossip_port, (gossip, ip_echo)) = bind_common_in_range((1024, 65535)).unwrap();
+        let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tpu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1640,7 +1644,7 @@ impl Node {
         let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
         let info = ContactInfo::new(
             pubkey,
-            gossip.local_addr().unwrap(),
+            gossip_addr,
             tvu.local_addr().unwrap(),
             tvu_forwards.local_addr().unwrap(),
             tpu.local_addr().unwrap(),
@@ -1654,6 +1658,7 @@ impl Node {
             info,
             sockets: Sockets {
                 gossip,
+                ip_echo: Some(ip_echo),
                 tvu: vec![tvu],
                 tvu_forwards: vec![tvu_forwards],
                 tpu: vec![tpu],
@@ -1665,16 +1670,19 @@ impl Node {
             },
         }
     }
-    fn get_gossip_port(gossip_addr: &SocketAddr, port_range: PortRange) -> (u16, UdpSocket) {
+    fn get_gossip_port(
+        gossip_addr: &SocketAddr,
+        port_range: PortRange,
+    ) -> (u16, (UdpSocket, TcpListener)) {
         if gossip_addr.port() != 0 {
             (
                 gossip_addr.port(),
-                bind_to(gossip_addr.port(), false).unwrap_or_else(|e| {
+                bind_common(gossip_addr.port(), false).unwrap_or_else(|e| {
                     panic!("gossip_addr bind_to port {}: {}", gossip_addr.port(), e)
                 }),
             )
         } else {
-            Self::bind(port_range)
+            bind_common_in_range(port_range).expect("Failed to bind")
         }
     }
     fn bind(port_range: PortRange) -> (u16, UdpSocket) {
@@ -1685,7 +1693,7 @@ impl Node {
         gossip_addr: &SocketAddr,
         port_range: PortRange,
     ) -> Node {
-        let (gossip_port, gossip) = Self::get_gossip_port(gossip_addr, port_range);
+        let (gossip_port, (gossip, ip_echo)) = Self::get_gossip_port(gossip_addr, port_range);
 
         let (tvu_port, tvu_sockets) = multi_bind_in_range(port_range, 8).expect("tvu multi_bind");
 
@@ -1727,6 +1735,7 @@ impl Node {
                 repair,
                 retransmit,
                 storage: None,
+                ip_echo: Some(ip_echo),
             },
         }
     }

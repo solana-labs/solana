@@ -74,7 +74,7 @@ fn test_replicator_startup_1_node() {
 }
 
 #[test]
-#[ignore]
+#[serial]
 fn test_replicator_startup_2_nodes() {
     run_replicator_startup_basic(2, 1);
 }
@@ -119,7 +119,7 @@ fn test_replicator_startup_leader_hang() {
 }
 
 #[test]
-#[ignore]
+#[serial]
 fn test_replicator_startup_ledger_hang() {
     solana_logger::setup();
     info!("starting replicator test");
