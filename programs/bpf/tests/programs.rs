@@ -30,8 +30,6 @@ mod bpf {
         use solana_sdk::bpf_loader;
         use solana_sdk::client::SyncClient;
         use solana_sdk::signature::KeypairUtil;
-        use solana_sdk::rent_calculator::RentCalculator;
-        use solana_sdk::sysvar::rent;
         use std::io::Read;
 
         #[test]
