@@ -60,10 +60,6 @@ mod bpf {
                     ..
                 } = create_genesis_block(50);
                 let bank = Bank::new(&genesis_block);
-                bank.store_account(
-                &rent::id(),
-                &rent::create_account(1, &RentCalculator::default()),
-            );
                 let bank_client = BankClient::new(bank);
 
                 // Call user program
