@@ -41,7 +41,7 @@ num-derive = { version = "0.2" }
 num-traits = { version = "0.2" }
 rand = { version = "0.6.5", optional = true }
 rayon = { version = "1.2.0", optional = true }
-serde = "1.0.100"
+serde = "1.0.101"
 serde_derive = "1.0.101"
 serde_json = { version = "1.0.40", optional = true }
 sha2 = "0.8.0"

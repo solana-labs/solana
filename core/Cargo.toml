@@ -45,7 +45,7 @@ num-traits = "0.2"
 rand = "0.6.5"
 rand_chacha = "0.1.1"
 rayon = "1.2.0"
-serde = "1.0.100"
+serde = "1.0.101"
 serde_derive = "1.0.101"
 serde_json = "1.0.40"
 solana-budget-api = { path = "../programs/budget_api", version = "0.19.0-pre0" }
