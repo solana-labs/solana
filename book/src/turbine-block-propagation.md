@@ -1,19 +1,19 @@
 # Turbine Block Propagation
 
 A Solana cluster uses a multi-layer block propagation mechanism called *Turbine*
-to broadcast transaction blobs to all nodes with minimal amount of duplicate
+to broadcast transaction shreds to all nodes with minimal amount of duplicate
 messages.  The cluster divides itself into small collections of nodes, called
 *neighborhoods*. Each node is responsible for sharing any data it receives with
 the other nodes in its neighborhood, as well as propagating the data on to a
 small set of nodes in other neighborhoods.  This way each node only has to
 communicate with a small number of nodes.
 
-During its slot, the leader node distributes blobs between the validator nodes
+During its slot, the leader node distributes shreds between the validator nodes
 in the first neighborhood (layer 0). Each validator shares its data within its
-neighborhood, but also retransmits the blobs to one node in some neighborhoods
+neighborhood, but also retransmits the shreds to one node in some neighborhoods
 in the next layer (layer 1). The layer-1 nodes each share their data with their 
 neighborhood peers, and retransmit to nodes in the next layer, etc, until all
-nodes in the cluster have received all the blobs.
+nodes in the cluster have received all the shreds.
 
 ## Neighborhood Assignment - Weighted Selection
 
@@ -26,10 +26,10 @@ make up layer 0. These will automatically be the highest stake holders, allowing
 the heaviest votes to come back to the leader first. Layer-0 and lower-layer
 nodes use the same logic to find their neighbors and next layer peers.
 
-To reduce the possibility of attack vectors, each blob is transmitted over a
+To reduce the possibility of attack vectors, each shred is transmitted over a
 random tree of neighborhoods.  Each node uses the same set of nodes representing
-the cluster.  A random tree is generated from the set for each blob using
-randomness derived from the blob itself.  Since the random seed is not known in
+the cluster.  A random tree is generated from the set for each shred using
+randomness derived from the shred itself.  Since the random seed is not known in
 advance, attacks that try to eclipse neighborhoods from certain leaders or
 blocks become very difficult, and should require almost complete control of the
 stake in the cluster.
@@ -43,7 +43,7 @@ these constraints to determine layer-capacity: Each neighborhood contains
 `DATA_PLANE_FANOUT` nodes. Layer-0 starts with 1 neighborhood with fanout nodes.
 The number of nodes in each additional layer grows by a factor of fanout.
 
-As mentioned above, each node in a layer only has to broadcast its blobs to its
+As mentioned above, each node in a layer only has to broadcast its shreds to its
 neighbors and to exactly 1 node in some next-layer neighborhoods, 
 instead of to every TVU peer in the cluster. A good way to think about this is, 
 layer-0 starts with 1 neighborhood with fanout nodes, layer-1 adds "fanout" 
@@ -52,11 +52,11 @@ neighborhoods, each with fanout nodes and layer-2 will have
 
 This way each node only has to communicate with a maximum of `2 * DATA_PLANE_FANOUT - 1` nodes.
 
-The following diagram shows how the Leader sends blobs with a Fanout of 2 to 
+The following diagram shows how the Leader sends shreds with a Fanout of 2 to 
 Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data
 with each other.
 
-<img alt="Leader sends blobs to Neighborhood 0 in Layer 0" src="img/data-plane-seeding.svg" class="center"/>
+<img alt="Leader sends shreds to Neighborhood 0 in Layer 0" src="img/data-plane-seeding.svg" class="center"/>
 
 The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
 
@@ -82,7 +82,7 @@ cluster sizes change.
 
 The following diagram shows how two neighborhoods in different layers interact.
 To cripple a neighborhood, enough nodes (erasure codes +1) from the neighborhood 
-above need to fail. Since each neighborhood receives blobs from multiple nodes 
+above need to fail. Since each neighborhood receives shreds from multiple nodes 
 in a neighborhood in the upper layer, we'd need a big network failure in the upper 
 layers to end up with incomplete data.
 

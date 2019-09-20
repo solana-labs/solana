@@ -9,29 +9,29 @@ naturally form as a result of leader rotation is described in
 described here is how a validator copes with those forks until blocks
 are finalized.
 
-The blocktree allows a validator to record every blob it observes
-on the network, in any order, as long as the blob is signed by the expected
+The blocktree allows a validator to record every shred it observes
+on the network, in any order, as long as the shred is signed by the expected
 leader for a given slot.
 
-Blobs are moved to a fork-able key space the tuple of `leader slot` + `blob
+Shreds are moved to a fork-able key space the tuple of `leader slot` + `shred
 index` (within the slot).  This permits the skip-list structure of the Solana
 protocol to be stored in its entirety, without a-priori choosing which fork to
 follow, which Entries to persist or when to persist them.
 
-Repair requests for recent blobs are served out of RAM or recent files and out
-of deeper storage for less recent blobs, as implemented by the store backing
+Repair requests for recent shreds are served out of RAM or recent files and out
+of deeper storage for less recent shreds, as implemented by the store backing
 Blocktree.
 
 ### Functionalities of Blocktree
 
 1. Persistence: the Blocktree lives in the front of the nodes verification
    pipeline, right behind network receive and signature verification.  If the
-blob received is consistent with the leader schedule (i.e. was signed by the
+shred received is consistent with the leader schedule (i.e. was signed by the
 leader for the indicated slot), it is immediately stored.
 2. Repair: repair is the same as window repair above, but able to serve any
-   blob that's been received. Blocktree stores blobs with signatures,
+   shred that's been received. Blocktree stores shreds with signatures,
 preserving the chain of origination.
-3. Forks: Blocktree supports random access of blobs, so can support a
+3. Forks: Blocktree supports random access of shreds, so can support a
    validator's need to rollback and replay from a Bank checkpoint.
 4. Restart: with proper pruning/culling, the Blocktree can be replayed by
    ordered enumeration of entries from slot 0.  The logic of the replay stage
@@ -41,22 +41,22 @@ the Blocktree.
 ### Blocktree Design
 
 1. Entries in the Blocktree are stored as key-value pairs, where the key is the concatenated
-slot index and blob index for an entry, and the value is the entry data. Note blob indexes are zero-based for each slot (i.e. they're slot-relative).
+slot index and shred index for an entry, and the value is the entry data. Note shred indexes are zero-based for each slot (i.e. they're slot-relative).
 
 2. The Blocktree maintains metadata for each slot, in the `SlotMeta` struct containing:
       * `slot_index` - The index of this slot
       * `num_blocks` - The number of blocks in the slot (used for chaining to a previous slot)
-      * `consumed` - The highest blob index `n`, such that for all `m < n`, there exists a blob in this slot with blob index equal to `n` (i.e. the highest consecutive blob index).
-      * `received` - The highest received blob index for the slot
+      * `consumed` - The highest shred index `n`, such that for all `m < n`, there exists a shred in this slot with shred index equal to `n` (i.e. the highest consecutive shred index).
+      * `received` - The highest received shred index for the slot
       * `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
       the ledger to find possible fork points.
-      * `last_index` - The index of the blob that is flagged as the last blob for this slot. This flag on a blob will be set by the leader for a slot when they are transmitting the last blob for a slot.
+      * `last_index` - The index of the shred that is flagged as the last shred for this slot. This flag on a shred will be set by the leader for a slot when they are transmitting the last shred for a slot.
       * `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_rooted for each slot with the following rules. Let slot(n) be the slot with index `n`, and slot(n).is_full() is true if the slot with index `n` has all the ticks expected for that slot. Let is_rooted(n) be the statement that "the slot(n).is_rooted is true". Then:
 
       is_rooted(0)
       is_rooted(n+1) iff (is_rooted(n) and slot(n).is_full()
 
-3. Chaining - When a blob for a new slot `x` arrives, we check the number of blocks (`num_blocks`) for that new slot (this information is encoded in the blob). We then know that this new slot chains to slot `x - num_blocks`.
+3. Chaining - When a shred for a new slot `x` arrives, we check the number of blocks (`num_blocks`) for that new slot (this information is encoded in the shred). We then know that this new slot chains to slot `x - num_blocks`.
 
 4. Subscriptions - The Blocktree records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blocktree channel for consumption by the ReplayStage. See the `Blocktree APIs` for details.
 
