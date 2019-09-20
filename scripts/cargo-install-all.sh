@@ -41,7 +41,7 @@ SECONDS=0
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $rust_version build --all $maybeReleaseFlag
+  $cargo $rust_version build $maybeReleaseFlag
 )
 
 BINS=(
