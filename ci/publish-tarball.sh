@@ -81,7 +81,8 @@ echo --- Creating tarball
   if [[ -n $maybeCUDA ]]; then
     # Wrap `solana-validator-cuda` with a script that loads perf-libs
     # automatically if possible
-    cp -a target/perf-libs solana-release/target/
+    mkdir -p solana-release/target
+    cp -a target/perf-libs solana-release/target/perf-libs
     mkdir solana-release/bin/_
     cp solana-release/bin/solana-validator-cuda solana-release/bin/_/solana-validator-cuda
     cat > solana-release/bin/solana-validator-cuda <<'EOF'
@@ -96,7 +97,7 @@ if [[ -z $SOLANA_PERF_LIBS_CUDA ]]; then
   echo Error: SOLANA_PERF_LIBS_CUDA environment variable undefined
   exit 1
 fi
-exec _/solana-validator-cuda "$@"
+exec bin/_/solana-validator-cuda "$@"
 EOF
     chmod +x solana-release/bin/solana-validator-cuda
   fi
