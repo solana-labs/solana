@@ -177,7 +177,6 @@ impl RepairService {
                             ("repair_request", format!("{:?}", repair_request), String),
                             ("to", to.to_string(), String),
                             ("from", local_addr.to_string(), String),
-                            ("id", id.to_string(), String)
                         );
                     }
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {

@@ -206,7 +206,7 @@ impl MetricsAgent {
                         barrier.wait();
                     }
                     MetricsCommand::Submit(point, level) => {
-                        log!(level, "{:?}", point);
+                        log!(level, "{}", point);
                         let (_, _, points) = points_map.entry(level).or_insert((
                             last_write_time,
                             HashMap::new(),
