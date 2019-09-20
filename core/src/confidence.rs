@@ -10,18 +10,12 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct BankConfidence {
-    confidence: Vec<u64>,
+    confidence: [u64; MAX_LOCKOUT_HISTORY],
 }
 
 impl BankConfidence {
-    pub fn new() -> Self {
-        Self {
-            confidence: vec![0u64; MAX_LOCKOUT_HISTORY],
-        }
-    }
-
     pub fn increase_confirmation_stake(&mut self, confirmation_count: usize, stake: u64) {
         assert!(confirmation_count > 0 && confirmation_count <= MAX_LOCKOUT_HISTORY);
         self.confidence[confirmation_count - 1] += stake;
@@ -36,14 +30,14 @@ impl BankConfidence {
 #[derive(Default)]
 pub struct ForkConfidenceCache {
     bank_confidence: HashMap<u64, BankConfidence>,
-    total_stake: u64,
+    _total_stake: u64,
 }
 
 impl ForkConfidenceCache {
     pub fn new(bank_confidence: HashMap<u64, BankConfidence>, total_stake: u64) -> Self {
         Self {
             bank_confidence,
-            total_stake,
+            _total_stake: total_stake,
         }
     }
 
@@ -120,7 +114,7 @@ impl AggregateConfidenceService {
             }
 
             let ancestors = aggregation_data.bank.status_cache_ancestors();
-            if ancestors.len() == 0 {
+            if ancestors.is_empty() {
                 continue;
             }
 
@@ -136,7 +130,7 @@ impl AggregateConfidenceService {
     }
 
     pub fn aggregate_confidence(ancestors: &[u64], bank: &Bank) -> HashMap<u64, BankConfidence> {
-        assert!(ancestors.len() > 0);
+        assert!(!ancestors.is_empty());
 
         // Check ancestors is sorted
         for a in ancestors.windows(2) {
@@ -171,14 +165,14 @@ impl AggregateConfidenceService {
         ancestors: &[u64],
         lamports: u64,
     ) {
-        assert!(ancestors.len() > 0);
+        assert!(!ancestors.is_empty());
         let mut ancestors_index = 0;
         if let Some(root) = vote_state.root_slot {
             for (i, a) in ancestors.iter().enumerate() {
                 if *a <= root {
                     confidence
                         .entry(*a)
-                        .or_insert(BankConfidence::new())
+                        .or_insert_with(BankConfidence::default)
                         .increase_confirmation_stake(MAX_LOCKOUT_HISTORY, lamports);
                 } else {
                     ancestors_index = i;
@@ -191,7 +185,7 @@ impl AggregateConfidenceService {
             while ancestors[ancestors_index] <= vote.slot {
                 confidence
                     .entry(ancestors[ancestors_index])
-                    .or_insert(BankConfidence::new())
+                    .or_insert_with(BankConfidence::default)
                     .increase_confirmation_stake(vote.confirmation_count as usize, lamports);
                 ancestors_index += 1;
 
@@ -221,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_bank_confidence() {
-        let mut cache = BankConfidence::new();
+        let mut cache = BankConfidence::default();
         assert_eq!(cache.get_confirmation_stake(1), 0);
         cache.increase_confirmation_stake(1, 10);
         assert_eq!(cache.get_confirmation_stake(1), 10);
@@ -246,7 +240,7 @@ mod tests {
         );
 
         for a in ancestors {
-            let mut expected = BankConfidence::new();
+            let mut expected = BankConfidence::default();
             expected.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, lamports);
             assert_eq!(*confidence.get(&a).unwrap(), expected);
         }
@@ -271,11 +265,11 @@ mod tests {
 
         for a in ancestors {
             if a <= root {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, lamports);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             } else {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(1, lamports);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             }
@@ -303,15 +297,15 @@ mod tests {
 
         for (i, a) in ancestors.iter().enumerate() {
             if *a <= root {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, lamports);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             } else if i <= 4 {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(2, lamports);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             } else if i <= 6 {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(1, lamports);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             }
@@ -358,20 +352,20 @@ mod tests {
 
         for a in ancestors {
             if a <= 3 {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(2, 150);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             } else if a <= 5 {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(1, 100);
                 expected.increase_confirmation_stake(2, 50);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             } else if a <= 9 {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(2, 50);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             } else if a <= 10 {
-                let mut expected = BankConfidence::new();
+                let mut expected = BankConfidence::default();
                 expected.increase_confirmation_stake(1, 50);
                 assert_eq!(*confidence.get(&a).unwrap(), expected);
             } else {

@@ -1055,7 +1055,7 @@ mod test {
                 .unwrap(),
             &expected0,
         );
-        let mut expected1 = BankConfidence::new();
+        let mut expected1 = BankConfidence::default();
         expected1.increase_confirmation_stake(2, leader_lamports);
         assert_eq!(
             fork_confidence_cache
@@ -1065,7 +1065,7 @@ mod test {
                 .unwrap(),
             &expected1
         );
-        let mut expected2 = BankConfidence::new();
+        let mut expected2 = BankConfidence::default();
         expected2.increase_confirmation_stake(1, leader_lamports);
         assert_eq!(
             fork_confidence_cache
