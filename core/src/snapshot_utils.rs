@@ -5,6 +5,7 @@ use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use bincode::{deserialize_from, serialize_into};
 use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
+use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::SlotDelta;
 use solana_sdk::transaction;
@@ -160,12 +161,19 @@ pub fn add_snapshot<P: AsRef<Path>>(
     // Create the snapshot
     serialize_into(&mut snapshot_stream, &*bank).map_err(|e| get_io_error(&e.to_string()))?;
     serialize_into(&mut snapshot_stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
+
+    let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
     // write the status cache
     serialize_into(
         &mut status_cache_stream,
         &bank.src.slot_deltas(slots_since_snapshot),
     )
     .map_err(|_| get_io_error("serialize bank status cache error"))?;
+    status_cache_serialize.stop();
+    inc_new_counter_info!(
+        "serialize-status-cache-ms",
+        status_cache_serialize.as_ms() as usize
+    );
 
     info!(
         "successfully created snapshot {}, path: {:?} status_cache: {:?}",
