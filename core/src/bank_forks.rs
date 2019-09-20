@@ -203,7 +203,7 @@ impl BankForks {
                 // Cleanup outdated snapshots
                 self.purge_old_snapshots();
                 snapshot_time.stop();
-                inc_new_counter_info!("total-snapshot-setup-ms", snapshot_time.as_ms() as usize);
+                inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
             }
         }
 
@@ -254,7 +254,11 @@ impl BankForks {
             .get(root)
             .cloned()
             .expect("root must exist in BankForks");
+
+        let mut add_snapshot_time = Measure::start("add-snapshot-ms");
         snapshot_utils::add_snapshot(&config.snapshot_path, &bank, slots_since_snapshot)?;
+        add_snapshot_time.stop();
+        inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
         // Package the relevant snapshots
         let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&config.snapshot_path);
