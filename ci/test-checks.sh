@@ -23,6 +23,7 @@ _ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0013
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
+_ book/build-svg.sh
 
 {
   cd programs/bpf

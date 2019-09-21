@@ -9,6 +9,8 @@ TEST_STAMP=src/tests.ok
 
 all: $(TARGET)
 
+svg: $(SVG_IMGS)
+
 test: $(TEST_STAMP)
 
 open: $(TEST_STAMP)
