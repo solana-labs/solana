@@ -607,7 +607,14 @@ EOF
 set -ex
 
 if [[ -f /solana-scratch/.instance-startup-complete ]]; then
-  # Skip on instance reboot
+  $(
+    cd "$here"/scripts/
+    if "$enableGpu"; then
+      cat enable-nvidia-persistence-mode.sh
+    fi
+  )
+
+  # Skip most setup on instance reboot
   exit 0
 fi
 
@@ -656,14 +663,13 @@ $(
     network-config.sh \
     remove-docker-interface.sh \
 
-    if "$enableGpu"; then
-      cat enable-nvidia-persistence-mode.sh
-    fi
+  if "$enableGpu"; then
+    cat enable-nvidia-persistence-mode.sh
+  fi
 
-    if [[ -n $fullNodeAdditionalDiskSizeInGb ]]; then
-      cat mount-additional-disk.sh
-    fi
-
+  if [[ -n $fullNodeAdditionalDiskSizeInGb ]]; then
+    cat mount-additional-disk.sh
+  fi
 )
 
 cat > /etc/motd <<EOM
