@@ -402,6 +402,20 @@ impl Bank {
         *self.hash.read().unwrap() != Hash::default()
     }
 
+    pub fn status_cache_ancestors(&self) -> Vec<u64> {
+        let mut roots = self.src.status_cache.read().unwrap().roots().clone();
+        let min = roots.iter().min().cloned().unwrap_or(0);
+        for ancestor in self.ancestors.keys() {
+            if *ancestor >= min {
+                roots.insert(*ancestor);
+            }
+        }
+
+        let mut ancestors: Vec<_> = roots.into_iter().collect();
+        ancestors.sort();
+        ancestors
+    }
+
     fn update_clock(&self) {
         self.store_account(
             &clock::id(),
@@ -1539,6 +1553,7 @@ mod tests {
     use crate::genesis_utils::{
         create_genesis_block_with_leader, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS,
     };
+    use crate::status_cache::MAX_CACHE_ENTRIES;
     use bincode::{deserialize_from, serialize_into, serialized_size};
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::genesis_block::create_genesis_block;
@@ -3020,5 +3035,23 @@ mod tests {
         bank3.squash();
         assert_eq!(bank1.get_program_accounts(&program_id).len(), 2);
         assert_eq!(bank3.get_program_accounts(&program_id).len(), 2);
+    }
+
+    #[test]
+    fn test_status_cache_ancestors() {
+        let (genesis_block, _mint_keypair) = create_genesis_block(500);
+        let parent = Arc::new(Bank::new(&genesis_block));
+        let bank1 = Arc::new(new_from_parent(&parent));
+        let mut bank = bank1;
+        for _ in 0..MAX_CACHE_ENTRIES * 2 {
+            bank = Arc::new(new_from_parent(&bank));
+            bank.squash();
+        }
+
+        let bank = new_from_parent(&bank);
+        assert_eq!(
+            bank.status_cache_ancestors(),
+            (bank.slot() - MAX_CACHE_ENTRIES as u64..=bank.slot()).collect::<Vec<_>>()
+        );
     }
 }

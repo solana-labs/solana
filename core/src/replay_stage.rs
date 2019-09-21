@@ -156,7 +156,7 @@ impl ReplayStage {
                         &mut progress,
                     );
 
-                    if let Some((_, bank, lockouts, total_staked)) = votable.into_iter().last() {
+                    if let Some((_, bank, _, total_staked)) = votable.into_iter().last() {
                         subscriptions.notify_subscribers(bank.slot(), &bank_forks);
 
                         if let Some(votable_leader) =
@@ -184,7 +184,6 @@ impl ReplayStage {
                         Self::handle_votable_bank(
                             &bank,
                             &bank_forks,
-                            &ancestors,
                             &mut tower,
                             &mut progress,
                             &vote_account,
@@ -193,7 +192,6 @@ impl ReplayStage {
                             &blocktree,
                             &leader_schedule_cache,
                             &root_bank_sender,
-                            lockouts,
                             total_staked,
                             &lockouts_sender,
                             &snapshot_package_sender,
@@ -406,7 +404,6 @@ impl ReplayStage {
     fn handle_votable_bank<T>(
         bank: &Arc<Bank>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        ancestors: &Arc<HashMap<u64, HashSet<u64>>>,
         tower: &mut Tower,
         progress: &mut HashMap<u64, ForkProgress>,
         vote_account: &Pubkey,
@@ -415,7 +412,6 @@ impl ReplayStage {
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
-        lockouts: HashMap<u64, StakeLockout>,
         total_staked: u64,
         lockouts_sender: &Sender<ConfidenceAggregationData>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
@@ -455,7 +451,7 @@ impl ReplayStage {
                 Err(e)?;
             }
         }
-        Self::update_confidence_cache(ancestors, tower, lockouts, total_staked, lockouts_sender);
+        Self::update_confidence_cache(bank.clone(), total_staked, lockouts_sender);
 
         if let Some(ref voting_keypair) = voting_keypair {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
@@ -476,18 +472,11 @@ impl ReplayStage {
     }
 
     fn update_confidence_cache(
-        ancestors: &Arc<HashMap<u64, HashSet<u64>>>,
-        tower: &Tower,
-        lockouts: HashMap<u64, StakeLockout>,
+        bank: Arc<Bank>,
         total_staked: u64,
         lockouts_sender: &Sender<ConfidenceAggregationData>,
     ) {
-        if let Err(e) = lockouts_sender.send(ConfidenceAggregationData::new(
-            lockouts,
-            tower.root(),
-            ancestors.clone(),
-            total_staked,
-        )) {
+        if let Err(e) = lockouts_sender.send(ConfidenceAggregationData::new(bank, total_staked)) {
             trace!("lockouts_sender failed: {:?}", e);
         }
     }
@@ -809,7 +798,7 @@ mod test {
     use super::*;
     use crate::blocktree::tests::make_slot_entries;
     use crate::blocktree::{entries_to_test_shreds, get_tmp_ledger_path};
-    use crate::confidence::Confidence;
+    use crate::confidence::BankConfidence;
     use crate::entry;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::replay_stage::ReplayStage;
@@ -1028,42 +1017,17 @@ mod test {
             &[arc_bank0.clone()],
             vec![0],
         )));
-        let pubkey = Pubkey::new_rand();
-        let mut tower = Tower::new(&pubkey, &Pubkey::new_rand(), &bank_forks.read().unwrap());
-        let mut progress = HashMap::new();
 
-        leader_vote(&arc_bank0, &leader_voting_pubkey);
-        let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
-
-        let votable =
-            ReplayStage::generate_votable_banks(&ancestors, &bank_forks, &tower, &mut progress);
-        if let Some((_, _, lockouts, total_staked)) = votable.into_iter().last() {
-            ReplayStage::update_confidence_cache(
-                &ancestors,
-                &tower,
-                lockouts,
-                total_staked,
-                &lockouts_sender,
-            );
-        }
-
-        thread::sleep(Duration::from_millis(200));
-
-        assert_eq!(
-            fork_confidence_cache
-                .read()
-                .unwrap()
-                .get_fork_confidence(0)
-                .unwrap(),
-            &Confidence::new(0, 3, 2)
-        );
+        assert!(fork_confidence_cache
+            .read()
+            .unwrap()
+            .get_fork_confidence(0)
+            .is_none());
         assert!(fork_confidence_cache
             .read()
             .unwrap()
             .get_fork_confidence(1)
             .is_none());
-
-        tower.record_vote(arc_bank0.slot(), arc_bank0.hash());
 
         let bank1 = Bank::new_from_parent(&arc_bank0, &Pubkey::default(), arc_bank0.slot() + 1);
         let _res = bank1.transfer(10, &genesis_block_info.mint_keypair, &Pubkey::new_rand());
@@ -1074,20 +1038,7 @@ mod test {
         bank_forks.write().unwrap().insert(bank1);
         let arc_bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
         leader_vote(&arc_bank1, &leader_voting_pubkey);
-        let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
-        let votable =
-            ReplayStage::generate_votable_banks(&ancestors, &bank_forks, &tower, &mut progress);
-        if let Some((_, _, lockouts, total_staked)) = votable.into_iter().last() {
-            ReplayStage::update_confidence_cache(
-                &ancestors,
-                &tower,
-                lockouts,
-                total_staked,
-                &lockouts_sender,
-            );
-        }
-
-        tower.record_vote(arc_bank1.slot(), arc_bank1.hash());
+        ReplayStage::update_confidence_cache(arc_bank1.clone(), leader_lamports, &lockouts_sender);
 
         let bank2 = Bank::new_from_parent(&arc_bank1, &Pubkey::default(), arc_bank1.slot() + 1);
         let _res = bank2.transfer(10, &genesis_block_info.mint_keypair, &Pubkey::new_rand());
@@ -1098,43 +1049,38 @@ mod test {
         bank_forks.write().unwrap().insert(bank2);
         let arc_bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
         leader_vote(&arc_bank2, &leader_voting_pubkey);
-        let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
-        let votable =
-            ReplayStage::generate_votable_banks(&ancestors, &bank_forks, &tower, &mut progress);
-        if let Some((_, _, lockouts, total_staked)) = votable.into_iter().last() {
-            ReplayStage::update_confidence_cache(
-                &ancestors,
-                &tower,
-                lockouts,
-                total_staked,
-                &lockouts_sender,
-            );
-        }
+        ReplayStage::update_confidence_cache(arc_bank2.clone(), leader_lamports, &lockouts_sender);
         thread::sleep(Duration::from_millis(200));
 
+        let mut expected0 = BankConfidence::default();
+        expected0.increase_confirmation_stake(2, leader_lamports);
         assert_eq!(
             fork_confidence_cache
                 .read()
                 .unwrap()
                 .get_fork_confidence(0)
                 .unwrap(),
-            &Confidence::new_with_stake_weighted(3, 3, 14, 60)
+            &expected0,
         );
+        let mut expected1 = BankConfidence::default();
+        expected1.increase_confirmation_stake(2, leader_lamports);
         assert_eq!(
             fork_confidence_cache
                 .read()
                 .unwrap()
                 .get_fork_confidence(1)
                 .unwrap(),
-            &Confidence::new_with_stake_weighted(3, 3, 6, 18)
+            &expected1
         );
+        let mut expected2 = BankConfidence::default();
+        expected2.increase_confirmation_stake(1, leader_lamports);
         assert_eq!(
             fork_confidence_cache
                 .read()
                 .unwrap()
                 .get_fork_confidence(2)
                 .unwrap(),
-            &Confidence::new_with_stake_weighted(0, 3, 2, 0)
+            &expected2
         );
     }
 }
