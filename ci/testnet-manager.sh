@@ -211,11 +211,12 @@ EOF
 fi
 
 maybe_deploy_software() {
+  declare arg=$1
   declare ok=true
   (
     echo "--- net.sh restart"
     set -x
-    time net/net.sh restart --skip-setup --deploy-if-newer -t "$CHANNEL_OR_TAG"
+    time net/net.sh restart --skip-setup "$arg" -t "$CHANNEL_OR_TAG"
   ) || ok=false
   if ! $ok; then
     net/net.sh logs
@@ -250,7 +251,7 @@ sanity() {
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
     )
-    maybe_deploy_software
+    maybe_deploy_software --deploy-if-newer
     ;;
   testnet-beta-perf)
     (
