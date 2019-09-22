@@ -375,26 +375,6 @@ pub mod test_utils {
     }
 }
 
-#[allow(clippy::mutex_atomic)]
-impl Serialize for AppendVec {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        use serde::ser::Error;
-        let mut buf = vec![0u8; *SIZE_OF_APPEND_VEC_METADATA as usize];
-        let mut wr = Cursor::new(&mut buf[..]);
-        self.map.flush().map_err(Error::custom)?;
-        serialize_into(&mut wr, &(self.current_len.load(Ordering::Relaxed) as u64))
-            .map_err(Error::custom)?;
-        serialize_into(&mut wr, &self.file_size).map_err(Error::custom)?;
-        let offset = *self.append_offset.lock().unwrap();
-        serialize_into(&mut wr, &offset).map_err(Error::custom)?;
-        let len = wr.position() as usize;
-        serializer.serialize_bytes(&wr.into_inner()[..len])
-    }
-}
-
 struct AppendVecVisitor;
 
 impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {

@@ -113,12 +113,14 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
         M: MapAccess<'de>,
     {
         let mut map = HashMap::new();
-        while let Some((storage_id, storage_entry)) = access.next_entry()? {
-            let storage_entry: AccountStorageEntry = storage_entry;
-            let storage_fork_map = map
-                .entry(storage_entry.fork_id)
-                .or_insert_with(HashMap::new);
-            storage_fork_map.insert(storage_id, Arc::new(storage_entry));
+        while let Some((fork_id, storage_ids)) = access.next_entry()? {
+            let storage_fork_map = map.entry(fork_id).or_insert_with(HashMap::new);
+            let storage_ids: Vec<usize> = storage_ids;
+            for storage_id in storage_ids {
+                let storage_entry: AccountStorageEntry =
+                    AccountStorageEntry::new(Path::new(""), fork_id, storage_id, 0);
+                storage_fork_map.insert(storage_id, Arc::new(storage_entry));
+            }
         }
 
         Ok(AccountStorage(map))
@@ -139,12 +141,11 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
         let mut map = serializer.serialize_map(Some(len))?;
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        for fork_storage in self.account_storage.0.values() {
-            for (storage_id, account_storage_entry) in fork_storage {
-                if account_storage_entry.fork_id <= self.slot {
-                    map.serialize_entry(storage_id, &**account_storage_entry)?;
-                    count += 1;
-                }
+        for (fork_id, fork_storage) in &self.account_storage.0 {
+            if *fork_id <= self.slot {
+                let storage_ids: Vec<_> = fork_storage.keys().collect();
+                map.serialize_entry(&fork_id, &storage_ids)?;
+                count += fork_storage.len();
             }
         }
         serialize_account_storage_timer.stop();
@@ -174,7 +175,7 @@ pub enum AccountStorageStatus {
 }
 
 /// Persistent storage structure holding the accounts
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 pub struct AccountStorageEntry {
     id: AppendVecId,
 
