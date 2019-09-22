@@ -1,4 +1,5 @@
-use bincode::{deserialize_from, serialize_into, serialized_size};
+use bincode::{deserialize_from, serialize_into};
+use lazy_static::lazy_static;
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, clock::Epoch, hash::Hash, pubkey::Pubkey};
@@ -381,14 +382,9 @@ impl Serialize for AppendVec {
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        let len = serialized_size(&self.path).unwrap()
-            + std::mem::size_of::<u64>() as u64
-            + std::mem::size_of::<u64>() as u64
-            + std::mem::size_of::<usize>() as u64;
-        let mut buf = vec![0u8; len as usize];
+        let mut buf = vec![0u8; *SIZE_OF_APPEND_VEC_METADATA as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         self.map.flush().map_err(Error::custom)?;
-        serialize_into(&mut wr, &self.path).map_err(Error::custom)?;
         serialize_into(&mut wr, &(self.current_len.load(Ordering::Relaxed) as u64))
             .map_err(Error::custom)?;
         serialize_into(&mut wr, &self.file_size).map_err(Error::custom)?;
@@ -417,15 +413,13 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
     {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
-        // TODO: this path does not need to be serialized, can remove
-        let path: PathBuf = deserialize_from(&mut rd).map_err(Error::custom)?;
         let current_len: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
 
         let map = MmapMut::map_anon(1).map_err(|e| Error::custom(e.to_string()))?;
         Ok(AppendVec {
-            path,
+            path: PathBuf::from(String::default()),
             map,
             append_offset: Mutex::new(offset),
             current_len: AtomicUsize::new(current_len as usize),
