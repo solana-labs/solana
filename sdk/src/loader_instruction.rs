@@ -1,5 +1,6 @@
 use crate::instruction::{AccountMeta, Instruction};
 use crate::pubkey::Pubkey;
+use crate::sysvar::rent;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum LoaderInstruction {
@@ -40,6 +41,9 @@ pub fn write(
 }
 
 pub fn finalize(account_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*account_pubkey, true)];
+    let account_metas = vec![
+        AccountMeta::new(*account_pubkey, true),
+        AccountMeta::new(rent::id(), false),
+    ];
     Instruction::new(*program_id, &LoaderInstruction::Finalize, account_metas)
 }

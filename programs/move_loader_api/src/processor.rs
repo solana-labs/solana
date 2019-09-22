@@ -7,7 +7,7 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount, instruction::InstructionError, loader_instruction::LoaderInstruction,
-    pubkey::Pubkey,
+    pubkey::Pubkey, sysvar::rent
 };
 use types::{
     account_address::AccountAddress,
@@ -294,9 +294,23 @@ impl MoveProcessor {
     }
 
     pub fn do_finalize(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+        if keyed_accounts.len() < 2 {
+            return Err(InstructionError::InvalidInstructionData);
+        }
         if keyed_accounts[PROGRAM_INDEX].signer_key().is_none() {
             debug!("Error: key[0] did not sign the transaction");
             return Err(InstructionError::GenericError);
+        }
+
+        if let Ok(rent_sysvar) = rent::from_keyed_account(&keyed_accounts[1]) {
+            if !rent_sysvar.rent_calculator.is_exempt(
+                keyed_accounts[0].account.lamports,
+                keyed_accounts[0].account.data.len(),
+            ) {
+                return Err(InstructionError::InsufficientFunds);
+            }
+        } else {
+            return Err(InstructionError::InvalidAccountData);
         }
 
         let (compiled_script, compiled_modules) =
