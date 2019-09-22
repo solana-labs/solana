@@ -110,7 +110,7 @@ some transactions!
 In a separate shell start the client:
 
 ```bash
-$ ./multinode-demo/client.sh # runs against localhost by default
+$ ./multinode-demo/bench-tps.sh # runs against localhost by default
 ```
 
 What just happened? The client demo spins up several threads to send 500,000 transactions
@@ -161,7 +161,7 @@ This will dump all the threads stack traces into gdb.txt
 In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
 
 ```bash
-$ ./multinode-demo/client.sh --entrypoint testnet.solana.com:8001 --drone testnet.solana.com:9900 --duration 60 --tx_count 50
+$ ./multinode-demo/bench-tps.sh --entrypoint testnet.solana.com:8001 --drone testnet.solana.com:9900 --duration 60 --tx_count 50
 ```
 
 You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)
