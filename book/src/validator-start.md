@@ -75,18 +75,18 @@ choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
-$ solana-validator --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --entrypoint testnet.solana.com
+$ solana-validator --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --entrypoint testnet.solana.com:8001
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run solana-validator -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --entrypoint testnet.solana.com
+$ solana-install run solana-validator -- --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --entrypoint testnet.solana.com:8001
 ```
 
 If you built from source:
 ```bash
-$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --entrypoint testnet.solana.com
+$ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --entrypoint testnet.solana.com:8001
 ```
 
 ### Enabling CUDA
