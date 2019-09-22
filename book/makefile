@@ -2,7 +2,7 @@ BOB_SRCS=$(wildcard art/*.bob)
 MSC_SRCS=$(wildcard art/*.msc)
 MD_SRCS=$(wildcard src/*.md)
 
-SVG_IMGS=$(BOB_SRCS:art/%.bob=src/img/%.svg) $(MSC_SRCS:art/%.msc=src/img/%.svg)
+SVG_IMGS=$(BOB_SRCS:art/%.bob=src/.gitbook/assets/%.svg) $(MSC_SRCS:art/%.msc=src/.gitbook/assets/%.svg)
 
 TARGET=html/index.html
 TEST_STAMP=src/tests.ok
@@ -19,11 +19,11 @@ open: $(TEST_STAMP)
 watch: $(SVG_IMGS)
 	mdbook watch
 
-src/img/%.svg: art/%.bob
+src/.gitbook/assets/%.svg: art/%.bob
 	@mkdir -p $(@D)
 	svgbob < $< > $@
 
- src/img/%.svg: art/%.msc
+src/.gitbook/assets/%.svg: art/%.msc
 	@mkdir -p $(@D)
 	mscgen -T svg -i $< -o $@
 

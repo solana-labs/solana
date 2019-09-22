@@ -56,15 +56,15 @@ The following diagram shows how the Leader sends shreds with a Fanout of 2 to
 Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data
 with each other.
 
-<img alt="Leader sends shreds to Neighborhood 0 in Layer 0" src="img/data-plane-seeding.svg" class="center"/>
+<img alt="Leader sends shreds to Neighborhood 0 in Layer 0" src=".gitbook/assets/data-plane-seeding.svg" class="center"/>
 
 The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
 
-<img alt="Neighborhood 0 Fanout to Neighborhood 1 and 2" src="img/data-plane-fanout.svg" class="center"/>
+<img alt="Neighborhood 0 Fanout to Neighborhood 1 and 2" src=".gitbook/assets/data-plane-fanout.svg" class="center"/>
 
 Finally, the following diagram shows a two layer cluster with a Fanout of 2.
 
-<img alt="Two layer cluster with a Fanout of 2" src="img/data-plane.svg" class="center"/>
+<img alt="Two layer cluster with a Fanout of 2" src=".gitbook/assets/data-plane.svg" class="center"/>
 
 #### Configuration Values
 
@@ -87,4 +87,4 @@ in a neighborhood in the upper layer, we'd need a big network failure in the upp
 layers to end up with incomplete data.
 
 <img alt="Inner workings of a neighborhood"
-src="img/data-plane-neighborhood.svg" class="center"/>
+src=".gitbook/assets/data-plane-neighborhood.svg" class="center"/>

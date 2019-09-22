@@ -67,7 +67,7 @@ PoH stream with possible forks over time.  L1, L2, etc. are leader slots, and
 represent ticks only, and time flows downwards in the diagram.
 
 
-<img alt="Fork generation" src="img/fork-generation.svg" class="center"/>
+<img alt="Fork generation" src=".gitbook/assets/fork-generation.svg" class="center"/>
 
 Note that an `E` appearing on 2 forks at the same slot is a slashable
 condition, so a validator observing `E3` and `E3'` can slash L3 and safely

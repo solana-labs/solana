@@ -36,7 +36,7 @@ We unwrap the many abstraction layers and build a single pipeline that can
 toggle leader mode on whenever the validator's ID shows up in the leader
 schedule.
 
-<img alt="Validator block diagram" src="img/validator-proposal.svg" class="center"/>
+<img alt="Validator block diagram" src=".gitbook/assets/validator-proposal.svg" class="center"/>
 
 ## Notable changes
 

@@ -21,10 +21,10 @@ The first factor is a function of protocol parameters only (i.e. independent of 
 
 At any given point in time, a specific validator's interest rate can be determined based on the porportion of circulating supply that is staked by the network and the validator's uptime/activity in the previous epoch. For example, consider a hypothetical instance of the network with an initial circulating token supply of 250MM tokens with an additional 250MM vesting over 3 years. Additionally an inflation rate is specified at network launch of 7.5%, and a disinflationary schedule of 20% decrease in inflation rate per year (the actual rates to be implemented are to be worked out during the testnet experimentation phase of mainnet launch). With these broad assumptions, the 10-year inflation rate (adjusted daily for this example) is shown in **Figure 2**, while the total circulating token supply is illustrated in **Figure 3**. Neglected in this toy-model is the inflation supression due to the portion of each transaction fee that is to be destroyed.
 
-<p style="text-align:center;"><img src="img/p_ex_schedule.png" alt="drawing" width="800"/></p>
+<p style="text-align:center;"><img src=".gitbook/assets/p_ex_schedule.png" alt="drawing" width="800"/></p>
 **Figure 2:** In this example schedule, the annual inflation rate [%] reduces at around 20% per year, until it reaches the long-term, fixed, 1.5% rate.
 
-<p style="text-align:center;"><img src="img/p_ex_supply.png" alt="drawing" width="800"/></p>
+<p style="text-align:center;"><img src=".gitbook/assets/p_ex_supply.png" alt="drawing" width="800"/></p>
 **Figure 3:** The total token supply over a 10-year period, based on an initial 250MM tokens with the disinflationary inflation schedule as shown in **Figure 2**
 
 Over time, the interest rate, at a fixed network staked percentage, will reduce concordant with network inflation. Validation-client interest rates are designed to be higher in the early days of the network to incentivize participation and jumpstart the network economy. As previously mentioned, the inflation rate is expected to stabalize near 1-2% which also results in a fixed, long-term, interest rate to be provided to validator-clients. This value does not represent the total interest available to validator-clients as transaction fees for state-validation and ledger storage replication (PoReps) are not accounted for here. 
@@ -33,7 +33,7 @@ Given these example parameters, annualized validator-specific interest rates can
 
 <!-- ![== Validation Client Interest Rates Figure ==](validation_client_interest_rates.png =250x) -->
 
-<p style="text-align:center;"><img src="img/p_ex_interest.png" alt="drawing" width="800"/></p>
+<p style="text-align:center;"><img src=".gitbook/assets/p_ex_interest.png" alt="drawing" width="800"/></p>
 
 **Figure 4:** Shown here are example validator interest rates over time, neglecting transaction fees, segmented by fraction of total circulating supply bonded as stake.
 

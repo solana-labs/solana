@@ -30,7 +30,7 @@ An active fork is as a sequence of checkpoints that has a length at least one
 longer than the rollback depth. The shortest fork will have a length exactly
 one longer than the rollback depth.  For example:
 
-<img alt="Forks" src="img/forks.svg" class="center"/>
+<img alt="Forks" src=".gitbook/assets/forks.svg" class="center"/>
 
 The following sequences are *active forks*:
 
@@ -50,14 +50,14 @@ can into the root.
 Starting from the example above, wth a rollback depth of 2, consider a vote on
 5 versus a vote on 6. First, a vote on 5:
 
-<img alt="Forks after pruning" src="img/forks-pruned.svg" class="center"/>
+<img alt="Forks after pruning" src=".gitbook/assets/forks-pruned.svg" class="center"/>
 
 The new root is 2, and any active forks that are not descendants from 2 are
 pruned.
 
 Alternatively, a vote on 6:
 
-<img alt="Forks" src="img/forks-pruned2.svg" class="center"/>
+<img alt="Forks" src=".gitbook/assets/forks-pruned2.svg" class="center"/>
 
 The tree remains with a root of 1, since the active fork starting at 6 is only
 2 checkpoints from the root.

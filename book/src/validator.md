@@ -1,6 +1,6 @@
 # Anatomy of a Validator
 
-<img alt="Validator block diagrams" src="img/validator.svg" class="center"/>
+<img alt="Validator block diagrams" src=".gitbook/assets/validator.svg" class="center"/>
 
 ## Pipelining
 

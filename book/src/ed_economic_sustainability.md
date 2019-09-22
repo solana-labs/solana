@@ -7,7 +7,7 @@ The dominant remittances from the Solana mining pool are validator and replicato
 The Replicator rewards are to be delivered to replicators as a portion of the network inflation after successful PoRep validation. The per-PoRep reward amount is determined as a function of the total network storage redundancy at the time of the PoRep validation and the network goal redundancy. This function is likely to take the form of a discount from a base reward to be delivered when the network has achieved and maintained its goal redundancy. An example of such a reward function is shown in **Figure 3**
 
 <!-- ![image alt text](porep_reward.png) -->
-<p style="text-align:center;"><img src="img/porep_reward.png" alt="==PoRep Reward Curve ==" width="800"/></p>
+<p style="text-align:center;"><img src=".gitbook/assets/porep_reward.png" alt="==PoRep Reward Curve ==" width="800"/></p>
 
 **Figure 3**: Example PoRep reward design as a function of global network storage redundancy.
 

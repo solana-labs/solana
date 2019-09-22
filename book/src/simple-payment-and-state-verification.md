@@ -68,7 +68,7 @@ transaction to the required set of validator votes.
 An Entry-Merkle is a Merkle Root including all transactions in the entry, sorted
 by signature.
 
-<img alt="Block Merkle Diagram" src="img/spv-block-merkle.svg" class="center"/>
+<img alt="Block Merkle Diagram" src=".gitbook/assets/spv-block-merkle.svg" class="center"/>
 
 A Block-Merkle is a Merkle root of all the Entry-Merkles sequenced in the block.
 Transaction status is necessary for the receipt because the state receipt is
@@ -95,7 +95,7 @@ state receipt would point to the same value for A or B.
 The Bank-Merkle is computed from the Merkle Tree of the new state changes, along
 with the Previous Bank-Merkle, and the Block-Merkle.
 
-<img alt="Bank Merkle Diagram" src="img/spv-bank-merkle.svg" class="center"/>
+<img alt="Bank Merkle Diagram" src=".gitbook/assets/spv-bank-merkle.svg" class="center"/>
 
 A state receipt contains only the state changes occurring in the block. A direct
 Merkle Path to the current Bank-Merkle guarantees the state value at that bank

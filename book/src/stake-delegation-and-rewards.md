@@ -199,7 +199,7 @@ stake.
 
 ## Example Callflow
 
-<img alt="Passive Staking Callflow" src="img/passive-staking-callflow.svg" class="center"/>
+<img alt="Passive Staking Callflow" src=".gitbook/assets/passive-staking-callflow.svg" class="center"/>
 
 ## Staking Rewards
 

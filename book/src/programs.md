@@ -10,7 +10,7 @@ transaction are discarded.
 
 ## Deploying Programs to a Cluster
 
-<img alt="SDK tools" src="img/sdk-tools.svg" class="center"/>
+<img alt="SDK tools" src=".gitbook/assets/sdk-tools.svg" class="center"/>
 
 As shown in the diagram above a client creates a program and compiles it to an
 ELF shared object containing BPF bytecode and sends it to the Solana cluster.

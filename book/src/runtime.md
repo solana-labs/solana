@@ -34,7 +34,7 @@ memory is committed.
 The TVU runtime ensures that PoH verification occurs before the runtime
 processes any transactions.
 
-<img alt="Runtime pipeline" src="img/runtime.svg" class="center"/>
+<img alt="Runtime pipeline" src=".gitbook/assets/runtime.svg" class="center"/>
 
 At the *execute* stage, the loaded accounts have no data dependencies, so all the
 programs can be executed in parallel.

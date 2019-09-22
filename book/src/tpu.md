@@ -1,3 +1,3 @@
 # The Transaction Processing Unit
 
-<img alt="TPU Block Diagram" src="img/tpu.svg" class="center"/>
+<img alt="TPU Block Diagram" src=".gitbook/assets/tpu.svg" class="center"/>
