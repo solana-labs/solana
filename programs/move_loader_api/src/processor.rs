@@ -7,7 +7,7 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount, instruction::InstructionError, loader_instruction::LoaderInstruction,
-    pubkey::Pubkey, sysvar::rent
+    pubkey::Pubkey, sysvar::rent,
 };
 use types::{
     account_address::AccountAddress,
