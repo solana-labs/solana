@@ -1,6 +1,6 @@
 [package]
 name = "solana-vote-api"
-version = "0.19.0-pre0"
+version = "0.20.0"
 description = "Solana Vote program API"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -15,9 +15,9 @@ num-derive = "0.2"
 num-traits = "0.2"
 serde = "1.0.101"
 serde_derive = "1.0.101"
-solana-logger = { path = "../../logger", version = "0.19.0-pre0" }
-solana-metrics = { path = "../../metrics", version = "0.19.0-pre0" }
-solana-sdk = { path = "../../sdk", version = "0.19.0-pre0" }
+solana-logger = { path = "../../logger", version = "0.20.0" }
+solana-metrics = { path = "../../metrics", version = "0.20.0" }
+solana-sdk = { path = "../../sdk", version = "0.20.0" }
 
 [lib]
 crate-type = ["lib"]

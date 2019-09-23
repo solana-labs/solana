@@ -1,7 +1,7 @@
 [package]
 name = "solana-core"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.19.0-pre0"
+version = "0.20.0"
 documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"
 readme = "../README.md"
@@ -48,25 +48,25 @@ rayon = "1.2.0"
 serde = "1.0.101"
 serde_derive = "1.0.101"
 serde_json = "1.0.40"
-solana-budget-api = { path = "../programs/budget_api", version = "0.19.0-pre0" }
-solana-budget-program = { path = "../programs/budget_program", version = "0.19.0-pre0" }
-solana-chacha-sys = { path = "../chacha-sys", version = "0.19.0-pre0" }
-solana-client = { path = "../client", version = "0.19.0-pre0" }
-solana-drone = { path = "../drone", version = "0.19.0-pre0" }
+solana-budget-api = { path = "../programs/budget_api", version = "0.20.0" }
+solana-budget-program = { path = "../programs/budget_program", version = "0.20.0" }
+solana-chacha-sys = { path = "../chacha-sys", version = "0.20.0" }
+solana-client = { path = "../client", version = "0.20.0" }
+solana-drone = { path = "../drone", version = "0.20.0" }
 solana-ed25519-dalek = "0.2.0"
-solana-kvstore = { path = "../kvstore", version = "0.19.0-pre0", optional = true }
-solana-logger = { path = "../logger", version = "0.19.0-pre0" }
-solana-merkle-tree = { path = "../merkle-tree", version = "0.19.0-pre0" }
-solana-metrics = { path = "../metrics", version = "0.19.0-pre0" }
-solana-measure = { path = "../measure", version = "0.19.0-pre0" }
-solana-netutil = { path = "../netutil", version = "0.19.0-pre0" }
-solana-runtime = { path = "../runtime", version = "0.19.0-pre0" }
-solana-sdk = { path = "../sdk", version = "0.19.0-pre0" }
-solana-stake-api = { path = "../programs/stake_api", version = "0.19.0-pre0" }
-solana-storage-api = { path = "../programs/storage_api", version = "0.19.0-pre0" }
-solana-storage-program = { path = "../programs/storage_program", version = "0.19.0-pre0" }
-solana-vote-api = { path = "../programs/vote_api", version = "0.19.0-pre0" }
-solana-vote-signer = { path = "../vote-signer", version = "0.19.0-pre0" }
+solana-kvstore = { path = "../kvstore", version = "0.20.0", optional = true }
+solana-logger = { path = "../logger", version = "0.20.0" }
+solana-merkle-tree = { path = "../merkle-tree", version = "0.20.0" }
+solana-metrics = { path = "../metrics", version = "0.20.0" }
+solana-measure = { path = "../measure", version = "0.20.0" }
+solana-netutil = { path = "../netutil", version = "0.20.0" }
+solana-runtime = { path = "../runtime", version = "0.20.0" }
+solana-sdk = { path = "../sdk", version = "0.20.0" }
+solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
+solana-storage-api = { path = "../programs/storage_api", version = "0.20.0" }
+solana-storage-program = { path = "../programs/storage_program", version = "0.20.0" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.20.0" }
+solana-vote-signer = { path = "../vote-signer", version = "0.20.0" }
 symlink = "0.1.0"
 sys-info = "0.5.8"
 tar = "0.4.26"
@@ -76,7 +76,7 @@ tokio-codec = "0.1"
 tokio-fs = "0.1"
 tokio-io = "0.1"
 untrusted = "0.7.0"
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.19.0-pre0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.20.0" }
 
 # reed-solomon-erasure's simd_c feature fails to build for x86_64-pc-windows-msvc, use pure-rust
 [target.'cfg(windows)'.dependencies]
