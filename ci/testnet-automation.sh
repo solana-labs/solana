@@ -24,6 +24,11 @@ source ci/upload-ci-artifact.sh
 
 TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TESTNET_ZONES},"
 
+maybeClientOptions=
+if [[ -n $CLIENT_OPTIONS ]] ; then
+  maybeClientOptions="-c"
+fi
+
 launchTestnet() {
   declare nodeCount=$1
   echo --- setup "$nodeCount" node test
@@ -42,9 +47,9 @@ launchTestnet() {
 
   echo --- start "$nodeCount" node test
   if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
-    net/net.sh start -f "cuda" -o noValidatorSanity -t "$CHANNEL" $CLIENT_OPTIONS
+    net/net.sh start -f "cuda" -o noValidatorSanity -t "$CHANNEL" -c bench-tps=1="--tx_count 50000 --thread-batch-sleep-ms 1000"
   else
-    net/net.sh start -f "cuda" -o noValidatorSanity -T solana-release*.tar.bz2 $CLIENT_OPTIONS
+    net/net.sh start -f "cuda" -o noValidatorSanity -T solana-release*.tar.bz2 -c bench-tps=1="--tx_count 50000 --thread-batch-sleep-ms 1000"
   fi
 
   echo --- wait "$ITERATION_WAIT" seconds to complete test
