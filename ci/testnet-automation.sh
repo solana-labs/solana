@@ -16,6 +16,7 @@ source ci/upload-ci-artifact.sh
 [[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
   LEADER_CPU_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
 [[ -n $CLIENT_COUNT ]] || CLIENT_COUNT=2
+[[ -n $CLIENT_OPTIONS ]] || CLIENT_OPTIONS=""
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
 [[ -n $CHANNEL ]] || CHANNEL=beta
@@ -39,9 +40,9 @@ launchTestnet() {
 
   echo --- start "$nodeCount" node test
   if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
-    net/net.sh start -f "cuda" -o noValidatorSanity -t "$CHANNEL"
+    net/net.sh start -f "cuda" -o noValidatorSanity -t "$CHANNEL" "$CLIENT_OPTIONS"
   else
-    net/net.sh start -f "cuda" -o noValidatorSanity -T solana-release*.tar.bz2
+    net/net.sh start -f "cuda" -o noValidatorSanity -T solana-release*.tar.bz2 "$CLIENT_OPTIONS"
   fi
 
   echo --- wait "$ITERATION_WAIT" seconds to complete test
