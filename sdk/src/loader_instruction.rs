@@ -16,6 +16,7 @@ pub enum LoaderInstruction {
     /// bit of the Account
     ///
     /// * key[0] - the account to prepare for execution
+    /// * key[1] - rent sysvar account
     ///
     /// The transaction must be signed by key[0]
     Finalize,
