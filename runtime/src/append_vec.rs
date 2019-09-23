@@ -177,7 +177,11 @@ impl AppendVec {
             .open(&path)?;
 
         let map = unsafe { MmapMut::map_mut(&data)? };
+        let file_len = map.len();
         self.map = map;
+        self.file_size = file_len as u64;
+        self.append_offset = Mutex::new(file_len);
+        self.current_len = AtomicUsize::new(file_len);
         Ok(())
     }
 
