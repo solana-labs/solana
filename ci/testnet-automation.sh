@@ -42,9 +42,9 @@ launchTestnet() {
 
   echo --- start "$nodeCount" node test
   if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
-    net/net.sh start -f "cuda" -o noValidatorSanity -t "$CHANNEL" "$CLIENT_OPTIONS"
+    net/net.sh start -f "cuda" -o noValidatorSanity -t "$CHANNEL" $CLIENT_OPTIONS
   else
-    net/net.sh start -f "cuda" -o noValidatorSanity -T solana-release*.tar.bz2 "$CLIENT_OPTIONS"
+    net/net.sh start -f "cuda" -o noValidatorSanity -T solana-release*.tar.bz2 $CLIENT_OPTIONS
   fi
 
   echo --- wait "$ITERATION_WAIT" seconds to complete test
