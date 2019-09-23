@@ -575,6 +575,11 @@ impl ReplayStage {
                 is_votable
             })
             .filter(|b| {
+                let is_recent = tower.is_recent(b.slot());
+                trace!("tower is recent: {} {}", b.slot(), is_recent);
+                is_recent
+            })
+            .filter(|b| {
                 let has_voted = tower.has_voted(b.slot());
                 trace!("bank has_voted: {} {}", b.slot(), has_voted);
                 !has_voted
