@@ -586,20 +586,17 @@ impl Shredder {
                 .iter()
                 .enumerate()
                 .for_each(|(position, was_present)| {
-                    if position < num_data {
-                        if !was_present {
-                            let drain_this = position - num_drained;
-                            let shred_buf = shred_bufs.remove(drain_this);
-                            num_drained += 1;
-                            if let Ok(shred) = Shred::new_from_serialized_shred(shred_buf) {
-                                let shred_index = shred.index() as usize;
-                                // Valid shred must be in the same slot as the original shreds
-                                if shred.slot() == slot {
-                                    // A valid data shred must be indexed between first_index and first+num_data index
-                                    if (first_index..first_index + num_data).contains(&shred_index)
-                                    {
-                                        recovered_data.push(shred)
-                                    }
+                    if !*was_present && position < num_data {
+                        let drain_this = position - num_drained;
+                        let shred_buf = shred_bufs.remove(drain_this);
+                        num_drained += 1;
+                        if let Ok(shred) = Shred::new_from_serialized_shred(shred_buf) {
+                            let shred_index = shred.index() as usize;
+                            // Valid shred must be in the same slot as the original shreds
+                            if shred.slot() == slot {
+                                // A valid data shred must be indexed between first_index and first+num_data index
+                                if (first_index..first_index + num_data).contains(&shred_index) {
+                                    recovered_data.push(shred)
                                 }
                             }
                         }
