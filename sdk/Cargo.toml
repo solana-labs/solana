@@ -1,6 +1,6 @@
 [package]
 name = "solana-sdk"
-version = "0.19.0-pre0"
+version = "0.20.0"
 description = "Solana SDK"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -48,6 +48,6 @@ serde_derive = "1.0.101"
 serde_json = { version = "1.0.40", optional = true }
 sha2 = "0.8.0"
 solana-ed25519-dalek = { version = "0.2.0", optional = true }
-solana-logger = { path = "../logger", version = "0.19.0-pre0", optional = true }
+solana-logger = { path = "../logger", version = "0.20.0", optional = true }
 untrusted = { version = "0.7.0", optional = true }
-solana-crate-features = { path = "../crate-features", version = "0.19.0-pre0", optional = true }
+solana-crate-features = { path = "../crate-features", version = "0.20.0", optional = true }
