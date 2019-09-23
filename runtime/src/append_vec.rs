@@ -1,4 +1,3 @@
-use bincode::{deserialize_from, serialize_into};
 use lazy_static::lazy_static;
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
@@ -83,6 +82,18 @@ pub struct AppendVec {
 impl Drop for AppendVec {
     fn drop(&mut self) {
         let _ignored = remove_file(&self.path);
+    }
+}
+
+impl Default for AppendVec {
+    fn default() -> Self {
+        Self {
+            path: PathBuf::from(String::default()),
+            map: MmapMut::map_anon(1).unwrap(),
+            append_offset: Mutex::new(0),
+            current_len: AtomicUsize::new(0),
+            file_size: 0,
+        }
     }
 }
 
@@ -379,48 +390,6 @@ pub mod test_utils {
     }
 }
 
-struct AppendVecVisitor;
-
-impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
-    type Value = AppendVec;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Expecting AppendVec")
-    }
-
-    #[allow(clippy::mutex_atomic)]
-    // Note this does not initialize a valid Mmap in the AppendVec, needs to be done
-    // externally
-    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        use serde::de::Error;
-        let mut rd = Cursor::new(&data[..]);
-        let current_len: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
-
-        let map = MmapMut::map_anon(1).map_err(|e| Error::custom(e.to_string()))?;
-        Ok(AppendVec {
-            path: PathBuf::from(String::default()),
-            map,
-            append_offset: Mutex::new(offset),
-            current_len: AtomicUsize::new(current_len as usize),
-            file_size,
-        })
-    }
-}
-
-impl<'de> Deserialize<'de> for AppendVec {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_bytes(AppendVecVisitor)
-    }
-}
-
 #[cfg(test)]
 pub mod tests {
     use super::test_utils::*;
@@ -495,44 +464,6 @@ pub mod tests {
             "sequential read time: {} ms",
             duration_as_ms(&now.elapsed()),
         );
-    }
-
-    #[test]
-    fn test_append_vec_serialize() {
-        let path = get_append_vec_path("test_append_serialize");
-        let av: AppendVec = AppendVec::new(&Path::new(&path.path).join("0"), true, 1024 * 1024);
-        let account1 = create_test_account(1);
-        let index1 = av.append_account_test(&account1).unwrap();
-        assert_eq!(index1, 0);
-        assert_eq!(av.get_account_test(index1).unwrap(), account1);
-
-        let account2 = create_test_account(2);
-        let index2 = av.append_account_test(&account2).unwrap();
-        assert_eq!(av.get_account_test(index2).unwrap(), account2);
-        assert_eq!(av.get_account_test(index1).unwrap(), account1);
-
-        let append_vec_path = &av.path;
-
-        // Serialize the AppendVec
-        let mut writer = Cursor::new(vec![]);
-        serialize_into(&mut writer, &av).unwrap();
-
-        // Deserialize the AppendVec
-        let buf = writer.into_inner();
-        let mut reader = Cursor::new(&buf[..]);
-        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
-
-        // Set the AppendVec path
-        dav.set_file(append_vec_path).unwrap();
-        assert_eq!(dav.get_account_test(index2).unwrap(), account2);
-        assert_eq!(dav.get_account_test(index1).unwrap(), account1);
-        drop(dav);
-
-        // Dropping dav above blows away underlying file's directory entry, so
-        // trying to set the file will fail
-        let mut reader = Cursor::new(&buf[..]);
-        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
-        assert!(dav.set_file(append_vec_path).is_err());
     }
 
     #[test]
