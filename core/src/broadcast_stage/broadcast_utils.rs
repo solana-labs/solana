@@ -22,24 +22,24 @@ const RECEIVE_ENTRY_COUNT_THRESHOLD: usize = 8;
 
 pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result<ReceiveResults> {
     let timer = Duration::new(1, 0);
-    let (mut current_bank, (entry, mut last_tick)) = receiver.recv_timeout(timer)?;
+    let (mut bank, (entry, mut last_tick)) = receiver.recv_timeout(timer)?;
     let recv_start = Instant::now();
 
     let mut entries = vec![entry];
-    let mut slot = current_bank.slot();
-    let mut max_tick_height = current_bank.max_tick_height();
+    let mut slot = bank.slot();
+    let mut max_tick_height = bank.max_tick_height();
 
     assert!(last_tick <= max_tick_height);
 
     if last_tick != max_tick_height {
-        while let Ok((bank, (entry, tick_height))) = receiver.try_recv() {
+        while let Ok((try_bank, (entry, tick_height))) = receiver.try_recv() {
             // If the bank changed, that implies the previous slot was interrupted and we do not have to
             // broadcast its entries.
-            if bank.slot() != slot {
+            if try_bank.slot() != slot {
                 entries.clear();
+                bank = try_bank;
                 slot = bank.slot();
                 max_tick_height = bank.max_tick_height();
-                current_bank = bank;
             }
             last_tick = tick_height;
             entries.push(entry);
@@ -59,7 +59,7 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
     Ok(ReceiveResults {
         entries,
         time_elapsed,
-        bank: current_bank,
+        bank,
         last_tick,
     })
 }
