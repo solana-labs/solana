@@ -358,7 +358,9 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::{account::Account, sysvar::stake_history::StakeHistory};
+    use solana_sdk::{
+        account::Account, rent_calculator::RentCalculator, sysvar::stake_history::StakeHistory,
+    };
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
         let mut accounts: Vec<_> = instruction
@@ -373,6 +375,8 @@ mod tests {
                     sysvar::stake_history::create_account(1, &StakeHistory::default())
                 } else if config::check_id(&meta.pubkey) {
                     config::create_account(1, &config::Config::default())
+                } else if sysvar::rent::check_id(&meta.pubkey) {
+                    sysvar::rent::create_account(1, &RentCalculator::default())
                 } else {
                     Account::default()
                 }

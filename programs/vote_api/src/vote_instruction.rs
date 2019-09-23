@@ -219,6 +219,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use solana_sdk::account::Account;
+    use solana_sdk::rent_calculator::RentCalculator;
 
     // these are for 100% coverage in this file
     #[test]
@@ -238,6 +239,8 @@ mod tests {
                     sysvar::clock::new_account(1, 0, 0, 0, 0)
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
                     sysvar::slot_hashes::create_account(1, &[])
+                } else if sysvar::rent::check_id(&meta.pubkey) {
+                    sysvar::rent::create_account(1, &RentCalculator::default())
                 } else {
                     Account::default()
                 }
