@@ -593,11 +593,12 @@ impl Shredder {
 
             let session = Session::new(num_data, num_coding).unwrap();
 
-            let mut blocks: Vec<&mut [u8]> = shred_bufs
+            let mut blocks: Vec<(&mut [u8], bool)> = shred_bufs
                 .iter_mut()
                 .map(|x| x[coding_block_offset..].as_mut())
+                .zip(present.clone())
                 .collect();
-            session.decode_blocks(&mut blocks, &present)?;
+            session.decode_blocks(&mut blocks)?;
 
             let mut num_drained = 0;
             present
