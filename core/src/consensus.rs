@@ -253,6 +253,16 @@ impl Tower {
         sum
     }
 
+    // a slot is not recent if its older than the oldest lockout we have
+    pub fn is_recent(&self, slot: u64) -> bool {
+        if let Some(oldest_vote) = self.lockouts.votes.front() {
+            if slot < oldest_vote.slot {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn has_voted(&self, slot: u64) -> bool {
         for vote in &self.lockouts.votes {
             if vote.slot == slot {
@@ -588,6 +598,19 @@ mod test {
         tower.record_vote(0, Hash::default());
         assert!(tower.has_voted(0));
         assert!(!tower.has_voted(1));
+    }
+
+    #[test]
+    fn test_check_recent_slot() {
+        let mut tower = Tower::new_for_tests(0, 0.67);
+        assert!(tower.is_recent(0));
+        assert!(tower.is_recent(32));
+        for i in 0..64 {
+            tower.record_vote(i, Hash::default());
+        }
+        assert!(!tower.is_recent(0));
+        assert!(!tower.is_recent(32));
+        assert!(tower.is_recent(65));
     }
 
     #[test]
