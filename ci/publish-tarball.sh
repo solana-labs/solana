@@ -84,8 +84,8 @@ echo --- Creating tarball
     mkdir -p solana-release/target
     cp -a target/perf-libs solana-release/target/perf-libs
     mkdir -p solana-release/bin/_
-    ln -s -T ../deps solana-release/bin/_/deps
     cp solana-release/bin/solana-validator-cuda solana-release/bin/_/solana-validator-cuda
+    cp -a solana-release/bin/deps solana-release/bin/_/deps
     cat > solana-release/bin/solana-validator-cuda <<'EOF'
 #!/usr/bin/env bash
 set -e
