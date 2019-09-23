@@ -28,6 +28,8 @@ launchTestnet() {
   declare nodeCount=$1
   echo --- setup "$nodeCount" node test
 
+  set -x
+
   # shellcheck disable=SC2068
   net/gce.sh create \
     -d pd-ssd \
@@ -47,8 +49,6 @@ launchTestnet() {
 
   echo --- wait "$ITERATION_WAIT" seconds to complete test
   sleep "$ITERATION_WAIT"
-
-  set -x
 
   declare q_mean_tps='
     SELECT round(mean("sum_count")) AS "mean_tps" FROM (
