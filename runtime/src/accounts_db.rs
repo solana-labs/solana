@@ -19,7 +19,7 @@
 //! commit for each fork entry would be indexed.
 
 use crate::accounts_index::{AccountsIndex, Fork};
-use crate::append_vec::{AppendVec, StorageMeta, StoredAccount};
+use crate::append_vec::{AppendVec, StoredAccount, StoredMeta};
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use fs_extra::dir::CopyOptions;
@@ -723,7 +723,7 @@ impl AccountsDB {
     pub fn hash_stored_account(fork: Fork, account: &StoredAccount) -> Hash {
         Self::hash_account_data(
             fork,
-            account.balance.lamports,
+            account.account_meta.lamports,
             account.data,
             &account.meta.pubkey,
         )
@@ -756,7 +756,7 @@ impl AccountsDB {
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
     ) -> Vec<AccountInfo> {
-        let with_meta: Vec<(StorageMeta, &Account)> = accounts
+        let with_meta: Vec<(StoredMeta, &Account)> = accounts
             .iter()
             .map(|(pubkey, account)| {
                 let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
@@ -765,7 +765,7 @@ impl AccountsDB {
                 } else {
                     account.data.len() as u64
                 };
-                let meta = StorageMeta {
+                let meta = StoredMeta {
                     write_version,
                     pubkey: **pubkey,
                     data_len,
@@ -1018,7 +1018,7 @@ impl AccountsDB {
                         let account_info = AccountInfo {
                             id,
                             offset: stored_account.offset,
-                            lamports: stored_account.balance.lamports,
+                            lamports: stored_account.account_meta.lamports,
                         };
                         accum.insert(
                             stored_account.meta.pubkey,
@@ -1574,8 +1574,8 @@ pub mod tests {
         let fork_id = 42;
         let num_threads = 2;
 
-        let min_file_bytes = std::mem::size_of::<StorageMeta>()
-            + std::mem::size_of::<crate::append_vec::AccountBalance>();
+        let min_file_bytes = std::mem::size_of::<StoredMeta>()
+            + std::mem::size_of::<crate::append_vec::AccountMeta>();
 
         let db = Arc::new(AccountsDB::new_sized(None, min_file_bytes as u64));
 
