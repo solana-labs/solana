@@ -32,19 +32,19 @@ impl PartialOrd for SlotSnapshotPaths {
 }
 
 impl SlotSnapshotPaths {
-    fn hardlink_snapshot_directory<P: AsRef<Path>>(&self, snapshot_hardlink_dir: P) -> Result<()> {
+    fn copy_snapshot_directory<P: AsRef<Path>>(&self, snapshot_hardlink_dir: P) -> Result<()> {
         // Create a new directory in snapshot_hardlink_dir
         let new_slot_hardlink_dir = snapshot_hardlink_dir.as_ref().join(self.slot.to_string());
         let _ = fs::remove_dir_all(&new_slot_hardlink_dir);
         fs::create_dir_all(&new_slot_hardlink_dir)?;
 
-        // Hardlink the snapshot
-        fs::hard_link(
+        // Copy the snapshot
+        fs::copy(
             &self.snapshot_file_path,
             &new_slot_hardlink_dir.join(self.slot.to_string()),
         )?;
-        // Hardlink the status cache
-        fs::hard_link(
+        // Copy the status cache
+        fs::copy(
             &self.snapshot_status_cache_path,
             &new_slot_hardlink_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
         )?;
@@ -79,7 +79,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     // Any errors from this point on will cause the above SnapshotPackage to drop, clearing
     // any temporary state created for the SnapshotPackage (like the snapshot_hard_links_dir)
     for files in snapshot_files {
-        files.hardlink_snapshot_directory(snapshot_hard_links_dir.path())?;
+        files.copy_snapshot_directory(snapshot_hard_links_dir.path())?;
     }
 
     let package = SnapshotPackage::new(
