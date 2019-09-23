@@ -59,6 +59,20 @@ pub fn from_keyed_account(account: &KeyedAccount) -> Result<Rent, InstructionErr
     Rent::from_account(account.account).ok_or(InstructionError::InvalidArgument)
 }
 
+pub fn verify_rent_exemption(
+    account: &KeyedAccount,
+    rent_sysvar_account: &KeyedAccount,
+) -> Result<(), InstructionError> {
+    if !from_keyed_account(rent_sysvar_account)?
+        .rent_calculator
+        .is_exempt(account.account.lamports, account.account.data.len())
+    {
+        Err(InstructionError::InsufficientFunds)
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

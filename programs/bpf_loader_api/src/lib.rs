@@ -20,7 +20,7 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::rent_utils;
+use solana_sdk::sysvar::rent;
 use std::convert::TryFrom;
 use std::io::prelude::*;
 use std::io::Error;
@@ -118,7 +118,7 @@ pub fn process_instruction(
                     return Err(InstructionError::GenericError);
                 }
 
-                rent_utils::verify_rent_exemption(&keyed_accounts[0], &keyed_accounts[1])?;
+                rent::verify_rent_exemption(&keyed_accounts[0], &keyed_accounts[1])?;
 
                 keyed_accounts[0].account.executable = true;
                 info!(
