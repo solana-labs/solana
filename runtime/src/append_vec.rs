@@ -2,14 +2,16 @@ use bincode::{deserialize_from, serialize_into, serialized_size};
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, clock::Epoch, hash::Hash, pubkey::Pubkey};
-use std::fmt;
-use std::fs::{create_dir_all, remove_file, OpenOptions};
-use std::io;
-use std::io::{Cursor, Seek, SeekFrom, Write};
-use std::mem;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::{
+    fmt,
+    fs::{create_dir_all, remove_file, OpenOptions},
+    io,
+    io::{Cursor, Seek, SeekFrom, Write},
+    mem,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicUsize, Ordering},
+    sync::Mutex,
+};
 
 //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
 //crash on some architectures.
@@ -19,9 +21,9 @@ macro_rules! align_up {
     };
 }
 
-/// StorageMeta contains enough context to recover the index from storage itself
+/// Meta contains enough context to recover the index from storage itself
 #[derive(Clone, PartialEq, Debug)]
-pub struct StorageMeta {
+pub struct StoredMeta {
     /// global write version
     pub write_version: u64,
     /// key for the account
@@ -30,7 +32,7 @@ pub struct StorageMeta {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct AccountBalance {
+pub struct AccountMeta {
     /// lamports in the account
     pub lamports: u64,
     /// the program that owns this account. If executable, the program that loads this account.
@@ -45,9 +47,9 @@ pub struct AccountBalance {
 /// The Account is stored separately from its data, so getting the actual account requires a clone
 #[derive(PartialEq, Debug)]
 pub struct StoredAccount<'a> {
-    pub meta: &'a StorageMeta,
+    pub meta: &'a StoredMeta,
     /// account data
-    pub balance: &'a AccountBalance,
+    pub account_meta: &'a AccountMeta,
     pub data: &'a [u8],
     pub offset: usize,
     pub hash: &'a Hash,
@@ -56,10 +58,10 @@ pub struct StoredAccount<'a> {
 impl<'a> StoredAccount<'a> {
     pub fn clone_account(&self) -> Account {
         Account {
-            lamports: self.balance.lamports,
-            owner: self.balance.owner,
-            executable: self.balance.executable,
-            rent_epoch: self.balance.rent_epoch,
+            lamports: self.account_meta.lamports,
+            owner: self.account_meta.owner,
+            executable: self.account_meta.executable,
+            rent_epoch: self.account_meta.rent_epoch,
             data: self.data.to_vec(),
             hash: *self.hash,
         }
@@ -243,14 +245,14 @@ impl AppendVec {
     }
 
     pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccount<'a>, usize)> {
-        let (meta, next): (&'a StorageMeta, _) = self.get_type(offset)?;
-        let (balance, next): (&'a AccountBalance, _) = self.get_type(next)?;
+        let (meta, next): (&'a StoredMeta, _) = self.get_type(offset)?;
+        let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
         let (hash, next): (&'a Hash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         Some((
             StoredAccount {
                 meta,
-                balance,
+                account_meta,
                 data,
                 offset,
                 hash,
@@ -258,10 +260,10 @@ impl AppendVec {
             next,
         ))
     }
-    pub fn get_account_test(&self, offset: usize) -> Option<(StorageMeta, Account)> {
-        let stored = self.get_account(offset)?;
-        let meta = stored.0.meta.clone();
-        Some((meta, stored.0.clone_account()))
+    pub fn get_account_test(&self, offset: usize) -> Option<(StoredMeta, Account)> {
+        let (stored_account, _) = self.get_account(offset)?;
+        let meta = stored_account.meta.clone();
+        Some((meta, stored_account.clone_account()))
     }
 
     pub fn get_path(&self) -> PathBuf {
@@ -280,26 +282,26 @@ impl AppendVec {
     #[allow(clippy::mutex_atomic)]
     pub fn append_accounts(
         &self,
-        accounts: &[(StorageMeta, &Account)],
+        accounts: &[(StoredMeta, &Account)],
         hashes: &[Hash],
     ) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
         let mut rv = vec![];
-        for ((storage_meta, account), hash) in accounts.iter().zip(hashes) {
-            let meta_ptr = storage_meta as *const StorageMeta;
-            let balance = AccountBalance {
+        for ((stored_meta, account), hash) in accounts.iter().zip(hashes) {
+            let meta_ptr = stored_meta as *const StoredMeta;
+            let account_meta = AccountMeta {
                 lamports: account.lamports,
                 owner: account.owner,
                 executable: account.executable,
                 rent_epoch: account.rent_epoch,
             };
-            let balance_ptr = &balance as *const AccountBalance;
-            let data_len = storage_meta.data_len as usize;
+            let account_meta_ptr = &account_meta as *const AccountMeta;
+            let data_len = stored_meta.data_len as usize;
             let data_ptr = account.data.as_ptr();
             let hash_ptr = hash.as_ref().as_ptr();
             let ptrs = [
-                (meta_ptr as *const u8, mem::size_of::<StorageMeta>()),
-                (balance_ptr as *const u8, mem::size_of::<AccountBalance>()),
+                (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
+                (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
                 (hash_ptr as *const u8, mem::size_of::<Hash>()),
                 (data_ptr, data_len),
             ];
@@ -314,7 +316,7 @@ impl AppendVec {
 
     pub fn append_account(
         &self,
-        storage_meta: StorageMeta,
+        storage_meta: StoredMeta,
         account: &Account,
         hash: Hash,
     ) -> Option<usize> {
@@ -322,14 +324,10 @@ impl AppendVec {
             .first()
             .cloned()
     }
-
-    pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
-        self.append_account(data.0.clone(), &data.1, Hash::default())
-    }
 }
 
 pub mod test_utils {
-    use super::StorageMeta;
+    use super::StoredMeta;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -363,16 +361,16 @@ pub mod test_utils {
         TempFile { path: buf }
     }
 
-    pub fn create_test_account(sample: usize) -> (StorageMeta, Account) {
+    pub fn create_test_account(sample: usize) -> (StoredMeta, Account) {
         let data_len = sample % 256;
         let mut account = Account::new(sample as u64, 0, &Pubkey::default());
         account.data = (0..data_len).map(|_| data_len as u8).collect();
-        let storage_meta = StorageMeta {
+        let stored_meta = StoredMeta {
             write_version: 0,
             pubkey: Pubkey::default(),
             data_len: data_len as u64,
         };
-        (storage_meta, account)
+        (stored_meta, account)
     }
 }
 
@@ -453,6 +451,12 @@ pub mod tests {
     use rand::{thread_rng, Rng};
     use solana_sdk::timing::duration_as_ms;
     use std::time::Instant;
+
+    impl AppendVec {
+        fn append_account_test(&self, data: &(StoredMeta, Account)) -> Option<usize> {
+            self.append_account(data.0.clone(), &data.1, Hash::default())
+        }
+    }
 
     #[test]
     fn test_append_vec_one() {
