@@ -41,7 +41,8 @@
 //!
 //!
 
-use reed_solomon_erasure::{ParallelParam, ReedSolomon};
+use reed_solomon_erasure::galois_8::Field;
+use reed_solomon_erasure::ReedSolomon;
 
 //TODO(sakridge) pick these values
 /// Number of data blobs
@@ -86,18 +87,17 @@ type Result<T> = std::result::Result<T, reed_solomon_erasure::Error>;
 /// Represents an erasure "session" with a particular configuration and number of data and coding
 /// blobs
 #[derive(Debug, Clone)]
-pub struct Session(ReedSolomon);
+pub struct Session(ReedSolomon<Field>);
 
 impl Session {
     pub fn new(data_count: usize, coding_count: usize) -> Result<Session> {
-        let rs = ReedSolomon::with_pparam(data_count, coding_count, ParallelParam::Disabled)?;
+        let rs = ReedSolomon::new(data_count, coding_count)?;
 
         Ok(Session(rs))
     }
 
     pub fn new_from_config(config: &ErasureConfig) -> Result<Session> {
-        let rs =
-            ReedSolomon::with_pparam(config.num_data, config.num_coding, ParallelParam::Disabled)?;
+        let rs = ReedSolomon::new(config.num_data, config.num_coding)?;
 
         Ok(Session(rs))
     }
@@ -114,8 +114,8 @@ impl Session {
     /// * `data` - array of data blocks to recover into
     /// * `coding` - array of coding blocks
     /// * `erasures` - list of indices in data where blocks should be recovered
-    pub fn decode_blocks(&self, blocks: &mut [&mut [u8]], present: &[bool]) -> Result<()> {
-        self.0.reconstruct(blocks, present)?;
+    pub fn decode_blocks(&self, blocks: &mut [(&mut [u8], bool)]) -> Result<()> {
+        self.0.reconstruct(blocks)?;
 
         Ok(())
     }
@@ -175,7 +175,7 @@ pub mod test {
         }
 
         let erasure: usize = 1;
-        let present = &mut [true; N_DATA + N_CODING];
+        let mut present = vec![true; N_DATA + N_CODING];
         present[erasure] = false;
         let erased = vs[erasure].clone();
 
@@ -186,10 +186,11 @@ pub mod test {
             .iter_mut()
             .chain(coding_blocks.iter_mut())
             .map(Vec::as_mut_slice)
+            .zip(present)
             .collect();
 
         session
-            .decode_blocks(blocks.as_mut_slice(), present)
+            .decode_blocks(blocks.as_mut_slice())
             .expect("decoding must succeed");
 
         trace!("test_coding: vs:");
