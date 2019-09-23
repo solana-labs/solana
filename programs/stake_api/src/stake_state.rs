@@ -680,9 +680,7 @@ pub fn create_account(
 mod tests {
     use super::*;
     use crate::id;
-    use solana_sdk::{
-        account::Account, pubkey::Pubkey, system_program,
-    };
+    use solana_sdk::{account::Account, pubkey::Pubkey, system_program};
     use solana_vote_api::vote_state;
 
     #[test]
@@ -1252,6 +1250,7 @@ mod tests {
         // lockup
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         let custodian = Pubkey::new_rand();
+<<<<<<< HEAD
         stake_keyed_account
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -1266,6 +1265,9 @@ mod tests {
             .lockup(0, &custodian)
 >>>>>>> move logic to rent_utils
             .unwrap();
+=======
+        stake_keyed_account.lockup(0, &custodian).unwrap();
+>>>>>>> fmt fix
 
         // signed keyed account and locked up, more than available should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
