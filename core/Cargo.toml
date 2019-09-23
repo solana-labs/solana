@@ -78,10 +78,10 @@ tokio-io = "0.1"
 untrusted = "0.7.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.20.0" }
 
-# reed-solomon-erasure's simd_c feature fails to build for x86_64-pc-windows-msvc, use pure-rust
-[target.'cfg(windows)'.dependencies]
+# reed-solomon-erasure's simd-accel feature fails to build for x86_64-pc-windows-msvc
+[target."cfg(windows)".dependencies]
 reed-solomon-erasure = "4.0"
-[target.'cfg(not(windows))'.dependencies]
+[target."cfg(not(windows))".dependencies]
 reed-solomon-erasure = { version = "4.0", features = ["simd-accel"] }
 
 [dependencies.rocksdb]
