@@ -122,12 +122,16 @@ impl SnapshotPackagerService {
         args.push(TAR_ACCOUNTS_DIR);
         args.push(TAR_SNAPSHOTS_DIR);
 
-        let status = std::process::Command::new("tar").args(&args).status()?;
+        let output = std::process::Command::new("tar").args(&args).output()?;
+        if !output.status.success() {
+            warn!("tar command failed with exit code: {}", output.status);
+            use std::str::from_utf8;
+            info!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
+            info!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
 
-        if !status.success() {
             return Err(Self::get_io_error(&format!(
                 "Error trying to generate snapshot archive: {}",
-                status
+                output.status
             )));
         }
 
