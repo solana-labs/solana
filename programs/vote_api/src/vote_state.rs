@@ -4,7 +4,6 @@ use crate::{id, vote_instruction::VoteError};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::rent_calculator::RentCalculator;
 use solana_sdk::sysvar::slot_hashes::SlotHash;
 use solana_sdk::{
     account::{Account, KeyedAccount},
@@ -469,7 +468,6 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::account_utils::State;
     use solana_sdk::hash::hash;
-    use solana_sdk::rent_calculator::RentCalculator;
 
     const MAX_RECENT_VOTES: usize = 16;
 

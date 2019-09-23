@@ -11,7 +11,6 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     instruction::InstructionError,
     pubkey::Pubkey,
-    rent_calculator::RentCalculator,
     sysvar::{
         self,
         stake_history::{StakeHistory, StakeHistoryEntry},
@@ -682,7 +681,7 @@ mod tests {
     use super::*;
     use crate::id;
     use solana_sdk::{
-        account::Account, pubkey::Pubkey, rent_calculator::RentCalculator, system_program,
+        account::Account, pubkey::Pubkey, system_program,
     };
     use solana_vote_api::vote_state;
 
@@ -1255,6 +1254,7 @@ mod tests {
         let custodian = Pubkey::new_rand();
         stake_keyed_account
 <<<<<<< HEAD
+<<<<<<< HEAD
             .initialize(
                 &Authorized::auto(&stake_pubkey),
                 &Lockup { slot: 0, custodian },
@@ -1262,6 +1262,9 @@ mod tests {
 =======
             .lockup(0, &RentCalculator::default(), &custodian)
 >>>>>>> fix test errors
+=======
+            .lockup(0, &custodian)
+>>>>>>> move logic to rent_utils
             .unwrap();
 
         // signed keyed account and locked up, more than available should fail

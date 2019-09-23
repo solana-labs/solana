@@ -11,8 +11,7 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
-    system_instruction, sysvar,
-    sysvar::rent,
+    rent_utils, system_instruction, sysvar,
 };
 
 /// Reasons the stake might have had an error
@@ -128,7 +127,7 @@ pub fn create_stake_account_with_lockup(
             &StakeInstruction::Initialize(*authorized, *lockup),
             vec![
                 AccountMeta::new(*stake_pubkey, false),
-                AccountMeta::new(rent::id(), false),
+                AccountMeta::new(sysvar::rent::id(), false),
             ],
         ),
     ]
@@ -289,6 +288,7 @@ pub fn process_instruction(
             if rest.is_empty() {
                 Err(InstructionError::InvalidInstructionData)?;
             }
+            rent_utils::verify_rent_exemption(me, &rest[0])?;
             me.initialize(&authorized, &lockup)
         },
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {

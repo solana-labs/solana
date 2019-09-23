@@ -7,7 +7,7 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount, instruction::InstructionError, loader_instruction::LoaderInstruction,
-    pubkey::Pubkey, sysvar::rent,
+    pubkey::Pubkey, rent_utils,
 };
 use types::{
     account_address::AccountAddress,
@@ -302,16 +302,7 @@ impl MoveProcessor {
             return Err(InstructionError::GenericError);
         }
 
-        if let Ok(rent_sysvar) = rent::from_keyed_account(&keyed_accounts[1]) {
-            if !rent_sysvar.rent_calculator.is_exempt(
-                keyed_accounts[0].account.lamports,
-                keyed_accounts[0].account.data.len(),
-            ) {
-                return Err(InstructionError::InsufficientFunds);
-            }
-        } else {
-            return Err(InstructionError::InvalidAccountData);
-        }
+        rent_utils::verify_rent_exemption(&keyed_accounts[0], &keyed_accounts[1])?;
 
         let (compiled_script, compiled_modules) =
             Self::deserialize_compiled_program(&keyed_accounts[PROGRAM_INDEX].account.data)?;
