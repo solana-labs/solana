@@ -25,6 +25,16 @@ use std::time::{Duration, Instant};
 
 pub const NUM_THREADS: u32 = 10;
 
+fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
+    if shred.is_data() {
+        // Only data shreds have parent information
+        blocktree::verify_shred_slots(shred.slot(), shred.parent(), root)
+    } else {
+        // Filter out outdated coding shreds
+        shred.slot() >= root
+    }
+}
+
 /// drop blobs that are from myself or not from the correct leader for the
 /// blob's slot
 pub fn should_retransmit_and_persist(
@@ -42,7 +52,7 @@ pub fn should_retransmit_and_persist(
         if leader_id == *my_pubkey {
             inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
             false
-        } else if !blocktree::verify_shred_slots(shred.slot(), shred.parent(), root) {
+        } else if !verify_shred_slot(shred, root) {
             inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
             false
         } else if !shred.verify(&leader_id) {

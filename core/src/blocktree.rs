@@ -396,7 +396,7 @@ impl Blocktree {
                         set_index as usize,
                         slot,
                     ) {
-                        submit_metrics(true, "complete".into());
+                        submit_metrics(true, format!("complete. recovered: {}", result.len()));
                         recovered_data_shreds.append(&mut result);
                     } else {
                         submit_metrics(true, "incomplete".into());
