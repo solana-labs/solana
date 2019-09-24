@@ -3,6 +3,7 @@ use crate::utils::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use std::{error, fmt};
+use bigint::uint::U256;
 
 pub type BitcoinTxHash = [u8; 32];
 
@@ -87,10 +88,28 @@ impl BlockHeader {
         }
     }
 
-    pub fn difficulty(mut self) -> u32 {
-        // calculates difficulty from nbits
-        let standin: u32 = 123_456_789;
-        standin
+    pub fn difficulty(&self) -> u64 {
+            let max_target = U256::from(0xFFFF) << 208;
+            (max_target / self.target()).as_u64()
+    }
+
+    pub fn target(&self) -> U256 {
+        let bits = u32::from_le_bytes(self.nbits);
+        let (mant, expt) = {
+            let unshifted_expt = bits >> 24;
+            if unshifted_expt <= 3 {
+                ((bits & 0xFFFFFF) >> (8 * (3 - unshifted_expt as usize)), 0)
+            } else {
+                (bits & 0xFFFFFF, 8 * ((bits >> 24) - 3))
+            }
+        };
+
+        // The mantissa is signed but may not be negative
+        if mant > 0x7FFFFF {
+            Default::default()
+        } else {
+            U256::from((mant as u64) << (expt as usize))
+        }
     }
 }
 
@@ -453,5 +472,21 @@ impl fmt::Display for SpvError {
             SpvError::ParseError => "Error parsing blockheaders placceholder text".fmt(f),
             SpvError::InvalidAccount => "Provided account is not usable or does not exist".fmt(f),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{spv_instruction, spv_state, utils};
+
+    #[test]
+    fn test_target_calculation() {
+        let testheader = "010000008a730974ac39042e95f82d719550e224c1a680a8dc9e8df9d007000000000000f50b20e8720a552dd36eb2ebdb7dceec9569e0395c990c1eb8a4292eeda05a931e1fce4e9a110e1a7a58aeb0";
+        let testhash = "0000000000000bae09a7a393a8acded75aa67e46cb81f7acaa5ad94f9eacd103";
+        let header = BlockHeader::hexnew(testheader, testhash).unwrap();
+
+        let target = header.target();
+
     }
 }

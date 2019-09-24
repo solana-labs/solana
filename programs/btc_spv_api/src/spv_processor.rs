@@ -19,24 +19,24 @@ impl SpvProcessor {
         difficulty: u64,
         confirm_num: u16,
     ) -> Result<(), InstructionError> {
-        let ln       = *headers.len();
+        let ln       = headers.len();
         // check that the headerchain is the right length
-        if ln != (2 + confirm_num) {
+        if ln != (2 + confirm_num as usize) {
             error!("Invalid length for Header Chain");
             Err(InstructionError::InvalidArgument)? //is this ? necessary?
         }
 
         for bh in 0..ln {
-            let header    = *headers[bh]
-            let parent_header   = *headers[bh-1];
+            let header    = &headers[bh as usize];
+            let parent_header   = &headers[bh-1];
             // check that the headerchain is in order and contiguous
-            if header.parent != parent_header.digest {
-                error!(format!("Invalid Header Chain hash sequence for header index {}", bh));
+            if header.parent != parent_header.blockhash {
+                error!("{}", format!("Invalid Header Chain hash sequence for header index {}", bh));
                 Err(InstructionError::InvalidArgument)?
             }
             //check that block difficulty is above the given threshold
-            if header.difficulty < diff {
-                error!(format!("Invalid block difficulty for header index {}", bh));
+            if header.difficulty() < difficulty {
+                error!("{}", format!("Invalid block difficulty for header index {}", bh));
                 Err(InstructionError::InvalidArgument)?
             }
         }
@@ -217,14 +217,16 @@ mod test {
             ("01000000e714ac14bfea0d57a28a1fce4cffb8a3210364c43cd865a19703000000000000ce0ee41c03692c424b522dd6541ae814da027e7d1fa440736faabee3405b2342e92ece4e9a110e1a61403e1b", "0000000000000d8a4b89a5b219ba1c4cc7cfc982f5119d0dcd4758fbe63cd735"),
             ("0100000035d73ce6fb5847cd0d9d11f582c9cfc74c1cba19b2a5894b8a0d000000000000ff2ed85a551b55a313df806ec819bf31ff7386302e82d79753c7e17183b3c4791132ce4e9a110e1a15bc904e", "00000000000001de6811527902b2a994f3721af035110242ddca509e9a40ef7e"),
         ];
-        let mut header_chain = Vec::new();
-        for head in header_chain_raw.len() {
-            let header = BlockHeader::hexnew(&head[0], &head[1]).unwrap();
+        let mut header_chain: Vec<BlockHeader> = Vec::new();
+        for h in 0..header_chain_raw.len() {
+            let head = header_chain_raw[h];
+            println!("{}", head.0);
+            let header = BlockHeader::hexnew(head.0, head.1).unwrap();
             header_chain.push(header);
         }
         let difficulty: u64 = 10_000_000;
         let confirmations: u16 = 5;
 
-        validate_header_chain(&header_chain, difficulty, confirmations).unwrap()
+        SpvProcessor::validate_header_chain(&header_chain, difficulty, confirmations).unwrap()
     }
 }
