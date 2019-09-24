@@ -294,6 +294,7 @@ mod test {
         repair_service::RepairSlotRange,
         service::Service,
         shred::Shredder,
+        shred::SIZE_OF_SHRED_TYPE,
     };
     use rand::{seq::SliceRandom, thread_rng};
     use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
@@ -364,13 +365,40 @@ mod test {
             true
         );
 
+        // If it's a coding shred, test that slot >= root
+        let mut coding_shred =
+            Shred::new_empty_from_header(Shredder::new_coding_shred_header(5, 5, 6, 6, 0));
+        Shredder::sign_shred(&leader_keypair, &mut coding_shred, *SIZE_OF_SHRED_TYPE);
+        assert_eq!(
+            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 0),
+            true
+        );
+        assert_eq!(
+            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 5),
+            true
+        );
+        assert_eq!(
+            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 6),
+            false
+        );
+
         // set the blob to have come from the wrong leader
-        /*
-                assert_eq!(
-                    should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id),
-                    false
-                );
-        */
+        let wrong_leader_keypair = Arc::new(Keypair::new());
+        let leader_pubkey = wrong_leader_keypair.pubkey();
+        let wrong_bank = Arc::new(Bank::new(
+            &create_genesis_block_with_leader(100, &leader_pubkey, 10).genesis_block,
+        ));
+        let wrong_cache = Arc::new(LeaderScheduleCache::new_from_bank(&wrong_bank));
+        assert_eq!(
+            should_retransmit_and_persist(
+                &shreds[0],
+                Some(wrong_bank.clone()),
+                &wrong_cache,
+                &me_id,
+                0
+            ),
+            false
+        );
 
         // with a Bank and no idea who leader is, blob gets thrown out
         shreds[0].set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
@@ -398,12 +426,10 @@ mod test {
         );
 
         // if the blob came back from me, it doesn't continue, whether or not I have a bank
-        /*
-                assert_eq!(
-                    should_retransmit_and_persist(&shreds[0], None, &cache, &me_id),
-                    false
-                );
-        */
+        assert_eq!(
+            should_retransmit_and_persist(&shreds[0], None, &cache, &me_id, 0),
+            false
+        );
     }
 
     fn make_test_window(

@@ -23,7 +23,7 @@ lazy_static! {
         { serialized_size(&DataShredHeader::default()).unwrap() as usize };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
-    static ref SIZE_OF_SHRED_TYPE: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
+    pub static ref SIZE_OF_SHRED_TYPE: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
 }
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
@@ -334,7 +334,7 @@ impl Shredder {
         }
     }
 
-    fn sign_shred(signer: &Arc<Keypair>, shred_info: &mut Shred, signature_offset: usize) {
+    pub fn sign_shred(signer: &Arc<Keypair>, shred_info: &mut Shred, signature_offset: usize) {
         let data_offset = signature_offset + *SIZE_OF_SIGNATURE;
         let signature = signer.sign_message(&shred_info.payload[data_offset..]);
         let serialized_signature =
