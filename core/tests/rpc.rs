@@ -1,5 +1,6 @@
 use bincode::serialize;
 use log::*;
+use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
 use solana_client::rpc_client::get_rpc_request_str;
 use solana_core::validator::new_validator_for_tests;
@@ -17,7 +18,7 @@ fn test_rpc_send_tx() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
-    let client = ureq::agent();
+    let client = reqwest::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -26,18 +27,20 @@ fn test_rpc_send_tx() {
     });
     let rpc_addr = leader_data.rpc;
     let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let response = client
+    let mut response = client
         .post(&rpc_string)
-        .set("Content-Type", "application/json")
-        .send_json(request);
-    let json: Value = serde_json::from_str(&response.into_string().unwrap()).unwrap();
+        .header(CONTENT_TYPE, "application/json")
+        .body(request.to_string())
+        .send()
+        .unwrap();
+    let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
     let blockhash: Hash = json["result"][0].as_str().unwrap().parse().unwrap();
 
     info!("blockhash: {:?}", blockhash);
     let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
     let serial_tx = serialize(&tx).unwrap();
 
-    let client = ureq::agent();
+    let client = reqwest::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -46,16 +49,18 @@ fn test_rpc_send_tx() {
     });
     let rpc_addr = leader_data.rpc;
     let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let response = client
+    let mut response = client
         .post(&rpc_string)
-        .set("Content-Type", "application/json")
-        .send_json(request);
-    let json: Value = serde_json::from_str(&response.into_string().unwrap()).unwrap();
+        .header(CONTENT_TYPE, "application/json")
+        .body(request.to_string())
+        .send()
+        .unwrap();
+    let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
     let signature = &json["result"];
 
     let mut confirmed_tx = false;
 
-    let client = ureq::agent();
+    let client = reqwest::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -64,11 +69,13 @@ fn test_rpc_send_tx() {
     });
 
     for _ in 0..solana_sdk::clock::DEFAULT_TICKS_PER_SLOT {
-        let response = client
+        let mut response = client
             .post(&rpc_string)
-            .set("Content-Type", "application/json")
-            .send_json(request.clone());
-        let response_json_text = response.into_string().unwrap();
+            .header(CONTENT_TYPE, "application/json")
+            .body(request.to_string())
+            .send()
+            .unwrap();
+        let response_json_text = response.text().unwrap();
         let json: Value = serde_json::from_str(&response_json_text).unwrap();
 
         if true == json["result"] {

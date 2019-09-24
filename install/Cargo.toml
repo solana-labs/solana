@@ -22,6 +22,7 @@ indicatif = "0.12.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
 nix = "0.15.0"
+reqwest = { version = "0.9.20", default-features = false, features = ["rustls-tls"] }
 semver = "0.9.0"
 serde = "1.0.101"
 serde_derive = "1.0.101"
@@ -34,7 +35,6 @@ solana-sdk = { path = "../sdk", version = "0.20.0" }
 tar = "0.4.26"
 tempdir = "0.3.7"
 url = "2.1.0"
-ureq = "0.11.1"
 
 [target."cfg(windows)".dependencies]
 winapi = "0.3.8"
