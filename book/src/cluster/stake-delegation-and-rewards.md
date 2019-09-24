@@ -27,30 +27,26 @@ VoteState is the current state of all the votes the validator has submitted to t
 * `root_slot` - The last slot to reach the full lockout commitment necessary for rewards.
 * `commission` - The commission taken by this VoteState for any rewards claimed by staker's Stake accounts. This is the percentage ceiling of the reward.
 * Account::lamports - The accumulated lamports from the commission. These do not count as stakes.
-* `authorized_vote_signer` - Only this identity is authorized to submit votes. This field can only modified by this identity.
+* `authorized_voter_pubkey` - Only this identity is authorized to submit votes. This field can only modified by this identity.
 
 ### VoteInstruction::Initialize
 
 * `account[0]` - RW - The VoteState
 
-  `VoteState::authorized_vote_signer` is initialized to `account[0]`
+  `VoteState::authorized_voter_pubkey` is initialized to `account[0]`
 
    other VoteState members defaulted
 
-### VoteInstruction::AuthorizeVoteSigner\(Pubkey\)
+### VoteInstruction::AuthorizeVoter\(Pubkey\)
+
+Allows a staker to choose a signing service for its votes. That service is
+responsible for ensuring the vote won't cause the staker to be slashed.
 
 * `account[0]` - RW - The VoteState
 
-  `VoteState::authorized_vote_signer` is set to to `Pubkey`, the transaction must by
+  `VoteState::authorized_voter_pubkey` is set to to `Pubkey`, the transaction must by
 
-   signed by the Vote account's current `authorized_vote_signer`.    
-
-
-   `VoteInstruction::AuthorizeVoter` allows a staker to choose a signing service
-
-  for its votes. That service is responsible for ensuring the vote won't cause
-
-  the staker to be slashed.
+   signed by the Vote account's current `authorized_voter_pubkey`.
 
 ### VoteInstruction::Vote\(Vec\)
 
@@ -210,4 +206,3 @@ As rewards are earned lamports can be withdrawn from a stake account. Only lampo
 ### Lock-up
 
 Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as a slot height, i.e. the minimum slot height that must be reached by the network before the stake account balance is available for withdrawal.
-
