@@ -79,12 +79,12 @@ test-stable-perf)
 
   # Run root package library tests
   _ cargo +"$rust_stable" build --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --manifest-path=core/Cargo.toml ${V:+--verbose} $maybeCuda -- --nocapture
+  _ cargo +"$rust_stable" test --all --manifest-path=core/Cargo.toml ${V:+--verbose} $maybeCuda --exclude solana-local-cluster -- --nocapture
   ;;
 test-local-cluster)
   echo "Executing $testName"
   _ cargo +"$rust_stable" build --release --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --release --manifest-path=local_cluster/Cargo.toml  ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture
   exit 0
   ;;
 *)
