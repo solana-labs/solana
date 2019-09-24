@@ -277,7 +277,7 @@ impl Tower {
 
         if !self.is_recent(slot) {
             trace!("slot is not recent: {}", slot);
-            return false;
+            return true;
         }
 
         let mut lockouts = self.lockouts.clone();
