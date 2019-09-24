@@ -303,7 +303,7 @@ cat >> ~/solana/on-reboot <<EOF
 EOF
     fi
 
-    args+=(--init-complete-file "$initCompleteFile")
+    args+=(--init-complete-file "$initCompleteFile" --snapshot-interval-slots 0)
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
 cat >> ~/solana/on-reboot <<EOF
