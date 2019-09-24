@@ -77,6 +77,8 @@ fn test_stake_account_delegate() {
         &mint_pubkey,
         &vote_pubkey,
         &node_pubkey,
+        &vote_pubkey,
+        &vote_pubkey,
         std::u8::MAX / 2,
         10,
     ));

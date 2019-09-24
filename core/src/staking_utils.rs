@@ -141,6 +141,8 @@ pub(crate) mod tests {
                 &from_account.pubkey(),
                 vote_pubkey,
                 node_pubkey,
+                vote_pubkey,
+                vote_pubkey,
                 0,
                 amount,
             ),
@@ -292,11 +294,13 @@ pub(crate) mod tests {
 
         // Node 1 has stake of 3
         for i in 0..3 {
-            stakes.push((i, VoteState::new(&Pubkey::new_rand(), &node1, 0)));
+            let vote = Pubkey::new_rand();
+            stakes.push((i, VoteState::new(&node1, &vote, &vote, 0)));
         }
 
         // Node 1 has stake of 5
-        stakes.push((5, VoteState::new(&Pubkey::new_rand(), &node2, 0)));
+        let vote = Pubkey::new_rand();
+        stakes.push((5, VoteState::new(&node2, &vote, &vote, 0)));
 
         let result = to_staked_nodes(stakes.into_iter());
         assert_eq!(result.len(), 2);

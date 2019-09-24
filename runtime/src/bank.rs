@@ -2854,6 +2854,8 @@ mod tests {
             &mint_keypair.pubkey(),
             &vote_keypair.pubkey(),
             &mint_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            &vote_keypair.pubkey(),
             0,
             10,
         );

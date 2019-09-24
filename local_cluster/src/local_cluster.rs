@@ -437,6 +437,8 @@ impl LocalCluster {
                     &from_account.pubkey(),
                     &vote_account_pubkey,
                     &node_pubkey,
+                    &vote_account_pubkey,
+                    &vote_account_pubkey,
                     0,
                     amount,
                 ),

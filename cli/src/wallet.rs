@@ -65,7 +65,8 @@ pub enum WalletCommand {
     Cancel(Pubkey),
     Confirm(Signature),
     AuthorizeVoter(Pubkey, Keypair, Pubkey),
-    CreateVoteAccount(Pubkey, Pubkey, u8, u64),
+    AuthorizeWithdrawer(Pubkey, Keypair, Pubkey),
+    CreateVoteAccount(Pubkey, Pubkey, Pubkey, Pubkey, u8, u64),
     ShowAccount {
         pubkey: Pubkey,
         output_file: Option<String>,
@@ -237,6 +238,7 @@ pub fn parse_command(
         }
         ("create-vote-account", Some(matches)) => parse_vote_create_account(matches),
         ("authorize-voter", Some(matches)) => parse_vote_authorize_voter(matches),
+        ("authorize-withdrawer", Some(matches)) => parse_vote_authorize_withdrawer(matches),
         ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         ("delegate-stake", Some(matches)) => {
@@ -1272,6 +1274,8 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::CreateVoteAccount(
             vote_account_pubkey,
             node_pubkey,
+            authorized_voter,
+            authorized_withdrawer,
             commission,
             lamports,
         ) => process_create_vote_account(
@@ -1279,6 +1283,8 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             config,
             &vote_account_pubkey,
             &node_pubkey,
+            &authorized_voter,
+            &authorized_withdrawer,
             *commission,
             *lamports,
         ),
@@ -1293,6 +1299,18 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             &vote_account_pubkey,
             &authorized_voter_keypair,
             &new_authorized_voter_pubkey,
+        ),
+
+        WalletCommand::AuthorizeWithdrawer(
+            vote_account_pubkey,
+            authorized_withdrawer_keypair,
+            new_authorized_withdrawer_pubkey,
+        ) => process_authorize_withdrawer(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            &authorized_withdrawer_keypair,
+            &new_authorized_withdrawer_pubkey,
         ),
 
         WalletCommand::ShowAccount {
@@ -1677,6 +1695,37 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
+            SubCommand::with_name("authorize-withdrawer")
+                .about("Authorize a new withdraw signing keypair for the given vote account")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account in which to set the authorized withdrawer"),
+                )
+                .arg(
+                    Arg::with_name("authorized_withdrawer_keypair_file")
+                        .index(2)
+                        .value_name("CURRENT WITHDRAWER KEYPAIR FILE")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_keypair)
+                        .help("Keypair file for the currently authorized withdrawer"),
+                )
+                .arg(
+                    Arg::with_name("new_authorized_withdrawer_pubkey")
+                        .index(3)
+                        .value_name("NEW WITHDRAWER PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("New withdrawer to authorize"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("create-vote-account")
                 .about("Create a vote account")
                 .arg(
@@ -1711,7 +1760,25 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("NUM")
                         .takes_value(true)
                         .help("The commission taken on reward redemption (0-255), default: 0"),
-                ),
+                )
+                .arg(
+                    Arg::with_name("authorized_voter")
+                        .long("authorized-voter")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Public key of the authorized voter (defaults to vote account pubkey)"),
+                )
+                .arg(
+                    Arg::with_name("authorized_withdrawer")
+                        .long("authorized-withdrawer")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Public key of the authorized withdrawer (defaults to vote account pubkey)"),
+                )
+
+,
         )
         .subcommand(
             SubCommand::with_name("show-account")
@@ -2621,7 +2688,14 @@ mod tests {
 
         let bob_pubkey = Pubkey::new_rand();
         let node_pubkey = Pubkey::new_rand();
-        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_pubkey, 0, 10);
+        config.command = WalletCommand::CreateVoteAccount(
+            bob_pubkey,
+            node_pubkey,
+            bob_pubkey,
+            bob_pubkey,
+            0,
+            10,
+        );
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -2778,7 +2852,14 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_pubkey, 0, 10);
+        config.command = WalletCommand::CreateVoteAccount(
+            bob_pubkey,
+            node_pubkey,
+            bob_pubkey,
+            bob_pubkey,
+            0,
+            10,
+        );
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::AuthorizeVoter(bob_pubkey, Keypair::new(), bob_pubkey);
