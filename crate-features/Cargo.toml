@@ -18,7 +18,7 @@ lazy_static = { version = "1.4.0", features = ["spin", "spin_no_std"] }
 libc = { version = "0.2.62", features = ["extra_traits"] }
 rand_chacha = { version = "0.1.1" }
 regex-syntax = { version = "0.6.12" }
-reqwest = { version = "0.9.20", features = ["rustls-tls"] }
+reqwest = { version = "0.9.20", default-features = false, features = ["rustls-tls"] }
 serde = { version = "1.0.100", features = ["rc"] }
 solana-ed25519-dalek = { version = "0.2.0", features = ["serde"] }
 syn = { version = "1.0.3", features = ["extra-traits", "full"] }
