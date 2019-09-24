@@ -26,7 +26,7 @@ impl log::Log for LoggerShim {
 // May be called at any time to re-configure the log filter
 pub fn setup_with_filter(filter: &str) {
     let logger = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
-        .default_format_timestamp_nanos(true)
+        .format_timestamp_nanos()
         .build();
     let max_level = logger.filter();
     log::set_max_level(max_level);

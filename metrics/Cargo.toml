@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
 reqwest = { version = "0.9.20", default-features = false, features = ["rustls-tls"] }
