@@ -42,7 +42,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::Transaction;
-use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp::min;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -697,43 +696,6 @@ impl ClusterInfo {
 
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
-    pub fn broadcast<I>(
-        &self,
-        s: &UdpSocket,
-        blobs: I,
-        stakes: Option<&HashMap<Pubkey, u64>>,
-    ) -> Result<()>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<SharedBlob>,
-    {
-        let mut last_err = Ok(());
-        let mut broadcast_table_len = 0;
-        let mut blobs_len = 0;
-        blobs.into_iter().for_each(|b| {
-            blobs_len += 1;
-            let blob = b.borrow().read().unwrap();
-            let broadcast_table = self.sorted_tvu_peers(stakes, ChaChaRng::from_seed(blob.seed()));
-            broadcast_table_len = cmp::max(broadcast_table_len, broadcast_table.len());
-
-            if !broadcast_table.is_empty() {
-                if let Err(e) = s.send_to(&blob.data[..blob.meta.size], &broadcast_table[0].tvu) {
-                    trace!("{}: broadcast result {:?}", self.id(), e);
-                    last_err = Err(e);
-                }
-            }
-        });
-
-        last_err?;
-
-        inc_new_counter_debug!("cluster_info-broadcast-max_idx", blobs_len);
-        datapoint_info!(
-            "cluster_info-num_nodes",
-            ("count", broadcast_table_len + 1, i64)
-        );
-        Ok(())
-    }
-
     pub fn broadcast_shreds(
         &self,
         s: &UdpSocket,
@@ -756,8 +718,13 @@ impl ClusterInfo {
         });
 
         last_err?;
+        datapoint_info!(
+            "cluster_info-num_nodes",
+            ("count", broadcast_table_len + 1, i64)
+        );
         Ok(())
     }
+
     /// retransmit messages to a list of nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
