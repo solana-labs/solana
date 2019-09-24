@@ -588,7 +588,7 @@ impl RpcClient {
                     return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
                 }
             }
-            sleep(Duration::from_secs(1));
+            sleep(Duration::from_millis(250));
         }
         Ok(confirmed_blocks)
     }
