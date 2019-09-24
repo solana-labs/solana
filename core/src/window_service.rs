@@ -42,7 +42,9 @@ pub fn should_retransmit_and_persist(
         if leader_id == *my_pubkey {
             inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
             false
-        } else if !blocktree::verify_shred_slots(shred.slot(), shred.parent(), root) {
+        } else if shred.is_data() // Only data shreds have parent information
+            && !blocktree::verify_shred_slots(shred.slot(), shred.parent(), root)
+        {
             inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
             false
         } else if !shred.verify(&leader_id) {
