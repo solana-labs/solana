@@ -46,17 +46,34 @@ pub fn append_primordial_accounts(
 
     for (account, account_details) in primordial_accounts {
         let pubkey = match file_format {
-            AccountFileFormat::Pubkey => Pubkey::from_str(account.as_str()).unwrap(),
+            AccountFileFormat::Pubkey => Pubkey::from_str(account.as_str()).map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Invalid pubkey {}: {:?}", account, err),
+                )
+            })?,
             AccountFileFormat::Keypair => {
                 let bytes: Vec<u8> = serde_json::from_str(account.as_str()).unwrap();
                 Keypair::from_bytes(&bytes).unwrap().pubkey()
             }
         };
 
-        let owner_program_id = Pubkey::from_str(account_details.owner.as_str()).unwrap();
+        let owner_program_id = Pubkey::from_str(account_details.owner.as_str()).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Invalid owner: {}: {:?}", account_details.owner, err),
+            )
+        })?;
 
         let mut account = Account::new(account_details.balance, 0, &owner_program_id);
-        account.data = base64::decode(account_details.data.as_str()).unwrap();
+        if account_details.data != "~" {
+            account.data = base64::decode(account_details.data.as_str()).map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Invalid account data: {}: {:?}", account_details.data, err),
+                )
+            })?;
+        }
         account.executable = account_details.executable;
 
         builder = builder.account(pubkey, account);
@@ -733,9 +750,14 @@ mod tests {
     fn test_primordial_account_struct_compatibility() {
         let yaml_string_pubkey = "---
 98frSc8R8toHoS3tQ1xWSvHCvGEADRM9hAm5qmUKjSDX:
-  balance: 3
+  balance: 4
   owner: Gw6S9CPzR8jHku1QQMdiqcmUKjC2dhJ3gzagWduA6PGw
-  data: bWUgaGVsbG8gdG8gd29ybGQ=
+  data:
+  executable: true
+88frSc8R8toHoS3tQ1xWSvHCvGEADRM9hAm5qmUKjSDX:
+  balance: 3
+  owner: Gw7S9CPzR8jHku1QQMdiqcmUKjC2dhJ3gzagWduA6PGw
+  data: ~
   executable: true
 6s36rsNPDfRSvzwek7Ly3mQu9jUMwgqBhjePZMV6Acp4:
   balance: 2
@@ -754,9 +776,13 @@ mod tests {
         file.write_all(yaml_string_pubkey.as_bytes()).unwrap();
 
         let builder = Builder::new();
-        append_primordial_accounts(path.to_str().unwrap(), AccountFileFormat::Pubkey, builder)
-            .expect("builder");
+        let builder =
+            append_primordial_accounts(path.to_str().unwrap(), AccountFileFormat::Pubkey, builder)
+                .expect("builder");
         remove_file(path).unwrap();
+
+        let genesis_block = builder.clone().build();
+        assert_eq!(genesis_block.accounts.len(), 4);
 
         let yaml_string_keypair = "---
 \"[17,12,234,59,35,246,168,6,64,36,169,164,219,96,253,79,238,202,164,160,195,89,9,96,179,117,255,239,32,64,124,66,233,130,19,107,172,54,86,32,119,148,4,39,199,40,122,230,249,47,150,168,163,159,83,233,97,18,25,238,103,25,253,108]\":
@@ -781,8 +807,12 @@ mod tests {
         file.write_all(yaml_string_keypair.as_bytes()).unwrap();
 
         let builder = Builder::new();
-        append_primordial_accounts(path.to_str().unwrap(), AccountFileFormat::Keypair, builder)
-            .expect("builder");
+        let builder =
+            append_primordial_accounts(path.to_str().unwrap(), AccountFileFormat::Keypair, builder)
+                .expect("builder");
         remove_file(path).unwrap();
+
+        let genesis_block = builder.clone().build();
+        assert_eq!(genesis_block.accounts.len(), 3);
     }
 }
