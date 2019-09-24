@@ -115,7 +115,7 @@ impl Session {
     /// * `coding` - array of coding blocks
     /// * `erasures` - list of indices in data where blocks should be recovered
     pub fn decode_blocks(&self, blocks: &mut [(&mut [u8], bool)]) -> Result<()> {
-        self.0.reconstruct(blocks)?;
+        self.0.reconstruct_data(blocks)?;
 
         Ok(())
     }

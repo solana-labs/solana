@@ -397,7 +397,7 @@ impl Blocktree {
                         slot,
                     ) {
                         submit_metrics(true, "complete".into());
-                        recovered_data_shreds.append(&mut result.recovered_data);
+                        recovered_data_shreds.append(&mut result);
                     } else {
                         submit_metrics(true, "incomplete".into());
                     }
