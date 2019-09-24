@@ -47,6 +47,10 @@ pub fn should_retransmit_and_persist(
         {
             inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
             false
+        } else if shred.slot() < root {
+            // Filter out outdated coding shreds
+            inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
+            false
         } else if !shred.verify(&leader_id) {
             inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
             false
