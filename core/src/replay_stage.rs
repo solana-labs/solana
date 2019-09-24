@@ -330,7 +330,7 @@ impl ReplayStage {
                 return;
             }
 
-            datapoint_info!(
+            datapoint_debug!(
                 "replay_stage-new_leader",
                 ("slot", poh_slot, i64),
                 ("leader", next_leader.to_string(), String),

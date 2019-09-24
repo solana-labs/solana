@@ -1,5 +1,5 @@
 use crate::bank_forks::BankForks;
-use solana_metrics::datapoint_info;
+use solana_metrics::datapoint_debug;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
@@ -99,7 +99,7 @@ impl Tower {
                     vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0) as i64
                 );
                 debug!("observed root {}", vote_state.root_slot.unwrap_or(0) as i64);
-                datapoint_info!(
+                datapoint_debug!(
                     "tower-observed",
                     (
                         "slot",
@@ -214,7 +214,7 @@ impl Tower {
         self.lockouts.process_vote_unchecked(&vote);
         self.last_vote = vote;
 
-        datapoint_info!(
+        datapoint_debug!(
             "tower-vote",
             ("latest", slot, i64),
             ("root", self.lockouts.root_slot.unwrap_or(0), i64)

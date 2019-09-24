@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use rocksdb;
 
-use solana_metrics::{datapoint_error, datapoint_info};
+use solana_metrics::{datapoint_debug, datapoint_error};
 
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -324,7 +324,7 @@ impl Blocktree {
         // 3a. Enough number of shreds = (#data + #coding shreds) > erasure.num_data
         for (&(slot, set_index), erasure_meta) in erasure_metas.iter() {
             let submit_metrics = |attempted: bool, status: String, recovered: usize| {
-                datapoint_info!(
+                datapoint_debug!(
                     "blocktree-erasure",
                     ("slot", slot as i64, i64),
                     ("start_index", set_index as i64, i64),

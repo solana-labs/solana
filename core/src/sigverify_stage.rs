@@ -16,7 +16,7 @@ use crate::sigverify::TxOffset;
 use crate::streamer::{self, PacketReceiver};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_info, inc_new_counter_info};
+use solana_metrics::{datapoint_debug, inc_new_counter_info};
 use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -110,7 +110,7 @@ impl SigVerifyStage {
             (len as f32 / verify_batch_time.as_s())
         );
 
-        datapoint_info!(
+        datapoint_debug!(
             "sigverify_stage-total_verify_time",
             ("batch_len", batch_len, i64),
             ("len", len, i64),

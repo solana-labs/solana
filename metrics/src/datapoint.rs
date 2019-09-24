@@ -91,56 +91,40 @@ macro_rules! datapoint {
 #[macro_export]
 macro_rules! datapoint_error {
     ($name:expr) => {
-        if log::log_enabled!(log::Level::Error) {
-            $crate::submit($crate::datapoint!(@point $name), log::Level::Error);
-        }
+        $crate::submit($crate::datapoint!(@point $name), log::Level::Error);
     };
     ($name:expr, $($fields:tt)+) => {
-        if log::log_enabled!(log::Level::Error) {
-            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Error);
-        }
+        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Error);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_warn {
     ($name:expr) => {
-        if log::log_enabled!(log::Level::Warn) {
-            $crate::submit($crate::datapoint!(@point $name), log::Level::Warn);
-        }
+        $crate::submit($crate::datapoint!(@point $name), log::Level::Warn);
     };
     ($name:expr, $($fields:tt)+) => {
-        if log::log_enabled!(log::Level::Warn) {
-            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Warn);
-        }
+        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Warn);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_info {
     ($name:expr) => {
-        if log::log_enabled!(log::Level::Info) {
-            $crate::submit($crate::datapoint!(@point $name), log::Level::Info);
-        }
+        $crate::submit($crate::datapoint!(@point $name), log::Level::Info);
     };
     ($name:expr, $($fields:tt)+) => {
-        if log::log_enabled!(log::Level::Info) {
-            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Info);
-        }
+        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Info);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_debug {
     ($name:expr) => {
-        if log::log_enabled!(log::Level::Debug) {
-            $crate::submit($crate::datapoint!(@point $name), log::Level::Debug);
-        }
+        $crate::submit($crate::datapoint!(@point $name), log::Level::Debug);
     };
     ($name:expr, $($fields:tt)+) => {
-        if log::log_enabled!(log::Level::Debug) {
-            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
-        }
+        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
     };
 }
 
