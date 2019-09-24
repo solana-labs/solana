@@ -1642,12 +1642,12 @@ mod tests {
             ),
             Ok(())
         );
-        let stake_account_rewards = stake_keyed_account.account.lamports - stake_account_balance;
-        let vote_account_rewards = vote_keyed_account.account.lamports - vote_account_balance;
-        assert!(vote_account_rewards > 0);
-        assert!(stake_account_rewards > 0);
+        let staker_rewards = stake_keyed_account.account.lamports - stake_account_balance;
+        let voter_commission = vote_keyed_account.account.lamports - vote_account_balance;
+        assert!(voter_commission > 0);
+        assert!(staker_rewards > 0);
         assert!(
-            stake_account_rewards / 3 > vote_account_rewards,
+            staker_rewards / 3 > voter_commission,
             "rewards should be split ~3:1"
         );
 
