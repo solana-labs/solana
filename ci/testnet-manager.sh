@@ -216,7 +216,7 @@ maybe_deploy_software() {
   (
     echo "--- net.sh restart"
     set -x
-    time net/net.sh restart --skip-setup "$arg" -t "$CHANNEL_OR_TAG"
+    time net/net.sh restart --skip-setup -t "$CHANNEL_OR_TAG" "$arg"
   ) || ok=false
   if ! $ok; then
     net/net.sh logs
