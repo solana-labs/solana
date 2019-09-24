@@ -253,10 +253,10 @@ impl Tower {
         sum
     }
 
-    // a slot is not recent if its older than the oldest lockout we have
-    pub fn is_recent(&self, slot: u64) -> bool {
-        if let Some(oldest_vote) = self.lockouts.votes.front() {
-            if slot < oldest_vote.slot {
+    // a slot is not recent if it's older than the newest vote we have
+    fn is_recent(&self, slot: u64) -> bool {
+        if let Some(last_vote) = self.lockouts.votes.back() {
+            if slot <= last_vote.slot {
                 return false;
             }
         }
@@ -274,6 +274,11 @@ impl Tower {
 
     pub fn is_locked_out(&self, slot: u64, ancestors: &HashMap<u64, HashSet<u64>>) -> bool {
         assert!(ancestors.contains_key(&slot));
+
+        if !self.is_recent(slot) {
+            trace!("slot is not recent: {}", slot);
+            return true;
+        }
 
         let mut lockouts = self.lockouts.clone();
         lockouts.process_slot_vote_unchecked(slot);
@@ -610,6 +615,7 @@ mod test {
         }
         assert!(!tower.is_recent(0));
         assert!(!tower.is_recent(32));
+        assert!(!tower.is_recent(63));
         assert!(tower.is_recent(65));
     }
 
