@@ -65,19 +65,17 @@ fn download_tar_bz2(
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Downloading {}...", TRUCK, url));
 
-    let client = ureq::agent();
-    let response = client.get(url.as_str()).call();
-    if response.error() {
-        let error = if let Some(err) = response.synthetic_error().as_ref() {
-            format!("Unable to get: {:?}", err)
-        } else {
-            "Unable to get: unspecified error".to_string()
-        };
-        Err(error)?
-    }
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url.as_str())
+        .send()
+        .and_then(|response| response.error_for_status())
+        .map_err(|err| format!("Unable to get: {:?}", err))?;
     let download_size = {
         response
-            .header("Content-Length")
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|content_length| content_length.to_str().ok())
             .and_then(|content_length| content_length.parse().ok())
             .unwrap_or(0)
     };
@@ -110,7 +108,7 @@ fn download_tar_bz2(
 
     let mut source = DownloadProgress {
         progress_bar,
-        response: response.into_reader(),
+        response,
     };
 
     let mut file = File::create(&temp_archive_path)

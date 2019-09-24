@@ -97,16 +97,20 @@ impl MetricsWriter for InfluxDbMetricsWriter {
                 line.push_str(&format!(" {}\n", &point.timestamp));
             }
 
-            let response = ureq::post(write_url.as_str())
-                .timeout_connect(2_000)
-                .timeout_read(2_000)
-                .timeout_write(4_000)
-                .send_string(&line);
-            info!(
-                "submit response: {} {}",
-                response.status(),
-                response.status_text()
-            );
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .unwrap();
+            let response = client.post(write_url.as_str()).body(line).send();
+            if let Ok(mut resp) = response {
+                info!(
+                    "submit response: {} {}",
+                    resp.status(),
+                    resp.text().unwrap()
+                );
+            } else {
+                error!("submit error: {}", response.unwrap_err());
+            }
         }
     }
 }
@@ -399,9 +403,9 @@ pub fn query(q: &str) -> Result<String, String> {
         &config.host, &config.username, &config.password, &q
     );
 
-    let response = ureq::get(query_url.as_str())
-        .call()
-        .into_string()
+    let response = reqwest::get(query_url.as_str())
+        .map_err(|err| err.to_string())?
+        .text()
         .map_err(|err| err.to_string())?;
 
     Ok(response)

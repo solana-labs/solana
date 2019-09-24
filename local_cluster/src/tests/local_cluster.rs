@@ -582,6 +582,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 }
 
 #[test]
+#[ignore]
 fn test_repairman_catchup() {
     solana_logger::setup();
     error!("test_repairman_catchup");

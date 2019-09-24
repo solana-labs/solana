@@ -21,6 +21,7 @@ lazy_static = "1.4.0"
 log = "0.4.8"
 num-traits = "0.2"
 pretty-hex = "0.1.1"
+reqwest = { version = "0.9.20", default-features = false, features = ["rustls-tls"] }
 serde = "1.0.101"
 serde_derive = "1.0.101"
 serde_json = "1.0.40"
@@ -37,7 +38,6 @@ solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.20.0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.20.0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.20.0" }
-ureq = "0.11.1"
 url = "2.1.0"
 
 [dev-dependencies]

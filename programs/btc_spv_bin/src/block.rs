@@ -1,17 +1,22 @@
 use clap;
 use clap::{App, Arg};
 use hex;
+use reqwest;
 use std::fs::File;
 use std::io::prelude::*;
 
 fn get_block_raw(hash: &str) -> String {
     let qs = format!("https://blockchain.info/block/{}?format=hex", hash);
-    let body = ureq::get(&qs).call();
-    if body.error() {
-        panic!("request failed");
-    } else {
-        let textbh: String = body.into_string().unwrap();
-        textbh
+    let body = reqwest::get(&qs);
+    match body {
+        Err(e) => panic!("rest request failed {}", e),
+        Ok(mut n) => {
+            if n.status().is_success() {
+                n.text().unwrap()
+            } else {
+                panic!("request failed");
+            }
+        }
     }
 }
 

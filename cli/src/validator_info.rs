@@ -4,6 +4,7 @@ use crate::{
 };
 use bincode::deserialize;
 use clap::ArgMatches;
+use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use solana_client::rpc_client::RpcClient;
@@ -87,7 +88,8 @@ fn verify_keybase(
             "https://keybase.pub/{}/solana/validator-{:?}",
             keybase_username, validator_pubkey
         );
-        if ureq::head(&url).call().ok() {
+        let client = Client::new();
+        if client.head(&url).send()?.status().is_success() {
             Ok(())
         } else {
             Err(format!("keybase_username could not be confirmed at: {}. Please add this pubkey file to your keybase profile to connect", url))?
