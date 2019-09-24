@@ -1,12 +1,10 @@
-use lazy_static::lazy_static;
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, clock::Epoch, hash::Hash, pubkey::Pubkey};
 use std::{
-    fmt,
     fs::{create_dir_all, remove_file, OpenOptions},
     io,
-    io::{Cursor, Seek, SeekFrom, Write},
+    io::{Seek, SeekFrom, Write},
     mem,
     path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
