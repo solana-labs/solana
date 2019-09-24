@@ -276,7 +276,7 @@ impl Tower {
         assert!(ancestors.contains_key(&slot));
 
         if !self.is_recent(slot) {
-            trace!("slot is not recent: {} {}", slot, is_recent);
+            trace!("slot is not recent: {}", slot);
             return false;
         }
 
