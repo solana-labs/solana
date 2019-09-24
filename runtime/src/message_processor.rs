@@ -209,16 +209,17 @@ impl MessageProcessor {
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
 
-        for (id, process_instruction) in &self.instruction_processors {
-            if id == program_id {
-                return process_instruction(&program_id, &mut keyed_accounts[1..], &ix_data);
-            }
-        }
-
         assert!(
             keyed_accounts[0].account.executable,
             "loader not executable"
         );
+
+        let loader_id = keyed_accounts[0].unsigned_key();
+        for (id, process_instruction) in &self.instruction_processors {
+            if id == loader_id {
+                return process_instruction(&program_id, &mut keyed_accounts[1..], &ix_data);
+            }
+        }
 
         native_loader::invoke_entrypoint(
             &program_id,
@@ -324,7 +325,7 @@ mod tests {
     use super::*;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::message::Message;
-    use solana_sdk::native_loader::{create_loadable_account, id};
+    use solana_sdk::native_loader::create_loadable_account;
 
     #[test]
     fn test_has_duplicates() {
@@ -585,7 +586,7 @@ mod tests {
 
         let mut loaders: Vec<Vec<(Pubkey, Account)>> = Vec::new();
         let account = create_loadable_account("mock_system_program");
-        loaders.push(vec![(id(), account)]);
+        loaders.push(vec![(mock_system_program_id, account)]);
 
         let from_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
