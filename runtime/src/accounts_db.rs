@@ -131,7 +131,7 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
         S: Serializer,
     {
         let mut len: usize = 0;
-        for (fork_id, _) in &self.account_storage.0 {
+        for fork_id in self.account_storage.0.keys() {
             if *fork_id <= self.slot {
                 len += 1;
             }

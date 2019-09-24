@@ -72,6 +72,7 @@ pub struct AppendVec {
     path: PathBuf,
     map: MmapMut,
     // This mutex forces append to be single threaded, but concurrent with reads
+    #[allow(clippy::mutex_atomic)]
     append_offset: Mutex<usize>,
     current_len: AtomicUsize,
     file_size: u64,
@@ -83,6 +84,7 @@ impl Drop for AppendVec {
     }
 }
 
+#[allow(clippy::mutex_atomic)]
 impl Default for AppendVec {
     fn default() -> Self {
         Self {
@@ -177,6 +179,7 @@ impl AppendVec {
         PathBuf::from(&format!("{}.{}", fork_id, id))
     }
 
+    #[allow(clippy::mutex_atomic)]
     pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         self.path = path.as_ref().to_path_buf();
         let data = OpenOptions::new()
