@@ -1,13 +1,13 @@
 use log::*;
 use rand::{thread_rng, Rng};
 use serde::Serialize;
-use solana_sdk::clock::{Slot, MAX_HASH_AGE_IN_SECONDS};
+use solana_sdk::clock::{Slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
-pub const MAX_CACHE_ENTRIES: usize = MAX_HASH_AGE_IN_SECONDS;
+pub const MAX_CACHE_ENTRIES: usize = MAX_RECENT_BLOCKHASHES;
 const CACHED_SIGNATURE_SIZE: usize = 20;
 
 // Store forks in a single chunk of memory to avoid another lookup.
@@ -428,6 +428,11 @@ mod tests {
         let slot_deltas = status_cache.slot_deltas(&slots);
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
+    }
+
+    #[test]
+    fn test_age_sanity() {
+        assert!(MAX_CACHE_ENTRIES <= MAX_RECENT_BLOCKHASHES);
     }
 
 }
