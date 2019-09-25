@@ -5,6 +5,7 @@ use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use bincode::{deserialize_from, serialize_into};
 use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
+use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::SlotDelta;
 use solana_sdk::transaction;
