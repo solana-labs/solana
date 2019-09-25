@@ -35,18 +35,17 @@ VoteState is the current state of all the votes the validator has submitted to t
 
   `VoteState::authorized_voter_pubkey` is initialized to `account[0]`
 
-   other VoteState members defaulted
+  other VoteState members defaulted
 
 ### VoteInstruction::AuthorizeVoter\(Pubkey\)
 
-Allows a staker to choose a signing service for its votes. That service is
-responsible for ensuring the vote won't cause the staker to be slashed.
+Allows a staker to choose a signing service for its votes. That service is responsible for ensuring the vote won't cause the staker to be slashed.
 
 * `account[0]` - RW - The VoteState
 
   `VoteState::authorized_voter_pubkey` is set to to `Pubkey`, the transaction must by
 
-   signed by the Vote account's current `authorized_voter_pubkey`.
+  signed by the Vote account's current `authorized_voter_pubkey`.
 
 ### VoteInstruction::Vote\(Vec\)
 
@@ -135,7 +134,7 @@ Lamports build up over time in a Stake account and any excess over activated sta
 
 ## Example Callflow
 
-![Passive Staking Callflow](../.gitbook/assets/passive-staking-callflow.svg)
+![Passive Staking Callflow](../.gitbook/assets/passive-staking-callflow%20%283%29.svg)
 
 ## Staking Rewards
 
@@ -206,3 +205,4 @@ As rewards are earned lamports can be withdrawn from a stake account. Only lampo
 ### Lock-up
 
 Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as a slot height, i.e. the minimum slot height that must be reached by the network before the stake account balance is available for withdrawal.
+

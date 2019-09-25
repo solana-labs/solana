@@ -30,11 +30,11 @@ Under this design, it is possible to have accounts that linger, never get touche
 
 Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/accessed\) was considered. The issues with such an approach are:
 
-* accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due, 
+* accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due,
 
   but would not be debitable during any such transaction
 
-* a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable, 
+* a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable,
 
   lest accounts that are loaded infrequently get a free ride
 

@@ -12,7 +12,7 @@ The fundamental difference between the pipelines is when the PoH is present. In 
 
 We unwrap the many abstraction layers and build a single pipeline that can toggle leader mode on whenever the validator's ID shows up in the leader schedule.
 
-![Validator block diagram](../.gitbook/assets/validator-proposal.svg)
+![Validator block diagram](../.gitbook/assets/validator-proposal%20%281%29.svg)
 
 ## Notable changes
 

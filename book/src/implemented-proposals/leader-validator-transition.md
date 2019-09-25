@@ -35,19 +35,17 @@ The PoH Recorder manages the transition between modes. Once a ledger is replayed
 The loop is synchronized to PoH and does a synchronous start and stop of the slot leader functionality. After stopping, the validator's TVU should find itself in the same state as if a different leader had sent it the same block. The following is pseudocode for the loop:
 
 1. Query the LeaderScheduler for the next assigned slot.
-2. Run the TVU over all the forks.
-   1. TVU will send votes to what it believes is the "best" fork.
-   2. After each vote, restart the PoH Recorder to run until the next assigned
+2. Run the TVU over all the forks. 1. TVU will send votes to what it believes is the "best" fork. 2. After each vote, restart the PoH Recorder to run until the next assigned
 
-      slot.
+   slot.
+
 3. When time to be a slot leader, start the TPU. Point it to the last fork the
 
    TVU voted on.
 
-4. Produce entries until the end of the slot.
-   1. For the duration of the slot, the TVU must not vote on other forks.
-   2. After the slot ends, the TPU freezes its BankFork. After freezing,
+4. Produce entries until the end of the slot. 1. For the duration of the slot, the TVU must not vote on other forks. 2. After the slot ends, the TPU freezes its BankFork. After freezing,
 
-      the TVU may resume voting.
+   the TVU may resume voting.
+
 5. Goto 1.
 

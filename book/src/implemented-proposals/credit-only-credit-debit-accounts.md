@@ -69,7 +69,7 @@ This design attempts to cache a credit-only account after loading without the us
 
 1. Transaction accounts are locked.
 
-    a. If the account is present in the ‘credit-only' table, the TX does not fail.
+   a. If the account is present in the ‘credit-only' table, the TX does not fail.
 
    ```text
    The pending state for this TX is marked NeedReadLock.
@@ -77,13 +77,13 @@ This design attempts to cache a credit-only account after loading without the us
 
 2. Transaction accounts are loaded.
 
-    a. Transaction accounts that are credit-only increase their reference
+   a. Transaction accounts that are credit-only increase their reference
 
    ```text
    count in the `credit-only` table.
    ```
 
-    b. Transaction accounts that need a write lock and are present in the
+   b. Transaction accounts that need a write lock and are present in the
 
    ```text
    `credit-only` table fail.
@@ -91,9 +91,9 @@ This design attempts to cache a credit-only account after loading without the us
 
 3. Transaction accounts are unlocked.
 
-    a. Decrement the `credit-only` lock table reference count; remove if its 0
+   a. Decrement the `credit-only` lock table reference count; remove if its 0
 
-    b. Remove from the `lock` set if the account is not in the `credit-only`
+   b. Remove from the `lock` set if the account is not in the `credit-only`
 
    ```text
    table.

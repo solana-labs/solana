@@ -56,7 +56,7 @@ A contract deployed on Solana which coordinates and intermediates the interactio
 
 * Submit Proof Request - allows client to place a request for a specific proof or set of proofs
 * Cancel Proof Request - allows client to invalidate a pending request
-* Fill Proof Request   - used by Provers to submit for validation a proof corresponding to a given Proof Request
+* Fill Proof Request - used by Provers to submit for validation a proof corresponding to a given Proof Request
 
   The SPV program maintains a publicly available listing of valid pending Proof
 

@@ -24,11 +24,11 @@ The following diagram shows how the Leader sends shreds with a Fanout of 2 to Ne
 
 The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
 
-![Neighborhood 0 Fanout to Neighborhood 1 and 2](../.gitbook/assets/data-plane-fanout.svg)
+![Neighborhood 0 Fanout to Neighborhood 1 and 2](../.gitbook/assets/data-plane-fanout%20%283%29.svg)
 
 Finally, the following diagram shows a two layer cluster with a Fanout of 2.
 
-![Two layer cluster with a Fanout of 2](../.gitbook/assets/data-plane.svg)
+![Two layer cluster with a Fanout of 2](../.gitbook/assets/data-plane%20%283%29.svg)
 
 ### Configuration Values
 
@@ -40,5 +40,5 @@ Currently, configuration is set when the cluster is launched. In the future, the
 
 The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives shreds from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
 
-![Inner workings of a neighborhood](../.gitbook/assets/data-plane-neighborhood.svg)
+![Inner workings of a neighborhood](../.gitbook/assets/data-plane-neighborhood%20%283%29.svg)
 

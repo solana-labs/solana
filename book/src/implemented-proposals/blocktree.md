@@ -12,7 +12,7 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
 
 1. Persistence: the Blocktree lives in the front of the nodes verification
 
-   pipeline, right behind network receive and signature verification.  If the
+   pipeline, right behind network receive and signature verification. If the
 
    shred received is consistent with the leader schedule \(i.e. was signed by the
 
@@ -30,7 +30,7 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
 
 4. Restart: with proper pruning/culling, the Blocktree can be replayed by
 
-   ordered enumeration of entries from slot 0.  The logic of the replay stage
+   ordered enumeration of entries from slot 0. The logic of the replay stage
 
    \(i.e. dealing with forks\) will have to be used for the most recent entries in
 
@@ -76,12 +76,9 @@ The bank exposes to replay stage:
 
    bank
 
-3. `votes`: a stack of records that contain:
-   1. `prev_hashes`: what anything after this vote must chain to in PoH
-   2. `tick_height`: the tick height at which this vote was cast
-   3. `lockout period`: how long a chain must be observed to be in the ledger to
+3. `votes`: a stack of records that contain: 1. `prev_hashes`: what anything after this vote must chain to in PoH 2. `tick_height`: the tick height at which this vote was cast 3. `lockout period`: how long a chain must be observed to be in the ledger to
 
-      be able to be chained below this vote
+   be able to be chained below this vote
 
 Replay stage uses Blocktree APIs to find the longest chain of entries it can hang off a previous vote. If that chain of entries does not hang off the latest vote, the replay stage rolls back the bank to that vote and replays the chain from there.
 
