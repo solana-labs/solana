@@ -13,7 +13,7 @@ source ci/_
 reportName="lcov-${CI_COMMIT:0:9}"
 
 if [[ -n $1 ]]; then
-  crate="--manifest-path=$1/Cargo.toml"
+  crate="--package $1"
 else
   crate="--all --exclude solana-local-cluster --exclude solana-validator-cuda"
 fi
@@ -37,7 +37,7 @@ rm -rf target/cov/$reportName
 
 source ci/rust-version.sh nightly
 # shellcheck disable=SC2086 #
-_ cargo +$rust_nightly build --target-dir target/cov $crate
+_ cargo +$rust_nightly build --tests --bins --target-dir target/cov $crate
 # shellcheck disable=SC2086 #
 _ cargo +$rust_nightly test --target-dir target/cov --lib $crate
 
