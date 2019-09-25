@@ -396,7 +396,7 @@ deploy() {
     (
       echo "--- net.sh update"
       set -x
-      time net/net.sh update -t "$CHANNEL_OR_TAG" --platform\ {linux,osx,windows}
+      time net/net.sh update -t edge --platform linux --platform osx --platform windows
     )
     ;;
   testnet-perf)
