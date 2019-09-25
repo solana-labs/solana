@@ -6,14 +6,10 @@ use crate::erasure::ErasureConfig;
 use crate::result::{Error, Result};
 use crate::shred::{Shred, Shredder};
 
-#[cfg(feature = "kvstore")]
-use solana_kvstore as kvstore;
-
 use bincode::deserialize;
 
 use std::collections::HashMap;
 
-#[cfg(not(feature = "kvstore"))]
 use rocksdb;
 
 use solana_metrics::{datapoint_error, datapoint_info};
@@ -61,10 +57,7 @@ macro_rules! db_imports {
     };
 }
 
-#[cfg(not(feature = "kvstore"))]
 db_imports! {rocks, Rocks, "rocksdb"}
-#[cfg(feature = "kvstore")]
-db_imports! {kvs, Kvs, "kvstore"}
 
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 
@@ -76,8 +69,6 @@ pub enum BlocktreeError {
     ShredForIndexExists,
     InvalidShredData(Box<bincode::ErrorKind>),
     RocksDb(rocksdb::Error),
-    #[cfg(feature = "kvstore")]
-    KvsDb(kvstore::Error),
     SlotNotRooted,
 }
 

@@ -15,7 +15,6 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 
 [features]
 cuda = []
-kvstore = ["solana-kvstore"]
 pin_gpu_memory = []
 
 [dependencies]
@@ -54,7 +53,6 @@ solana-chacha-sys = { path = "../chacha-sys", version = "0.20.0" }
 solana-client = { path = "../client", version = "0.20.0" }
 solana-drone = { path = "../drone", version = "0.20.0" }
 solana-ed25519-dalek = "0.2.0"
-solana-kvstore = { path = "../kvstore", version = "0.20.0", optional = true }
 solana-logger = { path = "../logger", version = "0.20.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "0.20.0" }
 solana-metrics = { path = "../metrics", version = "0.20.0" }
