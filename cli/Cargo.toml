@@ -9,7 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-bincode = "1.1.4"
+bincode = "1.2.0"
 bs58 = "0.3.0"
 chrono = { version = "0.4.9", features = ["serde"] }
 clap = "2.33.0"

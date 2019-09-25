@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-bincode = "1.1.4"
+bincode = "1.2.0"
 serde = "1.0.101"
 
 [lib]
