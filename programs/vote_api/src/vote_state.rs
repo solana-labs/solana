@@ -67,15 +67,33 @@ impl Lockout {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct VoteState {
-    pub votes: VecDeque<Lockout>,
+#[derive(Default, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+pub struct VoteInit {
     pub node_pubkey: Pubkey,
     pub authorized_voter: Pubkey,
+    pub authorized_withdrawer: Pubkey,
+    pub commission: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+pub enum VoteAuthorize {
+    Voter,
+    Withdrawer,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct VoteState {
+    /// the node that votes in this account
+    pub node_pubkey: Pubkey,
+    /// the signer for vote transactions
+    pub authorized_voter: Pubkey,
+    /// the signer for withdrawals
     pub authorized_withdrawer: Pubkey,
     /// fraction of std::u8::MAX that represents what part of a rewards
     ///  payout should be given to this VoteAccount
     pub commission: u8,
+
+    pub votes: VecDeque<Lockout>,
     pub root_slot: Option<u64>,
 
     /// clock epoch
@@ -92,17 +110,12 @@ pub struct VoteState {
 }
 
 impl VoteState {
-    pub fn new(
-        node_pubkey: &Pubkey,
-        authorized_voter: &Pubkey,
-        authorized_withdrawer: &Pubkey,
-        commission: u8,
-    ) -> Self {
+    pub fn new(vote_init: &VoteInit) -> Self {
         Self {
-            node_pubkey: *node_pubkey,
-            authorized_voter: *authorized_voter,
-            authorized_withdrawer: *authorized_withdrawer,
-            commission,
+            node_pubkey: vote_init.node_pubkey,
+            authorized_voter: vote_init.authorized_voter,
+            authorized_withdrawer: vote_init.authorized_withdrawer,
+            commission: vote_init.commission,
             ..VoteState::default()
         }
     }
@@ -320,41 +333,33 @@ impl VoteState {
     }
 }
 
-/// Authorize the given pubkey to sign votes. This may be called multiple times,
+/// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
 /// but will implicitly withdraw authorization from the previously authorized
-/// voter.
-pub fn authorize_voter(
+/// key
+pub fn authorize(
     vote_account: &mut KeyedAccount,
     other_signers: &[KeyedAccount],
-    authorized_voter: &Pubkey,
+    authorized: &Pubkey,
+    vote_authorize: VoteAuthorize,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
     // current authorized signer must say "yay"
-    verify_authorized_signer(&vote_state.authorized_voter, vote_account, other_signers)?;
+    match vote_authorize {
+        VoteAuthorize::Voter => {
+            verify_authorized_signer(&vote_state.authorized_voter, vote_account, other_signers)?;
+            vote_state.authorized_voter = *authorized;
+        }
+        VoteAuthorize::Withdrawer => {
+            verify_authorized_signer(
+                &vote_state.authorized_withdrawer,
+                vote_account,
+                other_signers,
+            )?;
+            vote_state.authorized_withdrawer = *authorized;
+        }
+    }
 
-    vote_state.authorized_voter = *authorized_voter;
-    vote_account.set_state(&vote_state)
-}
-
-/// Authorize the given pubkey to withdraw. This may be called multiple times,
-/// but will implicitly withdraw authorization from the previously authorized
-/// withdrawer.
-pub fn authorize_withdrawer(
-    vote_account: &mut KeyedAccount,
-    other_signers: &[KeyedAccount],
-    authorized_withdrawer: &Pubkey,
-) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account.state()?;
-
-    // current authorized signer must say "yay"
-    verify_authorized_signer(
-        &vote_state.authorized_withdrawer,
-        vote_account,
-        other_signers,
-    )?;
-
-    vote_state.authorized_withdrawer = *authorized_withdrawer;
     vote_account.set_state(&vote_state)
 }
 
@@ -404,22 +409,14 @@ pub fn withdraw(
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account(
     vote_account: &mut KeyedAccount,
-    authorized_voter: &Pubkey,
-    authorized_withdrawer: &Pubkey,
-    node_pubkey: &Pubkey,
-    commission: u8,
+    vote_init: &VoteInit,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
 
     if vote_state.authorized_voter != Pubkey::default() {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
-    vote_account.set_state(&VoteState::new(
-        authorized_voter,
-        authorized_withdrawer,
-        node_pubkey,
-        commission,
-    ))
+    vote_account.set_state(&VoteState::new(vote_init))
 }
 
 pub fn process_vote(
@@ -450,9 +447,14 @@ pub fn create_account(
 ) -> Account {
     let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
 
-    VoteState::new(node_pubkey, vote_pubkey, vote_pubkey, commission)
-        .to(&mut vote_account)
-        .unwrap();
+    VoteState::new(&VoteInit {
+        node_pubkey: *node_pubkey,
+        authorized_voter: *vote_pubkey,
+        authorized_withdrawer: *vote_pubkey,
+        commission,
+    })
+    .to(&mut vote_account)
+    .unwrap();
 
     vote_account
 }
@@ -469,7 +471,12 @@ mod tests {
 
     impl VoteState {
         pub fn new_for_test(auth_pubkey: &Pubkey) -> Self {
-            Self::new(&Pubkey::new_rand(), auth_pubkey, auth_pubkey, 0)
+            Self::new(&VoteInit {
+                node_pubkey: Pubkey::new_rand(),
+                authorized_voter: *auth_pubkey,
+                authorized_withdrawer: *auth_pubkey,
+                commission: 0,
+            })
         }
     }
 
@@ -484,20 +491,24 @@ mod tests {
         let mut vote_account = KeyedAccount::new(&vote_account_pubkey, false, &mut vote_account);
         let res = initialize_account(
             &mut vote_account,
-            &node_pubkey,
-            &vote_account_pubkey,
-            &vote_account_pubkey,
-            0,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_account_pubkey,
+                authorized_withdrawer: vote_account_pubkey,
+                commission: 0,
+            },
         );
         assert_eq!(res, Ok(()));
 
         // reinit should fail
         let res = initialize_account(
             &mut vote_account,
-            &node_pubkey,
-            &vote_account_pubkey,
-            &vote_account_pubkey,
-            0,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_account_pubkey,
+                authorized_withdrawer: vote_account_pubkey,
+                commission: 0,
+            },
         );
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
     }
@@ -640,21 +651,23 @@ mod tests {
 
         // another voter
         let authorized_voter_pubkey = Pubkey::new_rand();
-        let res = authorize_voter(
+        let res = authorize(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[],
             &authorized_voter_pubkey,
+            VoteAuthorize::Voter,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
-        let res = authorize_voter(
+        let res = authorize(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &[],
             &authorized_voter_pubkey,
+            VoteAuthorize::Voter,
         );
         assert_eq!(res, Ok(()));
         // verify authorized_voter_pubkey can authorize authorized_voter_pubkey ;)
-        let res = authorize_voter(
+        let res = authorize(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[KeyedAccount::new(
                 &authorized_voter_pubkey,
@@ -662,21 +675,23 @@ mod tests {
                 &mut Account::default(),
             )],
             &authorized_voter_pubkey,
+            VoteAuthorize::Voter,
         );
         assert_eq!(res, Ok(()));
 
         // authorize another withdrawer
         // another voter
         let authorized_withdrawer_pubkey = Pubkey::new_rand();
-        let res = authorize_withdrawer(
+        let res = authorize(
             &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &[],
             &authorized_withdrawer_pubkey,
+            VoteAuthorize::Withdrawer,
         );
         assert_eq!(res, Ok(()));
 
         // verify authorized_withdrawer can authorize authorized_withdrawer ;)
-        let res = authorize_withdrawer(
+        let res = authorize(
             &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[KeyedAccount::new(
                 &authorized_withdrawer_pubkey,
@@ -684,6 +699,7 @@ mod tests {
                 &mut Account::default(),
             )],
             &authorized_withdrawer_pubkey,
+            VoteAuthorize::Withdrawer,
         );
         assert_eq!(res, Ok(()));
 

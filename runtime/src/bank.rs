@@ -1576,7 +1576,7 @@ mod tests {
     use solana_sdk::sysvar::{fees::Fees, rewards::Rewards};
     use solana_stake_api::stake_state::Stake;
     use solana_vote_api::vote_instruction;
-    use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
+    use solana_vote_api::vote_state::{VoteInit, VoteState, MAX_LOCKOUT_HISTORY};
     use std::io::Cursor;
     use std::time::Duration;
     use tempfile::TempDir;
@@ -2853,10 +2853,12 @@ mod tests {
         let instructions = vote_instruction::create_account(
             &mint_keypair.pubkey(),
             &vote_keypair.pubkey(),
-            &mint_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            0,
+            &VoteInit {
+                node_pubkey: mint_keypair.pubkey(),
+                authorized_voter: vote_keypair.pubkey(),
+                authorized_withdrawer: vote_keypair.pubkey(),
+                commission: 0,
+            },
             10,
         );
 

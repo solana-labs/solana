@@ -3,7 +3,7 @@
 
 use crate::{
     id,
-    vote_state::{self, Vote, VoteState},
+    vote_state::{self, Vote, VoteAuthorize, VoteInit, VoteState},
 };
 use bincode::deserialize;
 use log::*;
@@ -51,14 +51,11 @@ impl std::error::Error for VoteError {}
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
     /// Initialize the VoteState for this `vote account`
-    /// takes a node_pubkey and commission
-    InitializeAccount(Pubkey, Pubkey, Pubkey, u8),
+    InitializeAccount(VoteInit),
 
-    /// Authorize a voter to send signed votes.
-    AuthorizeVoter(Pubkey),
-
-    /// Authorize a withdrawer to be able to withdraw
-    AuthorizeWithdrawer(Pubkey),
+    /// Authorize a voter to send signed votes or a withdrawer
+    ///  to withdraw
+    Authorize(Pubkey, VoteAuthorize),
 
     /// A Vote instruction with recent votes
     Vote(Vote),
@@ -67,22 +64,11 @@ pub enum VoteInstruction {
     Withdraw(u64),
 }
 
-fn initialize_account(
-    vote_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
-    authorized_voter: &Pubkey,
-    authorized_withdrawer: &Pubkey,
-    commission: u8,
-) -> Instruction {
+fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
     let account_metas = vec![AccountMeta::new(*vote_pubkey, false)];
     Instruction::new(
         id(),
-        &VoteInstruction::InitializeAccount(
-            *node_pubkey,
-            *authorized_voter,
-            *authorized_withdrawer,
-            commission,
-        ),
+        &VoteInstruction::InitializeAccount(*vote_init),
         account_metas,
     )
 }
@@ -90,22 +76,13 @@ fn initialize_account(
 pub fn create_account(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
-    authorized_voter: &Pubkey,
-    authorized_withdrawer: &Pubkey,
-    commission: u8,
+    vote_init: &VoteInit,
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;
     let create_ix =
         system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
-    let init_ix = initialize_account(
-        vote_pubkey,
-        node_pubkey,
-        authorized_voter,
-        authorized_withdrawer,
-        commission,
-    );
+    let init_ix = initialize_account(vote_pubkey, vote_init);
     vec![create_ix, init_ix]
 }
 
@@ -132,30 +109,17 @@ fn metas_for_authorized_signer(
     account_metas
 }
 
-pub fn authorize_voter(
+pub fn authorize(
     vote_pubkey: &Pubkey,
-    authorized_voter_pubkey: &Pubkey, // currently authorized
-    new_authorized_voter_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey, // currently authorized
+    new_authorized_pubkey: &Pubkey,
+    vote_authorize: VoteAuthorize,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_voter_pubkey, &[]);
+    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_pubkey, &[]);
 
     Instruction::new(
         id(),
-        &VoteInstruction::AuthorizeVoter(*new_authorized_voter_pubkey),
-        account_metas,
-    )
-}
-
-pub fn authorize_withdrawer(
-    vote_pubkey: &Pubkey,
-    authorized_withdrawer_pubkey: &Pubkey, // currently authorized
-    new_authorized_withdrawer_pubkey: &Pubkey,
-) -> Instruction {
-    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_withdrawer_pubkey, &[]);
-
-    Instruction::new(
-        id(),
-        &VoteInstruction::AuthorizeWithdrawer(*new_authorized_withdrawer_pubkey),
+        &VoteInstruction::Authorize(*new_authorized_pubkey, vote_authorize),
         account_metas,
     )
 }
@@ -210,23 +174,11 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        VoteInstruction::InitializeAccount(
-            node_pubkey,
-            authorized_voter,
-            authorized_withdrawer,
-            commission,
-        ) => vote_state::initialize_account(
-            me,
-            &node_pubkey,
-            &authorized_voter,
-            &authorized_withdrawer,
-            commission,
-        ),
-        VoteInstruction::AuthorizeVoter(voter_pubkey) => {
-            vote_state::authorize_voter(me, rest, &voter_pubkey)
+        VoteInstruction::InitializeAccount(vote_init) => {
+            vote_state::initialize_account(me, &vote_init)
         }
-        VoteInstruction::AuthorizeWithdrawer(withdrawer_pubkey) => {
-            vote_state::authorize_withdrawer(me, rest, &withdrawer_pubkey)
+        VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
+            vote_state::authorize(me, rest, &voter_pubkey, vote_authorize)
         }
         VoteInstruction::Vote(vote) => {
             datapoint_info!("vote-native", ("count", 1, i64));
@@ -303,10 +255,7 @@ mod tests {
         let instructions = create_account(
             &Pubkey::default(),
             &Pubkey::default(),
-            &Pubkey::default(),
-            &Pubkey::default(),
-            &Pubkey::default(),
-            0,
+            &VoteInit::default(),
             100,
         );
         assert_eq!(
@@ -322,18 +271,11 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&authorize_voter(
+            process_instruction(&authorize(
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
-            )),
-            Err(InstructionError::InvalidAccountData),
-        );
-        assert_eq!(
-            process_instruction(&authorize_withdrawer(
-                &Pubkey::default(),
-                &Pubkey::default(),
-                &Pubkey::default(),
+                VoteAuthorize::Voter,
             )),
             Err(InstructionError::InvalidAccountData),
         );

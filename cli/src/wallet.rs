@@ -7,11 +7,9 @@ use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use log::*;
 use num_traits::FromPrimitive;
-use serde_json;
-use serde_json::{json, Value};
+use serde_json::{self, json, Value};
 use solana_budget_api::budget_instruction::{self, BudgetError};
-use solana_client::client_error::ClientError;
-use solana_client::rpc_client::RpcClient;
+use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 #[cfg(test)]
@@ -33,14 +31,16 @@ use solana_sdk::{
 };
 use solana_stake_api::stake_instruction::{self, StakeError};
 use solana_storage_api::storage_instruction;
-use solana_vote_api::vote_state::VoteState;
-use std::collections::VecDeque;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::net::{IpAddr, SocketAddr};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
-use std::{error, fmt};
+use solana_vote_api::vote_state::{VoteAuthorize, VoteInit, VoteState};
+use std::{
+    collections::VecDeque,
+    fs::File,
+    io::{Read, Write},
+    net::{IpAddr, SocketAddr},
+    thread::sleep,
+    time::{Duration, Instant},
+    {error, fmt},
+};
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -64,9 +64,8 @@ pub enum WalletCommand {
     },
     Cancel(Pubkey),
     Confirm(Signature),
-    AuthorizeVoter(Pubkey, Keypair, Pubkey),
-    AuthorizeWithdrawer(Pubkey, Keypair, Pubkey),
-    CreateVoteAccount(Pubkey, Pubkey, Pubkey, Pubkey, u8, u64),
+    VoteAuthorize(Pubkey, Keypair, Pubkey, VoteAuthorize),
+    CreateVoteAccount(Pubkey, VoteInit, u64),
     ShowAccount {
         pubkey: Pubkey,
         output_file: Option<String>,
@@ -237,8 +236,12 @@ pub fn parse_command(
             })
         }
         ("create-vote-account", Some(matches)) => parse_vote_create_account(matches),
-        ("authorize-voter", Some(matches)) => parse_vote_authorize_voter(matches),
-        ("authorize-withdrawer", Some(matches)) => parse_vote_authorize_withdrawer(matches),
+        ("vote-authorize-voter", Some(matches)) => {
+            parse_vote_authorize(matches, VoteAuthorize::Voter)
+        }
+        ("vote-authorize-withdrawer", Some(matches)) => {
+            parse_vote_authorize(matches, VoteAuthorize::Withdrawer)
+        }
         ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         ("delegate-stake", Some(matches)) => {
@@ -1271,46 +1274,28 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
 
         // Create vote account
-        WalletCommand::CreateVoteAccount(
-            vote_account_pubkey,
-            node_pubkey,
-            authorized_voter,
-            authorized_withdrawer,
-            commission,
-            lamports,
-        ) => process_create_vote_account(
-            &rpc_client,
-            config,
-            &vote_account_pubkey,
-            &node_pubkey,
-            &authorized_voter,
-            &authorized_withdrawer,
-            *commission,
-            *lamports,
-        ),
+        WalletCommand::CreateVoteAccount(vote_account_pubkey, vote_init, lamports) => {
+            process_create_vote_account(
+                &rpc_client,
+                config,
+                &vote_account_pubkey,
+                &vote_init,
+                *lamports,
+            )
+        }
 
-        WalletCommand::AuthorizeVoter(
+        WalletCommand::VoteAuthorize(
             vote_account_pubkey,
-            authorized_voter_keypair,
-            new_authorized_voter_pubkey,
-        ) => process_authorize_voter(
+            authorized_keypair,
+            new_authorized_pubkey,
+            vote_authorize,
+        ) => process_vote_authorize(
             &rpc_client,
             config,
             &vote_account_pubkey,
-            &authorized_voter_keypair,
-            &new_authorized_voter_pubkey,
-        ),
-
-        WalletCommand::AuthorizeWithdrawer(
-            vote_account_pubkey,
-            authorized_withdrawer_keypair,
-            new_authorized_withdrawer_pubkey,
-        ) => process_authorize_withdrawer(
-            &rpc_client,
-            config,
-            &vote_account_pubkey,
-            &authorized_withdrawer_keypair,
-            &new_authorized_withdrawer_pubkey,
+            &authorized_keypair,
+            &new_authorized_pubkey,
+            *vote_authorize,
         ),
 
         WalletCommand::ShowAccount {
@@ -1664,7 +1649,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("authorize-voter")
+            SubCommand::with_name("vote-authorize-voter")
                 .about("Authorize a new vote signing keypair for the given vote account")
                 .arg(
                     Arg::with_name("vote_account_pubkey")
@@ -1676,7 +1661,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Vote account in which to set the authorized voter"),
                 )
                 .arg(
-                    Arg::with_name("authorized_voter_keypair_file")
+                    Arg::with_name("authorized_keypair_file")
                         .index(2)
                         .value_name("CURRENT VOTER KEYPAIR FILE")
                         .takes_value(true)
@@ -1685,7 +1670,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Keypair file for the currently authorized vote signer"),
                 )
                 .arg(
-                    Arg::with_name("new_authorized_voter_pubkey")
+                    Arg::with_name("new_authorized_pubkey")
                         .index(3)
                         .value_name("NEW VOTER PUBKEY")
                         .takes_value(true)
@@ -1695,7 +1680,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("authorize-withdrawer")
+            SubCommand::with_name("vote-authorize-withdrawer")
                 .about("Authorize a new withdraw signing keypair for the given vote account")
                 .arg(
                     Arg::with_name("vote_account_pubkey")
@@ -1707,7 +1692,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Vote account in which to set the authorized withdrawer"),
                 )
                 .arg(
-                    Arg::with_name("authorized_withdrawer_keypair_file")
+                    Arg::with_name("authorized_keypair_file")
                         .index(2)
                         .value_name("CURRENT WITHDRAWER KEYPAIR FILE")
                         .takes_value(true)
@@ -1716,7 +1701,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Keypair file for the currently authorized withdrawer"),
                 )
                 .arg(
-                    Arg::with_name("new_authorized_withdrawer_pubkey")
+                    Arg::with_name("new_authorized_pubkey")
                         .index(3)
                         .value_name("NEW WITHDRAWER PUBKEY")
                         .takes_value(true)
@@ -2690,19 +2675,25 @@ mod tests {
         let node_pubkey = Pubkey::new_rand();
         config.command = WalletCommand::CreateVoteAccount(
             bob_pubkey,
-            node_pubkey,
-            bob_pubkey,
-            bob_pubkey,
-            0,
+            VoteInit {
+                node_pubkey,
+                authorized_voter: bob_pubkey,
+                authorized_withdrawer: bob_pubkey,
+                commission: 0,
+            },
             10,
         );
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let bob_keypair = Keypair::new();
-        let new_authorized_voter_pubkey = Pubkey::new_rand();
-        config.command =
-            WalletCommand::AuthorizeVoter(bob_pubkey, bob_keypair, new_authorized_voter_pubkey);
+        let new_authorized_pubkey = Pubkey::new_rand();
+        config.command = WalletCommand::VoteAuthorize(
+            bob_pubkey,
+            bob_keypair,
+            new_authorized_pubkey,
+            VoteAuthorize::Voter,
+        );
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -2854,15 +2845,22 @@ mod tests {
 
         config.command = WalletCommand::CreateVoteAccount(
             bob_pubkey,
-            node_pubkey,
-            bob_pubkey,
-            bob_pubkey,
-            0,
+            VoteInit {
+                node_pubkey,
+                authorized_voter: bob_pubkey,
+                authorized_withdrawer: bob_pubkey,
+                commission: 0,
+            },
             10,
         );
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::AuthorizeVoter(bob_pubkey, Keypair::new(), bob_pubkey);
+        config.command = WalletCommand::VoteAuthorize(
+            bob_pubkey,
+            Keypair::new(),
+            bob_pubkey,
+            VoteAuthorize::Voter,
+        );
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::GetSlot;
