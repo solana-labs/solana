@@ -138,6 +138,10 @@ impl AppendVec {
         }
     }
 
+    pub fn flush(&self) -> io::Result<()> {
+        self.map.flush()
+    }
+
     #[allow(clippy::mutex_atomic)]
     pub fn reset(&self) {
         // This mutex forces append to be single threaded, but concurrent with reads
@@ -383,7 +387,6 @@ impl Serialize for AppendVec {
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        self.map.flush().map_err(Error::custom)?;
         let len = std::mem::size_of::<usize>() as u64;
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);

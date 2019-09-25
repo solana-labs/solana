@@ -244,6 +244,10 @@ impl AccountStorageEntry {
         self.id
     }
 
+    pub fn flush(&self) -> Result<(), IOError> {
+        self.accounts.flush()
+    }
+
     fn add_account(&self) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
