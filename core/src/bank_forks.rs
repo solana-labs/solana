@@ -271,8 +271,8 @@ impl BankForks {
             ErrorKind::Other,
             "no snapshots found in config snapshot_path",
         ))?;
-        // We only care about the last snapshot of roots.
-        // We'll ask the bank for all MAX_CACHE_ENTRIES (on the rooted path) worth of statuses
+        // We only care about the last banks's snapshot.
+        // We'll ask the bank for MAX_CACHE_ENTRIES (on the rooted path) worth of statuses
         let package = snapshot_utils::package_snapshot(
             &bank,
             latest_slot_snapshot_paths,

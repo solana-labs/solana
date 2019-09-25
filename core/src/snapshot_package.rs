@@ -190,7 +190,7 @@ impl SnapshotPackagerService {
         slot_deltas: &[SlotDelta<TransactionResult<()>>],
         snapshot_links: &TempDir,
     ) -> Result<()> {
-        // the status cache is stored as snapshot_path/slot/slot_satus_cache
+        // the status cache is stored as snapshot_path/satus_cache
         let snapshot_status_cache_file_path = snapshot_links
             .path()
             .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME);
