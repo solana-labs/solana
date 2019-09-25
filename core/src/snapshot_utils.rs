@@ -5,7 +5,6 @@ use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use bincode::{deserialize_from, serialize_into};
 use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
-use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::SlotDelta;
 use solana_sdk::transaction;
@@ -16,13 +15,12 @@ use std::io::{BufReader, BufWriter, Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
 use tar::Archive;
 
-const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
+pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
     pub slot: u64,
     pub snapshot_file_path: PathBuf,
-    pub snapshot_status_cache_path: PathBuf,
 }
 
 impl PartialOrd for SlotSnapshotPaths {
@@ -43,20 +41,16 @@ impl SlotSnapshotPaths {
             &self.snapshot_file_path,
             &new_slot_hardlink_dir.join(self.slot.to_string()),
         )?;
-        // Copy the status cache
-        fs::copy(
-            &self.snapshot_status_cache_path,
-            &new_slot_hardlink_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
-        )?;
         Ok(())
     }
 }
 
 pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     bank: &Bank,
-    snapshot_files: &[SlotSnapshotPaths],
+    snapshot_files: &SlotSnapshotPaths,
     snapshot_package_output_file: P,
     snapshot_path: Q,
+    slots_to_snapshot: &[u64],
 ) -> Result<SnapshotPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -78,12 +72,11 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
 
     // Any errors from this point on will cause the above SnapshotPackage to drop, clearing
     // any temporary state created for the SnapshotPackage (like the snapshot_hard_links_dir)
-    for files in snapshot_files {
-        files.copy_snapshot_directory(snapshot_hard_links_dir.path())?;
-    }
+    snapshot_files.copy_snapshot_directory(snapshot_hard_links_dir.path())?;
 
     let package = SnapshotPackage::new(
         bank.slot(),
+        bank.src.slot_deltas(slots_to_snapshot),
         snapshot_hard_links_dir,
         account_storage_entries,
         snapshot_package_output_file.as_ref().to_path_buf(),
@@ -112,8 +105,6 @@ where
                     SlotSnapshotPaths {
                         slot,
                         snapshot_file_path: snapshot_path.join(get_snapshot_file_name(slot)),
-                        snapshot_status_cache_path: snapshot_path
-                            .join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
                     }
                 })
                 .collect::<Vec<SlotSnapshotPaths>>();
@@ -131,11 +122,7 @@ where
     }
 }
 
-pub fn add_snapshot<P: AsRef<Path>>(
-    snapshot_path: P,
-    bank: &Bank,
-    slots_since_snapshot: &[u64],
-) -> Result<()> {
+pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
     let slot = bank.slot();
     // snapshot_path/slot
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
@@ -143,43 +130,21 @@ pub fn add_snapshot<P: AsRef<Path>>(
 
     // the snapshot is stored as snapshot_path/slot/slot
     let snapshot_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
-    // the status cache is stored as snapshot_path/slot/slot_satus_cache
-    let snapshot_status_cache_file_path = slot_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
     info!(
-        "creating snapshot {}, path: {:?} status_cache: {:?}",
+        "creating snapshot {}, path: {:?}",
         bank.slot(),
         snapshot_file_path,
-        snapshot_status_cache_file_path
     );
     let snapshot_file = File::create(&snapshot_file_path)?;
     // snapshot writer
     let mut snapshot_stream = BufWriter::new(snapshot_file);
-    let status_cache = File::create(&snapshot_status_cache_file_path)?;
-    // status cache writer
-    let mut status_cache_stream = BufWriter::new(status_cache);
-
     // Create the snapshot
     serialize_into(&mut snapshot_stream, &*bank).map_err(|e| get_io_error(&e.to_string()))?;
     serialize_into(&mut snapshot_stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
-
-    let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
-    // write the status cache
-    serialize_into(
-        &mut status_cache_stream,
-        &bank.src.slot_deltas(slots_since_snapshot),
-    )
-    .map_err(|_| get_io_error("serialize bank status cache error"))?;
-    status_cache_serialize.stop();
-    inc_new_counter_info!(
-        "serialize-status-cache-ms",
-        status_cache_serialize.as_ms() as usize
-    );
-
     info!(
-        "successfully created snapshot {}, path: {:?} status_cache: {:?}",
+        "successfully created snapshot {}, path: {:?}",
         bank.slot(),
         snapshot_file_path,
-        snapshot_status_cache_file_path
     );
 
     Ok(())
@@ -217,8 +182,11 @@ pub fn bank_from_archive<P: AsRef<Path>>(
 
     let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
     let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
-    let snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
-    let bank = rebuild_bank_from_snapshots(account_paths, &snapshot_paths, unpacked_accounts_dir)?;
+    let bank = rebuild_bank_from_snapshots(
+        account_paths,
+        &unpacked_snapshots_dir,
+        unpacked_accounts_dir,
+    )?;
 
     if !bank.verify_hash_internal_state() {
         warn!("Invalid snapshot hash value!");
@@ -260,18 +228,23 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
 
 fn rebuild_bank_from_snapshots<P>(
     local_account_paths: String,
-    snapshot_paths: &[SlotSnapshotPaths],
+    unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,
 {
-    // Rebuild the last root bank
-    let last_root_paths = snapshot_paths
-        .last()
+    let mut snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
+    if snapshot_paths.len() > 1 {
+        return Err(get_io_error("invalid snapshot format"));
+    }
+    let root_paths = snapshot_paths
+        .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
-    info!("Loading from {:?}", &last_root_paths.snapshot_file_path);
-    let file = File::open(&last_root_paths.snapshot_file_path)?;
+
+    // Rebuild the root bank
+    info!("Loading from {:?}", &root_paths.snapshot_file_path);
+    let file = File::open(&root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
     let bank: Bank = deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()))?;
 
@@ -279,16 +252,15 @@ where
     bank.rc
         .accounts_from_stream(&mut stream, local_account_paths, append_vecs_path)?;
 
-    // merge the status caches from all previous banks
-    for slot_paths in snapshot_paths.iter().rev() {
-        let status_cache = File::open(&slot_paths.snapshot_status_cache_path)?;
-        let mut stream = BufReader::new(status_cache);
-        let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = deserialize_from(&mut stream)
-            .map_err(|_| get_io_error("deserialize root error"))
-            .unwrap_or_default();
+    // Rebuild status cache
+    let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
+    let status_cache = File::open(status_cache_path)?;
+    let mut stream = BufReader::new(status_cache);
+    let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = deserialize_from(&mut stream)
+        .map_err(|_| get_io_error("deserialize root error"))
+        .unwrap_or_default();
 
-        bank.src.append(&slot_deltas);
-    }
+    bank.src.append(&slot_deltas);
 
     Ok(bank)
 }

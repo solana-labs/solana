@@ -1,10 +1,15 @@
 use crate::result::{Error, Result};
 use crate::service::Service;
+use crate::snapshot_utils;
+use bincode::serialize_into;
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::accounts_db::AccountStorageEntry;
+use solana_runtime::status_cache::SlotDelta;
+use solana_sdk::transaction::Result as TransactionResult;
 use std::fs;
-use std::io::{Error as IOError, ErrorKind};
+use std::fs::File;
+use std::io::{BufWriter, Error as IOError, ErrorKind};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
@@ -22,6 +27,7 @@ pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 
 pub struct SnapshotPackage {
     root: u64,
+    slot_deltas: Vec<SlotDelta<TransactionResult<()>>>,
     snapshot_links: TempDir,
     storage_entries: Vec<Arc<AccountStorageEntry>>,
     tar_output_file: PathBuf,
@@ -30,12 +36,14 @@ pub struct SnapshotPackage {
 impl SnapshotPackage {
     pub fn new(
         root: u64,
+        slot_deltas: Vec<SlotDelta<TransactionResult<()>>>,
         snapshot_links: TempDir,
         storage_entries: Vec<Arc<AccountStorageEntry>>,
         tar_output_file: PathBuf,
     ) -> Self {
         Self {
             root,
+            slot_deltas,
             snapshot_links,
             storage_entries,
             tar_output_file,
@@ -75,6 +83,12 @@ impl SnapshotPackagerService {
             "Generating snapshot tarball for root {}",
             snapshot_package.root
         );
+
+        Self::serialize_status_cache(
+            &snapshot_package.slot_deltas,
+            &snapshot_package.snapshot_links,
+        )?;
+
         let mut timer = Measure::start("snapshot_package-package_snapshots");
         let tar_dir = snapshot_package
             .tar_output_file
@@ -167,6 +181,31 @@ impl SnapshotPackagerService {
         warn!("Snapshot Packaging Error: {:?}", error);
         Error::IO(IOError::new(ErrorKind::Other, error))
     }
+
+    fn serialize_status_cache(
+        slot_deltas: &[SlotDelta<TransactionResult<()>>],
+        snapshot_links: &TempDir,
+    ) -> Result<()> {
+        // the status cache is stored as snapshot_path/status_cache
+        let snapshot_status_cache_file_path = snapshot_links
+            .path()
+            .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME);
+
+        let status_cache = File::create(&snapshot_status_cache_file_path)?;
+        // status cache writer
+        let mut status_cache_stream = BufWriter::new(status_cache);
+
+        let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
+        // write the status cache
+        serialize_into(&mut status_cache_stream, slot_deltas)
+            .map_err(|_| Self::get_io_error("serialize status cache error"))?;
+        status_cache_serialize.stop();
+        inc_new_counter_info!(
+            "serialize-status-cache-ms",
+            status_cache_serialize.as_ms() as usize
+        );
+        Ok(())
+    }
 }
 
 impl Service for SnapshotPackagerService {
@@ -228,6 +267,7 @@ mod tests {
         let output_tar_path = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
         let snapshot_package = SnapshotPackage::new(
             5,
+            vec![],
             link_snapshots_dir,
             storage_entries.clone(),
             output_tar_path.clone(),
@@ -235,6 +275,15 @@ mod tests {
 
         // Make tarball from packageable snapshot
         SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
+
+        // before we compare, stick an empty status_cache in this dir so that the package comparision works
+        // This is needed since the status_cache is added by the packager and is not collected from
+        // the source dir for snapshots
+        let slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
+        let dummy_status_cache = File::create(snapshots_dir.join("status_cache")).unwrap();
+        let mut status_cache_stream = BufWriter::new(dummy_status_cache);
+        serialize_into(&mut status_cache_stream, &slot_deltas).unwrap();
+        status_cache_stream.flush().unwrap();
 
         // Check tarball is correct
         snapshot_utils::tests::verify_snapshot_tar(output_tar_path, snapshots_dir, accounts_dir);

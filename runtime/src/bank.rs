@@ -23,6 +23,7 @@ use crate::{
 };
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
+use itertools::Itertools;
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
@@ -48,7 +49,7 @@ use solana_sdk::{
     timing::duration_as_ns,
     transaction::{Result, Transaction, TransactionError},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Error as IOError, Read};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -136,8 +137,15 @@ impl StatusCacheRc {
         sc.slot_deltas(slots)
     }
 
-    pub fn roots(&self) -> HashSet<u64> {
-        self.status_cache.read().unwrap().roots().clone()
+    pub fn roots(&self) -> Vec<u64> {
+        self.status_cache
+            .read()
+            .unwrap()
+            .roots()
+            .iter()
+            .cloned()
+            .sorted()
+            .collect()
     }
 
     pub fn append(&self, slot_deltas: &[SlotDelta<Result<()>>]) {

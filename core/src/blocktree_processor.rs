@@ -1569,12 +1569,6 @@ pub mod tests {
                 bank_slot: 6, // The head of the fork is slot 6
             }
         );
-
-        // slots_since_snapshot should contain everything on the rooted path
-        assert_eq!(
-            bank_forks.slots_since_snapshot().to_vec(),
-            vec![1, 2, 3, 4, 5]
-        );
         assert_eq!(bank_forks.root(), 5);
 
         // Verify the parents of the head of the fork
