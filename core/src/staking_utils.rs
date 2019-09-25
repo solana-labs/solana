@@ -1,9 +1,7 @@
 use solana_runtime::bank::Bank;
-use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{account::Account, pubkey::Pubkey};
 use solana_vote_api::vote_state::VoteState;
-use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::{borrow::Borrow, collections::HashMap};
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
 /// supermajority lockout
@@ -99,14 +97,15 @@ where
 pub(crate) mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS};
-    use solana_sdk::instruction::Instruction;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::sysvar::stake_history::{self, StakeHistory};
-    use solana_sdk::transaction::Transaction;
-    use solana_stake_api::stake_instruction;
-    use solana_stake_api::stake_state::Stake;
-    use solana_vote_api::vote_instruction;
+    use solana_sdk::{
+        instruction::Instruction,
+        pubkey::Pubkey,
+        signature::{Keypair, KeypairUtil},
+        sysvar::stake_history::{self, StakeHistory},
+        transaction::Transaction,
+    };
+    use solana_stake_api::{stake_instruction, stake_state::Stake};
+    use solana_vote_api::{vote_instruction, vote_state::VoteInit};
     use std::sync::Arc;
 
     fn new_from_parent(parent: &Arc<Bank>, slot: u64) -> Bank {
@@ -140,8 +139,12 @@ pub(crate) mod tests {
             vote_instruction::create_account(
                 &from_account.pubkey(),
                 vote_pubkey,
-                node_pubkey,
-                0,
+                &VoteInit {
+                    node_pubkey: *node_pubkey,
+                    authorized_voter: *vote_pubkey,
+                    authorized_withdrawer: *vote_pubkey,
+                    commission: 0,
+                },
                 amount,
             ),
         );
@@ -288,15 +291,28 @@ pub(crate) mod tests {
     fn test_to_staked_nodes() {
         let mut stakes = Vec::new();
         let node1 = Pubkey::new_rand();
-        let node2 = Pubkey::new_rand();
 
         // Node 1 has stake of 3
         for i in 0..3 {
-            stakes.push((i, VoteState::new(&Pubkey::new_rand(), &node1, 0)));
+            stakes.push((
+                i,
+                VoteState::new(&VoteInit {
+                    node_pubkey: node1,
+                    ..VoteInit::default()
+                }),
+            ));
         }
 
         // Node 1 has stake of 5
-        stakes.push((5, VoteState::new(&Pubkey::new_rand(), &node2, 0)));
+        let node2 = Pubkey::new_rand();
+
+        stakes.push((
+            5,
+            VoteState::new(&VoteInit {
+                node_pubkey: node2,
+                ..VoteInit::default()
+            }),
+        ));
 
         let result = to_staked_nodes(stakes.into_iter());
         assert_eq!(result.len(), 2);

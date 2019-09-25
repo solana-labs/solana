@@ -12,8 +12,7 @@ use solana_core::{
 };
 use solana_sdk::{
     client::SyncClient,
-    clock::DEFAULT_TICKS_PER_SLOT,
-    clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
+    clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
     genesis_block::GenesisBlock,
     message::Message,
     poh_config::PohConfig,
@@ -24,7 +23,10 @@ use solana_sdk::{
 };
 use solana_stake_api::{config as stake_config, stake_instruction, stake_state::StakeState};
 use solana_storage_api::{storage_contract, storage_instruction};
-use solana_vote_api::{vote_instruction, vote_state::VoteState};
+use solana_vote_api::{
+    vote_instruction,
+    vote_state::{VoteInit, VoteState},
+};
 use std::{
     collections::HashMap,
     fs::remove_dir_all,
@@ -436,8 +438,12 @@ impl LocalCluster {
                 vote_instruction::create_account(
                     &from_account.pubkey(),
                     &vote_account_pubkey,
-                    &node_pubkey,
-                    0,
+                    &VoteInit {
+                        node_pubkey,
+                        authorized_voter: vote_account_pubkey,
+                        authorized_withdrawer: vote_account_pubkey,
+                        commission: 0,
+                    },
                     amount,
                 ),
                 client.get_recent_blockhash().unwrap().0,
