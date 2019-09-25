@@ -902,9 +902,17 @@ impl AccountsDB {
         // a fork is not totally dead until it is older than the root
         dead_forks.retain(|fork| *fork < last_root);
         if !dead_forks.is_empty() {
-            let mut index = self.accounts_index.write().unwrap();
-            for fork in dead_forks.iter() {
-                index.cleanup_dead_fork(*fork);
+            {
+                let mut index = self.accounts_index.write().unwrap();
+                for fork in dead_forks.iter() {
+                    index.cleanup_dead_fork(*fork);
+                }
+            }
+            {
+                let mut fork_hashes = self.fork_hashes.write().unwrap();
+                for fork in dead_forks.iter() {
+                    fork_hashes.remove(fork);
+                }
             }
         }
     }
