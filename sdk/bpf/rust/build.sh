@@ -33,6 +33,7 @@ export RUSTFLAGS="
     -C link-arg=--Bdynamic \
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
+    -C link-arg=-no-threads \
     -C linker=$bpf_sdk/dependencies/llvm-native/bin/ld.lld"
 
 # Setup xargo
