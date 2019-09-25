@@ -9,10 +9,10 @@ use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::SlotDelta;
 use solana_sdk::transaction;
 use std::cmp::Ordering;
-use std::fs;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 use tar::Archive;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
@@ -235,7 +235,9 @@ where
     P: AsRef<Path>,
 {
     let mut snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
-    assert!(snapshot_paths.len() <= 1);
+    if snapshot_paths.len() > 1 {
+        return Error(io::Error::new(ErrorKind::Other, "invalid snapshot format"));
+    }
     let root_paths = snapshot_paths
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
