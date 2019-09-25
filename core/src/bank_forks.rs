@@ -33,7 +33,6 @@ pub struct BankForks {
     working_bank: Arc<Bank>,
     root: u64,
     snapshot_config: Option<SnapshotConfig>,
-    slots_to_snapshot: Vec<u64>,
     last_snapshot_slot: u64,
 }
 
@@ -54,7 +53,6 @@ impl BankForks {
             working_bank,
             root: 0,
             snapshot_config: None,
-            slots_to_snapshot: vec![bank_slot],
             last_snapshot_slot: bank_slot,
         }
     }
@@ -136,7 +134,6 @@ impl BankForks {
             banks,
             working_bank,
             snapshot_config: None,
-            slots_to_snapshot: rooted_path,
             last_snapshot_slot: root,
         }
     }
@@ -168,21 +165,6 @@ impl BankForks {
             .map(|bank| bank.transaction_count())
             .unwrap_or(0);
 
-        if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
-            let new_rooted_path = root_bank
-                .parents()
-                .into_iter()
-                .map(|p| p.slot())
-                .rev()
-                .skip(1);
-            self.slots_to_snapshot.extend(new_rooted_path);
-            self.slots_to_snapshot.push(root);
-            if self.slots_to_snapshot.len() > MAX_CACHE_ENTRIES {
-                let num_to_remove = self.slots_to_snapshot.len() - MAX_CACHE_ENTRIES;
-                self.slots_to_snapshot.drain(0..num_to_remove);
-            }
-        }
-
         root_bank.squash();
         let new_tx_count = root_bank.transaction_count();
 
@@ -195,7 +177,7 @@ impl BankForks {
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
                 let r = self.generate_snapshot(
                     root,
-                    &self.slots_to_snapshot[..],
+                    &root_bank.src.roots(),
                     snapshot_package_sender.as_ref().unwrap(),
                     snapshot_utils::get_snapshot_tar_path(&config.snapshot_package_output_path),
                 );
@@ -226,10 +208,6 @@ impl BankForks {
 
     pub fn root(&self) -> u64 {
         self.root
-    }
-
-    pub fn slots_since_snapshot(&self) -> &[u64] {
-        &self.slots_to_snapshot
     }
 
     fn purge_old_snapshots(&self) {
@@ -273,7 +251,7 @@ impl BankForks {
                 "no snapshots found in config snapshot_path",
             )
         })?;
-        // We only care about the last banks's snapshot.
+        // We only care about the last bank's snapshot.
         // We'll ask the bank for MAX_CACHE_ENTRIES (on the rooted path) worth of statuses
         let package = snapshot_utils::package_snapshot(
             &bank,
@@ -463,7 +441,7 @@ mod tests {
                 .expect("no snapshots found in path"),
             snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path),
             &snapshot_config.snapshot_path,
-            &bank_forks.slots_to_snapshot,
+            &last_bank.src.roots(),
         )
         .unwrap();
         SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
@@ -691,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn test_slots_since_snapshot() {
+    fn test_slots_to_snapshot() {
         solana_logger::setup();
         for add_root_interval in 1..10 {
             let (snapshot_sender, _snapshot_receiver) = channel();
@@ -712,24 +690,19 @@ mod tests {
                 snapshot_test_config
                     .bank_forks
                     .set_root(current_bank.slot(), &snapshot_sender);
-
-                let slots_since_snapshot_hashset: HashSet<_> = snapshot_test_config
-                    .bank_forks
-                    .slots_to_snapshot
-                    .iter()
-                    .cloned()
-                    .collect();
-                assert_eq!(slots_since_snapshot_hashset, current_bank.src.roots());
             }
 
-            let expected_slots_since_snapshot =
-                (0..=num_set_roots as u64 * add_root_interval as u64).collect_vec();
-            let num_old_slots = expected_slots_since_snapshot.len() - MAX_CACHE_ENTRIES;
+            let num_old_slots = num_set_roots * add_root_interval - MAX_CACHE_ENTRIES + 1;
+            let expected_slots_to_snapshot = (num_old_slots as u64
+                ..=num_set_roots as u64 * add_root_interval as u64)
+                .collect_vec();
 
-            assert_eq!(
-                snapshot_test_config.bank_forks.slots_since_snapshot(),
-                &expected_slots_since_snapshot[num_old_slots..],
-            );
+            let rooted_bank = snapshot_test_config
+                .bank_forks
+                .get(snapshot_test_config.bank_forks.root())
+                .unwrap();
+            let slots_to_snapshot = rooted_bank.src.roots();
+            assert_eq!(slots_to_snapshot, expected_slots_to_snapshot);
         }
     }
 

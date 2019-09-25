@@ -38,6 +38,7 @@ solana-vote-program = { path = "../programs/vote_program", version = "0.20.0" }
 sys-info = "0.5.8"
 tempfile = "3.1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.20.0" }
+itertools = "0.8.0"
 
 [lib]
 crate-type = ["lib"]
