@@ -267,10 +267,12 @@ impl BankForks {
 
         // Package the relevant snapshots
         let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&config.snapshot_path);
-        let latest_slot_snapshot_paths = slot_snapshot_paths.last().ok_or(io::Error::new(
-            ErrorKind::Other,
-            "no snapshots found in config snapshot_path",
-        ))?;
+        let latest_slot_snapshot_paths = slot_snapshot_paths.last().ok_or_else(|| {
+            io::Error::new(
+                ErrorKind::Other,
+                "no snapshots found in config snapshot_path",
+            )
+        })?;
         // We only care about the last banks's snapshot.
         // We'll ask the bank for MAX_CACHE_ENTRIES (on the rooted path) worth of statuses
         let package = snapshot_utils::package_snapshot(
