@@ -18,11 +18,6 @@ if [[ $(uname) != Linux ]]; then
   fi
 fi
 
-if [[ -f "$SOLANA_ROOT"/target/perf-libs/env.sh ]]; then
-  # shellcheck source=/dev/null
-  source "$SOLANA_ROOT"/target/perf-libs/env.sh
-fi
-
 if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
   solana_program() {
     declare program="$1"

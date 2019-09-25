@@ -29,6 +29,7 @@ fi
 echo "Install location: $installDir ($buildVariant)"
 
 cd "$(dirname "$0")"/..
+./fetch-perf-libs.sh
 
 SECONDS=0
 
@@ -72,6 +73,10 @@ mkdir -p "$installDir/bin"
 for bin in "${BINS[@]}"; do
   cp -fv "target/$buildVariant/$bin" "$installDir"/bin
 done
+
+if [[ -d target/perf-libs ]]; then
+  cp -a target/perf-libs "$installDir"/bin/perf-libs
+fi
 
 for dir in programs/*; do
   for program in echo target/$buildVariant/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do

@@ -334,11 +334,6 @@ build() {
     set -x
     rm -rf farf
 
-    if [[ -r target/perf-libs/env.sh ]]; then
-      # shellcheck source=/dev/null
-      source target/perf-libs/env.sh
-    fi
-
     buildVariant=
     if $debugBuild; then
       buildVariant=debug

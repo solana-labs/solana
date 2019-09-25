@@ -69,8 +69,6 @@ test-stable-perf)
 
     rm -rf target/perf-libs
     ./fetch-perf-libs.sh
-    # shellcheck source=/dev/null
-    source ./target/perf-libs/env.sh
     export TEST_PERF_LIBS_CUDA=1
   fi
 

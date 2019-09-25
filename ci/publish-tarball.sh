@@ -37,14 +37,12 @@ if [[ -z $CHANNEL_OR_TAG ]]; then
   exit 1
 fi
 
-maybeCUDA=
 case "$CI_OS_NAME" in
 osx)
   TARGET=x86_64-apple-darwin
   ;;
 linux)
   TARGET=x86_64-unknown-linux-gnu
-  maybeCUDA=1
   ;;
 windows)
   TARGET=x86_64-pc-windows-msvc
@@ -81,47 +79,6 @@ echo --- Creating tarball
       solana-release/bin/solana-bench-exchange.exe \
 
   fi
-
-  if [[ -n $maybeCUDA ]]; then
-    # Wrap `solana-validator-cuda` with a script that loads perf-libs
-    # automatically if possible.
-    mkdir -p solana-release/target
-    cp -a target/perf-libs solana-release/target/perf-libs
-    mkdir -p solana-release/bin/_
-    cp solana-release/bin/solana-validator-cuda solana-release/bin/_/solana-validator-cuda
-    cp -a solana-release/bin/deps solana-release/bin/_/deps
-    cat > solana-release/bin/solana-validator-cuda <<'EOF'
-#!/usr/bin/env bash
-set -e
-SOLANA_ROOT="$(dirname "$0")"/..
-if [[ -f "$SOLANA_ROOT"/target/perf-libs/env.sh ]]; then
-  source "$SOLANA_ROOT"/target/perf-libs/env.sh
-fi
-if [[ -z $SOLANA_PERF_LIBS_CUDA ]]; then
-  echo
-  echo Error: SOLANA_PERF_LIBS_CUDA environment variable undefined
-  exit 1
-fi
-exec "$SOLANA_ROOT"/bin/_/solana-validator-cuda "$@"
-EOF
-    chmod +x solana-release/bin/solana-validator-cuda
-  fi
-
-  # TODO: Remove scripts/ and multinode/... from tarball
-  cp -a scripts multinode-demo solana-release/
-
-  # Add a wrapper script for validator.sh
-  # TODO: Remove multinode/... from tarball
-  cat > solana-release/bin/validator.sh <<'EOF'
-#!/usr/bin/env bash
-set -e
-cd "$(dirname "$0")"/..
-export USE_INSTALL=1
-export REQUIRE_LEDGER_DIR=1
-export REQUIRE_KEYPAIRS=1
-exec multinode-demo/validator.sh "$@"
-EOF
-  chmod +x solana-release/bin/validator.sh
 
   tar cvf solana-release-$TARGET.tar solana-release
   bzip2 solana-release-$TARGET.tar

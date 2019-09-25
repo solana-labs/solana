@@ -93,15 +93,12 @@ local|tar|skip)
   export USE_INSTALL=1
 
   ./fetch-perf-libs.sh
-  # shellcheck source=/dev/null
-  source ./target/perf-libs/env.sh
 
 cat >> ~/solana/on-reboot <<EOF
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
   # shellcheck source=/dev/null
-  source ./target/perf-libs/env.sh
   SUDO_OK=1 source scripts/tune-system.sh
 
   (
