@@ -7279,7 +7279,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"recovered\") AS \"recovered\" FROM \"$testnet\".\"autogen\".\"blocktree-erasure\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT sum(\"recovered\") AS \"recovered\" FROM \"$testnet\".\"autogen\".\"blocktree-erasure\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
