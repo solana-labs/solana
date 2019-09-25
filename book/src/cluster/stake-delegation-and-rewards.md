@@ -35,7 +35,7 @@ VoteState is the current state of all the votes the validator has submitted to t
 
   `VoteState::authorized_vote_signer` is initialized to `account[0]`
 
-   other VoteState members defaulted
+  other VoteState members defaulted
 
 ### VoteInstruction::AuthorizeVoteSigner\(Pubkey\)
 
@@ -43,14 +43,13 @@ VoteState is the current state of all the votes the validator has submitted to t
 
   `VoteState::authorized_vote_signer` is set to to `Pubkey`, the transaction must by
 
-   signed by the Vote account's current `authorized_vote_signer`.    
+  signed by the Vote account's current `authorized_vote_signer`.
 
+`VoteInstruction::AuthorizeVoter` allows a staker to choose a signing service
 
-   `VoteInstruction::AuthorizeVoter` allows a staker to choose a signing service
+for its votes. That service is responsible for ensuring the vote won't cause
 
-  for its votes. That service is responsible for ensuring the vote won't cause
-
-  the staker to be slashed.
+the staker to be slashed.
 
 ### VoteInstruction::Vote\(Vec\)
 
