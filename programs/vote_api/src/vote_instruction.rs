@@ -3,7 +3,7 @@
 
 use crate::{
     id,
-    vote_state::{self, Vote, VoteState},
+    vote_state::{self, Vote, VoteAuthorize, VoteInit, VoteState},
 };
 use bincode::deserialize;
 use log::*;
@@ -51,11 +51,11 @@ impl std::error::Error for VoteError {}
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
     /// Initialize the VoteState for this `vote account`
-    /// takes a node_pubkey and commission
-    InitializeAccount(Pubkey, u8),
+    InitializeAccount(VoteInit),
 
-    /// Authorize a voter to send signed votes.
-    AuthorizeVoter(Pubkey),
+    /// Authorize a voter to send signed votes or a withdrawer
+    ///  to withdraw
+    Authorize(Pubkey, VoteAuthorize),
 
     /// A Vote instruction with recent votes
     Vote(Vote),
@@ -64,44 +64,38 @@ pub enum VoteInstruction {
     Withdraw(u64),
 }
 
-fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u8) -> Instruction {
+fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
     let account_metas = vec![AccountMeta::new(*vote_pubkey, false)];
     Instruction::new(
         id(),
-        &VoteInstruction::InitializeAccount(*node_pubkey, commission),
+        &VoteInstruction::InitializeAccount(*vote_init),
         account_metas,
     )
-}
-
-pub fn minimum_balance() -> u64 {
-    let rent_calculator = solana_sdk::rent_calculator::RentCalculator::default();
-
-    rent_calculator.minimum_balance(VoteState::size_of())
 }
 
 pub fn create_account(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
-    commission: u8,
+    vote_init: &VoteInit,
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;
     let create_ix =
         system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
-    let init_ix = initialize_account(vote_pubkey, node_pubkey, commission);
+    let init_ix = initialize_account(vote_pubkey, vote_init);
     vec![create_ix, init_ix]
 }
 
+// for instructions that whose authorized signer may differ from the account's pubkey
 fn metas_for_authorized_signer(
-    vote_pubkey: &Pubkey,
-    authorized_voter_pubkey: &Pubkey, // currently authorized
+    account_pubkey: &Pubkey,
+    authorized_signer: &Pubkey, // currently authorized
     other_params: &[AccountMeta],
 ) -> Vec<AccountMeta> {
-    let is_own_signer = authorized_voter_pubkey == vote_pubkey;
+    let is_own_signer = authorized_signer == account_pubkey;
 
     // vote account
-    let mut account_metas = vec![AccountMeta::new(*vote_pubkey, is_own_signer)];
+    let mut account_metas = vec![AccountMeta::new(*account_pubkey, is_own_signer)];
 
     for meta in other_params {
         account_metas.push(meta.clone());
@@ -109,22 +103,23 @@ fn metas_for_authorized_signer(
 
     // append signer at the end
     if !is_own_signer {
-        account_metas.push(AccountMeta::new_credit_only(*authorized_voter_pubkey, true)) // signer
+        account_metas.push(AccountMeta::new_credit_only(*authorized_signer, true)) // signer
     }
 
     account_metas
 }
 
-pub fn authorize_voter(
+pub fn authorize(
     vote_pubkey: &Pubkey,
-    authorized_voter_pubkey: &Pubkey, // currently authorized
-    new_authorized_voter_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey, // currently authorized
+    new_authorized_pubkey: &Pubkey,
+    vote_authorize: VoteAuthorize,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_voter_pubkey, &[]);
+    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_pubkey, &[]);
 
     Instruction::new(
         id(),
-        &VoteInstruction::AuthorizeVoter(*new_authorized_voter_pubkey),
+        &VoteInstruction::Authorize(*new_authorized_pubkey, vote_authorize),
         account_metas,
     )
 }
@@ -144,11 +139,17 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
     Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
 }
 
-pub fn withdraw(vote_pubkey: &Pubkey, lamports: u64, to_pubkey: &Pubkey) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*vote_pubkey, true),
-        AccountMeta::new_credit_only(*to_pubkey, false),
-    ];
+pub fn withdraw(
+    vote_pubkey: &Pubkey,
+    withdrawer_pubkey: &Pubkey,
+    lamports: u64,
+    to_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = metas_for_authorized_signer(
+        vote_pubkey,
+        withdrawer_pubkey,
+        &[AccountMeta::new_credit_only(*to_pubkey, false)],
+    );
 
     Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }
@@ -173,11 +174,11 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        VoteInstruction::InitializeAccount(node_pubkey, commission) => {
-            vote_state::initialize_account(me, &node_pubkey, commission)
+        VoteInstruction::InitializeAccount(vote_init) => {
+            vote_state::initialize_account(me, &vote_init)
         }
-        VoteInstruction::AuthorizeVoter(voter_pubkey) => {
-            vote_state::authorize_voter(me, rest, &voter_pubkey)
+        VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
+            vote_state::authorize(me, rest, &voter_pubkey, vote_authorize)
         }
         VoteInstruction::Vote(vote) => {
             datapoint_info!("vote-native", ("count", 1, i64));
@@ -198,7 +199,10 @@ pub fn process_instruction(
             if rest.is_empty() {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            vote_state::withdraw(me, lamports, &mut rest[0])
+            let (to, rest) = rest.split_at_mut(1);
+            let to = &mut to[0];
+
+            vote_state::withdraw(me, rest, lamports, to)
         }
     }
 }
@@ -251,8 +255,7 @@ mod tests {
         let instructions = create_account(
             &Pubkey::default(),
             &Pubkey::default(),
-            &Pubkey::default(),
-            0,
+            &VoteInit::default(),
             100,
         );
         assert_eq!(
@@ -268,10 +271,20 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&authorize_voter(
+            process_instruction(&authorize(
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
+                VoteAuthorize::Voter,
+            )),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(&withdraw(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                0,
+                &Pubkey::default()
             )),
             Err(InstructionError::InvalidAccountData),
         );
@@ -283,6 +296,46 @@ mod tests {
         let minimum_balance = rent_calculator.minimum_balance(VoteState::size_of());
         // vote state cheaper than "my $0.02" ;)
         assert!(minimum_balance as f64 / 2f64.powf(34.0) < 0.02)
+    }
+
+    #[test]
+    fn test_metas_for_authorized_signer() {
+        let account_pubkey = Pubkey::new_rand();
+        let authorized_signer = Pubkey::new_rand();
+
+        assert_eq!(
+            metas_for_authorized_signer(&account_pubkey, &authorized_signer, &[]).len(),
+            2
+        );
+        assert_eq!(
+            metas_for_authorized_signer(&account_pubkey, &account_pubkey, &[]).len(),
+            1
+        );
+    }
+    #[test]
+    fn test_custom_error_decode() {
+        use num_traits::FromPrimitive;
+        fn pretty_err<T>(err: InstructionError) -> String
+        where
+            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
+        {
+            if let InstructionError::CustomError(code) = err {
+                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
+                format!(
+                    "{:?}: {}::{:?} - {}",
+                    err,
+                    T::type_of(),
+                    specific_error,
+                    specific_error,
+                )
+            } else {
+                "".to_string()
+            }
+        }
+        assert_eq!(
+            "CustomError(0): VoteError::VoteTooOld - vote already recorded or not in slot hashes history",
+            pretty_err::<VoteError>(VoteError::VoteTooOld.into())
+        )
     }
 
 }

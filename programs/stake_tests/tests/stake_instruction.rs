@@ -14,7 +14,7 @@ use solana_stake_api::stake_instruction;
 use solana_stake_api::stake_instruction::process_instruction;
 use solana_stake_api::stake_state::StakeState;
 use solana_vote_api::vote_instruction;
-use solana_vote_api::vote_state::{Vote, VoteState};
+use solana_vote_api::vote_state::{Vote, VoteInit, VoteState};
 use std::sync::Arc;
 
 fn fill_epoch_with_votes(
@@ -76,8 +76,12 @@ fn test_stake_account_delegate() {
     let message = Message::new(vote_instruction::create_account(
         &mint_pubkey,
         &vote_pubkey,
-        &node_pubkey,
-        std::u8::MAX / 2,
+        &VoteInit {
+            node_pubkey,
+            authorized_voter: vote_pubkey,
+            authorized_withdrawer: vote_pubkey,
+            commission: std::u8::MAX / 2,
+        },
         10,
     ));
     bank_client

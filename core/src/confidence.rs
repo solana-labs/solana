@@ -228,7 +228,7 @@ mod tests {
         let ancestors = vec![3, 4, 5, 7, 9, 11];
         let mut confidence = HashMap::new();
         let lamports = 5;
-        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+        let mut vote_state = VoteState::default();
 
         let root = ancestors.last().unwrap();
         vote_state.root_slot = Some(*root);
@@ -251,7 +251,7 @@ mod tests {
         let ancestors = vec![3, 4, 5, 7, 9, 11];
         let mut confidence = HashMap::new();
         let lamports = 5;
-        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+        let mut vote_state = VoteState::default();
 
         let root = ancestors[2];
         vote_state.root_slot = Some(root);
@@ -281,7 +281,7 @@ mod tests {
         let ancestors = vec![3, 4, 5, 7, 9, 10, 11];
         let mut confidence = HashMap::new();
         let lamports = 5;
-        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+        let mut vote_state = VoteState::default();
 
         let root = ancestors[2];
         vote_state.root_slot = Some(root);
