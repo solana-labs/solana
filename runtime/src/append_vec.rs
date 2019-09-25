@@ -1,10 +1,12 @@
+use bincode::{deserialize_from, serialize_into};
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, clock::Epoch, hash::Hash, pubkey::Pubkey};
 use std::{
+    fmt,
     fs::{create_dir_all, remove_file, OpenOptions},
     io,
-    io::{Seek, SeekFrom, Write},
+    io::{Cursor, Seek, SeekFrom, Write},
     mem,
     path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
@@ -81,19 +83,6 @@ pub struct AppendVec {
 impl Drop for AppendVec {
     fn drop(&mut self) {
         let _ignored = remove_file(&self.path);
-    }
-}
-
-#[allow(clippy::mutex_atomic)]
-impl Default for AppendVec {
-    fn default() -> Self {
-        Self {
-            path: PathBuf::from(String::default()),
-            map: MmapMut::map_anon(1).unwrap(),
-            append_offset: Mutex::new(0),
-            current_len: AtomicUsize::new(0),
-            file_size: 0,
-        }
     }
 }
 
@@ -189,11 +178,7 @@ impl AppendVec {
             .open(&path)?;
 
         let map = unsafe { MmapMut::map_mut(&data)? };
-        let file_len = map.len();
         self.map = map;
-        self.file_size = file_len as u64;
-        self.append_offset = Mutex::new(file_len);
-        self.current_len = AtomicUsize::new(file_len);
         Ok(())
     }
 
@@ -388,6 +373,63 @@ pub mod test_utils {
             data_len: data_len as u64,
         };
         (stored_meta, account)
+    }
+}
+
+#[allow(clippy::mutex_atomic)]
+impl Serialize for AppendVec {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        use serde::ser::Error;
+        self.map.flush().map_err(Error::custom)?;
+        let len = std::mem::size_of::<usize>() as u64;
+        let mut buf = vec![0u8; len as usize];
+        let mut wr = Cursor::new(&mut buf[..]);
+        serialize_into(&mut wr, &(self.current_len.load(Ordering::Relaxed) as u64))
+            .map_err(Error::custom)?;
+        let len = wr.position() as usize;
+        serializer.serialize_bytes(&wr.into_inner()[..len])
+    }
+}
+
+struct AppendVecVisitor;
+
+impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
+    type Value = AppendVec;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expecting AppendVec")
+    }
+
+    #[allow(clippy::mutex_atomic)]
+    // Note this does not initialize a valid Mmap in the AppendVec, needs to be done
+    // externally
+    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        use serde::de::Error;
+        let mut rd = Cursor::new(&data[..]);
+        let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
+        let map = MmapMut::map_anon(1).map_err(|e| Error::custom(e.to_string()))?;
+        Ok(AppendVec {
+            path: PathBuf::from(String::default()),
+            map,
+            append_offset: Mutex::new(current_len),
+            current_len: AtomicUsize::new(current_len),
+            file_size: current_len as u64,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for AppendVec {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(AppendVecVisitor)
     }
 }
 

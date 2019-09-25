@@ -182,7 +182,6 @@ pub struct AccountStorageEntry {
     #[serde(skip)]
     fork_id: Fork,
 
-    #[serde(skip)]
     /// storage holding the accounts
     accounts: AppendVec,
 
