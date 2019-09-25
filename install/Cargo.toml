@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 atty = "0.2.11"
-bincode = "1.1.4"
+bincode = "1.2.0"
 bs58 = "0.3.0"
 bzip2 = "0.3.3"
 chrono = { version = "0.4.9", features = ["serde"] }

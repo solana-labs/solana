@@ -9,7 +9,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
-bincode = "1.1.4"
+bincode = "1.2.0"
 bs58 = "0.3.0"
 jsonrpc-core = "13.2.0"
 log = "0.4.8"
