@@ -118,7 +118,14 @@ impl Validator {
 
         warn!("identity pubkey: {:?}", id);
         warn!("vote pubkey: {:?}", vote_account);
-        warn!("CUDA is {}abled", if cfg!(cuda) { "en" } else { "dis" });
+        warn!(
+            "CUDA is {}abled",
+            if crate::perf_libs::api().is_some() {
+                "en"
+            } else {
+                "dis"
+            }
+        );
         info!("entrypoint: {:?}", entrypoint_info_option);
 
         Self::print_node_info(&node);

@@ -10,5 +10,5 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-solana-core = { path = "../core", version = "0.20.0", features=["cuda"] }
+solana-core = { path = "../core", version = "0.20.0" }
 solana-validator = { path = "../validator", version = "0.20.0" }

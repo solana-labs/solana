@@ -54,7 +54,7 @@ If building for CUDA \(Linux only\), fetch the perf-libs first then include the 
 ```bash
 $ ./fetch-perf-libs.sh
 $ source target/perf-libs/env.sh
-$ ./scripts/cargo-install-all.sh . cuda
+$ ./scripts/cargo-install-all.sh .
 $ export PATH=$PWD/bin:$PATH
 ```
 

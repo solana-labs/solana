@@ -44,7 +44,7 @@ osx)
   ;;
 linux)
   TARGET=x86_64-unknown-linux-gnu
-  maybeCUDA=cuda
+  maybeCUDA=1
   ;;
 windows)
   TARGET=x86_64-pc-windows-msvc
@@ -70,17 +70,21 @@ echo --- Creating tarball
   ) > solana-release/version.yml
 
   source ci/rust-version.sh stable
-  scripts/cargo-install-all.sh +"$rust_stable" solana-release $maybeCUDA
+  scripts/cargo-install-all.sh +"$rust_stable" solana-release
 
   # Reduce the Windows archive size until
   # https://github.com/appveyor/ci/issues/2997 is fixed
   if [[ -n $APPVEYOR ]]; then
-    rm -f solana-release/bin/solana-validator.exe solana-release/bin/solana-bench-exchange.exe
+    rm -f \
+      solana-release/bin/solana-validator.exe \
+      solana-release/bin/solana-validator-cuda.exe \
+      solana-release/bin/solana-bench-exchange.exe \
+
   fi
 
   if [[ -n $maybeCUDA ]]; then
     # Wrap `solana-validator-cuda` with a script that loads perf-libs
-    # automatically if possible
+    # automatically if possible.
     mkdir -p solana-release/target
     cp -a target/perf-libs solana-release/target/perf-libs
     mkdir -p solana-release/bin/_

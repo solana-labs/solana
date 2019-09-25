@@ -17,13 +17,7 @@ fi
 
 installDir="$(mkdir -p "$1"; cd "$1"; pwd)"
 cargo=cargo
-cargoFeatures="$2"
-debugBuild="$3"
-
-if [[ -n $cargoFeatures && $cargoFeatures != cuda ]]; then
-  echo "Unsupported feature flag: $cargoFeatures"
-  exit 1
-fi
+debugBuild="$2"
 
 buildVariant=release
 maybeReleaseFlag=--release
@@ -56,6 +50,7 @@ BINS=(
   solana-ledger-tool
   solana-replicator
   solana-validator
+  solana-validator-cuda
 )
 
 #XXX: Ensure `solana-genesis` is built LAST!
@@ -77,21 +72,6 @@ mkdir -p "$installDir/bin"
 for bin in "${BINS[@]}"; do
   cp -fv "target/$buildVariant/$bin" "$installDir"/bin
 done
-
-
-if [[ "$cargoFeatures" = cuda ]]; then
-  (
-    set -x
-    ./fetch-perf-libs.sh
-
-    # shellcheck source=/dev/null
-    source ./target/perf-libs/env.sh
-
-    # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    cargo $rust_version build $maybeReleaseFlag --package solana-validator-cuda
-  )
-  cp -fv "target/$buildVariant/solana-validator-cuda" "$installDir"/bin
-fi
 
 for dir in programs/*; do
   for program in echo target/$buildVariant/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do

@@ -113,7 +113,7 @@ cat >> ~/solana/on-reboot <<EOF
   scripts/net-stats.sh  > net-stats.log 2>&1 &
   echo \$! > net-stats.pid
 
-  if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
+  if [[ -e /dev/nvidia0 ]]; then
     echo Selecting solana-validator-cuda
     export SOLANA_CUDA=1
   fi

@@ -1,11 +1,8 @@
-// Module used by validators to approve storage mining proofs
-// // in parallel using the GPU
+// Module used by validators to approve storage mining proofs in parallel using the GPU
 
 use crate::blocktree::Blocktree;
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use crate::sigverify::{
-    chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state,
-};
+use crate::perf_libs;
 use solana_sdk::hash::Hash;
 use std::io;
 use std::mem::size_of;
@@ -22,6 +19,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
     ivecs: &mut [u8],
     samples: &[u64],
 ) -> io::Result<Vec<Hash>> {
+    let api = perf_libs::api().expect("perf libs");
     if ivecs.len() % CHACHA_BLOCK_SIZE != 0 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -45,7 +43,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
     let mut total_size = 0;
     let mut time: f32 = 0.0;
     unsafe {
-        chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
+        (api.chacha_init_sha_state)(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
         match blocktree.get_data_shreds(current_slot, start_index, std::u64::MAX, &mut buffer) {
@@ -73,7 +71,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
                 }
 
                 unsafe {
-                    chacha_cbc_encrypt_many_sample(
+                    (api.chacha_cbc_encrypt_many_sample)(
                         buffer[..size].as_ptr(),
                         int_sha_states.as_mut_ptr(),
                         size,
@@ -97,7 +95,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         }
     }
     unsafe {
-        chacha_end_sha_state(
+        (api.chacha_end_sha_state)(
             int_sha_states.as_ptr(),
             sha_states.as_mut_ptr(),
             num_keys as u32,
