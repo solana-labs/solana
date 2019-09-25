@@ -5,7 +5,7 @@
 The `solana-install` tool can be used to easily install and upgrade the validator software on Linux x86\_64 and mac OS systems.
 
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.19.0/install/solana-install-init.sh | sh -s
 ```
 
 Alternatively build the `solana-install` program from source and run the following command to obtain the same result:
