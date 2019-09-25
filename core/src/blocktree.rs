@@ -323,7 +323,7 @@ impl Blocktree {
         // 3. Before trying recovery, check if enough number of shreds have been received
         // 3a. Enough number of shreds = (#data + #coding shreds) > erasure.num_data
         for (&(slot, set_index), erasure_meta) in erasure_metas.iter() {
-            let submit_metrics = |attempted: bool, status: String| {
+            let submit_metrics = |attempted: bool, status: String, recovered: usize| {
                 datapoint_info!(
                     "blocktree-erasure",
                     ("slot", slot as i64, i64),
@@ -331,6 +331,7 @@ impl Blocktree {
                     ("end_index", erasure_meta.end_indexes().0 as i64, i64),
                     ("recovery_attempted", attempted, bool),
                     ("recovery_status", status, String),
+                    ("recovered", recovered as i64, i64),
                 );
             };
 
@@ -387,17 +388,17 @@ impl Blocktree {
                         set_index as usize,
                         slot,
                     ) {
-                        submit_metrics(true, format!("complete. recovered: {}", result.len()));
+                        submit_metrics(true, "complete".into(), result.len());
                         recovered_data_shreds.append(&mut result);
                     } else {
-                        submit_metrics(true, "incomplete".into());
+                        submit_metrics(true, "incomplete".into(), 0);
                     }
                 }
                 ErasureMetaStatus::DataFull => {
-                    submit_metrics(false, "complete".into());
+                    submit_metrics(false, "complete".into(), 0);
                 }
                 ErasureMetaStatus::StillNeed(needed) => {
-                    submit_metrics(false, format!("still need: {}", needed));
+                    submit_metrics(false, format!("still need: {}", needed), 0);
                 }
             };
         }
