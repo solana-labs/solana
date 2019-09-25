@@ -100,7 +100,7 @@ We have the following constraints:
 
    there are not any obvious attack vectors that this could accomplish besides having the
 
-   replicator do extra wasted work.  For many of the operations there are a number of options
+   replicator do extra wasted work. For many of the operations there are a number of options
 
    depending on how paranoid a replicator is:
 

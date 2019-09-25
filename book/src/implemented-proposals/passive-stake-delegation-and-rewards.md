@@ -35,7 +35,7 @@ VoteState is the current state of all the votes the **delegate** has submitted t
 
   `VoteState::authorized_vote_signer` is initialized to `account[0]`
 
-   other VoteState members defaulted
+  other VoteState members defaulted
 
 ### VoteInstruction::AuthorizeVoteSigner\(Pubkey\)
 
@@ -43,7 +43,7 @@ VoteState is the current state of all the votes the **delegate** has submitted t
 
   `VoteState::authorized_vote_signer` is set to to `Pubkey`, instruction must by
 
-   signed by Pubkey
+  signed by Pubkey
 
 ### StakeState
 

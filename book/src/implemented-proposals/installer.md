@@ -95,7 +95,7 @@ A release archive is expected to be a tar file compressed with bzip2 with the fo
 
 * `/version.yml` - a simple YAML file containing the field `"target"` - the
 
-  target tuple.  Any additional fields are ignored.
+  target tuple. Any additional fields are ignored.
 
 * `/bin/` -- directory containing available programs in the release.
 
