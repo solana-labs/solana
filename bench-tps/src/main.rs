@@ -37,6 +37,7 @@ fn main() {
     } = &cli_config;
 
     if *write_to_client_file {
+        println!("Generating {} keypairs", *tx_count * 2);
         let (keypairs, _) = generate_keypairs(&id, *tx_count as u64 * 2);
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeCalculator::new(*target_lamports_per_signature).max_lamports_per_signature;
@@ -56,6 +57,7 @@ fn main() {
             );
         });
 
+        println!("Writing {}", client_ids_and_stake_file);
         let serialized = serde_yaml::to_string(&accounts).unwrap();
         let path = Path::new(&client_ids_and_stake_file);
         let mut file = File::create(path).unwrap();
@@ -84,6 +86,7 @@ fn main() {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
+        println!("Reading {}", client_ids_and_stake_file);
         let accounts: HashMap<String, PrimordialAccountDetails> =
             serde_yaml::from_reader(file).unwrap();
         let mut keypairs = vec![];
@@ -96,6 +99,16 @@ fn main() {
                 keypairs.push(Keypair::from_bytes(&bytes).unwrap());
                 last_balance = primordial_account.balance;
             });
+
+        if keypairs.len() != tx_count * 2 {
+            eprintln!(
+                "Expected {} accounts in {}, only received {} (--tx_count mismatch?)",
+                tx_count * 2,
+                client_ids_and_stake_file,
+                keypairs.len(),
+            );
+            exit(1);
+        }
         // Sort keypairs so that do_bench_tps() uses the same subset of accounts for each run.
         // This prevents the amount of storage needed for bench-tps accounts from creeping up
         // across multiple runs.
