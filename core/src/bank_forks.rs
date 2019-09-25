@@ -9,8 +9,6 @@ use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::MAX_CACHE_ENTRIES;
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
-use std::io;
-use std::io::ErrorKind;
 use std::ops::Index;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
