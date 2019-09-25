@@ -511,7 +511,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 return Err(InstructionError::InvalidArgument);
             }
 
-            if let Some((stakers_reward, voters_reward, credits_observed)) = stake
+            if let Some((voters_reward, stakers_reward, credits_observed)) = stake
                 .calculate_rewards(
                     rewards.validator_point_value,
                     &vote_state,
@@ -1606,6 +1606,8 @@ mod tests {
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
 
         let mut vote_state = VoteState::from(&vote_account).unwrap();
+        // split credits 3:1 between staker and voter
+        vote_state.commission = std::u8::MAX / 4;
         // put in some credits in epoch 0 for which we should have a non-zero stake
         for _i in 0..100 {
             vote_state.increment_credits(1);
@@ -1629,6 +1631,8 @@ mod tests {
         rewards_pool_keyed_account.account.lamports = std::u64::MAX;
 
         // finally! some credits to claim
+        let stake_account_balance = stake_keyed_account.account.lamports;
+        let vote_account_balance = vote_keyed_account.account.lamports;
         assert_eq!(
             stake_keyed_account.redeem_vote_credits(
                 &mut vote_keyed_account,
@@ -1637,6 +1641,14 @@ mod tests {
                 &stake_history,
             ),
             Ok(())
+        );
+        let staker_rewards = stake_keyed_account.account.lamports - stake_account_balance;
+        let voter_commission = vote_keyed_account.account.lamports - vote_account_balance;
+        assert!(voter_commission > 0);
+        assert!(staker_rewards > 0);
+        assert!(
+            staker_rewards / 3 > voter_commission,
+            "rewards should be split ~3:1"
         );
 
         let wrong_vote_pubkey = Pubkey::new_rand();
