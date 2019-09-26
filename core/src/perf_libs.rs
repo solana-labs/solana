@@ -81,11 +81,10 @@ fn init(name: &OsStr) {
     info!("Loading {:?}", name);
     unsafe {
         INIT_HOOK.call_once(|| {
-            let api = Container::load(name).unwrap_or_else(|err| {
+            API = Some(Container::load(name).unwrap_or_else(|err| {
                 error!("Unable to load {:?}: {}", name, err);
                 std::process::exit(1);
-            });
-            API = Some(api);
+            }));
         })
     }
 }
@@ -138,7 +137,7 @@ pub fn init_cuda() {
                 info!("LD_LIBRARY_PATH set to {:?}", ld_library_path);
 
                 // Prefix LD_LIBRARY_PATH with $CUDA_HOME/lib64 directory
-                // the user has done this properly.
+                // to ensure the correct CUDA version is used
                 env::set_var("LD_LIBRARY_PATH", ld_library_path)
             } else {
                 warn!("{:?} does not exist", cuda_lib64_dir);
@@ -153,7 +152,7 @@ pub fn init_cuda() {
         }
     }
 
-    // Fall back: blindly load the shared object and hope it all works out
+    // Last resort!  Blindly load the shared object and hope it all works out
     init(OsStr::new("libcuda-crypt.so"))
 }
 
