@@ -295,6 +295,11 @@ const GetTransactionCountRpcResult = jsonRpcResult('number');
 const GetTotalSupplyRpcResult = jsonRpcResult('number');
 
 /**
+ * Expected JSON RPC response for the "getMinimumBalanceForRentExemption" message
+ */
+const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
+
+/**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
 const GetRecentBlockhash = jsonRpcResult([
@@ -681,6 +686,23 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     return GetInflationResult(res.result);
+  }
+
+  /**
+   * Fetch the minimum balance needed to exempt an account of `dataLength`
+   * size from rent
+   */
+  async getMinimumBalanceForRentExemption(dataLength: number): Promise<number> {
+    const unsafeRes = await this._rpcRequest(
+      'getMinimumBalanceForRentExemption',
+      [dataLength],
+    );
+    const res = GetMinimumBalanceForRentExemptionRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return Number(res.result);
   }
 
   /**
