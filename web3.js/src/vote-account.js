@@ -28,6 +28,10 @@ export type EpochCredits = {|
  * @private
  */
 const VoteAccountLayout = BufferLayout.struct([
+  Layout.publicKey('nodePubkey'),
+  Layout.publicKey('authorizedVoterPubkey'),
+  Layout.publicKey('authorizedWithdrawerPubkey'),
+  BufferLayout.u8('commission'),
   BufferLayout.nu64(), // votes.length
   BufferLayout.seq(
     BufferLayout.struct([
@@ -37,9 +41,6 @@ const VoteAccountLayout = BufferLayout.struct([
     BufferLayout.offset(BufferLayout.u32(), -8),
     'votes',
   ),
-  Layout.publicKey('nodePubkey'),
-  Layout.publicKey('authorizedVoterPubkey'),
-  BufferLayout.u8('commission'),
   BufferLayout.u8('rootSlotValid'),
   BufferLayout.nu64('rootSlot'),
   BufferLayout.nu64('epoch'),
@@ -61,10 +62,11 @@ const VoteAccountLayout = BufferLayout.struct([
  * VoteAccount class
  */
 export class VoteAccount {
-  votes: Array<Lockout>;
   nodePubkey: PublicKey;
   authorizedVoterPubkey: PublicKey;
+  authorizedWithdrawerPubkey: PublicKey;
   commission: number;
+  votes: Array<Lockout>;
   rootSlot: number | null;
   epoch: number;
   credits: number;
@@ -81,6 +83,9 @@ export class VoteAccount {
     const va = VoteAccountLayout.decode(buffer, 0);
     va.nodePubkey = new PublicKey(va.nodePubkey);
     va.authorizedVoterPubkey = new PublicKey(va.authorizedVoterPubkey);
+    va.authorizedWithdrawerPubkey = new PublicKey(
+      va.authorizedWithdrawerPubkey,
+    );
     if (!va.rootSlotValid) {
       va.rootSlot = null;
     }
