@@ -14,7 +14,7 @@ if [[ $(uname) != Linux ]]; then
   # later. Arguably these should be fatal errors but for now prefer tolerance.
   if [[ -n $SOLANA_CUDA ]]; then
     echo "Warning: CUDA is not supported on $(uname)"
-   # SOLANA_CUDA=
+    SOLANA_CUDA=
   fi
 fi
 
