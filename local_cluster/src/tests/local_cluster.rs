@@ -296,7 +296,7 @@ fn test_listener_startup() {
 #[allow(unused_attributes)]
 #[test]
 #[serial]
-fn test_snapshot_restart_locktower() {
+fn test_snapshot_restart_tower() {
     // First set up the cluster with 2 nodes
     let snapshot_interval_slots = 10;
     let num_account_paths = 4;
@@ -342,11 +342,11 @@ fn test_snapshot_restart_locktower() {
         snapshot_utils::get_snapshot_tar_path(&validator_snapshot_test_config.snapshot_output_path);
     fs::hard_link(tar, &validator_tar_path).unwrap();
 
-    // Restart validator from snapshot, the validator's locktower state in this snapshot
+    // Restart validator from snapshot, the validator's tower state in this snapshot
     // will contain slots < the root bank of the snapshot. Validator should not panic.
     cluster.restart_node(&validator_id, validator_info);
 
-    // Test cluster can still make progress and get confirmations in locktower
+    // Test cluster can still make progress and get confirmations in tower
     cluster_tests::spend_and_verify_all_nodes(
         &cluster.entry_point_info,
         &cluster.funding_keypair,
