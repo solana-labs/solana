@@ -75,7 +75,6 @@ echo --- Creating tarball
   if [[ -n $APPVEYOR ]]; then
     rm -f \
       solana-release/bin/solana-validator.exe \
-      solana-release/bin/solana-validator-cuda.exe \
       solana-release/bin/solana-bench-exchange.exe \
 
   fi

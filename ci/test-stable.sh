@@ -69,7 +69,12 @@ test-stable-perf)
 
     rm -rf target/perf-libs
     ./fetch-perf-libs.sh
+
+    # Force CUDA for solana-core unit tests
     export TEST_PERF_LIBS_CUDA=1
+
+    # Force CUDA in ci/localnet-sanity.sh
+    export SOLANA_CUDA=1
   fi
 
   _ cargo +"$rust_stable" build --bins ${V:+--verbose}

@@ -3914,15 +3914,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-validator-cuda"
-version = "0.20.0"
-dependencies = [
- "solana-core 0.20.0",
- "solana-logger 0.20.0",
- "solana-validator 0.20.0",
-]
-
-[[package]]
 name = "solana-vote-api"
 version = "0.20.0"
 dependencies = [

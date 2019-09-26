@@ -56,7 +56,6 @@ members = [
     "vote-signer",
     "cli",
     "rayon-threadlimit",
-    "validator-cuda",
 ]
 
 exclude = [

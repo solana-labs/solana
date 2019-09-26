@@ -390,7 +390,17 @@ pub fn main() {
                 .takes_value(false)
                 .help("Skip ledger verification at node bootup"),
         )
-         .get_matches();
+        .arg(
+            clap::Arg::with_name("cuda")
+                .long("cuda")
+                .takes_value(false)
+                .help("Use CUDA"),
+        )
+        .get_matches();
+
+    if matches.is_present("cuda") {
+        solana_core::perf_libs::init_cuda();
+    }
 
     let mut validator_config = ValidatorConfig::default();
     let keypair = if let Some(identity) = matches.value_of("identity") {

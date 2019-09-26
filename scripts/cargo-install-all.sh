@@ -51,7 +51,6 @@ BINS=(
   solana-ledger-tool
   solana-replicator
   solana-validator
-  solana-validator-cuda
 )
 
 #XXX: Ensure `solana-genesis` is built LAST!
