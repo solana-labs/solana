@@ -71,7 +71,10 @@ pub enum WalletCommand {
         output_file: Option<String>,
         use_lamports_unit: bool,
     },
-    ShowVoteAccount(Pubkey),
+    ShowVoteAccount {
+        pubkey: Pubkey,
+        use_lamports_unit: bool,
+    },
     Uptime {
         pubkey: Pubkey,
         aggregate: bool,
@@ -81,7 +84,10 @@ pub enum WalletCommand {
     WithdrawStake(Keypair, Pubkey, u64),
     DeactivateStake(Keypair, Pubkey),
     RedeemVoteCredits(Pubkey, Pubkey),
-    ShowStakeAccount(Pubkey),
+    ShowStakeAccount {
+        pubkey: Pubkey,
+        use_lamports_unit: bool,
+    },
     CreateReplicatorStorageAccount(Pubkey, Pubkey),
     CreateValidatorStorageAccount(Pubkey, Pubkey),
     ClaimStorageReward(Pubkey, Pubkey),
@@ -291,7 +297,11 @@ pub fn parse_command(
         }
         ("show-stake-account", Some(matches)) => {
             let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-            Ok(WalletCommand::ShowStakeAccount(stake_account_pubkey))
+            let use_lamports_unit = matches.is_present("lamports");
+            Ok(WalletCommand::ShowStakeAccount {
+                pubkey: stake_account_pubkey,
+                use_lamports_unit,
+            })
         }
         ("create-replicator-storage-account", Some(matches)) => {
             let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
@@ -721,6 +731,7 @@ fn process_show_stake_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
     stake_account_pubkey: &Pubkey,
+    use_lamports_unit: bool,
 ) -> ProcessResult {
     use solana_stake_api::stake_state::StakeState;
     let stake_account = rpc_client.get_account(stake_account_pubkey)?;
@@ -731,9 +742,15 @@ fn process_show_stake_account(
     }
     match stake_account.state() {
         Ok(StakeState::Stake(stake)) => {
-            println!("total stake: {}", stake_account.lamports);
+            println!(
+                "total stake: {}",
+                build_balance_message(stake_account.lamports, use_lamports_unit)
+            );
             println!("credits observed: {}", stake.credits_observed);
-            println!("delegated stake: {}", stake.stake);
+            println!(
+                "delegated stake: {}",
+                build_balance_message(stake.stake, use_lamports_unit)
+            );
             if stake.voter_pubkey != Pubkey::default() {
                 println!("delegated voter pubkey: {}", stake.voter_pubkey);
             }
@@ -1310,9 +1327,15 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             *use_lamports_unit,
         ),
 
-        WalletCommand::ShowVoteAccount(vote_account_pubkey) => {
-            process_show_vote_account(&rpc_client, config, &vote_account_pubkey)
-        }
+        WalletCommand::ShowVoteAccount {
+            pubkey: vote_account_pubkey,
+            use_lamports_unit,
+        } => process_show_vote_account(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            *use_lamports_unit,
+        ),
 
         WalletCommand::Uptime {
             pubkey: vote_account_pubkey,
@@ -1365,9 +1388,15 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             )
         }
 
-        WalletCommand::ShowStakeAccount(stake_account_pubkey) => {
-            process_show_stake_account(&rpc_client, config, &stake_account_pubkey)
-        }
+        WalletCommand::ShowStakeAccount {
+            pubkey: stake_account_pubkey,
+            use_lamports_unit,
+        } => process_show_stake_account(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            *use_lamports_unit,
+        ),
 
         WalletCommand::CreateReplicatorStorageAccount(
             storage_account_owner,
@@ -1541,7 +1570,7 @@ where
     }
 }
 
-fn build_balance_message(lamports: u64, use_lamports_unit: bool) -> String {
+pub(crate) fn build_balance_message(lamports: u64, use_lamports_unit: bool) -> String {
     if use_lamports_unit {
         let ess = if lamports == 1 { "" } else { "s" };
         format!("{:?} lamport{}", lamports, ess)
@@ -1553,7 +1582,7 @@ fn build_balance_message(lamports: u64, use_lamports_unit: bool) -> String {
     }
 }
 
-fn parse_amount_lamports(
+pub(crate) fn parse_amount_lamports(
     amount: &str,
     use_lamports_unit: Option<&str>,
 ) -> Result<u64, Box<dyn error::Error>> {
@@ -1732,12 +1761,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Validator that will vote with this account"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::with_name("amount")
                         .index(3)
-                        .value_name("LAMPORTS")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .help("The amount of lamports to send to the vote account"),
+                        .help("The amount of send to the vote account (default unit SOL)"),
+                )
+                .arg(
+                    Arg::with_name("unit")
+                        .index(4)
+                        .takes_value(true)
+                        .possible_values(&["SOL", "lamports"])
+                        .help("Specify unit to use for request"),
                 )
                 .arg(
                     Arg::with_name("commission")
@@ -1803,6 +1839,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Vote account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
@@ -1966,6 +2008,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .validator(is_pubkey_or_keypair)
                         .help("Stake account pubkey"),
                 )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("create-storage-mining-pool-account")
