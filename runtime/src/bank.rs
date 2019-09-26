@@ -680,7 +680,9 @@ impl Bank {
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64 {
-        self.rent_collector.rent_calculator.minimum_balance(data_len)
+        self.rent_collector
+            .rent_calculator
+            .minimum_balance(data_len)
     }
 
     pub fn last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
