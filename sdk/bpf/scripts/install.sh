@@ -80,7 +80,7 @@ if [[ ! -f llvm-native-$machine-$version.md ]]; then
 fi
 
 # Install Rust-BPF
-version=v0.1.6
+version=v0.1.7
 if [[ ! -f rust-bpf-$machine-$version.md ]]; then
   (
     filename=solana-rust-bpf-$machine.tar.bz2
@@ -116,7 +116,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
 fi
 
 # Install Rust-BPF Sysroot sources
-version=v0.9
+version=v0.10
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
     set -ex
