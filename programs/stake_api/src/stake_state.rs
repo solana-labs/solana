@@ -563,6 +563,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 vote_account.account.lamports += voters_reward;
 
                 stake.credits_observed = credits_observed;
+                stake.stake += stakers_reward;
 
                 self.set_state(&StakeState::Stake(authorized, lockup, stake))
             } else {
@@ -1702,6 +1703,9 @@ mod tests {
             staker_rewards / 3 > voter_commission,
             "rewards should be split ~3:1"
         );
+        // verify rewards are added to stake
+        let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
+        assert_eq!(stake.stake, stake_keyed_account.account.lamports);
 
         let wrong_vote_pubkey = Pubkey::new_rand();
         let mut wrong_vote_keyed_account =
