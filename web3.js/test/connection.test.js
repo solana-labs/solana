@@ -330,6 +330,25 @@ test('get total supply', async () => {
   expect(count).toBeGreaterThanOrEqual(0);
 });
 
+test('get minimum balance for rent exemption', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getMinimumBalanceForRentExemption',
+      params: [512],
+    },
+    {
+      error: null,
+      result: 1000000,
+    },
+  ]);
+
+  const count = await connection.getMinimumBalanceForRentExemption(512);
+  expect(count).toBeGreaterThanOrEqual(0);
+});
+
 test('get recent blockhash', async () => {
   const connection = new Connection(url);
 
