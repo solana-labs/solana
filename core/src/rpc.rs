@@ -926,7 +926,10 @@ pub mod tests {
         } else {
             panic!("Expected single response");
         };
-        assert_eq!(minimum_balance, bank.get_minimum_balance_for_rent_exemption(data_len));
+        assert_eq!(
+            minimum_balance,
+            bank.get_minimum_balance_for_rent_exemption(data_len)
+        );
     }
 
     #[test]
@@ -1227,7 +1230,7 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_block(TEST_MINT_LAMPORTS);
-        
+
         genesis_block.rent_calculator.lamports_per_byte_year = 50;
         genesis_block.rent_calculator.exemption_threshold = 2.0;
 
