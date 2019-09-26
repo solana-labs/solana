@@ -33,12 +33,7 @@ case $deployMethod in
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
-
-  ./fetch-perf-libs.sh
-  # shellcheck source=/dev/null
-  source ./target/perf-libs/env.sh
-
-  net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+  net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/*" ~/.cargo/bin/
   ;;
 skip)
   ;;

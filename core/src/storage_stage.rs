@@ -4,7 +4,6 @@
 
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
-#[cfg(cuda)]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use crate::cluster_info::ClusterInfo;
 use crate::result::{Error, Result};
@@ -408,11 +407,11 @@ impl StorageStage {
             samples.push(rng.gen_range(0, 10));
         }
         debug!("generated samples: {:?}", samples);
+
         // TODO: cuda required to generate the reference values
         // but if it is missing, then we need to take care not to
         // process storage mining results.
-        #[cfg(cuda)]
-        {
+        if crate::perf_libs::api().is_some() {
             // Lock the keys, since this is the IV memory,
             // it will be updated in-place by the encryption.
             // Should be overwritten by the proof signatures which replace the
@@ -729,10 +728,8 @@ mod tests {
         let keypair = Keypair::new();
         let hash = Hash::default();
         let signature = keypair.sign_message(&hash.as_ref());
-        #[cfg(feature = "cuda")]
+
         let mut result = storage_state.get_mining_result(&signature);
-        #[cfg(not(feature = "cuda"))]
-        let result = storage_state.get_mining_result(&signature);
 
         assert_eq!(result, Hash::default());
 
@@ -752,26 +749,27 @@ mod tests {
             .collect::<Vec<_>>();
         bank_sender.send(rooted_banks).unwrap();
 
-        #[cfg(feature = "cuda")]
-        for _ in 0..5 {
-            result = storage_state.get_mining_result(&signature);
-            if result != Hash::default() {
-                info!("found result = {:?} sleeping..", result);
-                break;
+        if crate::perf_libs::api().is_some() {
+            for _ in 0..5 {
+                result = storage_state.get_mining_result(&signature);
+                if result != Hash::default() {
+                    info!("found result = {:?} sleeping..", result);
+                    break;
+                }
+                info!("result = {:?} sleeping..", result);
+                sleep(Duration::new(1, 0));
             }
-            info!("result = {:?} sleeping..", result);
-            sleep(Duration::new(1, 0));
         }
 
         info!("joining..?");
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
 
-        #[cfg(not(cuda))]
-        assert_eq!(result, Hash::default());
-
-        #[cfg(cuda)]
-        assert_ne!(result, Hash::default());
+        if crate::perf_libs::api().is_some() {
+            assert_ne!(result, Hash::default());
+        } else {
+            assert_eq!(result, Hash::default());
+        }
 
         remove_dir_all(ledger_path).unwrap();
     }

@@ -18,11 +18,6 @@ if [[ $(uname) != Linux ]]; then
   fi
 fi
 
-if [[ -f "$SOLANA_ROOT"/target/perf-libs/env.sh ]]; then
-  # shellcheck source=/dev/null
-  source "$SOLANA_ROOT"/target/perf-libs/env.sh
-fi
-
 if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
   solana_program() {
     declare program="$1"
@@ -57,7 +52,7 @@ fi
 solana_bench_tps=$(solana_program bench-tps)
 solana_drone=$(solana_program drone)
 solana_validator=$(solana_program validator)
-solana_validator_cuda=$(solana_program validator-cuda)
+solana_validator_cuda="$solana_validator --cuda"
 solana_genesis=$(solana_program genesis)
 solana_gossip=$(solana_program gossip)
 solana_keygen=$(solana_program keygen)

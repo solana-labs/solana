@@ -33,7 +33,7 @@ test-stable)
   echo "Executing $testName"
 
   _ cargo +"$rust_stable" build --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --all --exclude solana-local-cluster --exclude solana-validator-cuda ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   echo "Executing $testName"
@@ -61,8 +61,6 @@ test-stable-perf)
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust
 
-  # Run root package tests with these features
-  maybeCuda=
   if [[ $(uname) = Linux ]]; then
     # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a
     # lengthy and unexpected delay the first time CUDA is involved when the driver
@@ -71,19 +69,20 @@ test-stable-perf)
 
     rm -rf target/perf-libs
     ./fetch-perf-libs.sh
-    # shellcheck source=/dev/null
-    source ./target/perf-libs/env.sh
-    maybeCuda=--features=cuda
+
+    # Force CUDA for solana-core unit tests
+    export TEST_PERF_LIBS_CUDA=1
+
+    # Force CUDA in ci/localnet-sanity.sh
     export SOLANA_CUDA=1
   fi
 
-  # Run root package library tests
-  _ cargo +"$rust_stable" build --tests --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --all --manifest-path=core/Cargo.toml ${V:+--verbose} $maybeCuda --exclude solana-local-cluster -- --nocapture
+  _ cargo +"$rust_stable" build --bins ${V:+--verbose}
+  _ cargo +"$rust_stable" test --package solana-core --lib ${V:+--verbose} -- --nocapture
   ;;
 test-local-cluster)
   echo "Executing $testName"
-  _ cargo +"$rust_stable" build --release --tests --bins ${V:+--verbose}
+  _ cargo +"$rust_stable" build --release --bins ${V:+--verbose}
   _ cargo +"$rust_stable" test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture
   exit 0
   ;;

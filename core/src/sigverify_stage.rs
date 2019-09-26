@@ -3,10 +3,11 @@
 //! top-level list with a list of booleans, telling the next stage whether the
 //! signature in that packet is valid. It assumes each packet contains one
 //! transaction. All processing is done on the CPU by default and on a GPU
-//! if the `cuda` feature is enabled with `--features=cuda`.
+//! if perf-libs are available
 
 use crate::cuda_runtime::PinnedVec;
 use crate::packet::Packets;
+use crate::perf_libs;
 use crate::recycler::Recycler;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -21,11 +22,8 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 
-#[cfg(feature = "cuda")]
-const RECV_BATCH_MAX: usize = 5_000;
-
-#[cfg(not(feature = "cuda"))]
-const RECV_BATCH_MAX: usize = 1000;
+const RECV_BATCH_MAX_CPU: usize = 1_000;
+const RECV_BATCH_MAX_GPU: usize = 5_000;
 
 pub type VerifiedPackets = Vec<(Packets, Vec<u8>)>;
 
@@ -70,7 +68,11 @@ impl SigVerifyStage {
     ) -> Result<()> {
         let (batch, len, recv_time) = streamer::recv_batch(
             &recvr.lock().expect("'recvr' lock in fn verifier"),
-            RECV_BATCH_MAX,
+            if perf_libs::api().is_some() {
+                RECV_BATCH_MAX_GPU
+            } else {
+                RECV_BATCH_MAX_CPU
+            },
         )?;
         inc_new_counter_info!("sigverify_stage-packets_received", len);
 
