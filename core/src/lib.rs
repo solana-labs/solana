@@ -10,10 +10,10 @@ pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod broadcast_stage;
 pub mod chacha;
-#[cfg(cuda)]
 pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
 pub mod confidence;
+pub mod perf_libs;
 pub mod recycler;
 #[macro_use]
 pub mod contact_info;
@@ -74,6 +74,9 @@ pub mod validator;
 pub(crate) mod version;
 pub mod weighted_shuffle;
 pub mod window_service;
+
+#[macro_use]
+extern crate dlopen_derive;
 
 #[macro_use]
 extern crate solana_budget_program;

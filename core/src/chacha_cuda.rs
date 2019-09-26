@@ -1,11 +1,8 @@
-// Module used by validators to approve storage mining proofs
-// // in parallel using the GPU
+// Module used by validators to approve storage mining proofs in parallel using the GPU
 
 use crate::blocktree::Blocktree;
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use crate::sigverify::{
-    chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state,
-};
+use crate::perf_libs;
 use solana_sdk::hash::Hash;
 use std::io;
 use std::mem::size_of;
@@ -22,6 +19,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
     ivecs: &mut [u8],
     samples: &[u64],
 ) -> io::Result<Vec<Hash>> {
+    let api = perf_libs::api().expect("no perf libs");
     if ivecs.len() % CHACHA_BLOCK_SIZE != 0 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -45,7 +43,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
     let mut total_size = 0;
     let mut time: f32 = 0.0;
     unsafe {
-        chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
+        (api.chacha_init_sha_state)(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
         match blocktree.get_data_shreds(current_slot, start_index, std::u64::MAX, &mut buffer) {
@@ -73,7 +71,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
                 }
 
                 unsafe {
-                    chacha_cbc_encrypt_many_sample(
+                    (api.chacha_cbc_encrypt_many_sample)(
                         buffer[..size].as_ptr(),
                         int_sha_states.as_mut_ptr(),
                         size,
@@ -97,7 +95,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         }
     }
     unsafe {
-        chacha_end_sha_state(
+        (api.chacha_end_sha_state)(
             int_sha_states.as_ptr(),
             sha_states.as_mut_ptr(),
             num_keys as u32,
@@ -114,22 +112,23 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::Blocktree;
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
     use crate::entry::create_ticks;
     use crate::replicator::sample_file;
     use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;
-    use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
-    use std::sync::Arc;
 
     #[test]
     fn test_encrypt_file_many_keys_single() {
         solana_logger::setup();
+        if perf_libs::api().is_none() {
+            info!("perf-libs unavailable, skipped");
+            return;
+        }
 
         let slots_per_segment = 32;
         let entries = create_ticks(slots_per_segment, Hash::default());
@@ -189,6 +188,10 @@ mod tests {
     #[test]
     fn test_encrypt_file_many_keys_multiple_keys() {
         solana_logger::setup();
+        if perf_libs::api().is_none() {
+            info!("perf-libs unavailable, skipped");
+            return;
+        }
 
         let entries = create_ticks(32, Hash::default());
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
@@ -255,6 +258,12 @@ mod tests {
 
     #[test]
     fn test_encrypt_file_many_keys_bad_key_length() {
+        solana_logger::setup();
+        if perf_libs::api().is_none() {
+            info!("perf-libs unavailable, skipped");
+            return;
+        }
+
         let mut keys = hex!("abc123");
         let ledger_dir = "test_encrypt_file_many_keys_bad_key_length";
         let ledger_path = get_tmp_ledger_path(ledger_dir);

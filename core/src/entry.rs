@@ -3,6 +3,7 @@
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
 use crate::packet::{Blob, SharedBlob};
+use crate::perf_libs;
 use crate::poh::Poh;
 use crate::result::Result;
 use bincode::{deserialize, serialized_size};
@@ -10,20 +11,14 @@ use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::inc_new_counter_warn;
+use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, RwLock};
-
-#[cfg(feature = "cuda")]
-use crate::sigverify::poh_verify_many;
-use solana_rayon_threadlimit::get_thread_count;
-#[cfg(feature = "cuda")]
-use std::sync::Mutex;
-#[cfg(feature = "cuda")]
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Instant;
 
@@ -257,13 +252,12 @@ impl EntrySlice for [Entry] {
         res
     }
 
-    #[cfg(not(feature = "cuda"))]
     fn verify(&self, start_hash: &Hash) -> bool {
-        self.verify_cpu(start_hash)
-    }
-
-    #[cfg(feature = "cuda")]
-    fn verify(&self, start_hash: &Hash) -> bool {
+        let api = perf_libs::api();
+        if api.is_none() {
+            return self.verify_cpu(start_hash);
+        }
+        let api = api.unwrap();
         inc_new_counter_warn!("entry_verify-num_entries", self.len() as usize);
 
         // Use CPU verify if the batch length is < 1K
@@ -287,7 +281,7 @@ impl EntrySlice for [Entry] {
             .collect();
 
         let num_hashes_vec: Vec<u64> = self
-            .into_iter()
+            .iter()
             .map(|entry| entry.num_hashes.saturating_sub(1))
             .collect();
 
@@ -300,7 +294,7 @@ impl EntrySlice for [Entry] {
             let mut hashes = hashes_clone.lock().unwrap();
             let res;
             unsafe {
-                res = poh_verify_many(
+                res = (api.poh_verify_many)(
                     hashes.as_mut_ptr() as *mut u8,
                     num_hashes_vec.as_ptr(),
                     length,

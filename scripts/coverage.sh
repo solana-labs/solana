@@ -15,7 +15,7 @@ reportName="lcov-${CI_COMMIT:0:9}"
 if [[ -n $1 ]]; then
   crate="--package $1"
 else
-  crate="--all --exclude solana-local-cluster --exclude solana-validator-cuda"
+  crate="--all --exclude solana-local-cluster"
 fi
 
 coverageFlags=(-Zprofile)                # Enable coverage
