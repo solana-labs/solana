@@ -6,6 +6,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::os::raw::{c_int, c_uint};
 use std::path::{Path, PathBuf};
+use std::sync::Once;
 
 #[repr(C)]
 pub struct Elems {
@@ -75,7 +76,6 @@ pub struct Api<'a> {
 static mut API: Option<Container<Api>> = None;
 
 fn init(name: &OsStr) {
-    use std::sync::Once;
     static INIT_HOOK: Once = Once::new();
 
     info!("Loading {:?}", name);
@@ -159,9 +159,12 @@ pub fn init_cuda() {
 pub fn api() -> Option<&'static Container<Api<'static>>> {
     #[cfg(test)]
     {
-        if std::env::var("TEST_PERF_LIBS_CUDA").is_ok() {
-            init_cuda();
-        }
+        static INIT_HOOK: Once = Once::new();
+        INIT_HOOK.call_once(|| {
+            if std::env::var("TEST_PERF_LIBS_CUDA").is_ok() {
+                init_cuda();
+            }
+        })
     }
 
     unsafe { API.as_ref() }
