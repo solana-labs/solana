@@ -1,6 +1,6 @@
 use crate::{
     config, id,
-    stake_state::{StakeAccount, StakeState},
+    stake_state::{Authorized, Lockup, StakeAccount, StakeAuthorize, StakeState},
 };
 use bincode::deserialize;
 use log::*;
@@ -8,7 +8,6 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount,
-    clock::Slot,
     instruction::{AccountMeta, Instruction, InstructionError},
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
@@ -36,7 +35,7 @@ impl std::fmt::Display for StakeError {
 }
 impl std::error::Error for StakeError {}
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum StakeInstruction {
     /// `Lockup` a stake until the specified slot
     ///
@@ -49,13 +48,14 @@ pub enum StakeInstruction {
     ///    account to which this stake will honor a withdrawal *before*
     //     lockup expires.
     ///
-    Lockup((Slot, Pubkey)),
+    Initialize(Authorized, Lockup),
 
     /// Authorize a system account to manage stake
     ///
     /// Expects 1 Account:
     ///     0 - Locked-up or delegated StakeAccount to be updated with authorized staker
-    Authorize(Pubkey),
+    Authorize(Pubkey, StakeAuthorize),
+
     /// `Delegate` a stake to a particular vote account
     ///
     /// Expects 4 Accounts:
@@ -106,8 +106,8 @@ pub fn create_stake_account_with_lockup(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
     lamports: u64,
-    lockup: Slot,
-    custodian: &Pubkey,
+    authorized: &Authorized,
+    lockup: &Lockup,
 ) -> Vec<Instruction> {
     vec![
         system_instruction::create_account(
@@ -119,7 +119,7 @@ pub fn create_stake_account_with_lockup(
         ),
         Instruction::new(
             id(),
-            &StakeInstruction::Lockup((lockup, *custodian)),
+            &StakeInstruction::Initialize(*authorized, *lockup),
             vec![AccountMeta::new(*stake_pubkey, false)],
         ),
     ]
@@ -129,8 +129,15 @@ pub fn create_stake_account(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
     lamports: u64,
+    authorized: &Authorized,
 ) -> Vec<Instruction> {
-    create_stake_account_with_lockup(from_pubkey, stake_pubkey, lamports, 0, &Pubkey::default())
+    create_stake_account_with_lockup(
+        from_pubkey,
+        stake_pubkey,
+        lamports,
+        authorized,
+        &Lockup::default(),
+    )
 }
 
 pub fn create_stake_account_and_delegate_stake(
@@ -138,21 +145,23 @@ pub fn create_stake_account_and_delegate_stake(
     stake_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
     lamports: u64,
+    authorized: &Authorized,
 ) -> Vec<Instruction> {
-    let mut instructions = create_stake_account(from_pubkey, stake_pubkey, lamports);
+    let mut instructions = create_stake_account(from_pubkey, stake_pubkey, lamports, authorized);
     instructions.push(delegate_stake(stake_pubkey, vote_pubkey));
     instructions
 }
 
-fn metas_for_authorized_staker(
-    stake_pubkey: &Pubkey,
-    authorized_pubkey: &Pubkey, // currently authorized
+// for instructions that whose authorized signer may differ from the account's pubkey
+fn metas_for_authorized_signer(
+    account_pubkey: &Pubkey,
+    authorized_signer: &Pubkey, // currently authorized
     other_params: &[AccountMeta],
 ) -> Vec<AccountMeta> {
-    let is_own_signer = authorized_pubkey == stake_pubkey;
+    let is_own_signer = authorized_signer == account_pubkey;
 
-    // stake account
-    let mut account_metas = vec![AccountMeta::new(*stake_pubkey, is_own_signer)];
+    // vote account
+    let mut account_metas = vec![AccountMeta::new(*account_pubkey, is_own_signer)];
 
     for meta in other_params {
         account_metas.push(meta.clone());
@@ -160,7 +169,7 @@ fn metas_for_authorized_staker(
 
     // append signer at the end
     if !is_own_signer {
-        account_metas.push(AccountMeta::new_credit_only(*authorized_pubkey, true)) // signer
+        account_metas.push(AccountMeta::new_credit_only(*authorized_signer, true)) // signer
     }
 
     account_metas
@@ -170,12 +179,13 @@ pub fn authorize(
     stake_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     new_authorized_pubkey: &Pubkey,
+    stake_authorize: StakeAuthorize,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_staker(stake_pubkey, authorized_pubkey, &[]);
+    let account_metas = metas_for_authorized_signer(stake_pubkey, authorized_pubkey, &[]);
 
     Instruction::new(
         id(),
-        &StakeInstruction::Authorize(*new_authorized_pubkey),
+        &StakeInstruction::Authorize(*new_authorized_pubkey, stake_authorize),
         account_metas,
     )
 }
@@ -239,8 +249,10 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StakeInstruction::Lockup((lockup, custodian)) => me.lockup(lockup, &custodian),
-        StakeInstruction::Authorize(authorized_pubkey) => me.authorize(&authorized_pubkey, &rest),
+        StakeInstruction::Initialize(authorized, lockup) => me.initialize(&authorized, &lockup),
+        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
+            me.authorize(&authorized_pubkey, stake_authorize, &rest)
+        }
         StakeInstruction::DelegateStake => {
             if rest.len() < 3 {
                 Err(InstructionError::InvalidInstructionData)?;
@@ -366,7 +378,11 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&StakeInstruction::Lockup((0, Pubkey::default()))).unwrap(),
+                &serialize(&StakeInstruction::Initialize(
+                    Authorized::default(),
+                    Lockup::default()
+                ))
+                .unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
         );
