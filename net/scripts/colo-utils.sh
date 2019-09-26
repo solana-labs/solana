@@ -74,7 +74,7 @@ colo_instance_run() {
   declare CMD="$2"
   declare OUT
   set +e
-  OUT=$(ssh -l solana -o "ConnectTimeout=3" -n "$IP" "$CMD" 2>&1)
+  OUT=$(ssh -l solana -o "StrictHostKeyChecking=no" -o "ConnectTimeout=3" -n "$IP" "$CMD" 2>&1)
   declare RC=$?
   set -e
   while read -r LINE; do
@@ -147,6 +147,9 @@ __colo_node_status_result_normalize() {
     if [ -n "$US" ]; then
       BY="$US"
       ST="HELD"
+      if [[ -z "$INSTNAME" ]]; then
+        return
+      fi
     else
       ST="FREE"
     fi
