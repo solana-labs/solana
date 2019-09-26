@@ -220,9 +220,11 @@ pub mod tests {
 
     //   add stake to a vote_pubkey                               (   stake    )
     pub fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
+        let stake_pubkey = Pubkey::new_rand();
         (
-            Pubkey::new_rand(),
+            stake_pubkey,
             stake_state::create_account(
+                &stake_pubkey,
                 &vote_pubkey,
                 &vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1),
                 stake,

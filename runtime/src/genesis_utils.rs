@@ -41,6 +41,7 @@ pub fn create_genesis_block_with_leader(
     );
 
     let stake_account = stake_state::create_account(
+        &staking_keypair.pubkey(),
         &voting_keypair.pubkey(),
         &vote_account,
         bootstrap_leader_stake_lamports,

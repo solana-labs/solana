@@ -228,7 +228,7 @@ mod tests {
         let ancestors = vec![3, 4, 5, 7, 9, 11];
         let mut confidence = HashMap::new();
         let lamports = 5;
-        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+        let mut vote_state = VoteState::default();
 
         let root = ancestors.last().unwrap();
         vote_state.root_slot = Some(*root);
@@ -251,7 +251,7 @@ mod tests {
         let ancestors = vec![3, 4, 5, 7, 9, 11];
         let mut confidence = HashMap::new();
         let lamports = 5;
-        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+        let mut vote_state = VoteState::default();
 
         let root = ancestors[2];
         vote_state.root_slot = Some(root);
@@ -281,7 +281,7 @@ mod tests {
         let ancestors = vec![3, 4, 5, 7, 9, 10, 11];
         let mut confidence = HashMap::new();
         let lamports = 5;
-        let mut vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+        let mut vote_state = VoteState::default();
 
         let root = ancestors[2];
         vote_state.root_slot = Some(root);
@@ -319,18 +319,20 @@ mod tests {
             mut genesis_block, ..
         } = create_genesis_block(10_000);
 
+        let sk1 = Pubkey::new_rand();
         let pk1 = Pubkey::new_rand();
         let mut vote_account1 = vote_state::create_account(&pk1, &Pubkey::new_rand(), 0, 100);
-        let stake_account1 = stake_state::create_account(&pk1, &vote_account1, 100);
+        let stake_account1 = stake_state::create_account(&sk1, &pk1, &vote_account1, 100);
+        let sk2 = Pubkey::new_rand();
         let pk2 = Pubkey::new_rand();
         let mut vote_account2 = vote_state::create_account(&pk2, &Pubkey::new_rand(), 0, 50);
-        let stake_account2 = stake_state::create_account(&pk2, &vote_account2, 50);
+        let stake_account2 = stake_state::create_account(&sk2, &pk2, &vote_account2, 50);
 
         genesis_block.accounts.extend(vec![
             (pk1, vote_account1.clone()),
-            (Pubkey::new_rand(), stake_account1),
+            (sk1, stake_account1),
             (pk2, vote_account2.clone()),
-            (Pubkey::new_rand(), stake_account2),
+            (sk2, stake_account2),
         ]);
 
         // Create bank
