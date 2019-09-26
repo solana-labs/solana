@@ -21,7 +21,10 @@ use solana_sdk::{
     system_transaction,
     transaction::Transaction,
 };
-use solana_stake_api::{config as stake_config, stake_instruction, stake_state::StakeState};
+use solana_stake_api::{
+    config as stake_config, stake_instruction,
+    stake_state::{Authorized as StakeAuthorized, StakeState},
+};
 use solana_storage_api::{storage_contract, storage_instruction};
 use solana_vote_api::{
     vote_instruction,
@@ -462,6 +465,7 @@ impl LocalCluster {
                     &stake_account_pubkey,
                     &vote_account_pubkey,
                     amount,
+                    &StakeAuthorized::auto(&stake_account_pubkey),
                 ),
                 client.get_recent_blockhash().unwrap().0,
             );
