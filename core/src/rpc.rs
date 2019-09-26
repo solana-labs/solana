@@ -73,6 +73,10 @@ impl JsonRpcRequestProcessor {
             .ok_or_else(Error::invalid_request)
     }
 
+    pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64> {
+        Ok(self.bank().get_minimum_balance_for_rent_exemption(data_len))
+    }
+
     pub fn get_program_accounts(&self, program_id: &Pubkey) -> Result<Vec<(String, Account)>> {
         Ok(self
             .bank()
@@ -299,6 +303,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(&self, _: Self::Metadata, _: String) -> Result<Vec<(String, Account)>>;
 
+    #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
+    fn get_minimum_balance_for_rent_exemption(&self, _: Self::Metadata, _: usize) -> Result<u64>;
+
     #[rpc(meta, name = "getInflation")]
     fn get_inflation(&self, _: Self::Metadata) -> Result<Inflation>;
 
@@ -405,6 +412,21 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_account_info(&pubkey)
+    }
+
+    fn get_minimum_balance_for_rent_exemption(
+        &self,
+        meta: Self::Metadata,
+        data_len: usize,
+    ) -> Result<u64> {
+        debug!(
+            "get_minimum_balance_for_rent_exemption rpc request received: {:?}",
+            data_len
+        );
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_minimum_balance_for_rent_exemption(data_len)
     }
 
     fn get_program_accounts(
@@ -878,6 +900,39 @@ pub mod tests {
     }
 
     #[test]
+    fn test_rpc_get_minimum_balance_for_rent_exemption() {
+        let bob_pubkey = Pubkey::new_rand();
+        let data_len = 50;
+        let (io, meta, bank, _blockhash, _alice, _leader_pubkey) =
+            start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[{}]}}"#,
+            data_len
+        );
+        let rep = io.handle_request_sync(&req, meta);
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+        let minimum_balance: u64 = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                if let Value::Number(num) = res.result {
+                    num.as_u64().unwrap()
+                } else {
+                    panic!("Expected number");
+                }
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        assert_eq!(
+            minimum_balance,
+            bank.get_minimum_balance_for_rent_exemption(data_len)
+        );
+    }
+
+    #[test]
     fn test_rpc_get_inflation() {
         let bob_pubkey = Pubkey::new_rand();
         let (io, meta, bank, _blockhash, _alice, _leader_pubkey) =
@@ -1171,10 +1226,14 @@ pub mod tests {
 
     fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair) {
         let GenesisBlockInfo {
-            genesis_block,
+            mut genesis_block,
             mint_keypair,
             ..
         } = create_genesis_block(TEST_MINT_LAMPORTS);
+
+        genesis_block.rent_calculator.lamports_per_byte_year = 50;
+        genesis_block.rent_calculator.exemption_threshold = 2.0;
+
         let bank = Bank::new(&genesis_block);
         (
             Arc::new(RwLock::new(BankForks::new(bank.slot(), bank))),

@@ -306,6 +306,35 @@ impl RpcClient {
         self.get_account(pubkey).map(|account| account.data)
     }
 
+    pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> io::Result<u64> {
+        let params = json!([data_len]);
+        let minimum_balance_json = self
+            .client
+            .send(
+                &RpcRequest::GetMinimumBalanceForRentExemption,
+                Some(params),
+                0,
+            )
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "GetMinimumBalanceForRentExemption request failure: {:?}",
+                        err
+                    ),
+                )
+            })?;
+
+        let minimum_balance: u64 =
+            serde_json::from_value(minimum_balance_json).expect("deserialize minimum_balance");
+        trace!(
+            "Response minimum balance {:?} {:?}",
+            data_len,
+            minimum_balance
+        );
+        Ok(minimum_balance)
+    }
+
     /// Request the balance of the user holding `pubkey`. This method blocks
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.

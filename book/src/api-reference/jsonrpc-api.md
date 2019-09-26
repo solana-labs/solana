@@ -30,6 +30,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getStorageTurn](jsonrpc-api.md#getstorageturn)
 * [getStorageTurnRate](jsonrpc-api.md#getstorageturnrate)
 * [getNumBlocksSinceSignatureConfirmation](jsonrpc-api.md#getnumblockssincesignatureconfirmation)
+* [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 * [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 * [getTotalSupply](jsonrpc-api.md#gettotalsupply)
 * [getVersion](jsonrpc-api.md#getversion)
@@ -453,6 +454,28 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 // Result
 {"jsonrpc":"2.0","result":8,"id":1}
+```
+
+### getMinimumBalanceForRentExemption
+
+Returns minimum balance required to make account rent exempt.
+
+#### Parameters:
+
+* `integer` - account data length, as unsigned integer
+
+#### Results:
+
+* `integer` - minimum lamports required in account, as unsigned 64-bit integer
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":500,"id":1}
 ```
 
 ### getTransactionCount

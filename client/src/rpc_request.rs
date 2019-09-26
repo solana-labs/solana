@@ -28,6 +28,7 @@ pub enum RpcRequest {
     RequestAirdrop,
     SendTransaction,
     SignVote,
+    GetMinimumBalanceForRentExemption,
 }
 
 impl RpcRequest {
@@ -61,6 +62,7 @@ impl RpcRequest {
             RpcRequest::RequestAirdrop => "requestAirdrop",
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SignVote => "signVote",
+            RpcRequest::GetMinimumBalanceForRentExemption => "getMinimumBalanceForRentExemption",
         };
         let mut request = json!({
            "jsonrpc": jsonrpc,
