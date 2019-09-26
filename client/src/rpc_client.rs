@@ -307,7 +307,7 @@ impl RpcClient {
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> io::Result<u64> {
-        let params = json!([format!("{}", data_len)]);
+        let params = json!([data_len]);
         let minimum_balance_json = self
             .client
             .send(
