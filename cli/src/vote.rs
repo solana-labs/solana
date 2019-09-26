@@ -25,11 +25,13 @@ pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<WalletComma
     let authorized_voter = pubkey_of(matches, "authorized_voter").unwrap_or(vote_account_pubkey);
     let authorized_withdrawer =
         pubkey_of(matches, "authorized_withdrawer").unwrap_or(vote_account_pubkey);
-    let lamports = matches
-        .value_of("lamports")
-        .unwrap()
-        .parse()
-        .map_err(|err| WalletError::BadParameter(format!("Invalid lamports: {:?}", err)))?;
+
+    let lamports = crate::wallet::parse_amount_lamports(
+        matches.value_of("amount").unwrap(),
+        matches.value_of("unit"),
+    )
+    .map_err(|err| WalletError::BadParameter(format!("Invalid amount: {:?}", err)))?;
+
     Ok(WalletCommand::CreateVoteAccount(
         vote_account_pubkey,
         VoteInit {
@@ -62,7 +64,11 @@ pub fn parse_vote_get_account_command(
     matches: &ArgMatches<'_>,
 ) -> Result<WalletCommand, WalletError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    Ok(WalletCommand::ShowVoteAccount(vote_account_pubkey))
+    let use_lamports_unit = matches.is_present("lamports");
+    Ok(WalletCommand::ShowVoteAccount {
+        pubkey: vote_account_pubkey,
+        use_lamports_unit,
+    })
 }
 
 pub fn process_create_vote_account(
@@ -144,6 +150,7 @@ pub fn process_show_vote_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
     vote_account_pubkey: &Pubkey,
+    use_lamports_unit: bool,
 ) -> ProcessResult {
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
@@ -159,7 +166,10 @@ pub fn process_show_vote_account(
         )
     })?;
 
-    println!("account lamports: {}", vote_account.lamports);
+    println!(
+        "account balance: {}",
+        crate::wallet::build_balance_message(vote_account.lamports, use_lamports_unit)
+    );
     println!("node id: {}", vote_state.node_pubkey);
     println!("authorized voter: {}", vote_state.authorized_voter);
     println!(
@@ -319,6 +329,7 @@ mod tests {
             "50",
             "--commission",
             "10",
+            "lamports",
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account).unwrap(),
@@ -350,7 +361,7 @@ mod tests {
                     authorized_withdrawer: pubkey,
                     commission: 0
                 },
-                50
+                858993459200
             )
         );
         // test init with an authed voter
@@ -361,6 +372,7 @@ mod tests {
             &pubkey_string,
             &node_pubkey_string,
             "50",
+            "SOL",
             "--authorized-voter",
             &authed.to_string(),
         ]);
@@ -374,7 +386,7 @@ mod tests {
                     authorized_withdrawer: pubkey,
                     commission: 0
                 },
-                50
+                858993459200
             )
         );
         // test init with an authed withdrawer
@@ -383,7 +395,7 @@ mod tests {
             "create-vote-account",
             &pubkey_string,
             &node_pubkey_string,
-            "50",
+            "0.5",
             "--authorized-withdrawer",
             &authed.to_string(),
         ]);
@@ -397,7 +409,7 @@ mod tests {
                     authorized_withdrawer: authed,
                     commission: 0
                 },
-                50
+                8589934592
             )
         );
 
