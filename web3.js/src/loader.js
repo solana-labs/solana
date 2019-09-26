@@ -44,10 +44,11 @@ export class Loader {
     data: Array<number>,
   ): Promise<PublicKey> {
     {
+      const balanceNeeded = await connection.getMinimumBalanceForRentExemption(data.length);
       const transaction = SystemProgram.createAccount(
         payer.publicKey,
         program.publicKey,
-        1,
+        balanceNeeded > 0 ? balanceNeeded : 1,
         data.length,
         programId,
       );
