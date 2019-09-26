@@ -344,7 +344,11 @@ impl<'a> Serialize for AccountsDBSerialize<'a> {
         serialize_into(&mut wr, &account_storage_serialize).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
         let fork_hashes = self.accounts_db.fork_hashes.read().unwrap();
-        serialize_into(&mut wr, &*fork_hashes).map_err(Error::custom)?;
+        serialize_into(
+            &mut wr,
+            &(self.slot, &*fork_hashes.get(&self.slot).unwrap()),
+        )
+        .map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
     }
@@ -507,9 +511,12 @@ impl AccountsDB {
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
-        let fork_hashes: HashMap<Fork, (bool, BankHash)> = deserialize_from(&mut stream)
+        let fork_hash: (Fork, (bool, BankHash)) = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("fork hashes deserialize error"))?;
-        *self.fork_hashes.write().unwrap() = fork_hashes;
+        self.fork_hashes
+            .write()
+            .unwrap()
+            .insert(fork_hash.0, fork_hash.1);
 
         // Process deserialized data, set necessary fields in self
         *self.paths.write().unwrap() = local_account_paths;
@@ -1545,10 +1552,15 @@ pub mod tests {
         accounts.add_root(0);
 
         let mut pubkeys1: Vec<Pubkey> = vec![];
-        create_account(&accounts, &mut pubkeys1, 1, 10, 0, 0);
+        let latest_fork = 1;
+        create_account(&accounts, &mut pubkeys1, latest_fork, 10, 0, 0);
 
         let mut writer = Cursor::new(vec![]);
-        serialize_into(&mut writer, &AccountsDBSerialize::new(&accounts, 1)).unwrap();
+        serialize_into(
+            &mut writer,
+            &AccountsDBSerialize::new(&accounts, latest_fork),
+        )
+        .unwrap();
         assert!(check_storage(&accounts, 0, 100));
         assert!(check_storage(&accounts, 1, 10));
 
@@ -1576,6 +1588,13 @@ pub mod tests {
             accounts.next_id.load(Ordering::Relaxed)
         );
 
+        // Get the hash for the latest fork, which should be the only hash in the
+        // fork_hashes map on the deserializied AccountsDb
+        assert_eq!(daccounts.fork_hashes.read().unwrap().len(), 1);
+        assert_eq!(
+            daccounts.fork_hashes.read().unwrap().get(&latest_fork),
+            accounts.fork_hashes.read().unwrap().get(&latest_fork)
+        );
         check_accounts(&daccounts, &pubkeys, 0, 100, 2);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
         assert!(check_storage(&daccounts, 0, 100));
