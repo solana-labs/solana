@@ -315,6 +315,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         1,
     );
     let stake_account = stake_state::create_account(
+        &bootstrap_stake_keypair.pubkey(),
         &bootstrap_vote_keypair.pubkey(),
         &vote_account,
         bootstrap_leader_stake_lamports,

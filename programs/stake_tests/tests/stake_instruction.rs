@@ -1,20 +1,27 @@
 use assert_matches::assert_matches;
-use solana_runtime::bank::Bank;
-use solana_runtime::bank_client::BankClient;
-use solana_runtime::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
-use solana_sdk::account_utils::State;
-use solana_sdk::client::SyncClient;
-use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::sysvar;
-use solana_sdk::sysvar::rewards::Rewards;
-use solana_stake_api::id;
-use solana_stake_api::stake_instruction;
-use solana_stake_api::stake_instruction::process_instruction;
-use solana_stake_api::stake_state::StakeState;
-use solana_vote_api::vote_instruction;
-use solana_vote_api::vote_state::{Vote, VoteInit, VoteState};
+use solana_runtime::{
+    bank::Bank,
+    bank_client::BankClient,
+    genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
+};
+use solana_sdk::{
+    account_utils::State,
+    client::SyncClient,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    sysvar,
+    sysvar::rewards::Rewards,
+};
+use solana_stake_api::{
+    id,
+    stake_instruction::{self, process_instruction},
+    stake_state::{self, StakeState},
+};
+use solana_vote_api::{
+    vote_instruction,
+    vote_state::{Vote, VoteInit, VoteState},
+};
 use std::sync::Arc;
 
 fn fill_epoch_with_votes(
@@ -88,12 +95,14 @@ fn test_stake_account_delegate() {
         .send_message(&[&mint_keypair], message)
         .expect("failed to create vote account");
 
+    let authorized = stake_state::Authorized::auto(&staker_pubkey);
     // Create stake account and delegate to vote account
     let message = Message::new(stake_instruction::create_stake_account_and_delegate_stake(
         &mint_pubkey,
         &staker_pubkey,
         &vote_pubkey,
         20000,
+        &authorized,
     ));
     bank_client
         .send_message(&[&mint_keypair, &staker_keypair], message)
@@ -102,7 +111,7 @@ fn test_stake_account_delegate() {
     // Test that correct lamports are staked
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(stake) = stake_state {
+    if let StakeState::Stake(_authorized, _lockup, stake) = stake_state {
         assert_eq!(stake.stake, 20000);
     } else {
         assert!(false, "wrong account type found")
@@ -124,7 +133,7 @@ fn test_stake_account_delegate() {
     // Test that lamports are still staked
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(stake) = stake_state {
+    if let StakeState::Stake(_authorized, _lockup, stake) = stake_state {
         assert_eq!(stake.stake, 20000);
     } else {
         assert!(false, "wrong account type found")
@@ -168,7 +177,7 @@ fn test_stake_account_delegate() {
     let rewards;
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(stake) = stake_state {
+    if let StakeState::Stake(_authorized, _lockup, stake) = stake_state {
         assert!(account.lamports > 20000);
         assert_eq!(stake.stake, 20000);
         rewards = account.lamports - 20000;
@@ -251,7 +260,7 @@ fn test_stake_account_delegate() {
     // Test that balance and stake is updated correctly (we have withdrawn all lamports except rewards)
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_stake) = stake_state {
+    if let StakeState::Stake(_, _, _stake) = stake_state {
         assert_eq!(account.lamports, rewards);
     } else {
         assert!(false, "wrong account type found")
