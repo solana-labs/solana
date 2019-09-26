@@ -100,7 +100,7 @@ fn main() {
                 last_balance = primordial_account.balance;
             });
 
-        if keypairs.len() != tx_count * 2 {
+        if keypairs.len() < tx_count * 2 {
             eprintln!(
                 "Expected {} accounts in {}, only received {} (--tx_count mismatch?)",
                 tx_count * 2,
