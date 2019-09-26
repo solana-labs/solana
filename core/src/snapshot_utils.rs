@@ -5,6 +5,7 @@ use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use bincode::{deserialize_from, serialize_into};
 use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
+use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::SlotDelta;
 use solana_sdk::transaction;
@@ -140,7 +141,11 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     let mut snapshot_stream = BufWriter::new(snapshot_file);
     // Create the snapshot
     serialize_into(&mut snapshot_stream, &*bank).map_err(|e| get_io_error(&e.to_string()))?;
+    let mut bank_rc_serialize = Measure::start("bank_rc_serialize-ms");
     serialize_into(&mut snapshot_stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
+    bank_rc_serialize.stop();
+    inc_new_counter_info!("bank-rc-serialize-ms", bank_rc_serialize.as_ms() as usize);
+
     info!(
         "successfully created snapshot {}, path: {:?}",
         bank.slot(),
