@@ -84,20 +84,6 @@ pub type AppendVecId = usize;
 // Each fork has a set of storage entries.
 type ForkStores = HashMap<usize, Arc<AccountStorageEntry>>;
 
-#[derive(Clone, Default, Debug)]
-pub struct AccountStorage(pub HashMap<Fork, ForkStores>);
-pub struct AccountStorageSerialize<'a> {
-    account_storage: &'a AccountStorage,
-    slot: u64,
-}
-impl<'a> AccountStorageSerialize<'a> {
-    pub fn new(account_storage: &'a AccountStorage, slot: u64) -> Self {
-        Self {
-            account_storage,
-            slot,
-        }
-    }
-}
 struct AccountStorageVisitor;
 
 impl<'de> Visitor<'de> for AccountStorageVisitor {
@@ -113,15 +99,29 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
         M: MapAccess<'de>,
     {
         let mut map = HashMap::new();
-        while let Some((storage_id, storage_entry)) = access.next_entry()? {
-            let storage_entry: AccountStorageEntry = storage_entry;
-            let storage_fork_map = map
-                .entry(storage_entry.fork_id)
-                .or_insert_with(HashMap::new);
-            storage_fork_map.insert(storage_id, Arc::new(storage_entry));
+        while let Some((fork_id, storage_entries)) = access.next_entry()? {
+            let storage_entries: Vec<AccountStorageEntry> = storage_entries;
+            let storage_fork_map = map.entry(fork_id).or_insert_with(HashMap::new);
+            for mut storage in storage_entries {
+                storage.fork_id = fork_id;
+                storage_fork_map.insert(storage.id, Arc::new(storage));
+            }
         }
 
         Ok(AccountStorage(map))
+    }
+}
+
+pub struct AccountStorageSerialize<'a> {
+    account_storage: &'a AccountStorage,
+    slot: u64,
+}
+impl<'a> AccountStorageSerialize<'a> {
+    pub fn new(account_storage: &'a AccountStorage, slot: u64) -> Self {
+        Self {
+            account_storage,
+            slot,
+        }
     }
 }
 
@@ -131,20 +131,19 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
         S: Serializer,
     {
         let mut len: usize = 0;
-        for (fork_id, storage) in &self.account_storage.0 {
+        for fork_id in self.account_storage.0.keys() {
             if *fork_id <= self.slot {
-                len += storage.len();
+                len += 1;
             }
         }
         let mut map = serializer.serialize_map(Some(len))?;
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        for fork_storage in self.account_storage.0.values() {
-            for (storage_id, account_storage_entry) in fork_storage {
-                if account_storage_entry.fork_id <= self.slot {
-                    map.serialize_entry(storage_id, &**account_storage_entry)?;
-                    count += 1;
-                }
+        for (fork_id, fork_storage) in &self.account_storage.0 {
+            if *fork_id <= self.slot {
+                let storage_entries: Vec<_> = fork_storage.values().collect();
+                map.serialize_entry(&fork_id, &storage_entries)?;
+                count += fork_storage.len();
             }
         }
         serialize_account_storage_timer.stop();
@@ -157,6 +156,8 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
     }
 }
 
+#[derive(Clone, Default, Debug)]
+pub struct AccountStorage(pub HashMap<Fork, ForkStores>);
 impl<'de> Deserialize<'de> for AccountStorage {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -174,10 +175,11 @@ pub enum AccountStorageStatus {
 }
 
 /// Persistent storage structure holding the accounts
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AccountStorageEntry {
     id: AppendVecId,
 
+    #[serde(skip)]
     fork_id: Fork,
 
     /// storage holding the accounts
@@ -240,6 +242,10 @@ impl AccountStorageEntry {
 
     pub fn append_vec_id(&self) -> AppendVecId {
         self.id
+    }
+
+    pub fn flush(&self) -> Result<(), IOError> {
+        self.accounts.flush()
     }
 
     fn add_account(&self) {
