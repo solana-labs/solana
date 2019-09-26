@@ -1,4 +1,4 @@
-use bincode::{deserialize_from, serialize_into, serialized_size};
+use bincode::{deserialize_from, serialize_into};
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, clock::Epoch, hash::Hash, pubkey::Pubkey};
@@ -74,6 +74,7 @@ pub struct AppendVec {
     path: PathBuf,
     map: MmapMut,
     // This mutex forces append to be single threaded, but concurrent with reads
+    #[allow(clippy::mutex_atomic)]
     append_offset: Mutex<usize>,
     current_len: AtomicUsize,
     file_size: u64,
@@ -137,6 +138,10 @@ impl AppendVec {
         }
     }
 
+    pub fn flush(&self) -> io::Result<()> {
+        self.map.flush()
+    }
+
     #[allow(clippy::mutex_atomic)]
     pub fn reset(&self) {
         // This mutex forces append to be single threaded, but concurrent with reads
@@ -167,6 +172,7 @@ impl AppendVec {
         PathBuf::from(&format!("{}.{}", fork_id, id))
     }
 
+    #[allow(clippy::mutex_atomic)]
     pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         self.path = path.as_ref().to_path_buf();
         let data = OpenOptions::new()
@@ -381,19 +387,11 @@ impl Serialize for AppendVec {
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        let len = serialized_size(&self.path).unwrap()
-            + std::mem::size_of::<u64>() as u64
-            + std::mem::size_of::<u64>() as u64
-            + std::mem::size_of::<usize>() as u64;
+        let len = std::mem::size_of::<usize>() as u64;
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
-        self.map.flush().map_err(Error::custom)?;
-        serialize_into(&mut wr, &self.path).map_err(Error::custom)?;
         serialize_into(&mut wr, &(self.current_len.load(Ordering::Relaxed) as u64))
             .map_err(Error::custom)?;
-        serialize_into(&mut wr, &self.file_size).map_err(Error::custom)?;
-        let offset = *self.append_offset.lock().unwrap();
-        serialize_into(&mut wr, &offset).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
     }
@@ -417,19 +415,14 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
     {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
-        // TODO: this path does not need to be serialized, can remove
-        let path: PathBuf = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let current_len: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
-
+        let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
         let map = MmapMut::map_anon(1).map_err(|e| Error::custom(e.to_string()))?;
         Ok(AppendVec {
-            path,
+            path: PathBuf::from(String::default()),
             map,
-            append_offset: Mutex::new(offset),
-            current_len: AtomicUsize::new(current_len as usize),
-            file_size,
+            append_offset: Mutex::new(current_len),
+            current_len: AtomicUsize::new(current_len),
+            file_size: current_len as u64,
         })
     }
 }
@@ -517,44 +510,6 @@ pub mod tests {
             "sequential read time: {} ms",
             duration_as_ms(&now.elapsed()),
         );
-    }
-
-    #[test]
-    fn test_append_vec_serialize() {
-        let path = get_append_vec_path("test_append_serialize");
-        let av: AppendVec = AppendVec::new(&Path::new(&path.path).join("0"), true, 1024 * 1024);
-        let account1 = create_test_account(1);
-        let index1 = av.append_account_test(&account1).unwrap();
-        assert_eq!(index1, 0);
-        assert_eq!(av.get_account_test(index1).unwrap(), account1);
-
-        let account2 = create_test_account(2);
-        let index2 = av.append_account_test(&account2).unwrap();
-        assert_eq!(av.get_account_test(index2).unwrap(), account2);
-        assert_eq!(av.get_account_test(index1).unwrap(), account1);
-
-        let append_vec_path = &av.path;
-
-        // Serialize the AppendVec
-        let mut writer = Cursor::new(vec![]);
-        serialize_into(&mut writer, &av).unwrap();
-
-        // Deserialize the AppendVec
-        let buf = writer.into_inner();
-        let mut reader = Cursor::new(&buf[..]);
-        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
-
-        // Set the AppendVec path
-        dav.set_file(append_vec_path).unwrap();
-        assert_eq!(dav.get_account_test(index2).unwrap(), account2);
-        assert_eq!(dav.get_account_test(index1).unwrap(), account1);
-        drop(dav);
-
-        // Dropping dav above blows away underlying file's directory entry, so
-        // trying to set the file will fail
-        let mut reader = Cursor::new(&buf[..]);
-        let mut dav: AppendVec = deserialize_from(&mut reader).unwrap();
-        assert!(dav.set_file(append_vec_path).is_err());
     }
 
     #[test]

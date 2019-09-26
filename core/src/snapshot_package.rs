@@ -111,6 +111,7 @@ impl SnapshotPackagerService {
 
         // Add the AppendVecs into the compressible list
         for storage in &snapshot_package.storage_entries {
+            storage.flush()?;
             let storage_path = storage.get_path();
             let output_path = staging_accounts_dir.join(
                 storage_path
