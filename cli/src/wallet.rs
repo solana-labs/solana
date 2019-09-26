@@ -31,7 +31,7 @@ use solana_sdk::{
 };
 use solana_stake_api::{
     stake_instruction::{self, StakeError},
-    stake_state::Authorized,
+    stake_state::{Authorized, Lockup},
 };
 use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_state::{VoteAuthorize, VoteInit, VoteState};
@@ -747,8 +747,16 @@ fn process_show_stake_account(
             format!("{:?} is not a stake account", stake_account_pubkey).to_string(),
         ))?;
     }
+    fn show_authorized(authorized: &Authorized) {
+        println!("authorized staker: {}", authorized.staker);
+        println!("authorized withdrawer: {}", authorized.staker);
+    }
+    fn show_lockup(lockup: &Lockup) {
+        println!("lockup slot: {}", lockup.slot);
+        println!("lockup custodian: {}", lockup.custodian);
+    }
     match stake_account.state() {
-        Ok(StakeState::Stake(_authorized, _lockup, stake)) => {
+        Ok(StakeState::Stake(authorized, lockup, stake)) => {
             println!(
                 "total stake: {}",
                 build_balance_message(stake_account.lamports, use_lamports_unit)
@@ -771,11 +779,18 @@ fn process_show_stake_account(
                     stake.deactivation_epoch
                 );
             }
+            show_authorized(&authorized);
+            show_lockup(&lockup);
             Ok("".to_string())
         }
         Ok(StakeState::RewardsPool) => Ok("Stake account is a rewards pool".to_string()),
-        Ok(StakeState::Uninitialized) => Ok("Stake account is unstaked".to_string()),
-        Ok(StakeState::Initialized(_, _)) => Ok("Stake account is not delegated".to_string()),
+        Ok(StakeState::Uninitialized) => Ok("Stake account is uninitialized".to_string()),
+        Ok(StakeState::Initialized(authorized, lockup)) => {
+            println!("Stake account is undelegated");
+            show_authorized(&authorized);
+            show_lockup(&lockup);
+            Ok("".to_string())
+        }
         Err(err) => Err(WalletError::RpcRequestError(format!(
             "Account data could not be deserialized to stake state: {:?}",
             err

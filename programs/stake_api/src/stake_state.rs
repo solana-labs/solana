@@ -69,10 +69,12 @@ pub enum StakeAuthorize {
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Lockup {
-    /// slot height at which this stake will allow withdrawal, unless to the custodian
+    /// slot height at which this stake will allow withdrawal, unless
+    ///  to the custodian
     pub slot: Slot,
     /// custodian account, the only account to which this stake will honor a
-    /// withdrawal *before* lockup expires
+    ///  withdrawal before lockup expires.  After lockup expires, custodian
+    ///  is irrelevant
     pub custodian: Pubkey,
 }
 

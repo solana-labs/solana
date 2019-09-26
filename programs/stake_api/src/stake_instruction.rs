@@ -37,29 +37,31 @@ impl std::error::Error for StakeError {}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum StakeInstruction {
-    /// `Lockup` a stake until the specified slot
+    /// `Initialize` a stake with Lockup and Authorized information
     ///
     /// Expects 1 Account:
-    ///    0 - Uninitialized StakeAccount to be lockup'd
+    ///    0 - Uninitialized StakeAccount
     ///
-    /// The Slot parameter denotes slot height at which this stake
-    ///    will allow withdrawal from the stake account.
-    /// The Pubkey parameter denotes a "custodian" account, the only
-    ///    account to which this stake will honor a withdrawal *before*
-    //     lockup expires.
+    /// Authorized carries pubkeys that must sign staker transactions
+    ///   and withdrawer transactions.
+    /// Lockup carries information about withdrawal restrictions
     ///
     Initialize(Authorized, Lockup),
 
-    /// Authorize a system account to manage stake
+    /// Authorize a key to manage stake or withdrawal
+    ///    requires Authorized::staker or Authorized::withdrawer
+    ///    signature, depending on which key's being updated
     ///
     /// Expects 1 Account:
-    ///     0 - Locked-up or delegated StakeAccount to be updated with authorized staker
+    ///    0 - StakeAccount to be updated with the Pubkey for
+    ///          authorization
     Authorize(Pubkey, StakeAuthorize),
 
     /// `Delegate` a stake to a particular vote account
+    ///    requires Authorized::staker signature
     ///
     /// Expects 4 Accounts:
-    ///    0 - Lockup'd StakeAccount to be delegated <= transaction must have this signature
+    ///    0 - Initialized StakeAccount to be delegated
     ///    1 - VoteAccount to which this Stake will be delegated
     ///    2 - Clock sysvar Account that carries clock bank epoch
     ///    3 - Config Account that carries stake config
@@ -71,9 +73,10 @@ pub enum StakeInstruction {
     DelegateStake,
 
     /// Redeem credits in the stake account
+    ///    requires Authorized::staker signature
     ///
     /// Expects 5 Accounts:
-    ///    0 - Delegate StakeAccount to be updated with rewards
+    ///    0 - StakeAccount to be updated with rewards
     ///    1 - VoteAccount to which the Stake is delegated,
     ///    2 - RewardsPool Stake Account from which to redeem credits
     ///    3 - Rewards sysvar Account that carries points values
@@ -81,21 +84,23 @@ pub enum StakeInstruction {
     RedeemVoteCredits,
 
     /// Withdraw unstaked lamports from the stake account
+    ///    requires Authorized::withdrawer signature
     ///
     /// Expects 4 Accounts:
-    ///    0 - Delegate StakeAccount <= transaction must have this signature
+    ///    0 - StakeAccount from which to withdraw
     ///    1 - System account to which the lamports will be transferred,
     ///    2 - Syscall Account that carries epoch
     ///    3 - StakeHistory sysvar that carries stake warmup/cooldown history
     ///
     /// The u64 is the portion of the Stake account balance to be withdrawn,
-    ///    must be <= StakeAccount.lamports - staked lamports
+    ///    must be <= StakeAccount.lamports - staked lamports.
     Withdraw(u64),
 
     /// Deactivates the stake in the account
+    ///    requires Authorized::staker signature
     ///
     /// Expects 3 Accounts:
-    ///    0 - Delegate StakeAccount <= transaction must have this signature
+    ///    0 - Delegate StakeAccount
     ///    1 - VoteAccount to which the Stake is delegated
     ///    2 - Syscall Account that carries epoch
     ///
