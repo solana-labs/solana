@@ -18,7 +18,7 @@ use solana_sdk::{
 };
 use solana_vote_api::vote_state::VoteState;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 #[allow(clippy::large_enum_variant)]
 pub enum StakeState {
     Uninitialized,
@@ -49,13 +49,13 @@ impl StakeState {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeState::Stake(_authorized, _lockup, stake) => Some(stake.clone()),
+            StakeState::Stake(_authorized, _lockup, stake) => Some(*stake),
             _ => None,
         }
     }
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeState::Stake(authorized, _lockup, _stake) => Some(authorized.clone()),
+            StakeState::Stake(authorized, _lockup, _stake) => Some(*authorized),
             _ => None,
         }
     }
@@ -82,7 +82,7 @@ pub struct Authorized {
     pub withdrawer: Pubkey,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Stake {
     /// most recently delegated vote account pubkey
     pub voter_pubkey: Pubkey,
