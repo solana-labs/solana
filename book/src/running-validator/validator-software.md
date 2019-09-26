@@ -48,13 +48,3 @@ If you are unable to use the prebuilt binaries or prefer to build it yourself fr
 $ ./scripts/cargo-install-all.sh .
 $ export PATH=$PWD/bin:$PATH
 ```
-
-If building for CUDA \(Linux only\), fetch the perf-libs first then include the `cuda` feature flag when building:
-
-```bash
-$ ./fetch-perf-libs.sh
-$ source target/perf-libs/env.sh
-$ ./scripts/cargo-install-all.sh . cuda
-$ export PATH=$PWD/bin:$PATH
-```
-

@@ -15,7 +15,7 @@ _ cargo +"$rust_stable" fmt --all -- --check
 # Clippy gets stuck for unknown reasons if sdk-c is included in the build, so check it separately.
 # See https://github.com/solana-labs/solana/issues/5503
 _ cargo +"$rust_stable" clippy --version
-_ cargo +"$rust_stable" clippy --all --exclude solana-sdk-c --exclude solana-validator-cuda -- --deny=warnings
+_ cargo +"$rust_stable" clippy --all --exclude solana-sdk-c -- --deny=warnings
 _ cargo +"$rust_stable" clippy --manifest-path sdk-c/Cargo.toml -- --deny=warnings
 
 _ cargo +"$rust_stable" audit --version

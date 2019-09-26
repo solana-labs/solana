@@ -1,11 +1,12 @@
 //! The `sigverify` module provides digital signature verification functions.
 //! By default, signatures are verified in parallel using all available CPU
-//! cores.  When `--features=cuda` is enabled, signature verification is
-//! offloaded to the GPU.
+//! cores.  When perf-libs are available signature verification is offloaded
+//! to the GPU.
 //!
 
 use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
+use crate::perf_libs;
 use crate::recycler::Recycler;
 use crate::result::Result;
 use bincode::serialized_size;
@@ -19,11 +20,7 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction::Transaction;
 use std::mem::size_of;
 
-#[cfg(feature = "cuda")]
-use core::ffi::c_void;
 use solana_rayon_threadlimit::get_thread_count;
-#[cfg(feature = "cuda")]
-use std::os::raw::{c_int, c_uint};
 pub const NUM_THREADS: u32 = 10;
 use std::cell::RefCell;
 
@@ -36,62 +33,16 @@ pub type TxOffset = PinnedVec<u32>;
 
 type TxOffsets = (TxOffset, TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>);
 
-#[cfg(feature = "cuda")]
-#[repr(C)]
-struct Elems {
-    elems: *const Packet,
-    num: u32,
-}
-
-#[cfg(feature = "cuda")]
-#[link(name = "cuda-crypt")]
-extern "C" {
-    fn ed25519_init() -> bool;
-    fn ed25519_set_verbose(val: bool);
-    fn ed25519_verify_many(
-        vecs: *const Elems,
-        num: u32,          //number of vecs
-        message_size: u32, //size of each element inside the elems field of the vec
-        total_packets: u32,
-        total_signatures: u32,
-        message_lens: *const u32,
-        pubkey_offsets: *const u32,
-        signature_offsets: *const u32,
-        signed_message_offsets: *const u32,
-        out: *mut u8, //combined length of all the items in vecs
-        use_non_default_stream: u8,
-    ) -> u32;
-
-    pub fn chacha_cbc_encrypt_many_sample(
-        input: *const u8,
-        sha_state: *mut u8,
-        in_len: usize,
-        keys: *const u8,
-        ivec: *mut u8,
-        num_keys: u32,
-        samples: *const u64,
-        num_samples: u32,
-        starting_block: u64,
-        time_us: *mut f32,
-    );
-
-    pub fn chacha_init_sha_state(sha_state: *mut u8, num_keys: u32);
-    pub fn chacha_end_sha_state(sha_state_in: *const u8, out: *mut u8, num_keys: u32);
-
-    pub fn poh_verify_many(
-        hashes: *mut u8,
-        num_hashes_arr: *const u64,
-        num_elems: usize,
-        use_non_default_stream: u8,
-    ) -> c_int;
-
-    pub fn cuda_host_register(ptr: *mut c_void, size: usize, flags: c_uint) -> c_int;
-    pub fn cuda_host_unregister(ptr: *mut c_void) -> c_int;
-}
-
-#[cfg(not(feature = "cuda"))]
 pub fn init() {
-    // stub
+    if let Some(api) = perf_libs::api() {
+        unsafe {
+            (api.ed25519_set_verbose)(true);
+            if !(api.ed25519_init)() {
+                panic!("ed25519_init() failed");
+            }
+            (api.ed25519_set_verbose)(false);
+        }
+    }
 }
 
 fn verify_packet(packet: &Packet) -> u8 {
@@ -128,15 +79,6 @@ fn verify_packet(packet: &Packet) -> u8 {
 
 fn batch_size(batches: &[Packets]) -> usize {
     batches.iter().map(|p| p.packets.len()).sum()
-}
-
-#[cfg(not(feature = "cuda"))]
-pub fn ed25519_verify(
-    batches: &[Packets],
-    _recycler: &Recycler<TxOffset>,
-    _recycler_out: &Recycler<PinnedVec<u8>>,
-) -> Vec<Vec<u8>> {
-    ed25519_verify_cpu(batches)
 }
 
 pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u32, u32) {
@@ -235,23 +177,17 @@ pub fn ed25519_verify_disabled(batches: &[Packets]) -> Vec<Vec<u8>> {
     rv
 }
 
-#[cfg(feature = "cuda")]
-pub fn init() {
-    unsafe {
-        ed25519_set_verbose(true);
-        if !ed25519_init() {
-            panic!("ed25519_init() failed");
-        }
-        ed25519_set_verbose(false);
-    }
-}
-
-#[cfg(feature = "cuda")]
 pub fn ed25519_verify(
     batches: &[Packets],
     recycler: &Recycler<TxOffset>,
     recycler_out: &Recycler<PinnedVec<u8>>,
 ) -> Vec<Vec<u8>> {
+    let api = perf_libs::api();
+    if api.is_none() {
+        return ed25519_verify_cpu(batches);
+    }
+    let api = api.unwrap();
+
     use crate::packet::PACKET_DATA_SIZE;
     let count = batch_size(batches);
 
@@ -276,7 +212,7 @@ pub fn ed25519_verify(
 
     let mut num_packets = 0;
     for p in batches {
-        elems.push(Elems {
+        elems.push(perf_libs::Elems {
             elems: p.packets.as_ptr(),
             num: p.packets.len() as u32,
         });
@@ -292,7 +228,7 @@ pub fn ed25519_verify(
     trace!("len offset: {}", PACKET_DATA_SIZE as u32);
     const USE_NON_DEFAULT_STREAM: u8 = 1;
     unsafe {
-        let res = ed25519_verify_many(
+        let res = (api.ed25519_verify_many)(
             elems.as_ptr(),
             elems.len() as u32,
             size_of::<Packet>() as u32,
