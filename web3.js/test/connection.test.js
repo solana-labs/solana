@@ -255,7 +255,9 @@ test('getVoteAccounts', async () => {
 
   const connection = new Connection(url);
   const voteAccounts = await connection.getVoteAccounts();
-  expect(voteAccounts.current.length).toBeGreaterThan(0);
+  expect(
+    voteAccounts.current.concat(voteAccounts.delinquent).length,
+  ).toBeGreaterThan(0);
 });
 
 test('confirm transaction - error', async () => {
