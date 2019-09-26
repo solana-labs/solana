@@ -73,6 +73,10 @@ impl JsonRpcRequestProcessor {
             .ok_or_else(Error::invalid_request)
     }
 
+    pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64> {
+        Ok(self.bank().get_minimum_balance_for_rent_exemption(data_len))
+    }
+
     pub fn get_program_accounts(&self, program_id: &Pubkey) -> Result<Vec<(String, Account)>> {
         Ok(self
             .bank()
@@ -299,6 +303,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(&self, _: Self::Metadata, _: String) -> Result<Vec<(String, Account)>>;
 
+    #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
+    fn get_minimum_balance_for_rent_exemption(&self, _: Self::Metadata, _: usize) -> Result<u64>;
+
     #[rpc(meta, name = "getInflation")]
     fn get_inflation(&self, _: Self::Metadata) -> Result<Inflation>;
 
@@ -405,6 +412,21 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_account_info(&pubkey)
+    }
+
+    fn get_minimum_balance_for_rent_exemption(
+        &self,
+        meta: Self::Metadata,
+        data_len: usize,
+    ) -> Result<u64> {
+        debug!(
+            "get_minimum_balance_for_rent_exemption rpc request received: {:?}",
+            data_len
+        );
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_minimum_balance_for_rent_exemption(data_len)
     }
 
     fn get_program_accounts(
