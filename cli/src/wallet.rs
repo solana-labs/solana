@@ -30,6 +30,7 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_stake_api::stake_instruction::{self, StakeError};
+use solana_stake_api::stake_state::StakeState;
 use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_state::{VoteAuthorize, VoteInit, VoteState};
 use std::{
@@ -65,7 +66,7 @@ pub enum WalletCommand {
     Cancel(Pubkey),
     Confirm(Signature),
     VoteAuthorize(Pubkey, Keypair, Pubkey, VoteAuthorize),
-    CreateVoteAccount(Pubkey, VoteInit, u64),
+    CreateVoteAccount(Pubkey, VoteInit),
     ShowAccount {
         pubkey: Pubkey,
         output_file: Option<String>,
@@ -617,6 +618,15 @@ fn process_delegate_stake(
         ),
     )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let minimum_balance =
+        rpc_client.get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())?;
+
+    if lamports < minimum_balance {
+        Err(WalletError::BadParameter(format!(
+            "need atleast {} lamports for stake account to be rent exempt, provided lamports: {}",
+            minimum_balance, lamports
+        )))?;
+    }
 
     let ixs = stake_instruction::create_stake_account_and_delegate_stake(
         &config.keypair.pubkey(),
@@ -733,7 +743,6 @@ fn process_show_stake_account(
     stake_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    use solana_stake_api::stake_state::StakeState;
     let stake_account = rpc_client.get_account(stake_account_pubkey)?;
     if stake_account.owner != solana_stake_api::id() {
         Err(WalletError::RpcRequestError(
@@ -893,11 +902,12 @@ fn process_deploy(
     // Build transactions to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
     let mut create_account_tx = system_transaction::create_account(
         &config.keypair,
         &program_id.pubkey(),
         blockhash,
-        1,
+        minimum_balance,
         program_data.len() as u64,
         &bpf_loader::id(),
     );
@@ -1291,14 +1301,8 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
 
         // Create vote account
-        WalletCommand::CreateVoteAccount(vote_account_pubkey, vote_init, lamports) => {
-            process_create_vote_account(
-                &rpc_client,
-                config,
-                &vote_account_pubkey,
-                &vote_init,
-                *lamports,
-            )
+        WalletCommand::CreateVoteAccount(vote_account_pubkey, vote_init) => {
+            process_create_vote_account(&rpc_client, config, &vote_account_pubkey, &vote_init)
         }
 
         WalletCommand::VoteAuthorize(

@@ -26,12 +26,6 @@ pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<WalletComma
     let authorized_withdrawer =
         pubkey_of(matches, "authorized_withdrawer").unwrap_or(vote_account_pubkey);
 
-    let lamports = crate::wallet::parse_amount_lamports(
-        matches.value_of("amount").unwrap(),
-        matches.value_of("unit"),
-    )
-    .map_err(|err| WalletError::BadParameter(format!("Invalid amount: {:?}", err)))?;
-
     Ok(WalletCommand::CreateVoteAccount(
         vote_account_pubkey,
         VoteInit {
@@ -40,7 +34,6 @@ pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<WalletComma
             authorized_withdrawer,
             commission,
         },
-        lamports,
     ))
 }
 
@@ -76,7 +69,6 @@ pub fn process_create_vote_account(
     config: &WalletConfig,
     vote_account_pubkey: &Pubkey,
     vote_init: &VoteInit,
-    lamports: u64,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
@@ -86,11 +78,13 @@ pub fn process_create_vote_account(
         (&config.keypair.pubkey(), "wallet keypair".to_string()),
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
     )?;
+    let required_balance =
+        rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
         vote_account_pubkey,
         vote_init,
-        lamports,
+        required_balance,
     );
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
