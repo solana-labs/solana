@@ -107,18 +107,19 @@ launchTestnet() {
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
+  RESULTS_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$nodeCount".log
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
-    python tests/testnet-performance/testnet-automation-json-parser.py >>"$TESTNET_TAG"_TPS_"$nodeCount".log
+    python tests/testnet-performance/testnet-automation-json-parser.py >>"$RESULTS_FILE"
 
-  upload-ci-artifact "$TESTNET_TAG"_SUMMARY_STATS_"$nodeCount".log
+  upload-ci-artifact "$RESULTS_FILE"
 
   echo --- collect logs from remote nodes
   rm -rf net/log
   net/net.sh logs
   for logfile in net/log/* ; do
-    new_log="$TESTNET_TAG"_"$nodeCount"-nodes_"$logfile"
+    new_log=net/log/"$TESTNET_TAG"_"$nodeCount"-nodes_"$(basename "$logfile")"
     cp "$logfile" "$new_log"
     upload-ci-artifact "$new_log"
   done
