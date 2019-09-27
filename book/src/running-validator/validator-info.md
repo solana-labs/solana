@@ -7,14 +7,14 @@ You can publish your validator information to the chain to be publicly visible t
 Run the solana CLI to populate a validator info account:
 
 ```bash
-$ solana validator-info publish --keypair ~/validator-keypair.json <VALIDATOR_NAME> <VALIDATOR_INFO_ARGS>
+$ solana validator-info publish --keypair ~/validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME> 
 ```
 
-Optional fields for VALIDATOR\_INFO\_ARGS:
+For details about optional fields for VALIDATOR\_INFO\_ARGS:
 
-* Website
-* Keybase Username
-* Details
+```bash
+$ solana validator-info publish --help
+```
 
 ## Keybase
 
