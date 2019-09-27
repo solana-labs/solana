@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
   echo --- downloading tar from build artifacts
@@ -12,10 +12,10 @@ fi
 source ci/upload-ci-artifact.sh
 
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
-[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25 50 100"
+[[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES="10 25 50 100"
 [[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
   LEADER_CPU_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
-[[ -n $CLIENT_COUNT ]] || CLIENT_COUNT=2
+[[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=2
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
 [[ -n $CHANNEL ]] || CHANNEL=beta
@@ -30,7 +30,7 @@ launchTestnet() {
   # shellcheck disable=SC2068
   net/gce.sh create \
     -d pd-ssd \
-    -n "$nodeCount" -c "$CLIENT_COUNT" \
+    -n "$nodeCount" -c "$NUMBER_OF_CLIENT_NODES" \
     -G "$LEADER_CPU_MACHINE_TYPE" \
     -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/-z } "$ADDITIONAL_FLAGS"
 
@@ -89,7 +89,7 @@ launchTestnet() {
 # This is needed, because buildkite doesn't let us define an array of numbers.
 # The array is defined as a space separated string of numbers
 # shellcheck disable=SC2206
-nodes_count_array=($NUMBER_OF_NODES)
+nodes_count_array=($NUMBER_OF_VALIDATOR_NODES)
 
 for n in "${nodes_count_array[@]}"; do
   launchTestnet "$n"
