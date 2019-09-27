@@ -17,8 +17,8 @@ solana-config-api = { path = "../programs/config_api", version = "0.20.0" }
 solana-config-program = { path = "../programs/config_program", version = "0.20.0" }
 solana-exchange-api = { path = "../programs/exchange_api", version = "0.20.0" }
 solana-exchange-program = { path = "../programs/exchange_program", version = "0.20.0" }
-solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.20.0" }
-solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.20.0" }
+solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.20.0", optional = true }
+solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.20.0", optional = true }
 solana-sdk = { path = "../sdk", version = "0.20.0" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
 solana-stake-program = { path = "../programs/stake_program", version = "0.20.0" }
@@ -32,3 +32,6 @@ solana-vote-program = { path = "../programs/vote_program", version = "0.20.0" }
 [lib]
 crate-type = ["lib"]
 name = "solana_genesis_programs"
+
+[features]
+move = ["solana-move-loader-program", "solana-move-loader-api"]

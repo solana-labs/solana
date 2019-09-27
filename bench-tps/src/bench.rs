@@ -1,13 +1,14 @@
 use solana_metrics;
 
 use crate::cli::Config;
-use bincode;
 use log::*;
 use rayon::prelude::*;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
+#[cfg(feature = "move")]
 use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_program};
+#[cfg(feature = "move")]
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_sdk::client::Client;
@@ -30,6 +31,7 @@ use std::thread::Builder;
 use std::time::Duration;
 use std::time::Instant;
 
+#[cfg(feature = "move")]
 use solana_librapay_api::librapay_transaction;
 
 pub const MAX_SPENDS_PER_TX: u64 = 4;
@@ -232,6 +234,7 @@ fn metrics_submit_lamport_balance(lamport_balance: u64) {
     );
 }
 
+#[cfg(feature = "move")]
 fn generate_move_txs(
     source: &[Keypair],
     dest: &[Keypair],
@@ -314,21 +317,29 @@ fn generate_txs(
     let signing_start = Instant::now();
 
     let transactions = if let Some((
-        libra_genesis_keypair,
-        libra_pay_program_id,
+        _libra_genesis_keypair,
+        _libra_pay_program_id,
         _libra_mint_program_id,
-        libra_keys,
+        _libra_keys,
     )) = libra_args
     {
-        generate_move_txs(
-            source,
-            dest,
-            reclaim,
-            &libra_keys,
-            libra_pay_program_id,
-            &libra_genesis_keypair.pubkey(),
-            blockhash,
-        )
+        #[cfg(not(feature = "move"))]
+        {
+            return;
+        }
+
+        #[cfg(feature = "move")]
+        {
+            generate_move_txs(
+                source,
+                dest,
+                reclaim,
+                &_libra_keys,
+                _libra_pay_program_id,
+                &_libra_genesis_keypair.pubkey(),
+                blockhash,
+            )
+        }
     } else {
         generate_system_txs(source, dest, reclaim, blockhash)
     };
@@ -689,6 +700,7 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u
     (rnd.gen_n_keypairs(total_keys), extra)
 }
 
+#[cfg(feature = "move")]
 fn fund_move_keys<T: Client>(
     client: &T,
     funding_key: &Keypair,
@@ -862,7 +874,11 @@ pub fn generate_and_fund_keypairs<T: Client>(
         .get_balance(&keypairs[tx_count * 2 - 1].pubkey())
         .unwrap_or(0);
 
+    #[cfg(feature = "move")]
     let mut move_keypairs_ret = None;
+
+    #[cfg(not(feature = "move"))]
+    let move_keypairs_ret = None;
 
     if lamports_per_account > last_keypair_balance {
         let (_blockhash, fee_calculator) = get_recent_blockhash(client);
@@ -883,34 +899,37 @@ pub fn generate_and_fund_keypairs<T: Client>(
             airdrop_lamports(client, &drone_addr.unwrap(), funding_key, total)?;
         }
 
-        if use_move {
-            let libra_genesis_keypair = create_genesis(&funding_key, client, 10_000_000);
-            let libra_mint_program_id = upload_mint_program(&funding_key, client);
-            let libra_pay_program_id = upload_payment_program(&funding_key, client);
+        #[cfg(feature = "move")]
+        {
+            if use_move {
+                let libra_genesis_keypair = create_genesis(&funding_key, client, 10_000_000);
+                let libra_mint_program_id = upload_mint_program(&funding_key, client);
+                let libra_pay_program_id = upload_payment_program(&funding_key, client);
 
-            // Generate another set of keypairs for move accounts.
-            // Still fund the solana ones which will be used for fees.
-            let seed = [0u8; 32];
-            let mut rnd = GenKeys::new(seed);
-            let move_keypairs = rnd.gen_n_keypairs(tx_count as u64 * 2);
-            fund_move_keys(
-                client,
-                funding_key,
-                &move_keypairs,
-                total / 3,
-                &libra_pay_program_id,
-                &libra_mint_program_id,
-                &libra_genesis_keypair,
-            );
-            move_keypairs_ret = Some((
-                libra_genesis_keypair,
-                libra_pay_program_id,
-                libra_mint_program_id,
-                move_keypairs,
-            ));
+                // Generate another set of keypairs for move accounts.
+                // Still fund the solana ones which will be used for fees.
+                let seed = [0u8; 32];
+                let mut rnd = GenKeys::new(seed);
+                let move_keypairs = rnd.gen_n_keypairs(tx_count as u64 * 2);
+                fund_move_keys(
+                    client,
+                    funding_key,
+                    &move_keypairs,
+                    total / 3,
+                    &libra_pay_program_id,
+                    &libra_mint_program_id,
+                    &libra_genesis_keypair,
+                );
+                move_keypairs_ret = Some((
+                    libra_genesis_keypair,
+                    libra_pay_program_id,
+                    libra_mint_program_id,
+                    move_keypairs,
+                ));
 
-            // Give solana keys 1/3 and move keys 1/3 the lamports. Keep 1/3 for fees.
-            total /= 3;
+                // Give solana keys 1/3 and move keys 1/3 the lamports. Keep 1/3 for fees.
+                total /= 3;
+            }
         }
 
         fund_keys(
