@@ -1,25 +1,26 @@
 steps:
   - command: "tests/testnet-performance/testnet-automation.sh"
     label: "Run performance testnets on EDGE channel"
-    agents:
-      - "queue=testnet-deploy"
     #branches: 'master'
     env:
       CHANNEL: edge
       TESTNET_TAG: "nightly-edge-perf"
       ITERATION_WAIT: 300
       NUMBER_OF_VALIDATOR_NODES: "10"
-      LEADER_CPU_MACHINE_TYPE: "--machine-type n1-standard-16"
+      LEADER_CPU_MACHINE_TYPE: "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
       NUMBER_OF_CLIENT_NODES: 1
       TESTNET_ZONES: "us-west1-b"
       ADDITIONAL_FLAGS: ""
+    agents:
+      - "queue=testnet-deploy"
 
   - wait: ~
     continue_on_failure: true
 
   - command: "tests/testnet-performance/testnet-automation-cleanup.sh"
-    label: "delete testnet"
-    agents:
-      - "queue=testnet-deploy"
+    label: "Delete performance testnets on EDGE"
+    #branches: 'master'
     env:
       TESTNET_TAG: "nightly-edge-perf"
+    agents:
+      - "queue=testnet-deploy"
