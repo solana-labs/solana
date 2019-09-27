@@ -264,8 +264,10 @@ impl VoteState {
         if epoch != self.epoch {
             // encode the delta, but be able to return partial for stakers who
             //   attach halfway through an epoch
-            self.epoch_credits
-                .push((self.epoch, self.credits, self.last_epoch_credits));
+            if self.credits > 0 {
+                self.epoch_credits
+                    .push((self.epoch, self.credits, self.last_epoch_credits));
+            }
             // if stakers do not claim before the epoch goes away they lose the
             //  credits...
             if self.epoch_credits.len() > MAX_EPOCH_CREDITS_HISTORY {
@@ -1143,4 +1145,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_vote_state_epoch0_no_credits() {
+        let mut vote_state = VoteState::default();
+
+        assert_eq!(
+            vote_state
+                .epoch_credits()
+                .cloned()
+                .collect::<Vec<(Epoch, u64, u64)>>()
+                .len(),
+            0
+        );
+        vote_state.increment_credits(1);
+        assert_eq!(
+            vote_state
+                .epoch_credits()
+                .cloned()
+                .collect::<Vec<(Epoch, u64, u64)>>()
+                .len(),
+            0
+        );
+
+        vote_state.increment_credits(2);
+        assert_eq!(
+            vote_state
+                .epoch_credits()
+                .cloned()
+                .collect::<Vec<(Epoch, u64, u64)>>()
+                .len(),
+            1
+        );
+    }
 }
