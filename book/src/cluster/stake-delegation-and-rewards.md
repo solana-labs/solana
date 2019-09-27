@@ -139,7 +139,7 @@ Lamports build up over time in a Stake account and any excess over activated sta
 
 ## Example Callflow
 
-![Passive Staking Callflow](https://github.com/solana-labs/solana/tree/6b18db969dd1616eff07de35e7b823c75339fea8/book/src/img/passive-staking-callflow.svg)
+![Passive Staking Callflow](../.gitbook/assets/passive-staking-callflow.svg)
 
 ## Staking Rewards
 
