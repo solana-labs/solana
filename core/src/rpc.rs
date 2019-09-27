@@ -163,7 +163,11 @@ impl JsonRpcRequestProcessor {
                 }
             })
             .partition(|vote_account_info| {
-                vote_account_info.last_vote >= bank.slot() - MAX_LOCKOUT_HISTORY as u64
+                if bank.slot() >= MAX_LOCKOUT_HISTORY as u64 {
+                    vote_account_info.last_vote > bank.slot() - MAX_LOCKOUT_HISTORY as u64
+                } else {
+                    vote_account_info.last_vote > 0
+                }
             });
         Ok(RpcVoteAccountStatus {
             current: current_vote_accounts,
