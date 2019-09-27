@@ -24,6 +24,7 @@ _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
 _ book/build-svg.sh
+_ ci/check-ssh-keys.sh
 
 {
   cd programs/bpf
