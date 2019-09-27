@@ -51,7 +51,7 @@ echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
 
 maybeClientOptions=
 if [[ -n $CLIENT_OPTIONS ]] ; then
-  $maybeClientOptions="-c"
+  maybeClientOptions="-c"
 fi
 
 TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TESTNET_ZONES},"
