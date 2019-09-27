@@ -36,7 +36,7 @@ This information is not readily available from the stock `cargo` program, so use
 the following steps to produce a custom `cargo` program that will output the
 necessary feature information to stderr during a build:
 ```bash
-$ git clone git@github.com:rust-lang/cargo.git -b rust-1.37.0
+$ git clone git@github.com:rust-lang/cargo.git -b rust-1.38.0
 $ cd cargo
 $ git apply 0001-Print-package-features.patch
 $ cargo build
