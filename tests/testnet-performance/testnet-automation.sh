@@ -4,9 +4,6 @@ set -e
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 
 function delete_testnet {
-  echo --- find testnet configuration
-  net/gce.sh config -p $TESTNET_TAG
-
   echo --- delete testnet
   net/gce.sh delete -p $TESTNET_TAG
 }
@@ -63,9 +60,9 @@ launchTestnet() {
 
   echo --- start "$nodeCount" node test
   if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
-    net/net.sh start -o noValidatorSanity -t "$CHANNEL"
+    net/net.sh start -t "$CHANNEL"
   else
-    net/net.sh start -o noValidatorSanity -T solana-release*.tar.bz2
+    net/net.sh start -T solana-release*.tar.bz2
   fi
 
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
