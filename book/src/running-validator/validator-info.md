@@ -2,7 +2,7 @@
 
 You can publish your validator information to the chain to be publicly visible to other users.
 
-## Run solana-validator-info
+## Run solana validator-info
 
 Run the solana validator-info CLI to populate a validator-info account:
 
@@ -30,7 +30,7 @@ Including a Keybase username allows client applications \(like the Solana Networ
    * To check your pubkey, ensure you can successfully browse to
 
      `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<PUBKEY>`
-3. Add or update your `solana-validator-info` with your Keybase username. The
+3. Add or update your `solana validator-info` with your Keybase username. The
 
    CLI will verify the `validator-<PUBKEY>` file
 
