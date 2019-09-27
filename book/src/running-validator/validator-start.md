@@ -68,7 +68,7 @@ Your validator will need a vote account. Create it now with the following comman
 
 ```bash
 $ solana-keygen new -o ~/validator-vote-keypair.json
-$ solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json 1
+$ solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json 1 lamports
 ```
 
 Then use one of the following commands, depending on your installation choice, to start the node:
