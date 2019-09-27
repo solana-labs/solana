@@ -12,11 +12,12 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [-e] [-d] [username]
+usage: $0 [-e] [-d] [-c database_name] [username]
 
 Creates a testnet dev metrics database
 
   username        InfluxDB user with access to create a new database
+  -c              Manually specify a database to create, rather than read from config file
   -d              Delete the database instead of creating it
   -e              Assume database already exists and SOLANA_METRICS_CONFIG is
                   defined in the environment already
@@ -25,16 +26,19 @@ EOF
   exit $exitcode
 }
 
-loadConfigFile
-
 useEnv=false
 delete=false
+createWithoutConfig=false
 host="https://metrics.solana.com:8086"
-while getopts "hde" opt; do
+while getopts "hdec:" opt; do
   case $opt in
   h|\?)
     usage
     exit 0
+    ;;
+  c)
+    createWithoutConfig=true
+    netBasename=$OPTARG
     ;;
   d)
     delete=true
@@ -61,6 +65,10 @@ else
   echo
 
   password="$(urlencode "$password")"
+
+  if ! $createWithoutConfig; then
+    loadConfigFile
+  fi
 
   query() {
     echo "$*"
