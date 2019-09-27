@@ -22,6 +22,7 @@ fi
 # shellcheck disable=SC1091
 source ci/upload-ci-artifact.sh
 
+[[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
 [[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES="10 25 50 100"
 [[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
@@ -30,6 +31,15 @@ source ci/upload-ci-artifact.sh
 [[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
 [[ -n $CHANNEL ]] || CHANNEL=beta
 [[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
+
+if [[ -z $SOLANA_METRICS_CONFIG ]]; then
+  if [[ -z $SOLANA_METRICS_PARTIAL_CONFIG ]]; then
+    echo SOLANA_METRICS_PARTIAL_CONFIG not defined
+    exit 1
+  fi
+  export SOLANA_METRICS_CONFIG="db=$TESTNET_TAG,host=$INFLUX_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
+fi
+echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
 
 TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TESTNET_ZONES},"
 
