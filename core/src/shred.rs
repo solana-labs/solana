@@ -15,6 +15,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::io;
 use std::io::{Error as IOError, ErrorKind, Write};
 use std::sync::Arc;
+use std::time::Instant;
 
 lazy_static! {
     static ref SIZE_OF_CODING_SHRED_HEADER: usize =
@@ -261,6 +262,7 @@ pub struct Shredder {
     active_shred: Vec<u8>,
     active_shred_header: DataShredHeader,
     active_offset: usize,
+    pub signing_coding_time: u128,
 }
 
 impl Write for Shredder {
@@ -277,7 +279,9 @@ impl Write for Shredder {
         }
 
         if self.index - self.fec_set_index >= MAX_DATA_SHREDS_PER_FEC_BLOCK {
+            let now = Instant::now();
             self.sign_unsigned_shreds_and_generate_codes();
+            self.signing_coding_time += now.elapsed().as_millis();
         }
 
         Ok(slice_len)
@@ -330,6 +334,7 @@ impl Shredder {
                 active_shred,
                 active_shred_header: header,
                 active_offset: 0,
+                signing_coding_time: 0,
             })
         }
     }
