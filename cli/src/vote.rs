@@ -320,10 +320,8 @@ mod tests {
             "create-vote-account",
             &pubkey_string,
             &node_pubkey_string,
-            "50",
             "--commission",
             "10",
-            "lamports",
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account).unwrap(),
@@ -334,8 +332,7 @@ mod tests {
                     authorized_voter: pubkey,
                     authorized_withdrawer: pubkey,
                     commission: 10
-                },
-                50
+                }
             )
         );
         let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
@@ -343,7 +340,6 @@ mod tests {
             "create-vote-account",
             &pubkey_string,
             &node_pubkey_string,
-            "50",
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account2).unwrap(),
@@ -354,8 +350,7 @@ mod tests {
                     authorized_voter: pubkey,
                     authorized_withdrawer: pubkey,
                     commission: 0
-                },
-                858993459200
+                }
             )
         );
         // test init with an authed voter
@@ -365,8 +360,6 @@ mod tests {
             "create-vote-account",
             &pubkey_string,
             &node_pubkey_string,
-            "50",
-            "SOL",
             "--authorized-voter",
             &authed.to_string(),
         ]);
@@ -379,8 +372,7 @@ mod tests {
                     authorized_voter: authed,
                     authorized_withdrawer: pubkey,
                     commission: 0
-                },
-                858993459200
+                }
             )
         );
         // test init with an authed withdrawer
@@ -389,7 +381,6 @@ mod tests {
             "create-vote-account",
             &pubkey_string,
             &node_pubkey_string,
-            "0.5",
             "--authorized-withdrawer",
             &authed.to_string(),
         ]);
@@ -402,8 +393,7 @@ mod tests {
                     authorized_voter: pubkey,
                     authorized_withdrawer: authed,
                     commission: 0
-                },
-                8589934592
+                }
             )
         );
 

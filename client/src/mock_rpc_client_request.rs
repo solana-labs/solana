@@ -62,6 +62,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
             RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
             RpcRequest::GetSlot => Value::Number(Number::from(0)),
             RpcRequest::SendTransaction => Value::String(SIGNATURE.to_string()),
+            RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(1234)),
             _ => Value::Null,
         };
         Ok(val)

@@ -1765,21 +1765,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Validator that will vote with this account"),
                 )
                 .arg(
-                    Arg::with_name("amount")
-                        .index(3)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The amount of send to the vote account (default unit SOL)"),
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(4)
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request"),
-                )
-                .arg(
                     Arg::with_name("commission")
                         .long("commission")
                         .value_name("NUM")
@@ -2733,7 +2718,6 @@ mod tests {
                 authorized_withdrawer: bob_pubkey,
                 commission: 0,
             },
-            10,
         );
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -2903,7 +2887,6 @@ mod tests {
                 authorized_withdrawer: bob_pubkey,
                 commission: 0,
             },
-            10,
         );
         assert!(process_command(&config).is_err());
 
