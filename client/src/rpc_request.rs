@@ -1,6 +1,22 @@
 use serde_json::{json, Value};
 use std::{error, fmt};
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcEpochInfo {
+    /// The current epoch
+    pub epoch: u64,
+
+    /// The current slot, relative to the start of the current epoch
+    pub slot_index: u64,
+
+    /// The number of slots in this epoch
+    pub slots_in_epoch: u64,
+
+    /// The absolute current slot
+    pub absolute_slot: u64,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum RpcRequest {
     ConfirmTransaction,
@@ -9,6 +25,7 @@ pub enum RpcRequest {
     GetAccountInfo,
     GetBalance,
     GetClusterNodes,
+    GetEpochInfo,
     GetGenesisBlockhash,
     GetInflation,
     GetNumBlocksSinceSignatureConfirmation,
@@ -41,6 +58,7 @@ impl RpcRequest {
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
             RpcRequest::GetClusterNodes => "getClusterNodes",
+            RpcRequest::GetEpochInfo => "getEpochInfo",
             RpcRequest::GetGenesisBlockhash => "getGenesisBlockhash",
             RpcRequest::GetInflation => "getInflation",
             RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
@@ -113,6 +131,10 @@ mod tests {
         let test_request = RpcRequest::GetBalance;
         let request = test_request.build_request_json(1, Some(addr));
         assert_eq!(request["method"], "getBalance");
+
+        let test_request = RpcRequest::GetEpochInfo;
+        let request = test_request.build_request_json(1, None);
+        assert_eq!(request["method"], "getEpochInfo");
 
         let test_request = RpcRequest::GetInflation;
         let request = test_request.build_request_json(1, None);
