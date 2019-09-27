@@ -20,15 +20,15 @@ This way each node only has to communicate with a maximum of `2 * DATA_PLANE_FAN
 
 The following diagram shows how the Leader sends blobs with a Fanout of 2 to Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data with each other.
 
-![Leader sends blobs to Neighborhood 0 in Layer 0](https://github.com/solana-labs/solana/tree/6b18db969dd1616eff07de35e7b823c75339fea8/book/src/img/data-plane-seeding.svg)
+![Leader sends blobs to Neighborhood 0 in Layer 0](../.gitbook/assets/data-plane-seeding.svg)
 
 The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
 
-![Neighborhood 0 Fanout to Neighborhood 1 and 2](https://github.com/solana-labs/solana/tree/6b18db969dd1616eff07de35e7b823c75339fea8/book/src/img/data-plane-fanout.svg)
+![Neighborhood 0 Fanout to Neighborhood 1 and 2](../.gitbook/assets/data-plane-fanout.svg)
 
 Finally, the following diagram shows a two layer cluster with a Fanout of 2.
 
-![Two layer cluster with a Fanout of 2](https://github.com/solana-labs/solana/tree/6b18db969dd1616eff07de35e7b823c75339fea8/book/src/img/data-plane.svg)
+![Two layer cluster with a Fanout of 2](../.gitbook/assets/data-plane.svg)
 
 ### Configuration Values
 
@@ -40,5 +40,5 @@ Currently, configuration is set when the cluster is launched. In the future, the
 
 The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives blobs from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
 
-![Inner workings of a neighborhood](https://github.com/solana-labs/solana/tree/6b18db969dd1616eff07de35e7b823c75339fea8/book/src/img/data-plane-neighborhood.svg)
+![Inner workings of a neighborhood](../.gitbook/assets/data-plane-neighborhood.svg)
 
