@@ -23,7 +23,8 @@ fi
 source ci/upload-ci-artifact.sh
 
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
-[[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
+[[ -n $TEST_DURATION ]] || TEST_DURATION=300
+[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=60
 [[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES="10 25 50 100"
 [[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
   LEADER_CPU_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
@@ -47,7 +48,10 @@ launchTestnet() {
   declare nodeCount=$1
   echo --- setup "$nodeCount" node test
 
+  set -x
+
   # shellcheck disable=SC2068
+  echo --- create "$nodeCount" nodes
   net/gce.sh create \
     -d pd-ssd \
     -n "$nodeCount" -c "$NUMBER_OF_CLIENT_NODES" \
@@ -64,44 +68,46 @@ launchTestnet() {
     net/net.sh start -o noValidatorSanity -T solana-release*.tar.bz2
   fi
 
-  echo --- wait "$ITERATION_WAIT" seconds to complete test
-  sleep "$ITERATION_WAIT"
+  echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
+  sleep "$RAMP_UP_TIME"
 
-  set -x
+  echo --- wait "$TEST_DURATION" seconds to complete test
+  sleep "$TEST_DURATION"
 
+  echo --- collect statistics about run
   declare q_mean_tps='
     SELECT round(mean("sum_count")) AS "mean_tps" FROM (
       SELECT sum("count") AS "sum_count"
         FROM '"$TESTNET_TAG"'."autogen"."banking_stage-record_transactions"
-        WHERE time > now() - '"$ITERATION_WAIT"'s GROUP BY time(1s)
+        WHERE time > now() - '"$TEST_DURATION"'s GROUP BY time(1s)
     )'
 
   declare q_max_tps='
     SELECT round(max("sum_count")) AS "max_tps" FROM (
       SELECT sum("count") AS "sum_count"
         FROM '"$TESTNET_TAG"'."autogen"."banking_stage-record_transactions"
-        WHERE time > now() - '"$ITERATION_WAIT"'s GROUP BY time(1s)
+        WHERE time > now() - '"$TEST_DURATION"'s GROUP BY time(1s)
     )'
 
   declare q_mean_confirmation='
     SELECT round(mean("duration_ms")) as "mean_confirmation"
       FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
-      WHERE time > now() - '"$ITERATION_WAIT"'s'
+      WHERE time > now() - '"$TEST_DURATION"'s'
 
   declare q_max_confirmation='
     SELECT round(max("duration_ms")) as "max_confirmation"
       FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
-      WHERE time > now() - '"$ITERATION_WAIT"'s'
+      WHERE time > now() - '"$TEST_DURATION"'s'
 
   declare q_99th_confirmation='
     SELECT round(percentile("duration_ms", 99)) as "99th_confirmation"
       FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
-      WHERE time > now() - '"$ITERATION_WAIT"'s'
+      WHERE time > now() - '"$TEST_DURATION"'s'
 
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
-    python test/testnet-performance/testnet-automation-json-parser.py >>"$TESTNET_TAG"_TPS_"$nodeCount".log
+    python tests/testnet-performance/testnet-automation-json-parser.py >>"$TESTNET_TAG"_TPS_"$nodeCount".log
 
   upload-ci-artifact "$TESTNET_TAG"_TPS_"$nodeCount".log
 }
