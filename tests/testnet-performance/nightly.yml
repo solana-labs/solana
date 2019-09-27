@@ -3,7 +3,7 @@ steps:
     label: "Run performance testnets on EDGE channel"
     agents:
       - "queue=testnet-deploy"
-    branches: 'master'
+    #branches: 'master'
     env:
       CHANNEL: edge
       TESTNET_TAG: "nightly-edge-perf"
