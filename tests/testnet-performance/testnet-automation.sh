@@ -3,11 +3,20 @@ set -e
 
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 
-function delete_testnet {
+function cleanup_testnet {
+  echo --- collect logs from remote nodes
+  rm -rf net/log
+  net/net.sh logs
+  for logfile in net/log/* ; do
+    new_log="$TESTNET_TAG"-"$NUMBER_OF_VALIDATOR_NODES"-nodes-"$logfile"
+    cp "$logfile" "$new_log"
+    upload-ci-artifact "$new_log"
+  done
+
   echo --- delete testnet
   net/gce.sh delete -p $TESTNET_TAG
 }
-trap delete_testnet EXIT
+trap cleanup_testnet EXIT
 
 cd "$(dirname "$0")/../.."
 
@@ -23,9 +32,10 @@ source ci/upload-ci-artifact.sh
 [[ -n $TEST_DURATION ]] || TEST_DURATION=300
 [[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=60
 [[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES="10 25 50 100"
-[[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
-  LEADER_CPU_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+[[ -n $VALIDATOR_NODE_MACHINE_TYPE ]] ||
+  VALIDATOR_NODE_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
 [[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=2
+[[ -n $CLIENT_OPTIONS ]] || CLIENT_OPTIONS=
 [[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
 [[ -n $CHANNEL ]] || CHANNEL=beta
 [[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
@@ -38,6 +48,10 @@ if [[ -z $SOLANA_METRICS_CONFIG ]]; then
   export SOLANA_METRICS_CONFIG="db=$TESTNET_TAG,host=$INFLUX_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
 fi
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
+
+maybeClientOptions=
+if [[ -n $CLIENT_OPTIONS ]] ; then
+  $maybeClientOptions="-c"
 
 TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TESTNET_ZONES},"
 
@@ -52,7 +66,7 @@ launchTestnet() {
   net/gce.sh create \
     -d pd-ssd \
     -n "$nodeCount" -c "$NUMBER_OF_CLIENT_NODES" \
-    -G "$LEADER_CPU_MACHINE_TYPE" \
+    -G "$VALIDATOR_NODE_MACHINE_TYPE" \
     -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/-z } "$ADDITIONAL_FLAGS"
 
   echo --- configure database
@@ -60,9 +74,9 @@ launchTestnet() {
 
   echo --- start "$nodeCount" node test
   if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
-    net/net.sh start -t "$CHANNEL"
+    net/net.sh start -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
   else
-    net/net.sh start -T solana-release*.tar.bz2
+    net/net.sh start -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
   fi
 
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize

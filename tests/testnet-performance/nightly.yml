@@ -6,11 +6,11 @@ steps:
       TESTNET_TAG: "nightly-edge-perf-cpu-only"
       CHANNEL: edge
       RAMP_UP_TIME: 60
-      TEST_DURATION: 60
-      NUMBER_OF_VALIDATOR_NODES: "10"
-      LEADER_CPU_MACHINE_TYPE: "--machine-type n1-standard-16"
+      TEST_DURATION: 120
+      NUMBER_OF_VALIDATOR_NODES: "10 25"
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
       NUMBER_OF_CLIENT_NODES: 1
-      CLIENT_OPTIONS: ""
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 80000 --thread-batch-sleep-ms 1000"
       TESTNET_ZONES: "us-west1-b"
       ADDITIONAL_FLAGS: ""
     agents:
@@ -26,10 +26,11 @@ steps:
       TESTNET_TAG: "nightly-edge-perf-gpu-enabled"
       CHANNEL: edge
       RAMP_UP_TIME: 60
-      TEST_DURATION: 60
+      TEST_DURATION: 120
       NUMBER_OF_VALIDATOR_NODES: "10"
-      LEADER_CPU_MACHINE_TYPE: "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
       NUMBER_OF_CLIENT_NODES: 1
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 80000 --thread-batch-sleep-ms 1000"
       TESTNET_ZONES: "us-west1-b"
       ADDITIONAL_FLAGS: ""
     agents:
