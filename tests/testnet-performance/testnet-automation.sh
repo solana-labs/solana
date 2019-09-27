@@ -75,30 +75,30 @@ launchTestnet() {
   declare q_mean_tps='
     SELECT round(mean("sum_count")) AS "mean_tps" FROM (
       SELECT sum("count") AS "sum_count"
-        FROM '"$TESTNET_TAG"'."autogen"."banking_stage-record_transactions"
+        FROM "'$TESTNET_TAG'"."autogen"."banking_stage-record_transactions"
         WHERE time > now() - '"$TEST_DURATION"'s GROUP BY time(1s)
     )'
 
   declare q_max_tps='
     SELECT round(max("sum_count")) AS "max_tps" FROM (
       SELECT sum("count") AS "sum_count"
-        FROM '"$TESTNET_TAG"'."autogen"."banking_stage-record_transactions"
+        FROM "'$TESTNET_TAG'"."autogen"."banking_stage-record_transactions"
         WHERE time > now() - '"$TEST_DURATION"'s GROUP BY time(1s)
     )'
 
   declare q_mean_confirmation='
     SELECT round(mean("duration_ms")) as "mean_confirmation"
-      FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
+      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
   declare q_max_confirmation='
     SELECT round(max("duration_ms")) as "max_confirmation"
-      FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
+      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
   declare q_99th_confirmation='
     SELECT round(percentile("duration_ms", 99)) as "99th_confirmation"
-      FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
+      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
