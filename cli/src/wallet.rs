@@ -622,6 +622,18 @@ fn process_delegate_stake(
             "stake_account_keypair".to_string(),
         ),
     )?;
+
+    if rpc_client
+        .get_account(&stake_account_keypair.pubkey())
+        .is_ok()
+    {
+        return Err(WalletError::BadParameter(format!(
+            "Unable to delegate. Stake account already exists: {}",
+            stake_account_keypair.pubkey()
+        ))
+        .into());
+    }
+
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ixs = stake_instruction::create_stake_account_and_delegate_stake(
