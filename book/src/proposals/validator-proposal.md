@@ -12,7 +12,7 @@ The fundamental difference between the pipelines is when the PoH is present. In 
 
 We unwrap the many abstraction layers and build a single pipeline that can toggle leader mode on whenever the validator's ID shows up in the leader schedule.
 
-![Validator block diagram](https://github.com/solana-labs/solana/tree/6b18db969dd1616eff07de35e7b823c75339fea8/book/src/img/validator-proposal.svg)
+![Validator block diagram](../.gitbook/assets/validator-proposal.svg)
 
 ## Notable changes
 

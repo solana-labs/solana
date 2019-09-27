@@ -20,7 +20,7 @@ Transactions are batched and processed in a pipeline. The TPU and TVU follow a s
 
 The TVU runtime ensures that PoH verification occurs before the runtime processes any transactions.
 
-![Runtime pipeline](https://github.com/solana-labs/solana/tree/6b18db969dd1616eff07de35e7b823c75339fea8/book/src/img/runtime.svg)
+![Runtime pipeline](../.gitbook/assets/runtime.svg)
 
 At the _execute_ stage, the loaded accounts have no data dependencies, so all the programs can be executed in parallel.
 
