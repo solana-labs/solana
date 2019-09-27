@@ -10,11 +10,11 @@ Run the solana CLI to populate a validator-info account:
 $ solana validator-info publish --keypair ~/validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME> 
 ```
 
-Optional fields for VALIDATOR\_INFO\_ARGS:
+For details about optional fields for VALIDATOR\_INFO\_ARGS:
 
-* Website
-* Keybase Username
-* Details
+```bash
+$ solana validator-info publish --help
+```
 
 ## Keybase
 
