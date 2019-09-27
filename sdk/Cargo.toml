@@ -38,7 +38,7 @@ hex = "0.4.0"
 itertools = { version = "0.8.0" }
 log = { version = "0.4.8" }
 memmap = { version = "0.6.2", optional = true }
-num-derive = { version = "0.2" }
+num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 rand = { version = "0.6.5", optional = true }
 rand_chacha = { version = "0.1.1", optional = true }
