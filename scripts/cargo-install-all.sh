@@ -17,13 +17,7 @@ fi
 
 installDir="$(mkdir -p "$1"; cd "$1"; pwd)"
 cargo=cargo
-cargoFeatures="$2"
-debugBuild="$3"
-
-if [[ -n $cargoFeatures && $cargoFeatures != cuda ]]; then
-  echo "Unsupported feature flag: $cargoFeatures"
-  exit 1
-fi
+debugBuild="$2"
 
 buildVariant=release
 maybeReleaseFlag=--release
@@ -35,6 +29,7 @@ fi
 echo "Install location: $installDir ($buildVariant)"
 
 cd "$(dirname "$0")"/..
+./fetch-perf-libs.sh
 
 SECONDS=0
 
@@ -78,19 +73,8 @@ for bin in "${BINS[@]}"; do
   cp -fv "target/$buildVariant/$bin" "$installDir"/bin
 done
 
-
-if [[ "$cargoFeatures" = cuda ]]; then
-  (
-    set -x
-    ./fetch-perf-libs.sh
-
-    # shellcheck source=/dev/null
-    source ./target/perf-libs/env.sh
-
-    # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    cargo $rust_version build $maybeReleaseFlag --package solana-validator-cuda
-  )
-  cp -fv "target/$buildVariant/solana-validator-cuda" "$installDir"/bin
+if [[ -d target/perf-libs ]]; then
+  cp -a target/perf-libs "$installDir"/bin/perf-libs
 fi
 
 for dir in programs/*; do

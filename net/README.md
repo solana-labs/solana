@@ -73,12 +73,6 @@ $ ./ec2.sh create -g ...
 If deploying a tarball-based network nothing further is required, as GPU presence
 is detected at runtime and the CUDA build is auto selected.
 
-If deploying a locally-built network, first run `./fetch-perf-libs.sh` then
-ensure the `cuda` feature is specified at network start:
-```bash
-$ ./net.sh start -f "cuda"
-```
-
 ### How to interact with a CD testnet deployed by ci/testnet-deploy.sh
 
 **AWS-Specific Extra Setup**: Follow the steps in

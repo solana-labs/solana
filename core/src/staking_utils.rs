@@ -104,7 +104,10 @@ pub(crate) mod tests {
         sysvar::stake_history::{self, StakeHistory},
         transaction::Transaction,
     };
-    use solana_stake_api::{stake_instruction, stake_state::Stake};
+    use solana_stake_api::{
+        stake_instruction,
+        stake_state::{Authorized, Stake},
+    };
     use solana_vote_api::{vote_instruction, vote_state::VoteInit};
     use std::sync::Arc;
 
@@ -160,6 +163,7 @@ pub(crate) mod tests {
                 &stake_account_pubkey,
                 vote_pubkey,
                 amount,
+                &Authorized::auto(&stake_account_pubkey),
             ),
         );
     }

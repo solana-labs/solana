@@ -32,8 +32,6 @@ Operate a configured testnet
    -t edge|beta|stable|vX.Y.Z         - Deploy the latest tarball release for the
                                         specified release channel (edge|beta|stable) or release tag
                                         (vX.Y.Z)
-   -f [cargoFeatures]                 - List of |cargo --feaures=| to activate
-                                        (ignored if -s or -S is specified)
    -r / --skip-setup                  - Reuse existing node/ledger configuration from a
                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -d / --debug                       - Build/deploy the testnet with debug binaries
@@ -111,7 +109,6 @@ releaseChannel=
 deployMethod=local
 deployIfNewer=
 sanityExtraArgs=
-cargoFeatures=
 skipSetup=false
 customPrograms=
 updatePlatforms=
@@ -219,9 +216,6 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
       usage "Invalid release channel: $OPTARG"
       ;;
     esac
-    ;;
-  f)
-    cargoFeatures=$OPTARG
     ;;
   n)
     numFullnodesRequested=$OPTARG
@@ -340,11 +334,6 @@ build() {
     set -x
     rm -rf farf
 
-    if [[ -r target/perf-libs/env.sh ]]; then
-      # shellcheck source=/dev/null
-      source target/perf-libs/env.sh
-    fi
-
     buildVariant=
     if $debugBuild; then
       buildVariant=debug
@@ -352,7 +341,7 @@ build() {
 
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf \"$cargoFeatures\" \"$buildVariant\"
+      scripts/cargo-install-all.sh farf \"$buildVariant\"
       if [[ -n \"$customPrograms\" ]]; then
         scripts/cargo-install-custom-programs.sh farf $customPrograms
       fi

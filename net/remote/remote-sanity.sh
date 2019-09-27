@@ -67,11 +67,6 @@ case $deployMethod in
 local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
-  if [[ -r target/perf-libs/env.sh ]]; then
-    # shellcheck source=/dev/null
-    source target/perf-libs/env.sh
-  fi
-
   solana_gossip=solana-gossip
   solana_install=solana-install
   ;;

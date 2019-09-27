@@ -30,7 +30,7 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_stake_api::stake_instruction::{self, StakeError};
-use solana_stake_api::stake_state::StakeState;
+use solana_stake_api::stake_state::{Authorized, Lockup, StakeState};
 use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_state::{VoteAuthorize, VoteInit, VoteState};
 use std::{
@@ -81,7 +81,7 @@ pub enum WalletCommand {
         aggregate: bool,
         span: Option<u64>,
     },
-    DelegateStake(Keypair, Pubkey, u64, bool),
+    DelegateStake(Keypair, Pubkey, u64, Authorized, bool),
     WithdrawStake(Keypair, Pubkey, u64),
     DeactivateStake(Keypair, Pubkey),
     RedeemVoteCredits(Pubkey, Pubkey),
@@ -258,11 +258,13 @@ pub fn parse_command(
                 matches.value_of("amount").unwrap(),
                 matches.value_of("unit"),
             )?;
+            let authorized = Authorized::auto(&stake_account_keypair.pubkey());
             let force = matches.is_present("force");
             Ok(WalletCommand::DelegateStake(
                 stake_account_keypair,
                 vote_account_pubkey,
                 lamports,
+                authorized,
                 force,
             ))
         }
@@ -608,6 +610,7 @@ fn process_delegate_stake(
     stake_account_keypair: &Keypair,
     vote_account_pubkey: &Pubkey,
     lamports: u64,
+    authorized: &Authorized,
     force: bool,
 ) -> ProcessResult {
     check_unique_pubkeys(
@@ -633,6 +636,7 @@ fn process_delegate_stake(
         &stake_account_keypair.pubkey(),
         vote_account_pubkey,
         lamports,
+        authorized,
     );
 
     // Sanity check the vote account to ensure it is attached to a validator that has recently
@@ -749,8 +753,16 @@ fn process_show_stake_account(
             format!("{:?} is not a stake account", stake_account_pubkey).to_string(),
         ))?;
     }
+    fn show_authorized(authorized: &Authorized) {
+        println!("authorized staker: {}", authorized.staker);
+        println!("authorized withdrawer: {}", authorized.staker);
+    }
+    fn show_lockup(lockup: &Lockup) {
+        println!("lockup slot: {}", lockup.slot);
+        println!("lockup custodian: {}", lockup.custodian);
+    }
     match stake_account.state() {
-        Ok(StakeState::Stake(stake)) => {
+        Ok(StakeState::Stake(authorized, lockup, stake)) => {
             println!(
                 "total stake: {}",
                 build_balance_message(stake_account.lamports, use_lamports_unit)
@@ -773,11 +785,17 @@ fn process_show_stake_account(
                     stake.deactivation_epoch
                 );
             }
+            show_authorized(&authorized);
+            show_lockup(&lockup);
             Ok("".to_string())
         }
         Ok(StakeState::RewardsPool) => Ok("Stake account is a rewards pool".to_string()),
-        Ok(StakeState::Uninitialized) | Ok(StakeState::Lockup(_)) => {
-            Ok("Stake account is uninitialized".to_string())
+        Ok(StakeState::Uninitialized) => Ok("Stake account is uninitialized".to_string()),
+        Ok(StakeState::Initialized(authorized, lockup)) => {
+            println!("Stake account is undelegated");
+            show_authorized(&authorized);
+            show_lockup(&lockup);
+            Ok("".to_string())
         }
         Err(err) => Err(WalletError::RpcRequestError(format!(
             "Account data could not be deserialized to stake state: {:?}",
@@ -1351,6 +1369,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             stake_account_keypair,
             vote_account_pubkey,
             lamports,
+            authorized,
             force,
         ) => process_delegate_stake(
             &rpc_client,
@@ -1358,6 +1377,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             &stake_account_keypair,
             &vote_account_pubkey,
             *lamports,
+            &authorized,
             *force,
         ),
 
@@ -2466,9 +2486,16 @@ mod tests {
             "42",
             "lamports",
         ]);
+        let stake_pubkey = keypair.pubkey();
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
-            WalletCommand::DelegateStake(keypair, pubkey, 42, false)
+            WalletCommand::DelegateStake(
+                keypair,
+                pubkey,
+                42,
+                Authorized::auto(&stake_pubkey),
+                false,
+            )
         );
 
         let keypair = read_keypair(&keypair_file).unwrap();
@@ -2481,9 +2508,16 @@ mod tests {
             "42",
             "lamports",
         ]);
+        let stake_pubkey = keypair.pubkey();
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
-            WalletCommand::DelegateStake(keypair, pubkey, 42, true)
+            WalletCommand::DelegateStake(
+                keypair,
+                pubkey,
+                42,
+                Authorized::auto(&stake_pubkey),
+                true
+            )
         );
 
         // Test WithdrawStake Subcommand

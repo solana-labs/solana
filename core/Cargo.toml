@@ -14,7 +14,6 @@ edition = "2018"
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
 [features]
-cuda = []
 pin_gpu_memory = []
 
 [dependencies]
@@ -27,6 +26,8 @@ core_affinity = "0.5.9"
 crc = { version = "1.8.1", optional = true }
 crossbeam-channel = "0.3"
 dir-diff = "0.3.1"
+dlopen = "0.1.8"
+dlopen_derive = "0.1.4"
 fs_extra = "1.1.0"
 indexmap = "1.1"
 itertools = "0.8.0"

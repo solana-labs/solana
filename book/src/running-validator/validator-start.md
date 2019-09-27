@@ -93,9 +93,9 @@ $ NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-ke
 
 ### Enabling CUDA
 
-If your machine has a GPU with CUDA installed \(Linux-only currently\), use the `solana-validator-cuda` executable instead of `solana-validator`.
+If your machine has a GPU with CUDA installed \(Linux-only currently\), include the `--cuda` argument to `solana-validator`.
 
-Or if you built from source, define the SOLANA\_CUDA flag in your environment _before_ running any of the previusly mentioned commands
+Or if you built from source, define the SOLANA\_CUDA flag in your environment _before_ running any of the previously mentioned commands
 
 ```bash
 $ export SOLANA_CUDA=1

@@ -5,48 +5,55 @@
 //    copies from host memory to GPU memory unless the memory is page-pinned and
 //    cannot be paged to disk. The cuda driver provides these interfaces to pin and unpin memory.
 
+#[cfg(feature = "pin_gpu_memory")]
+use crate::perf_libs;
 use crate::recycler::Reset;
-
-#[cfg(all(feature = "cuda", feature = "pin_gpu_memory"))]
-use crate::sigverify::{cuda_host_register, cuda_host_unregister};
 use std::ops::{Deref, DerefMut};
 
-#[cfg(all(feature = "cuda", feature = "pin_gpu_memory"))]
+#[cfg(feature = "pin_gpu_memory")]
 use std::os::raw::c_int;
 
-#[cfg(all(feature = "cuda", feature = "pin_gpu_memory"))]
+#[cfg(feature = "pin_gpu_memory")]
 const CUDA_SUCCESS: c_int = 0;
 
 pub fn pin<T>(_mem: &mut Vec<T>) {
-    #[cfg(all(feature = "cuda", feature = "pin_gpu_memory"))]
-    unsafe {
-        use core::ffi::c_void;
-        use std::mem::size_of;
+    #[cfg(feature = "pin_gpu_memory")]
+    {
+        if let Some(api) = perf_libs::api() {
+            unsafe {
+                use core::ffi::c_void;
+                use std::mem::size_of;
 
-        let err = cuda_host_register(
-            _mem.as_mut_ptr() as *mut c_void,
-            _mem.capacity() * size_of::<T>(),
-            0,
-        );
-        if err != CUDA_SUCCESS {
-            error!(
-                "cudaHostRegister error: {} ptr: {:?} bytes: {}",
-                err,
-                _mem.as_ptr(),
-                _mem.capacity() * size_of::<T>()
-            );
+                let err = (api.cuda_host_register)(
+                    _mem.as_mut_ptr() as *mut c_void,
+                    _mem.capacity() * size_of::<T>(),
+                    0,
+                );
+                if err != CUDA_SUCCESS {
+                    error!(
+                        "cudaHostRegister error: {} ptr: {:?} bytes: {}",
+                        err,
+                        _mem.as_ptr(),
+                        _mem.capacity() * size_of::<T>()
+                    );
+                }
+            }
         }
     }
 }
 
 pub fn unpin<T>(_mem: *mut T) {
-    #[cfg(all(feature = "cuda", feature = "pin_gpu_memory"))]
-    unsafe {
-        use core::ffi::c_void;
+    #[cfg(feature = "pin_gpu_memory")]
+    {
+        if let Some(api) = perf_libs::api() {
+            unsafe {
+                use core::ffi::c_void;
 
-        let err = cuda_host_unregister(_mem as *mut c_void);
-        if err != CUDA_SUCCESS {
-            error!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
+                let err = (api.cuda_host_unregister)(_mem as *mut c_void);
+                if err != CUDA_SUCCESS {
+                    error!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
+                }
+            }
         }
     }
 }
