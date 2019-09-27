@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -e
 
+[[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
+
+function delete_testnet {
+  echo --- find testnet configuration
+  net/gce.sh config -p $TESTNET_TAG
+
+  echo --- delete testnet
+  net/gce.sh delete -p $TESTNET_TAG
+}
+trap delete_testnet EXIT
+
 cd "$(dirname "$0")/../.."
 
 if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
@@ -16,7 +27,6 @@ source ci/upload-ci-artifact.sh
 [[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
   LEADER_CPU_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
 [[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=2
-[[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
 [[ -n $CHANNEL ]] || CHANNEL=beta
 [[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
@@ -52,38 +62,38 @@ launchTestnet() {
   declare q_mean_tps='
     SELECT round(mean("sum_count")) AS "mean_tps" FROM (
       SELECT sum("count") AS "sum_count"
-        FROM "testnet-automation"."autogen"."banking_stage-record_transactions"
-        WHERE time > now() - 300s GROUP BY time(1s)
+        FROM '"$TESTNET_TAG"'."autogen"."banking_stage-record_transactions"
+        WHERE time > now() - '"$ITERATION_WAIT"'s GROUP BY time(1s)
     )'
 
   declare q_max_tps='
     SELECT round(max("sum_count")) AS "max_tps" FROM (
       SELECT sum("count") AS "sum_count"
-        FROM "testnet-automation"."autogen"."banking_stage-record_transactions"
-        WHERE time > now() - 300s GROUP BY time(1s)
+        FROM '"$TESTNET_TAG"'."autogen"."banking_stage-record_transactions"
+        WHERE time > now() - '"$ITERATION_WAIT"'s GROUP BY time(1s)
     )'
 
   declare q_mean_confirmation='
     SELECT round(mean("duration_ms")) as "mean_confirmation"
-      FROM "testnet-automation"."autogen"."validator-confirmation"
-      WHERE time > now() - 300s'
+      FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
+      WHERE time > now() - '"$ITERATION_WAIT"'s'
 
   declare q_max_confirmation='
     SELECT round(max("duration_ms")) as "max_confirmation"
-      FROM "testnet-automation"."autogen"."validator-confirmation"
-      WHERE time > now() - 300s'
+      FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
+      WHERE time > now() - '"$ITERATION_WAIT"'s'
 
   declare q_99th_confirmation='
     SELECT round(percentile("duration_ms", 99)) as "99th_confirmation"
-      FROM "testnet-automation"."autogen"."validator-confirmation"
-      WHERE time > now() - 300s'
+      FROM '"$TESTNET_TAG"'."autogen"."validator-confirmation"
+      WHERE time > now() - '"$ITERATION_WAIT"'s'
 
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
-    --data-urlencode "db=testnet-automation" \
+    --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
-    python ci/testnet-automation-json-parser.py >>TPS"$nodeCount".log
+    python test/testnet-performance/testnet-automation-json-parser.py >>"$TESTNET_TAG"_TPS_"$nodeCount".log
 
-  upload-ci-artifact TPS"$nodeCount".log
+  upload-ci-artifact "$TESTNET_TAG"_TPS_"$nodeCount".log
 }
 
 # This is needed, because buildkite doesn't let us define an array of numbers.

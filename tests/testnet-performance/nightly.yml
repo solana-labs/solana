@@ -1,13 +1,13 @@
 steps:
   - command: "tests/testnet-performance/testnet-automation.sh"
-    label: "Run performance testnets on EDGE channel"
+    label: "Run performance testnets on EDGE channel CPU ONLY"
     #branches: 'master'
     env:
+      TESTNET_TAG: "nightly-edge-perf-cpu-only"
       CHANNEL: edge
-      TESTNET_TAG: "nightly-edge-perf"
-      ITERATION_WAIT: 300
+      ITERATION_WAIT: 60
       NUMBER_OF_VALIDATOR_NODES: "10"
-      LEADER_CPU_MACHINE_TYPE: "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+      LEADER_CPU_MACHINE_TYPE: "--machine-type n1-standard-16"
       NUMBER_OF_CLIENT_NODES: 1
       TESTNET_ZONES: "us-west1-b"
       ADDITIONAL_FLAGS: ""
@@ -17,10 +17,17 @@ steps:
   - wait: ~
     continue_on_failure: true
 
-  - command: "tests/testnet-performance/testnet-automation-cleanup.sh"
-    label: "Delete performance testnets on EDGE"
+  - command: "tests/testnet-performance/testnet-automation.sh"
+    label: "Run performance testnets on EDGE channel GPU ENABLED"
     #branches: 'master'
     env:
-      TESTNET_TAG: "nightly-edge-perf"
+      TESTNET_TAG: "nightly-edge-perf-gpu-enabled"
+      CHANNEL: edge
+      ITERATION_WAIT: 60
+      NUMBER_OF_VALIDATOR_NODES: "10"
+      LEADER_CPU_MACHINE_TYPE: "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+      NUMBER_OF_CLIENT_NODES: 1
+      TESTNET_ZONES: "us-west1-b"
+      ADDITIONAL_FLAGS: ""
     agents:
       - "queue=testnet-deploy"
