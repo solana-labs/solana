@@ -101,8 +101,8 @@ fn test_stake_account_delegate() {
         &mint_pubkey,
         &staker_pubkey,
         &vote_pubkey,
-        1_000_000,
         &authorized,
+        1_000_000,
     ));
     bank_client
         .send_message(&[&mint_keypair, &staker_keypair], message)
@@ -120,6 +120,7 @@ fn test_stake_account_delegate() {
     // Test that we cannot withdraw staked lamports
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
+            &staker_pubkey,
             &staker_pubkey,
             &Pubkey::new_rand(),
             1_000_000,
@@ -188,6 +189,7 @@ fn test_stake_account_delegate() {
     let message = Message::new_with_payer(
         vec![stake_instruction::deactivate_stake(
             &staker_pubkey,
+            &staker_pubkey,
             &vote_pubkey,
         )],
         Some(&mint_pubkey),
@@ -199,6 +201,7 @@ fn test_stake_account_delegate() {
     // Test that we cannot withdraw staked lamports due to cooldown period
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
+            &staker_pubkey,
             &staker_pubkey,
             &Pubkey::new_rand(),
             1_000_000,
@@ -221,6 +224,7 @@ fn test_stake_account_delegate() {
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
             &staker_pubkey,
+            &staker_pubkey,
             &Pubkey::new_rand(),
             1_000_000,
         )],
@@ -233,6 +237,7 @@ fn test_stake_account_delegate() {
 
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
+            &staker_pubkey,
             &staker_pubkey,
             &Pubkey::new_rand(),
             250_000,
@@ -257,6 +262,7 @@ fn test_stake_account_delegate() {
     // Test that we can withdraw now
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
+            &staker_pubkey,
             &staker_pubkey,
             &Pubkey::new_rand(),
             750_000,

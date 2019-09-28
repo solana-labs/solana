@@ -162,8 +162,8 @@ pub(crate) mod tests {
                 &from_account.pubkey(),
                 &stake_account_pubkey,
                 vote_pubkey,
-                amount,
                 &Authorized::auto(&stake_account_pubkey),
+                amount,
             ),
         );
     }
