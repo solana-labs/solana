@@ -358,6 +358,15 @@ pub fn process_create_stake_account(
         (&config.keypair.pubkey(), "wallet keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
+
+    if rpc_client.get_account(&stake_account_pubkey).is_ok() {
+        return Err(WalletError::BadParameter(format!(
+            "Unable to create stake account. Stake account already exists: {}",
+            stake_account_pubkey
+        ))
+        .into());
+    }
+
     let ixs = stake_instruction::create_stake_account_with_lockup(
         &config.keypair.pubkey(),
         stake_account_pubkey,
