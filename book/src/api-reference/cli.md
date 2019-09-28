@@ -175,32 +175,32 @@ $ solana send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 ```
 
 ## Usage
-
 ```text
-solana 0.12.0
+solana-cli 0.20.0
+Blockchain, Rebuilt for Scale
 
 USAGE:
-    solana [FLAGS] [OPTIONS] [SUBCOMMAND]
+    solana [OPTIONS] <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 SUBCOMMANDS:
     address                               Get your public key
     airdrop                               Request lamports
-    authorize-voter                       Authorize a new vote signing keypair for the given vote account
     balance                               Get your balance
     cancel                                Cancel a transfer
     claim-storage-reward                  Redeem storage reward credits
     cluster-version                       Get the version of the cluster entrypoint
     confirm                               Confirm transaction by signature
     create-replicator-storage-account     Create a replicator storage account
+    create-stake-account                  Create a stake account
     create-storage-mining-pool-account    Create mining pool account
     create-validator-storage-account      Create a validator storage account
     create-vote-account                   Create a vote account
@@ -222,12 +222,27 @@ SUBCOMMANDS:
     show-stake-account                    Show the contents of a stake account
     show-storage-account                  Show the contents of a storage account
     show-vote-account                     Show the contents of a vote account
+    stake-authorize-staker                Authorize a new stake signing keypair for the given stake account
+    stake-authorize-withdrawer            Authorize a new withdraw signing keypair for the given stake account
+    uptime                                Show the uptime of a validator, based on epoch voting history
     validator-info                        Publish/get Validator info on Solana
+    vote-authorize-voter                  Authorize a new vote signing keypair for the given vote account
+    vote-authorize-withdrawer             Authorize a new withdraw signing keypair for the given vote account
     withdraw-stake                        Withdraw the unstaked lamports from the stake account
 ```
 
+error: Found argument 'SUBCOMMANDS:' which wasn't expected, or isn't valid in this context
+
+USAGE:
+    solana [OPTIONS] <SUBCOMMAND>
+
+For more information try --help
 ```text
-solana-address
+
+```
+
+```text
+solana-address 
 Get your public key
 
 USAGE:
@@ -238,14 +253,14 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
 ```text
-solana-airdrop
-Request a batch of lamports
+solana-airdrop 
+Request lamports
 
 USAGE:
     solana airdrop [OPTIONS] <AMOUNT> [unit]
@@ -255,7 +270,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>        Configuration file to use [default: /Users/tyeraeulberg/.config/solana/wallet/config.yml]
+    -C, --config <PATH>        Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
         --drone-host <HOST>    Drone host to use [default: the --url host]
         --drone-port <PORT>    Drone port to use [default: 9900]
     -u, --url <URL>            JSON RPC URL for the solana cluster
@@ -267,29 +282,7 @@ ARGS:
 ```
 
 ```text
-solana-authorize-voter
-Authorize a new vote signing keypair for the given vote account
-
-USAGE:
-    solana authorize-voter [OPTIONS] <VOTE ACCOUNT PUBKEY> <CURRENT VOTER KEYPAIR FILE> <NEW VOTER PUBKEY>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
-    -u, --url <URL>         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>    /path/to/id.json
-
-ARGS:
-    <VOTE ACCOUNT PUBKEY>           Vote account in which to set the authorized voter
-    <CURRENT VOTER KEYPAIR FILE>    Keypair file for the currently authorized vote signer
-    <NEW VOTER PUBKEY>              New vote signer to authorize
-```
-
-```text
-solana-balance
+solana-balance 
 Get your balance
 
 USAGE:
@@ -301,7 +294,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -310,7 +303,7 @@ ARGS:
 ```
 
 ```text
-solana-cancel
+solana-cancel 
 Cancel a transfer
 
 USAGE:
@@ -321,7 +314,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -330,7 +323,7 @@ ARGS:
 ```
 
 ```text
-solana-claim-storage-reward
+solana-claim-storage-reward 
 Redeem storage reward credits
 
 USAGE:
@@ -341,7 +334,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -351,7 +344,7 @@ ARGS:
 ```
 
 ```text
-solana-cluster-version
+solana-cluster-version 
 Get the version of the cluster entrypoint
 
 USAGE:
@@ -362,13 +355,13 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
 ```text
-solana-confirm
+solana-confirm 
 Confirm transaction by signature
 
 USAGE:
@@ -379,7 +372,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -388,7 +381,7 @@ ARGS:
 ```
 
 ```text
-solana-create-replicator-storage-account
+solana-create-replicator-storage-account 
 Create a replicator storage account
 
 USAGE:
@@ -399,17 +392,44 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>
-    <STORAGE ACCOUNT PUBKEY>
+    <STORAGE ACCOUNT OWNER PUBKEY>    
+    <STORAGE ACCOUNT PUBKEY>          
 ```
 
 ```text
-solana-create-storage-mining-pool-account
+solana-create-stake-account 
+Create a stake account
+
+USAGE:
+    solana create-stake-account [OPTIONS] <STAKE ACCOUNT> <AMOUNT> [UNIT]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+        --authorized-staker <PUBKEY>        Public key of authorized staker (defaults to wallet)
+        --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to wallet)
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            /home/rwalker/.config/solana/wallet/config.yml]
+        --custodian <PUBKEY>                Identity of the custodian (can withdraw before lockup expires)
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+        --lockup <SLOT>                     The slot height at which this account will be available for withdrawal
+
+ARGS:
+    <STAKE ACCOUNT>    Address of the stake account to fund (pubkey or keypair)
+    <AMOUNT>           The amount of send to the vote account (default unit SOL)
+    <UNIT>             Specify unit to use for request [possible values: SOL, lamports]
+```
+
+```text
+solana-create-storage-mining-pool-account 
 Create mining pool account
 
 USAGE:
@@ -420,7 +440,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /Users/tyeraeulberg/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -431,7 +451,7 @@ ARGS:
 ```
 
 ```text
-solana-create-validator-storage-account
+solana-create-validator-storage-account 
 Create a validator storage account
 
 USAGE:
@@ -442,84 +462,86 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>
-    <STORAGE ACCOUNT PUBKEY>
+    <STORAGE ACCOUNT OWNER PUBKEY>    
+    <STORAGE ACCOUNT PUBKEY>          
 ```
 
 ```text
-solana-create-vote-account
+solana-create-vote-account 
 Create a vote account
 
 USAGE:
-    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <LAMPORTS>
+    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <AMOUNT> [unit]
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-        --commission <NUM>    The commission taken on reward redemption (0-255), default: 0
-    -C, --config <PATH>       Configuration file to use [default: ~/.config/solana/wallet/config.yml]
-    -u, --url <URL>           JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>      /path/to/id.json
+        --authorized-voter <PUBKEY>         Public key of the authorized voter (defaults to vote account)
+        --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to wallet)
+        --commission <NUM>                  The commission taken on reward redemption (0-255), default: 0
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            /home/rwalker/.config/solana/wallet/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>    Vote account address to fund
     <VALIDATOR PUBKEY>       Validator that will vote with this account
-    <LAMPORTS>               The amount of lamports to send to the vote account
+    <AMOUNT>                 The amount of send to the vote account (default unit SOL)
+    <unit>                   Specify unit to use for request [possible values: SOL, lamports]
 ```
 
 ```text
-solana-deactivate-stake
+solana-deactivate-stake 
 Deactivate the delegated stake from the stake account
 
 USAGE:
-    solana deactivate-stake [OPTIONS] <STAKE ACCOUNT KEYPAIR FILE> <PUBKEY>
+    solana deactivate-stake [OPTIONS] <STAKE ACCOUNT> <VOTE ACCOUNT>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STAKE ACCOUNT KEYPAIR FILE>    Keypair file for the stake account, for signing the delegate transaction.
-    <PUBKEY>                        The vote account to which the stake is currently delegated
+    <STAKE ACCOUNT>    Stake account to be deactivated.
+    <VOTE ACCOUNT>     The vote account to which the stake is currently delegated
 ```
 
 ```text
-solana-delegate-stake
+solana-delegate-stake 
 Delegate stake to a vote account
 
 USAGE:
-    solana delegate-stake [OPTIONS] <STAKE ACCOUNT KEYPAIR FILE> <VOTE ACCOUNT PUBKEY> <AMOUNT> [unit]
+    solana delegate-stake [OPTIONS] <STAKE ACCOUNT> <VOTE ACCOUNT>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /Users/tyeraeulberg/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STAKE ACCOUNT KEYPAIR FILE>    Keypair file for the new stake account
-    <VOTE ACCOUNT PUBKEY>           The vote account to which the stake will be delegated
-    <AMOUNT>                        The amount to delegate (default unit SOL)
-    <unit>                          Specify unit to use for request [possible values: SOL, lamports]
+    <STAKE ACCOUNT>    Stake account to delegate
+    <VOTE ACCOUNT>     The vote account to which the stake will be delegated
 ```
 
 ```text
-solana-deploy
+solana-deploy 
 Deploy a program
 
 USAGE:
@@ -530,7 +552,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -539,7 +561,7 @@ ARGS:
 ```
 
 ```text
-solana-fees
+solana-fees 
 Display current cluster fees
 
 USAGE:
@@ -550,13 +572,13 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
 ```text
-solana-get
+solana-get 
 Get wallet config settings
 
 USAGE:
@@ -567,7 +589,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -576,7 +598,7 @@ ARGS:
 ```
 
 ```text
-solana-get-slot
+solana-get-slot 
 Get current slot
 
 USAGE:
@@ -587,13 +609,13 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
 ```text
-solana-get-transaction-count
+solana-get-transaction-count 
 Get current transaction count
 
 USAGE:
@@ -604,26 +626,36 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
+error: The subcommand '--help' wasn't recognized
+
+USAGE:
+	solana help <subcommands>...
+
+For more information try --help
 ```text
-solana-pay
+
+```
+
+```text
+solana-pay 
 Send a payment
 
 USAGE:
     solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [unit]
 
 FLAGS:
-        --cancelable
+        --cancelable    
     -h, --help          Prints help information
     -V, --version       Prints version information
 
 OPTIONS:
     -C, --config <PATH>                         Configuration file to use [default:
-                                                /Users/tyeraeulberg/.config/solana/wallet/config.yml]
+                                                /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>                             JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                        /path/to/id.json
         --after <DATETIME>                      A timestamp after which transaction will execute
@@ -631,13 +663,13 @@ OPTIONS:
         --require-signature-from <PUBKEY>...    Any third party signatures required to unlock the lamports
 
 ARGS:
-    <PUBKEY>    The public key of recipient
+    <PUBKEY>    The pubkey of recipient
     <AMOUNT>    The amount to send (default unit SOL)
     <unit>      Specify unit to use for request [possible values: SOL, lamports]
 ```
 
 ```text
-solana-ping
+solana-ping 
 Submit transactions sequentially
 
 USAGE:
@@ -648,8 +680,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>         Configuration file to use [default:
-                                ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>         Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -c, --count <NUMBER>        Stop after submitting count transactions
     -i, --interval <SECONDS>    Wait interval seconds between submitting the next transaction [default: 2]
     -u, --url <URL>             JSON RPC URL for the solana cluster
@@ -658,28 +689,28 @@ OPTIONS:
 ```
 
 ```text
-solana-redeem-vote-credits
+solana-redeem-vote-credits 
 Redeem credits in the stake account
 
 USAGE:
-    solana redeem-vote-credits [OPTIONS] <STAKING ACCOUNT PUBKEY> <VOTE ACCOUNT PUBKEY>
+    solana redeem-vote-credits [OPTIONS] <STAKE ACCOUNT> <VOTE ACCOUNT>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STAKING ACCOUNT PUBKEY>    Staking account address to redeem credits for
-    <VOTE ACCOUNT PUBKEY>       The vote account to which the stake was previously delegated.
+    <STAKE ACCOUNT>    Address of the stake account in which to redeem credits
+    <VOTE ACCOUNT>     The vote account to which the stake is currently delegated.
 ```
 
 ```text
-solana-send-signature
+solana-send-signature 
 Send a signature to authorize a transfer
 
 USAGE:
@@ -690,17 +721,17 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <PUBKEY>        The public key of recipient
+    <PUBKEY>        The pubkey of recipient
     <PROCESS ID>    The process id of the transfer to authorize
 ```
 
 ```text
-solana-send-timestamp
+solana-send-timestamp 
 Send a timestamp to unlock a transfer
 
 USAGE:
@@ -711,18 +742,18 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>      Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>      Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
         --date <DATETIME>    Optional arbitrary timestamp to apply
     -u, --url <URL>          JSON RPC URL for the solana cluster
     -k, --keypair <PATH>     /path/to/id.json
 
 ARGS:
-    <PUBKEY>        The public key of recipient
+    <PUBKEY>        The pubkey of recipient
     <PROCESS ID>    The process id of the transfer to unlock
 ```
 
 ```text
-solana-set
+solana-set 
 Set a wallet config setting
 
 USAGE:
@@ -733,13 +764,13 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
 ```text
-solana-show-account
+solana-show-account 
 Show the contents of an account
 
 USAGE:
@@ -751,37 +782,38 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
     -o, --output <FILE>     Write the account data to this file
 
 ARGS:
-    <ACCOUNT PUBKEY>    Account public key
+    <ACCOUNT PUBKEY>    Account pubkey
 ```
 
 ```text
-solana-show-stake-account
+solana-show-stake-account 
 Show the contents of a stake account
 
 USAGE:
-    solana show-stake-account [OPTIONS] <STAKE ACCOUNT PUBKEY>
+    solana show-stake-account [FLAGS] [OPTIONS] <STAKE ACCOUNT>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help        Prints help information
+        --lamports    Display balance in lamports instead of SOL
+    -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STAKE ACCOUNT PUBKEY>    Stake account public key
+    <STAKE ACCOUNT>    Address of the stake account to display
 ```
 
 ```text
-solana-show-storage-account
+solana-show-storage-account 
 Show the contents of a storage account
 
 USAGE:
@@ -792,36 +824,101 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT PUBKEY>    Storage account public key
+    <STORAGE ACCOUNT PUBKEY>    Storage account pubkey
 ```
 
 ```text
-solana-show-vote-account
+solana-show-vote-account 
 Show the contents of a vote account
 
 USAGE:
-    solana show-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY>
+    solana show-vote-account [FLAGS] [OPTIONS] <VOTE ACCOUNT PUBKEY>
+
+FLAGS:
+    -h, --help        Prints help information
+        --lamports    Display balance in lamports instead of SOL
+    -V, --version     Prints version information
+
+OPTIONS:
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -u, --url <URL>         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>    /path/to/id.json
+
+ARGS:
+    <VOTE ACCOUNT PUBKEY>    Vote account pubkey
+```
+
+```text
+solana-stake-authorize-staker 
+Authorize a new stake signing keypair for the given stake account
+
+USAGE:
+    solana stake-authorize-staker [OPTIONS] <STAKE ACCOUNT> <AUTHORIZE PUBKEY>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <VOTE ACCOUNT PUBKEY>    Vote account public key
+    <STAKE ACCOUNT>       Stake account in which to set the authorized staker
+    <AUTHORIZE PUBKEY>    New authorized staker
 ```
 
 ```text
-solana-validator-info
+solana-stake-authorize-withdrawer 
+Authorize a new withdraw signing keypair for the given stake account
+
+USAGE:
+    solana stake-authorize-withdrawer [OPTIONS] <STAKE ACCOUNT> <AUTHORIZE PUBKEY>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -u, --url <URL>         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>    /path/to/id.json
+
+ARGS:
+    <STAKE ACCOUNT>       Stake account in which to set the authorized withdrawer
+    <AUTHORIZE PUBKEY>    New authorized withdrawer
+```
+
+```text
+solana-uptime 
+Show the uptime of a validator, based on epoch voting history
+
+USAGE:
+    solana uptime [FLAGS] [OPTIONS] <VOTE ACCOUNT PUBKEY>
+
+FLAGS:
+        --aggregate    Aggregate uptime data across span
+    -h, --help         Prints help information
+    -V, --version      Prints version information
+
+OPTIONS:
+    -C, --config <PATH>           Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -u, --url <URL>               JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>          /path/to/id.json
+        --span <NUM OF EPOCHS>    Number of recent epochs to examine
+
+ARGS:
+    <VOTE ACCOUNT PUBKEY>    Vote account pubkey
+```
+
+```text
+solana-validator-info 
 Publish/get Validator info on Solana
 
 USAGE:
@@ -832,7 +929,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -843,25 +940,67 @@ SUBCOMMANDS:
 ```
 
 ```text
-solana-withdraw-stake
-Withdraw the unstaked lamports from the stake account
+solana-vote-authorize-voter 
+Authorize a new vote signing keypair for the given vote account
 
 USAGE:
-    solana withdraw-stake [OPTIONS] <STAKE ACCOUNT KEYPAIR FILE> <DESTINATION PUBKEY> <AMOUNT> [unit]
+    solana vote-authorize-voter [OPTIONS] <VOTE ACCOUNT PUBKEY> <NEW VOTER PUBKEY>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /Users/tyeraeulberg/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STAKE ACCOUNT KEYPAIR FILE>    Keypair file for the stake account, for signing the withdraw transaction.
-    <DESTINATION PUBKEY>            The account where the lamports should be transfered
-    <AMOUNT>                        The amount to withdraw from the stake account (default unit SOL)
-    <unit>                          Specify unit to use for request [possible values: SOL, lamports]
+    <VOTE ACCOUNT PUBKEY>    Vote account in which to set the authorized voter
+    <NEW VOTER PUBKEY>       New vote signer to authorize
+```
+
+```text
+solana-vote-authorize-withdrawer 
+Authorize a new withdraw signing keypair for the given vote account
+
+USAGE:
+    solana vote-authorize-withdrawer [OPTIONS] <VOTE ACCOUNT PUBKEY> <NEW WITHDRAWER PUBKEY>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -u, --url <URL>         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>    /path/to/id.json
+
+ARGS:
+    <VOTE ACCOUNT PUBKEY>      Vote account in which to set the authorized withdrawer
+    <NEW WITHDRAWER PUBKEY>    New withdrawer to authorize
+```
+
+```text
+solana-withdraw-stake 
+Withdraw the unstaked lamports from the stake account
+
+USAGE:
+    solana withdraw-stake [OPTIONS] <STAKE ACCOUNT> <DESTINATION ACCOUNT> <AMOUNT> [UNIT]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -u, --url <URL>         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>    /path/to/id.json
+
+ARGS:
+    <STAKE ACCOUNT>          Stake account from which to withdraw
+    <DESTINATION ACCOUNT>    The account to which the lamports should be transfered
+    <AMOUNT>                 The amount to withdraw from the stake account (default unit SOL)
+    <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
 ```
 

@@ -1,16 +1,14 @@
 use crate::{
     input_parsers::*,
     wallet::{
-        check_account_for_fee, check_unique_pubkeys, log_instruction_custom_error, ProcessResult,
-        WalletCommand, WalletConfig, WalletError,
+        build_balance_message, check_account_for_fee, check_unique_pubkeys,
+        log_instruction_custom_error, ProcessResult, WalletCommand, WalletConfig, WalletError,
     },
 };
 use clap::{value_t_or_exit, ArgMatches};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
-    system_instruction::SystemError,
+    pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
     transaction::Transaction,
 };
 use solana_vote_api::{
@@ -18,19 +16,17 @@ use solana_vote_api::{
     vote_state::{VoteAuthorize, VoteInit, VoteState},
 };
 
-pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
+pub fn parse_vote_create_account(
+    pubkey: &Pubkey,
+    matches: &ArgMatches<'_>,
+) -> Result<WalletCommand, WalletError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
     let commission = value_of(&matches, "commission").unwrap_or(0);
     let authorized_voter = pubkey_of(matches, "authorized_voter").unwrap_or(vote_account_pubkey);
-    let authorized_withdrawer =
-        pubkey_of(matches, "authorized_withdrawer").unwrap_or(vote_account_pubkey);
+    let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer").unwrap_or(*pubkey);
 
-    let lamports = crate::wallet::parse_amount_lamports(
-        matches.value_of("amount").unwrap(),
-        matches.value_of("unit"),
-    )
-    .map_err(|err| WalletError::BadParameter(format!("Invalid amount: {:?}", err)))?;
+    let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
 
     Ok(WalletCommand::CreateVoteAccount(
         vote_account_pubkey,
@@ -49,12 +45,10 @@ pub fn parse_vote_authorize(
     vote_authorize: VoteAuthorize,
 ) -> Result<WalletCommand, WalletError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    let authorized_keypair = keypair_of(matches, "authorized_keypair_file").unwrap();
     let new_authorized_pubkey = pubkey_of(matches, "new_authorized_pubkey").unwrap();
 
     Ok(WalletCommand::VoteAuthorize(
         vote_account_pubkey,
-        authorized_keypair,
         new_authorized_pubkey,
         vote_authorize,
     ))
@@ -103,7 +97,6 @@ pub fn process_vote_authorize(
     rpc_client: &RpcClient,
     config: &WalletConfig,
     vote_account_pubkey: &Pubkey,
-    authorized_keypair: &Keypair,
     new_authorized_pubkey: &Pubkey,
     vote_authorize: VoteAuthorize,
 ) -> ProcessResult {
@@ -113,21 +106,15 @@ pub fn process_vote_authorize(
     )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize(
-        vote_account_pubkey,          // vote account to update
-        &authorized_keypair.pubkey(), // current authorized voter (often the vote account itself)
-        new_authorized_pubkey,        // new vote signer
-        vote_authorize,               // vote or withdraw
+        vote_account_pubkey,      // vote account to update
+        &config.keypair.pubkey(), // current authorized voter
+        new_authorized_pubkey,    // new vote signer/withdrawer
+        vote_authorize,           // vote or withdraw
     )];
 
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair, &authorized_keypair],
-        recent_blockhash,
-    );
+    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result =
-        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_keypair]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<VoteError>(result)
 }
 
@@ -168,7 +155,7 @@ pub fn process_show_vote_account(
 
     println!(
         "account balance: {}",
-        crate::wallet::build_balance_message(vote_account.lamports, use_lamports_unit)
+        build_balance_message(vote_account.lamports, use_lamports_unit)
     );
     println!("node id: {}", vote_state.node_pubkey);
     println!("authorized voter: {}", vote_state.authorized_voter);
@@ -290,33 +277,23 @@ pub fn process_uptime(
 mod tests {
     use super::*;
     use crate::wallet::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
-    use std::fs;
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
         let pubkey = Pubkey::new_rand();
-        let pubkey_string = format!("{}", pubkey);
-
-        // Test AuthorizeVoter Subcommand
-        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
-        let keypair_file = format!("{}/tmp/keypair_file-{}", out_dir, keypair.pubkey());
-        let _ = write_keypair(&keypair, &keypair_file).unwrap();
+        let pubkey_string = pubkey.to_string();
 
         let test_authorize_voter = test_commands.clone().get_matches_from(vec![
             "test",
             "vote-authorize-voter",
             &pubkey_string,
-            &keypair_file,
             &pubkey_string,
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_authorize_voter).unwrap(),
-            WalletCommand::VoteAuthorize(pubkey, keypair, pubkey, VoteAuthorize::Voter)
+            WalletCommand::VoteAuthorize(pubkey, pubkey, VoteAuthorize::Voter)
         );
-        fs::remove_file(&keypair_file).unwrap();
 
         // Test CreateVoteAccount SubCommand
         let node_pubkey = Pubkey::new_rand();
