@@ -12,7 +12,7 @@ edition = "2018"
 bincode = "1.2.0"
 chrono = { version = "0.4.9", features = ["serde"] }
 log = "0.4.2"
-num-derive = "0.2"
+num-derive = "0.3"
 num-traits = "0.2"
 serde = "1.0.101"
 serde_derive = "1.0.101"
