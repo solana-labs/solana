@@ -187,7 +187,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -253,7 +253,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -270,7 +270,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>        Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>        Configuration file to use [default: ~/.config/solana/wallet/config.yml]
         --drone-host <HOST>    Drone host to use [default: the --url host]
         --drone-port <PORT>    Drone port to use [default: 9900]
     -u, --url <URL>            JSON RPC URL for the solana cluster
@@ -294,7 +294,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -314,7 +314,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -334,7 +334,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -355,7 +355,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -372,7 +372,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -392,7 +392,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -416,7 +416,7 @@ OPTIONS:
         --authorized-staker <PUBKEY>        Public key of authorized staker (defaults to wallet)
         --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to wallet)
     -C, --config <PATH>                     Configuration file to use [default:
-                                            /home/rwalker/.config/solana/wallet/config.yml]
+                                            ~/.config/solana/wallet/config.yml]
         --custodian <PUBKEY>                Identity of the custodian (can withdraw before lockup expires)
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
@@ -440,7 +440,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -462,7 +462,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -487,7 +487,7 @@ OPTIONS:
         --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to wallet)
         --commission <NUM>                  The commission taken on reward redemption (0-255), default: 0
     -C, --config <PATH>                     Configuration file to use [default:
-                                            /home/rwalker/.config/solana/wallet/config.yml]
+                                            ~/.config/solana/wallet/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
 
@@ -510,7 +510,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -531,7 +531,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -552,7 +552,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -572,7 +572,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -589,7 +589,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -609,7 +609,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -626,7 +626,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -655,7 +655,7 @@ FLAGS:
 
 OPTIONS:
     -C, --config <PATH>                         Configuration file to use [default:
-                                                /home/rwalker/.config/solana/wallet/config.yml]
+                                                ~/.config/solana/wallet/config.yml]
     -u, --url <URL>                             JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                        /path/to/id.json
         --after <DATETIME>                      A timestamp after which transaction will execute
@@ -680,7 +680,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>         Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>         Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -c, --count <NUMBER>        Stop after submitting count transactions
     -i, --interval <SECONDS>    Wait interval seconds between submitting the next transaction [default: 2]
     -u, --url <URL>             JSON RPC URL for the solana cluster
@@ -700,7 +700,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -721,7 +721,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -742,7 +742,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>      Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>      Configuration file to use [default: ~/.config/solana/wallet/config.yml]
         --date <DATETIME>    Optional arbitrary timestamp to apply
     -u, --url <URL>          JSON RPC URL for the solana cluster
     -k, --keypair <PATH>     /path/to/id.json
@@ -764,7 +764,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -782,7 +782,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
     -o, --output <FILE>     Write the account data to this file
@@ -804,7 +804,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -824,7 +824,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -845,7 +845,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -865,7 +865,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -886,7 +886,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -908,7 +908,7 @@ FLAGS:
     -V, --version      Prints version information
 
 OPTIONS:
-    -C, --config <PATH>           Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>           Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>               JSON RPC URL for the solana cluster
     -k, --keypair <PATH>          /path/to/id.json
         --span <NUM OF EPOCHS>    Number of recent epochs to examine
@@ -929,7 +929,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -951,7 +951,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -972,7 +972,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -993,7 +993,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: /home/rwalker/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 

@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-usage=$(cargo -q run -p solana-cli -- --help)
+usage=$(cargo -q run -p solana-cli -- --help | sed 's|'"$HOME"'|~|g')
 exec 1>& src/api-reference/cli.md
 
 cat src/api-reference/.cli.md
@@ -21,6 +21,6 @@ while read subcommand rest; do
 %s
 ```
 
-' "$(cargo -q run -p solana-cli -- "$subcommand" --help)"
+' "$(cargo -q run -p solana-cli -- "$subcommand" --help | sed 's|'"$HOME"'|~|g')"
   fi
 done <<<"$usage"
