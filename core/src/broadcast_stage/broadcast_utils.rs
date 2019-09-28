@@ -126,15 +126,16 @@ pub(super) fn entries_to_shreds(
         })
     };
 
+    let num_shreds = shredder.shreds.len();
     shreds.append(&mut shredder.shreds);
 
     datapoint_info!(
         "shredding-stats",
         ("slot", slot as i64, i64),
-        ("num_shreds", shred_infos.len() as i64, i64),
+        ("num_shreds", num_shreds as i64, i64),
         ("signing_coding", shredder.signing_coding_time as i64, i64),
         (
-            "copying_serialzing",
+            "copying_serializing",
             (elapsed - shredder.signing_coding_time) as i64,
             i64
         ),

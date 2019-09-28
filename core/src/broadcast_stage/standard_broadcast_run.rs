@@ -164,7 +164,7 @@ impl BroadcastRun for StandardBroadcastRun {
                 ("shredding_time", self.shredding_elapsed as i64, i64),
                 ("insertion_time", self.insertion_elapsed as i64, i64),
                 ("broadcast_time", self.broadcast_elapsed as i64, i64),
-                ("num_shreds", (latest_shred_index + 1) as i64, i64),
+                ("num_shreds", latest_shred_index as i64, i64),
                 (
                     "slot_broadcast_time",
                     self.slot_broadcast_start.unwrap().elapsed().as_millis() as i64,
