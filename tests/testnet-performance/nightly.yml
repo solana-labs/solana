@@ -1,7 +1,7 @@
 steps:
   - command: "tests/testnet-performance/testnet-automation.sh"
     label: "Run performance testnets on EDGE channel CPU ONLY"
-    branches: 'master'
+#    branches: 'master'
     env:
       TESTNET_TAG: "nightly-edge-perf-cpu-only"
       CHANNEL: edge
@@ -21,7 +21,7 @@ steps:
 
   - command: "tests/testnet-performance/testnet-automation.sh"
     label: "Run performance testnets on EDGE channel GPU ENABLED"
-    branches: 'master'
+#    branches: 'master'
     env:
       TESTNET_TAG: "nightly-edge-perf-gpu-enabled"
       CHANNEL: edge
@@ -41,7 +41,7 @@ steps:
 
   - command: "tests/testnet-performance/testnet-automation.sh"
     label: "Run performance testnets on BETA channel CPU ONLY"
-    branches: 'v0.19'
+#    branches: 'v0.19'
     env:
       TESTNET_TAG: "nightly-beta-perf-cpu-only"
       CHANNEL: beta
@@ -61,7 +61,7 @@ steps:
 
   - command: "tests/testnet-performance/testnet-automation.sh"
     label: "Run performance testnets on BETA channel GPU ENABLED"
-    branches: 'v0.19'
+#    branches: 'v0.19'
     env:
       TESTNET_TAG: "nightly-beta-perf-gpu-enabled"
       CHANNEL: beta
