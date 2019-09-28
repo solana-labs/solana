@@ -152,6 +152,7 @@ startNodes() {
     addLogs=true
   fi
   initCompleteFiles=()
+  maybeExpectedGenesisBlockhash=
   for i in $(seq 0 $((${#nodes[@]} - 1))); do
     declare cmd=${nodes[$i]}
 
@@ -160,7 +161,7 @@ startNodes() {
       rm -f "$initCompleteFile"
       initCompleteFiles+=("$initCompleteFile")
     fi
-    startNode "$i" "$cmd"
+    startNode "$i" "$cmd $maybeExpectedGenesisBlockhash"
     if $addLogs; then
       logs+=("$(getNodeLogFile "$i" "$cmd")")
     fi
@@ -170,6 +171,14 @@ startNodes() {
     if [[ "$i" -eq 1 ]]; then
       SECONDS=
       waitForNodeToInit "$initCompleteFile"
+
+      (
+        source multinode-demo/common.sh
+        set -x
+        $solana_cli --keypair config/bootstrap-leader/identity-keypair.json \
+          --url http://127.0.0.1:8899 get-genesis-blockhash
+      ) | tee genesis-blockhash.log
+      maybeExpectedGenesisBlockhash="--expected-genesis-blockhash $(tail -n1 genesis-blockhash.log)"
     fi
   done
 
