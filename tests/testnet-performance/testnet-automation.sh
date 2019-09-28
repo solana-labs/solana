@@ -4,6 +4,15 @@ set -e
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 
 function cleanup_testnet {
+  echo --- collect logs from remote nodes
+  rm -rf net/log
+  net/net.sh logs
+  for logfile in net/log/* ; do
+    new_log=net/log/"$TESTNET_TAG"_"$nodeCount"-nodes_"$(basename "$logfile")"
+    cp "$logfile" "$new_log"
+    upload-ci-artifact "$new_log"
+  done
+  
   echo --- delete testnet
   net/gce.sh delete -p $TESTNET_TAG
 }
@@ -114,15 +123,6 @@ launchTestnet() {
     python tests/testnet-performance/testnet-automation-json-parser.py >>"$RESULTS_FILE"
 
   upload-ci-artifact "$RESULTS_FILE"
-
-  echo --- collect logs from remote nodes
-  rm -rf net/log
-  net/net.sh logs
-  for logfile in net/log/* ; do
-    new_log=net/log/"$TESTNET_TAG"_"$nodeCount"-nodes_"$(basename "$logfile")"
-    cp "$logfile" "$new_log"
-    upload-ci-artifact "$new_log"
-  done
 }
 
 # This is needed, because buildkite doesn't let us define an array of numbers.
