@@ -356,16 +356,19 @@ impl Shredder {
         });
         let unsigned_coding_shred_start = self.shreds.len();
 
-        self.generate_coding_shreds();
-        let signature_offset = *SIZE_OF_SHRED_TYPE;
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.shreds[unsigned_coding_shred_start..]
-                    .par_iter_mut()
-                    .for_each(|d| Self::sign_shred(&signer, d, signature_offset));
-            })
-        });
-
+        if self.fec_rate > 0.0 {
+            self.generate_coding_shreds();
+            let signature_offset = *SIZE_OF_SHRED_TYPE;
+            PAR_THREAD_POOL.with(|thread_pool| {
+                thread_pool.borrow().install(|| {
+                    self.shreds[unsigned_coding_shred_start..]
+                        .par_iter_mut()
+                        .for_each(|d| Self::sign_shred(&signer, d, signature_offset));
+                })
+            });
+        } else {
+            self.fec_set_index = self.index;
+        }
         self.fec_set_shred_start = self.shreds.len();
     }
 
@@ -877,6 +880,17 @@ mod tests {
 
         let shred = shredder.shreds.remove(0);
         verify_test_code_shred(&shred, 2, slot, &keypair.pubkey(), true);
+    }
+
+    #[test]
+    fn test_large_data_shredder() {
+        let keypair = Arc::new(Keypair::new());
+        let mut shredder =
+            Shredder::new(1, 0, 0.0, &keypair, 0).expect("Failed in creating shredder");
+
+        let data = vec![0u8; 1000 * 1000];
+        bincode::serialize_into(&mut shredder, &data).unwrap();
+        assert!(shredder.shreds.len() > data.len() / PACKET_DATA_SIZE);
     }
 
     #[test]
