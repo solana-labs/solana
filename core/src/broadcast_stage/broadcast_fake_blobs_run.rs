@@ -1,5 +1,6 @@
 use super::*;
 use crate::entry::Entry;
+use crate::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 
 pub(super) struct BroadcastFakeBlobsRun {
@@ -30,21 +31,26 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
         let last_tick = receive_results.last_tick;
 
         let keypair = &cluster_info.read().unwrap().keypair.clone();
-        let latest_blob_index = blocktree
+        let next_shred_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
             .map(|meta| meta.consumed)
-            .unwrap_or(0);
+            .unwrap_or(0) as u32;
 
         let num_entries = receive_results.entries.len();
-        let (shred_bufs, _) = broadcast_utils::entries_to_shreds(
-            receive_results.entries,
+
+        let shredder = Shredder::new(
             bank.slot(),
-            receive_results.last_tick,
-            bank.max_tick_height(),
-            keypair,
-            latest_blob_index,
             bank.parent().unwrap().slot(),
+            RECOMMENDED_FEC_RATE,
+            keypair.clone(),
+        )
+        .expect("Expected to create a new shredder");
+
+        let (shred_bufs, _) = shredder.entries_to_shreds(
+            receive_results.entries,
+            last_tick == bank.max_tick_height(),
+            next_shred_index,
         );
 
         // If the last blockhash is default, a new block is being created
@@ -57,14 +63,10 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             .map(|_| Entry::new(&self.last_blockhash, 0, vec![]))
             .collect();
 
-        let (fake_shred_bufs, _) = broadcast_utils::entries_to_shreds(
+        let (fake_shred_bufs, _) = shredder.entries_to_shreds(
             fake_entries,
-            receive_results.last_tick,
-            bank.slot(),
-            bank.max_tick_height(),
-            keypair,
-            latest_blob_index,
-            bank.parent().unwrap().slot(),
+            last_tick == bank.max_tick_height(),
+            next_shred_index,
         );
 
         // If it's the last tick, reset the last block hash to default

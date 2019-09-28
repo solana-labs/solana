@@ -1,4 +1,5 @@
 use super::*;
+use crate::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 
 pub(super) struct FailEntryVerificationBroadcastRun {}
@@ -29,21 +30,25 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             last_entry.hash = Hash::default();
         }
 
-        let keypair = &cluster_info.read().unwrap().keypair.clone();
-        let latest_blob_index = blocktree
+        let keypair = cluster_info.read().unwrap().keypair.clone();
+        let next_shred_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
             .map(|meta| meta.consumed)
-            .unwrap_or(0);
+            .unwrap_or(0) as u32;
 
-        let (shred_infos, _) = broadcast_utils::entries_to_shreds(
-            receive_results.entries,
-            last_tick,
+        let shredder = Shredder::new(
             bank.slot(),
-            bank.max_tick_height(),
-            keypair,
-            latest_blob_index,
             bank.parent().unwrap().slot(),
+            RECOMMENDED_FEC_RATE,
+            keypair.clone(),
+        )
+        .expect("Expected to create a new shredder");
+
+        let (shred_infos, _) = shredder.entries_to_shreds(
+            receive_results.entries,
+            last_tick == bank.max_tick_height(),
+            next_shred_index,
         );
 
         let seeds: Vec<[u8; 32]> = shred_infos.iter().map(|s| s.seed()).collect();

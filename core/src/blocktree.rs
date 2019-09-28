@@ -806,7 +806,7 @@ impl Blocktree {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
-    pub fn write_entries<I>(
+    /*pub fn write_entries<I>(
         &self,
         start_slot: u64,
         num_ticks_in_start_slot: u64,
@@ -833,9 +833,8 @@ impl Blocktree {
             },
             |v| v,
         );
-        let mut shredder =
-            Shredder::new(current_slot, parent_slot, 0.0, keypair, start_index as u32)
-                .expect("Failed to create entry shredder");
+        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair)
+            .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
         // Find all the entries for start_slot
         for entry in entries {
@@ -871,7 +870,7 @@ impl Blocktree {
         let num_shreds = all_shreds.len();
         self.insert_shreds(all_shreds, None)?;
         Ok(num_shreds)
-    }
+    }*/
 
     pub fn get_index(&self, slot: u64) -> Result<Option<Index>> {
         self.index_cf.get(slot)
@@ -1553,13 +1552,12 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     let blocktree = Blocktree::open(ledger_path)?;
     let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
 
-    let mut shredder = Shredder::new(0, 0, 0.0, &Arc::new(Keypair::new()), 0)
+    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()))
         .expect("Failed to create entry shredder");
     let last_hash = entries.last().unwrap().hash;
-    bincode::serialize_into(&mut shredder, &entries)
-        .expect("Expect to write all entries to shreds");
-    shredder.finalize_slot();
-    let shreds: Vec<Shred> = shredder.shreds.drain(..).collect();
+
+    let last_tick = ticks_per_slot - 1;
+    let shreds = shredder.entries_to_shreds(entries, true, 0).0;
 
     blocktree.insert_shreds(shreds, None)?;
     blocktree.set_roots(&[0])?;
@@ -1635,7 +1633,7 @@ pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (PathB
     (ledger_path, blockhash)
 }
 
-pub fn entries_to_test_shreds(
+/*pub fn entries_to_test_shreds(
     entries: Vec<Entry>,
     slot: u64,
     parent_slot: u64,
@@ -1653,7 +1651,7 @@ pub fn entries_to_test_shreds(
     }
 
     shredder.shreds.drain(..).collect()
-}
+}*/
 
 #[cfg(test)]
 pub mod tests {

@@ -1,11 +1,13 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
+use crate::entry::Entry;
 use crate::erasure::Session;
 use crate::result;
 use crate::result::Error;
 use bincode::serialized_size;
 use core::cell::RefCell;
 use lazy_static::lazy_static;
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::slice::ParallelSlice;
 use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
 use solana_rayon_threadlimit::get_thread_count;
@@ -13,13 +15,14 @@ use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::io;
-use std::io::{Error as IOError, ErrorKind, Write};
+use std::io::{Error as IOError, ErrorKind};
 use std::sync::Arc;
+use std::time::Instant;
 
 lazy_static! {
-    static ref SIZE_OF_CODING_SHRED_HEADER: usize =
+    pub static ref SIZE_OF_CODING_SHRED_HEADER: usize =
         { serialized_size(&CodingShredHeader::default()).unwrap() as usize };
-    static ref SIZE_OF_DATA_SHRED_HEADER: usize =
+    pub static ref SIZE_OF_DATA_SHRED_HEADER: usize =
         { serialized_size(&DataShredHeader::default()).unwrap() as usize };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
@@ -37,7 +40,7 @@ pub const CODING_SHRED: u8 = 0b0101_1010;
 
 /// This limit comes from reed solomon library, but unfortunately they don't have
 /// a public constant defined for it.
-const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
+pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
 
 /// Based on rse benchmarks, the optimal erasure config uses 16 data shreds and 4 coding shreds
 pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
@@ -112,6 +115,23 @@ impl Shred {
         }
     }
 
+    pub fn new_from_data(slot: u64, index: u32, parent_offset: u16, data: Option<&[u8]>) -> Self {
+        let mut shred_buf = vec![0; PACKET_DATA_SIZE];
+        let mut header = DataShredHeader::default();
+        header.data_header.slot = slot;
+        header.data_header.index = index;
+        header.parent_offset = parent_offset;
+
+        if let Some(data) = data {
+            assert_eq!(data.len(), PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_HEADER);
+            bincode::serialize_into(&mut shred_buf[..*SIZE_OF_DATA_SHRED_HEADER], &header)
+                .expect("Failed to write header into shred buffer");
+            shred_buf[*SIZE_OF_DATA_SHRED_HEADER..].clone_from_slice(data);
+        }
+
+        Self::new(header, shred_buf)
+    }
+
     pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> result::Result<Self> {
         let shred_type: u8 = bincode::deserialize(&shred_buf[..*SIZE_OF_SHRED_TYPE])?;
         let header = if shred_type == CODING_SHRED {
@@ -140,7 +160,7 @@ impl Shred {
         Shred { headers, payload }
     }
 
-    fn header(&self) -> &ShredCommonHeader {
+    pub fn header(&self) -> &ShredCommonHeader {
         if self.is_data() {
             &self.headers.data_header
         } else {
@@ -251,50 +271,18 @@ impl Shred {
 #[derive(Debug)]
 pub struct Shredder {
     slot: u64,
-    pub index: u32,
-    fec_set_index: u32,
-    parent_offset: u16,
+    parent_slot: u64,
     fec_rate: f32,
-    signer: Arc<Keypair>,
-    pub shreds: Vec<Shred>,
-    fec_set_shred_start: usize,
-    active_shred: Vec<u8>,
-    active_shred_header: DataShredHeader,
-    active_offset: usize,
-}
-
-impl Write for Shredder {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let offset = self.active_offset + *SIZE_OF_DATA_SHRED_HEADER;
-        let slice_len = std::cmp::min(buf.len(), PACKET_DATA_SIZE - offset);
-        self.active_shred[offset..offset + slice_len].copy_from_slice(&buf[..slice_len]);
-        let capacity = PACKET_DATA_SIZE - offset - slice_len;
-
-        if buf.len() > slice_len || capacity == 0 {
-            self.finalize_data_shred();
-        } else {
-            self.active_offset += slice_len;
-        }
-
-        if self.index - self.fec_set_index >= MAX_DATA_SHREDS_PER_FEC_BLOCK {
-            self.sign_unsigned_shreds_and_generate_codes();
-        }
-
-        Ok(slice_len)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        unimplemented!()
-    }
+    keypair: Arc<Keypair>,
+    pub signing_coding_time: u128,
 }
 
 impl Shredder {
     pub fn new(
         slot: u64,
-        parent: u64,
+        parent_slot: u64,
         fec_rate: f32,
-        signer: &Arc<Keypair>,
-        index: u32,
+        keypair: Arc<Keypair>,
     ) -> result::Result<Self> {
         if fec_rate > 1.0 || fec_rate < 0.0 {
             Err(Error::IO(IOError::new(
@@ -304,34 +292,135 @@ impl Shredder {
                     fec_rate
                 ),
             )))
-        } else if slot < parent || slot - parent > u64::from(std::u16::MAX) {
+        } else if slot < parent_slot || slot - parent_slot > u64::from(std::u16::MAX) {
             Err(Error::IO(IOError::new(
                 ErrorKind::Other,
                 format!(
                     "Current slot {:?} must be > Parent slot {:?}, but the difference must not be > {:?}",
-                    slot, parent, std::u16::MAX
+                    slot, parent_slot, std::u16::MAX
                 ),
             )))
         } else {
-            let mut header = DataShredHeader::default();
-            header.data_header.slot = slot;
-            header.data_header.index = index;
-            header.parent_offset = (slot - parent) as u16;
-            let active_shred = vec![0; PACKET_DATA_SIZE];
             Ok(Shredder {
                 slot,
-                index,
-                fec_set_index: index,
-                parent_offset: (slot - parent) as u16,
+                parent_slot,
                 fec_rate,
-                signer: signer.clone(),
-                shreds: vec![],
-                fec_set_shred_start: 0,
-                active_shred,
-                active_shred_header: header,
-                active_offset: 0,
+                keypair,
+                signing_coding_time: 0,
             })
         }
+    }
+
+    pub(super) fn entries_to_shreds(
+        &self,
+        entries: Vec<Entry>,
+        is_last_in_slot: bool,
+        mut next_shred_index: u32,
+    ) -> (Vec<Shred>, u32) {
+        let now = Instant::now();
+        let serialized_shreds =
+            bincode::serialize(&entries).expect("Expect to serialize all entries");
+
+        let no_header_size = PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_HEADER;
+
+        // Add one more shred to `num_shreds` to account for the last data shred denoting the end
+        // of a fec set or slot
+        let num_shreds = (serialized_shreds.len() + no_header_size - 1) / no_header_size + 1;
+        let last_shred_index = next_shred_index + num_shreds as u32 - 1;
+
+        // 1) Generate data shreds
+        let mut finalized_shreds: Vec<Shred> = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                serialized_shreds
+                    .par_chunks(no_header_size)
+                    .enumerate()
+                    .map(|(i, shred_data)| {
+                        let shred_index = next_shred_index + i as u32;
+
+                        let mut shred = Shred::new_from_data(
+                            self.slot,
+                            shred_index,
+                            (self.slot - self.parent_slot) as u16,
+                            Some(shred_data),
+                        );
+
+                        Shredder::sign_shred(
+                            &self.keypair,
+                            &mut shred,
+                            *SIZE_OF_CODING_SHRED_HEADER,
+                        );
+                        shred
+                    })
+                    .collect()
+            })
+        });
+
+        // Add one more shred to `num_shreds` to account for the last data shred denoting the end
+        // of a fec set or slot
+        // TODO: do we actually need this last shred or can we just mark the last shred in the par_iter
+        // above?
+        let mut last_data_shred = Shred::new_from_data(
+            self.slot,
+            last_shred_index as u32,
+            (self.slot - self.parent_slot) as u16,
+            None,
+        );
+
+        last_data_shred.headers.flags |= DATA_COMPLETE_SHRED;
+        if is_last_in_slot {
+            last_data_shred.headers.flags |= LAST_SHRED_IN_SLOT;
+        }
+
+        Shredder::sign_shred(
+            &self.keypair,
+            &mut last_data_shred,
+            *SIZE_OF_CODING_SHRED_HEADER,
+        );
+
+        finalized_shreds.push(last_data_shred);
+        next_shred_index = finalized_shreds.last().unwrap().header().index + 1;
+
+        // 2) Generate coding shreds
+        let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                finalized_shreds
+                    .par_chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
+                    .flat_map(|shred_data_batch| {
+                        Shredder::generate_coding_shreds(self.slot, self.fec_rate, shred_data_batch)
+                    })
+                    .collect()
+            })
+        });
+
+        // 3) Sign coding shreds
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                coding_shreds.par_iter_mut().for_each(|mut coding_shred| {
+                    Shredder::sign_shred(&self.keypair, &mut coding_shred, *SIZE_OF_SHRED_TYPE);
+                })
+            })
+        });
+
+        // TODO: pre-allocate this
+        finalized_shreds.append(&mut coding_shreds);
+        let elapsed = now.elapsed().as_millis();
+
+        datapoint_info!(
+            "shredding-stats",
+            ("slot", self.slot as i64, i64),
+            ("num_shreds", finalized_shreds.len() as i64, i64),
+            // TODO: update signing_coding_time
+            ("signing_coding", self.signing_coding_time as i64, i64),
+            (
+                "copying_serialzing",
+                (elapsed - self.signing_coding_time) as i64,
+                i64
+            ),
+        );
+
+        trace!("Inserting {:?} shreds in blocktree", finalized_shreds.len());
+
+        (finalized_shreds, next_shred_index)
     }
 
     pub fn sign_shred(signer: &Arc<Keypair>, shred_info: &mut Shred, signature_offset: usize) {
@@ -342,58 +431,6 @@ impl Shredder {
         shred_info.payload[signature_offset..signature_offset + serialized_signature.len()]
             .copy_from_slice(&serialized_signature);
         shred_info.header_mut().signature = signature;
-    }
-
-    fn sign_unsigned_shreds_and_generate_codes(&mut self) {
-        let signature_offset = *SIZE_OF_CODING_SHRED_HEADER;
-        let signer = self.signer.clone();
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.shreds[self.fec_set_shred_start..]
-                    .par_iter_mut()
-                    .for_each(|d| Self::sign_shred(&signer, d, signature_offset));
-            })
-        });
-        let unsigned_coding_shred_start = self.shreds.len();
-
-        if self.fec_rate > 0.0 {
-            self.generate_coding_shreds();
-            let signature_offset = *SIZE_OF_SHRED_TYPE;
-            PAR_THREAD_POOL.with(|thread_pool| {
-                thread_pool.borrow().install(|| {
-                    self.shreds[unsigned_coding_shred_start..]
-                        .par_iter_mut()
-                        .for_each(|d| Self::sign_shred(&signer, d, signature_offset));
-                })
-            });
-        } else {
-            self.fec_set_index = self.index;
-        }
-        self.fec_set_shred_start = self.shreds.len();
-    }
-
-    /// Finalize a data shred. Update the shred index for the next shred
-    fn finalize_data_shred(&mut self) {
-        self.active_offset = 0;
-        self.index += 1;
-
-        // Swap header
-        let mut header = DataShredHeader::default();
-        header.data_header.slot = self.slot;
-        header.data_header.index = self.index;
-        header.parent_offset = self.parent_offset;
-        std::mem::swap(&mut header, &mut self.active_shred_header);
-
-        // Swap shred buffer
-        let mut shred_buf = vec![0; PACKET_DATA_SIZE];
-        std::mem::swap(&mut shred_buf, &mut self.active_shred);
-
-        let mut wr = io::Cursor::new(&mut shred_buf[..*SIZE_OF_DATA_SHRED_HEADER]);
-        bincode::serialize_into(&mut wr, &header)
-            .expect("Failed to write header into shred buffer");
-
-        let shred = Shred::new(header, shred_buf);
-        self.shreds.push(shred);
     }
 
     pub fn new_coding_shred_header(
@@ -414,18 +451,23 @@ impl Shredder {
     }
 
     /// Generates coding shreds for the data shreds in the current FEC set
-    fn generate_coding_shreds(&mut self) {
-        if self.fec_rate != 0.0 {
-            let num_data = (self.index - self.fec_set_index) as usize;
+    pub fn generate_coding_shreds(
+        slot: u64,
+        fec_rate: f32,
+        data_shred_batch: &[Shred],
+    ) -> Vec<Shred> {
+        assert!(data_shred_batch.len() > 0);
+        if fec_rate != 0.0 {
+            let num_data = data_shred_batch.len();
             // always generate at least 1 coding shred even if the fec_rate doesn't allow it
-            let num_coding = 1.max((self.fec_rate * num_data as f32) as usize);
+            let num_coding = 1.max((fec_rate * num_data as f32) as usize);
             let session =
                 Session::new(num_data, num_coding).expect("Failed to create erasure session");
-            let start_index = self.index - num_data as u32;
+            let start_index = data_shred_batch[0].header().index;
 
             // All information after coding shred field in a data shred is encoded
             let coding_block_offset = *SIZE_OF_CODING_SHRED_HEADER;
-            let data_ptrs: Vec<_> = self.shreds[self.fec_set_shred_start..]
+            let data_ptrs: Vec<_> = data_shred_batch
                 .iter()
                 .map(|data| &data.payload[coding_block_offset..])
                 .collect();
@@ -434,7 +476,7 @@ impl Shredder {
             let mut coding_shreds = Vec::with_capacity(num_coding);
             (0..num_coding).for_each(|i| {
                 let header = Self::new_coding_shred_header(
-                    self.slot,
+                    slot,
                     start_index + i as u32,
                     num_data,
                     num_coding,
@@ -456,43 +498,23 @@ impl Shredder {
                 .expect("Failed in erasure encode");
 
             // append to the shred list
-            coding_shreds.into_iter().enumerate().for_each(|(i, code)| {
-                let header = Self::new_coding_shred_header(
-                    self.slot,
-                    start_index + i as u32,
-                    num_data,
-                    num_coding,
-                    i,
-                );
-                self.shreds.push(Shred::new(header, code));
-            });
-            self.fec_set_index = self.index;
+            coding_shreds
+                .into_iter()
+                .enumerate()
+                .map(|(i, code)| {
+                    let header = Self::new_coding_shred_header(
+                        slot,
+                        start_index + i as u32,
+                        num_data,
+                        num_coding,
+                        i,
+                    );
+                    Shred::new(header, code)
+                })
+                .collect()
+        } else {
+            vec![]
         }
-    }
-
-    /// Create the final data shred for the current FEC set or slot
-    /// If there's an active data shred, morph it into the final shred
-    /// If the current active data shred is first in slot, finalize it and create a new shred
-    fn make_final_data_shred(&mut self, last_in_slot: u8) {
-        if self.active_shred_header.data_header.index == 0 {
-            self.finalize_data_shred();
-        }
-        self.active_shred_header.flags |= DATA_COMPLETE_SHRED;
-        if last_in_slot == LAST_SHRED_IN_SLOT {
-            self.active_shred_header.flags |= LAST_SHRED_IN_SLOT;
-        }
-        self.finalize_data_shred();
-        self.sign_unsigned_shreds_and_generate_codes();
-    }
-
-    /// Finalize the current FEC block, and generate coding shreds
-    pub fn finalize_data(&mut self) {
-        self.make_final_data_shred(0);
-    }
-
-    /// Finalize the current slot (i.e. add last slot shred) and generate coding shreds
-    pub fn finalize_slot(&mut self) {
-        self.make_final_data_shred(LAST_SHRED_IN_SLOT);
     }
 
     fn fill_in_missing_shreds(
