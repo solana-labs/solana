@@ -16,7 +16,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::{
     account_utils::State,
-    bpf_loader,
+    bpf_loader, clock,
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::InstructionError,
@@ -97,6 +97,7 @@ pub enum WalletCommand {
     ShowStorageAccount(Pubkey),
     Deploy(String),
     GetSlot,
+    GetEpochInfo,
     GetTransactionCount,
     GetVersion,
     Pay {
@@ -343,6 +344,7 @@ pub fn parse_command(
                 .to_string(),
         )),
         ("get-slot", Some(_matches)) => Ok(WalletCommand::GetSlot),
+        ("get-epoch-info", Some(_matches)) => Ok(WalletCommand::GetEpochInfo),
         ("get-transaction-count", Some(_matches)) => Ok(WalletCommand::GetTransactionCount),
         ("pay", Some(pay_matches)) => {
             let lamports = parse_amount_lamports(
@@ -1089,6 +1091,35 @@ fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
     Ok(slot.to_string())
 }
 
+fn process_get_epoch_info(rpc_client: &RpcClient) -> ProcessResult {
+    let epoch_info = rpc_client.get_epoch_info()?;
+    println!();
+    println_name_value("Current epoch:", &epoch_info.epoch.to_string());
+    println_name_value("Current slot:", &epoch_info.absolute_slot.to_string());
+    println_name_value(
+        "Total slots in current epoch:",
+        &epoch_info.slots_in_epoch.to_string(),
+    );
+    let remaining_slots_in_epoch = epoch_info.slots_in_epoch - epoch_info.slot_index;
+    println_name_value(
+        "Remaining slots in current epoch:",
+        &remaining_slots_in_epoch.to_string(),
+    );
+
+    let remaining_time_in_epoch = Duration::from_secs(
+        remaining_slots_in_epoch * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
+    );
+    println_name_value(
+        "Time remaining in current epoch:",
+        &format!(
+            "{} minutes, {} seconds",
+            remaining_time_in_epoch.as_secs() / 60,
+            remaining_time_in_epoch.as_secs() % 60
+        ),
+    );
+    Ok("".to_string())
+}
+
 fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
     let transaction_count = rpc_client.get_transaction_count()?;
     Ok(transaction_count.to_string())
@@ -1471,6 +1502,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         }
 
         WalletCommand::GetSlot => process_get_slot(&rpc_client),
+        WalletCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
         WalletCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
 
         // If client has positive balance, pay lamports to another address
@@ -2167,6 +2199,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .subcommand(
             SubCommand::with_name("get-slot")
                 .about("Get current slot"),
+        )
+        .subcommand(
+            SubCommand::with_name("get-epoch-info")
+                .about("Get information about the current epoch"),
         )
         .subcommand(
             SubCommand::with_name("get-transaction-count")
