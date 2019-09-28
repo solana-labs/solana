@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+set
+exit 1
+
 cd "$(dirname "$0")/.."
 
 source ci/_
