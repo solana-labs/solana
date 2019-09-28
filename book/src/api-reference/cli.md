@@ -175,6 +175,7 @@ $ solana send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 ```
 
 ## Usage
+### solana-cli
 ```text
 solana-cli 0.20.0
 Blockchain, Rebuilt for Scale
@@ -231,6 +232,7 @@ SUBCOMMANDS:
     withdraw-stake                        Withdraw the unstaked lamports from the stake account
 ```
 
+#### solana-address
 ```text
 solana-address 
 Get your public key
@@ -248,6 +250,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
+#### solana-airdrop
 ```text
 solana-airdrop 
 Request lamports
@@ -271,6 +274,7 @@ ARGS:
     <UNIT>      Specify unit to use for request and balance display [possible values: SOL, lamports]
 ```
 
+#### solana-balance
 ```text
 solana-balance 
 Get your balance
@@ -292,6 +296,7 @@ ARGS:
     <PUBKEY>    The public key of the balance to check
 ```
 
+#### solana-cancel
 ```text
 solana-cancel 
 Cancel a transfer
@@ -312,6 +317,7 @@ ARGS:
     <PROCESS ID>    The process id of the transfer to cancel
 ```
 
+#### solana-claim-storage-reward
 ```text
 solana-claim-storage-reward 
 Redeem storage reward credits
@@ -333,6 +339,7 @@ ARGS:
     <STORAGE ACCOUNT PUBKEY>    Storage account address to redeem credits for
 ```
 
+#### solana-cluster-version
 ```text
 solana-cluster-version 
 Get the version of the cluster entrypoint
@@ -350,6 +357,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
+#### solana-confirm
 ```text
 solana-confirm 
 Confirm transaction by signature
@@ -370,6 +378,7 @@ ARGS:
     <SIGNATURE>    The transaction signature to confirm
 ```
 
+#### solana-create-replicator-storage-account
 ```text
 solana-create-replicator-storage-account 
 Create a replicator storage account
@@ -391,6 +400,7 @@ ARGS:
     <STORAGE ACCOUNT PUBKEY>          
 ```
 
+#### solana-create-stake-account
 ```text
 solana-create-stake-account 
 Create a stake account
@@ -418,6 +428,7 @@ ARGS:
     <UNIT>             Specify unit to use for request [possible values: SOL, lamports]
 ```
 
+#### solana-create-storage-mining-pool-account
 ```text
 solana-create-storage-mining-pool-account 
 Create mining pool account
@@ -440,6 +451,7 @@ ARGS:
     <UNIT>                      Specify unit to use for request [possible values: SOL, lamports]
 ```
 
+#### solana-create-validator-storage-account
 ```text
 solana-create-validator-storage-account 
 Create a validator storage account
@@ -461,6 +473,7 @@ ARGS:
     <STORAGE ACCOUNT PUBKEY>          
 ```
 
+#### solana-create-vote-account
 ```text
 solana-create-vote-account 
 Create a vote account
@@ -488,6 +501,7 @@ ARGS:
     <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
 ```
 
+#### solana-deactivate-stake
 ```text
 solana-deactivate-stake 
 Deactivate the delegated stake from the stake account
@@ -509,6 +523,7 @@ ARGS:
     <VOTE ACCOUNT>     The vote account to which the stake is currently delegated
 ```
 
+#### solana-delegate-stake
 ```text
 solana-delegate-stake 
 Delegate stake to a vote account
@@ -530,6 +545,7 @@ ARGS:
     <VOTE ACCOUNT>     The vote account to which the stake will be delegated
 ```
 
+#### solana-deploy
 ```text
 solana-deploy 
 Deploy a program
@@ -550,6 +566,7 @@ ARGS:
     <PATH TO PROGRAM>    /path/to/program.o
 ```
 
+#### solana-fees
 ```text
 solana-fees 
 Display current cluster fees
@@ -567,6 +584,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
+#### solana-get
 ```text
 solana-get 
 Get wallet config settings
@@ -587,6 +605,7 @@ ARGS:
     <CONFIG_FIELD>    Return a specific config setting [possible values: url, keypair]
 ```
 
+#### solana-get-slot
 ```text
 solana-get-slot 
 Get current slot
@@ -604,6 +623,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
+#### solana-get-transaction-count
 ```text
 solana-get-transaction-count 
 Get current transaction count
@@ -621,16 +641,19 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
-error: The subcommand '--help' wasn't recognized
+#### solana-help
+```text
+solana-help 
+Prints this message or the help of the given subcommand(s)
 
 USAGE:
-	solana help <subcommands>...
+    solana help [subcommand]...
 
-For more information try --help
-```text
-
+ARGS:
+    <subcommand>...    The subcommand whose help message to display
 ```
 
+#### solana-pay
 ```text
 solana-pay 
 Send a payment
@@ -658,6 +681,7 @@ ARGS:
     <UNIT>      Specify unit to use for request [possible values: SOL, lamports]
 ```
 
+#### solana-ping
 ```text
 solana-ping 
 Submit transactions sequentially
@@ -678,6 +702,7 @@ OPTIONS:
     -t, --timeout <SECONDS>     Wait up to timeout seconds for transaction confirmation [default: 10]
 ```
 
+#### solana-redeem-vote-credits
 ```text
 solana-redeem-vote-credits 
 Redeem credits in the stake account
@@ -699,6 +724,7 @@ ARGS:
     <VOTE ACCOUNT>     The vote account to which the stake is currently delegated.
 ```
 
+#### solana-send-signature
 ```text
 solana-send-signature 
 Send a signature to authorize a transfer
@@ -720,6 +746,7 @@ ARGS:
     <PROCESS ID>    The process id of the transfer to authorize
 ```
 
+#### solana-send-timestamp
 ```text
 solana-send-timestamp 
 Send a timestamp to unlock a transfer
@@ -742,6 +769,7 @@ ARGS:
     <PROCESS ID>    The process id of the transfer to unlock
 ```
 
+#### solana-set
 ```text
 solana-set 
 Set a wallet config setting
@@ -759,6 +787,7 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
+#### solana-show-account
 ```text
 solana-show-account 
 Show the contents of an account
@@ -781,6 +810,7 @@ ARGS:
     <ACCOUNT PUBKEY>    Account pubkey
 ```
 
+#### solana-show-stake-account
 ```text
 solana-show-stake-account 
 Show the contents of a stake account
@@ -802,6 +832,7 @@ ARGS:
     <STAKE ACCOUNT>    Address of the stake account to display
 ```
 
+#### solana-show-storage-account
 ```text
 solana-show-storage-account 
 Show the contents of a storage account
@@ -822,6 +853,7 @@ ARGS:
     <STORAGE ACCOUNT PUBKEY>    Storage account pubkey
 ```
 
+#### solana-show-vote-account
 ```text
 solana-show-vote-account 
 Show the contents of a vote account
@@ -843,6 +875,7 @@ ARGS:
     <VOTE ACCOUNT PUBKEY>    Vote account pubkey
 ```
 
+#### solana-stake-authorize-staker
 ```text
 solana-stake-authorize-staker 
 Authorize a new stake signing keypair for the given stake account
@@ -864,6 +897,7 @@ ARGS:
     <AUTHORIZE PUBKEY>    New authorized staker
 ```
 
+#### solana-stake-authorize-withdrawer
 ```text
 solana-stake-authorize-withdrawer 
 Authorize a new withdraw signing keypair for the given stake account
@@ -885,6 +919,7 @@ ARGS:
     <AUTHORIZE PUBKEY>    New authorized withdrawer
 ```
 
+#### solana-uptime
 ```text
 solana-uptime 
 Show the uptime of a validator, based on epoch voting history
@@ -907,6 +942,7 @@ ARGS:
     <VOTE ACCOUNT PUBKEY>    Vote account pubkey
 ```
 
+#### solana-validator-info
 ```text
 solana-validator-info 
 Publish/get Validator info on Solana
@@ -929,6 +965,7 @@ SUBCOMMANDS:
     publish    Publish Validator info on Solana
 ```
 
+#### solana-vote-authorize-voter
 ```text
 solana-vote-authorize-voter 
 Authorize a new vote signing keypair for the given vote account
@@ -950,6 +987,7 @@ ARGS:
     <NEW VOTER PUBKEY>       New vote signer to authorize
 ```
 
+#### solana-vote-authorize-withdrawer
 ```text
 solana-vote-authorize-withdrawer 
 Authorize a new withdraw signing keypair for the given vote account
@@ -971,6 +1009,7 @@ ARGS:
     <NEW WITHDRAWER PUBKEY>    New withdrawer to authorize
 ```
 
+#### solana-withdraw-stake
 ```text
 solana-withdraw-stake 
 Withdraw the unstaked lamports from the stake account
@@ -994,117 +1033,3 @@ ARGS:
     <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
 ```
 
-diff --git a/book/build-cli-usage.sh b/book/build-cli-usage.sh
-index 9d90fe53..bb6c93d1 100755
---- a/book/build-cli-usage.sh
-+++ b/book/build-cli-usage.sh
-@@ -23,7 +23,7 @@ while read subcommand rest; do
- ```
- 
- ' "$(cargo -q run -p solana-cli -- "$subcommand" --help | sed 's|'"$HOME"'|~|g')"
--      break
-+
-   fi
- done <<<"$usage"
- 
-diff --git a/book/src/api-reference/cli.md b/book/src/api-reference/cli.md
-index ef0e51e7..0a2e6e2b 100644
---- a/book/src/api-reference/cli.md
-+++ b/book/src/api-reference/cli.md
-@@ -231,16 +231,6 @@ SUBCOMMANDS:
-     withdraw-stake                        Withdraw the unstaked lamports from the stake account
- ```
- 
--error: Found argument 'SUBCOMMANDS:' which wasn't expected, or isn't valid in this context
--
--USAGE:
--    solana [OPTIONS] <SUBCOMMAND>
--
--For more information try --help
--```text
--
--```
--
- ```text
- solana-address 
- Get your public key
-@@ -1004,79 +994,3 @@ ARGS:
-     <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
- ```
- 
--diff --git a/book/src/api-reference/cli.md b/book/src/api-reference/cli.md
--index d35a9e53..90fe7f04 100644
----- a/book/src/api-reference/cli.md
--+++ b/book/src/api-reference/cli.md
--@@ -263,7 +263,7 @@ solana-airdrop
-- Request lamports
-- 
-- USAGE:
---    solana airdrop [OPTIONS] <AMOUNT> [unit]
--+    solana airdrop [OPTIONS] <AMOUNT> [UNIT]
-- 
-- FLAGS:
--     -h, --help       Prints help information
--@@ -278,7 +278,7 @@ OPTIONS:
-- 
-- ARGS:
--     <AMOUNT>    The airdrop amount to request (default unit SOL)
---    <unit>      Specify unit to use for request and balance display [possible values: SOL, lamports]
--+    <UNIT>      Specify unit to use for request and balance display [possible values: SOL, lamports]
-- ```
-- 
-- ```text
--@@ -433,7 +433,7 @@ solana-create-storage-mining-pool-account
-- Create mining pool account
-- 
-- USAGE:
---    solana create-storage-mining-pool-account [OPTIONS] <STORAGE ACCOUNT PUBKEY> <AMOUNT> [unit]
--+    solana create-storage-mining-pool-account [OPTIONS] <STORAGE ACCOUNT PUBKEY> <AMOUNT> [UNIT]
-- 
-- FLAGS:
--     -h, --help       Prints help information
--@@ -447,7 +447,7 @@ OPTIONS:
-- ARGS:
--     <STORAGE ACCOUNT PUBKEY>    Storage mining pool account address to fund
--     <AMOUNT>                    The amount to assign to the storage mining pool account (default unit SOL)
---    <unit>                      Specify unit to use for request [possible values: SOL, lamports]
--+    <UNIT>                      Specify unit to use for request [possible values: SOL, lamports]
-- ```
-- 
-- ```text
--@@ -476,7 +476,7 @@ solana-create-vote-account
-- Create a vote account
-- 
-- USAGE:
---    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <AMOUNT> [unit]
--+    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <AMOUNT> [UNIT]
-- 
-- FLAGS:
--     -h, --help       Prints help information
--@@ -495,7 +495,7 @@ ARGS:
--     <VOTE ACCOUNT PUBKEY>    Vote account address to fund
--     <VALIDATOR PUBKEY>       Validator that will vote with this account
--     <AMOUNT>                 The amount of send to the vote account (default unit SOL)
---    <unit>                   Specify unit to use for request [possible values: SOL, lamports]
--+    <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
-- ```
-- 
-- ```text
--@@ -646,7 +646,7 @@ solana-pay
-- Send a payment
-- 
-- USAGE:
---    solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [unit]
--+    solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [UNIT]
-- 
-- FLAGS:
--         --cancelable    
--@@ -665,7 +665,7 @@ OPTIONS:
-- ARGS:
--     <PUBKEY>    The pubkey of recipient
--     <AMOUNT>    The amount to send (default unit SOL)
---    <unit>      Specify unit to use for request [possible values: SOL, lamports]
--+    <UNIT>      Specify unit to use for request [possible values: SOL, lamports]
-- ```
-- 
-- ```text
