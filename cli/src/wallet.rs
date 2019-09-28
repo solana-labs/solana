@@ -1392,6 +1392,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("unit")
                         .index(2)
+                        .value_name("UNIT")
                         .takes_value(true)
                         .possible_values(&["SOL", "lamports"])
                         .help("Specify unit to use for request and balance display"),
@@ -1516,6 +1517,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("unit")
                         .index(4)
+                        .value_name("UNIT")
                         .takes_value(true)
                         .possible_values(&["SOL", "lamports"])
                         .help("Specify unit to use for request"),
@@ -1639,6 +1641,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("unit")
                         .index(3)
+                        .value_name("UNIT")
                         .takes_value(true)
                         .possible_values(&["SOL", "lamports"])
                         .help("Specify unit to use for request"),
@@ -1761,6 +1764,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("unit")
                         .index(3)
+                        .value_name("UNIT")
                         .takes_value(true)
                         .possible_values(&["SOL", "lamports"])
                         .help("Specify unit to use for request"),

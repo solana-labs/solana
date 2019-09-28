@@ -24,3 +24,8 @@ while read subcommand rest; do
 ' "$(cargo -q run -p solana-cli -- "$subcommand" --help | sed 's|'"$HOME"'|~|g')"
   fi
 done <<<"$usage"
+
+if [[ -n $CI ]]; then
+  # In CI confirm that no svgs need to be built
+  git diff --exit-code
+fi
