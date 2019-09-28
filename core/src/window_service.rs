@@ -311,17 +311,14 @@ mod test {
     };
 
     fn local_entries_to_shred(
-        entries: Vec<Entry>,
+        entries: &[Entry],
         slot: u64,
         parent: u64,
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
-        let mut shredder =
-            Shredder::new(slot, parent, 0.0, keypair, 0).expect("Failed to create entry shredder");
-        bincode::serialize_into(&mut shredder, &entries)
-            .expect("Expect to write all entries to shreds");
-        shredder.finalize_slot();
-        shredder.shreds.drain(..).collect()
+        let shredder = Shredder::new(slot, parent, 0.0, keypair.clone())
+            .expect("Failed to create entry shredder");
+        shredder.entries_to_shreds(&entries, true, 0).0
     }
 
     #[test]
@@ -330,8 +327,7 @@ mod test {
         let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
         let num_entries = 10;
         let original_entries = create_ticks(num_entries, Hash::default());
-        let mut shreds =
-            local_entries_to_shred(original_entries.clone(), 0, 0, &Arc::new(Keypair::new()));
+        let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Arc::new(Keypair::new()));
         shreds.reverse();
         blocktree
             .insert_shreds(shreds, None)
@@ -356,7 +352,7 @@ mod test {
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
-        let mut shreds = local_entries_to_shred(vec![Entry::default()], 0, 0, &leader_keypair);
+        let mut shreds = local_entries_to_shred(&[Entry::default()], 0, 0, &leader_keypair);
 
         // with a Bank for slot 0, blob continues
         assert_eq!(
@@ -408,8 +404,7 @@ mod test {
 
         // with a shred where shred.slot() == root, blob gets thrown out
         let slot = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
-        let shreds =
-            local_entries_to_shred(vec![Entry::default()], slot, slot - 1, &leader_keypair);
+        let shreds = local_entries_to_shred(&[Entry::default()], slot, slot - 1, &leader_keypair);
         assert_eq!(
             should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot),
             false
@@ -418,7 +413,7 @@ mod test {
         // with a shred where shred.parent() < root, blob gets thrown out
         let slot = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds =
-            local_entries_to_shred(vec![Entry::default()], slot + 1, slot - 1, &leader_keypair);
+            local_entries_to_shred(&[Entry::default()], slot + 1, slot - 1, &leader_keypair);
         assert_eq!(
             should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot),
             false

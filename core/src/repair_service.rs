@@ -404,6 +404,7 @@ mod test {
     };
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::Node;
+    use crate::shred::max_ticks_per_shred;
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::{thread_rng, Rng};
@@ -535,7 +536,7 @@ mod test {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
-            let num_entries_per_slot = 10;
+            let num_entries_per_slot = max_ticks_per_shred() + 1;
 
             let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
             for (mut slot_shreds, _) in shreds.into_iter() {

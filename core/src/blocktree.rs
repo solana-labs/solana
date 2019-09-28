@@ -18,7 +18,6 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp;
 use std::fs;
@@ -806,21 +805,17 @@ impl Blocktree {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
-    pub fn write_entries<I>(
+    pub fn write_entries(
         &self,
         start_slot: u64,
         num_ticks_in_start_slot: u64,
-        start_index: u64,
+        start_index: u32,
         ticks_per_slot: u64,
         parent: Option<u64>,
         is_full_slot: bool,
         keypair: &Arc<Keypair>,
-        entries: I,
-    ) -> Result<usize>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<Entry>,
-    {
+        entries: Vec<Entry>,
+    ) -> Result<usize> {
         assert!(num_ticks_in_start_slot < ticks_per_slot);
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
@@ -833,40 +828,45 @@ impl Blocktree {
             },
             |v| v,
         );
-        let mut shredder =
-            Shredder::new(current_slot, parent_slot, 0.0, keypair, start_index as u32)
-                .expect("Failed to create entry shredder");
+        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
+            .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
+        let mut slot_entries = vec![];
         // Find all the entries for start_slot
-        for entry in entries {
+        for entry in entries.into_iter() {
             if remaining_ticks_in_slot == 0 {
                 current_slot += 1;
                 parent_slot = current_slot - 1;
                 remaining_ticks_in_slot = ticks_per_slot;
-                shredder.finalize_slot();
-                all_shreds.append(&mut shredder.shreds);
-                shredder =
-                    Shredder::new(current_slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0)
-                        .expect("Failed to create entry shredder");
+                let mut current_entries = vec![];
+                std::mem::swap(&mut slot_entries, &mut current_entries);
+                let start_index = {
+                    if all_shreds.is_empty() {
+                        start_index
+                    } else {
+                        0
+                    }
+                };
+                let (mut data_shreds, mut coding_shreds, _) =
+                    shredder.entries_to_shreds(&current_entries, true, start_index);
+                all_shreds.append(&mut data_shreds);
+                all_shreds.append(&mut coding_shreds);
+                shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
+                    .expect("Failed to create entry shredder");
             }
 
-            if entry.borrow().is_tick() {
+            if entry.is_tick() {
                 remaining_ticks_in_slot -= 1;
             }
-
-            bincode::serialize_into(&mut shredder, &vec![entry.borrow().clone()])
-                .expect("Expect to write all entries to shreds");
-            if remaining_ticks_in_slot == 0 {
-                shredder.finalize_slot();
-            } else {
-                shredder.finalize_data();
-            }
+            slot_entries.push(entry);
         }
 
-        if is_full_slot && remaining_ticks_in_slot != 0 {
-            shredder.finalize_slot();
+        if !slot_entries.is_empty() {
+            let (mut data_shreds, mut coding_shreds, _) =
+                shredder.entries_to_shreds(&slot_entries, is_full_slot, 0);
+            all_shreds.append(&mut data_shreds);
+            all_shreds.append(&mut coding_shreds);
         }
-        all_shreds.append(&mut shredder.shreds);
 
         let num_shreds = all_shreds.len();
         self.insert_shreds(all_shreds, None)?;
@@ -919,6 +919,7 @@ impl Blocktree {
                 break;
             }
             let (current_slot, index) = db_iterator.key().expect("Expect a valid key");
+
             let current_index = {
                 if current_slot > slot {
                     end_index
@@ -926,6 +927,7 @@ impl Blocktree {
                     index
                 }
             };
+
             let upper_index = cmp::min(current_index, end_index);
 
             for i in prev_index..upper_index {
@@ -982,9 +984,9 @@ impl Blocktree {
     ) -> Result<(Vec<Entry>, usize)> {
         // Find the next consecutive block of shreds.
         let mut serialized_shreds: Vec<Vec<u8>> = vec![];
-        let data_cf = self.db.column::<cf::ShredData>();
+        let data_shred_cf = self.db.column::<cf::ShredData>();
 
-        while let Some(serialized_shred) = data_cf.get_bytes((slot, start_index))? {
+        while let Some(serialized_shred) = data_shred_cf.get_bytes((slot, start_index))? {
             serialized_shreds.push(serialized_shred);
             start_index += 1;
         }
@@ -994,6 +996,7 @@ impl Blocktree {
             serialized_shreds.len(),
             slot
         );
+
         let mut shreds: Vec<Shred> = serialized_shreds
             .into_iter()
             .filter_map(|serialized_shred| Shred::new_from_serialized_shred(serialized_shred).ok())
@@ -1036,7 +1039,6 @@ impl Blocktree {
         }
 
         trace!("Found {:?} entries", all_entries.len());
-
         Ok((all_entries, num))
     }
 
@@ -1551,15 +1553,14 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
 
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open(ledger_path)?;
-    let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
 
-    let mut shredder = Shredder::new(0, 0, 0.0, &Arc::new(Keypair::new()), 0)
-        .expect("Failed to create entry shredder");
+    let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
     let last_hash = entries.last().unwrap().hash;
-    bincode::serialize_into(&mut shredder, &entries)
-        .expect("Expect to write all entries to shreds");
-    shredder.finalize_slot();
-    let shreds: Vec<Shred> = shredder.shreds.drain(..).collect();
+
+    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()))
+        .expect("Failed to create entry shredder");
+    let shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+    assert!(shreds.last().unwrap().last_in_slot());
 
     blocktree.insert_shreds(shreds, None)?;
     blocktree.set_roots(&[0])?;
@@ -1641,24 +1642,18 @@ pub fn entries_to_test_shreds(
     parent_slot: u64,
     is_full_slot: bool,
 ) -> Vec<Shred> {
-    let mut shredder = Shredder::new(slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0 as u32)
+    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()))
         .expect("Failed to create entry shredder");
 
-    bincode::serialize_into(&mut shredder, &entries)
-        .expect("Expect to write all entries to shreds");
-    if is_full_slot {
-        shredder.finalize_slot();
-    } else {
-        shredder.finalize_data();
-    }
-
-    shredder.shreds.drain(..).collect()
+    shredder.entries_to_shreds(&entries, is_full_slot, 0).0
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
     use crate::entry::{create_ticks, Entry};
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::shred::max_ticks_per_shred;
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
@@ -1666,6 +1661,54 @@ pub mod tests {
     use solana_sdk::packet::PACKET_DATA_SIZE;
     use std::iter::FromIterator;
     use std::time::Duration;
+
+    #[test]
+    fn test_create_new_ledger() {
+        let mint_total = 1_000_000_000_000;
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(mint_total);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let ledger = Blocktree::open(&ledger_path).unwrap();
+
+        let ticks = create_ticks(genesis_block.ticks_per_slot, genesis_block.hash());
+        let entries = ledger.get_slot_entries(0, 0, None).unwrap();
+
+        assert_eq!(ticks, entries);
+
+        // Destroying database without closing it first is undefined behavior
+        drop(ledger);
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_insert_get_bytes() {
+        // Create enough entries to ensure there are at least two shreds created
+        let num_entries = max_ticks_per_shred() + 1;
+        assert!(num_entries > 1);
+
+        let (mut shreds, _) = make_slot_entries(0, 0, num_entries);
+
+        let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_basic");
+        let ledger = Blocktree::open(&ledger_path).unwrap();
+
+        // Insert last shred, test we can retrieve it
+        let last_shred = shreds.pop().unwrap();
+        assert!(last_shred.index() > 0);
+        ledger
+            .insert_shreds(vec![last_shred.clone()], None)
+            .unwrap();
+
+        let serialized_shred = ledger
+            .data_shred_cf
+            .get_bytes((0, last_shred.index() as u64))
+            .unwrap()
+            .unwrap();
+        let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
+
+        assert_eq!(last_shred, deserialized_shred);
+        // Destroying database without closing it first is undefined behavior
+        drop(ledger);
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
 
     #[test]
     fn test_write_entries() {
@@ -1877,7 +1920,8 @@ pub mod tests {
 
     #[test]
     fn test_insert_data_shreds_basic() {
-        let num_entries = 5;
+        // Create enough entries to ensure there are at least two shreds created
+        let num_entries = max_ticks_per_shred() + 1;
         assert!(num_entries > 1);
 
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
@@ -1888,6 +1932,7 @@ pub mod tests {
 
         // Insert last shred, we're missing the other shreds, so no consecutive
         // shreds starting from slot 0, index 0 should exist.
+        assert!(shreds.len() > 1);
         let last_shred = shreds.pop().unwrap();
         ledger.insert_shreds(vec![last_shred], None).unwrap();
         assert!(ledger.get_slot_entries(0, 0, None).unwrap().is_empty());
@@ -2098,21 +2143,28 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path("test_insert_data_shreds_consecutive");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            // Create enough entries to ensure there are at least two shreds created
+            let min_entries = max_ticks_per_shred() + 1;
             for i in 0..4 {
                 let slot = i;
                 let parent_slot = if i == 0 { 0 } else { i - 1 };
                 // Write entries
-                let num_entries = 21 as u64 * (i + 1);
-                let (mut shreds, original_entries) =
-                    make_slot_entries(slot, parent_slot, num_entries);
+                let num_entries = min_entries * (i + 1);
+                let (shreds, original_entries) = make_slot_entries(slot, parent_slot, num_entries);
 
                 let num_shreds = shreds.len() as u64;
+                assert!(num_shreds > 1);
+                let mut even_shreds = vec![];
                 let mut odd_shreds = vec![];
-                for i in (0..num_shreds).rev() {
-                    if i % 2 != 0 {
-                        odd_shreds.insert(0, shreds.remove(i as usize));
+
+                for (i, shred) in shreds.into_iter().enumerate() {
+                    if i % 2 == 0 {
+                        even_shreds.push(shred);
+                    } else {
+                        odd_shreds.push(shred);
                     }
                 }
+
                 blocktree.insert_shreds(odd_shreds, None).unwrap();
 
                 assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), vec![]);
@@ -2121,7 +2173,7 @@ pub mod tests {
                 if num_shreds % 2 == 0 {
                     assert_eq!(meta.received, num_shreds);
                 } else {
-                    debug!("got here");
+                    trace!("got here");
                     assert_eq!(meta.received, num_shreds - 1);
                 }
                 assert_eq!(meta.consumed, 0);
@@ -2131,7 +2183,7 @@ pub mod tests {
                     assert_eq!(meta.last_index, std::u64::MAX);
                 }
 
-                blocktree.insert_shreds(shreds, None).unwrap();
+                blocktree.insert_shreds(even_shreds, None).unwrap();
 
                 assert_eq!(
                     blocktree.get_slot_entries(slot, 0, None).unwrap(),
@@ -2504,11 +2556,13 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 15;
-            let entries_per_slot = 5;
+            // Create enough entries to ensure there are at least two shreds created
+            let entries_per_slot = max_ticks_per_shred() + 1;
             assert!(entries_per_slot > 1);
 
             let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
             let shreds_per_slot = shreds.len() / num_slots as usize;
+            assert!(shreds_per_slot > 1);
 
             // Write the shreds such that every 3rd slot has a gap in the beginning
             let mut missing_shreds = vec![];
@@ -2852,13 +2906,15 @@ pub mod tests {
         // Write entries
         let gap: u64 = 10;
         assert!(gap > 3);
-        let num_entries = 10;
+        // Create enough entries to ensure there are at least two shreds created
+        let num_entries = max_ticks_per_shred() + 1;
         let entries = create_ticks(num_entries, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
         let num_shreds = shreds.len();
-        for (i, b) in shreds.iter_mut().enumerate() {
-            b.set_index(i as u32 * gap as u32);
-            b.set_slot(slot);
+        assert!(num_shreds > 1);
+        for (i, s) in shreds.iter_mut().enumerate() {
+            s.set_index(i as u32 * gap as u32);
+            s.set_slot(slot);
         }
         blocktree.insert_shreds(shreds, None).unwrap();
 
@@ -2892,7 +2948,8 @@ pub mod tests {
             vec![1],
         );
 
-        // Test with end indexes that are greater than the last item in the ledger
+        // Test with a range that encompasses a shred with index == gap which was
+        // already inserted.
         let mut expected: Vec<u64> = (1..gap).collect();
         expected.push(gap + 1);
         assert_eq!(
@@ -2943,8 +3000,9 @@ pub mod tests {
         assert_eq!(blocktree.find_missing_data_indexes(slot, 4, 3, 1), empty);
         assert_eq!(blocktree.find_missing_data_indexes(slot, 1, 2, 0), empty);
 
-        let entries = create_ticks(20, Hash::default());
+        let entries = create_ticks(100, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
+        assert!(shreds.len() > 2);
         shreds.drain(2..);
 
         const ONE: u64 = 1;

@@ -1775,9 +1775,9 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
+    use crate::shred::max_ticks_per_shred;
     use crate::shred::{DataShredHeader, Shred};
     use crate::test_tx::test_tx;
-    use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
@@ -1980,7 +1980,7 @@ mod tests {
 
             let _ = fill_blocktree_slot_with_ticks(
                 &blocktree,
-                DEFAULT_TICKS_PER_SLOT,
+                max_ticks_per_shred() + 1,
                 2,
                 1,
                 Hash::default(),

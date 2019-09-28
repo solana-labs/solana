@@ -1,9 +1,7 @@
 use crate::entry::Entry;
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::Result;
-use crate::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE};
 use solana_runtime::bank::Bank;
-use solana_sdk::signature::Keypair;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -69,79 +67,6 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
         bank,
         last_tick,
     })
-}
-
-pub(super) fn entries_to_shreds(
-    entries: Vec<Entry>,
-    last_tick: u64,
-    slot: u64,
-    bank_max_tick: u64,
-    keypair: &Arc<Keypair>,
-    latest_shred_index: u64,
-    parent_slot: u64,
-    last_unfinished_slot: Option<UnfinishedSlotInfo>,
-) -> (Vec<Shred>, Option<UnfinishedSlotInfo>) {
-    let mut shreds = if let Some(unfinished_slot) = last_unfinished_slot {
-        if unfinished_slot.slot != slot {
-            let mut shredder = Shredder::new(
-                unfinished_slot.slot,
-                unfinished_slot.parent,
-                RECOMMENDED_FEC_RATE,
-                keypair,
-                unfinished_slot.next_index as u32,
-            )
-            .expect("Expected to create a new shredder");
-            shredder.finalize_slot();
-            shredder.shreds.drain(..).collect()
-        } else {
-            vec![]
-        }
-    } else {
-        vec![]
-    };
-
-    let mut shredder = Shredder::new(
-        slot,
-        parent_slot,
-        RECOMMENDED_FEC_RATE,
-        keypair,
-        latest_shred_index as u32,
-    )
-    .expect("Expected to create a new shredder");
-
-    let now = Instant::now();
-    bincode::serialize_into(&mut shredder, &entries)
-        .expect("Expect to write all entries to shreds");
-    let elapsed = now.elapsed().as_millis();
-
-    let unfinished_slot = if last_tick == bank_max_tick {
-        shredder.finalize_slot();
-        None
-    } else {
-        shredder.finalize_data();
-        Some(UnfinishedSlotInfo {
-            next_index: u64::from(shredder.index),
-            slot,
-            parent: parent_slot,
-        })
-    };
-
-    let num_shreds = shredder.shreds.len();
-    shreds.append(&mut shredder.shreds);
-
-    datapoint_info!(
-        "shredding-stats",
-        ("slot", slot as i64, i64),
-        ("num_shreds", num_shreds as i64, i64),
-        ("signing_coding", shredder.signing_coding_time as i64, i64),
-        (
-            "copying_serializing",
-            (elapsed - shredder.signing_coding_time) as i64,
-            i64
-        ),
-    );
-
-    (shreds, unfinished_slot)
 }
 
 #[cfg(test)]
