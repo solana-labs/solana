@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-usage=$(cargo -q run -p solana-cli -- --help | sed 's|'"$HOME"'|~|g')
+usage=$(cargo -q run -p solana-cli -- -C ~/.foo --help | sed 's|'"$HOME"'|~|g')
 
 out=${1:-src/api-reference/cli.md}
 
@@ -32,8 +32,3 @@ while read -r subcommand rest; do
       section "$(cargo -q run -p solana-cli -- help "$subcommand" | sed 's|'"$HOME"'|~|g')" "####" >> "$out"
   fi
 done <<<"$usage">>"$out"
-
-if [[ -n $CI ]]; then
-  # In CI confirm that the cli reference doesn't need to be built
-  git diff --exit-code
-fi
