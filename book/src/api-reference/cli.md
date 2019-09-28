@@ -231,16 +231,6 @@ SUBCOMMANDS:
     withdraw-stake                        Withdraw the unstaked lamports from the stake account
 ```
 
-error: Found argument 'SUBCOMMANDS:' which wasn't expected, or isn't valid in this context
-
-USAGE:
-    solana [OPTIONS] <SUBCOMMAND>
-
-For more information try --help
-```text
-
-```
-
 ```text
 solana-address 
 Get your public key
@@ -1004,79 +994,117 @@ ARGS:
     <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
 ```
 
+diff --git a/book/build-cli-usage.sh b/book/build-cli-usage.sh
+index 9d90fe53..bb6c93d1 100755
+--- a/book/build-cli-usage.sh
++++ b/book/build-cli-usage.sh
+@@ -23,7 +23,7 @@ while read subcommand rest; do
+ ```
+ 
+ ' "$(cargo -q run -p solana-cli -- "$subcommand" --help | sed 's|'"$HOME"'|~|g')"
+-      break
++
+   fi
+ done <<<"$usage"
+ 
 diff --git a/book/src/api-reference/cli.md b/book/src/api-reference/cli.md
-index d35a9e53..90fe7f04 100644
+index ef0e51e7..0a2e6e2b 100644
 --- a/book/src/api-reference/cli.md
 +++ b/book/src/api-reference/cli.md
-@@ -263,7 +263,7 @@ solana-airdrop
- Request lamports
- 
- USAGE:
--    solana airdrop [OPTIONS] <AMOUNT> [unit]
-+    solana airdrop [OPTIONS] <AMOUNT> [UNIT]
- 
- FLAGS:
-     -h, --help       Prints help information
-@@ -278,7 +278,7 @@ OPTIONS:
- 
- ARGS:
-     <AMOUNT>    The airdrop amount to request (default unit SOL)
--    <unit>      Specify unit to use for request and balance display [possible values: SOL, lamports]
-+    <UNIT>      Specify unit to use for request and balance display [possible values: SOL, lamports]
+@@ -231,16 +231,6 @@ SUBCOMMANDS:
+     withdraw-stake                        Withdraw the unstaked lamports from the stake account
  ```
  
+-error: Found argument 'SUBCOMMANDS:' which wasn't expected, or isn't valid in this context
+-
+-USAGE:
+-    solana [OPTIONS] <SUBCOMMAND>
+-
+-For more information try --help
+-```text
+-
+-```
+-
  ```text
-@@ -433,7 +433,7 @@ solana-create-storage-mining-pool-account
- Create mining pool account
- 
- USAGE:
--    solana create-storage-mining-pool-account [OPTIONS] <STORAGE ACCOUNT PUBKEY> <AMOUNT> [unit]
-+    solana create-storage-mining-pool-account [OPTIONS] <STORAGE ACCOUNT PUBKEY> <AMOUNT> [UNIT]
- 
- FLAGS:
-     -h, --help       Prints help information
-@@ -447,7 +447,7 @@ OPTIONS:
- ARGS:
-     <STORAGE ACCOUNT PUBKEY>    Storage mining pool account address to fund
-     <AMOUNT>                    The amount to assign to the storage mining pool account (default unit SOL)
--    <unit>                      Specify unit to use for request [possible values: SOL, lamports]
-+    <UNIT>                      Specify unit to use for request [possible values: SOL, lamports]
+ solana-address 
+ Get your public key
+@@ -1004,79 +994,3 @@ ARGS:
+     <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
  ```
  
- ```text
-@@ -476,7 +476,7 @@ solana-create-vote-account
- Create a vote account
- 
- USAGE:
--    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <AMOUNT> [unit]
-+    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <AMOUNT> [UNIT]
- 
- FLAGS:
-     -h, --help       Prints help information
-@@ -495,7 +495,7 @@ ARGS:
-     <VOTE ACCOUNT PUBKEY>    Vote account address to fund
-     <VALIDATOR PUBKEY>       Validator that will vote with this account
-     <AMOUNT>                 The amount of send to the vote account (default unit SOL)
--    <unit>                   Specify unit to use for request [possible values: SOL, lamports]
-+    <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
- ```
- 
- ```text
-@@ -646,7 +646,7 @@ solana-pay
- Send a payment
- 
- USAGE:
--    solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [unit]
-+    solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [UNIT]
- 
- FLAGS:
-         --cancelable    
-@@ -665,7 +665,7 @@ OPTIONS:
- ARGS:
-     <PUBKEY>    The pubkey of recipient
-     <AMOUNT>    The amount to send (default unit SOL)
--    <unit>      Specify unit to use for request [possible values: SOL, lamports]
-+    <UNIT>      Specify unit to use for request [possible values: SOL, lamports]
- ```
- 
- ```text
+-diff --git a/book/src/api-reference/cli.md b/book/src/api-reference/cli.md
+-index d35a9e53..90fe7f04 100644
+---- a/book/src/api-reference/cli.md
+-+++ b/book/src/api-reference/cli.md
+-@@ -263,7 +263,7 @@ solana-airdrop
+- Request lamports
+- 
+- USAGE:
+--    solana airdrop [OPTIONS] <AMOUNT> [unit]
+-+    solana airdrop [OPTIONS] <AMOUNT> [UNIT]
+- 
+- FLAGS:
+-     -h, --help       Prints help information
+-@@ -278,7 +278,7 @@ OPTIONS:
+- 
+- ARGS:
+-     <AMOUNT>    The airdrop amount to request (default unit SOL)
+--    <unit>      Specify unit to use for request and balance display [possible values: SOL, lamports]
+-+    <UNIT>      Specify unit to use for request and balance display [possible values: SOL, lamports]
+- ```
+- 
+- ```text
+-@@ -433,7 +433,7 @@ solana-create-storage-mining-pool-account
+- Create mining pool account
+- 
+- USAGE:
+--    solana create-storage-mining-pool-account [OPTIONS] <STORAGE ACCOUNT PUBKEY> <AMOUNT> [unit]
+-+    solana create-storage-mining-pool-account [OPTIONS] <STORAGE ACCOUNT PUBKEY> <AMOUNT> [UNIT]
+- 
+- FLAGS:
+-     -h, --help       Prints help information
+-@@ -447,7 +447,7 @@ OPTIONS:
+- ARGS:
+-     <STORAGE ACCOUNT PUBKEY>    Storage mining pool account address to fund
+-     <AMOUNT>                    The amount to assign to the storage mining pool account (default unit SOL)
+--    <unit>                      Specify unit to use for request [possible values: SOL, lamports]
+-+    <UNIT>                      Specify unit to use for request [possible values: SOL, lamports]
+- ```
+- 
+- ```text
+-@@ -476,7 +476,7 @@ solana-create-vote-account
+- Create a vote account
+- 
+- USAGE:
+--    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <AMOUNT> [unit]
+-+    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <AMOUNT> [UNIT]
+- 
+- FLAGS:
+-     -h, --help       Prints help information
+-@@ -495,7 +495,7 @@ ARGS:
+-     <VOTE ACCOUNT PUBKEY>    Vote account address to fund
+-     <VALIDATOR PUBKEY>       Validator that will vote with this account
+-     <AMOUNT>                 The amount of send to the vote account (default unit SOL)
+--    <unit>                   Specify unit to use for request [possible values: SOL, lamports]
+-+    <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
+- ```
+- 
+- ```text
+-@@ -646,7 +646,7 @@ solana-pay
+- Send a payment
+- 
+- USAGE:
+--    solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [unit]
+-+    solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [UNIT]
+- 
+- FLAGS:
+-         --cancelable    
+-@@ -665,7 +665,7 @@ OPTIONS:
+- ARGS:
+-     <PUBKEY>    The pubkey of recipient
+-     <AMOUNT>    The amount to send (default unit SOL)
+--    <unit>      Specify unit to use for request [possible values: SOL, lamports]
+-+    <UNIT>      Specify unit to use for request [possible values: SOL, lamports]
+- ```
+- 
+- ```text

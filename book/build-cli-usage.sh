@@ -14,14 +14,16 @@ printf '```text
 
 ' "$usage"
 
+in_subcommands=0
 while read subcommand rest; do
-  [[ $subcommand == "SUBCOMMANDS:" ]] && in_subcommands=1
+  [[ $subcommand == "SUBCOMMANDS:" ]] && in_subcommands=1 && continue
   if ((in_subcommands)); then
       printf '```text
 %s
 ```
 
 ' "$(cargo -q run -p solana-cli -- "$subcommand" --help | sed 's|'"$HOME"'|~|g')"
+
   fi
 done <<<"$usage"
 
