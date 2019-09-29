@@ -699,7 +699,8 @@ export class Connection {
     );
     const res = GetMinimumBalanceForRentExemptionRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      console.warn("Unable to fetch minimum balance for rent exemption");
+      return 0;
     }
     assert(typeof res.result !== 'undefined');
     return Number(res.result);
