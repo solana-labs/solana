@@ -15,11 +15,12 @@ import BN from 'bn.js';
 declare module '@solana/web3.js' {
   // === src/publickey.js ===
   declare export class PublicKey {
-    constructor(number: string | Buffer | Array<number>): PublicKey;
+    constructor(value: number | string | Buffer | Array<number>): PublicKey;
     static isPublicKey(o: Object): boolean;
     equals(publickey: PublicKey): boolean;
     toBase58(): string;
     toBuffer(): Buffer;
+    toString(): string;
   }
 
   // === src/blockhash.js ===
