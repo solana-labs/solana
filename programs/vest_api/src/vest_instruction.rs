@@ -120,9 +120,9 @@ pub fn terminate(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
 }
 
 /// Apply account data to a contract waiting on an AccountData witness.
-pub fn redeem_tokens(witness_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
+pub fn redeem_tokens(oracle_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new_credit_only(*witness_pubkey, false),
+        AccountMeta::new_credit_only(*oracle_pubkey, false),
         AccountMeta::new(*contract, false),
         AccountMeta::new_credit_only(*to, false),
     ];
