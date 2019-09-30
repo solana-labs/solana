@@ -12,7 +12,7 @@ use crate::prize::{self, Winner, Winners};
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
-use solana_stake_api::stake_state::{Authorized, Lockup, StakeState};
+use solana_stake_api::stake_state::StakeState;
 use solana_vote_api::vote_state::VoteState;
 use std::cmp::{max, min};
 use std::collections::HashMap;
@@ -135,7 +135,7 @@ pub fn compute_winners(bank: &Bank, starting_balance: u64) -> Winners {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_stake_api::stake_state::Stake;
+    use solana_stake_api::stake_state::{Authorized, Lockup, Stake};
     use solana_vote_api::vote_state::VoteInit;
 
     #[test]
