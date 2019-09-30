@@ -65,7 +65,7 @@ pub enum WalletCommand {
     Cancel(Pubkey),
     Confirm(Signature),
     VoteAuthorize(Pubkey, Pubkey, VoteAuthorize),
-    CreateVoteAccount(Pubkey, VoteInit, u64),
+    CreateVoteAccount(Pubkey, VoteInit),
     ShowAccount {
         pubkey: Pubkey,
         output_file: Option<String>,
@@ -655,11 +655,12 @@ fn process_deploy(
     // Build transactions to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
     let mut create_account_tx = system_transaction::create_account(
         &config.keypair,
         &program_id.pubkey(),
         blockhash,
-        1,
+        minimum_balance,
         program_data.len() as u64,
         &bpf_loader::id(),
     );
@@ -1087,14 +1088,8 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
 
         // Create vote account
-        WalletCommand::CreateVoteAccount(vote_account_pubkey, vote_init, lamports) => {
-            process_create_vote_account(
-                &rpc_client,
-                config,
-                &vote_account_pubkey,
-                &vote_init,
-                *lamports,
-            )
+        WalletCommand::CreateVoteAccount(vote_account_pubkey, vote_init) => {
+            process_create_vote_account(&rpc_client, config, &vote_account_pubkey, &vote_init)
         }
 
         WalletCommand::VoteAuthorize(
@@ -1545,22 +1540,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Validator that will vote with this account"),
-                )
-                .arg(
-                    Arg::with_name("amount")
-                        .index(3)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The amount of send to the vote account (default unit SOL)"),
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(4)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request"),
                 )
                 .arg(
                     Arg::with_name("commission")
@@ -2324,7 +2303,6 @@ mod tests {
                 authorized_withdrawer: bob_pubkey,
                 commission: 0,
             },
-            10,
         );
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -2344,7 +2322,7 @@ mod tests {
                 withdrawer: config.keypair.pubkey(),
             },
             Lockup { slot: 0, custodian },
-            10,
+            1234,
         );
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -2493,7 +2471,6 @@ mod tests {
                 authorized_withdrawer: bob_pubkey,
                 commission: 0,
             },
-            10,
         );
         assert!(process_command(&config).is_err());
 

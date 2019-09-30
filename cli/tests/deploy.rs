@@ -28,12 +28,19 @@ fn test_wallet_deploy_program() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
+    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let minimum_balance_for_rent_exemption = rpc_client
+        .get_minimum_balance_for_rent_exemption(program_data.len())
+        .unwrap();
+
     let mut config = WalletConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.command = WalletCommand::Airdrop {
         drone_host: None,
         drone_port: drone_addr.port(),
-        lamports: 50,
+        lamports: minimum_balance_for_rent_exemption + 1, // min balance for rent exemption + leftover for tx processing
         use_lamports_unit: true,
     };
     process_command(&config).unwrap();
@@ -57,7 +64,7 @@ fn test_wallet_deploy_program() {
     let account_info_obj = account_info.as_object().unwrap();
     assert_eq!(
         account_info_obj.get("lamports").unwrap().as_u64().unwrap(),
-        1
+        minimum_balance_for_rent_exemption
     );
     let owner_array = account_info.get("owner").unwrap();
     assert_eq!(owner_array, &json!(bpf_loader::id()));

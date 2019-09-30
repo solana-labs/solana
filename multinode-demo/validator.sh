@@ -282,7 +282,7 @@ setup_validator_accounts() {
     fi
 
     echo "Creating validator vote account"
-    wallet create-vote-account "$voting_keypair_path" "$identity_keypair_path" 1 lamports --commission 127 || return $?
+    wallet create-vote-account "$voting_keypair_path" "$identity_keypair_path" --commission 127 || return $?
   fi
   echo "Validator vote account configured"
 

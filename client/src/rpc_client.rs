@@ -346,8 +346,12 @@ impl RpcClient {
                 )
             })?;
 
-        let minimum_balance: u64 =
-            serde_json::from_value(minimum_balance_json).expect("deserialize minimum_balance");
+        let minimum_balance: u64 = serde_json::from_value(minimum_balance_json).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetMinimumBalanceForRentExemption parse failure: {:?}", err),
+            )
+        })?;
         trace!(
             "Response minimum balance {:?} {:?}",
             data_len,

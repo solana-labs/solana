@@ -367,6 +367,16 @@ pub fn process_create_stake_account(
         .into());
     }
 
+    let minimum_balance =
+        rpc_client.get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())?;
+
+    if lamports < minimum_balance {
+        Err(WalletError::BadParameter(format!(
+            "need atleast {} lamports for stake account to be rent exempt, provided lamports: {}",
+            minimum_balance, lamports
+        )))?;
+    }
+
     let ixs = stake_instruction::create_stake_account_with_lockup(
         &config.keypair.pubkey(),
         stake_account_pubkey,
