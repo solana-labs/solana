@@ -243,5 +243,4 @@ mod tests {
         assert_eq!(block.hash(), loaded_block.hash());
         let _ignored = std::fs::remove_file(&path);
     }
-
 }

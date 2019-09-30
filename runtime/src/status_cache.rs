@@ -434,5 +434,4 @@ mod tests {
     fn test_age_sanity() {
         assert!(MAX_CACHE_ENTRIES <= MAX_RECENT_BLOCKHASHES);
     }
-
 }

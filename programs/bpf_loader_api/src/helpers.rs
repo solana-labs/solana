@@ -113,7 +113,6 @@ pub fn helper_sol_log(
                     info!("info!: {}", message);
                     return Ok(0);
                 }
-         
             }
         }
         Err(Error::new(

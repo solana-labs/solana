@@ -103,7 +103,8 @@ fn metas_for_authorized_signer(
 
     // append signer at the end
     if !is_own_signer {
-        account_metas.push(AccountMeta::new_credit_only(*authorized_signer, true)) // signer
+        account_metas.push(AccountMeta::new_credit_only(*authorized_signer, true))
+        // signer
     }
 
     account_metas
@@ -337,5 +338,4 @@ mod tests {
             pretty_err::<VoteError>(VoteError::VoteTooOld.into())
         )
     }
-
 }

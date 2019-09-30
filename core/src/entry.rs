@@ -555,5 +555,4 @@ mod tests {
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&one)); // inductive step, bad
     }
-
 }

@@ -134,5 +134,4 @@ mod tests {
             Err(ParseHashError::Invalid)
         );
     }
-
 }
