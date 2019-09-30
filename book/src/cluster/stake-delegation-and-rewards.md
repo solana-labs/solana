@@ -30,7 +30,7 @@ VoteState is the current state of all the votes the validator has submitted to t
 * `authorized_voter` - Only this identity is authorized to submit votes. This field can only modified by this identity.
 * `node_pubkey` - The Solana node that votes in this account.
 * `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's 
-                           address, and the authorized vote signer
+                           address and the authorized vote signer
                              
 
 ### VoteInstruction::Initialize(VoteInit)
@@ -43,13 +43,12 @@ VoteState is the current state of all the votes the validator has submitted to t
 
 ### VoteInstruction::Authorize\(Pubkey, VoteAuthorize\)
 
-Allows a vote account owner to choose an authorized voter or withdrawer, according to the VoteAuthorize parameter
-  (`Voter` or `Withdrawer`)
+ Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter
+  (`Voter` or `Withdrawer`).  The transaction must be by signed by the Vote account's current `authorized_voter` or `authorized_withdrawer`.
 
 * `account[0]` - RW - The VoteState
 
-  `VoteState::authorized_voter` or `authorized_withdrawer` is set to to `Pubkey`, the transaction must be by signed by the 
-  Vote account's current `authorized_voter` or `authorized_withdrawer`.
+  `VoteState::authorized_voter` or `authorized_withdrawer` is set to to `Pubkey`.
 
 ### VoteInstruction::Vote\(Vote\)
 
@@ -92,10 +91,20 @@ The Stakes and the RewardsPool are accounts that are owned by the same `Stake` p
 The Stake account is moved from Ininitialized to StakeState::Stake form. This is how stakers choose their initial delegate validator node and activate their stake account lamports.  If the stake account is already StakeState::Stake (i.e. already activated), the
 stake is re-delegated  The transaction must be signed by the stake's `authorized_staker`.
 
-* `account[0]` - RW - The StakeState::Stake instance.   `StakeState::Stake::credits_observed` is initialized to `VoteState::credits`,  `StakeState::Stake::voter_pubkey` is initialized to `account[1]`,  `StakeState::Stake::stake` is initialized to the u64 passed as an argument above,  `StakeState::Stake::activated` is initialized to current Bank epoch, and  `StakeState::Stake::deactivated` is initialized to std::u64::MAX
+* `account[0]` - RW - The StakeState::Stake instance.  `StakeState::Stake::credits_observed` is initialized to `VoteState::credits`,  `StakeState::Stake::voter_pubkey` is initialized to `account[1]`.  If this is the initial delegation of stake, `StakeState::Stake::stake` is initialized to the account's balance in lamports,  `StakeState::Stake::activated` is initialized to the current Bank epoch, and  `StakeState::Stake::deactivated` is initialized to std::u64::MAX
 * `account[1]` - R - The VoteState instance.
 * `account[2]` - R - sysvar::clock account, carries information about current Bank epoch
 * `account[3]` - R - stake\_api::Config accoount, carries warmup, cooldown, and slashing configuration
+
+### StakeInstruction::Authorize\(Pubkey, StakeAuthorize\)
+
+Updates the account with a new authorized staker or withdrawer, according to 
+  the StakeAuthorize parameter (`Staker` or `Withdrawer`).  The transaction must be by signed by the 
+  Stakee account's current `authorized_staker` or `authorized_withdrawer`.
+
+* `account[0]` - RW - The StakeState
+
+  `StakeState::authorized_staker` or `authorized_withdrawer` is set to to `Pubkey`.
 
 ### StakeInstruction::RedeemVoteCredits
 
