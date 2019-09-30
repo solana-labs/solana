@@ -110,9 +110,9 @@ pub enum StakeInstruction {
 pub fn create_stake_account_with_lockup(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
-    lamports: u64,
     authorized: &Authorized,
     lockup: &Lockup,
+    lamports: u64,
 ) -> Vec<Instruction> {
     vec![
         system_instruction::create_account(
@@ -133,15 +133,15 @@ pub fn create_stake_account_with_lockup(
 pub fn create_stake_account(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
-    lamports: u64,
     authorized: &Authorized,
+    lamports: u64,
 ) -> Vec<Instruction> {
     create_stake_account_with_lockup(
         from_pubkey,
         stake_pubkey,
-        lamports,
         authorized,
         &Lockup::default(),
+        lamports,
     )
 }
 
@@ -149,11 +149,15 @@ pub fn create_stake_account_and_delegate_stake(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
-    lamports: u64,
     authorized: &Authorized,
+    lamports: u64,
 ) -> Vec<Instruction> {
-    let mut instructions = create_stake_account(from_pubkey, stake_pubkey, lamports, authorized);
-    instructions.push(delegate_stake(stake_pubkey, vote_pubkey));
+    let mut instructions = create_stake_account(from_pubkey, stake_pubkey, authorized, lamports);
+    instructions.push(delegate_stake(
+        stake_pubkey,
+        &authorized.staker,
+        vote_pubkey,
+    ));
     instructions
 }
 
@@ -206,32 +210,54 @@ pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instr
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
 
-pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*stake_pubkey, true),
-        AccountMeta::new_credit_only(*vote_pubkey, false),
-        AccountMeta::new_credit_only(sysvar::clock::id(), false),
-        AccountMeta::new_credit_only(crate::config::id(), false),
-    ];
+pub fn delegate_stake(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = metas_for_authorized_signer(
+        stake_pubkey,
+        authorized_pubkey,
+        &[
+            AccountMeta::new_credit_only(*vote_pubkey, false),
+            AccountMeta::new_credit_only(sysvar::clock::id(), false),
+            AccountMeta::new_credit_only(crate::config::id(), false),
+        ],
+    );
     Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
 }
 
-pub fn withdraw(stake_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*stake_pubkey, true),
-        AccountMeta::new_credit_only(*to_pubkey, false),
-        AccountMeta::new_credit_only(sysvar::clock::id(), false),
-        AccountMeta::new_credit_only(sysvar::stake_history::id(), false),
-    ];
+pub fn withdraw(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    to_pubkey: &Pubkey,
+    lamports: u64,
+) -> Instruction {
+    let account_metas = metas_for_authorized_signer(
+        stake_pubkey,
+        authorized_pubkey,
+        &[
+            AccountMeta::new_credit_only(*to_pubkey, false),
+            AccountMeta::new_credit_only(sysvar::clock::id(), false),
+            AccountMeta::new_credit_only(sysvar::stake_history::id(), false),
+        ],
+    );
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
 
-pub fn deactivate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*stake_pubkey, true),
-        AccountMeta::new_credit_only(*vote_pubkey, false),
-        AccountMeta::new_credit_only(sysvar::clock::id(), false),
-    ];
+pub fn deactivate_stake(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = metas_for_authorized_signer(
+        stake_pubkey,
+        authorized_pubkey,
+        &[
+            AccountMeta::new_credit_only(*vote_pubkey, false),
+            AccountMeta::new_credit_only(sysvar::clock::id(), false),
+        ],
+    );
     Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
 }
 
@@ -361,15 +387,28 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&delegate_stake(&Pubkey::default(), &Pubkey::default())),
+            process_instruction(&delegate_stake(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default()
+            )),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&withdraw(&Pubkey::default(), &Pubkey::new_rand(), 100)),
+            process_instruction(&withdraw(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+                100
+            )),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&deactivate_stake(&Pubkey::default(), &Pubkey::default())),
+            process_instruction(&deactivate_stake(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default()
+            )),
             Err(InstructionError::InvalidAccountData),
         );
     }

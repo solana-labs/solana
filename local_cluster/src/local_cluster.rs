@@ -464,8 +464,8 @@ impl LocalCluster {
                     &from_account.pubkey(),
                     &stake_account_pubkey,
                     &vote_account_pubkey,
-                    amount,
                     &StakeAuthorized::auto(&stake_account_pubkey),
+                    amount,
                 ),
                 client.get_recent_blockhash().unwrap().0,
             );

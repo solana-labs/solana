@@ -311,8 +311,7 @@ impl RpcClient {
 
         response
             .and_then(|account_json| {
-                let account: Account =
-                    serde_json::from_value(account_json).expect("deserialize account");
+                let account: Account = serde_json::from_value(account_json)?;
                 trace!("Response account {:?} {:?}", pubkey, account);
                 Ok(account)
             })
