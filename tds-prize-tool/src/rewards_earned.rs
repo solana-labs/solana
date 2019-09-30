@@ -1,3 +1,13 @@
+//! Calculates the winners of the "Most Rewards Earned" category in Tour de Sol by summing the
+//! balances of all stake and vote accounts attributed to a particular validator.
+//!
+//! The top 3 validators will receive the top prizes and validators will be awarded additional
+//! prizes if they place into the following buckets:
+//!
+//! `hi` - Top 25%
+//! `md` - Top 25-50%
+//! `lo` - Top 50-90%
+
 use crate::prize::{self, Winner, Winners};
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
@@ -66,9 +76,6 @@ fn validator_rewards(
 }
 
 // Bucket validators for reward distribution
-// - (1) Top 25% of reward earners
-// - (2) Top 25-50% of reward earners
-// - (3) Top 50-90% of reward earners
 fn bucket_winners(results: &[(Pubkey, i64)]) -> Vec<(String, Vec<Winner>)> {
     let num_validators = results.len();
     let mut bucket_winners = Vec::new();
