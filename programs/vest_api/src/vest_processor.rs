@@ -6,7 +6,6 @@ use crate::{
 };
 use bincode::deserialize;
 use chrono::prelude::*;
-use log::*;
 use solana_config_api::get_config_data;
 use solana_sdk::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
 
@@ -77,7 +76,6 @@ fn redeem_tokens(
     }
 
     if &vest_state.payee_pubkey != keyed_accounts[2].unsigned_key() {
-        trace!("destination missing");
         return Err(VestError::DestinationMissing);
     }
 
@@ -124,12 +122,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    let instruction = deserialize(data).map_err(|err| {
-        info!("Invalid transaction data: {:?} {:?}", data, err);
-        InstructionError::InvalidInstructionData
-    })?;
-
-    trace!("process_instruction: {:?}", instruction);
+    let instruction = deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)?;
 
     match instruction {
         VestInstruction::InitializeAccount {
@@ -153,7 +146,6 @@ pub fn process_instruction(
             let mut vest_state = VestState::deserialize(&keyed_accounts[1].account.data)?;
             redeem_tokens(&mut vest_state, keyed_accounts)
                 .map_err(|e| InstructionError::CustomError(e as u32))?;
-            trace!("apply account data committed");
             vest_state.serialize(&mut keyed_accounts[1].account.data)
         }
         VestInstruction::Terminate => {
@@ -161,10 +153,8 @@ pub fn process_instruction(
             if keyed_accounts[0].signer_key().is_none() {
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            trace!("apply signature");
             terminate(&mut vest_state, keyed_accounts)
                 .map_err(|e| InstructionError::CustomError(e as u32))?;
-            trace!("apply signature committed");
             vest_state.serialize(&mut keyed_accounts[1].account.data)
         }
     }
