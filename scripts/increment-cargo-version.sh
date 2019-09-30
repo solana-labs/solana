@@ -32,6 +32,7 @@ readCargoVariable() {
 
 # shellcheck disable=2207
 Cargo_tomls=($(find . -name Cargo.toml))
+Doc_updates=($(find . -name "*.md"))
 
 # Collect the name of all the internal crates
 crates=()
@@ -105,6 +106,16 @@ for Cargo_toml in "${Cargo_tomls[@]}"; do
         s/^$crate = { *path *= *\"\([^\"]*\)\" *, *version *= *\"[^\"]*\"\(.*\)} *\$/$crate = \{ path = \"\1\", version = \"$newVersion\"\2\}/
       "
     )
+  done
+done
+
+# Update all the documentation references
+for Doc_update in "${Doc_updates[@]}"; do
+  # Set new crate version
+  (
+    set -x
+    sed -i "$Doc_update" -e "s/v[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]/$newVersion/g"
+  )
   done
 done
 
