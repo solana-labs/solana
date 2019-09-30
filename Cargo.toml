@@ -50,6 +50,7 @@ members = [
     "runtime",
     "sdk",
     "sdk-c",
+    "tds-prize-tool",
     "upload-perf",
     "netutil",
     "fixed-buf",
