@@ -129,6 +129,8 @@ fn download_to_temp_archive(
     if expected_sha256.is_some() && expected_sha256 != Some(&temp_file_sha256) {
         Err(io::Error::new(io::ErrorKind::Other, "Incorrect hash"))?;
     }
+
+    source.progress_bar.finish_and_clear();
     Ok((temp_dir, temp_file, temp_file_sha256))
 }
 
