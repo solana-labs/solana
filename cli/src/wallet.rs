@@ -2322,7 +2322,7 @@ mod tests {
                 withdrawer: config.keypair.pubkey(),
             },
             Lockup { slot: 0, custodian },
-            10,
+            1234,
         );
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
