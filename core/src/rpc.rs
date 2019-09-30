@@ -10,6 +10,7 @@ use crate::version::VERSION;
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
+use solana_client::rpc_request::RpcEpochInfo;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
@@ -269,22 +270,6 @@ pub struct RpcVoteAccountInfo {
 
     /// Most recent slot voted on by this vote account
     pub last_vote: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcEpochInfo {
-    /// The current epoch
-    pub epoch: u64,
-
-    /// The current slot, relative to the start of the current epoch
-    pub slot_index: u64,
-
-    /// The number of slots in this epoch
-    pub slots_in_epoch: u64,
-
-    /// The absolute current slot
-    pub absolute_slot: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -1,3 +1,4 @@
+use crate::sol_to_lamports;
 use clap::ArgMatches;
 use solana_sdk::{
     pubkey::Pubkey,
@@ -41,6 +42,14 @@ pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
 // or is a filename that can be read as a keypair
 pub fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
+}
+
+pub fn amount_of(matches: &ArgMatches<'_>, name: &str, unit: &str) -> Option<u64> {
+    if matches.value_of(unit) == Some("lamports") {
+        value_of(matches, name)
+    } else {
+        value_of(matches, name).map(sol_to_lamports)
+    }
 }
 
 #[cfg(test)]

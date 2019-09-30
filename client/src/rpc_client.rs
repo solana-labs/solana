@@ -2,23 +2,26 @@ use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::mock_rpc_client_request::MockRpcClientRequest;
 use crate::rpc_client_request::RpcClientRequest;
-use crate::rpc_request::RpcRequest;
+use crate::rpc_request::{RpcEpochInfo, RpcRequest};
 use bincode::serialize;
 use log::*;
 use serde_json::{json, Value};
-use solana_sdk::account::Account;
-use solana_sdk::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::inflation::Inflation;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{KeypairUtil, Signature};
-use solana_sdk::transaction::{self, Transaction, TransactionError};
-use std::error;
-use std::io;
-use std::net::SocketAddr;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use solana_sdk::{
+    account::Account,
+    clock::{Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    inflation::Inflation,
+    pubkey::Pubkey,
+    signature::{KeypairUtil, Signature},
+    transaction::{self, Transaction, TransactionError},
+};
+use std::{
+    error, io,
+    net::SocketAddr,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 pub struct RpcClient {
     client: Box<dyn GenericRpcClientRequest + Send + Sync>,
@@ -76,7 +79,7 @@ impl RpcClient {
         Ok(result)
     }
 
-    pub fn get_slot(&self) -> io::Result<u64> {
+    pub fn get_slot(&self) -> io::Result<Slot> {
         let response = self
             .client
             .send(&RpcRequest::GetSlot, None, 0)
@@ -91,6 +94,25 @@ impl RpcClient {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetSlot parse failure: {}", err),
+            )
+        })
+    }
+
+    pub fn get_epoch_info(&self) -> io::Result<RpcEpochInfo> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetEpochInfo, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetEpochInfo request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetEpochInfo parse failure: {}", err),
             )
         })
     }
@@ -289,8 +311,7 @@ impl RpcClient {
 
         response
             .and_then(|account_json| {
-                let account: Account =
-                    serde_json::from_value(account_json).expect("deserialize account");
+                let account: Account = serde_json::from_value(account_json)?;
                 trace!("Response account {:?} {:?}", pubkey, account);
                 Ok(account)
             })
@@ -429,9 +450,9 @@ impl RpcClient {
     }
 
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
-        let mut num_retries = 10;
+        let mut num_retries = 0;
         let start = Instant::now();
-        while num_retries > 0 {
+        while start.elapsed().as_secs() < 5 {
             if let Ok((new_blockhash, fee_calculator)) = self.get_recent_blockhash() {
                 if new_blockhash != *blockhash {
                     return Ok((new_blockhash, fee_calculator));
@@ -443,13 +464,14 @@ impl RpcClient {
             sleep(Duration::from_millis(
                 500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
             ));
-            num_retries -= 1;
+            num_retries += 1;
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
             format!(
-                "Unable to get new blockhash after {}ms, stuck at {}",
+                "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
                 start.elapsed().as_millis(),
+                num_retries,
                 blockhash
             ),
         ))

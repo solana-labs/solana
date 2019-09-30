@@ -67,6 +67,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --blockstream ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --expected-genesis-blockhash ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = --identity ]]; then
       identity_keypair_path=$2
       args+=("$1" "$2")
