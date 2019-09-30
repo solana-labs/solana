@@ -1485,6 +1485,11 @@ impl Bank {
         self.stakes.read().unwrap().vote_accounts().clone()
     }
 
+    /// current stake accounts for this bank
+    pub fn stake_accounts(&self) -> HashMap<Pubkey, Account> {
+        self.stakes.read().unwrap().stake_accounts().clone()
+    }
+
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: Epoch) -> Option<&HashMap<Pubkey, (u64, Account)>> {
