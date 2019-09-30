@@ -12,12 +12,10 @@ use crate::prize::{self, Winner, Winners};
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
-use solana_stake_api::stake_state::StakeState;
+use solana_stake_api::stake_state::{Authorized, Lockup, StakeState};
 use solana_vote_api::vote_state::VoteState;
 use std::cmp::{max, min};
 use std::collections::HashMap;
-
-pub const STARTING_BALANCE_LAMPORTS: i64 = 0; // TODO
 
 const HIGH_BUCKET: &str = "Top 25% Bucket";
 const MID_BUCKET: &str = "Top 25-50% Bucket";
@@ -37,7 +35,10 @@ fn voter_stake_rewards(stake_accounts: HashMap<Pubkey, Account>) -> HashMap<Pubk
     voter_stake_sum
 }
 
-fn validator_results(validator_reward_map: HashMap<Pubkey, u64>) -> Vec<(Pubkey, i64)> {
+fn validator_results(
+    validator_reward_map: HashMap<Pubkey, u64>,
+    starting_balance: u64,
+) -> Vec<(Pubkey, i64)> {
     let mut validator_rewards: Vec<(Pubkey, u64)> = validator_reward_map
         .iter()
         .map(|(key, balance)| (*key, *balance))
@@ -47,7 +48,7 @@ fn validator_results(validator_reward_map: HashMap<Pubkey, u64>) -> Vec<(Pubkey,
     validator_rewards.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     validator_rewards
         .into_iter()
-        .map(|(key, earned)| (key, (earned as i64) - STARTING_BALANCE_LAMPORTS))
+        .map(|(key, earned)| (key, (earned as i64) - (starting_balance as i64)))
         .collect()
 }
 
@@ -62,7 +63,6 @@ fn validator_rewards(
             let voter_commission = account.lamports;
             let voter_stake_reward = voter_stake_rewards.remove(&voter_key).unwrap_or_default();
 
-            // TODO: check if it's possible to have multiple vote accounts in working bank
             let validator_id = vote_state.node_pubkey;
             if let Some(validator_reward) = validator_reward_map.get_mut(&validator_id) {
                 *validator_reward += voter_commission + voter_stake_reward;
@@ -118,10 +118,10 @@ fn normalize_winners(winners: &[(Pubkey, i64)]) -> Vec<(Pubkey, String)> {
         .collect()
 }
 
-pub fn compute_winners(bank: &Bank) -> Winners {
+pub fn compute_winners(bank: &Bank, starting_balance: u64) -> Winners {
     let voter_stake_rewards = voter_stake_rewards(bank.stake_accounts());
     let validator_reward_map = validator_rewards(voter_stake_rewards, bank.vote_accounts());
-    let results = validator_results(validator_reward_map);
+    let results = validator_results(validator_reward_map, starting_balance);
     let num_validators = results.len();
     let num_winners = min(num_validators, 3);
 
@@ -146,9 +146,9 @@ mod tests {
         rewards_map.insert(top_validator, 1000);
         rewards_map.insert(bottom_validator, 10);
 
-        let results = validator_results(rewards_map);
-        assert_eq!(results[0], (top_validator, 1000));
-        assert_eq!(results[1], (bottom_validator, 10));
+        let results = validator_results(rewards_map, 100);
+        assert_eq!(results[0], (top_validator, 900));
+        assert_eq!(results[1], (bottom_validator, -90));
     }
 
     #[test]
@@ -199,8 +199,8 @@ mod tests {
             Account::new_data(
                 lamports,
                 &StakeState::Stake(
-                    Default::default(),
-                    Default::default(),
+                    Authorized::default(),
+                    Lockup::default(),
                     Stake {
                         voter_pubkey: voter_pubkey.clone(),
                         ..Stake::default()
