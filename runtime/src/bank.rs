@@ -222,6 +222,10 @@ pub struct Bank {
     #[serde(deserialize_with = "deserialize_atomicu64")]
     collector_fees: AtomicU64,
 
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    collected_rent: AtomicU64,
+
     /// Latest transaction fees for transactions processed by this bank
     fee_calculator: FeeCalculator,
 
@@ -333,6 +337,7 @@ impl Bank {
             parent_hash: parent.hash(),
             collector_id: *collector_id,
             collector_fees: AtomicU64::new(0),
+            collected_rent: AtomicU64::new(0),
             ancestors: HashMap::new(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
@@ -1119,6 +1124,45 @@ impl Bank {
         )
     }
 
+    fn collect_rent(
+        &self,
+        txs: &[Transaction],
+        iteration_order: Option<&[usize]>,
+        loaded_accounts: &mut [Result<TransactionLoadResult>],
+    ) {
+        let mut collected_rent = 0;
+        let mut seen_credit_only_account: HashSet<Pubkey> = HashSet::new();
+        for (tx, loaded_account) in
+            OrderedIterator::new(txs, iteration_order).zip(loaded_accounts.iter())
+        {
+            if loaded_account.is_err() {
+                continue;
+            }
+            let (_account, _loaders, _credits, rents) = loaded_account.as_ref().unwrap();
+
+            let message = tx.message();
+
+            for ((i, key), rent) in message
+                .account_keys
+                .iter()
+                .enumerate()
+                .filter(|(_i, key)| !message.program_ids().contains(&key))
+                .zip(rents.iter())
+            {
+                if seen_credit_only_account.contains(&key) {
+                    continue;
+                }
+                collected_rent += rent;
+                if !message.is_debitable(i) {
+                    seen_credit_only_account.insert(*key);
+                }
+            }
+        }
+
+        self.collected_rent
+            .fetch_add(collected_rent, Ordering::Relaxed);
+    }
+
     fn filter_program_errors_and_collect_fee(
         &self,
         txs: &[Transaction],
@@ -1198,6 +1242,7 @@ impl Bank {
         write_time.stop();
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
         self.update_transaction_statuses(txs, iteration_order, &executed);
+        self.collect_rent(txs, iteration_order, loaded_accounts);
         self.filter_program_errors_and_collect_fee(txs, iteration_order, executed)
     }
 
