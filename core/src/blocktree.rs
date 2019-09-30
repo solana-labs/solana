@@ -18,7 +18,6 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp;
 use std::fs;
@@ -806,21 +805,17 @@ impl Blocktree {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
-    /*pub fn write_entries<I>(
+    pub fn write_entries(
         &self,
         start_slot: u64,
         num_ticks_in_start_slot: u64,
-        start_index: u64,
+        start_index: u32,
         ticks_per_slot: u64,
         parent: Option<u64>,
         is_full_slot: bool,
         keypair: &Arc<Keypair>,
-        entries: I,
-    ) -> Result<usize>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<Entry>,
-    {
+        mut entries: Vec<Entry>,
+    ) -> Result<usize> {
         assert!(num_ticks_in_start_slot < ticks_per_slot);
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
@@ -833,44 +828,46 @@ impl Blocktree {
             },
             |v| v,
         );
-        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair)
+        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
             .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
+        let mut slot_entries = vec![];
         // Find all the entries for start_slot
-        for entry in entries {
+        for entry in entries.drain(..) {
             if remaining_ticks_in_slot == 0 {
                 current_slot += 1;
                 parent_slot = current_slot - 1;
                 remaining_ticks_in_slot = ticks_per_slot;
-                shredder.finalize_slot();
-                all_shreds.append(&mut shredder.shreds);
-                shredder =
-                    Shredder::new(current_slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0)
-                        .expect("Failed to create entry shredder");
+                let mut entries = vec![];
+                std::mem::swap(&mut slot_entries, &mut entries);
+                let start_index = {
+                    if all_shreds.is_empty() {
+                        start_index
+                    } else {
+                        0
+                    }
+                };
+                let mut shreds = shredder.entries_to_shreds(entries, true, start_index).0;
+                all_shreds.append(&mut shreds);
+                shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
+                    .expect("Failed to create entry shredder");
             }
 
-            if entry.borrow().is_tick() {
+            if entry.is_tick() {
                 remaining_ticks_in_slot -= 1;
             }
-
-            bincode::serialize_into(&mut shredder, &vec![entry.borrow().clone()])
-                .expect("Expect to write all entries to shreds");
-            if remaining_ticks_in_slot == 0 {
-                shredder.finalize_slot();
-            } else {
-                shredder.finalize_data();
-            }
+            slot_entries.push(entry);
         }
 
-        if is_full_slot && remaining_ticks_in_slot != 0 {
-            shredder.finalize_slot();
+        if !slot_entries.is_empty() {
+            let mut shreds = shredder.entries_to_shreds(entries, is_full_slot, 0).0;
+            all_shreds.append(&mut shreds);
         }
-        all_shreds.append(&mut shredder.shreds);
 
         let num_shreds = all_shreds.len();
         self.insert_shreds(all_shreds, None)?;
         Ok(num_shreds)
-    }*/
+    }
 
     pub fn get_index(&self, slot: u64) -> Result<Option<Index>> {
         self.index_cf.get(slot)
@@ -1550,13 +1547,12 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
 
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open(ledger_path)?;
+
     let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
+    let last_hash = entries.last().unwrap().hash;
 
     let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()))
         .expect("Failed to create entry shredder");
-    let last_hash = entries.last().unwrap().hash;
-
-    let last_tick = ticks_per_slot - 1;
     let shreds = shredder.entries_to_shreds(entries, true, 0).0;
 
     blocktree.insert_shreds(shreds, None)?;
@@ -1633,25 +1629,17 @@ pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (PathB
     (ledger_path, blockhash)
 }
 
-/*pub fn entries_to_test_shreds(
+pub fn entries_to_test_shreds(
     entries: Vec<Entry>,
     slot: u64,
     parent_slot: u64,
     is_full_slot: bool,
 ) -> Vec<Shred> {
-    let mut shredder = Shredder::new(slot, parent_slot, 0.0, &Arc::new(Keypair::new()), 0 as u32)
+    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()))
         .expect("Failed to create entry shredder");
 
-    bincode::serialize_into(&mut shredder, &entries)
-        .expect("Expect to write all entries to shreds");
-    if is_full_slot {
-        shredder.finalize_slot();
-    } else {
-        shredder.finalize_data();
-    }
-
-    shredder.shreds.drain(..).collect()
-}*/
+    shredder.entries_to_shreds(entries, is_full_slot, 0).0
+}
 
 #[cfg(test)]
 pub mod tests {

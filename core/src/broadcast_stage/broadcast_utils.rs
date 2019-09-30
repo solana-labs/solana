@@ -68,7 +68,6 @@ mod tests {
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::Keypair;
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::Transaction;
     use std::sync::mpsc::channel;

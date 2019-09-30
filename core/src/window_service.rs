@@ -317,12 +317,9 @@ mod test {
         parent: u64,
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
-        let mut shredder =
-            Shredder::new(slot, parent, 0.0, keypair, 0).expect("Failed to create entry shredder");
-        bincode::serialize_into(&mut shredder, &entries)
-            .expect("Expect to write all entries to shreds");
-        shredder.finalize_slot();
-        shredder.shreds.drain(..).collect()
+        let shredder = Shredder::new(slot, parent, 0.0, keypair.clone())
+            .expect("Failed to create entry shredder");
+        shredder.entries_to_shreds(entries, true, 0).0
     }
 
     #[test]

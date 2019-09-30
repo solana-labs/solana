@@ -456,7 +456,7 @@ pub mod tests {
                 Some(parent_slot),
                 true,
                 &Arc::new(Keypair::new()),
-                &entries,
+                entries,
             )
             .unwrap();
 
@@ -849,7 +849,7 @@ pub mod tests {
 
         // Fill up the rest of slot 1 with ticks
         entries.extend(create_ticks(genesis_block.ticks_per_slot, last_entry_hash));
-
+        let last_blockhash = entries.last().unwrap().hash;
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
         blocktree
@@ -861,7 +861,7 @@ pub mod tests {
                 None,
                 true,
                 &Arc::new(Keypair::new()),
-                &entries,
+                entries,
             )
             .unwrap();
         let (bank_forks, bank_forks_info, _) =
@@ -877,7 +877,7 @@ pub mod tests {
             mint - deducted_from_mint
         );
         assert_eq!(bank.tick_height(), 2 * genesis_block.ticks_per_slot - 1);
-        assert_eq!(bank.last_blockhash(), entries.last().unwrap().hash);
+        assert_eq!(bank.last_blockhash(), last_blockhash);
     }
 
     #[test]

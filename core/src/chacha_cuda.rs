@@ -146,7 +146,7 @@ mod tests {
                 Some(0),
                 true,
                 &Arc::new(Keypair::new()),
-                &entries,
+                entries,
             )
             .unwrap();
 
@@ -207,7 +207,7 @@ mod tests {
                 Some(0),
                 true,
                 &Arc::new(Keypair::new()),
-                &entries,
+                entries,
             )
             .unwrap();
 

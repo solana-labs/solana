@@ -136,7 +136,7 @@ mod tests {
                 None,
                 true,
                 &Arc::new(keypair),
-                &entries,
+                entries,
             )
             .unwrap();
 
