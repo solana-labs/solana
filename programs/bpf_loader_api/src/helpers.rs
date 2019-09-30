@@ -101,23 +101,27 @@ pub fn helper_sol_log(
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(u64), Error> {
-    let host_addr = translate_addr(addr, len as usize, "Load", 0, ro_regions)?;
-    let c_buf: *const c_char = host_addr as *const c_char;
-    unsafe {
-        for i in 0..len {
-            let c = std::ptr::read(c_buf.offset(i as isize));
-            if i == len - 1 || c == 0 {
-                let message =
-                    from_utf8(from_raw_parts(host_addr as *const u8, len as usize)).unwrap();
-                info!("info!: {}", message);
-                return Ok(0);
+    if log_enabled!(log::Level::Info) {
+        let host_addr = translate_addr(addr, len as usize, "Load", 0, ro_regions)?;
+        let c_buf: *const c_char = host_addr as *const c_char;
+        unsafe {
+            for i in 0..len {
+                let c = std::ptr::read(c_buf.offset(i as isize));
+                if i == len - 1 || c == 0 {
+                    let message =
+                        from_utf8(from_raw_parts(host_addr as *const u8, len as usize)).unwrap();
+                    info!("info!: {}", message);
+                    return Ok(0);
+                }
             }
         }
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error: Unterminated string logged",
+        ))
+    } else {
+        Ok(0)
     }
-    Err(Error::new(
-        ErrorKind::Other,
-        "Error: Unterminated string logged",
-    ))
 }
 
 pub fn helper_sol_log_u64(
@@ -130,10 +134,12 @@ pub fn helper_sol_log_u64(
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(u64), Error> {
-    info!(
-        "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
-        arg1, arg2, arg3, arg4, arg5
-    );
+    if log_enabled!(log::Level::Info) {
+        info!(
+            "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+            arg1, arg2, arg3, arg4, arg5
+        );
+    }
     Ok(0)
 }
 

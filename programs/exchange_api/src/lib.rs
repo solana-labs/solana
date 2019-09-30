@@ -25,5 +25,4 @@ pub mod faucet {
         EXCHANGE_FAUCET_ID,
         "ExchangeFaucet11111111111111111111111111111"
     );
-
 }

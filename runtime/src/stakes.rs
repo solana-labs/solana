@@ -509,5 +509,4 @@ pub mod tests {
             assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
         }
     }
-
 }

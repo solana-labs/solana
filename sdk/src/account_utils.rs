@@ -57,5 +57,4 @@ mod tests {
         let stored_state: u64 = account.state().unwrap();
         assert_eq!(stored_state, state);
     }
-
 }
