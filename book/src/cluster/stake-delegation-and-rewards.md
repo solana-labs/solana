@@ -62,7 +62,8 @@ VoteState is the current state of all the votes the validator has submitted to t
 
 ### StakeState
 
-A StakeState takes one of three forms, StakeState::Uninitialized, StakeState::Initialized, StakeState::Stake, and StakeState::RewardsPool.  Only the first three forms are interesting for stakers.  All RewardsPools are created at genesis.
+A StakeState takes one of four forms, StakeState::Uninitialized, StakeState::Initialized, StakeState::Stake, and StakeState::RewardsPool.  Only the first three forms are used in staking, but only StakeState::Stake is interesting.
+All RewardsPools are created at genesis.
 
 ### StakeState::Stake
 
