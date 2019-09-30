@@ -78,11 +78,16 @@ pub fn process_create_vote_account(
     )?;
     let required_balance =
         rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
+    let lamports = if required_balance > 0 {
+        required_balance
+    } else {
+        1
+    };
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
         vote_account_pubkey,
         vote_init,
-        required_balance,
+        lamports,
     );
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
