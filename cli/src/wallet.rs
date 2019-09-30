@@ -96,6 +96,7 @@ pub enum WalletCommand {
     ClaimStorageReward(Pubkey, Pubkey),
     ShowStorageAccount(Pubkey),
     Deploy(String),
+    GetGenesisBlockhash,
     GetSlot,
     GetEpochInfo,
     GetTransactionCount,
@@ -343,6 +344,7 @@ pub fn parse_command(
                 .unwrap()
                 .to_string(),
         )),
+        ("get-genesis-blockhash", Some(_matches)) => Ok(WalletCommand::GetGenesisBlockhash),
         ("get-slot", Some(_matches)) => Ok(WalletCommand::GetSlot),
         ("get-epoch-info", Some(_matches)) => Ok(WalletCommand::GetEpochInfo),
         ("get-transaction-count", Some(_matches)) => Ok(WalletCommand::GetTransactionCount),
@@ -1086,6 +1088,11 @@ fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey
     log_instruction_custom_error::<BudgetError>(result)
 }
 
+fn process_get_genesis_blockhash(rpc_client: &RpcClient) -> ProcessResult {
+    let genesis_blockhash = rpc_client.get_genesis_blockhash()?;
+    Ok(genesis_blockhash.to_string())
+}
+
 fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
     let slot = rpc_client.get_slot()?;
     Ok(slot.to_string())
@@ -1501,6 +1508,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_deploy(&rpc_client, config, program_location)
         }
 
+        WalletCommand::GetGenesisBlockhash => process_get_genesis_blockhash(&rpc_client),
         WalletCommand::GetSlot => process_get_slot(&rpc_client),
         WalletCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
         WalletCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
@@ -2195,6 +2203,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .help("/path/to/program.o"),
                 ), // TODO: Add "loader" argument; current default is bpf_loader
+        )
+        .subcommand(
+            SubCommand::with_name("get-genesis-blockhash")
+                .about("Get the genesis blockhash"),
         )
         .subcommand(
             SubCommand::with_name("get-slot")

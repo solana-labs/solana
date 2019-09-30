@@ -497,12 +497,13 @@ pub fn new_banks_from_blocktree(
 ) {
     let genesis_block = GenesisBlock::load(blocktree_path).expect("Failed to load genesis block");
     let genesis_blockhash = genesis_block.hash();
+    info!("genesis blockhash: {}", genesis_blockhash);
 
     if let Some(expected_genesis_blockhash) = expected_genesis_blockhash {
         if genesis_blockhash != expected_genesis_blockhash {
             error!(
-                "Genesis blockhash mismatch: expected {} but local genesis blockhash is {}",
-                expected_genesis_blockhash, genesis_blockhash,
+                "genesis blockhash mismatch: expected {}",
+                expected_genesis_blockhash
             );
             error!(
                 "Delete the ledger directory to continue: {:?}",

@@ -20,6 +20,7 @@ use std::io::{self, Read};
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -29,6 +30,12 @@ fn port_range_validator(port_range: String) -> Result<(), String> {
     } else {
         Err("Invalid port range".to_string())
     }
+}
+
+fn hash_validator(hash: String) -> Result<(), String> {
+    Hash::from_str(&hash)
+        .map(|_| ())
+        .map_err(|e| format!("{:?}", e))
 }
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
@@ -171,7 +178,7 @@ fn initialize_ledger_path(
         .map(|addrs| addrs.0)
         .find(|rpc_addr| rpc_addr.ip() == entrypoint.gossip.ip())
         .unwrap_or_else(|| {
-            eprintln!(
+            error!(
                 "Entrypoint ({:?}) is not running the RPC service",
                 entrypoint.gossip.ip()
             );
@@ -199,7 +206,7 @@ fn initialize_ledger_path(
             snapshot_package.parent().unwrap(),
             false,
         )
-        .unwrap_or_else(|err| eprintln!("Warning: Unable to fetch snapshot: {:?}", err));
+        .unwrap_or_else(|err| warn!("Unable to fetch snapshot: {:?}", err));
     }
 
     match client.get_slot() {
@@ -396,6 +403,14 @@ pub fn main() {
                 .takes_value(false)
                 .help("Use CUDA"),
         )
+        .arg(
+            Arg::with_name("expected_genesis_blockhash")
+                .long("expected-genesis-blockhash")
+                .value_name("HASH")
+                .takes_value(true)
+                .validator(hash_validator)
+                .help("Require the genesis block have this blockhash"),
+        )
         .get_matches();
 
     if matches.is_present("cuda") {
@@ -405,7 +420,7 @@ pub fn main() {
     let mut validator_config = ValidatorConfig::default();
     let keypair = if let Some(identity) = matches.value_of("identity") {
         read_keypair(identity).unwrap_or_else(|err| {
-            eprintln!("{}: Unable to open keypair file: {}", err, identity);
+            error!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
         })
     } else {
@@ -414,7 +429,7 @@ pub fn main() {
 
     let voting_keypair = if let Some(identity) = matches.value_of("voting_keypair") {
         read_keypair(identity).unwrap_or_else(|err| {
-            eprintln!("{}: Unable to open keypair file: {}", err, identity);
+            error!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
         })
     } else {
@@ -422,7 +437,7 @@ pub fn main() {
     };
     let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
         read_keypair(storage_keypair).unwrap_or_else(|err| {
-            eprintln!("{}: Unable to open keypair file: {}", err, storage_keypair);
+            error!("{}: Unable to open keypair file: {}", err, storage_keypair);
             exit(1);
         })
     } else {
@@ -471,7 +486,7 @@ pub fn main() {
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", usize);
     let snapshot_path = ledger_path.clone().join("snapshot");
     fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
-        eprintln!(
+        error!(
             "Failed to create snapshots directory {:?}: {}",
             snapshot_path, err
         );
@@ -495,7 +510,7 @@ pub fn main() {
         let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)
             .expect("failed to parse entrypoint address");
         let ip_addr = solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-            eprintln!(
+            error!(
                 "Failed to contact cluster entrypoint {} ({}): {}",
                 entrypoint, entrypoint_addr, err
             );
@@ -543,13 +558,17 @@ pub fn main() {
     if let Some(port) = matches.value_of("rpc_port") {
         let port_number = port.to_string().parse().expect("integer");
         if port_number == 0 {
-            eprintln!("Invalid RPC port requested: {:?}", port);
+            error!("Invalid RPC port requested: {:?}", port);
             exit(1);
         }
         node.info.rpc = SocketAddr::new(node.info.gossip.ip(), port_number);
         node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), port_number + 1);
         tcp_ports = vec![port_number, port_number + 1];
     };
+
+    validator_config.expected_genesis_blockhash = matches
+        .value_of("expected_genesis_blockhash")
+        .map(|s| Hash::from_str(&s).unwrap());
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
         let udp_sockets = [
@@ -583,21 +602,31 @@ pub fn main() {
             &udp_sockets,
         );
 
-        let expected_genesis_blockhash = initialize_ledger_path(
+        let genesis_blockhash = initialize_ledger_path(
             cluster_entrypoint,
             &ledger_path,
             matches.is_present("no_snapshot_fetch"),
         )
         .unwrap_or_else(|err| {
-            eprintln!("Failed to download ledger: {}", err);
+            error!("Failed to download ledger: {}", err);
             exit(1);
         });
-        validator_config.expected_genesis_blockhash = Some(expected_genesis_blockhash);
+
+        if let Some(expected_genesis_blockhash) = validator_config.expected_genesis_blockhash {
+            if expected_genesis_blockhash != genesis_blockhash {
+                error!(
+                    "Genesis blockhash mismatch: expected {} but local genesis blockhash is {}",
+                    expected_genesis_blockhash, genesis_blockhash,
+                );
+                exit(1);
+            }
+        }
+        validator_config.expected_genesis_blockhash = Some(genesis_blockhash);
     } else {
         // Without a cluster entrypoint, ledger_path must already be present
         if !ledger_path.is_dir() {
-            eprintln!(
-                "Error: ledger directory does not exist or is not accessible: {:?}",
+            error!(
+                "ledger directory does not exist or is not accessible: {:?}",
                 ledger_path
             );
             exit(1);
@@ -618,7 +647,7 @@ pub fn main() {
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {
-            eprintln!("Unable to create: {}", filename);
+            error!("Unable to create: {}", filename);
             exit(1);
         });
     }
