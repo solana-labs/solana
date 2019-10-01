@@ -54,7 +54,7 @@ impl BlockhashQueue {
     pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> bool {
         let hash_age = self.ages.get(hash);
         match hash_age {
-            Some(age) => self.hash_height - age.hash_height <= max_age as u64,
+            Some(age) => Self::check_age(self.hash_height, max_age, age),
             _ => false,
         }
     }
