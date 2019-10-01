@@ -320,7 +320,6 @@ while true; do
   secs_to_next_genesis_poll=60
   while true; do
     if [[ -z $pid ]] || ! kill -0 "$pid"; then
-      [[ -z $pid ]] || wait "$pid"
       echo "############## validator exited, restarting ##############"
       break
     fi
