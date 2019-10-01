@@ -12,7 +12,7 @@ function cleanup_testnet {
     cp "$logfile" "$new_log"
     upload-ci-artifact "$new_log"
   done
-  
+
   echo --- delete testnet
   net/gce.sh delete -p $TESTNET_TAG
 }
