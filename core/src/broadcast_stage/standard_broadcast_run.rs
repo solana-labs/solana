@@ -1,6 +1,6 @@
 use super::broadcast_utils;
 use super::*;
-use crate::broadcast_stage::broadcast_utils::entries_to_shreds;
+use crate::broadcast_stage::broadcast_utils::{entries_to_shreds, UnfinishedSlotInfo};
 use solana_sdk::timing::duration_as_ms;
 
 #[derive(Default)]
@@ -12,12 +12,14 @@ struct BroadcastStats {
 
 pub(super) struct StandardBroadcastRun {
     stats: BroadcastStats,
+    unfinished_slot: Option<UnfinishedSlotInfo>,
 }
 
 impl StandardBroadcastRun {
     pub(super) fn new() -> Self {
         Self {
             stats: BroadcastStats::default(),
+            unfinished_slot: None,
         }
     }
 
@@ -91,7 +93,7 @@ impl BroadcastRun for StandardBroadcastRun {
         };
 
         let to_shreds_start = Instant::now();
-        let (shred_infos, latest_shred_index) = entries_to_shreds(
+        let (shred_infos, uninished_slot) = entries_to_shreds(
             receive_results.entries,
             last_tick,
             bank.slot(),
@@ -99,8 +101,10 @@ impl BroadcastRun for StandardBroadcastRun {
             keypair,
             latest_shred_index,
             parent_slot,
+            self.unfinished_slot,
         );
         let to_shreds_elapsed = to_shreds_start.elapsed();
+        self.unfinished_slot = uninished_slot;
 
         let all_seeds: Vec<[u8; 32]> = shred_infos.iter().map(|s| s.seed()).collect();
         let num_shreds = shred_infos.len();
@@ -125,6 +129,13 @@ impl BroadcastRun for StandardBroadcastRun {
         )?;
 
         let broadcast_elapsed = broadcast_start.elapsed();
+        let latest_shred_index = uninished_slot.map(|s| s.next_index).unwrap_or_else(|| {
+            blocktree
+                .meta(bank.slot())
+                .expect("Database error")
+                .map(|meta| meta.consumed)
+                .unwrap_or(0)
+        });
         self.update_broadcast_stats(
             duration_as_ms(&receive_elapsed),
             duration_as_ms(&to_shreds_elapsed),
