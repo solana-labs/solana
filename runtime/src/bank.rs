@@ -214,8 +214,8 @@ pub struct Bank {
     /// Bank epoch
     epoch: Epoch,
 
-    /// Bank height in term of banks
-    bank_height: u64,
+    /// Bank block_height
+    block_height: u64,
 
     /// The pubkey to send transactions fees to.
     collector_id: Pubkey,
@@ -320,7 +320,7 @@ impl Bank {
             epoch_schedule,
             rent_collector: parent.rent_collector.clone_with_epoch(epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot - 1,
-            bank_height: parent.bank_height + 1,
+            block_height: parent.block_height + 1,
             fee_calculator: FeeCalculator::new_derived(
                 &parent.fee_calculator,
                 parent.signature_count(),
@@ -345,7 +345,7 @@ impl Bank {
         datapoint_info!(
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
-            ("bank_height", new.bank_height, i64)
+            ("block_height", new.block_height, i64)
         );
 
         let stakers_epoch = epoch_schedule.get_stakers_epoch(slot);
@@ -1421,6 +1421,11 @@ impl Bank {
     /// Return this bank's max_tick_height
     pub fn max_tick_height(&self) -> u64 {
         self.max_tick_height
+    }
+
+    /// Return the block_height of this bank
+    pub fn block_height(&self) -> u64 {
+        self.block_height
     }
 
     /// Return the number of slots per epoch for the given epoch
