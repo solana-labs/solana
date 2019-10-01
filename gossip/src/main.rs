@@ -111,7 +111,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     if let Some(addr) = matches.value_of("entrypoint") {
         entrypoint_addr = solana_netutil::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {}", e);
-            exit(1)
+            exit(1);
         });
     }
 
@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         addr.set_ip(
             solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
                 eprintln!("failed to contact {}: {}", entrypoint_addr, err);
-                exit(1)
+                exit(1);
             }),
         );
         Some(addr)
@@ -163,11 +163,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             "Error: Insufficient nodes discovered.  Expecting {}{}",
                             num, add,
                         );
+                        exit(1);
                     }
                 }
                 if let Some(node) = pubkey {
                     if nodes.iter().find(|x| x.id == node).is_none() {
                         eprintln!("Error: Could not find node {:?}", node);
+                        exit(1);
                     }
                 }
             }
@@ -176,6 +178,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     "Error: Extra nodes discovered.  Expecting exactly {}",
                     num_nodes_exactly.unwrap()
                 );
+                exit(1);
             }
         }
         ("get-rpc-url", Some(matches)) => {
@@ -220,6 +223,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             if !ContactInfo::is_valid_address(&node.rpc) {
                 eprintln!("Error: RPC service is not enabled on node {:?}", pubkey);
+                exit(1);
             }
             println!("\nSending stop request to node {:?}", pubkey);
 
