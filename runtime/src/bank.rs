@@ -1423,6 +1423,11 @@ impl Bank {
         self.max_tick_height
     }
 
+    /// Return the block_height of this bank
+    pub fn block_height(&self) -> u64 {
+        self.block_height
+    }
+
     /// Return the number of slots per epoch for the given epoch
     pub fn get_slots_in_epoch(&self, epoch: Epoch) -> u64 {
         self.epoch_schedule.get_slots_in_epoch(epoch)
