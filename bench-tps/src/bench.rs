@@ -11,25 +11,33 @@ use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_pr
 #[cfg(feature = "move")]
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
-use solana_sdk::client::Client;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction;
-use solana_sdk::system_transaction;
-use solana_sdk::timing::timestamp;
-use solana_sdk::timing::{duration_as_ms, duration_as_s};
-use solana_sdk::transaction::Transaction;
-use std::cmp;
-use std::collections::VecDeque;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::thread::Builder;
-use std::time::Duration;
-use std::time::Instant;
+use solana_sdk::{
+    client::Client,
+    clock::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_instruction, system_transaction,
+    timing::{duration_as_ms, duration_as_s, timestamp},
+    transaction::Transaction,
+};
+use std::{
+    cmp,
+    collections::VecDeque,
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
+        Arc, RwLock,
+    },
+    thread::{sleep, Builder},
+    time::{Duration, Instant},
+};
+
+// The point at which transactions become "too old", in seconds. The cluster keeps blockhashes for
+// approximately MAX_RECENT_BLOCKHASHES/DEFAULT_TICKS_PER_SLOT seconds. The adjustment of 5sec
+// seems about right to minimize BlockhashNotFound errors, based on empirical testing.
+const MAX_TX_QUEUE_AGE: u64 = MAX_RECENT_BLOCKHASHES as u64 / DEFAULT_TICKS_PER_SLOT - 5;
 
 #[cfg(feature = "move")]
 use solana_librapay_api::librapay_transaction;
@@ -396,14 +404,22 @@ fn do_tx_transfers<T: Client>(
             );
             let tx_len = txs0.len();
             let transfer_start = Instant::now();
+            let mut old_transactions = false;
             for tx in txs0 {
                 let now = timestamp();
-                if now > tx.1 && now - tx.1 > 1000 * 30 {
+                // Transactions that are too old will be rejected by the cluster Don't bother
+                // sending them.
+                if now > tx.1 && now - tx.1 > 1000 * MAX_TX_QUEUE_AGE {
+                    old_transactions = true;
                     continue;
                 }
                 client
                     .async_send_transaction(tx.0)
                     .expect("async_send_transaction in do_tx_transfers");
+            }
+            if old_transactions {
+                let mut shared_txs_wl = shared_txs.write().expect("write lock in do_tx_transfers");
+                shared_txs_wl.clear();
             }
             shared_tx_thread_count.fetch_add(-1, Ordering::Relaxed);
             total_tx_sent_count.fetch_add(tx_len, Ordering::Relaxed);
