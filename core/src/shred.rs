@@ -913,6 +913,26 @@ mod tests {
     }
 
     #[test]
+    fn test_shred_rebase() {
+        let keypair = Arc::new(Keypair::new());
+        let mut shredder =
+            Shredder::new(1, 0, 0.0, &keypair, 0).expect("Failed in creating shredder");
+
+        let new_base = 1234;
+        let data = vec![0u8; 1000 * 1000];
+        bincode::serialize_into(&mut shredder, &data).unwrap();
+        shredder.shreds.into_iter().enumerate().for_each(|(i, s)| {
+            assert_eq!(s.index(), i as u32);
+            let mut shred = Shred::new_from_serialized_shred(s.payload).unwrap();
+            assert_eq!(shred.index(), i as u32);
+            shred.rebase_index(new_base);
+            assert_eq!(shred.index(), new_base + i as u32);
+            let updated_shred = Shred::new_from_serialized_shred(shred.payload).unwrap();
+            assert_eq!(updated_shred.index(), new_base + i as u32);
+        });
+    }
+
+    #[test]
     fn test_recovery_and_reassembly() {
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
