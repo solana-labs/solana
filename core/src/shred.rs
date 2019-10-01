@@ -23,6 +23,10 @@ lazy_static! {
         { serialized_size(&DataShredHeader::default()).unwrap() as usize };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
+    static ref OFFSET_OF_CODING_SHRED_INDEX: usize =
+        { *SIZE_OF_SIGNATURE + bincode::serialized_size(&0u64).unwrap() as usize };
+    static ref OFFSET_OF_DATA_SHRED_INDEX: usize =
+        { *SIZE_OF_CODING_SHRED_HEADER + *OFFSET_OF_CODING_SHRED_INDEX };
     pub static ref SIZE_OF_SHRED_TYPE: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
 }
 
@@ -178,6 +182,18 @@ impl Shred {
         self.header_mut().index = index
     }
 
+    pub fn rebase_index(&mut self, base: u32) {
+        let new_index = self.index() + base;
+        let offset = if self.is_data() {
+            *OFFSET_OF_DATA_SHRED_INDEX
+        } else {
+            *OFFSET_OF_CODING_SHRED_INDEX
+        };
+        let mut wr = io::Cursor::new(&mut self.payload[offset..]);
+        bincode::serialize_into(&mut wr, &new_index).expect("Failed in rebasing index");
+        self.set_index(new_index);
+    }
+
     /// This is not a safe function. It only changes the meta information.
     /// Use this only for test code which doesn't care about actual shred
     pub fn set_slot(&mut self, slot: u64) {
@@ -261,6 +277,7 @@ pub struct Shredder {
     active_shred: Vec<u8>,
     active_shred_header: DataShredHeader,
     active_offset: usize,
+    pub num_data_shreds: usize,
 }
 
 impl Write for Shredder {
@@ -330,6 +347,7 @@ impl Shredder {
                 active_shred,
                 active_shred_header: header,
                 active_offset: 0,
+                num_data_shreds: 0,
             })
         }
     }
@@ -376,6 +394,7 @@ impl Shredder {
     fn finalize_data_shred(&mut self) {
         self.active_offset = 0;
         self.index += 1;
+        self.num_data_shreds += 1;
 
         // Swap header
         let mut header = DataShredHeader::default();

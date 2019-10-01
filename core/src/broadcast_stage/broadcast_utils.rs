@@ -2,6 +2,10 @@ use crate::entry::Entry;
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::Result;
 use crate::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE};
+use core::cell::RefCell;
+use rayon::prelude::*;
+use rayon::ThreadPool;
+use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
 use solana_sdk::signature::Keypair;
 use std::sync::mpsc::Receiver;
@@ -21,6 +25,11 @@ pub struct UnfinishedSlotInfo {
     pub slot: u64,
     pub parent: u64,
 }
+
+thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+                    .num_threads(get_thread_count())
+                    .build()
+                    .unwrap()));
 
 /// Theis parameter tunes how many entries are received in one iteration of recv loop
 /// This will prevent broadcast stage from consuming more entries, that could have led
@@ -77,11 +86,11 @@ pub(super) fn entries_to_shreds(
     slot: u64,
     bank_max_tick: u64,
     keypair: &Arc<Keypair>,
-    latest_shred_index: u64,
+    mut latest_shred_index: u64,
     parent_slot: u64,
     last_unfinished_slot: Option<UnfinishedSlotInfo>,
 ) -> (Vec<Shred>, Option<UnfinishedSlotInfo>) {
-    let mut shreds = if let Some(unfinished_slot) = last_unfinished_slot {
+    let mut past_shreds = if let Some(unfinished_slot) = last_unfinished_slot {
         if unfinished_slot.slot != slot {
             let mut shredder = Shredder::new(
                 unfinished_slot.slot,
@@ -100,31 +109,66 @@ pub(super) fn entries_to_shreds(
         vec![]
     };
 
-    let mut shredder = Shredder::new(
-        slot,
-        parent_slot,
-        RECOMMENDED_FEC_RATE,
-        keypair,
-        latest_shred_index as u32,
-    )
-    .expect("Expected to create a new shredder");
+    // Shred entries in parallel, with index starting at 0 for each entry
+    let shredders: Vec<Shredder> = PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            entries
+                .par_iter()
+                .map(|e| {
+                    let mut shredder =
+                        Shredder::new(slot, parent_slot, RECOMMENDED_FEC_RATE, keypair, 0)
+                            .expect("Expected to create a new shredder");
 
-    bincode::serialize_into(&mut shredder, &entries)
-        .expect("Expect to write all entries to shreds");
+                    bincode::serialize_into(&mut shredder, &e)
+                        .expect("Expect to write all entries to shreds");
+
+                    if last_tick != bank_max_tick {
+                        shredder.finalize_data();
+                    }
+                    shredder
+                })
+                .collect()
+        })
+    });
+
+    let mut shredders_and_new_base: Vec<(u64, Shredder)> = shredders
+        .into_iter()
+        .map(|s| {
+            let base = latest_shred_index;
+            latest_shred_index += s.num_data_shreds as u64;
+            (base, s)
+        })
+        .collect();
 
     let unfinished_slot = if last_tick == bank_max_tick {
-        shredder.finalize_slot();
+        shredders_and_new_base.last_mut().unwrap().1.finalize_slot();
         None
     } else {
-        shredder.finalize_data();
+        let last_shredder = shredders_and_new_base.last().unwrap();
+        let last_index = last_shredder.0 + last_shredder.1.num_data_shreds as u64;
         Some(UnfinishedSlotInfo {
-            next_index: u64::from(shredder.index),
+            next_index: last_index + 1,
             slot,
             parent: parent_slot,
         })
     };
 
-    shreds.append(&mut shredder.shreds);
+    // Rebase entries in shredder in parallel
+    let mut shreds: Vec<Shred> = PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            shredders_and_new_base
+                .into_par_iter()
+                .flat_map(|(b, mut s)| {
+                    s.shreds
+                        .iter_mut()
+                        .for_each(|shred| shred.rebase_index(b as u32));
+                    s.shreds
+                })
+                .collect()
+        })
+    });
+
+    shreds.append(&mut past_shreds);
 
     trace!("Inserting {:?} shreds in blocktree", shreds.len());
 
