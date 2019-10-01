@@ -3,7 +3,6 @@ steps:
     label: "Run performance testnets on EDGE channel CPU ONLY"
 #    branches: 'master'
     env:
-      CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "nightly-edge-perf-cpu-only"
       CHANNEL: edge
       RAMP_UP_TIME: 60
@@ -24,7 +23,6 @@ steps:
     label: "Run performance testnets on EDGE channel GPU ENABLED"
 #    branches: 'master'
     env:
-      CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "nightly-edge-perf-gpu-enabled"
       CHANNEL: edge
       RAMP_UP_TIME: 60
@@ -45,7 +43,6 @@ steps:
     label: "Run performance testnets on BETA channel CPU ONLY"
 #    branches: 'v0.19'
     env:
-      CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "nightly-beta-perf-cpu-only"
       CHANNEL: beta
       RAMP_UP_TIME: 60
@@ -66,7 +63,6 @@ steps:
     label: "Run performance testnets on BETA channel GPU ENABLED"
 #    branches: 'v0.19'
     env:
-      CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "nightly-beta-perf-gpu-enabled"
       CHANNEL: beta
       RAMP_UP_TIME: 60
