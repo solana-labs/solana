@@ -1296,7 +1296,7 @@ mod tests {
                 poh_recorder.tick();
             }
             poh_recorder.set_bank(&bank.clone());
-            assert!(!bank.check_hash_age(&genesis_blockhash, 1));
+            assert!(bank.check_hash_age(&genesis_blockhash, 1).is_err());
         }
     }
 

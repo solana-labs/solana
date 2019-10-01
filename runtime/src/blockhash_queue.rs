@@ -11,6 +11,13 @@ struct HashAge {
     timestamp: u64,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum HashAgeKind {
+    Extant,
+}
+
+pub type HashAgeResult = Result<HashAgeKind, ()>;
+
 /// Low memory overhead, so can be cloned for every checkpoint
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockhashQueue {
@@ -51,11 +58,11 @@ impl BlockhashQueue {
 
     /// Check if the age of the hash is within the max_age
     /// return false for any hashes with an age above max_age
-    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> bool {
+    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> HashAgeResult {
         let hash_age = self.ages.get(hash);
         match hash_age {
             Some(age) => Self::check_age(self.hash_height, max_age, age),
-            _ => false,
+            _ => Err(()),
         }
     }
 
@@ -78,8 +85,12 @@ impl BlockhashQueue {
         self.last_hash = Some(*hash);
     }
 
-    fn check_age(hash_height: u64, max_age: usize, age: &HashAge) -> bool {
-        hash_height - age.hash_height <= max_age as u64
+    fn check_age(hash_height: u64, max_age: usize, age: &HashAge) -> HashAgeResult {
+        if hash_height - age.hash_height <= max_age as u64 {
+            Ok(HashAgeKind::Extant)
+        } else {
+            Err(())
+        }
     }
 
     pub fn register_hash(&mut self, hash: &Hash, fee_calculator: &FeeCalculator) {
@@ -91,7 +102,7 @@ impl BlockhashQueue {
         let max_age = self.max_age;
         if self.ages.len() >= max_age {
             self.ages
-                .retain(|_, age| Self::check_age(hash_height, max_age, age));
+                .retain(|_, age| Self::check_age(hash_height, max_age, age).is_ok());
         }
         self.ages.insert(
             *hash,
@@ -148,6 +159,9 @@ mod tests {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&last_hash, &FeeCalculator::default());
         assert_eq!(last_hash, hash_queue.last_hash());
-        assert!(hash_queue.check_hash_age(&last_hash, 0));
+        assert_eq!(
+            hash_queue.check_hash_age(&last_hash, 0).unwrap(),
+            HashAgeKind::Extant
+        );
     }
 }

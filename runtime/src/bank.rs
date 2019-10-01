@@ -5,7 +5,7 @@
 use crate::{
     accounts::{Accounts, TransactionLoadResult},
     accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
-    blockhash_queue::BlockhashQueue,
+    blockhash_queue::{BlockhashQueue, HashAgeResult},
     message_processor::{MessageProcessor, ProcessInstruction},
     rent_collector::RentCollector,
     serde_utils::{
@@ -909,7 +909,9 @@ impl Bank {
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok()
-                    && !hash_queue.check_hash_age(&tx.message().recent_blockhash, max_age)
+                    && hash_queue
+                        .check_hash_age(&tx.message().recent_blockhash, max_age)
+                        .is_err()
                 {
                     error_counters.reserve_blockhash += 1;
                     Err(TransactionError::BlockhashNotFound)
@@ -951,7 +953,7 @@ impl Bank {
             .collect()
     }
 
-    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> bool {
+    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> HashAgeResult {
         self.blockhash_queue
             .read()
             .unwrap()
