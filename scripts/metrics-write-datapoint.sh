@@ -9,7 +9,7 @@ if [[ -z $point ]]; then
   exit 1
 fi
 
-echo "Influx data point: $point"
+echo "[$(date --iso-8601=seconds)] Influx data point: $point"
 if [[ -z $INFLUX_DATABASE || -z $INFLUX_USERNAME || -z $INFLUX_PASSWORD ]]; then
   echo Influx user credentials not found
   exit 0
