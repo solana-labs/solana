@@ -1,6 +1,11 @@
 use crate::{
+<<<<<<< HEAD
     display::println_name_value, input_parsers::*, input_validators::*, lamports_to_sol,
     sol_to_lamports, validator_info::*, vote::*,
+=======
+    display::println_name_value, input_parsers::*, input_validators::*, stake::*,
+    validator_info::*, vote::*,
+>>>>>>> a6363e56b... Add native_token module to sdk (#6192)
 };
 use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -23,6 +28,7 @@ use solana_sdk::{
     instruction_processor_utils::DecodeError,
     loader_instruction,
     message::Message,
+    native_token::lamports_to_sol,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
     system_instruction::SystemError,

@@ -1,5 +1,6 @@
 use clap::ArgMatches;
 use solana_sdk::{
+    native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{read_keypair, Keypair, KeypairUtil},
 };
