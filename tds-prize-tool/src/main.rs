@@ -1,11 +1,11 @@
 mod prize;
 mod rewards_earned;
-mod utils;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana_core::blocktree::Blocktree;
 use solana_core::blocktree_processor::process_blocktree;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::native_token::sol_to_lamports;
 use std::path::PathBuf;
 use std::process::exit;
 
@@ -54,10 +54,10 @@ fn main() {
     };
 
     println!("Verifying ledger...");
-    match process_blocktree(&genesis_block, &blocktree, None, true, None) {
+    match process_blocktree(&genesis_block, &blocktree, None, false, None) {
         Ok((bank_forks, _bank_forks_info, _leader_schedule_cache)) => {
             let bank = bank_forks.working_bank();
-            let starting_balance = utils::sol_to_lamports(starting_balance_sol);
+            let starting_balance = sol_to_lamports(starting_balance_sol);
             let rewards_earned_winners = rewards_earned::compute_winners(&bank, starting_balance);
             println!("{:#?}", rewards_earned_winners);
         }
