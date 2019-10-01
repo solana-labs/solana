@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 set -e
 
+# TODO: Make sure a dB named $TESTNET_TAG exists in the influxDB host, or can be created
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
+[[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
+
+# TODO: Remove all default values, force explicitness in the testcase definition
+[[ -n $TEST_DURATION ]] || TEST_DURATION=300
+[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=60
+[[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES="10 25 50 100"
+[[ -n $VALIDATOR_NODE_MACHINE_TYPE ]] ||
+  VALIDATOR_NODE_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+[[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=2
+[[ -n $CLIENT_OPTIONS ]] || CLIENT_OPTIONS=
+[[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
+[[ -n $CHANNEL ]] || CHANNEL=beta
+[[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
 
 function cleanup_testnet {
   echo --- collect logs from remote nodes
@@ -27,18 +41,6 @@ fi
 
 # shellcheck disable=SC1091
 source ci/upload-ci-artifact.sh
-
-[[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
-[[ -n $TEST_DURATION ]] || TEST_DURATION=300
-[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=60
-[[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES="10 25 50 100"
-[[ -n $VALIDATOR_NODE_MACHINE_TYPE ]] ||
-  VALIDATOR_NODE_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
-[[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=2
-[[ -n $CLIENT_OPTIONS ]] || CLIENT_OPTIONS=
-[[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
-[[ -n $CHANNEL ]] || CHANNEL=beta
-[[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
 
 if [[ -z $SOLANA_METRICS_CONFIG ]]; then
   if [[ -z $SOLANA_METRICS_PARTIAL_CONFIG ]]; then
