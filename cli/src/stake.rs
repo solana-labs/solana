@@ -618,26 +618,28 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let pubkey_string = format!("{}", pubkey);
 
-        //        // Test AuthorizeStaker Subcommand
-        //        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        //        let keypair = Keypair::new();
-        //        let keypair_file = format!("{}/tmp/keypair_file-{}", out_dir, keypair.pubkey());
-        //        let _ = write_keypair(&keypair, &keypair_file).unwrap();
-        //
-        //        let test_authorize_staker = test_commands.clone().get_matches_from(vec![
-        //            "test",
-        //            "stake-authorize-staker",
-        //            &pubkey_string,
-        //            &keypair_file,
-        //            &pubkey_string,
-        //        ]);
-        //        assert_eq!(
-        //            parse_command(&pubkey, &test_authorize_staker).unwrap(),
-        //            WalletCommand::StakeAuthorize(pubkey, keypair, pubkey, StakeAuthorize::Staker)
-        //        );
-        //        fs::remove_file(&keypair_file).unwrap();
+        let test_authorize_staker = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize-staker",
+            &pubkey_string,
+            &pubkey_string,
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_authorize_staker).unwrap(),
+            WalletCommand::StakeAuthorize(pubkey, pubkey, StakeAuthorize::Staker)
+        );
+        let test_authorize_withdrawer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize-withdrawer",
+            &pubkey_string,
+            &pubkey_string,
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_authorize_withdrawer).unwrap(),
+            WalletCommand::StakeAuthorize(pubkey, pubkey, StakeAuthorize::Withdrawer)
+        );
 
-        // Test CreateVoteAccount SubCommand
+        // Test CreateStakeAccount SubCommand
         let custodian = Pubkey::new_rand();
         let custodian_string = format!("{}", custodian);
         let authorized = Pubkey::new_rand();
