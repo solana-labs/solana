@@ -7,7 +7,7 @@ function cleanup_testnet {
   echo --- collect logs from remote nodes
   rm -rf net/log
   net/net.sh logs
-  for logfile in net/log/* ; do
+  for logfile in $(ls -A net/log) ; do
     new_log=net/log/"$TESTNET_TAG"_"$nodeCount"-nodes_"$(basename "$logfile")"
     cp "$logfile" "$new_log"
     upload-ci-artifact "$new_log"
