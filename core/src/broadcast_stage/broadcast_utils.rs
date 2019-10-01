@@ -122,9 +122,7 @@ pub(super) fn entries_to_shreds(
                     bincode::serialize_into(&mut shredder, &e)
                         .expect("Expect to write all entries to shreds");
 
-                    if last_tick != bank_max_tick {
-                        shredder.finalize_data();
-                    }
+                    shredder.finalize_data();
                     shredder
                 })
                 .collect()
@@ -179,8 +177,11 @@ pub(super) fn entries_to_shreds(
 mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::test_tx::test_tx;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::Transaction;
     use std::sync::mpsc::channel;
@@ -200,6 +201,78 @@ mod tests {
         );
 
         (genesis_block, bank0, tx)
+    }
+
+    #[test]
+    fn test_entries_to_shred() {
+        let kp = Arc::new(Keypair::new());
+        let entries: Vec<Entry> = (0..100)
+            .map(|_| Entry {
+                num_hashes: 100_000,
+                hash: Hash::default(),
+                transactions: vec![test_tx(); 128],
+            })
+            .collect();
+
+        let mut expected_data_index = 123;
+        let mut expected_code_index = 123;
+        let (shreds, _) = entries_to_shreds(entries, 0, 0, 1, &kp, expected_data_index, 0, None);
+
+        let mut reset_code_index = false;
+        let mut found_last_in_slot = false;
+        shreds.iter().for_each(|s| {
+            if s.is_data() {
+                if reset_code_index {
+                    expected_code_index = expected_data_index;
+                    reset_code_index = false;
+                }
+                assert_eq!(s.index(), expected_data_index as u32);
+                expected_data_index += 1;
+                found_last_in_slot = found_last_in_slot || s.last_in_slot();
+            } else {
+                assert_eq!(s.index(), expected_code_index as u32);
+                expected_code_index += 1;
+                reset_code_index = true;
+            }
+        });
+
+        assert!(!found_last_in_slot);
+    }
+
+    #[test]
+    fn test_entries_to_shred_slot_finish() {
+        let kp = Arc::new(Keypair::new());
+        let entries: Vec<Entry> = (0..100)
+            .map(|_| Entry {
+                num_hashes: 100_000,
+                hash: Hash::default(),
+                transactions: vec![test_tx(); 128],
+            })
+            .collect();
+
+        let mut expected_data_index = 123;
+        let mut expected_code_index = 123;
+        let (shreds, _) = entries_to_shreds(entries, 0, 0, 0, &kp, expected_data_index, 0, None);
+
+        let mut reset_code_index = false;
+        let mut found_last_in_slot = false;
+        shreds.iter().for_each(|s| {
+            if s.is_data() {
+                if reset_code_index {
+                    expected_code_index = expected_data_index;
+                    reset_code_index = false;
+                }
+                assert_eq!(s.index(), expected_data_index as u32);
+                expected_data_index += 1;
+                found_last_in_slot = found_last_in_slot || s.last_in_slot();
+            } else {
+                assert_eq!(s.index(), expected_code_index as u32);
+                expected_code_index += 1;
+                reset_code_index = true;
+            }
+        });
+
+        assert!(found_last_in_slot);
     }
 
     #[test]
