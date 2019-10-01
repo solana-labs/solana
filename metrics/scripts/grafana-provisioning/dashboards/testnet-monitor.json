@@ -8617,7 +8617,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"bank_height\") as \"bank_height\" FROM \"$testnet\".\"autogen\".\"bank-new_from_parent-heights\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"block_height\") as \"block_height\" FROM \"$testnet\".\"autogen\".\"bank-new_from_parent-heights\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
