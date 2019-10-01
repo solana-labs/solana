@@ -1,5 +1,5 @@
 use crate::{
-    display::println_name_value, input_parsers::*, input_validators::*, lamports_to_sol, stake::*,
+    display::println_name_value, input_parsers::*, input_validators::*, stake::*,
     validator_info::*, vote::*,
 };
 use chrono::prelude::*;
@@ -23,6 +23,7 @@ use solana_sdk::{
     instruction_processor_utils::DecodeError,
     loader_instruction,
     message::Message,
+    native_token::lamports_to_sol,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
     system_instruction::SystemError,
