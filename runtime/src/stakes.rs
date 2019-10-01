@@ -167,8 +167,13 @@ impl Stakes {
             }
         }
     }
+
     pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, Account)> {
         &self.vote_accounts
+    }
+
+    pub fn stake_accounts(&self) -> &HashMap<Pubkey, Account> {
+        &self.stake_accounts
     }
 
     pub fn rewards_pools(&self) -> impl Iterator<Item = (&Pubkey, &Account)> {
