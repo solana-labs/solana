@@ -15,6 +15,13 @@ pub(super) struct ReceiveResults {
     pub last_tick: u64,
 }
 
+#[derive(Copy, Clone)]
+pub struct UnfinishedSlotInfo {
+    pub next_index: u64,
+    pub slot: u64,
+    pub parent: u64,
+}
+
 /// Theis parameter tunes how many entries are received in one iteration of recv loop
 /// This will prevent broadcast stage from consuming more entries, that could have led
 /// to delays in shredding, and broadcasting shreds to peer validators
@@ -72,7 +79,27 @@ pub(super) fn entries_to_shreds(
     keypair: &Arc<Keypair>,
     latest_shred_index: u64,
     parent_slot: u64,
-) -> (Vec<Shred>, u64) {
+    last_unfinished_slot: Option<UnfinishedSlotInfo>,
+) -> (Vec<Shred>, Option<UnfinishedSlotInfo>) {
+    let mut shreds = if let Some(unfinished_slot) = last_unfinished_slot {
+        if unfinished_slot.slot != slot {
+            let mut shredder = Shredder::new(
+                unfinished_slot.slot,
+                unfinished_slot.parent,
+                RECOMMENDED_FEC_RATE,
+                keypair,
+                unfinished_slot.next_index as u32,
+            )
+            .expect("Expected to create a new shredder");
+            shredder.finalize_slot();
+            shredder.shreds.drain(..).collect()
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
     let mut shredder = Shredder::new(
         slot,
         parent_slot,
@@ -85,17 +112,23 @@ pub(super) fn entries_to_shreds(
     bincode::serialize_into(&mut shredder, &entries)
         .expect("Expect to write all entries to shreds");
 
-    if last_tick == bank_max_tick {
+    let unfinished_slot = if last_tick == bank_max_tick {
         shredder.finalize_slot();
+        None
     } else {
         shredder.finalize_data();
-    }
+        Some(UnfinishedSlotInfo {
+            next_index: u64::from(shredder.index),
+            slot,
+            parent: parent_slot,
+        })
+    };
 
-    let shred_infos: Vec<Shred> = shredder.shreds.drain(..).collect();
+    shreds.append(&mut shredder.shreds);
 
-    trace!("Inserting {:?} shreds in blocktree", shred_infos.len());
+    trace!("Inserting {:?} shreds in blocktree", shreds.len());
 
-    (shred_infos, u64::from(shredder.index))
+    (shreds, unfinished_slot)
 }
 
 #[cfg(test)]

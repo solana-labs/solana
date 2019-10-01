@@ -45,6 +45,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             keypair,
             latest_blob_index,
             bank.parent().unwrap().slot(),
+            None,
         );
 
         // If the last blockhash is default, a new block is being created
@@ -65,6 +66,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             keypair,
             latest_blob_index,
             bank.parent().unwrap().slot(),
+            None,
         );
 
         // If it's the last tick, reset the last block hash to default

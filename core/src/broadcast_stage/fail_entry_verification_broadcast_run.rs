@@ -44,6 +44,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             keypair,
             latest_blob_index,
             bank.parent().unwrap().slot(),
+            None,
         );
 
         let seeds: Vec<[u8; 32]> = shred_infos.iter().map(|s| s.seed()).collect();
