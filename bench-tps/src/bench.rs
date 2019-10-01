@@ -13,7 +13,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_sdk::{
     client::Client,
-    clock::{DEFAULT_TICKS_PER_SECOND, MAX_RECENT_BLOCKHASHES},
+    clock::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
     fee_calculator::FeeCalculator,
     hash::Hash,
     pubkey::Pubkey,
@@ -33,6 +33,11 @@ use std::{
     thread::{sleep, Builder},
     time::{Duration, Instant},
 };
+
+// The point at which transactions become "too old", in seconds. The cluster keeps blockhashes for
+// approximately MAX_RECENT_BLOCKHASHES/DEFAULT_TICKS_PER_SLOT seconds. The adjustment of 5sec
+// seems about right to minimize BlockhashNotFound errors, based on empirical testing.
+const MAX_TX_QUEUE_AGE: u64 = MAX_RECENT_BLOCKHASHES as u64 / DEFAULT_TICKS_PER_SLOT - 5;
 
 #[cfg(feature = "move")]
 use solana_librapay_api::librapay_transaction;
@@ -403,14 +408,8 @@ fn do_tx_transfers<T: Client>(
             for tx in txs0 {
                 let now = timestamp();
                 // Transactions that are too old will be rejected by the cluster Don't bother
-                // sending them. The cluster keeps blockhashes for approximately
-                // MAX_RECENT_BLOCKHASHES/DEFAULT_TICKS_PER_SECOND seconds. The adjustment of 5sec
-                // seems about right to minimize BlockhashNotFound errors, based on empirical
-                // testing.
-                if now > tx.1
-                    && now - tx.1
-                        > 1000 * (MAX_RECENT_BLOCKHASHES as u64 / DEFAULT_TICKS_PER_SECOND - 5)
-                {
+                // sending them.
+                if now > tx.1 && now - tx.1 > 1000 * MAX_TX_QUEUE_AGE {
                     old_transactions = true;
                     continue;
                 }
