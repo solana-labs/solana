@@ -1,8 +1,9 @@
 steps:
   - command: "tests/testnet-performance/testnet-automation.sh"
-    label: "NIGHTLY COLO performance testnet on EDGE channel GPU ENABLED"
+    label: "COLO performance testnet on EDGE channel GPU ENABLED"
 #    branches: 'master'
     env:
+      CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-edge-perf-gpu-enabled"
       CHANNEL: edge
       RAMP_UP_TIME: 60
@@ -18,9 +19,10 @@ steps:
     continue_on_failure: true
 
   - command: "tests/testnet-performance/testnet-automation.sh"
-    label: "NIGHTLY COLO performance testnet on BETA channel GPU ENABLED"
+    label: "COLO performance testnet on BETA channel GPU ENABLED"
 #    branches: 'v0.19'
     env:
+      CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-beta-perf-gpu-enabled"
       CHANNEL: beta
       RAMP_UP_TIME: 60

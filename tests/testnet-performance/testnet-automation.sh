@@ -66,11 +66,24 @@ launchTestnet() {
 
   # shellcheck disable=SC2068
   echo --- create "$nodeCount" nodes
-  net/gce.sh create \
-    -d pd-ssd \
-    -n "$nodeCount" -c "$NUMBER_OF_CLIENT_NODES" \
-    -G "$VALIDATOR_NODE_MACHINE_TYPE" \
-    -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/-z } "$ADDITIONAL_FLAGS"
+
+  case $CLOUD_PROVIDER in
+    gce)
+      net/gce.sh create \
+        -d pd-ssd \
+        -n "$nodeCount" -c "$NUMBER_OF_CLIENT_NODES" \
+        -G "$VALIDATOR_NODE_MACHINE_TYPE" \
+        -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/-z } "$ADDITIONAL_FLAGS"
+      ;;
+    colo)
+      net/colo.sh create \
+        -n "$nodeCount" -c "$NUMBER_OF_CLIENT_NODES" \
+        -p "$TESTNET_TAG" "$ADDITIONAL_FLAGS"
+      ;;
+    *)
+      echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
+      ;;
+    esac
 
   echo --- configure database
   net/init-metrics.sh -e
