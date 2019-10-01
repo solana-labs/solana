@@ -1,6 +1,5 @@
 use crate::{
-    display::println_name_value, input_parsers::*, input_validators::*, lamports_to_sol,
-    sol_to_lamports, validator_info::*, vote::*,
+    display::println_name_value, input_parsers::*, input_validators::*, validator_info::*, vote::*,
 };
 use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -23,6 +22,7 @@ use solana_sdk::{
     instruction_processor_utils::DecodeError,
     loader_instruction,
     message::Message,
+    native_token::{lamports_to_sol, sol_to_lamports},
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
     system_instruction::SystemError,
