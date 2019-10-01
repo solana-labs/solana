@@ -1025,9 +1025,18 @@ impl Blocktree {
             }
 
             if let Ok(deshred_payload) = Shredder::deshred(&shred_chunk) {
-                let entries: Vec<Entry> = bincode::deserialize(&deshred_payload)?;
-                trace!("Found entries: {:#?}", entries);
-                all_entries.extend(entries);
+                // let entries: Vec<Entry> = bincode::deserialize(&deshred_payload)?;
+                if let Ok(entry) = bincode::deserialize(&deshred_payload) {
+                    trace!("Found an entry");
+                    let entry: Entry = entry;
+                    if entry != Entry::default() {
+                        all_entries.push(entry);
+                    }
+                } else {
+                    let mut entries: Vec<Entry> = bincode::deserialize(&deshred_payload)?;
+                    trace!("Found entries: {:#?}", entries);
+                    all_entries.append(&mut entries);
+                }
                 num += shred_chunk.len();
             } else {
                 debug!("Failed in deshredding shred payloads");
