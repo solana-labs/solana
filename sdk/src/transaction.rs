@@ -9,6 +9,19 @@ use crate::signature::{KeypairUtil, Signature};
 use bincode::serialize;
 use std::result;
 
+pub mod full_spend_blockhash {
+    const FULL_SPEND_BLOCKHASH: [u8; 32] = [
+        0x03, 0xd0, 0xed, 0x95, 0x9c, 0x7d, 0x80, 0xeb, 0x88, 0xd0, 0xed, 0x4d, 0x07, 0x5b, 0x5f,
+        0x30, 0xfb, 0x6d, 0x16, 0xca, 0xb8, 0xa2, 0x89, 0x45, 0x40, 0x9c, 0xbe, 0x08, 0x00, 0x00,
+        0x00, 0x00,
+    ];
+
+    cardinal_name_hash!(
+        FULL_SPEND_BLOCKHASH,
+        "Fu11Spend1111111111111111111111111111111111"
+    );
+}
+
 /// Reasons a transaction might be rejected.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionError {

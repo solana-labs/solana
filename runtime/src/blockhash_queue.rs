@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing::timestamp;
+use solana_sdk::transaction::full_spend_blockhash;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -14,6 +15,7 @@ struct HashAge {
 #[derive(Debug, PartialEq)]
 pub enum HashAgeKind {
     Extant,
+    FullSpend,
 }
 
 pub type HashAgeResult = Result<HashAgeKind, ()>;
@@ -62,7 +64,13 @@ impl BlockhashQueue {
         let hash_age = self.ages.get(hash);
         match hash_age {
             Some(age) => Self::check_age(self.hash_height, max_age, age),
-            _ => Err(()),
+            _ => {
+                if full_spend_blockhash::check_hash(hash) {
+                    Ok(HashAgeKind::FullSpend)
+                } else {
+                    Err(())
+                }
+            }
         }
     }
 
@@ -162,6 +170,20 @@ mod tests {
         assert_eq!(
             hash_queue.check_hash_age(&last_hash, 0).unwrap(),
             HashAgeKind::Extant
+        );
+    }
+    #[test]
+    fn test_queue_accept_full_spend_hash() {
+        let mut hash_queue = BlockhashQueue::new(100);
+        for i in 0..102 {
+            let last_hash = hash(&serialize(&i).unwrap());
+            hash_queue.register_hash(&last_hash, &FeeCalculator::default());
+        }
+        assert_eq!(
+            hash_queue
+                .check_hash_age(&full_spend_blockhash::hash(), 0)
+                .unwrap(),
+            HashAgeKind::FullSpend
         );
     }
 }
