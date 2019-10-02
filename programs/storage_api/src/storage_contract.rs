@@ -141,7 +141,7 @@ impl<'a> StorageAccount<'a> {
             };
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::AccountAlreadyInitialized)?
+            Err(InstructionError::AccountAlreadyInitialized)
         }
     }
 
@@ -157,7 +157,7 @@ impl<'a> StorageAccount<'a> {
             };
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::AccountAlreadyInitialized)?
+            Err(InstructionError::AccountAlreadyInitialized)
         }
     }
 
@@ -234,7 +234,7 @@ impl<'a> StorageAccount<'a> {
             segment_proofs.push(proof);
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::InvalidArgument)?
+            Err(InstructionError::InvalidArgument)
         }
     }
 
@@ -270,7 +270,7 @@ impl<'a> StorageAccount<'a> {
             credits.current_epoch += total_validations;
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::InvalidArgument)?
+            Err(InstructionError::InvalidArgument)
         }
     }
 
@@ -360,7 +360,7 @@ impl<'a> StorageAccount<'a> {
 
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::InvalidArgument)?
+            Err(InstructionError::InvalidArgument)
         }
     }
 
@@ -380,9 +380,9 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             if owner.id != *account_owner {
-                Err(InstructionError::CustomError(
+                return Err(InstructionError::CustomError(
                     StorageError::InvalidOwner as u32,
-                ))?
+                ));
             }
 
             credits.update_epoch(clock.epoch);
@@ -397,9 +397,9 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             if owner.id != *account_owner {
-                Err(InstructionError::CustomError(
+                return Err(InstructionError::CustomError(
                     StorageError::InvalidOwner as u32,
-                ))?
+                ));
             }
             credits.update_epoch(clock.epoch);
             let (num_validations, _total_proofs) = count_valid_proofs(&validations);
@@ -409,7 +409,7 @@ impl<'a> StorageAccount<'a> {
 
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::InvalidArgument)?
+            Err(InstructionError::InvalidArgument)
         }
     }
 }
@@ -424,15 +424,16 @@ fn check_redeemable(
     if rewards_pool.account.lamports < rewards {
         Err(InstructionError::CustomError(
             StorageError::RewardPoolDepleted as u32,
-        ))?
+        ))
+    } else {
+        if rewards >= 1 {
+            rewards_pool.account.lamports -= rewards;
+            owner.account.lamports += rewards;
+            //clear credits
+            credits.redeemable = 0;
+        }
+        Ok(())
     }
-    if rewards >= 1 {
-        rewards_pool.account.lamports -= rewards;
-        owner.account.lamports += rewards;
-        //clear credits
-        credits.redeemable = 0;
-    }
-    Ok(())
 }
 
 pub fn create_rewards_pool() -> Account {

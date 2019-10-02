@@ -213,13 +213,13 @@ pub fn request_airdrop_transaction(
     })?;
     let transaction_length = LittleEndian::read_u16(&buffer) as usize;
     if transaction_length >= PACKET_DATA_SIZE {
-        Err(Error::new(
+        return Err(Error::new(
             ErrorKind::Other,
             format!(
                 "request_airdrop_transaction: invalid transaction_length from drone: {}",
                 transaction_length
             ),
-        ))?;
+        ));
     }
 
     // Read the transaction
@@ -265,11 +265,8 @@ pub fn run_drone(
     send_addr: Option<Sender<SocketAddr>>,
 ) {
     let socket = TcpListener::bind(&drone_addr).unwrap();
-    if send_addr.is_some() {
-        send_addr
-            .unwrap()
-            .send(socket.local_addr().unwrap())
-            .unwrap();
+    if let Some(send_addr) = send_addr {
+        send_addr.send(socket.local_addr().unwrap()).unwrap();
     }
     info!("Drone started. Listening on: {}", drone_addr);
     let done = socket

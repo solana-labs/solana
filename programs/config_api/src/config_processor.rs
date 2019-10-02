@@ -33,7 +33,7 @@ pub fn process_instruction(
         // or when no signers specified in Config data
         if keyed_accounts[0].signer_key().is_none() {
             error!("account[0].signer_key().is_none()");
-            Err(InstructionError::MissingRequiredSignature)?;
+            return Err(InstructionError::MissingRequiredSignature);
         }
     }
 
@@ -50,19 +50,19 @@ pub fn process_instruction(
             let signer_account = keyed_accounts.get(account_index);
             if signer_account.is_none() {
                 error!("account {:?} is not in account list", signer);
-                Err(InstructionError::MissingRequiredSignature)?;
+                return Err(InstructionError::MissingRequiredSignature);
             }
             let signer_key = signer_account.unwrap().signer_key();
             if signer_key.is_none() {
                 error!("account {:?} signer_key().is_none()", signer);
-                Err(InstructionError::MissingRequiredSignature)?;
+                return Err(InstructionError::MissingRequiredSignature);
             }
             if signer_key.unwrap() != signer {
                 error!(
                     "account[{:?}].signer_key() does not match Config data)",
                     account_index
                 );
-                Err(InstructionError::MissingRequiredSignature)?;
+                return Err(InstructionError::MissingRequiredSignature);
             }
             // If Config account is already initialized, update signatures must match Config data
             if !current_data.keys.is_empty()
@@ -72,11 +72,11 @@ pub fn process_instruction(
                     .is_none()
             {
                 error!("account {:?} is not in stored signer list", signer);
-                Err(InstructionError::MissingRequiredSignature)?;
+                return Err(InstructionError::MissingRequiredSignature);
             }
         } else if keyed_accounts[0].signer_key().is_none() {
             error!("account[0].signer_key().is_none()");
-            Err(InstructionError::MissingRequiredSignature)?;
+            return Err(InstructionError::MissingRequiredSignature);
         }
     }
 
@@ -87,12 +87,12 @@ pub fn process_instruction(
             counter,
             current_signer_keys.len()
         );
-        Err(InstructionError::MissingRequiredSignature)?;
+        return Err(InstructionError::MissingRequiredSignature);
     }
 
     if keyed_accounts[0].account.data.len() < data.len() {
         error!("instruction data too large");
-        Err(InstructionError::InvalidInstructionData)?;
+        return Err(InstructionError::InvalidInstructionData);
     }
 
     keyed_accounts[0].account.data[0..data.len()].copy_from_slice(&data);

@@ -53,10 +53,11 @@ impl GenericRpcClientRequest for RpcClientRequest {
                 Ok(mut response) => {
                     let json: serde_json::Value = serde_json::from_str(&response.text()?)?;
                     if json["error"].is_object() {
-                        Err(RpcError::RpcRequestError(format!(
+                        return Err(RpcError::RpcRequestError(format!(
                             "RPC Error response: {}",
                             serde_json::to_string(&json["error"]).unwrap()
-                        )))?
+                        ))
+                        .into());
                     }
                     return Ok(json["result"].clone());
                 }
@@ -66,7 +67,7 @@ impl GenericRpcClientRequest for RpcClientRequest {
                         request, retries, e
                     );
                     if retries == 0 {
-                        Err(e)?;
+                        return Err(e.into());
                     }
                     retries -= 1;
 

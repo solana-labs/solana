@@ -339,7 +339,7 @@ impl SyncClient for ThinClient {
             }
             Err(e) => {
                 self.optimizer.report(index, std::u64::MAX);
-                Err(e)?
+                Err(e.into())
             }
         }
     }
@@ -380,7 +380,7 @@ impl SyncClient for ThinClient {
             }
             Err(e) => {
                 self.optimizer.report(index, std::u64::MAX);
-                Err(e)?
+                Err(e.into())
             }
         }
     }

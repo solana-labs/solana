@@ -22,13 +22,13 @@ pub fn process_instruction(
     match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StorageInstruction::InitializeReplicatorStorage { owner } => {
             if !rest.is_empty() {
-                Err(InstructionError::InvalidArgument)?;
+                return Err(InstructionError::InvalidArgument);
             }
             storage_account.initialize_replicator_storage(owner)
         }
         StorageInstruction::InitializeValidatorStorage { owner } => {
             if !rest.is_empty() {
-                Err(InstructionError::InvalidArgument)?;
+                return Err(InstructionError::InvalidArgument);
             }
             storage_account.initialize_validator_storage(owner)
         }
@@ -40,7 +40,7 @@ pub fn process_instruction(
         } => {
             if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
-                Err(InstructionError::InvalidArgument)?;
+                return Err(InstructionError::InvalidArgument);
             }
             let clock = sysvar::clock::from_keyed_account(&rest[0])?;
             storage_account.submit_mining_proof(
@@ -54,14 +54,14 @@ pub fn process_instruction(
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, segment } => {
             if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
-                Err(InstructionError::InvalidArgument)?;
+                return Err(InstructionError::InvalidArgument);
             }
             let clock = sysvar::clock::from_keyed_account(&rest[0])?;
             storage_account.advertise_storage_recent_blockhash(hash, segment, clock)
         }
         StorageInstruction::ClaimStorageReward => {
             if rest.len() != 4 {
-                Err(InstructionError::InvalidArgument)?;
+                return Err(InstructionError::InvalidArgument);
             }
             let (clock, rest) = rest.split_at_mut(1);
             let (rewards, rest) = rest.split_at_mut(1);
@@ -75,13 +75,13 @@ pub fn process_instruction(
         }
         StorageInstruction::ProofValidation { segment, proofs } => {
             if rest.is_empty() {
-                Err(InstructionError::InvalidArgument)?;
+                return Err(InstructionError::InvalidArgument);
             }
 
             let (clock, rest) = rest.split_at_mut(1);
             if me_unsigned || rest.is_empty() {
                 // This instruction must be signed by `me` and `rest` cannot be empty
-                Err(InstructionError::InvalidArgument)?;
+                return Err(InstructionError::InvalidArgument);
             }
             let me_id = storage_account.id;
             let clock = sysvar::clock::from_keyed_account(&clock[0])?;
