@@ -13,7 +13,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_sdk::{
     client::Client,
-    clock::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
+    clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
     fee_calculator::FeeCalculator,
     hash::Hash,
     pubkey::Pubkey,
@@ -34,10 +34,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-// The point at which transactions become "too old", in seconds. The cluster keeps blockhashes for
-// approximately MAX_RECENT_BLOCKHASHES/DEFAULT_TICKS_PER_SLOT seconds. The adjustment of 5sec
-// seems about right to minimize BlockhashNotFound errors, based on empirical testing.
-const MAX_TX_QUEUE_AGE: u64 = MAX_RECENT_BLOCKHASHES as u64 / DEFAULT_TICKS_PER_SLOT - 5;
+// The point at which transactions become "too old", in seconds.
+const MAX_TX_QUEUE_AGE: u64 =
+    MAX_PROCESSING_AGE as u64 * DEFAULT_TICKS_PER_SECOND / DEFAULT_TICKS_PER_SLOT;
 
 #[cfg(feature = "move")]
 use solana_librapay_api::librapay_transaction;
