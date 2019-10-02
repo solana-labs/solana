@@ -278,10 +278,10 @@ impl BankingStage {
         enable_forwarding: bool,
         batch_limit: usize,
     ) -> Result<()> {
-        let (poh_next_slot_leader, poh_has_bank, would_be_leader) = {
+        let (leader_at_slot_offset, poh_has_bank, would_be_leader) = {
             let poh = poh_recorder.lock().unwrap();
             (
-                poh.next_slot_leader(),
+                poh.leader_after_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
                 poh.has_bank(),
                 poh.would_be_leader(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
@@ -291,7 +291,7 @@ impl BankingStage {
 
         let decision = Self::consume_or_forward_packets(
             my_pubkey,
-            poh_next_slot_leader,
+            leader_at_slot_offset,
             poh_has_bank,
             would_be_leader,
         );
