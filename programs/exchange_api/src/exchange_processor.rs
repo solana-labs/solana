@@ -25,7 +25,7 @@ impl ExchangeProcessor {
             Ok(())
         } else {
             error!("New account is already in use");
-            Err(InstructionError::InvalidAccountData)?
+            Err(InstructionError::InvalidAccountData)
         }
     }
 
@@ -35,7 +35,7 @@ impl ExchangeProcessor {
             Ok(account)
         } else {
             error!("Not a valid account");
-            Err(InstructionError::InvalidAccountData)?
+            Err(InstructionError::InvalidAccountData)
         }
     }
 
@@ -45,7 +45,7 @@ impl ExchangeProcessor {
             Ok(info)
         } else {
             error!("Not a valid trade");
-            Err(InstructionError::InvalidAccountData)?
+            Err(InstructionError::InvalidAccountData)
         }
     }
 
@@ -55,7 +55,7 @@ impl ExchangeProcessor {
             Ok(_) => Ok(()),
             Err(e) => {
                 error!("Serialize failed: {:?}", e);
-                Err(InstructionError::GenericError)?
+                Err(InstructionError::GenericError)
             }
         }
     }
@@ -81,11 +81,11 @@ impl ExchangeProcessor {
     ) -> Result<(), InstructionError> {
         if to_trade.tokens == 0 || from_trade.tokens == 0 {
             error!("Inactive Trade, balance is zero");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
         if to_trade.price == 0 || from_trade.price == 0 {
             error!("Inactive Trade, price is zero");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
 
         // Calc swap
@@ -116,7 +116,7 @@ impl ExchangeProcessor {
 
         if primary_tokens == 0 || secondary_tokens == 0 {
             error!("Trade quantities to low to be fulfilled");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
 
         trace!("pt {} st {}", primary_tokens, secondary_tokens);
@@ -138,11 +138,11 @@ impl ExchangeProcessor {
 
         if to_trade.tokens < primary_cost {
             error!("Not enough tokens in to account");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
         if from_trade.tokens < secondary_cost {
             error!("Not enough tokens in from account");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
         to_trade.tokens -= primary_cost;
         to_trade.tokens_settled += secondary_tokens;
@@ -161,7 +161,7 @@ impl ExchangeProcessor {
 
         if keyed_accounts.len() < 2 {
             error!("Not enough accounts");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
 
         Self::is_account_unallocated(&keyed_accounts[NEW_ACCOUNT_INDEX].account.data)?;
@@ -186,7 +186,7 @@ impl ExchangeProcessor {
 
         if keyed_accounts.len() < 3 {
             error!("Not enough accounts");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
 
         let mut to_account =
@@ -202,12 +202,12 @@ impl ExchangeProcessor {
                 ExchangeState::Account(mut from_account) => {
                     if &from_account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
                         error!("Signer does not own from account");
-                        Err(InstructionError::GenericError)?
+                        return Err(InstructionError::GenericError);
                     }
 
                     if from_account.tokens[token] < tokens {
                         error!("From account balance too low");
-                        Err(InstructionError::GenericError)?
+                        return Err(InstructionError::GenericError);
                     }
 
                     from_account.tokens[token] -= tokens;
@@ -221,7 +221,7 @@ impl ExchangeProcessor {
                 ExchangeState::Trade(mut from_trade) => {
                     if &from_trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
                         error!("Signer does not own from account");
-                        Err(InstructionError::GenericError)?
+                        return Err(InstructionError::GenericError);
                     }
 
                     let from_token = match from_trade.side {
@@ -230,12 +230,12 @@ impl ExchangeProcessor {
                     };
                     if token != from_token {
                         error!("Trade to transfer from does not hold correct token");
-                        Err(InstructionError::GenericError)?
+                        return Err(InstructionError::GenericError);
                     }
 
                     if from_trade.tokens_settled < tokens {
                         error!("From trade balance too low");
-                        Err(InstructionError::GenericError)?
+                        return Err(InstructionError::GenericError);
                     }
 
                     from_trade.tokens_settled -= tokens;
@@ -248,7 +248,7 @@ impl ExchangeProcessor {
                 }
                 _ => {
                     error!("Not a valid from account for transfer");
-                    Err(InstructionError::InvalidArgument)?
+                    return Err(InstructionError::InvalidArgument);
                 }
             }
         }
@@ -269,7 +269,7 @@ impl ExchangeProcessor {
 
         if keyed_accounts.len() < 3 {
             error!("Not enough accounts");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
 
         Self::is_account_unallocated(&keyed_accounts[ORDER_INDEX].account.data)?;
@@ -278,7 +278,7 @@ impl ExchangeProcessor {
 
         if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own account");
-            Err(InstructionError::GenericError)?
+            return Err(InstructionError::GenericError);
         }
         let from_token = match info.side {
             OrderSide::Ask => info.pair.Base,
@@ -286,7 +286,7 @@ impl ExchangeProcessor {
         };
         if account.tokens[from_token] < info.tokens {
             error!("From token balance is too low");
-            Err(InstructionError::GenericError)?
+            return Err(InstructionError::GenericError);
         }
 
         if let Err(e) = check_trade(info.side, info.tokens, info.price) {
@@ -321,14 +321,14 @@ impl ExchangeProcessor {
 
         if keyed_accounts.len() < 2 {
             error!("Not enough accounts");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
 
         let order = Self::deserialize_order(&keyed_accounts[ORDER_INDEX].account.data)?;
 
         if &order.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own trade");
-            Err(InstructionError::GenericError)?
+            return Err(InstructionError::GenericError);
         }
 
         let token = match order.side {
@@ -354,7 +354,7 @@ impl ExchangeProcessor {
 
         if keyed_accounts.len() < 4 {
             error!("Not enough accounts");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
 
         let mut to_order = Self::deserialize_order(&keyed_accounts[TO_ORDER_INDEX].account.data)?;
@@ -365,19 +365,19 @@ impl ExchangeProcessor {
 
         if to_order.side != OrderSide::Ask {
             error!("To trade is not a To");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
         if from_order.side != OrderSide::Bid {
             error!("From trade is not a From");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
         if to_order.pair != from_order.pair {
             error!("Mismatched token pairs");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
         if to_order.side == from_order.side {
             error!("Matching trade sides");
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
 
         if let Err(e) =
@@ -387,7 +387,7 @@ impl ExchangeProcessor {
                 "Swap calculation failed from {} for {} to {} for {}",
                 from_order.tokens, from_order.price, to_order.tokens, to_order.price,
             );
-            Err(e)?
+            return Err(e);
         }
 
         inc_new_counter_info!("exchange_processor-swaps", 1);
