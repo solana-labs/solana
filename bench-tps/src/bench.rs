@@ -8,7 +8,6 @@ use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
 #[cfg(feature = "move")]
 use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_program};
-#[cfg(feature = "move")]
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_sdk::{
@@ -474,6 +473,7 @@ pub fn fund_keys<T: Client>(
         let mut new_funded: Vec<(&Keypair, u64)> = vec![];
         let mut to_fund = vec![];
         println!("creating from... {}", funded.len());
+        let mut build_to_fund = Measure::start("build_to_fund");
         for f in &mut funded {
             let max_units = cmp::min(notfunded.len() as u64, MAX_SPENDS_PER_TX);
             if max_units == 0 {
@@ -495,6 +495,8 @@ pub fn fund_keys<T: Client>(
             }
             extra -= 1;
         }
+        build_to_fund.stop();
+        debug!("build to_fund vec: {}us", build_to_fund.as_us());
 
         // try to transfer a "few" at a time with recent blockhash
         //  assume 4MB network buffers, and 512 byte packets
@@ -503,6 +505,7 @@ pub fn fund_keys<T: Client>(
         to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
             let mut tries = 0;
 
+            let mut make_txs = Measure::start("make_txs");
             // this set of transactions just initializes us for bookkeeping
             #[allow(clippy::clone_double_ref)] // sigh
             let mut to_fund_txs: Vec<_> = chunk
@@ -514,6 +517,12 @@ pub fn fund_keys<T: Client>(
                     (k.clone(), tx)
                 })
                 .collect();
+            make_txs.stop();
+            debug!(
+                "make {} unsigned txs: {}us",
+                to_fund_txs.len(),
+                make_txs.as_us()
+            );
 
             let amount = chunk[0].1[0].1;
 
@@ -537,24 +546,51 @@ pub fn fund_keys<T: Client>(
                 let (blockhash, _fee_calculator) = get_recent_blockhash(client);
 
                 // re-sign retained to_fund_txes with updated blockhash
+                let mut sign_txs = Measure::start("sign_txs");
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
                     tx.sign(&[*k], blockhash);
                 });
+                sign_txs.stop();
+                debug!("sign {} txs: {}us", to_fund_txs.len(), sign_txs.as_us());
 
+                let mut send_txs = Measure::start("send_txs");
                 to_fund_txs.iter().for_each(|(_, tx)| {
                     client.async_send_transaction(tx.clone()).expect("transfer");
                 });
+                send_txs.stop();
+                debug!("send {} txs: {}us", to_fund_txs.len(), send_txs.as_us());
 
                 // retry anything that seems to have dropped through cracks
                 //  again since these txs are all or nothing, they're fine to
                 //  retry
-                for _ in 0..10 {
-                    to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, &tx, amount));
+                let mut verify_txs = Measure::start("verify_txs");
+                let mut starting_txs = to_fund_txs.len();
+                let mut verified_txs = 0;
+                for _ in 0..2 {
+                    let mut timer = Instant::now();
+                    to_fund_txs.retain(|(_, tx)| {
+                        if timer.elapsed() >= Duration::from_secs(5) {
+                            println!(
+                                "Verifying transfers... {} remaining",
+                                starting_txs - verified_txs
+                            );
+                            timer = Instant::now();
+                        }
+                        let verified = verify_funding_transfer(client, &tx, amount);
+                        if verified {
+                            verified_txs = verified_txs + 1;
+                        }
+                        !verified
+                    });
                     if to_fund_txs.is_empty() {
                         break;
                     }
+                    println!("Verifying transfers... {} remaining", to_fund_txs.len());
                     sleep(Duration::from_millis(100));
                 }
+                starting_txs = starting_txs - to_fund_txs.len();
+                verify_txs.stop();
+                debug!("verified {} txs: {}us", starting_txs, verify_txs.as_us());
 
                 tries += 1;
             }
