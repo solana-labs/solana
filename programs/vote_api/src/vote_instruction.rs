@@ -183,7 +183,7 @@ pub fn process_instruction(
             if rest.is_empty() {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            rent_utils::verify_rent_exemption(me, &rest[0])?;
+            rent::verify_rent_exemption(me, &rest[0])?;
             vote_state::initialize_account(me, &vote_init)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {

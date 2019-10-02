@@ -289,9 +289,9 @@ pub fn process_instruction(
             if rest.is_empty() {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            rent_utils::verify_rent_exemption(me, &rest[0])?;
+            rent::verify_rent_exemption(me, &rest[0])?;
             me.initialize(&authorized, &lockup)
-        },
+        }
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&authorized_pubkey, stake_authorize, &rest)
         }

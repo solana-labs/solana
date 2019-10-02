@@ -1250,24 +1250,12 @@ mod tests {
         // lockup
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         let custodian = Pubkey::new_rand();
-<<<<<<< HEAD
         stake_keyed_account
-<<<<<<< HEAD
-<<<<<<< HEAD
             .initialize(
                 &Authorized::auto(&stake_pubkey),
                 &Lockup { slot: 0, custodian },
             )
-=======
-            .lockup(0, &RentCalculator::default(), &custodian)
->>>>>>> fix test errors
-=======
-            .lockup(0, &custodian)
->>>>>>> move logic to rent_utils
             .unwrap();
-=======
-        stake_keyed_account.lockup(0, &custodian).unwrap();
->>>>>>> fmt fix
 
         // signed keyed account and locked up, more than available should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
