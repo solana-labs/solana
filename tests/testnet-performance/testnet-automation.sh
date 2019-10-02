@@ -17,6 +17,34 @@ set -e
 [[ -n $CHANNEL ]] || CHANNEL=beta
 [[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
 
+function cleanup_testnet {
+  echo --- collect logs from remote nodes
+  rm -rf net/log
+  net/net.sh logs
+  for logfile in $(ls -A net/log) ; do
+    new_log=net/log/"$TESTNET_TAG"_"$nodeCount"-nodes_"$(basename "$logfile")"
+    cp "$logfile" "$new_log"
+    upload-ci-artifact "$new_log"
+  done
+
+  echo --- stop network software
+  net/net.sh stop -p $TESTNET_TAG
+
+  echo --- delete testnet
+  case $CLOUD_PROVIDER in
+    gce)
+      net/gce.sh delete -p $TESTNET_TAG
+      ;;
+    colo)
+      net/colo.sh delete -p $TESTNET_TAG
+      ;;
+    *)
+      echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
+      ;;
+    esac
+}
+trap cleanup_testnet EXIT
+
 cd "$(dirname "$0")/../.."
 
 if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
@@ -44,22 +72,25 @@ fi
 TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TESTNET_ZONES},"
 
 launchTestnet() {
+  declare nodeCount=$1
+  echo --- setup "$nodeCount" node test
+
   set -x
 
   # shellcheck disable=SC2068
-  echo --- create "$NUMBER_OF_VALIDATOR_NODES" nodes
+  echo --- create "$nodeCount" nodes
 
   case $CLOUD_PROVIDER in
     gce)
       net/gce.sh create \
         -d pd-ssd \
-        -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
+        -n "$nodeCount" -c "$NUMBER_OF_CLIENT_NODES" \
         -G "$VALIDATOR_NODE_MACHINE_TYPE" \
         -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/-z } "$ADDITIONAL_FLAGS"
       ;;
     colo)
       net/colo.sh create \
-        -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" -g \
+        -n "$nodeCount" -c "$NUMBER_OF_CLIENT_NODES" \
         -p "$TESTNET_TAG" "$ADDITIONAL_FLAGS"
       ;;
     *)
@@ -71,7 +102,7 @@ launchTestnet() {
   net/init-metrics.sh -e
 
 # TODO: Calling net.sh restart instead of start until https://github.com/solana-labs/solana/issues/6216 is fixed
-  echo --- start "$NUMBER_OF_VALIDATOR_NODES" node test
+  echo --- start "$nodeCount" node test
   if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
     net/net.sh restart -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
   else
@@ -114,7 +145,7 @@ launchTestnet() {
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
-  RESULTS_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$NUMBER_OF_VALIDATOR_NODES".log
+  RESULTS_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$nodeCount".log
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
@@ -123,4 +154,11 @@ launchTestnet() {
   upload-ci-artifact "$RESULTS_FILE"
 }
 
-launchTestnet
+# This is needed, because buildkite doesn't let us define an array of numbers.
+# The array is defined as a space separated string of numbers
+# shellcheck disable=SC2206
+nodes_count_array=($NUMBER_OF_VALIDATOR_NODES)
+
+for n in "${nodes_count_array[@]}"; do
+  launchTestnet "$n"
+done
