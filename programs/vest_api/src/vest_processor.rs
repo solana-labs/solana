@@ -31,7 +31,7 @@ fn div(dividend: u64, divisor: u64) -> (u64, u64) {
     (dividend / divisor, dividend % divisor)
 }
 
-// Return a list of contract messages and a list of contract_id/to_id pairs.
+/// Return a list of contract messages and a list of vesting-date/lamports pairs.
 pub fn create_vesting_schedule(start_date: Date<Utc>, mut lamports: u64) -> Vec<(Date<Utc>, u64)> {
     let mut schedule = vec![];
 
@@ -61,7 +61,7 @@ pub fn create_vesting_schedule(start_date: Date<Utc>, mut lamports: u64) -> Vec<
     schedule
 }
 
-/// Process an AccountData Witness and any payment waiting on it.
+/// Redeem vested tokens.
 fn redeem_tokens(
     vest_state: &mut VestState,
     keyed_accounts: &mut [KeyedAccount],
@@ -170,9 +170,11 @@ mod tests {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::hash::hash;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
     use solana_sdk::transport::TransportError;
+    use std::sync::Arc;
 
     #[test]
     fn test_get_month() {
@@ -280,7 +282,7 @@ mod tests {
         );
     }
 
-    fn create_bank_client(lamports: u64) -> (BankClient, Keypair) {
+    fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_block, mint_keypair) = create_genesis_block(lamports);
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(
@@ -288,6 +290,11 @@ mod tests {
             solana_config_api::config_processor::process_instruction,
         );
         bank.add_instruction_processor(id(), process_instruction);
+        (bank, mint_keypair)
+    }
+
+    fn create_bank_client(lamports: u64) -> (BankClient, Keypair) {
+        let (bank, mint_keypair) = create_bank(lamports);
         (BankClient::new(bank), mint_keypair)
     }
 
@@ -305,6 +312,18 @@ mod tests {
         instructions.push(date_instruction::store(&date_pubkey, dt));
 
         let message = Message::new(instructions);
+        bank_client.send_message(&[&payer_keypair, &date_keypair], message)
+    }
+
+    fn store_date(
+        bank_client: &BankClient,
+        payer_keypair: &Keypair,
+        date_keypair: &Keypair,
+        dt: Date<Utc>,
+    ) -> Result<Signature, TransportError> {
+        let date_pubkey = date_keypair.pubkey();
+        let instruction = date_instruction::store(&date_pubkey, dt);
+        let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
         bank_client.send_message(&[&payer_keypair, &date_keypair], message)
     }
 
@@ -329,7 +348,7 @@ mod tests {
         bank_client.send_message(&[&payer_keypair], message)
     }
 
-    fn redeem_tokens(
+    fn send_redeem_tokens(
         bank_client: &BankClient,
         payer_keypair: &Keypair,
         payee_pubkey: &Pubkey,
@@ -344,7 +363,9 @@ mod tests {
 
     #[test]
     fn test_redeem_tokens() {
-        let (bank_client, alice_keypair) = create_bank_client(3);
+        let (bank, alice_keypair) = create_bank(38);
+        let bank = Arc::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
         let alice_pubkey = alice_keypair.pubkey();
 
         let date_keypair = Keypair::new();
@@ -355,22 +376,22 @@ mod tests {
 
         let contract_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
-        let dt = Utc.ymd(2018, 1, 1);
+        let start_dt = Utc.ymd(2018, 1, 1);
 
         create_vest_account(
             &bank_client,
             &alice_keypair,
             &bob_pubkey,
             &contract_pubkey,
-            dt,
+            start_dt,
             &date_pubkey,
-            1,
+            36,
         )
         .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
-        assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 36);
 
-        redeem_tokens(
+        send_redeem_tokens(
             &bank_client,
             &alice_keypair,
             &bob_pubkey,
@@ -379,11 +400,34 @@ mod tests {
         )
         .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
-        assert_eq!(
-            bank_client.get_account_data(&contract_pubkey).unwrap(),
-            None
-        );
-        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 24);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 12);
+
+        // Update the date oracle and redeem more tokens
+        store_date(
+            &bank_client,
+            &alice_keypair,
+            &date_keypair,
+            Utc.ymd(2019, 2, 1),
+        )
+        .unwrap();
+
+        // Force a new blockhash so that there's not a duplicate signature.
+        for _ in 0..bank.ticks_per_slot() {
+            bank.register_tick(&hash(&[1]));
+        }
+
+        send_redeem_tokens(
+            &bank_client,
+            &alice_keypair,
+            &bob_pubkey,
+            &contract_pubkey,
+            &date_pubkey,
+        )
+        .unwrap();
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 23);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 13);
     }
 
     #[test]
