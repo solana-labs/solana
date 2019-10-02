@@ -26,7 +26,10 @@ function cleanup_testnet {
     cp "$logfile" "$new_log"
     upload-ci-artifact "$new_log"
   done
-  
+
+  echo --- stop network software
+  net/net.sh stop -p $TESTNET_TAG
+
   echo --- delete testnet
   case $CLOUD_PROVIDER in
     gce)
@@ -98,11 +101,12 @@ launchTestnet() {
   echo --- configure database
   net/init-metrics.sh -e
 
+# TODO: Calling net.sh restart instead of start until https://github.com/solana-labs/solana/issues/6216 is fixed
   echo --- start "$nodeCount" node test
   if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
-    net/net.sh start -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
+    net/net.sh restart -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
   else
-    net/net.sh start -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
+    net/net.sh restart -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
   fi
 
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
