@@ -225,7 +225,7 @@ declare module '@solana/web3.js' {
 
     constructor(opts?: TransactionCtorFields): Transaction;
     add(
-      ...items: Array<Transaction | TransactionInstructionCtorFields>
+      ...items: Array<Transaction | TransactionInstruction | TransactionInstructionCtorFields>
     ): Transaction;
     sign(...signers: Array<Account>): void;
     signPartial(...partialSigners: Array<PublicKey | Account>): void;
