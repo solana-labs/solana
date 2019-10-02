@@ -299,7 +299,7 @@ mod tests {
         let oracle_keypair = Keypair::new();
         let oracle_pubkey = oracle_keypair.pubkey();
 
-        let future_dt = Utc.ymd(2019, 1, 1).and_hms(0, 0, 0);
+        let future_dt = Utc.ymd(2019, 1, 1);
         let mut instructions = date_instruction::create_account(&alice_pubkey, &oracle_pubkey, 1);
         instructions.push(date_instruction::store(&oracle_pubkey, future_dt));
 
@@ -310,7 +310,7 @@ mod tests {
 
         let vest_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
-        let dt = Utc.ymd(2018, 1, 1).and_hms(0, 0, 0);
+        let dt = Utc.ymd(2018, 1, 1);
 
         let instructions = vest_instruction::create_account(
             &alice_pubkey,
@@ -345,7 +345,7 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let vest_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
-        let dt = Utc::now();
+        let dt = Utc::now().date();
 
         let instructions = vest_instruction::create_account(
             &alice_pubkey,

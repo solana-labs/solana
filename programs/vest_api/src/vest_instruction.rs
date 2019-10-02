@@ -1,6 +1,6 @@
 use crate::{id, vest_state::VestState};
 use bincode::serialized_size;
-use chrono::prelude::{DateTime, Utc};
+use chrono::prelude::{Date, DateTime, Utc};
 use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
@@ -62,7 +62,7 @@ fn initialize_account(
     terminator_pubkey: &Pubkey,
     payee_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
-    start_dt: DateTime<Utc>,
+    start_dt: Date<Utc>,
     oracle_pubkey: &Pubkey,
     lamports: u64,
 ) -> Instruction {
@@ -72,7 +72,7 @@ fn initialize_account(
         &VestInstruction::InitializeAccount {
             terminator_pubkey: *terminator_pubkey,
             payee_pubkey: *payee_pubkey,
-            start_dt,
+            start_dt: start_dt.and_hms(0, 0, 0),
             oracle_pubkey: *oracle_pubkey,
             lamports,
         },
@@ -84,7 +84,7 @@ pub fn create_account(
     terminator_pubkey: &Pubkey,
     payee_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
-    start_dt: DateTime<Utc>,
+    start_dt: Date<Utc>,
     oracle_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {

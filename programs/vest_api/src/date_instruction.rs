@@ -3,7 +3,7 @@
 ///
 use bincode::{deserialize, serialized_size};
 use chrono::{
-    prelude::{DateTime, TimeZone, Utc},
+    prelude::{Date, DateTime, TimeZone, Utc},
     serde::ts_seconds,
 };
 use serde_derive::{Deserialize, Serialize};
@@ -24,8 +24,10 @@ impl Default for DateConfig {
     }
 }
 impl DateConfig {
-    pub fn new(dt: DateTime<Utc>) -> Self {
-        Self { dt }
+    pub fn new(dt: Date<Utc>) -> Self {
+        Self {
+            dt: dt.and_hms(0, 0, 0),
+        }
     }
 
     pub fn deserialize(input: &[u8]) -> Option<Self> {
@@ -55,7 +57,7 @@ pub fn create_account(
 
 /// Set the date in the date account. The account pubkey must be signed in the
 /// transaction containing this instruction.
-pub fn store(date_account_pubkey: &Pubkey, dt: DateTime<Utc>) -> Instruction {
+pub fn store(date_account_pubkey: &Pubkey, dt: Date<Utc>) -> Instruction {
     let date_config = DateConfig::new(dt);
     config_instruction::store(&date_account_pubkey, true, vec![], &date_config)
 }
