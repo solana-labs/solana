@@ -28,7 +28,7 @@ use std::mem;
 pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm, MemoryRegion), Error> {
     let mut vm = EbpfVm::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
-    vm.set_max_instruction_count(36000)?;
+    vm.set_max_instruction_count(100_000)?;
     vm.set_elf(&prog)?;
 
     let heap_region = helpers::register_helpers(&mut vm)?;
