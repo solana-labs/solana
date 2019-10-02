@@ -65,22 +65,23 @@ pub fn create_vesting_schedule(start_date: Date<Utc>, mut lamports: u64) -> Vec<
 fn redeem_tokens(
     vest_state: &mut VestState,
     keyed_accounts: &mut [KeyedAccount],
-) -> Result<(), VestError> {
+) -> Result<(), InstructionError> {
     let date_keyed_account = &keyed_accounts[0];
     if date_keyed_account.account.owner != solana_config_api::id() {
-        return Err(VestError::UnexpectedProgramId);
+        return Err(InstructionError::IncorrectProgramId);
     }
 
     if *date_keyed_account.unsigned_key() != vest_state.date_pubkey {
-        return Err(VestError::Unauthorized);
+        return Err(VestError::Unauthorized.into());
     }
 
     if &vest_state.payee_pubkey != keyed_accounts[2].unsigned_key() {
-        return Err(VestError::DestinationMissing);
+        return Err(VestError::DestinationMissing.into());
     }
 
-    let date_config: DateConfig =
-        deserialize(get_config_data(&date_keyed_account.account.data).unwrap()).unwrap();
+    let config_data = get_config_data(&date_keyed_account.account.data).unwrap();
+    let date_config =
+        deserialize::<DateConfig>(config_data).map_err(|_| InstructionError::InvalidAccountData)?;
 
     let schedule = create_vesting_schedule(vest_state.start_dt.date(), vest_state.lamports);
 
@@ -104,10 +105,13 @@ fn redeem_tokens(
 fn terminate(
     vest_state: &mut VestState,
     keyed_accounts: &mut [KeyedAccount],
-) -> Result<(), VestError> {
+) -> Result<(), InstructionError> {
+    if keyed_accounts[0].signer_key().is_none() {
+        return Err(InstructionError::MissingRequiredSignature);
+    }
     let signer_key = keyed_accounts[0].signer_key().unwrap();
     if &vest_state.terminator_pubkey != signer_key {
-        return Err(VestError::Unauthorized);
+        return Err(VestError::Unauthorized.into());
     }
 
     // If only 2 accounts provided, send tokens to the signer.
@@ -144,17 +148,12 @@ pub fn process_instruction(
         }
         VestInstruction::RedeemTokens => {
             let mut vest_state = VestState::deserialize(&keyed_accounts[1].account.data)?;
-            redeem_tokens(&mut vest_state, keyed_accounts)
-                .map_err(|e| InstructionError::CustomError(e as u32))?;
+            redeem_tokens(&mut vest_state, keyed_accounts)?;
             vest_state.serialize(&mut keyed_accounts[1].account.data)
         }
         VestInstruction::Terminate => {
             let mut vest_state = VestState::deserialize(&keyed_accounts[1].account.data)?;
-            if keyed_accounts[0].signer_key().is_none() {
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            terminate(&mut vest_state, keyed_accounts)
-                .map_err(|e| InstructionError::CustomError(e as u32))?;
+            terminate(&mut vest_state, keyed_accounts)?;
             vest_state.serialize(&mut keyed_accounts[1].account.data)
         }
     }

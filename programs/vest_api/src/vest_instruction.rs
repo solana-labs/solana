@@ -4,7 +4,7 @@ use chrono::prelude::{Date, DateTime, Utc};
 use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
+    instruction::{AccountMeta, Instruction, InstructionError},
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction,
@@ -14,7 +14,12 @@ use solana_sdk::{
 pub enum VestError {
     DestinationMissing,
     Unauthorized,
-    UnexpectedProgramId,
+}
+
+impl From<VestError> for InstructionError {
+    fn from(e: VestError) -> Self {
+        InstructionError::CustomError(e as u32)
+    }
 }
 
 impl<T> DecodeError<T> for VestError {
@@ -31,7 +36,6 @@ impl std::fmt::Display for VestError {
             match self {
                 VestError::DestinationMissing => "destination missing",
                 VestError::Unauthorized => "unauthorized",
-                VestError::UnexpectedProgramId => "unexpected program id",
             }
         )
     }
