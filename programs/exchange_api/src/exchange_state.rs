@@ -190,18 +190,18 @@ pub fn check_trade(side: OrderSide, tokens: u64, price: u64) -> Result<(), Excha
     match side {
         OrderSide::Ask => {
             if tokens * price / SCALER == 0 {
-                Err(ExchangeError::InvalidTrade(format!(
+                return Err(ExchangeError::InvalidTrade(format!(
                     "To trade of {} for {}/{} results in 0 tradeable tokens",
                     tokens, SCALER, price
-                )))?
+                )));
             }
         }
         OrderSide::Bid => {
             if tokens * SCALER / price == 0 {
-                Err(ExchangeError::InvalidTrade(format!(
+                return Err(ExchangeError::InvalidTrade(format!(
                     "From trade of {} for {}?{} results in 0 tradeable tokens",
                     tokens, SCALER, price
-                )))?
+                )));
             }
         }
     }
