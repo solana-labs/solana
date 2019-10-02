@@ -66,12 +66,12 @@ fn redeem_tokens(
     vest_state: &mut VestState,
     keyed_accounts: &mut [KeyedAccount],
 ) -> Result<(), VestError> {
-    let oracle_keyed_account = &keyed_accounts[0];
-    if oracle_keyed_account.account.owner != solana_config_api::id() {
+    let date_keyed_account = &keyed_accounts[0];
+    if date_keyed_account.account.owner != solana_config_api::id() {
         return Err(VestError::UnexpectedProgramId);
     }
 
-    if *oracle_keyed_account.unsigned_key() != vest_state.oracle_pubkey {
+    if *date_keyed_account.unsigned_key() != vest_state.date_pubkey {
         return Err(VestError::Unauthorized);
     }
 
@@ -80,7 +80,7 @@ fn redeem_tokens(
     }
 
     let date_config: DateConfig =
-        deserialize(get_config_data(&oracle_keyed_account.account.data).unwrap()).unwrap();
+        deserialize(get_config_data(&date_keyed_account.account.data).unwrap()).unwrap();
 
     let schedule = create_vesting_schedule(vest_state.start_dt.date(), vest_state.lamports);
 
@@ -129,14 +129,14 @@ pub fn process_instruction(
             terminator_pubkey,
             payee_pubkey,
             start_dt,
-            oracle_pubkey,
+            date_pubkey,
             lamports,
         } => {
             let vest_state = VestState {
                 terminator_pubkey,
                 payee_pubkey,
                 start_dt,
-                oracle_pubkey,
+                date_pubkey,
                 lamports,
                 redeemed_lamports: 0,
             };
@@ -171,7 +171,8 @@ mod tests {
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::transport::TransportError;
 
     #[test]
     fn test_get_month() {
@@ -279,7 +280,7 @@ mod tests {
         );
     }
 
-    fn create_bank(lamports: u64) -> (Bank, Keypair) {
+    fn create_bank_client(lamports: u64) -> (BankClient, Keypair) {
         let (genesis_block, mint_keypair) = create_genesis_block(lamports);
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(
@@ -287,88 +288,143 @@ mod tests {
             solana_config_api::config_processor::process_instruction,
         );
         bank.add_instruction_processor(id(), process_instruction);
-        (bank, mint_keypair)
+        (BankClient::new(bank), mint_keypair)
+    }
+
+    /// Create a config account and use it as a date oracle.
+    fn create_date_account(
+        bank_client: &BankClient,
+        payer_keypair: &Keypair,
+        date_keypair: &Keypair,
+        dt: Date<Utc>,
+    ) -> Result<Signature, TransportError> {
+        let date_pubkey = date_keypair.pubkey();
+
+        let mut instructions =
+            date_instruction::create_account(&payer_keypair.pubkey(), &date_pubkey, 1);
+        instructions.push(date_instruction::store(&date_pubkey, dt));
+
+        let message = Message::new(instructions);
+        bank_client.send_message(&[&payer_keypair, &date_keypair], message)
+    }
+
+    fn create_vest_account(
+        bank_client: &BankClient,
+        payer_keypair: &Keypair,
+        payee_pubkey: &Pubkey,
+        contract_pubkey: &Pubkey,
+        start_dt: Date<Utc>,
+        date_pubkey: &Pubkey,
+        lamports: u64,
+    ) -> Result<Signature, TransportError> {
+        let instructions = vest_instruction::create_account(
+            &payer_keypair.pubkey(),
+            &payee_pubkey,
+            &contract_pubkey,
+            start_dt,
+            &date_pubkey,
+            lamports,
+        );
+        let message = Message::new(instructions);
+        bank_client.send_message(&[&payer_keypair], message)
+    }
+
+    fn redeem_tokens(
+        bank_client: &BankClient,
+        payer_keypair: &Keypair,
+        payee_pubkey: &Pubkey,
+        contract_pubkey: &Pubkey,
+        date_pubkey: &Pubkey,
+    ) -> Result<Signature, TransportError> {
+        let instruction =
+            vest_instruction::redeem_tokens(&date_pubkey, &contract_pubkey, &payee_pubkey);
+        let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
+        bank_client.send_message(&[&payer_keypair], message)
     }
 
     #[test]
     fn test_redeem_tokens() {
-        let (bank, alice_keypair) = create_bank(3);
-        let bank_client = BankClient::new(bank);
+        let (bank_client, alice_keypair) = create_bank_client(3);
         let alice_pubkey = alice_keypair.pubkey();
 
-        let oracle_keypair = Keypair::new();
-        let oracle_pubkey = oracle_keypair.pubkey();
+        let date_keypair = Keypair::new();
+        let date_pubkey = date_keypair.pubkey();
 
-        let future_dt = Utc.ymd(2019, 1, 1);
-        let mut instructions = date_instruction::create_account(&alice_pubkey, &oracle_pubkey, 1);
-        instructions.push(date_instruction::store(&oracle_pubkey, future_dt));
+        let current_dt = Utc.ymd(2019, 1, 1);
+        create_date_account(&bank_client, &alice_keypair, &date_keypair, current_dt).unwrap();
 
-        let message = Message::new(instructions);
-        bank_client
-            .send_message(&[&alice_keypair, &oracle_keypair], message)
-            .unwrap();
-
-        let vest_pubkey = Pubkey::new_rand();
+        let contract_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
         let dt = Utc.ymd(2018, 1, 1);
 
-        let instructions = vest_instruction::create_account(
-            &alice_pubkey,
+        create_vest_account(
+            &bank_client,
+            &alice_keypair,
             &bob_pubkey,
-            &vest_pubkey,
+            &contract_pubkey,
             dt,
-            &oracle_pubkey,
+            &date_pubkey,
             1,
-        );
-        let message = Message::new(instructions);
-        bank_client
-            .send_message(&[&alice_keypair], message)
-            .unwrap();
+        )
+        .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
-        assert_eq!(bank_client.get_balance(&vest_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 1);
 
-        let instruction =
-            vest_instruction::redeem_tokens(&oracle_pubkey, &vest_pubkey, &bob_pubkey);
-        let message = Message::new_with_payer(vec![instruction], Some(&alice_pubkey));
-        bank_client
-            .send_message(&[&alice_keypair], message)
-            .unwrap();
+        redeem_tokens(
+            &bank_client,
+            &alice_keypair,
+            &bob_pubkey,
+            &contract_pubkey,
+            &date_pubkey,
+        )
+        .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
-        assert_eq!(bank_client.get_account_data(&vest_pubkey).unwrap(), None);
+        assert_eq!(
+            bank_client.get_account_data(&contract_pubkey).unwrap(),
+            None
+        );
         assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 1);
     }
 
     #[test]
     fn test_cancel_payment() {
-        let (bank, alice_keypair) = create_bank(3);
-        let bank_client = BankClient::new(bank);
+        let (bank_client, alice_keypair) = create_bank_client(3);
         let alice_pubkey = alice_keypair.pubkey();
-        let vest_pubkey = Pubkey::new_rand();
+        let contract_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
-        let dt = Utc::now().date();
+        let start_dt = Utc::now().date();
 
-        let instructions = vest_instruction::create_account(
-            &alice_pubkey,
+        let date_keypair = Keypair::new();
+        let date_pubkey = date_keypair.pubkey();
+
+        let current_dt = Utc.ymd(2019, 1, 1);
+        create_date_account(&bank_client, &alice_keypair, &date_keypair, current_dt).unwrap();
+
+        create_vest_account(
+            &bank_client,
+            &alice_keypair,
             &bob_pubkey,
-            &vest_pubkey,
-            dt,
-            &alice_pubkey,
+            &contract_pubkey,
+            start_dt,
+            &date_pubkey,
             1,
-        );
-        let message = Message::new(instructions);
-        bank_client
-            .send_message(&[&alice_keypair], message)
-            .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
-        assert_eq!(bank_client.get_balance(&vest_pubkey).unwrap(), 1);
+        )
+        .unwrap();
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 1);
 
         // Now, terminate the transaction. alice gets her funds back
-        let instruction = vest_instruction::terminate(&alice_pubkey, &vest_pubkey, &alice_pubkey);
+        // Note: that tokens up until the oracle date are *not* redeemed automatically.
+        let instruction =
+            vest_instruction::terminate(&alice_pubkey, &contract_pubkey, &alice_pubkey);
         bank_client
             .send_instruction(&alice_keypair, instruction)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 3);
-        assert_eq!(bank_client.get_account_data(&vest_pubkey).unwrap(), None);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
+        assert_eq!(
+            bank_client.get_account_data(&contract_pubkey).unwrap(),
+            None
+        );
         assert_eq!(bank_client.get_account_data(&bob_pubkey).unwrap(), None);
     }
 }

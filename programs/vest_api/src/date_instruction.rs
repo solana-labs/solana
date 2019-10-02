@@ -43,21 +43,16 @@ impl ConfigState for DateConfig {
 
 /// Create a date account. The date is set to the Unix epoch.
 pub fn create_account(
-    from_account_pubkey: &Pubkey,
-    date_account_pubkey: &Pubkey,
+    payer_pubkey: &Pubkey,
+    date_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
-    config_instruction::create_account::<DateConfig>(
-        from_account_pubkey,
-        date_account_pubkey,
-        lamports,
-        vec![],
-    )
+    config_instruction::create_account::<DateConfig>(payer_pubkey, date_pubkey, lamports, vec![])
 }
 
 /// Set the date in the date account. The account pubkey must be signed in the
 /// transaction containing this instruction.
-pub fn store(date_account_pubkey: &Pubkey, dt: Date<Utc>) -> Instruction {
+pub fn store(date_pubkey: &Pubkey, dt: Date<Utc>) -> Instruction {
     let date_config = DateConfig::new(dt);
-    config_instruction::store(&date_account_pubkey, true, vec![], &date_config)
+    config_instruction::store(&date_pubkey, true, vec![], &date_config)
 }

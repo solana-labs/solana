@@ -21,7 +21,7 @@ pub struct VestState {
     pub start_dt: DateTime<Utc>,
 
     /// Address of an account containing a trusted date, used to drive the vesting schedule
-    pub oracle_pubkey: Pubkey,
+    pub date_pubkey: Pubkey,
 
     /// The number of lamports to send the payee if the schedule completes
     pub lamports: u64,
@@ -36,7 +36,7 @@ impl Default for VestState {
             terminator_pubkey: Pubkey::default(),
             payee_pubkey: Pubkey::default(),
             start_dt: Utc.timestamp(0, 0),
-            oracle_pubkey: Pubkey::default(),
+            date_pubkey: Pubkey::default(),
             lamports: 0,
             redeemed_lamports: 0,
         }

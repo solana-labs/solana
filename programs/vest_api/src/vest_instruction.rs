@@ -46,8 +46,8 @@ pub enum VestInstruction {
         terminator_pubkey: Pubkey, // The address authorized to terminate this contract with a signed Terminate instruction
         payee_pubkey: Pubkey,      // The address authorized to redeem vested tokens
         start_dt: DateTime<Utc>,   // The day from which the vesting contract begins
-        oracle_pubkey: Pubkey, // Address of an account containing a trusted date, used to drive the vesting schedule
-        lamports: u64,         // The number of lamports to send the payee if the schedule completes
+        date_pubkey: Pubkey, // Address of an account containing a trusted date, used to drive the vesting schedule
+        lamports: u64,       // The number of lamports to send the payee if the schedule completes
     },
 
     /// Load an account and pass its data to the contract for inspection.
@@ -63,7 +63,7 @@ fn initialize_account(
     payee_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
     start_dt: Date<Utc>,
-    oracle_pubkey: &Pubkey,
+    date_pubkey: &Pubkey,
     lamports: u64,
 ) -> Instruction {
     let keys = vec![AccountMeta::new(*contract_pubkey, false)];
@@ -73,7 +73,7 @@ fn initialize_account(
             terminator_pubkey: *terminator_pubkey,
             payee_pubkey: *payee_pubkey,
             start_dt: start_dt.and_hms(0, 0, 0),
-            oracle_pubkey: *oracle_pubkey,
+            date_pubkey: *date_pubkey,
             lamports,
         },
         keys,
@@ -85,7 +85,7 @@ pub fn create_account(
     payee_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
     start_dt: Date<Utc>,
-    oracle_pubkey: &Pubkey,
+    date_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = serialized_size(&VestState::default()).unwrap();
@@ -102,7 +102,7 @@ pub fn create_account(
             payee_pubkey,
             contract_pubkey,
             start_dt,
-            oracle_pubkey,
+            date_pubkey,
             lamports,
         ),
     ]
@@ -120,9 +120,9 @@ pub fn terminate(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
 }
 
 /// Apply account data to a contract waiting on an AccountData witness.
-pub fn redeem_tokens(oracle_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
+pub fn redeem_tokens(date_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new_credit_only(*oracle_pubkey, false),
+        AccountMeta::new_credit_only(*date_pubkey, false),
         AccountMeta::new(*contract, false),
         AccountMeta::new_credit_only(*to, false),
     ];
