@@ -24,8 +24,6 @@ solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
 solana-stake-program = { path = "../programs/stake_program", version = "0.20.0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.20.0" }
 solana-storage-program = { path = "../programs/storage_program", version = "0.20.0" }
-solana-token-api = { path = "../programs/token_api", version = "0.20.0" }
-solana-token-program = { path = "../programs/token_program", version = "0.20.0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.20.0" }
 solana-vote-program = { path = "../programs/vote_program", version = "0.20.0" }
 

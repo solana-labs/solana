@@ -42,8 +42,6 @@ members = [
     "programs/stake_tests",
     "programs/storage_api",
     "programs/storage_program",
-    "programs/token_api",
-    "programs/token_program",
     "programs/vote_api",
     "programs/vote_program",
     "replicator",
