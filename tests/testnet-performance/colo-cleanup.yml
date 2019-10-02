@@ -1,0 +1,20 @@
+- command: "tests/testnet-performance/utils.sh logs"
+  label: "Collect logs"
+  agents:
+    - "queue=colo-deploy"
+
+- wait: ~
+  continue_on_failure: true
+
+- command: "tests/testnet-performance/utils.sh stop"
+  label: "Stop Network software"
+  agents:
+    - "queue=colo-deploy"
+
+- wait: ~
+  continue_on_failure: true
+
+- command: "tests/testnet-performance/utils.sh delete"
+  label: "Delete Testnet"
+  agents:
+    - "queue=colo-deploy"
