@@ -28,7 +28,17 @@ function cleanup_testnet {
   done
   
   echo --- delete testnet
-  net/gce.sh delete -p $TESTNET_TAG
+  case $CLOUD_PROVIDER in
+    gce)
+      net/gce.sh delete -p $TESTNET_TAG
+      ;;
+    colo)
+      net/colo.sh delete -p $TESTNET_TAG
+      ;;
+    *)
+      echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
+      ;;
+    esac
 }
 trap cleanup_testnet EXIT
 
