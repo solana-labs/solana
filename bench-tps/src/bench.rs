@@ -560,9 +560,6 @@ pub fn fund_keys<T: Client>(
                 send_txs.stop();
                 debug!("send {} txs: {}us", to_fund_txs.len(), send_txs.as_us());
 
-                // retry anything that seems to have dropped through cracks
-                //  again since these txs are all or nothing, they're fine to
-                //  retry
                 let mut verify_txs = Measure::start("verify_txs");
                 let mut starting_txs = to_fund_txs.len();
                 let mut verified_txs = 0;
@@ -592,6 +589,9 @@ pub fn fund_keys<T: Client>(
                 verify_txs.stop();
                 debug!("verified {} txs: {}us", starting_txs, verify_txs.as_us());
 
+                // retry anything that seems to have dropped through cracks
+                //  again since these txs are all or nothing, they're fine to
+                //  retry
                 tries += 1;
             }
             println!("transferred");
