@@ -42,9 +42,10 @@ cache.
 4. Subtract the fee from the balance.
 
 5. For all the keys in the transaction that are Credit-Debit and
-are referenced by an instruction, mark their balance as 0 in the
-cache.  The execution key can be declared as Credit-Debit as long
-as it is not used in any instruction.
+are referenced by an instruction, reduce their balance to 0 in the
+cache.  The execution key is declared as Credit-Debit, but as long
+as it is not used in any instruction its balance will not be reduced
+to 0.
 
 ## Leader Replay
 
@@ -54,7 +55,7 @@ replay stage operation.
 ## Impact on Clients
 
 The same execution key can be reused many times in the same block
-until it is used once as a Credit-Debit key.
+until it is used once as a Credit-Debit key by an instruction.
 
 Clients that transmit a large number of transactions per second
 should use a dedicated execution key that is not used as Credit-Debit

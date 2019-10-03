@@ -76,7 +76,7 @@ The time, i.e. number of [slots](terminology.md#slot), for which a [leader sched
 
 ## execution key
 
-The key in the transaction that pays for the cost of including the transaction in the ledger.  This is the first key in the transaction.
+The key in the transaction that pays for the cost of including the transaction in the ledger.  This is the first key in the transaction.  This key must be declared as Credit-Debit since paying for the transaction reduces the account balance.
 
 ## fake storage proof
 
