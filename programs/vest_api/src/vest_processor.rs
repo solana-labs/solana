@@ -2,7 +2,6 @@
 use crate::date_instruction::DateConfig;
 use crate::{
     vest_instruction::{VestError, VestInstruction},
-    vest_schedule::create_vesting_schedule,
     vest_state::VestState,
 };
 use bincode::deserialize;
@@ -22,7 +21,7 @@ fn parse_date_account(
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    if *keyed_account.unsigned_key() != *expected_pubkey {
+    if keyed_account.unsigned_key() != expected_pubkey {
         return Err(VestError::Unauthorized.into());
     }
 
@@ -37,56 +36,26 @@ fn parse_payee_account<'a>(
     keyed_account: &'a mut KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<&'a mut Account, InstructionError> {
-    if *keyed_account.unsigned_key() != *expected_pubkey {
+    if keyed_account.unsigned_key() != expected_pubkey {
         return Err(VestError::DestinationMissing.into());
     }
 
     Ok(keyed_account.account)
 }
 
-/// Redeem vested tokens.
-fn redeem_tokens(
-    vest_state: &mut VestState,
-    current_dt: Date<Utc>,
-    contract_account: &mut Account,
-    payee_account: &mut Account,
-) -> Result<(), InstructionError> {
-    let schedule = create_vesting_schedule(vest_state.start_dt.date(), vest_state.lamports);
-
-    let vested_lamports = schedule
-        .into_iter()
-        .take_while(|(dt, _)| *dt <= current_dt)
-        .map(|(_, lamports)| lamports)
-        .sum::<u64>();
-
-    let redeemable_lamports = vested_lamports.saturating_sub(vest_state.redeemed_lamports);
-
-    contract_account.lamports -= redeemable_lamports;
-    payee_account.lamports += redeemable_lamports;
-
-    vest_state.redeemed_lamports += redeemable_lamports;
-
-    Ok(())
-}
-
-/// Terminate the contract and return all tokens to the given pubkey.
-fn terminate(
-    vest_state: &mut VestState,
-    keyed_accounts: &mut [KeyedAccount],
-) -> Result<(), InstructionError> {
-    if keyed_accounts[0].signer_key().is_none() {
+fn parse_terminator_account<'a>(
+    keyed_account: &'a mut KeyedAccount,
+    expected_pubkey: &Pubkey,
+) -> Result<&'a mut Account, InstructionError> {
+    if keyed_account.signer_key().is_none() {
         return Err(InstructionError::MissingRequiredSignature);
     }
-    let signer_key = keyed_accounts[0].signer_key().unwrap();
-    if &vest_state.terminator_pubkey != signer_key {
+
+    if keyed_account.unsigned_key() != expected_pubkey {
         return Err(VestError::Unauthorized.into());
     }
 
-    // If only 2 accounts provided, send tokens to the signer.
-    let i = if keyed_accounts.len() < 3 { 0 } else { 2 };
-    keyed_accounts[i].account.lamports += keyed_accounts[1].account.lamports;
-    keyed_accounts[1].account.lamports = 0;
-    Ok(())
+    Ok(keyed_account.account)
 }
 
 pub fn process_instruction(
@@ -124,13 +93,25 @@ pub fn process_instruction(
             let contract_account = &mut ka1.account;
             let payee_account = parse_payee_account(ka2, &vest_state.payee_pubkey)?;
 
-            redeem_tokens(&mut vest_state, current_dt, contract_account, payee_account)?;
+            vest_state.redeem_tokens(current_dt, contract_account, payee_account);
             vest_state.serialize(&mut ka1.account.data)
         }
         VestInstruction::Terminate => {
-            let mut vest_state = VestState::deserialize(&keyed_accounts[1].account.data)?;
-            terminate(&mut vest_state, keyed_accounts)?;
-            vest_state.serialize(&mut keyed_accounts[1].account.data)
+            let (ka0, ka1, ka2) = match keyed_accounts {
+                [ka0, ka1] => (ka0, ka1, None),
+                [ka0, ka1, ka2] => (ka0, ka1, Some(ka2)),
+                _ => return Err(InstructionError::InvalidArgument),
+            };
+            let mut vest_state = VestState::deserialize(&ka1.account.data)?;
+            let terminator_account = parse_terminator_account(ka0, &vest_state.terminator_pubkey)?;
+            let contract_account = &mut ka1.account;
+            let payee_account = if let Some(ka2) = ka2 {
+                &mut ka2.account
+            } else {
+                terminator_account
+            };
+            vest_state.terminate(contract_account, payee_account);
+            vest_state.serialize(&mut ka1.account.data)
         }
     }
 }

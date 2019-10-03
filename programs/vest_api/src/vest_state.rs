@@ -1,12 +1,13 @@
 //! vest state
+use crate::vest_schedule::create_vesting_schedule;
 use bincode::{self, deserialize, serialize_into};
+use chrono::prelude::*;
 use chrono::{
     prelude::{DateTime, TimeZone, Utc},
     serde::ts_seconds,
 };
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct VestState {
@@ -50,6 +51,35 @@ impl VestState {
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
         deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
+    }
+
+    /// Redeem vested tokens.
+    pub fn redeem_tokens(
+        &mut self,
+        current_dt: Date<Utc>,
+        contract_account: &mut Account,
+        payee_account: &mut Account,
+    ) {
+        let schedule = create_vesting_schedule(self.start_dt.date(), self.lamports);
+
+        let vested_lamports = schedule
+            .into_iter()
+            .take_while(|(dt, _)| *dt <= current_dt)
+            .map(|(_, lamports)| lamports)
+            .sum::<u64>();
+
+        let redeemable_lamports = vested_lamports.saturating_sub(self.redeemed_lamports);
+
+        contract_account.lamports -= redeemable_lamports;
+        payee_account.lamports += redeemable_lamports;
+
+        self.redeemed_lamports += redeemable_lamports;
+    }
+
+    /// Terminate the contract and return all tokens to the given pubkey.
+    pub fn terminate(&mut self, contract_account: &mut Account, payee_account: &mut Account) {
+        payee_account.lamports += contract_account.lamports;
+        contract_account.lamports = 0;
     }
 }
 
