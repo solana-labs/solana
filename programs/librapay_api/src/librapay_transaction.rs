@@ -121,7 +121,7 @@ pub fn get_libra_balance<T: Client>(
             }
             state => {
                 info!("Unknown account state: {:?}", state);
-                return Err(LibrapayError::UnknownAccountState)?;
+                return Err(LibrapayError::UnknownAccountState.into());
             }
         }
         let resource = data_store

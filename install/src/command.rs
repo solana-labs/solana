@@ -127,7 +127,7 @@ fn download_to_temp_archive(
         .map_err(|err| format!("Unable to hash {:?}: {}", temp_file, err))?;
 
     if expected_sha256.is_some() && expected_sha256 != Some(&temp_file_sha256) {
-        Err(io::Error::new(io::ErrorKind::Other, "Incorrect hash"))?;
+        return Err(io::Error::new(io::ErrorKind::Other, "Incorrect hash").into());
     }
 
     source.progress_bar.finish_and_clear();
@@ -651,7 +651,7 @@ pub fn deploy(
         })?;
     progress_bar.finish_and_clear();
     if balance.unwrap_or(0) == 0 {
-        Err(format!("{} account balance is empty", from_keypair_file))?;
+        return Err(format!("{} account balance is empty", from_keypair_file));
     }
 
     // Download the release
@@ -780,12 +780,12 @@ pub fn update(config_file: &str) -> Result<bool, String> {
         if timestamp_secs()
             < u64::from_str_radix(crate::build_env::BUILD_SECONDS_SINCE_UNIX_EPOCH, 10).unwrap()
         {
-            Err("Unable to update as system time seems unreliable".to_string())?
+            return Err("Unable to update as system time seems unreliable".to_string());
         }
 
         if let Some(ref current_update_manifest) = config.current_update_manifest {
             if update_manifest.timestamp_secs < current_update_manifest.timestamp_secs {
-                Err("Unable to update to an older version".to_string())?
+                return Err("Unable to update to an older version".to_string());
             }
         }
         let release_dir = config.release_dir(&update_manifest.download_sha256);
@@ -818,7 +818,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
     })?;
 
     if release_target != crate::build_env::TARGET {
-        Err(format!("Incompatible update target: {}", release_target))?;
+        return Err(format!("Incompatible update target: {}", release_target));
     }
 
     let _ = fs::remove_dir_all(config.active_release_dir());
@@ -854,10 +854,10 @@ pub fn run(
     }
 
     if !full_program_path.exists() {
-        Err(format!(
+        return Err(format!(
             "{} does not exist",
             full_program_path.to_str().unwrap()
-        ))?;
+        ));
     }
 
     let mut child_option: Option<std::process::Child> = None;

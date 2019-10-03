@@ -13,11 +13,12 @@ pub fn request_airdrop_transaction(
     _blockhash: Hash,
 ) -> Result<Transaction, Error> {
     if lamports == 0 {
-        Err(Error::new(ErrorKind::Other, "Airdrop failed"))?
+        Err(Error::new(ErrorKind::Other, "Airdrop failed"))
+    } else {
+        let key = Keypair::new();
+        let to = Pubkey::new_rand();
+        let blockhash = Hash::default();
+        let tx = system_transaction::create_user_account(&key, &to, lamports, blockhash);
+        Ok(tx)
     }
-    let key = Keypair::new();
-    let to = Pubkey::new_rand();
-    let blockhash = Hash::default();
-    let tx = system_transaction::create_user_account(&key, &to, lamports, blockhash);
-    Ok(tx)
 }

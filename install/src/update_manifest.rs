@@ -47,12 +47,10 @@ impl SignedUpdateManifest {
         let mut manifest: SignedUpdateManifest = bincode::deserialize(input)?;
         manifest.account_pubkey = *account_pubkey;
         if !manifest.verify() {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Manifest failed to verify",
-            ))?;
+            Err(io::Error::new(io::ErrorKind::Other, "Manifest failed to verify").into())
+        } else {
+            Ok(manifest)
         }
-        Ok(manifest)
     }
 }
 

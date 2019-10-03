@@ -61,9 +61,11 @@ impl RpcClient {
             Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Received result of an unexpected type",
-            ))?;
+            )
+            .into())
+        } else {
+            Ok(signature.as_str().unwrap().to_string())
         }
-        Ok(signature.as_str().unwrap().to_string())
     }
 
     pub fn get_signature_status(
@@ -195,14 +197,11 @@ impl RpcClient {
                 send_retries - 1
             };
             if send_retries == 0 {
-                if status.is_some() {
-                    status.unwrap()?
-                } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Transaction {:?} failed: {:?}", signature_str, status),
-                    ))?;
-                }
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Transaction {:?} failed: {:?}", signature_str, status),
+                )
+                .into());
             }
         }
     }
@@ -262,7 +261,7 @@ impl RpcClient {
             }
 
             if send_retries == 0 {
-                Err(io::Error::new(io::ErrorKind::Other, "Transactions failed"))?;
+                return Err(io::Error::new(io::ErrorKind::Other, "Transactions failed").into());
             }
             send_retries -= 1;
 

@@ -166,7 +166,7 @@ pub fn process_instruction(
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
     if keyed_accounts.is_empty() {
-        Err(InstructionError::InvalidInstructionData)?;
+        return Err(InstructionError::InvalidInstructionData);
     }
 
     // 0th index is vote account
@@ -184,7 +184,7 @@ pub fn process_instruction(
         VoteInstruction::Vote(vote) => {
             datapoint_info!("vote-native", ("count", 1, i64));
             if rest.len() < 2 {
-                Err(InstructionError::InvalidInstructionData)?;
+                return Err(InstructionError::InvalidInstructionData);
             }
             let (slot_hashes_and_clock, other_signers) = rest.split_at_mut(2);
 
@@ -198,7 +198,7 @@ pub fn process_instruction(
         }
         VoteInstruction::Withdraw(lamports) => {
             if rest.is_empty() {
-                Err(InstructionError::InvalidInstructionData)?;
+                return Err(InstructionError::InvalidInstructionData);
             }
             let (to, rest) = rest.split_at_mut(1);
             let to = &mut to[0];
