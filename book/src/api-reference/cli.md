@@ -175,7 +175,9 @@ $ solana send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 ```
 
 ## Usage
+
 ### solana-cli
+
 ```text
 solana-cli 0.20.0
 Blockchain, Rebuilt for Scale
@@ -233,6 +235,7 @@ SUBCOMMANDS:
 ```
 
 #### solana-address
+
 ```text
 solana-address 
 Get your public key
@@ -251,6 +254,7 @@ OPTIONS:
 ```
 
 #### solana-airdrop
+
 ```text
 solana-airdrop 
 Request lamports
@@ -275,6 +279,7 @@ ARGS:
 ```
 
 #### solana-balance
+
 ```text
 solana-balance 
 Get your balance
@@ -297,6 +302,7 @@ ARGS:
 ```
 
 #### solana-cancel
+
 ```text
 solana-cancel 
 Cancel a transfer
@@ -318,6 +324,7 @@ ARGS:
 ```
 
 #### solana-claim-storage-reward
+
 ```text
 solana-claim-storage-reward 
 Redeem storage reward credits
@@ -340,6 +347,7 @@ ARGS:
 ```
 
 #### solana-cluster-version
+
 ```text
 solana-cluster-version 
 Get the version of the cluster entrypoint
@@ -358,6 +366,7 @@ OPTIONS:
 ```
 
 #### solana-confirm
+
 ```text
 solana-confirm 
 Confirm transaction by signature
@@ -379,6 +388,7 @@ ARGS:
 ```
 
 #### solana-create-replicator-storage-account
+
 ```text
 solana-create-replicator-storage-account 
 Create a replicator storage account
@@ -397,10 +407,11 @@ OPTIONS:
 
 ARGS:
     <STORAGE ACCOUNT OWNER PUBKEY>    
-    <STORAGE ACCOUNT PUBKEY>          
+    <STORAGE ACCOUNT PUBKEY>
 ```
 
 #### solana-create-stake-account
+
 ```text
 solana-create-stake-account 
 Create a stake account
@@ -429,6 +440,7 @@ ARGS:
 ```
 
 #### solana-create-storage-mining-pool-account
+
 ```text
 solana-create-storage-mining-pool-account 
 Create mining pool account
@@ -452,6 +464,7 @@ ARGS:
 ```
 
 #### solana-create-validator-storage-account
+
 ```text
 solana-create-validator-storage-account 
 Create a validator storage account
@@ -470,10 +483,11 @@ OPTIONS:
 
 ARGS:
     <STORAGE ACCOUNT OWNER PUBKEY>    
-    <STORAGE ACCOUNT PUBKEY>          
+    <STORAGE ACCOUNT PUBKEY>
 ```
 
 #### solana-create-vote-account
+
 ```text
 solana-create-vote-account 
 Create a vote account
@@ -502,6 +516,7 @@ ARGS:
 ```
 
 #### solana-deactivate-stake
+
 ```text
 solana-deactivate-stake 
 Deactivate the delegated stake from the stake account
@@ -524,6 +539,7 @@ ARGS:
 ```
 
 #### solana-delegate-stake
+
 ```text
 solana-delegate-stake 
 Delegate stake to a vote account
@@ -546,6 +562,7 @@ ARGS:
 ```
 
 #### solana-deploy
+
 ```text
 solana-deploy 
 Deploy a program
@@ -567,6 +584,7 @@ ARGS:
 ```
 
 #### solana-fees
+
 ```text
 solana-fees 
 Display current cluster fees
@@ -585,6 +603,7 @@ OPTIONS:
 ```
 
 #### solana-get
+
 ```text
 solana-get 
 Get wallet config settings
@@ -606,6 +625,7 @@ ARGS:
 ```
 
 #### solana-get-slot
+
 ```text
 solana-get-slot 
 Get current slot
@@ -624,6 +644,7 @@ OPTIONS:
 ```
 
 #### solana-get-transaction-count
+
 ```text
 solana-get-transaction-count 
 Get current transaction count
@@ -642,6 +663,7 @@ OPTIONS:
 ```
 
 #### solana-help
+
 ```text
 solana-help 
 Prints this message or the help of the given subcommand(s)
@@ -654,6 +676,7 @@ ARGS:
 ```
 
 #### solana-pay
+
 ```text
 solana-pay 
 Send a payment
@@ -682,6 +705,7 @@ ARGS:
 ```
 
 #### solana-ping
+
 ```text
 solana-ping 
 Submit transactions sequentially
@@ -703,6 +727,7 @@ OPTIONS:
 ```
 
 #### solana-redeem-vote-credits
+
 ```text
 solana-redeem-vote-credits 
 Redeem credits in the stake account
@@ -725,6 +750,7 @@ ARGS:
 ```
 
 #### solana-send-signature
+
 ```text
 solana-send-signature 
 Send a signature to authorize a transfer
@@ -747,6 +773,7 @@ ARGS:
 ```
 
 #### solana-send-timestamp
+
 ```text
 solana-send-timestamp 
 Send a timestamp to unlock a transfer
@@ -770,6 +797,7 @@ ARGS:
 ```
 
 #### solana-set
+
 ```text
 solana-set 
 Set a wallet config setting
@@ -788,6 +816,7 @@ OPTIONS:
 ```
 
 #### solana-show-account
+
 ```text
 solana-show-account 
 Show the contents of an account
@@ -811,6 +840,7 @@ ARGS:
 ```
 
 #### solana-show-stake-account
+
 ```text
 solana-show-stake-account 
 Show the contents of a stake account
@@ -833,6 +863,7 @@ ARGS:
 ```
 
 #### solana-show-storage-account
+
 ```text
 solana-show-storage-account 
 Show the contents of a storage account
@@ -854,6 +885,7 @@ ARGS:
 ```
 
 #### solana-show-vote-account
+
 ```text
 solana-show-vote-account 
 Show the contents of a vote account
@@ -876,6 +908,7 @@ ARGS:
 ```
 
 #### solana-stake-authorize-staker
+
 ```text
 solana-stake-authorize-staker 
 Authorize a new stake signing keypair for the given stake account
@@ -898,6 +931,7 @@ ARGS:
 ```
 
 #### solana-stake-authorize-withdrawer
+
 ```text
 solana-stake-authorize-withdrawer 
 Authorize a new withdraw signing keypair for the given stake account
@@ -920,6 +954,7 @@ ARGS:
 ```
 
 #### solana-uptime
+
 ```text
 solana-uptime 
 Show the uptime of a validator, based on epoch voting history
@@ -943,6 +978,7 @@ ARGS:
 ```
 
 #### solana-validator-info
+
 ```text
 solana-validator-info 
 Publish/get Validator info on Solana
@@ -966,6 +1002,7 @@ SUBCOMMANDS:
 ```
 
 #### solana-vote-authorize-voter
+
 ```text
 solana-vote-authorize-voter 
 Authorize a new vote signing keypair for the given vote account
@@ -988,6 +1025,7 @@ ARGS:
 ```
 
 #### solana-vote-authorize-withdrawer
+
 ```text
 solana-vote-authorize-withdrawer 
 Authorize a new withdraw signing keypair for the given vote account
@@ -1010,6 +1048,7 @@ ARGS:
 ```
 
 #### solana-withdraw-stake
+
 ```text
 solana-withdraw-stake 
 Withdraw the unstaked lamports from the stake account

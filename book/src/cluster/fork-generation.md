@@ -58,7 +58,7 @@ Validators vote based on a greedy choice to maximize their reward described in [
 
 The diagram below represents a validator's view of the PoH stream with possible forks over time. L1, L2, etc. are leader slots, and `E`s represent entries from that leader during that leader's slot. The `x`s represent ticks only, and time flows downwards in the diagram.
 
-![Fork generation](../.gitbook/assets/fork-generation%20%283%29.svg)
+![Fork generation](../.gitbook/assets/fork-generation%20%284%29.svg)
 
 Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E3` and `E3'` can slash L3 and safely choose `x` for that slot. Once a validator commits to a forks, other forks can be discarded below that tick count. For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader. But multiple virtual entries may overlap as they link back to the a previous slot.
 

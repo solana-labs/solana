@@ -30,10 +30,12 @@ VoteState is the current state of all the votes the validator has submitted to t
 * `authorized_voter` - Only this identity is authorized to submit votes. This field can only modified by this identity.
 * `node_pubkey` - The Solana node that votes in this account.
 * `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's 
-                           address and the authorized vote signer
-                             
 
-### VoteInstruction::Initialize(VoteInit)
+  ```text
+                       address and the authorized vote signer
+  ```
+
+### VoteInstruction::Initialize\(VoteInit\)
 
 * `account[0]` - RW - The VoteState
 
@@ -43,8 +45,7 @@ VoteState is the current state of all the votes the validator has submitted to t
 
 ### VoteInstruction::Authorize\(Pubkey, VoteAuthorize\)
 
- Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter
-  (`Voter` or `Withdrawer`).  The transaction must be by signed by the Vote account's current `authorized_voter` or `authorized_withdrawer`.
+Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter \(`Voter` or `Withdrawer`\). The transaction must be by signed by the Vote account's current `authorized_voter` or `authorized_withdrawer`.
 
 * `account[0]` - RW - The VoteState
 
@@ -57,13 +58,11 @@ VoteState is the current state of all the votes the validator has submitted to t
   `VoteState::lockouts` and `VoteState::credits` are updated according to voting lockout rules see [Tower BFT](../implemented-proposals/tower-bft.md)
 
 * `account[1]` - RO - `sysvar::slot_hashes` A list of some N most recent slots and their hashes for the vote to be verified against.
-
 * `account[2]` - RO - `sysvar::clock` The current network time, expressed in slots, epochs.
 
 ### StakeState
 
-A StakeState takes one of four forms, StakeState::Uninitialized, StakeState::Initialized, StakeState::Stake, and StakeState::RewardsPool.  Only the first three forms are used in staking, but only StakeState::Stake is interesting.
-All RewardsPools are created at genesis.
+A StakeState takes one of four forms, StakeState::Uninitialized, StakeState::Initialized, StakeState::Stake, and StakeState::RewardsPool. Only the first three forms are used in staking, but only StakeState::Stake is interesting. All RewardsPools are created at genesis.
 
 ### StakeState::Stake
 
@@ -75,22 +74,27 @@ StakeState::Stake is the current delegation preference of the **staker** and con
 * `credits_observed` - The total credits claimed over the lifetime of the program.
 * `activated` - the epoch at which this stake was activated/delegated. The full stake will be counted after warm up.
 * `deactivated` - the epoch at which this stake was de-activated, some cool down epochs are required before the account
-                  is fully deactivated, and the stake available for withdrawal    
+
+  ```text
+              is fully deactivated, and the stake available for withdrawal    
+  ```
+
 * `authorized_staker` - the pubkey of the entity that must sign delegation, activation, and deactivation transactions
 * `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's 
-                           address, and the authorized staker
+
+  ```text
+                       address, and the authorized staker
+  ```
 
 ### StakeState::RewardsPool
 
-To avoid a single network wide lock or contention in redemption, 256 RewardsPools are part of genesis under pre-determined 
-keys, each with std::u64::MAX credits to be able to satisfy redemptions according to point value.
+To avoid a single network wide lock or contention in redemption, 256 RewardsPools are part of genesis under pre-determined keys, each with std::u64::MAX credits to be able to satisfy redemptions according to point value.
 
 The Stakes and the RewardsPool are accounts that are owned by the same `Stake` program.
 
 ### StakeInstruction::DelegateStake
 
-The Stake account is moved from Ininitialized to StakeState::Stake form. This is how stakers choose their initial delegate validator node and activate their stake account lamports.  If the stake account is already StakeState::Stake (i.e. already activated), the
-stake is re-delegated  The transaction must be signed by the stake's `authorized_staker`.
+The Stake account is moved from Ininitialized to StakeState::Stake form. This is how stakers choose their initial delegate validator node and activate their stake account lamports. If the stake account is already StakeState::Stake \(i.e. already activated\), the stake is re-delegated The transaction must be signed by the stake's `authorized_staker`.
 
 * `account[0]` - RW - The StakeState::Stake instance.  `StakeState::Stake::credits_observed` is initialized to `VoteState::credits`,  `StakeState::Stake::voter_pubkey` is initialized to `account[1]`.  If this is the initial delegation of stake, `StakeState::Stake::stake` is initialized to the account's balance in lamports,  `StakeState::Stake::activated` is initialized to the current Bank epoch, and  `StakeState::Stake::deactivated` is initialized to std::u64::MAX
 * `account[1]` - R - The VoteState instance.
@@ -99,9 +103,7 @@ stake is re-delegated  The transaction must be signed by the stake's `authorized
 
 ### StakeInstruction::Authorize\(Pubkey, StakeAuthorize\)
 
-Updates the account with a new authorized staker or withdrawer, according to 
-  the StakeAuthorize parameter (`Staker` or `Withdrawer`).  The transaction must be by signed by the 
-  Stakee account's current `authorized_staker` or `authorized_withdrawer`.
+Updates the account with a new authorized staker or withdrawer, according to the StakeAuthorize parameter \(`Staker` or `Withdrawer`\). The transaction must be by signed by the Stakee account's current `authorized_staker` or `authorized_withdrawer`.
 
 * `account[0]` - RW - The StakeState
 
@@ -119,8 +121,7 @@ The Vote account and the Stake account pair maintain a lifetime counter of total
 * `account[3]` - R - sysvar::rewards account from the Bank that carries point value.
 * `account[4]` - R - sysvar::stake\_history account from the Bank that carries stake warmup/cooldown history
 
-Reward is paid out for the difference between `VoteState::credits` to `StakeState::Stake::credits_observed`, multiplied by `sysvar::rewards::Rewards::validator_point_value`. `StakeState::Stake::credits_observed` is updated to`VoteState::credits`. The commission is deposited into the Vote account token balance, and the reward is deposited to the Stake account token balance and 
-the stake account's `stake` is increased by the same amount (re-invested).
+Reward is paid out for the difference between `VoteState::credits` to `StakeState::Stake::credits_observed`, multiplied by `sysvar::rewards::Rewards::validator_point_value`. `StakeState::Stake::credits_observed` is updated to`VoteState::credits`. The commission is deposited into the Vote account token balance, and the reward is deposited to the Stake account token balance and the stake account's `stake` is increased by the same amount \(re-invested\).
 
 ```text
 let credits_to_claim = vote_state.credits - stake_state.credits_observed;
@@ -142,8 +143,7 @@ StakeState::Stake::deactivated is set to the current epoch + cool down. The acco
 
 ### StakeInstruction::Withdraw\(u64\)
 
-Lamports build up over time in a Stake account and any excess over activated stake can be withdrawn.
-The transaction must be signed by the stake's `authorized_withdrawer`.
+Lamports build up over time in a Stake account and any excess over activated stake can be withdrawn. The transaction must be signed by the stake's `authorized_withdrawer`.
 
 * `account[0]` - RW - The StakeState::Stake from which to withdraw.
 * `account[1]` - RW - Account that should be credited with the withdrawn lamports.
@@ -159,7 +159,7 @@ The transaction must be signed by the stake's `authorized_withdrawer`.
 
 ## Example Callflow
 
-![Passive Staking Callflow](../.gitbook/assets/passive-staking-callflow%20%283%29.svg)
+![Passive Staking Callflow](../.gitbook/assets/passive-staking-callflow-3.svg)
 
 ## Staking Rewards
 
@@ -225,9 +225,9 @@ Were 2 stakes \(X and Y\) to activate at epoch N, they would be awarded a portio
 
 ### Withdrawal
 
-Only lamports in excess of effective+activating stake may be withdrawn at any time. This means that during warmup, effectively no stake can be withdrawn. During cooldown, any tokens in excess of effective stake may be withdrawn \(activating == 0\).  Because earned rewards are automatically added to stake, withdrawal is generally only possible after deactivation.
+Only lamports in excess of effective+activating stake may be withdrawn at any time. This means that during warmup, effectively no stake can be withdrawn. During cooldown, any tokens in excess of effective stake may be withdrawn \(activating == 0\). Because earned rewards are automatically added to stake, withdrawal is generally only possible after deactivation.
 
 ### Lock-up
 
-Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as a slot height, i.e. the minimum slot height that must be reached by the network before the stake account balance is available for withdrawal, except to a specified custodian.  This information is gathered when the stake account is created.
+Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as a slot height, i.e. the minimum slot height that must be reached by the network before the stake account balance is available for withdrawal, except to a specified custodian. This information is gathered when the stake account is created.
 
