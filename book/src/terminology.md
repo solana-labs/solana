@@ -74,6 +74,10 @@ A globally unique identifier that is also a proof that the [entry](terminology.m
 
 The time, i.e. number of [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid.
 
+## execution key
+
+The key in the transaction that pays for the cost of including the transaction in the ledger.  This is the first key in the transaction.
+
 ## fake storage proof
 
 A proof which has the same format as a storage proof, but the sha state is actually from hashing a known ledger value which the storage client can reveal and is also easily verifiable by the network on-chain.
