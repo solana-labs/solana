@@ -41,15 +41,29 @@ fn retransmit(
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     let mut peers_len = 0;
+    let stakes = staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch);
+    let (peers, stakes_and_index) = cluster_info
+        .read()
+        .unwrap()
+        .sorted_retransmit_peers_and_stakes(stakes.as_ref());
     for packet in &packets.packets {
-        let (my_index, mut peers) = cluster_info.read().unwrap().shuffle_peers_and_index(
-            staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch).as_ref(),
-            ChaChaRng::from_seed(packet.meta.seed),
-        );
-        peers_len = cmp::max(peers_len, peers.len());
-        peers.remove(my_index);
+        let (my_index, mut shuffled_stakes_and_index) =
+            cluster_info.read().unwrap().shuffle_peers_and_index(
+                &peers,
+                &stakes_and_index,
+                ChaChaRng::from_seed(packet.meta.seed),
+            );
+        peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
+        shuffled_stakes_and_index.remove(my_index);
+        // split off the indexes, we don't need the stakes anymore
+        let indexes = shuffled_stakes_and_index
+            .into_iter()
+            .map(|(_, index)| index)
+            .collect();
 
-        let (neighbors, children) = compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, peers);
+        let (neighbors, children) = compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, indexes);
+        let neighbors: Vec<_> = neighbors.into_iter().map(|index| &peers[index]).collect();
+        let children: Vec<_> = children.into_iter().map(|index| &peers[index]).collect();
 
         let leader = leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
         if !packet.meta.forward {
