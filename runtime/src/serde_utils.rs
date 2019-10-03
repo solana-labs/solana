@@ -1,5 +1,5 @@
 use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 struct U64Visitor;
 impl<'a> serde::de::Visitor<'a> for U64Visitor {
@@ -16,19 +16,19 @@ impl<'a> serde::de::Visitor<'a> for U64Visitor {
     }
 }
 
-pub fn deserialize_atomicusize<'de, D>(d: D) -> Result<AtomicUsize, D::Error>
+pub fn deserialize_atomicu64<'de, D>(d: D) -> Result<AtomicU64, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
     let value = d.deserialize_u64(U64Visitor)?;
-    Ok(AtomicUsize::new(value as usize))
+    Ok(AtomicU64::new(value))
 }
 
-pub fn serialize_atomicusize<S>(x: &AtomicUsize, s: S) -> Result<S::Ok, S::Error>
+pub fn serialize_atomicu64<S>(x: &AtomicU64, s: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
-    s.serialize_u64(x.load(Ordering::Relaxed) as u64)
+    s.serialize_u64(x.load(Ordering::Relaxed))
 }
 
 struct BoolVisitor;
