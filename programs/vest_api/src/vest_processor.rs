@@ -47,17 +47,10 @@ fn parse_payee_account<'a>(
 /// Redeem vested tokens.
 fn redeem_tokens(
     vest_state: &mut VestState,
-    keyed_accounts: &mut [KeyedAccount],
+    current_dt: Date<Utc>,
+    contract_account: &mut Account,
+    payee_account: &mut Account,
 ) -> Result<(), InstructionError> {
-    let (current_dt, payer_account, payee_account) = match keyed_accounts {
-        [a0, a1, a2] => (
-            parse_date_account(&a0, &vest_state.date_pubkey)?,
-            &mut a1.account,
-            parse_payee_account(a2, &vest_state.payee_pubkey)?,
-        ),
-        _ => return Err(InstructionError::InvalidArgument),
-    };
-
     let schedule = create_vesting_schedule(vest_state.start_dt.date(), vest_state.lamports);
 
     let vested_lamports = schedule
@@ -68,7 +61,7 @@ fn redeem_tokens(
 
     let redeemable_lamports = vested_lamports.saturating_sub(vest_state.redeemed_lamports);
 
-    payer_account.lamports -= redeemable_lamports;
+    contract_account.lamports -= redeemable_lamports;
     payee_account.lamports += redeemable_lamports;
 
     vest_state.redeemed_lamports += redeemable_lamports;
@@ -122,9 +115,17 @@ pub fn process_instruction(
             vest_state.serialize(&mut keyed_accounts[0].account.data)
         }
         VestInstruction::RedeemTokens => {
-            let mut vest_state = VestState::deserialize(&keyed_accounts[1].account.data)?;
-            redeem_tokens(&mut vest_state, keyed_accounts)?;
-            vest_state.serialize(&mut keyed_accounts[1].account.data)
+            let (ka0, ka1, ka2) = match keyed_accounts {
+                [ka0, ka1, ka2] => (ka0, ka1, ka2),
+                _ => return Err(InstructionError::InvalidArgument),
+            };
+            let mut vest_state = VestState::deserialize(&ka1.account.data)?;
+            let current_dt = parse_date_account(&ka0, &vest_state.date_pubkey)?;
+            let contract_account = &mut ka1.account;
+            let payee_account = parse_payee_account(ka2, &vest_state.payee_pubkey)?;
+
+            redeem_tokens(&mut vest_state, current_dt, contract_account, payee_account)?;
+            vest_state.serialize(&mut ka1.account.data)
         }
         VestInstruction::Terminate => {
             let mut vest_state = VestState::deserialize(&keyed_accounts[1].account.data)?;
