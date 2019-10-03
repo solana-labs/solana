@@ -101,7 +101,7 @@ where
             }
         }
     };
-    println!("Initial transaction count {}", first_tx_count);
+    info!("Initial transaction count {}", first_tx_count);
 
     let exit_signal = Arc::new(AtomicBool::new(false));
 
@@ -109,7 +109,7 @@ where
     // collect the max transaction rate and total tx count seen
     let maxes = Arc::new(RwLock::new(Vec::new()));
     let sample_period = 1; // in seconds
-    println!("Sampling TPS every {} second...", sample_period);
+    info!("Sampling TPS every {} second...", sample_period);
     let v_threads: Vec<_> = clients
         .iter()
         .map(|client| {
@@ -203,18 +203,18 @@ where
     // Stop the sampling threads so it will collect the stats
     exit_signal.store(true, Ordering::Relaxed);
 
-    println!("Waiting for validator threads...");
+    info!("Waiting for validator threads...");
     for t in v_threads {
         if let Err(err) = t.join() {
-            println!("  join() failed with: {:?}", err);
+            info!("  join() failed with: {:?}", err);
         }
     }
 
     // join the tx send threads
-    println!("Waiting for transmit threads...");
+    info!("Waiting for transmit threads...");
     for t in s_threads {
         if let Err(err) = t.join() {
-            println!("  join() failed with: {:?}", err);
+            info!("  join() failed with: {:?}", err);
         }
     }
 
@@ -233,7 +233,7 @@ where
 }
 
 fn metrics_submit_lamport_balance(lamport_balance: u64) {
-    println!("Token balance: {}", lamport_balance);
+    info!("Token balance: {}", lamport_balance);
     datapoint_info!(
         "bench-tps-lamport_balance",
         ("balance", lamport_balance, i64)
@@ -319,7 +319,7 @@ fn generate_txs(
     libra_args: &Option<LibraKeys>,
 ) {
     let tx_count = source.len();
-    println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
+    info!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
 
     let transactions = if let Some((
@@ -354,7 +354,7 @@ fn generate_txs(
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let bsps = (tx_count) as f64 / ns as f64;
     let nsps = ns as f64 / (tx_count) as f64;
-    println!(
+    info!(
         "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time, {}",
         bsps * 1_000_000_f64,
         nsps / 1_000_f64,
@@ -395,7 +395,7 @@ fn do_tx_transfers<T: Client>(
         }
         if let Some(txs0) = txs {
             shared_tx_thread_count.fetch_add(1, Ordering::Relaxed);
-            println!(
+            info!(
                 "Transferring 1 unit {} times... to {}",
                 txs0.len(),
                 client.as_ref().tpu_addr(),
@@ -421,7 +421,7 @@ fn do_tx_transfers<T: Client>(
             }
             shared_tx_thread_count.fetch_add(-1, Ordering::Relaxed);
             total_tx_sent_count.fetch_add(tx_len, Ordering::Relaxed);
-            println!(
+            info!(
                 "Tx send done. {} ms {} tps",
                 duration_as_ms(&transfer_start.elapsed()),
                 tx_len as f32 / duration_as_s(&transfer_start.elapsed()),
@@ -462,7 +462,7 @@ pub fn fund_keys<T: Client>(
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
     let lamports_per_account = (total - (extra * max_fee)) / (notfunded.len() as u64 + 1);
 
-    println!(
+    info!(
         "funding keys {} with lamports: {:?} total: {}",
         dests.len(),
         client.get_balance(&source.pubkey()),
@@ -471,7 +471,7 @@ pub fn fund_keys<T: Client>(
     while !notfunded.is_empty() {
         let mut new_funded: Vec<(&Keypair, u64)> = vec![];
         let mut to_fund = vec![];
-        println!("creating from... {}", funded.len());
+        info!("creating from... {}", funded.len());
         let mut build_to_fund = Measure::start("build_to_fund");
         for f in &mut funded {
             let max_units = cmp::min(notfunded.len() as u64, MAX_SPENDS_PER_TX);
@@ -530,7 +530,7 @@ pub fn fund_keys<T: Client>(
                     .iter()
                     .fold(0, |len, (_, tx)| len + tx.message().instructions.len());
 
-                println!(
+                info!(
                     "{} {} to {} in {} txs",
                     if tries == 0 {
                         "transferring"
@@ -571,7 +571,7 @@ pub fn fund_keys<T: Client>(
                             if failed_verify > 0 {
                                 debug!("total txs failed verify: {}", failed_verify);
                             }
-                            println!(
+                            info!(
                                 "Verifying transfers... {} remaining",
                                 starting_txs - verified_txs
                             );
@@ -589,7 +589,7 @@ pub fn fund_keys<T: Client>(
                         break;
                     }
                     debug!("Looping verifications");
-                    println!("Verifying transfers... {} remaining", to_fund_txs.len());
+                    info!("Verifying transfers... {} remaining", to_fund_txs.len());
                     sleep(Duration::from_millis(100));
                 }
                 starting_txs -= to_fund_txs.len();
@@ -601,9 +601,9 @@ pub fn fund_keys<T: Client>(
                 //  retry
                 tries += 1;
             }
-            println!("transferred");
+            info!("transferred");
         });
-        println!("funded: {} left: {}", new_funded.len(), notfunded.len());
+        info!("funded: {} left: {}", new_funded.len(), notfunded.len());
         funded = new_funded;
     }
 }
@@ -616,11 +616,11 @@ pub fn airdrop_lamports<T: Client>(
 ) -> Result<()> {
     let starting_balance = client.get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_lamport_balance(starting_balance);
-    println!("starting balance {}", starting_balance);
+    info!("starting balance {}", starting_balance);
 
     if starting_balance < tx_count {
         let airdrop_amount = tx_count - starting_balance;
-        println!(
+        info!(
             "Airdropping {:?} lamports from {} for {}",
             airdrop_amount,
             drone_addr,
@@ -649,14 +649,14 @@ pub fn airdrop_lamports<T: Client>(
         };
 
         let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
-            println!("airdrop error {}", e);
+            info!("airdrop error {}", e);
             starting_balance
         });
-        println!("current balance {}...", current_balance);
+        info!("current balance {}...", current_balance);
 
         metrics_submit_lamport_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
-            println!(
+            info!(
                 "Airdrop failed! {} {} {}",
                 id.pubkey(),
                 current_balance,
@@ -679,8 +679,8 @@ fn compute_and_report_stats(
     let mut max_tx_count = 0;
     let mut nodes_with_zero_tps = 0;
     let mut total_maxes = 0.0;
-    println!(" Node address        |       Max TPS | Total Transactions");
-    println!("---------------------+---------------+--------------------");
+    info!(" Node address        |       Max TPS | Total Transactions");
+    info!("---------------------+---------------+--------------------");
 
     for (sock, stats) in maxes.read().unwrap().iter() {
         let maybe_flag = match stats.txs {
@@ -688,7 +688,7 @@ fn compute_and_report_stats(
             _ => "",
         };
 
-        println!(
+        info!(
             "{:20} | {:13.2} | {} {}",
             sock, stats.tps, stats.txs, maybe_flag
         );
@@ -709,7 +709,7 @@ fn compute_and_report_stats(
     if total_maxes > 0.0 {
         let num_nodes_with_tps = maxes.read().unwrap().len() - nodes_with_zero_tps;
         let average_max = total_maxes / num_nodes_with_tps as f32;
-        println!(
+        info!(
             "\nAverage max TPS: {:.2}, {} nodes had 0 TPS",
             average_max, nodes_with_zero_tps
         );
@@ -721,7 +721,7 @@ fn compute_and_report_stats(
     } else {
         0.0
     };
-    println!(
+    info!(
         "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {} drop rate: {:.2}",
         max_of_maxes,
         sample_period,
@@ -729,7 +729,7 @@ fn compute_and_report_stats(
         maxes.read().unwrap().len(),
         drop_rate,
     );
-    println!(
+    info!(
         "\tAverage TPS: {}",
         max_tx_count as f32 / duration_as_s(tx_send_elapsed)
     );
@@ -948,7 +948,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
             total *= 3;
         }
 
-        println!("Previous key balance: {} max_fee: {} lamports_per_account: {} extra: {} desired_balance: {} total: {}",
+        info!("Previous key balance: {} max_fee: {} lamports_per_account: {} extra: {} desired_balance: {} total: {}",
                  last_keypair_balance, fee_calculator.max_lamports_per_signature, lamports_per_account, extra,
                  account_desired_balance, total
                  );
