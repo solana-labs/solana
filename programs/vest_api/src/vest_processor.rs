@@ -6,36 +6,45 @@ use crate::{
     vest_state::VestState,
 };
 use bincode::deserialize;
+use chrono::prelude::*;
 use solana_config_api::get_config_data;
 use solana_sdk::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
 
-/// Redeem vested tokens.
-fn redeem_tokens(
-    vest_state: &mut VestState,
-    keyed_accounts: &mut [KeyedAccount],
-) -> Result<(), InstructionError> {
-    let date_keyed_account = &keyed_accounts[0];
+fn parse_date_account(
+    date_keyed_account: &KeyedAccount,
+    date_pubkey: &Pubkey,
+) -> Result<Date<Utc>, InstructionError> {
     if date_keyed_account.account.owner != solana_config_api::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    if *date_keyed_account.unsigned_key() != vest_state.date_pubkey {
+    if *date_keyed_account.unsigned_key() != *date_pubkey {
         return Err(VestError::Unauthorized.into());
-    }
-
-    if &vest_state.payee_pubkey != keyed_accounts[2].unsigned_key() {
-        return Err(VestError::DestinationMissing.into());
     }
 
     let config_data = get_config_data(&date_keyed_account.account.data).unwrap();
     let date_config =
         deserialize::<DateConfig>(config_data).map_err(|_| InstructionError::InvalidAccountData)?;
 
+    Ok(date_config.dt.date())
+}
+
+/// Redeem vested tokens.
+fn redeem_tokens(
+    vest_state: &mut VestState,
+    keyed_accounts: &mut [KeyedAccount],
+) -> Result<(), InstructionError> {
+    let current_dt = parse_date_account(&keyed_accounts[0], &vest_state.date_pubkey)?;
+
+    if &vest_state.payee_pubkey != keyed_accounts[2].unsigned_key() {
+        return Err(VestError::DestinationMissing.into());
+    }
+
     let schedule = create_vesting_schedule(vest_state.start_dt.date(), vest_state.lamports);
 
     let vested_lamports = schedule
         .into_iter()
-        .take_while(|(dt, _)| *dt <= date_config.dt.date())
+        .take_while(|(dt, _)| *dt <= current_dt)
         .map(|(_, lamports)| lamports)
         .sum::<u64>();
 
@@ -113,7 +122,6 @@ mod tests {
     use crate::date_instruction;
     use crate::id;
     use crate::vest_instruction;
-    use chrono::prelude::*;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
