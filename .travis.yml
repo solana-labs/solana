@@ -6,7 +6,7 @@ rust:
   - stable
 
 install:
-  - source ci/rust-version.sh stable
+  - source ci/rust-version.sh
 
 script:
   - source ci/env.sh
