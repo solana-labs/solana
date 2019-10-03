@@ -89,4 +89,4 @@ should use a dedicated fee account that is not used as Credit-Debit
 in any instruction.
 
 Once an account fee is used as Credit-Debit, it will fail the
-balance check for the remainder of the block.
+balance check until the balance cache is reset.
