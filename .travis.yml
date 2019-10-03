@@ -16,7 +16,7 @@ script:
 branches:
   only:
     - master
-    - /^v\d+\.\d+$/
+    - /^v\d+\.\d+/
 
 notifications:
   slack:
