@@ -1,6 +1,7 @@
 pub mod date_instruction;
 pub mod vest_instruction;
 pub mod vest_processor;
+pub mod vest_schedule;
 pub mod vest_state;
 
 const VEST_PROGRAM_ID: [u8; 32] = [
