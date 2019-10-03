@@ -36,7 +36,7 @@ _ ci/check-ssh-keys.sh
       _ cargo +"$rust_stable" fmt -- --check
       _ cargo +"$rust_nightly" test
       _ cargo +"$rust_nightly" clippy --version
-      _ cargo +"$rust_nightly" clippy -- --deny=warnings
+      _ cargo +"$rust_nightly" clippy -- --deny=warnings --allow=clippy::missing_safety_doc
     )
   done
 }
