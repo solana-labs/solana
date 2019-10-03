@@ -1,6 +1,7 @@
 [package]
 name = "solana-rayon-threadlimit"
 version = "0.20.0"
+description = "solana-rayon-threadlimit"
 homepage = "https://solana.com/"
 readme = "../README.md"
 repository = "https://github.com/solana-labs/solana"
