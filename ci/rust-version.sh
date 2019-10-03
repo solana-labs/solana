@@ -19,7 +19,12 @@ nightly_version=2019-09-25
 export rust_stable="$stable_version"
 export rust_stable_docker_image=solanalabs/rust:"$stable_version"
 
-export rust_nightly=nightly-"$nightly_version"
+if [[ -n $CI ]]; then
+  export rust_nightly=nightly-"$nightly_version"
+else
+  # For dev work any old nightly is probably good enough
+  export rust_nightly=nightly
+fi
 export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
 
 [[ -z $1 ]] || (
