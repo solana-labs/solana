@@ -37,8 +37,6 @@ rm -rf target/cov/$reportName
 
 source ci/rust-version.sh nightly
 # shellcheck disable=SC2086 #
-_ cargo +$rust_nightly build --tests --bins --target-dir target/cov $crate
-# shellcheck disable=SC2086 #
 _ cargo +$rust_nightly test --target-dir target/cov --lib $crate
 
 echo "--- grcov"
