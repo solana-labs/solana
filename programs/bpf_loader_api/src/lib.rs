@@ -20,6 +20,7 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::sysvar::rent;
 use std::convert::TryFrom;
 use std::io::prelude::*;
 use std::io::Error;
@@ -109,10 +110,16 @@ pub fn process_instruction(
                 keyed_accounts[0].account.data[offset..offset + len].copy_from_slice(&bytes);
             }
             LoaderInstruction::Finalize => {
+                if keyed_accounts.len() < 2 {
+                    return Err(InstructionError::InvalidInstructionData);
+                }
                 if keyed_accounts[0].signer_key().is_none() {
                     warn!("key[0] did not sign the transaction");
                     return Err(InstructionError::GenericError);
                 }
+
+                rent::verify_rent_exemption(&keyed_accounts[0], &keyed_accounts[1])?;
+
                 keyed_accounts[0].account.executable = true;
                 info!(
                     "Finalize: account {:?}",

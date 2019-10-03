@@ -7,7 +7,7 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount, instruction::InstructionError, loader_instruction::LoaderInstruction,
-    pubkey::Pubkey,
+    pubkey::Pubkey, sysvar::rent,
 };
 use types::{
     account_address::AccountAddress,
@@ -294,10 +294,15 @@ impl MoveProcessor {
     }
 
     pub fn do_finalize(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+        if keyed_accounts.len() < 2 {
+            return Err(InstructionError::InvalidInstructionData);
+        }
         if keyed_accounts[PROGRAM_INDEX].signer_key().is_none() {
             debug!("Error: key[0] did not sign the transaction");
             return Err(InstructionError::GenericError);
         }
+
+        rent::verify_rent_exemption(&keyed_accounts[0], &keyed_accounts[1])?;
 
         let (compiled_script, compiled_modules) =
             Self::deserialize_compiled_program(&keyed_accounts[PROGRAM_INDEX].account.data)?;
@@ -402,6 +407,8 @@ mod tests {
     use super::*;
     use language_e2e_tests::account::AccountResource;
     use solana_sdk::account::Account;
+    use solana_sdk::rent_calculator::RentCalculator;
+    use solana_sdk::sysvar::rent;
 
     #[test]
     fn test_finalize() {
@@ -410,7 +417,12 @@ mod tests {
         let code = "main() { return; }";
         let sender_address = AccountAddress::default();
         let mut program = LibraAccount::create_program(&sender_address, code, vec![]);
-        let mut keyed_accounts = vec![KeyedAccount::new(&program.key, true, &mut program.account)];
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
         let (_, _) = MoveProcessor::deserialize_verified_program(&program.account.data).unwrap();
     }
@@ -451,11 +463,20 @@ mod tests {
         let mut program = LibraAccount::create_program(&sender_address, code, vec![]);
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
+
+        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
         ];
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
             &bincode::serialize(&InvokeCommand::RunProgram {
@@ -482,11 +503,20 @@ mod tests {
         let mut program = LibraAccount::create_program(&sender_address, code, vec![]);
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
+
+        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
         ];
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         assert_eq!(
             MoveProcessor::do_invoke_main(
                 &mut keyed_accounts,
@@ -547,13 +577,23 @@ mod tests {
         let (genesis, sender) = accounts.split_at_mut(GENESIS_INDEX + 1);
         let genesis = &mut genesis[1];
         let sender = &mut sender[0];
+
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
+
+        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&sender.key, false, &mut sender.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         let amount = 2;
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
@@ -610,12 +650,21 @@ mod tests {
         let mut payee = LibraAccount::create_unallocated();
         let mut program = LibraAccount::create_program(&payee.address, code, vec![]);
 
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
+
+        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
             &bincode::serialize(&InvokeCommand::RunProgram {
@@ -645,12 +694,21 @@ mod tests {
         let mut program = LibraAccount::create_program(&module.address, code, vec![]);
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
+
+        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&module.key, false, &mut module.account),
         ];
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
             &bincode::serialize(&InvokeCommand::RunProgram {
@@ -678,12 +736,21 @@ mod tests {
         let mut program =
             LibraAccount::create_program(&module.address, &code, vec![&module.account.data]);
 
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
+
+        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&module.key, false, &mut module.account),
         ];
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
             &bincode::serialize(&InvokeCommand::RunProgram {
@@ -711,12 +778,21 @@ mod tests {
         let mut program = LibraAccount::create_program(&genesis.address, code, vec![]);
         let mut payee = LibraAccount::create_unallocated();
 
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
+
+        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
             &bincode::serialize(&InvokeCommand::RunProgram {

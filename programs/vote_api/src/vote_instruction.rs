@@ -15,7 +15,8 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
-    system_instruction, sysvar,
+    system_instruction,
+    sysvar::{self, rent},
 };
 
 /// Reasons the stake might have had an error
@@ -65,7 +66,10 @@ pub enum VoteInstruction {
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*vote_pubkey, false)];
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new(sysvar::rent::id(), false),
+    ];
     Instruction::new(
         id(),
         &VoteInstruction::InitializeAccount(*vote_init),
@@ -176,6 +180,10 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         VoteInstruction::InitializeAccount(vote_init) => {
+            if rest.is_empty() {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            rent::verify_rent_exemption(me, &rest[0])?;
             vote_state::initialize_account(me, &vote_init)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
@@ -212,6 +220,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use solana_sdk::account::Account;
+    use solana_sdk::rent_calculator::RentCalculator;
 
     // these are for 100% coverage in this file
     #[test]
@@ -231,6 +240,8 @@ mod tests {
                     sysvar::clock::new_account(1, 0, 0, 0, 0)
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
                     sysvar::slot_hashes::create_account(1, &[])
+                } else if sysvar::rent::check_id(&meta.pubkey) {
+                    sysvar::rent::create_account(1, &RentCalculator::default())
                 } else {
                     Account::default()
                 }

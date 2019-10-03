@@ -12,6 +12,7 @@ use solana_sdk::{
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction, sysvar,
+    sysvar::rent,
 };
 
 /// Reasons the stake might have had an error
@@ -125,7 +126,10 @@ pub fn create_stake_account_with_lockup(
         Instruction::new(
             id(),
             &StakeInstruction::Initialize(*authorized, *lockup),
-            vec![AccountMeta::new(*stake_pubkey, false)],
+            vec![
+                AccountMeta::new(*stake_pubkey, false),
+                AccountMeta::new(sysvar::rent::id(), false),
+            ],
         ),
     ]
 }
@@ -281,7 +285,13 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StakeInstruction::Initialize(authorized, lockup) => me.initialize(&authorized, &lockup),
+        StakeInstruction::Initialize(authorized, lockup) => {
+            if rest.is_empty() {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            rent::verify_rent_exemption(me, &rest[0])?;
+            me.initialize(&authorized, &lockup)
+        }
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&authorized_pubkey, stake_authorize, &rest)
         }
@@ -349,7 +359,9 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::{account::Account, sysvar::stake_history::StakeHistory};
+    use solana_sdk::{
+        account::Account, rent_calculator::RentCalculator, sysvar::stake_history::StakeHistory,
+    };
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
         let mut accounts: Vec<_> = instruction
@@ -364,6 +376,8 @@ mod tests {
                     sysvar::stake_history::create_account(1, &StakeHistory::default())
                 } else if config::check_id(&meta.pubkey) {
                     config::create_account(1, &config::Config::default())
+                } else if sysvar::rent::check_id(&meta.pubkey) {
+                    sysvar::rent::create_account(1, &RentCalculator::default())
                 } else {
                     Account::default()
                 }

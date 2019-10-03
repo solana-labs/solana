@@ -283,6 +283,7 @@ impl Bank {
             bank.update_stake_history(None);
         }
         bank.update_clock();
+        bank.update_rent();
         bank
     }
 
@@ -1594,6 +1595,7 @@ mod tests {
     use solana_sdk::hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::poh_config::PohConfig;
+    use solana_sdk::rent_calculator::RentCalculator;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
     use solana_sdk::system_transaction;
@@ -1611,7 +1613,7 @@ mod tests {
         let dummy_leader_lamports = BOOTSTRAP_LEADER_LAMPORTS;
         let mint_lamports = 10_000;
         let GenesisBlockInfo {
-            genesis_block,
+            mut genesis_block,
             mint_keypair,
             voting_keypair,
             ..
@@ -1620,12 +1622,25 @@ mod tests {
             &dummy_leader_pubkey,
             dummy_leader_lamports,
         );
+        genesis_block.rent_calculator = RentCalculator {
+            lamports_per_byte_year: 5,
+            exemption_threshold: 1.2,
+            burn_percent: 5,
+        };
+
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), mint_lamports);
         assert_eq!(
             bank.get_balance(&voting_keypair.pubkey()),
             dummy_leader_lamports /* 1 token goes to the vote account associated with dummy_leader_lamports */
         );
+
+        let rent_account = bank.get_account(&rent::id()).unwrap();
+        let rent_sysvar = rent::Rent::from_account(&rent_account).unwrap();
+
+        assert_eq!(rent_sysvar.rent_calculator.burn_percent, 5);
+        assert_eq!(rent_sysvar.rent_calculator.exemption_threshold, 1.2);
+        assert_eq!(rent_sysvar.rent_calculator.lamports_per_byte_year, 5);
     }
 
     #[test]
