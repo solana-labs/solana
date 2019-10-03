@@ -43,6 +43,7 @@ test-stable-perf)
     .rs$ \
     Cargo.lock$ \
     Cargo.toml$ \
+    ^ci/rust-version.sh \
     ^ci/test-stable-perf.sh \
     ^ci/test-stable.sh \
     ^ci/test-local-cluster.sh \
