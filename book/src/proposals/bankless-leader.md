@@ -7,8 +7,8 @@ the entries and broadcasting the shreds.
 
 While a validator only needs to reassemble the block and replay
 execution of well formed entries.  For transactions that have
-low execution costs, the leader does 3x more memory operations than
-the validator.
+low execution costs, the leader does 3x more memory operations
+before any bank execution than the validator.
 
 ## Execution Key
 
@@ -28,6 +28,9 @@ of the block the cache is destroyed.
 
 ## Balance Check
 
+Prior to the balance check, the leader validates all the signatures
+in the transaction.
+
 1. Verify the accounts are not in use and BlockHash is valid.
 
 2. Check if the key is present in the cache, or load the key from
@@ -38,8 +41,10 @@ cache.
 
 4. Subtract the fee from the balance.
 
-5. For all the keys in the transaction that are used as Credit-Debit,
-mark their balance as 0 by storing the balance in the cache.
+5. For all the keys in the transaction that are Credit-Debit and
+are referenced by an instruction, mark their balance as 0 in the
+cache.  The execution key can be declared as Credit-Debit as long
+as it is not used in any instruction.
 
 ## Leader Replay
 
@@ -53,7 +58,7 @@ until it is used once as a Credit-Debit key.
 
 Clients that transmit a large number of transactions per second
 should use a dedicated execution key that is not used as Credit-Debit
-in any transactions.
+in any instruction.
 
 Once a execution key is used as Credit-Debit, it will fail the
 balance check for the remainder of the block.
