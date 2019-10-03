@@ -29,7 +29,7 @@ The new root is 2, and any active forks that are not descendants from 2 are prun
 
 Alternatively, a vote on 6:
 
-![Forks](../.gitbook/assets/forks-pruned2%20%281%29.svg)
+![Forks](../.gitbook/assets/forks-pruned2.svg)
 
 The tree remains with a root of 1, since the active fork starting at 6 is only 2 checkpoints from the root.
 
