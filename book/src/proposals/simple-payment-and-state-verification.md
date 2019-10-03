@@ -48,7 +48,7 @@ At the end of the block, A and B are in the exact same starting state, and any s
 
 The Bank-Merkle is computed from the Merkle Tree of the new state changes, along with the Previous Bank-Merkle, and the Block-Merkle.
 
-![Bank Merkle Diagram](../.gitbook/assets/spv-bank-merkle%20%284%29.svg)
+![Bank Merkle Diagram](../.gitbook/assets/spv-bank-merkle%20%283%29.svg)
 
 A state receipt contains only the state changes occurring in the block. A direct Merkle Path to the current Bank-Merkle guarantees the state value at that bank hash, but it cannot be used to generate a “current” receipt to the latest state if the state modification occurred in some previous block. There is no guarantee that the path provided by the validator is the latest one available out of all the previous Bank-Merkles.
 

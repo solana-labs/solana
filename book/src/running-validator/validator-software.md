@@ -48,4 +48,3 @@ If you are unable to use the prebuilt binaries or prefer to build it yourself fr
 $ ./scripts/cargo-install-all.sh .
 $ export PATH=$PWD/bin:$PATH
 ```
-
