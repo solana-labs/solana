@@ -162,6 +162,9 @@ declare module '@solana/web3.js' {
     static fromConfigData(buffer: Buffer): ?ValidatorInfo;
   }
 
+  // === src/sysvar-rent.js ===
+  declare export var SYSVAR_RENT_PUBKEY;
+
   // === src/vote-account.js ===
   declare export var VOTE_ACCOUNT_KEY;
   declare export type Lockout = {|
