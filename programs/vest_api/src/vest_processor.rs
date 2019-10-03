@@ -14,36 +14,35 @@ use solana_sdk::{
 };
 
 fn parse_date_account(
-    keyed_account: &KeyedAccount,
+    keyed_account: &mut KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<Date<Utc>, InstructionError> {
     if keyed_account.account.owner != solana_config_api::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    if keyed_account.unsigned_key() != expected_pubkey {
-        return Err(VestError::Unauthorized.into());
-    }
+    let account = parse_account(keyed_account, expected_pubkey)?;
 
-    let config_data = get_config_data(&keyed_account.account.data).unwrap();
+    let config_data =
+        get_config_data(&account.data).map_err(|_| InstructionError::InvalidAccountData)?;
     let date_config =
         deserialize::<DateConfig>(config_data).map_err(|_| InstructionError::InvalidAccountData)?;
 
     Ok(date_config.dt.date())
 }
 
-fn parse_payee_account<'a>(
+fn parse_account<'a>(
     keyed_account: &'a mut KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<&'a mut Account, InstructionError> {
     if keyed_account.unsigned_key() != expected_pubkey {
-        return Err(VestError::DestinationMissing.into());
+        return Err(VestError::Unauthorized.into());
     }
 
     Ok(keyed_account.account)
 }
 
-fn parse_terminator_account<'a>(
+fn parse_signed_account<'a>(
     keyed_account: &'a mut KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<&'a mut Account, InstructionError> {
@@ -51,11 +50,7 @@ fn parse_terminator_account<'a>(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    if keyed_account.unsigned_key() != expected_pubkey {
-        return Err(VestError::Unauthorized.into());
-    }
-
-    Ok(keyed_account.account)
+    parse_account(keyed_account, expected_pubkey)
 }
 
 pub fn process_instruction(
@@ -89,9 +84,9 @@ pub fn process_instruction(
                 _ => return Err(InstructionError::InvalidArgument),
             };
             let mut vest_state = VestState::deserialize(&ka1.account.data)?;
-            let current_dt = parse_date_account(&ka0, &vest_state.date_pubkey)?;
+            let current_dt = parse_date_account(ka0, &vest_state.date_pubkey)?;
             let contract_account = &mut ka1.account;
-            let payee_account = parse_payee_account(ka2, &vest_state.payee_pubkey)?;
+            let payee_account = parse_account(ka2, &vest_state.payee_pubkey)?;
 
             vest_state.redeem_tokens(current_dt, contract_account, payee_account);
             vest_state.serialize(&mut ka1.account.data)
@@ -103,7 +98,7 @@ pub fn process_instruction(
                 _ => return Err(InstructionError::InvalidArgument),
             };
             let mut vest_state = VestState::deserialize(&ka1.account.data)?;
-            let terminator_account = parse_terminator_account(ka0, &vest_state.terminator_pubkey)?;
+            let terminator_account = parse_signed_account(ka0, &vest_state.terminator_pubkey)?;
             let contract_account = &mut ka1.account;
             let payee_account = if let Some(ka2) = ka2 {
                 &mut ka2.account
@@ -209,6 +204,81 @@ mod tests {
             vest_instruction::redeem_tokens(&date_pubkey, &contract_pubkey, &payee_pubkey);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
         bank_client.send_message(&[&payer_keypair], message)
+    }
+
+    #[test]
+    fn test_parse_account_unauthorized() {
+        // Ensure client can't sneak in with an untrusted date account.
+        let date_pubkey = Pubkey::new_rand();
+        let mut account = Account::new(1, 0, &solana_config_api::id());
+        let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
+
+        let mallory_pubkey = Pubkey::new_rand(); // <-- Attack! Not the expected account.
+        assert_eq!(
+            parse_account(&mut keyed_account, &mallory_pubkey).unwrap_err(),
+            VestError::Unauthorized.into()
+        );
+    }
+
+    #[test]
+    fn test_parse_signed_account_missing_signature() {
+        // Ensure client can't sneak in with an unsigned account.
+        let date_pubkey = Pubkey::new_rand();
+        let mut account = Account::new(1, 0, &solana_config_api::id());
+        let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account); // <-- Attack! Unsigned transaction.
+
+        assert_eq!(
+            parse_signed_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            InstructionError::MissingRequiredSignature.into()
+        );
+    }
+
+    #[test]
+    fn test_parse_date_account_incorrect_program_id() {
+        // Ensure client can't sneak in with a non-Config account.
+        let date_pubkey = Pubkey::new_rand();
+        let mut account = Account::new(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
+        let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
+        assert_eq!(
+            parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            InstructionError::IncorrectProgramId
+        );
+    }
+
+    #[test]
+    fn test_parse_date_account_uninitialized_config() {
+        // Ensure no panic when `get_config_data()` returns an error.
+        let date_pubkey = Pubkey::new_rand();
+        let mut account = Account::new(1, 0, &solana_config_api::id()); // <-- Attack! Zero space.
+        let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
+        assert_eq!(
+            parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            InstructionError::InvalidAccountData
+        );
+    }
+
+    #[test]
+    fn test_parse_date_account_invalid_date_config() {
+        // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
+        let date_pubkey = Pubkey::new_rand();
+        let mut account = Account::new(1, 1, &solana_config_api::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
+        assert_eq!(
+            parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            InstructionError::InvalidAccountData
+        );
+    }
+
+    #[test]
+    fn test_parse_date_account_deserialize() {
+        // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
+        let date_pubkey = Pubkey::new_rand();
+        let mut account = Account::new(1, 1, &solana_config_api::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
+        assert_eq!(
+            parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            InstructionError::InvalidAccountData
+        );
     }
 
     #[test]
