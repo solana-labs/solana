@@ -6,6 +6,7 @@ import {Account} from './account';
 import {PublicKey} from './publickey';
 import {NUM_TICKS_PER_SECOND} from './timing';
 import {Transaction, PACKET_DATA_SIZE} from './transaction';
+import {SYSVAR_RENT_PUBKEY} from './sysvar-rent';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import {sleep} from './util/sleep';
 import type {Connection} from './connection';
@@ -123,7 +124,10 @@ export class Loader {
       );
 
       const transaction = new Transaction().add({
-        keys: [{pubkey: program.publicKey, isSigner: true, isDebitable: true}],
+        keys: [
+          {pubkey: program.publicKey, isSigner: true, isDebitable: true},
+          {pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isDebitable: false}
+        ],
         programId,
         data,
       });
