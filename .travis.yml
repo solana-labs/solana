@@ -3,11 +3,10 @@ os:
 
 language: rust
 rust:
-  - 1.37.0
+  - stable
 
 install:
-  - source ci/rust-version.sh
-  - test $rust_stable = $TRAVIS_RUST_VERSION # Update .travis.yml rust version above when this fails
+  - source ci/rust-version.sh stable
 
 script:
   - source ci/env.sh
