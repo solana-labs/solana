@@ -29,6 +29,7 @@ entire duration of the cache.  At the block boundary, the cache can
 be reset along with the base fork after replay stage finishes
 verifying the previous block.
 
+
 ## Balance Check
 
 Prior to the balance check, the leader validates all the signatures
@@ -64,6 +65,19 @@ while the replay stage for the first block is playing.
 When the leader finishes the replay stage it can reset the balance
 cache by clearing it, and set a new fork as the base for the
 cache which can become active on the next block.
+
+## Reseting the Balance Cache
+
+1. At the start of the block, if the balance cache is uninitialized,
+set the base fork for the balance cache to be the parent of the
+block and create an empty cache.
+
+2. if the cache is initialized, check if block's parents has a new
+finalized bank that is newer than the current base fork for the
+balance cache.
+
+3. if a parent newer than the cache's base fork exist, reset the
+cache to the parent.
 
 ## Impact on Clients
 
