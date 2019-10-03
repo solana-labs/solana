@@ -16,4 +16,17 @@ function collect_logs {
     )
   done
 }
-collect_logs
+
+case $CLOUD_PROVIDER in
+  gce)
+    net/gce.sh config -p "$TESTNET_TAG"
+    collect_logs
+    ;;
+  colo)
+    net/colo.sh create -p "$TESTNET_TAG"
+    collect_logs
+    ;;
+  *)
+    echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
+    ;;
+esac

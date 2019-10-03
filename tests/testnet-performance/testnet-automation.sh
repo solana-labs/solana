@@ -20,11 +20,15 @@ set -e
 function cleanup_testnet {
   (
     cat <<EOF
+- wait: ~
+  continue_on_failure: true
+
 - command: "tests/utils/collect_logs.sh"
   label: "Collect logs"
   agents:
     - "queue=colo-deploy"
   env:
+    CLOUD_PROVIDER: "${CLOUD_PROVIDER}"
     TESTNET_TAG: "${TESTNET_TAG}"
     NUMBER_OF_VALIDATOR_NODES: "${NUMBER_OF_VALIDATOR_NODES}"
 
