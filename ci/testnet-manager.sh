@@ -333,7 +333,7 @@ deploy() {
     (
       set -x
       ci/testnet-deploy.sh -p edge-testnet-solana-com -C gce -z us-west1-b \
-        -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
+        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
         -a edge-testnet-solana-com --letsencrypt edge.testnet.solana.com \
         --limit-ledger-size \
         ${skipCreate:+-e} \
@@ -359,7 +359,7 @@ deploy() {
     (
       set -x
       ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce -z us-west1-b \
-        -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
+        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
         -a beta-testnet-solana-com --letsencrypt beta.testnet.solana.com \
         --limit-ledger-size \
         ${skipCreate:+-e} \
@@ -385,7 +385,7 @@ deploy() {
     (
       set -x
       ci/testnet-deploy.sh -p testnet-solana-com -C gce -z us-west1-b \
-        -t "$CHANNEL_OR_TAG" -n 2 -c 0 -u -P \
+        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
         -a testnet-solana-com --letsencrypt testnet.solana.com \
         --limit-ledger-size \
         ${skipCreate:+-e} \
