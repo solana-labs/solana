@@ -506,7 +506,7 @@ impl Bank {
         );
 
         self.capitalization.fetch_add(
-            (validator_rewards + storage_rewards) as u64, // WIP: why is it ok to cast f64 => u64?
+            (validator_rewards + storage_rewards) as u64,
             Ordering::Relaxed,
         );
     }
