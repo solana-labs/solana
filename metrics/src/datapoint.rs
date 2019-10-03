@@ -176,7 +176,7 @@ mod test {
             ("bool", true, bool)
         );
         assert_eq!(point.name, "name");
-        assert_eq!(point.fields[0], ("i64", "1i".to_string()));;
+        assert_eq!(point.fields[0], ("i64", "1i".to_string()));
         assert_eq!(
             point.fields[1],
             ("String", "\"string space string\"".to_string())

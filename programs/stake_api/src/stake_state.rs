@@ -1418,7 +1418,7 @@ mod tests {
             std::mem::size_of::<StakeState>(),
             &id(),
         )
-        .expect("stake_account");;
+        .expect("stake_account");
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
