@@ -444,7 +444,6 @@ fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64)
             return true;
         }
     }
-
     false
 }
 
@@ -563,10 +562,15 @@ pub fn fund_keys<T: Client>(
                 let mut verify_txs = Measure::start("verify_txs");
                 let mut starting_txs = to_fund_txs.len();
                 let mut verified_txs = 0;
-                for _ in 0..2 {
+                let mut failed_verify = 0;
+                // Only loop multiple times for small (quick) transaction batches
+                for _ in 0..(if starting_txs < 1000 { 3 } else { 1 }) {
                     let mut timer = Instant::now();
                     to_fund_txs.retain(|(_, tx)| {
                         if timer.elapsed() >= Duration::from_secs(5) {
+                            if failed_verify > 0 {
+                                debug!("total txs failed verify: {}", failed_verify);
+                            }
                             println!(
                                 "Verifying transfers... {} remaining",
                                 starting_txs - verified_txs
@@ -575,17 +579,20 @@ pub fn fund_keys<T: Client>(
                         }
                         let verified = verify_funding_transfer(client, &tx, amount);
                         if verified {
-                            verified_txs = verified_txs + 1;
+                            verified_txs += 1;
+                        } else {
+                            failed_verify += 1;
                         }
                         !verified
                     });
                     if to_fund_txs.is_empty() {
                         break;
                     }
+                    debug!("Looping verifications");
                     println!("Verifying transfers... {} remaining", to_fund_txs.len());
                     sleep(Duration::from_millis(100));
                 }
-                starting_txs = starting_txs - to_fund_txs.len();
+                starting_txs -= to_fund_txs.len();
                 verify_txs.stop();
                 debug!("verified {} txs: {}us", starting_txs, verify_txs.as_us());
 
