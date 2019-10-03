@@ -74,13 +74,13 @@ A globally unique identifier that is also a proof that the [entry](terminology.m
 
 The time, i.e. number of [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid.
 
-## execution key
-
-The key in the transaction that pays for the cost of including the transaction in the ledger.  This is the first key in the transaction.  This key must be declared as Credit-Debit since paying for the transaction reduces the account balance.
-
 ## fake storage proof
 
 A proof which has the same format as a storage proof, but the sha state is actually from hashing a known ledger value which the storage client can reveal and is also easily verifiable by the network on-chain.
+
+## fee account
+
+The fee account in the transaction is the account pays for the cost of including the transaction in the ledger.  This is the first account in the transaction.  This account must be declared as Credit-Debit in the transaction since paying for the transaction reduces the account balance.
 
 ## finality
 
