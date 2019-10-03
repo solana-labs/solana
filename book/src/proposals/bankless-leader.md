@@ -17,12 +17,17 @@ fee.
 
 ## Balance Cache
 
-For the duration of the block, the leader maintains a temporary
-balance cache for all the processed fee accounts.  The cache is
-a map of pubkeys to lamports.
+For the duration of the leaders consecutive blocks, the leader
+maintains a temporary balance cache for all the processed fee
+accounts.  The cache is a map of pubkeys to lamports.
 
-At the start of the block the balance cache is empty.  At the end
-of the block the cache is destroyed.
+At the start of the first block the balance cache is empty.  At the
+end of the last block the cache is destroyed.
+
+The balance cache lookups must reference the same base fork for the
+entire duration of the cache.  At the block boundary, the cache can
+be reset along with the base fork after replay stage finishes
+verifying the previous block.
 
 ## Balance Check
 
@@ -47,8 +52,18 @@ to 0.
 
 ## Leader Replay
 
-Leaders will need to replay their block as part of the standard
+Leaders will need to replay their blocks as part of the standard
 replay stage operation.
+
+## Leader Replay With Consecutive Blocks
+
+A leader can be scheduled to produce multiple blocks in a row.  In
+that scenario the leader is likely to be producing the next block
+while the replay stage for the first block is playing.
+
+When the leader finishes the replay stage it can reset the balance
+cache by clearing it, and set a new fork as the base for the
+cache which can become active on the next block.
 
 ## Impact on Clients
 
