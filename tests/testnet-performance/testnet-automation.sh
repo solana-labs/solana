@@ -18,30 +18,33 @@ set -e
 [[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
 
 function cleanup_testnet {
-  echo --- collect logs from remote nodes
-  rm -rf net/log
-  net/net.sh logs
-  for logfile in $(ls -A net/log) ; do
-    new_log=net/log/"$TESTNET_TAG"_"$NUMBER_OF_VALIDATOR_NODES"-nodes_"$(basename "$logfile")"
-    cp "$logfile" "$new_log"
-    upload-ci-artifact "$new_log"
-  done
+  (
+    cat <<EOF
+- command: "tests/utils/collect_logs.sh"
+  label: "Collect logs"
+  agents:
+    - "queue=colo-deploy"
+  env:
+    TESTNET_TAG: "${TESTNET_TAG}"
+    NUMBER_OF_VALIDATOR_NODES: "${NUMBER_OF_VALIDATOR_NODES}"
 
-  echo --- stop network software
-  net/net.sh stop -p $TESTNET_TAG
+- wait: ~
+  continue_on_failure: true
 
-  echo --- delete testnet
-  case $CLOUD_PROVIDER in
-    gce)
-      net/gce.sh delete -p $TESTNET_TAG
-      ;;
-    colo)
-      net/colo.sh delete -p $TESTNET_TAG
-      ;;
-    *)
-      echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
-      ;;
-    esac
+- command: "net/net.sh stop -p ${TESTNET_TAG}"
+  label: "Stop Network software"
+  agents:
+    - "queue=colo-deploy"
+
+- wait: ~
+  continue_on_failure: true
+
+- command: "net/colo.sh delete -p $TESTNET_TAG"
+  label: "Delete Testnet"
+  agents:
+    - "queue=colo-deploy"
+EOF
+  ) | buildkite-agent pipeline upload
 }
 trap cleanup_testnet EXIT
 
