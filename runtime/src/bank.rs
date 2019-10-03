@@ -2918,7 +2918,7 @@ mod tests {
         let (genesis_block, _) = create_genesis_block(500);
         let bank = Arc::new(Bank::new(&genesis_block));
         //set tick height to max
-        let max_tick_height = ((bank.slot + 1) * bank.ticks_per_slot - 1) as usize;
+        let max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
         bank.tick_height.store(max_tick_height, Ordering::Relaxed);
         assert!(bank.is_votable());
     }
