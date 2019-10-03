@@ -287,7 +287,7 @@ pub fn process_instruction(
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::Initialize(authorized, lockup) => {
             if rest.is_empty() {
-                Err(InstructionError::InvalidInstructionData)?;
+                return Err(InstructionError::InvalidInstructionData);
             }
             rent::verify_rent_exemption(me, &rest[0])?;
             me.initialize(&authorized, &lockup)
