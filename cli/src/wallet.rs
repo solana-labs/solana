@@ -1483,95 +1483,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("vote-authorize-voter")
-                .about("Authorize a new vote signing keypair for the given vote account")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account in which to set the authorized voter"),
-                )
-                .arg(
-                    Arg::with_name("new_authorized_pubkey")
-                        .index(2)
-                        .value_name("NEW VOTER PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("New vote signer to authorize"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("vote-authorize-withdrawer")
-                .about("Authorize a new withdraw signing keypair for the given vote account")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account in which to set the authorized withdrawer"),
-                )
-                .arg(
-                    Arg::with_name("new_authorized_pubkey")
-                        .index(2)
-                        .value_name("NEW WITHDRAWER PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("New withdrawer to authorize"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("create-vote-account")
-                .about("Create a vote account")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account address to fund"),
-                )
-                .arg(
-                    Arg::with_name("node_pubkey")
-                        .index(2)
-                        .value_name("VALIDATOR PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Validator that will vote with this account"),
-                )
-                .arg(
-                    Arg::with_name("commission")
-                        .long("commission")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("The commission taken on reward redemption (0-255), default: 0"),
-                )
-                .arg(
-                    Arg::with_name("authorized_voter")
-                        .long("authorized-voter")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized voter (defaults to vote account)"),
-                )
-                .arg(
-                    Arg::with_name("authorized_withdrawer")
-                        .long("authorized-withdrawer")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to wallet)"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("show-account")
                 .about("Show the contents of an account")
                 .arg(
@@ -1598,50 +1509,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("show-vote-account")
-                .about("Show the contents of a vote account")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account pubkey"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("uptime")
-                .about("Show the uptime of a validator, based on epoch voting history")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account pubkey"),
-                )
-                .arg(
-                    Arg::with_name("span")
-                        .long("span")
-                        .value_name("NUM OF EPOCHS")
-                        .takes_value(true)
-                        .help("Number of recent epochs to examine")
-                )
-                .arg(
-                    Arg::with_name("aggregate")
-                        .long("aggregate")
-                        .help("Aggregate uptime data across span")
-                ),
-        )
+        .vote_subcommands()
         .stake_subcommands()
         .subcommand(
             SubCommand::with_name("create-storage-mining-pool-account")

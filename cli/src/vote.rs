@@ -1,11 +1,12 @@
 use crate::{
     input_parsers::*,
+    input_validators::*,
     wallet::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys,
         log_instruction_custom_error, ProcessResult, WalletCommand, WalletConfig, WalletError,
     },
 };
-use clap::{value_t_or_exit, ArgMatches};
+use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
@@ -15,6 +16,148 @@ use solana_vote_api::{
     vote_instruction::{self, VoteError},
     vote_state::{VoteAuthorize, VoteInit, VoteState},
 };
+
+pub trait VoteSubCommands {
+    fn vote_subcommands(self) -> Self;
+}
+
+impl VoteSubCommands for App<'_, '_> {
+    fn vote_subcommands(self) -> Self {
+        self.subcommand(
+            SubCommand::with_name("create-vote-account")
+                .about("Create a vote account")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("node_pubkey")
+                        .index(2)
+                        .value_name("VALIDATOR PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Validator that will vote with this account"),
+                )
+                .arg(
+                    Arg::with_name("commission")
+                        .long("commission")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("The commission taken on reward redemption (0-255), default: 0"),
+                )
+                .arg(
+                    Arg::with_name("authorized_voter")
+                        .long("authorized-voter")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Public key of the authorized voter (defaults to vote account)"),
+                )
+                .arg(
+                    Arg::with_name("authorized_withdrawer")
+                        .long("authorized-withdrawer")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Public key of the authorized withdrawer (defaults to wallet)"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("vote-authorize-voter")
+                .about("Authorize a new vote signing keypair for the given vote account")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account in which to set the authorized voter"),
+                )
+                .arg(
+                    Arg::with_name("new_authorized_pubkey")
+                        .index(2)
+                        .value_name("NEW VOTER PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("New vote signer to authorize"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("vote-authorize-withdrawer")
+                .about("Authorize a new withdraw signing keypair for the given vote account")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account in which to set the authorized withdrawer"),
+                )
+                .arg(
+                    Arg::with_name("new_authorized_pubkey")
+                        .index(2)
+                        .value_name("NEW WITHDRAWER PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("New withdrawer to authorize"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("show-vote-account")
+                .about("Show the contents of a vote account")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("uptime")
+                .about("Show the uptime of a validator, based on epoch voting history")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("span")
+                        .long("span")
+                        .value_name("NUM OF EPOCHS")
+                        .takes_value(true)
+                        .help("Number of recent epochs to examine"),
+                )
+                .arg(
+                    Arg::with_name("aggregate")
+                        .long("aggregate")
+                        .help("Aggregate uptime data across span"),
+                ),
+        )
+    }
+}
 
 pub fn parse_vote_create_account(
     pubkey: &Pubkey,
@@ -59,6 +202,21 @@ pub fn parse_vote_get_account_command(
     Ok(WalletCommand::ShowVoteAccount {
         pubkey: vote_account_pubkey,
         use_lamports_unit,
+    })
+}
+
+pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
+    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+    let aggregate = matches.is_present("aggregate");
+    let span = if matches.is_present("span") {
+        Some(value_t_or_exit!(matches, "span", u64))
+    } else {
+        None
+    };
+    Ok(WalletCommand::Uptime {
+        pubkey: vote_account_pubkey,
+        aggregate,
+        span,
     })
 }
 
@@ -119,21 +277,6 @@ pub fn process_vote_authorize(
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<VoteError>(result)
-}
-
-pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
-    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    let aggregate = matches.is_present("aggregate");
-    let span = if matches.is_present("span") {
-        Some(value_t_or_exit!(matches, "span", u64))
-    } else {
-        None
-    };
-    Ok(WalletCommand::Uptime {
-        pubkey: vote_account_pubkey,
-        aggregate,
-        span,
-    })
 }
 
 pub fn process_show_vote_account(
