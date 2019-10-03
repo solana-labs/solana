@@ -3,12 +3,10 @@
 A bankless leader does the minimum amount of work to produce a valid
 block.  The leader is tasked with ingress transactions, sorting and
 filtering valid transactions, arranging them into entries, shredding
-the entries and broadcasting the shreds.
-
-While a validator only needs to reassemble the block and replay
-execution of well formed entries.  For transactions that have
-low execution costs, the leader does 3x more memory operations
-before any bank execution than the validator.
+the entries and broadcasting the shreds.  While a validator only
+needs to reassemble the block and replay execution of well formed
+entries.  The leader does 3x more memory operations before any bank
+execution than the validator per processed transaction.
 
 ## Fee Account
 
