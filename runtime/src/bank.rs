@@ -1063,7 +1063,7 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders, ref mut credits, ref mut _rents)) => {
-                    signature_count += tx.message().header.num_required_signatures as u64;
+                    signature_count += u64::from(tx.message().header.num_required_signatures);
                     self.message_processor
                         .process_message(tx.message(), loaders, accounts, credits)
                 }
