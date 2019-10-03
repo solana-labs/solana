@@ -542,8 +542,6 @@ impl ClusterInfo {
         rng: ChaChaRng,
     ) -> (usize, Vec<(u64, usize)>) {
         let shuffled_stakes_and_index = ClusterInfo::stake_weighted_shuffle(stakes_and_index, rng);
-        //        let contacts_and_stakes: Vec<_> =
-        //            ClusterInfo::stake_weighted_shuffle(peers, stakes_and_index, rng);
         let mut self_index = 0;
         shuffled_stakes_and_index
             .iter()
