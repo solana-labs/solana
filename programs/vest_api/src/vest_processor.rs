@@ -8,25 +8,40 @@ use crate::{
 use bincode::deserialize;
 use chrono::prelude::*;
 use solana_config_api::get_config_data;
-use solana_sdk::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
+use solana_sdk::{
+    account::{Account, KeyedAccount},
+    instruction::InstructionError,
+    pubkey::Pubkey,
+};
 
 fn parse_date_account(
-    date_keyed_account: &KeyedAccount,
-    date_pubkey: &Pubkey,
+    keyed_account: &KeyedAccount,
+    expected_pubkey: &Pubkey,
 ) -> Result<Date<Utc>, InstructionError> {
-    if date_keyed_account.account.owner != solana_config_api::id() {
+    if keyed_account.account.owner != solana_config_api::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    if *date_keyed_account.unsigned_key() != *date_pubkey {
+    if *keyed_account.unsigned_key() != *expected_pubkey {
         return Err(VestError::Unauthorized.into());
     }
 
-    let config_data = get_config_data(&date_keyed_account.account.data).unwrap();
+    let config_data = get_config_data(&keyed_account.account.data).unwrap();
     let date_config =
         deserialize::<DateConfig>(config_data).map_err(|_| InstructionError::InvalidAccountData)?;
 
     Ok(date_config.dt.date())
+}
+
+fn parse_payee_account<'a>(
+    keyed_account: &'a mut KeyedAccount,
+    expected_pubkey: &Pubkey,
+) -> Result<&'a mut Account, InstructionError> {
+    if *keyed_account.unsigned_key() != *expected_pubkey {
+        return Err(VestError::DestinationMissing.into());
+    }
+
+    Ok(keyed_account.account)
 }
 
 /// Redeem vested tokens.
@@ -34,11 +49,14 @@ fn redeem_tokens(
     vest_state: &mut VestState,
     keyed_accounts: &mut [KeyedAccount],
 ) -> Result<(), InstructionError> {
-    let current_dt = parse_date_account(&keyed_accounts[0], &vest_state.date_pubkey)?;
-
-    if &vest_state.payee_pubkey != keyed_accounts[2].unsigned_key() {
-        return Err(VestError::DestinationMissing.into());
-    }
+    let (current_dt, payer_account, payee_account) = match keyed_accounts {
+        [a0, a1, a2] => (
+            parse_date_account(&a0, &vest_state.date_pubkey)?,
+            &mut a1.account,
+            parse_payee_account(a2, &vest_state.payee_pubkey)?,
+        ),
+        _ => return Err(InstructionError::InvalidArgument),
+    };
 
     let schedule = create_vesting_schedule(vest_state.start_dt.date(), vest_state.lamports);
 
@@ -50,8 +68,8 @@ fn redeem_tokens(
 
     let redeemable_lamports = vested_lamports.saturating_sub(vest_state.redeemed_lamports);
 
-    keyed_accounts[1].account.lamports -= redeemable_lamports;
-    keyed_accounts[2].account.lamports += redeemable_lamports;
+    payer_account.lamports -= redeemable_lamports;
+    payee_account.lamports += redeemable_lamports;
 
     vest_state.redeemed_lamports += redeemable_lamports;
 
