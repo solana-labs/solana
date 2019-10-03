@@ -12,8 +12,7 @@ use crate::{
     message_processor::{MessageProcessor, ProcessInstruction},
     rent_collector::RentCollector,
     serde_utils::{
-        deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool,
-        serialize_atomicu64,
+        deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool, serialize_atomicu64,
     },
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -541,8 +540,7 @@ impl Bank {
             let (unburned, burned) = self.fee_calculator.burn(collector_fees);
             // burn a portion of fees
             self.deposit(&self.collector_id, unburned);
-            self.capitalization
-                .fetch_sub(burned, Ordering::Relaxed);
+            self.capitalization.fetch_sub(burned, Ordering::Relaxed);
         }
     }
 
@@ -1146,8 +1144,7 @@ impl Bank {
             })
             .collect();
 
-        self.collector_fees
-            .fetch_add(fees, Ordering::Relaxed);
+        self.collector_fees.fetch_add(fees, Ordering::Relaxed);
         results
     }
 
