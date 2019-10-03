@@ -15,8 +15,8 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
-    system_instruction, sysvar,
-    sysvar::rent,
+    system_instruction,
+    sysvar::{self, rent},
 };
 
 /// Reasons the stake might have had an error
