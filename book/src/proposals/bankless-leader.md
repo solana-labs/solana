@@ -8,6 +8,19 @@ needs to reassemble the block and replay execution of well formed
 entries.  The leader does 3x more memory operations before any bank
 execution than the validator per processed transaction.
 
+## Rationale
+
+Normal bank operation for a spend needs to do 2 loads and 2 stores.
+With this design leader just does 1 load. so 4x less account\_db
+work before generating the block. The store operations are likely
+to be more expensive than reads.
+
+When replay stage starts processing the same transactions, it can
+assume that PoH is valid, and that all the entries are safe for
+parallel execution.  The fee accounts that have been loaded to
+produce the block are likely to still be in memory, so the additional
+load should be warm and the cost is likely to be amortized.
+
 ## Fee Account
 
 The [fee account](terminology.md#fee_account) pays for the
