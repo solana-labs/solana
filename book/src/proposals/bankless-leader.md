@@ -73,7 +73,7 @@ set the base fork for the balance cache to be the parent of the
 block and create an empty cache.
 
 2. if the cache is initialized, check if block's parents has a new
-finalized bank that is newer than the current base fork for the
+frozen bank that is newer than the current base fork for the
 balance cache.
 
 3. if a parent newer than the cache's base fork exist, reset the
