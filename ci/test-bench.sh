@@ -12,7 +12,8 @@ ci/affects-files.sh \
   .rs$ \
   Cargo.lock$ \
   Cargo.toml$ \
-  ci/test-bench.sh \
+  ^ci/rust-version.sh \
+  ^ci/test-bench.sh \
 || {
   annotate --style info --context test-bench \
     "Bench skipped as no .rs files were modified"
