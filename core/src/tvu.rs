@@ -158,11 +158,11 @@ impl Tvu {
             fork_confidence_cache,
         );
 
-        let blockstream_service = if blockstream_unix_socket.is_some() {
+        let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
             let blockstream_service = BlockstreamService::new(
                 blockstream_slot_receiver,
                 blocktree.clone(),
-                blockstream_unix_socket.unwrap(),
+                blockstream_unix_socket,
                 &exit,
             );
             Some(blockstream_service)

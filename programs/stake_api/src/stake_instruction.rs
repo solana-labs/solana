@@ -273,7 +273,7 @@ pub fn process_instruction(
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
     if keyed_accounts.is_empty() {
-        Err(InstructionError::InvalidInstructionData)?;
+        return Err(InstructionError::InvalidInstructionData);
     }
 
     let (me, rest) = &mut keyed_accounts.split_at_mut(1);
@@ -287,7 +287,7 @@ pub fn process_instruction(
         }
         StakeInstruction::DelegateStake => {
             if rest.len() < 3 {
-                Err(InstructionError::InvalidInstructionData)?;
+                return Err(InstructionError::InvalidInstructionData);
             }
             let vote = &rest[0];
 
@@ -300,7 +300,7 @@ pub fn process_instruction(
         }
         StakeInstruction::RedeemVoteCredits => {
             if rest.len() != 4 {
-                Err(InstructionError::InvalidInstructionData)?;
+                return Err(InstructionError::InvalidInstructionData);
             }
             let (vote, rest) = rest.split_at_mut(1);
             let vote = &mut vote[0];
@@ -316,7 +316,7 @@ pub fn process_instruction(
         }
         StakeInstruction::Withdraw(lamports) => {
             if rest.len() < 3 {
-                Err(InstructionError::InvalidInstructionData)?;
+                return Err(InstructionError::InvalidInstructionData);
             }
             let (to, rest) = &mut rest.split_at_mut(1);
             let mut to = &mut to[0];
@@ -331,7 +331,7 @@ pub fn process_instruction(
         }
         StakeInstruction::Deactivate => {
             if rest.len() < 2 {
-                Err(InstructionError::InvalidInstructionData)?;
+                return Err(InstructionError::InvalidInstructionData);
             }
             let (vote, rest) = rest.split_at_mut(1);
             let vote = &mut vote[0];

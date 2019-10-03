@@ -173,12 +173,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     }
                 }
             }
-            if num_nodes_exactly.is_some() && nodes.len() > num_nodes_exactly.unwrap() {
-                eprintln!(
-                    "Error: Extra nodes discovered.  Expecting exactly {}",
-                    num_nodes_exactly.unwrap()
-                );
-                exit(1);
+            if let Some(num_nodes_exactly) = num_nodes_exactly {
+                if nodes.len() > num_nodes_exactly {
+                    eprintln!(
+                        "Error: Extra nodes discovered.  Expecting exactly {}",
+                        num_nodes_exactly
+                    );
+                    exit(1);
+                }
             }
         }
         ("get-rpc-url", Some(matches)) => {

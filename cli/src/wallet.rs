@@ -423,7 +423,7 @@ fn check_account_for_multiple_fees(
             return Ok(());
         }
     }
-    Err(WalletError::InsufficientFundsForFee)?
+    Err(WalletError::InsufficientFundsForFee.into())
 }
 
 pub fn check_unique_pubkeys(
@@ -462,9 +462,12 @@ fn process_airdrop(
     );
     let previous_balance = match rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)? {
         Some(lamports) => lamports,
-        None => Err(WalletError::RpcRequestError(
-            "Received result of an unexpected type".to_string(),
-        ))?,
+        None => {
+            return Err(WalletError::RpcRequestError(
+                "Received result of an unexpected type".to_string(),
+            )
+            .into())
+        }
     };
 
     request_and_confirm_airdrop(&rpc_client, drone_addr, &config.keypair.pubkey(), lamports)?;
@@ -486,7 +489,8 @@ fn process_balance(
         Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit)),
         None => Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
-        ))?,
+        )
+        .into()),
     }
 }
 
@@ -502,10 +506,9 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
                 Ok("Not found".to_string())
             }
         }
-        Err(err) => Err(WalletError::RpcRequestError(format!(
-            "Unable to confirm: {:?}",
-            err
-        )))?,
+        Err(err) => {
+            Err(WalletError::RpcRequestError(format!("Unable to confirm: {:?}", err)).into())
+        }
     }
 }
 
@@ -619,9 +622,10 @@ fn process_show_storage_account(
     let account = rpc_client.get_account(storage_account_pubkey)?;
 
     if account.owner != solana_storage_api::id() {
-        Err(WalletError::RpcRequestError(
+        return Err(WalletError::RpcRequestError(
             format!("{:?} is not a storage account", storage_account_pubkey).to_string(),
-        ))?;
+        )
+        .into());
     }
 
     use solana_storage_api::storage_contract::StorageContract;
@@ -771,9 +775,10 @@ fn process_pay(
         let witness = if let Some(ref witness_vec) = *witnesses {
             witness_vec[0]
         } else {
-            Err(WalletError::BadParameter(
+            return Err(WalletError::BadParameter(
                 "Could not parse required signature pubkey(s)".to_string(),
-            ))?
+            )
+            .into());
         };
 
         let contract_state = Keypair::new();
@@ -1361,22 +1366,22 @@ pub fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> P
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
-    if result.is_err() {
-        let err = result.unwrap_err();
-        if let ClientError::TransactionError(TransactionError::InstructionError(
-            _,
-            InstructionError::CustomError(code),
-        )) = err
-        {
-            if let Some(specific_error) = E::decode_custom_error_to_enum(code) {
-                error!("{}::{:?}", E::type_of(), specific_error);
-                Err(specific_error)?
+    match result {
+        Err(err) => {
+            if let ClientError::TransactionError(TransactionError::InstructionError(
+                _,
+                InstructionError::CustomError(code),
+            )) = err
+            {
+                if let Some(specific_error) = E::decode_custom_error_to_enum(code) {
+                    error!("{}::{:?}", E::type_of(), specific_error);
+                    return Err(specific_error.into());
+                }
             }
+            error!("{:?}", err);
+            Err(err.into())
         }
-        error!("{:?}", err);
-        Err(err)?
-    } else {
-        Ok(result.unwrap())
+        Ok(sig) => Ok(sig),
     }
 }
 

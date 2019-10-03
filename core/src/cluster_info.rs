@@ -809,7 +809,7 @@ impl ClusterInfo {
         //  by a valid tvu port location
         let valid: Vec<_> = self.repair_peers();
         if valid.is_empty() {
-            Err(ClusterInfoError::NoPeers)?;
+            return Err(ClusterInfoError::NoPeers.into());
         }
         let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].gossip; // send the request to the peer's gossip port

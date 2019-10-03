@@ -572,7 +572,7 @@ impl Shredder {
             shred_bufs.append(&mut pending_shreds);
 
             if shred_bufs.len() != fec_set_size {
-                Err(reed_solomon_erasure::Error::TooFewShardsPresent)?;
+                return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
             }
 
             let session = Session::new(num_data, num_coding).unwrap();
@@ -623,7 +623,7 @@ impl Shredder {
             };
 
             if num_data.saturating_add(first_index) != last_index.saturating_add(1) {
-                Err(reed_solomon_erasure::Error::TooFewDataShards)?;
+                return Err(reed_solomon_erasure::Error::TooFewDataShards);
             }
 
             shreds.iter().map(|shred| &shred.payload).collect()

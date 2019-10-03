@@ -145,9 +145,10 @@ pub fn process_show_vote_account(
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
     if vote_account.owner != solana_vote_api::id() {
-        Err(WalletError::RpcRequestError(
+        return Err(WalletError::RpcRequestError(
             format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
-        ))?;
+        )
+        .into());
     }
 
     let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
@@ -218,9 +219,10 @@ pub fn process_uptime(
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
     if vote_account.owner != solana_vote_api::id() {
-        Err(WalletError::RpcRequestError(
+        return Err(WalletError::RpcRequestError(
             format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
-        ))?;
+        )
+        .into());
     }
 
     let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {

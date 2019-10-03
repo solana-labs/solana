@@ -528,8 +528,8 @@ pub fn new_banks_from_blocktree(
         dev_halt_at_slot,
     );
 
-    if snapshot_config.is_some() {
-        bank_forks.set_snapshot_config(snapshot_config.unwrap());
+    if let Some(snapshot_config) = snapshot_config {
+        bank_forks.set_snapshot_config(snapshot_config);
     }
 
     (

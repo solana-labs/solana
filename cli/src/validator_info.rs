@@ -92,13 +92,14 @@ fn verify_keybase(
         if client.head(&url).send()?.status().is_success() {
             Ok(())
         } else {
-            Err(format!("keybase_username could not be confirmed at: {}. Please add this pubkey file to your keybase profile to connect", url))?
+            Err(format!("keybase_username could not be confirmed at: {}. Please add this pubkey file to your keybase profile to connect", url).into())
         }
     } else {
         Err(format!(
             "keybase_username could not be parsed as String: {}",
             keybase_username
-        ))?
+        )
+        .into())
     }
 }
 
@@ -136,7 +137,8 @@ fn parse_validator_info(
         Err(format!(
             "account {} found, but could not be parsed as ValidatorInfo",
             pubkey
-        ))?
+        )
+        .into())
     }
 }
 

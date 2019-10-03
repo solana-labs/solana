@@ -77,8 +77,7 @@ fn recv_window<F>(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
 ) -> Result<()>
 where
-    F: Fn(&Shred, u64) -> bool,
-    F: Sync,
+    F: Fn(&Shred, u64) -> bool + Sync,
 {
     let timer = Duration::from_millis(200);
     let mut packets = r.recv_timeout(timer)?;

@@ -614,7 +614,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         };
 
         if lockup.slot > clock.slot && lockup.custodian != *to.unsigned_key() {
-            return Err(StakeError::LockupInForce)?;
+            return Err(StakeError::LockupInForce.into());
         }
         if lamports > self.account.lamports {
             return Err(InstructionError::InsufficientFunds);

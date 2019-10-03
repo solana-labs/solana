@@ -277,8 +277,7 @@ impl Accounts {
     /// returns only the latest/current version of B for this fork
     fn scan_fork<F, B>(&self, fork: Fork, func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount) -> Option<B>,
-        F: Send + Sync,
+        F: Fn(&StoredAccount) -> Option<B> + Send + Sync,
         B: Send + Default,
     {
         let accumulator: Vec<Vec<(Pubkey, u64, B)>> = self.accounts_db.scan_account_storage(

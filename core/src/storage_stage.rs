@@ -432,7 +432,7 @@ impl StorageStage {
                 }
                 Err(e) => {
                     info!("error encrypting file: {:?}", e);
-                    Err(e)?;
+                    return Err(e.into());
                 }
             }
         }

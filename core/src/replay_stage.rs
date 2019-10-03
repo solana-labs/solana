@@ -448,7 +448,7 @@ impl ReplayStage {
             trace!("new root {}", new_root);
             if let Err(e) = root_bank_sender.send(rooted_banks) {
                 trace!("root_bank_sender failed: {:?}", e);
-                Err(e)?;
+                return Err(e.into());
             }
         }
         Self::update_confidence_cache(bank.clone(), total_staked, lockouts_sender);

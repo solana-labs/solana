@@ -582,10 +582,9 @@ impl Replicator {
     ) -> Result<()> {
         // make sure replicator has some balance
         if client.poll_get_balance(&keypair.pubkey())? == 0 {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "keypair account has no balance",
-            ))?
+            return Err(
+                io::Error::new(io::ErrorKind::Other, "keypair account has no balance").into(),
+            );
         }
 
         // check if the storage account exists
@@ -705,10 +704,7 @@ impl Replicator {
                 .as_u64()
                 .unwrap())
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "No RPC peers...".to_string(),
-            ))?
+            Err(io::Error::new(io::ErrorKind::Other, "No RPC peers...".to_string()).into())
         }
     }
 
@@ -889,10 +885,9 @@ impl Replicator {
 
         // check if all the slots in the segment are complete
         if !Self::segment_complete(start_slot, slots_per_segment, blocktree) {
-            Err(io::Error::new(
-                ErrorKind::Other,
-                "Unable to download the full segment",
-            ))?
+            return Err(
+                io::Error::new(ErrorKind::Other, "Unable to download the full segment").into(),
+            );
         }
         Ok(start_slot)
     }

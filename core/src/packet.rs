@@ -605,7 +605,7 @@ impl Blob {
                         "error sending {} byte packet to {:?}: {:?}",
                         p.meta.size, a, e
                     );
-                    Err(e)?;
+                    return Err(e.into());
                 }
             }
         }

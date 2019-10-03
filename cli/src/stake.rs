@@ -371,10 +371,11 @@ pub fn process_create_stake_account(
         rpc_client.get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())?;
 
     if lamports < minimum_balance {
-        Err(WalletError::BadParameter(format!(
+        return Err(WalletError::BadParameter(format!(
             "need atleast {} lamports for stake account to be rent exempt, provided lamports: {}",
             minimum_balance, lamports
-        )))?;
+        ))
+        .into());
     }
 
     let ixs = stake_instruction::create_stake_account_with_lockup(
@@ -486,9 +487,10 @@ pub fn process_show_stake_account(
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_pubkey)?;
     if stake_account.owner != solana_stake_api::id() {
-        Err(WalletError::RpcRequestError(
+        return Err(WalletError::RpcRequestError(
             format!("{:?} is not a stake account", stake_account_pubkey).to_string(),
-        ))?;
+        )
+        .into());
     }
     fn show_authorized(authorized: &Authorized) {
         println!("authorized staker: {}", authorized.staker);
@@ -537,7 +539,8 @@ pub fn process_show_stake_account(
         Err(err) => Err(WalletError::RpcRequestError(format!(
             "Account data could not be deserialized to stake state: {:?}",
             err
-        )))?,
+        ))
+        .into()),
     }
 }
 

@@ -91,9 +91,10 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
     } else {
         let default = WalletConfig::default();
         if !std::path::Path::new(&default.keypair_path).exists() {
-            Err(WalletError::KeypairFileNotFound(
+            return Err(WalletError::KeypairFileNotFound(
                 "Generate a new keypair with `solana-keygen new`".to_string(),
-            ))?;
+            )
+            .into());
         }
         default.keypair_path
     };

@@ -266,7 +266,7 @@ impl Blocktree {
                     "Error: {:?} while submitting write batch for slot {:?} retrying...",
                     e, from_slot
                 );
-                Err(e)?;
+                return Err(e);
             }
             Ok(end)
         }

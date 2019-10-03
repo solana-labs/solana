@@ -20,7 +20,7 @@ fn create_system_account(
             "CreateAccount: invalid account[from] owner {} ",
             &keyed_accounts[FROM_ACCOUNT_INDEX].account.owner
         );
-        Err(SystemError::SourceNotSystemAccount)?;
+        return Err(SystemError::SourceNotSystemAccount);
     }
 
     if !keyed_accounts[TO_ACCOUNT_INDEX].account.data.is_empty()
@@ -30,7 +30,7 @@ fn create_system_account(
             "CreateAccount: invalid argument; account {} already in use",
             keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()
         );
-        Err(SystemError::AccountAlreadyInUse)?;
+        return Err(SystemError::AccountAlreadyInUse);
     }
 
     if sysvar::check_id(&program_id) {
@@ -38,7 +38,7 @@ fn create_system_account(
             "CreateAccount: invalid argument; program id {} invalid",
             program_id
         );
-        Err(SystemError::InvalidProgramId)?;
+        return Err(SystemError::InvalidProgramId);
     }
 
     if sysvar::is_sysvar_id(&keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()) {
@@ -46,7 +46,7 @@ fn create_system_account(
             "CreateAccount: invalid argument; account id {} invalid",
             program_id
         );
-        Err(SystemError::InvalidAccountId)?;
+        return Err(SystemError::InvalidAccountId);
     }
 
     if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
@@ -54,7 +54,7 @@ fn create_system_account(
             "CreateAccount: insufficient lamports ({}, need {})",
             keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
         );
-        Err(SystemError::ResultWithNegativeLamports)?;
+        return Err(SystemError::ResultWithNegativeLamports);
     }
     keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
     keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
@@ -80,7 +80,7 @@ fn transfer_lamports(
             "Transfer: insufficient lamports ({}, need {})",
             keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
         );
-        Err(SystemError::ResultWithNegativeLamports)?;
+        return Err(SystemError::ResultWithNegativeLamports);
     }
     keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
     keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
@@ -99,7 +99,7 @@ pub fn process_instruction(
         // All system instructions require that accounts_keys[0] be a signer
         if keyed_accounts[FROM_ACCOUNT_INDEX].signer_key().is_none() {
             debug!("account[from] is unsigned");
-            Err(InstructionError::MissingRequiredSignature)?;
+            return Err(InstructionError::MissingRequiredSignature);
         }
 
         match instruction {
@@ -110,7 +110,7 @@ pub fn process_instruction(
             } => create_system_account(keyed_accounts, lamports, space, &program_id),
             SystemInstruction::Assign { program_id } => {
                 if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
-                    Err(InstructionError::IncorrectProgramId)?;
+                    return Err(InstructionError::IncorrectProgramId);
                 }
                 assign_account_to_program(keyed_accounts, &program_id)
             }
