@@ -52,9 +52,9 @@ static CROSS_MARK: Emoji = Emoji("❌ ", "");
 pub enum CliCommand {
     // Cluster Info Commands
     Fees,
+    GetEpochInfo,
     GetGenesisBlockhash,
     GetSlot,
-    GetEpochInfo,
     GetTransactionCount,
     GetVersion,
     Ping {
@@ -190,8 +190,80 @@ pub fn parse_command(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommand, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
-        ("address", Some(_address_matches)) => Ok(CliCommand::Address),
+        // Cluster Info Commands
         ("fees", Some(_fees_matches)) => Ok(CliCommand::Fees),
+        ("get-epoch-info", Some(_matches)) => Ok(CliCommand::GetEpochInfo),
+        ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommand::GetGenesisBlockhash),
+        ("get-slot", Some(_matches)) => Ok(CliCommand::GetSlot),
+        ("get-transaction-count", Some(_matches)) => Ok(CliCommand::GetTransactionCount),
+        ("cluster-version", Some(_matches)) => Ok(CliCommand::GetVersion),
+        ("ping", Some(ping_matches)) => {
+            let interval = Duration::from_secs(value_t_or_exit!(ping_matches, "interval", u64));
+            let count = if ping_matches.is_present("count") {
+                Some(value_t_or_exit!(ping_matches, "count", u64))
+            } else {
+                None
+            };
+            let timeout = Duration::from_secs(value_t_or_exit!(ping_matches, "timeout", u64));
+            Ok(CliCommand::Ping {
+                interval,
+                count,
+                timeout,
+            })
+        }
+        // Program Deployment
+        ("deploy", Some(deploy_matches)) => Ok(CliCommand::Deploy(
+            deploy_matches
+                .value_of("program_location")
+                .unwrap()
+                .to_string(),
+        )),
+        // Stake Commands
+        ("create-stake-account", Some(matches)) => parse_stake_create_account(pubkey, matches),
+        ("delegate-stake", Some(matches)) => parse_stake_delegate_stake(matches),
+        ("withdraw-stake", Some(matches)) => parse_stake_withdraw_stake(matches),
+        ("deactivate-stake", Some(matches)) => parse_stake_deactivate_stake(matches),
+        ("stake-authorize-staker", Some(matches)) => {
+            parse_stake_authorize(matches, StakeAuthorize::Staker)
+        }
+        ("stake-authorize-withdrawer", Some(matches)) => {
+            parse_stake_authorize(matches, StakeAuthorize::Withdrawer)
+        }
+        ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
+        ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
+        // Storage Commands
+        ("create-replicator-storage-account", Some(matches)) => {
+            parse_storage_create_replicator_account(matches)
+        }
+        ("create-validator-storage-account", Some(matches)) => {
+            parse_storage_create_validator_account(matches)
+        }
+        ("claim-storage-reward", Some(matches)) => parse_storage_claim_reward(matches),
+        ("show-storage-account", Some(matches)) => parse_storage_get_account_command(matches),
+        // Validator Info Commands
+        ("validator-info", Some(matches)) => match matches.subcommand() {
+            ("publish", Some(matches)) => parse_validator_info_command(matches, pubkey),
+            ("get", Some(matches)) => parse_get_validator_info_command(matches),
+            ("", None) => {
+                eprintln!("{}", matches.usage());
+                Err(CliError::CommandNotRecognized(
+                    "no validator-info subcommand given".to_string(),
+                ))
+            }
+            _ => unreachable!(),
+        },
+        // Vote Commands
+        ("create-vote-account", Some(matches)) => parse_vote_create_account(pubkey, matches),
+        ("vote-authorize-voter", Some(matches)) => {
+            parse_vote_authorize(matches, VoteAuthorize::Voter)
+        }
+        ("vote-authorize-withdrawer", Some(matches)) => {
+            parse_vote_authorize(matches, VoteAuthorize::Withdrawer)
+        }
+        ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
+        ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
+        // Wallet Commands
+        ("address", Some(_address_matches)) => Ok(CliCommand::Address),
         ("airdrop", Some(airdrop_matches)) => {
             let drone_port = airdrop_matches
                 .value_of("drone_port")
@@ -245,55 +317,6 @@ pub fn parse_command(
                 }
             }
         }
-        ("show-account", Some(matches)) => {
-            let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
-            let output_file = matches.value_of("output_file");
-            let use_lamports_unit = matches.is_present("lamports");
-            Ok(CliCommand::ShowAccount {
-                pubkey: account_pubkey,
-                output_file: output_file.map(ToString::to_string),
-                use_lamports_unit,
-            })
-        }
-        ("create-vote-account", Some(matches)) => parse_vote_create_account(pubkey, matches),
-        ("vote-authorize-voter", Some(matches)) => {
-            parse_vote_authorize(matches, VoteAuthorize::Voter)
-        }
-        ("vote-authorize-withdrawer", Some(matches)) => {
-            parse_vote_authorize(matches, VoteAuthorize::Withdrawer)
-        }
-        ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
-        ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
-        ("create-stake-account", Some(matches)) => parse_stake_create_account(pubkey, matches),
-        ("delegate-stake", Some(matches)) => parse_stake_delegate_stake(matches),
-        ("withdraw-stake", Some(matches)) => parse_stake_withdraw_stake(matches),
-        ("deactivate-stake", Some(matches)) => parse_stake_deactivate_stake(matches),
-        ("stake-authorize-staker", Some(matches)) => {
-            parse_stake_authorize(matches, StakeAuthorize::Staker)
-        }
-        ("stake-authorize-withdrawer", Some(matches)) => {
-            parse_stake_authorize(matches, StakeAuthorize::Withdrawer)
-        }
-        ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
-        ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
-        ("create-replicator-storage-account", Some(matches)) => {
-            parse_storage_create_replicator_account(matches)
-        }
-        ("create-validator-storage-account", Some(matches)) => {
-            parse_storage_create_validator_account(matches)
-        }
-        ("claim-storage-reward", Some(matches)) => parse_storage_claim_reward(matches),
-        ("show-storage-account", Some(matches)) => parse_storage_get_account_command(matches),
-        ("deploy", Some(deploy_matches)) => Ok(CliCommand::Deploy(
-            deploy_matches
-                .value_of("program_location")
-                .unwrap()
-                .to_string(),
-        )),
-        ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommand::GetGenesisBlockhash),
-        ("get-slot", Some(_matches)) => Ok(CliCommand::GetSlot),
-        ("get-epoch-info", Some(_matches)) => Ok(CliCommand::GetEpochInfo),
-        ("get-transaction-count", Some(_matches)) => Ok(CliCommand::GetTransactionCount),
         ("pay", Some(pay_matches)) => {
             let lamports = amount_of(pay_matches, "amount", "unit").expect("Invalid amount");
             let to = value_of(&pay_matches, "to").unwrap_or(*pubkey);
@@ -325,18 +348,14 @@ pub fn parse_command(
                 cancelable,
             })
         }
-        ("ping", Some(ping_matches)) => {
-            let interval = Duration::from_secs(value_t_or_exit!(ping_matches, "interval", u64));
-            let count = if ping_matches.is_present("count") {
-                Some(value_t_or_exit!(ping_matches, "count", u64))
-            } else {
-                None
-            };
-            let timeout = Duration::from_secs(value_t_or_exit!(ping_matches, "timeout", u64));
-            Ok(CliCommand::Ping {
-                interval,
-                count,
-                timeout,
+        ("show-account", Some(matches)) => {
+            let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
+            let output_file = matches.value_of("output_file");
+            let use_lamports_unit = matches.is_present("lamports");
+            Ok(CliCommand::ShowAccount {
+                pubkey: account_pubkey,
+                output_file: output_file.map(ToString::to_string),
+                use_lamports_unit,
             })
         }
         ("send-signature", Some(sig_matches)) => {
@@ -364,18 +383,6 @@ pub fn parse_command(
             };
             Ok(CliCommand::TimeElapsed(to, process_id, dt))
         }
-        ("cluster-version", Some(_matches)) => Ok(CliCommand::GetVersion),
-        ("validator-info", Some(matches)) => match matches.subcommand() {
-            ("publish", Some(matches)) => parse_validator_info_command(matches, pubkey),
-            ("get", Some(matches)) => parse_get_validator_info_command(matches),
-            ("", None) => {
-                eprintln!("{}", matches.usage());
-                Err(CliError::CommandNotRecognized(
-                    "no validator-info subcommand given".to_string(),
-                ))
-            }
-            _ => unreachable!(),
-        },
         ("", None) => {
             eprintln!("{}", matches.usage());
             Err(CliError::CommandNotRecognized(
