@@ -17,25 +17,32 @@ set -e
 [[ -n $CHANNEL ]] || CHANNEL=beta
 [[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
 
+function collect_logs {
+  echo --- collect logs from remote nodes
+  rm -rf net/log
+  net/net.sh logs
+  for logfile in $(ls -A net/log) ; do
+    (
+      cd net/log
+      new_log="$TESTNET_TAG"_"$NUMBER_OF_VALIDATOR_NODES"-nodes_"$(basename "$logfile")"
+      cp "$logfile" "$new_log"
+      upload-ci-artifact "$new_log"
+    )
+  done
+}
+
 function cleanup_testnet {
+  (
+    set +e
+    collect_logs
+  )
   (
     cat <<EOF
 - wait: ~
   continue_on_failure: true
 
-- command: "tests/utils/collect_logs.sh"
-  label: "Collect logs"
-  agents:
-    - "queue=colo-deploy"
-  env:
-    CLOUD_PROVIDER: "${CLOUD_PROVIDER}"
-    TESTNET_TAG: "${TESTNET_TAG}"
-    NUMBER_OF_VALIDATOR_NODES: "${NUMBER_OF_VALIDATOR_NODES}"
-
-- wait: ~
-  continue_on_failure: true
-
-- command: "net/net.sh stop -p ${TESTNET_TAG}"
+# TODO: Replace this with the cleanup from https://github.com/solana-labs/solana/issues/6216
+- command: "net/colo.sh config -p ${TESTNET_TAG} ; net/net.sh stop"
   label: "Stop Network software"
   agents:
     - "queue=colo-deploy"
@@ -43,7 +50,7 @@ function cleanup_testnet {
 - wait: ~
   continue_on_failure: true
 
-- command: "net/colo.sh delete -p $TESTNET_TAG"
+- command: "net/colo.sh delete -p ${TESTNET_TAG}"
   label: "Delete Testnet"
   agents:
     - "queue=colo-deploy"
