@@ -86,8 +86,11 @@ pub(crate) mod tests {
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_storage_api::storage_contract::{StorageAccount, STORAGE_ACCOUNT_SPACE};
-    use solana_storage_api::{storage_instruction, storage_processor};
+    use solana_storage_api::{
+        storage_contract::{StorageAccount, STORAGE_ACCOUNT_SPACE},
+        storage_instruction::{self, StorageAccountType},
+        storage_processor,
+    };
     use std::sync::Arc;
 
     #[test]
@@ -110,22 +113,24 @@ pub(crate) mod tests {
         bank_client
             .transfer(10, &mint_keypair, &replicator_pubkey)
             .unwrap();
-        let message = Message::new(storage_instruction::create_replicator_storage_account(
+        let message = Message::new(storage_instruction::create_storage_account(
             &mint_pubkey,
             &Pubkey::default(),
             &replicator_pubkey,
             1,
+            StorageAccountType::Replicator,
         ));
         bank_client.send_message(&[&mint_keypair], message).unwrap();
 
         bank_client
             .transfer(10, &mint_keypair, &validator_pubkey)
             .unwrap();
-        let message = Message::new(storage_instruction::create_validator_storage_account(
+        let message = Message::new(storage_instruction::create_storage_account(
             &mint_pubkey,
             &Pubkey::default(),
             &validator_pubkey,
             1,
+            StorageAccountType::Validator,
         ));
         bank_client.send_message(&[&mint_keypair], message).unwrap();
 
@@ -192,7 +197,7 @@ pub(crate) mod tests {
             Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
         let mut validator = StorageAccount::new(validator_pubkey, &mut validator_account);
         validator
-            .initialize_validator_storage(validator_pubkey)
+            .initialize_storage(validator_pubkey, StorageAccountType::Validator)
             .unwrap();
         let storage_contract = &mut validator_account.state().unwrap();
         if let StorageContract::ValidatorStorage {
@@ -208,7 +213,7 @@ pub(crate) mod tests {
             Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
         let mut replicator = StorageAccount::new(replicator_pubkey, &mut replicator_account);
         replicator
-            .initialize_replicator_storage(replicator_pubkey)
+            .initialize_storage(replicator_pubkey, StorageAccountType::Replicator)
             .unwrap();
         let storage_contract = &mut replicator_account.state().unwrap();
         if let StorageContract::ReplicatorStorage {
