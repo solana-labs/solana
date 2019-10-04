@@ -486,11 +486,13 @@ impl ClusterInfo {
         peers: &[ContactInfo],
         stakes: Option<&HashMap<Pubkey, u64, S>>,
     ) -> Vec<(u64, usize)> {
-        let mut stakes_and_index: Vec<_> = peers
+        let stakes_and_index: Vec<_> = peers
             .iter()
             .enumerate()
             .map(|(i, c)| {
-                let stake = stakes.map_or(0, |stakes| *stakes.get(&c.id).unwrap_or(&0));
+                // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
+                // assumed to be missing entry. So let's make sure stake weights are atleast 1
+                let stake = 1.max(stakes.map_or(1, |stakes| *stakes.get(&c.id).unwrap_or(&1)));
                 (stake, i)
             })
             .sorted_by(|(l_stake, l_info), (r_stake, r_info)| {
@@ -501,12 +503,6 @@ impl ClusterInfo {
                 }
             })
             .collect();
-
-        // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
-        // assumed to be missing entry. So let's make sure stake weights are atleast 1
-        stakes_and_index
-            .iter_mut()
-            .for_each(|(stake, _)| *stake = cmp::max(1, *stake));
 
         stakes_and_index
     }
