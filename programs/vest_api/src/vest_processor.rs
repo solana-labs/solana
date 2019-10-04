@@ -79,15 +79,26 @@ pub fn process_instruction(
             };
             vest_state.serialize(&mut contract_account.data)
         }
+        VestInstruction::SetPayee(payee_pubkey) => {
+            let (old_payee_keyed_account, contract_keyed_account) = match keyed_accounts {
+                [ka0, ka1] => (ka0, ka1),
+                _ => return Err(InstructionError::InvalidArgument),
+            };
+            let contract_account = &mut contract_keyed_account.account;
+            let mut vest_state = VestState::deserialize(&contract_account.data)?;
+            parse_signed_account(old_payee_keyed_account, &vest_state.payee_pubkey)?;
+            vest_state.payee_pubkey = payee_pubkey;
+            vest_state.serialize(&mut contract_account.data)
+        }
         VestInstruction::RedeemTokens => {
             let (date_keyed_account, contract_keyed_account, payee_keyed_account) =
                 match keyed_accounts {
                     [ka0, ka1, ka2] => (ka0, ka1, ka2),
                     _ => return Err(InstructionError::InvalidArgument),
                 };
-            let mut vest_state = VestState::deserialize(&contract_keyed_account.account.data)?;
-            let current_date = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
             let contract_account = &mut contract_keyed_account.account;
+            let mut vest_state = VestState::deserialize(&contract_account.data)?;
+            let current_date = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
             let payee_account = parse_account(payee_keyed_account, &vest_state.payee_pubkey)?;
 
             vest_state.redeem_tokens(current_date, contract_account, payee_account);
@@ -100,10 +111,10 @@ pub fn process_instruction(
                     [ka0, ka1, ka2] => (ka0, ka1, Some(ka2)),
                     _ => return Err(InstructionError::InvalidArgument),
                 };
-            let mut vest_state = VestState::deserialize(&contract_keyed_account.account.data)?;
+            let contract_account = &mut contract_keyed_account.account;
+            let mut vest_state = VestState::deserialize(&contract_account.data)?;
             let terminator_account =
                 parse_signed_account(terminator_keyed_account, &vest_state.terminator_pubkey)?;
-            let contract_account = &mut contract_keyed_account.account;
             let payee_account = if let Some(payee_keyed_account) = payee_keyed_account {
                 &mut payee_keyed_account.account
             } else {
@@ -197,6 +208,20 @@ mod tests {
         bank_client.send_message(&[&payer_keypair], message)
     }
 
+    fn send_set_payee(
+        bank_client: &BankClient,
+        old_payee_keypair: &Keypair,
+        contract_pubkey: &Pubkey,
+        new_payee_pubkey: &Pubkey,
+    ) -> Result<Signature, TransportError> {
+        let instruction = vest_instruction::set_payee(
+            &old_payee_keypair.pubkey(),
+            &contract_pubkey,
+            &new_payee_pubkey,
+        );
+        bank_client.send_instruction(&old_payee_keypair, instruction)
+    }
+
     fn send_redeem_tokens(
         bank_client: &BankClient,
         payer_keypair: &Keypair,
@@ -283,6 +308,55 @@ mod tests {
             parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
             InstructionError::InvalidAccountData
         );
+    }
+
+    #[test]
+    fn test_set_payee() {
+        let (bank_client, alice_keypair) = create_bank_client(38);
+        let date_pubkey = Pubkey::new_rand();
+        let contract_pubkey = Pubkey::new_rand();
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
+        let start_date = Utc.ymd(2018, 1, 1);
+
+        create_vest_account(
+            &bank_client,
+            &alice_keypair,
+            &bob_pubkey,
+            &contract_pubkey,
+            start_date,
+            &date_pubkey,
+            36,
+        )
+        .unwrap();
+
+        let new_bob_pubkey = Pubkey::new_rand();
+
+        // Ensure some rando can't change the payee.
+        // Transfer bob a token to pay the transaction fee.
+        let mallory_keypair = Keypair::new();
+        bank_client
+            .transfer(1, &alice_keypair, &mallory_keypair.pubkey())
+            .unwrap();
+        send_set_payee(
+            &bank_client,
+            &mallory_keypair,
+            &contract_pubkey,
+            &new_bob_pubkey,
+        )
+        .unwrap_err();
+
+        // Ensure bob can update which account he wants vested funds transfered to.
+        bank_client
+            .transfer(1, &alice_keypair, &bob_pubkey)
+            .unwrap();
+        send_set_payee(
+            &bank_client,
+            &bob_keypair,
+            &contract_pubkey,
+            &new_bob_pubkey,
+        )
+        .unwrap();
     }
 
     #[test]

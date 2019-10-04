@@ -54,6 +54,9 @@ pub enum VestInstruction {
         total_lamports: u64, // The number of lamports to send the payee if the schedule completes
     },
 
+    /// Change the payee pubkey
+    SetPayee(Pubkey),
+
     /// Load an account and pass its data to the contract for inspection.
     RedeemTokens,
 
@@ -110,6 +113,14 @@ pub fn create_account(
             lamports,
         ),
     ]
+}
+
+pub fn set_payee(old_payee: &Pubkey, contract: &Pubkey, new_payee: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*old_payee, true),
+        AccountMeta::new(*contract, false),
+    ];
+    Instruction::new(id(), &VestInstruction::SetPayee(*new_payee), account_metas)
 }
 
 pub fn terminate(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
