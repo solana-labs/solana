@@ -1,4 +1,4 @@
-use solana_cli::wallet::{process_command, CliCommand, CliConfig};
+use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
 use solana_drone::drone::run_local_drone;
@@ -7,7 +7,7 @@ use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 
 #[test]
-fn test_wallet_request_airdrop() {
+fn test_cli_request_airdrop() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let (sender, receiver) = channel();
     run_local_drone(alice, sender, None);

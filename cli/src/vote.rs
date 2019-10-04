@@ -1,10 +1,10 @@
 use crate::{
-    input_parsers::*,
-    input_validators::*,
-    wallet::{
+    cli::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys,
         log_instruction_custom_error, CliCommand, CliConfig, CliError, ProcessResult,
     },
+    input_parsers::*,
+    input_validators::*,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
@@ -65,7 +65,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to wallet)"),
+                        .help("Public key of the authorized withdrawer (defaults to cli)"),
                 ),
         )
         .subcommand(
@@ -229,7 +229,7 @@ pub fn process_create_vote_account(
         (&vote_init.node_pubkey, "node_pubkey".to_string()),
     )?;
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
     )?;
     let required_balance =
@@ -422,7 +422,7 @@ pub fn process_uptime(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::{app, parse_command};
+    use crate::cli::{app, parse_command};
 
     #[test]
     fn test_parse_command() {

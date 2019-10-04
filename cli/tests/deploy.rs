@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use solana_cli::wallet::{process_command, CliCommand, CliConfig};
+use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_core::validator::new_validator_for_tests;
@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::channel;
 
 #[test]
-fn test_wallet_deploy_program() {
+fn test_cli_deploy_program() {
     solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

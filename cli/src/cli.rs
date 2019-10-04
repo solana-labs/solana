@@ -618,7 +618,7 @@ fn process_pay(
     cancelable: Option<Pubkey>,
 ) -> ProcessResult {
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (to, "to".to_string()),
     )?;
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
@@ -1164,7 +1164,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Apply witness signature to contract
         CliCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
 
-        // Return software version of wallet and cluster entrypoint node
+        // Return software version of solana-cli and cluster entrypoint node
         CliCommand::GetVersion => process_get_version(&rpc_client, config),
 
         // Return all or single validator info
@@ -1670,7 +1670,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_parse_command() {
+    fn test_cli_parse_command() {
         let test_commands = app("test", "desc", "version");
 
         let pubkey = Pubkey::new_rand();
@@ -1912,7 +1912,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_process_command() {
+    fn test_cli_process_command() {
         // Success cases
         let mut config = CliConfig::default();
         config.rpc_client = Some(RpcClient::new_mock("succeeds".to_string()));
@@ -2168,7 +2168,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_deploy() {
+    fn test_cli_deploy() {
         solana_logger::setup();
         let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         pathbuf.push("tests");

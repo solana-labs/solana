@@ -1,10 +1,10 @@
 use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 use solana_cli::{
+    cli::{app, parse_command, process_command, CliConfig, CliError},
     config::{self, Config},
     display::{println_name_value, println_name_value_or},
     input_validators::is_url,
-    wallet::{app, parse_command, process_command, CliConfig, CliError},
 };
 use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
@@ -13,26 +13,22 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
     let parse_args = match matches.subcommand() {
         ("get", Some(subcommand_matches)) => {
             if let Some(config_file) = matches.value_of("config_file") {
-                let default_wallet_config = CliConfig::default();
+                let default_cli_config = CliConfig::default();
                 let config = Config::load(config_file).unwrap_or_default();
                 if let Some(field) = subcommand_matches.value_of("specific_setting") {
                     let (value, default_value) = match field {
-                        "url" => (config.url, default_wallet_config.json_rpc_url),
-                        "keypair" => (config.keypair, default_wallet_config.keypair_path),
+                        "url" => (config.url, default_cli_config.json_rpc_url),
+                        "keypair" => (config.keypair, default_cli_config.keypair_path),
                         _ => unreachable!(),
                     };
                     println_name_value_or(&format!("* {}:", field), &value, &default_value);
                 } else {
                     println_name_value("Wallet Config:", config_file);
-                    println_name_value_or(
-                        "* url:",
-                        &config.url,
-                        &default_wallet_config.json_rpc_url,
-                    );
+                    println_name_value_or("* url:", &config.url, &default_cli_config.json_rpc_url);
                     println_name_value_or(
                         "* keypair:",
                         &config.keypair,
-                        &default_wallet_config.keypair_path,
+                        &default_cli_config.keypair_path,
                     );
                 }
             } else {
@@ -154,7 +150,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .subcommand(
             SubCommand::with_name("get")
-                .about("Get wallet config settings")
+                .about("Get cli config settings")
                 .arg(
                     Arg::with_name("specific_setting")
                         .index(1)
@@ -166,7 +162,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .subcommand(
             SubCommand::with_name("set")
-                .about("Set a wallet config setting")
+                .about("Set a cli config setting")
                 .group(
                     ArgGroup::with_name("config_settings")
                         .args(&["json_rpc_url", "keypair"])

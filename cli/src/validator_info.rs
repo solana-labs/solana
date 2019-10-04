@@ -1,6 +1,6 @@
 use crate::{
+    cli::{check_account_for_fee, CliCommand, CliConfig, CliError, ProcessResult},
     input_validators::is_url,
-    wallet::{check_account_for_fee, CliCommand, CliConfig, CliError, ProcessResult},
 };
 use bincode::deserialize;
 use clap::ArgMatches;
@@ -305,7 +305,7 @@ pub fn process_get_validator_info(rpc_client: &RpcClient, pubkey: Option<Pubkey>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::app;
+    use crate::cli::app;
     use bincode::{serialize, serialized_size};
     use serde_json::json;
 

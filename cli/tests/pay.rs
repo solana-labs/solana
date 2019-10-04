@@ -1,6 +1,6 @@
 use chrono::prelude::*;
 use serde_json::Value;
-use solana_cli::wallet::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
+use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
@@ -27,7 +27,7 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 }
 
 #[test]
-fn test_wallet_timestamp_tx() {
+fn test_cli_timestamp_tx() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
@@ -98,7 +98,7 @@ fn test_wallet_timestamp_tx() {
 }
 
 #[test]
-fn test_wallet_witness_tx() {
+fn test_cli_witness_tx() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
@@ -165,7 +165,7 @@ fn test_wallet_witness_tx() {
 }
 
 #[test]
-fn test_wallet_cancel_tx() {
+fn test_cli_cancel_tx() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 

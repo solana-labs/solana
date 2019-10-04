@@ -1,10 +1,10 @@
 use crate::{
-    input_parsers::*,
-    input_validators::*,
-    wallet::{
+    cli::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys,
         log_instruction_custom_error, CliCommand, CliConfig, CliError, ProcessResult,
     },
+    input_parsers::*,
+    input_validators::*,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
@@ -73,7 +73,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of authorized staker (defaults to wallet)")
+                        .help("Public key of authorized staker (defaults to cli)")
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -81,7 +81,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to wallet)")
+                        .help("Public key of the authorized withdrawer (defaults to cli)")
                 )
         )
         .subcommand(
@@ -353,7 +353,7 @@ pub fn process_create_stake_account(
     lamports: u64,
 ) -> ProcessResult {
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
 
@@ -550,7 +550,7 @@ pub fn process_delegate_stake(
     force: bool,
 ) -> ProcessResult {
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
 
@@ -611,7 +611,7 @@ pub fn process_delegate_stake(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::{app, parse_command};
+    use crate::cli::{app, parse_command};
 
     #[test]
     fn test_parse_command() {

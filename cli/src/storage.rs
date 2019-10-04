@@ -1,10 +1,10 @@
 use crate::{
-    input_parsers::*,
-    input_validators::*,
-    wallet::{
+    cli::{
         check_account_for_fee, check_unique_pubkeys, log_instruction_custom_error, CliCommand,
         CliConfig, CliError, ProcessResult,
     },
+    input_parsers::*,
+    input_validators::*,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
@@ -144,7 +144,7 @@ pub fn process_create_storage_account(
     account_type: StorageAccountType,
 ) -> ProcessResult {
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (
             &storage_account_pubkey,
             "storage_account_pubkey".to_string(),
@@ -211,7 +211,7 @@ pub fn process_show_storage_account(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::{app, parse_command};
+    use crate::cli::{app, parse_command};
 
     #[test]
     fn test_parse_command() {
