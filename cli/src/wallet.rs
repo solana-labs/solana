@@ -50,21 +50,46 @@ static CROSS_MARK: Emoji = Emoji("❌ ", "");
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum WalletCommand {
-    Address,
+    // Cluster Info Commands
     Fees,
-    Airdrop {
-        drone_host: Option<IpAddr>,
-        drone_port: u16,
-        lamports: u64,
-        use_lamports_unit: bool,
+    GetGenesisBlockhash,
+    GetSlot,
+    GetEpochInfo,
+    GetTransactionCount,
+    GetVersion,
+    Ping {
+        interval: Duration,
+        count: Option<u64>,
+        timeout: Duration,
     },
-    Balance {
+    // Program Deployment
+    Deploy(String),
+    // Stake Commands
+    CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
+    DelegateStake(Pubkey, Pubkey, bool),
+    DeactivateStake(Pubkey, Pubkey),
+    RedeemVoteCredits(Pubkey, Pubkey),
+    ShowStakeAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
     },
-    Cancel(Pubkey),
-    Confirm(Signature),
-    VoteAuthorize(Pubkey, Pubkey, VoteAuthorize),
+    StakeAuthorize(Pubkey, Pubkey, StakeAuthorize),
+    WithdrawStake(Pubkey, Pubkey, u64),
+    // Storage Commands
+    CreateStorageAccount {
+        account_owner: Pubkey,
+        storage_account_pubkey: Pubkey,
+        account_type: StorageAccountType,
+    },
+    ClaimStorageReward {
+        node_account_pubkey: Pubkey,
+        storage_account_pubkey: Pubkey,
+    },
+    ShowStorageAccount(Pubkey),
+    // Validator Info Commands
+    GetValidatorInfo(Option<Pubkey>),
+    SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
+    // Vote Commands
     CreateVoteAccount(Pubkey, VoteInit),
     ShowAccount {
         pubkey: Pubkey,
@@ -80,32 +105,21 @@ pub enum WalletCommand {
         aggregate: bool,
         span: Option<u64>,
     },
-    CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
-    StakeAuthorize(Pubkey, Pubkey, StakeAuthorize),
-    DelegateStake(Pubkey, Pubkey, bool),
-    WithdrawStake(Pubkey, Pubkey, u64),
-    DeactivateStake(Pubkey, Pubkey),
-    RedeemVoteCredits(Pubkey, Pubkey),
-    ShowStakeAccount {
+    VoteAuthorize(Pubkey, Pubkey, VoteAuthorize),
+    // Wallet Commands
+    Address,
+    Airdrop {
+        drone_host: Option<IpAddr>,
+        drone_port: u16,
+        lamports: u64,
+        use_lamports_unit: bool,
+    },
+    Balance {
         pubkey: Pubkey,
         use_lamports_unit: bool,
     },
-    CreateStorageAccount {
-        account_owner: Pubkey,
-        storage_account_pubkey: Pubkey,
-        account_type: StorageAccountType,
-    },
-    ClaimStorageReward {
-        node_account_pubkey: Pubkey,
-        storage_account_pubkey: Pubkey,
-    },
-    ShowStorageAccount(Pubkey),
-    Deploy(String),
-    GetGenesisBlockhash,
-    GetSlot,
-    GetEpochInfo,
-    GetTransactionCount,
-    GetVersion,
+    Cancel(Pubkey),
+    Confirm(Signature),
     Pay {
         lamports: u64,
         to: Pubkey,
@@ -114,15 +128,8 @@ pub enum WalletCommand {
         witnesses: Option<Vec<Pubkey>>,
         cancelable: Option<Pubkey>,
     },
-    Ping {
-        interval: Duration,
-        count: Option<u64>,
-        timeout: Duration,
-    },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
-    GetValidatorInfo(Option<Pubkey>),
-    SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
 }
 
 #[derive(Debug, Clone)]
