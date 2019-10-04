@@ -24,7 +24,7 @@ pretty-hex = "0.1.1"
 reqwest = { version = "0.9.21", default-features = false, features = ["rustls-tls"] }
 serde = "1.0.101"
 serde_derive = "1.0.101"
-serde_json = "1.0.40"
+serde_json = "1.0.41"
 serde_yaml = "0.8.9"
 solana-budget-api = { path = "../programs/budget_api", version = "0.20.0" }
 solana-client = { path = "../client", version = "0.20.0" }
