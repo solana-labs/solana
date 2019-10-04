@@ -1,6 +1,6 @@
 use crate::{
+    cli::{check_account_for_fee, CliCommand, CliConfig, CliError, ProcessResult},
     input_validators::is_url,
-    wallet::{check_account_for_fee, ProcessResult, WalletCommand, WalletConfig, WalletError},
 };
 use bincode::deserialize;
 use clap::ArgMatches;
@@ -142,10 +142,10 @@ fn parse_validator_info(
     }
 }
 
-fn parse_info_pubkey(matches: &ArgMatches<'_>) -> Result<Option<Pubkey>, WalletError> {
+fn parse_info_pubkey(matches: &ArgMatches<'_>) -> Result<Option<Pubkey>, CliError> {
     let info_pubkey = if let Some(pubkey) = matches.value_of("info_pubkey") {
         Some(pubkey.parse::<Pubkey>().map_err(|err| {
-            WalletError::BadParameter(format!("Invalid validator info pubkey: {:?}", err))
+            CliError::BadParameter(format!("Invalid validator info pubkey: {:?}", err))
         })?)
     } else {
         None
@@ -156,7 +156,7 @@ fn parse_info_pubkey(matches: &ArgMatches<'_>) -> Result<Option<Pubkey>, WalletE
 pub fn parse_validator_info_command(
     matches: &ArgMatches<'_>,
     validator_pubkey: &Pubkey,
-) -> Result<WalletCommand, WalletError> {
+) -> Result<CliCommand, CliError> {
     let info_pubkey = parse_info_pubkey(matches)?;
     // Prepare validator info
     let validator_info = parse_args(&matches);
@@ -167,10 +167,7 @@ pub fn parse_validator_info_command(
                 println!("--force supplied, ignoring: {:?}", result);
             } else {
                 result.map_err(|err| {
-                    WalletError::BadParameter(format!(
-                        "Invalid validator keybase username: {:?}",
-                        err
-                    ))
+                    CliError::BadParameter(format!("Invalid validator keybase username: {:?}", err))
                 })?;
             }
         }
@@ -179,19 +176,17 @@ pub fn parse_validator_info_command(
     let validator_info = ValidatorInfo {
         info: validator_string,
     };
-    Ok(WalletCommand::SetValidatorInfo(validator_info, info_pubkey))
+    Ok(CliCommand::SetValidatorInfo(validator_info, info_pubkey))
 }
 
-pub fn parse_get_validator_info_command(
-    matches: &ArgMatches<'_>,
-) -> Result<WalletCommand, WalletError> {
+pub fn parse_get_validator_info_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let info_pubkey = parse_info_pubkey(matches)?;
-    Ok(WalletCommand::GetValidatorInfo(info_pubkey))
+    Ok(CliCommand::GetValidatorInfo(info_pubkey))
 }
 
 pub fn process_set_validator_info(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     validator_info: &ValidatorInfo,
     info_pubkey: Option<Pubkey>,
 ) -> ProcessResult {
@@ -310,7 +305,7 @@ pub fn process_get_validator_info(rpc_client: &RpcClient, pubkey: Option<Pubkey>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::app;
+    use crate::cli::app;
     use bincode::{serialize, serialized_size};
     use serde_json::json;
 

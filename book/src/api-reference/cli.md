@@ -188,48 +188,49 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 SUBCOMMANDS:
-    address                               Get your public key
-    airdrop                               Request lamports
-    balance                               Get your balance
-    cancel                                Cancel a transfer
-    claim-storage-reward                  Redeem storage reward credits
-    cluster-version                       Get the version of the cluster entrypoint
-    confirm                               Confirm transaction by signature
-    create-replicator-storage-account     Create a replicator storage account
-    create-stake-account                  Create a stake account
-    create-storage-mining-pool-account    Create mining pool account
-    create-validator-storage-account      Create a validator storage account
-    create-vote-account                   Create a vote account
-    deactivate-stake                      Deactivate the delegated stake from the stake account
-    delegate-stake                        Delegate stake to a vote account
-    deploy                                Deploy a program
-    fees                                  Display current cluster fees
-    get                                   Get wallet config settings
-    get-slot                              Get current slot
-    get-transaction-count                 Get current transaction count
-    help                                  Prints this message or the help of the given subcommand(s)
-    pay                                   Send a payment
-    ping                                  Submit transactions sequentially
-    redeem-vote-credits                   Redeem credits in the stake account
-    send-signature                        Send a signature to authorize a transfer
-    send-timestamp                        Send a timestamp to unlock a transfer
-    set                                   Set a wallet config setting
-    show-account                          Show the contents of an account
-    show-stake-account                    Show the contents of a stake account
-    show-storage-account                  Show the contents of a storage account
-    show-vote-account                     Show the contents of a vote account
-    stake-authorize-staker                Authorize a new stake signing keypair for the given stake account
-    stake-authorize-withdrawer            Authorize a new withdraw signing keypair for the given stake account
-    uptime                                Show the uptime of a validator, based on epoch voting history
-    validator-info                        Publish/get Validator info on Solana
-    vote-authorize-voter                  Authorize a new vote signing keypair for the given vote account
-    vote-authorize-withdrawer             Authorize a new withdraw signing keypair for the given vote account
-    withdraw-stake                        Withdraw the unstaked lamports from the stake account
+    address                              Get your public key
+    airdrop                              Request lamports
+    balance                              Get your balance
+    cancel                               Cancel a transfer
+    claim-storage-reward                 Redeem storage reward credits
+    cluster-version                      Get the version of the cluster entrypoint
+    confirm                              Confirm transaction by signature
+    create-replicator-storage-account    Create a replicator storage account
+    create-stake-account                 Create a stake account
+    create-validator-storage-account     Create a validator storage account
+    create-vote-account                  Create a vote account
+    deactivate-stake                     Deactivate the delegated stake from the stake account
+    delegate-stake                       Delegate stake to a vote account
+    deploy                               Deploy a program
+    fees                                 Display current cluster fees
+    get                                  Get cli config settings
+    get-epoch-info                       Get information about the current epoch
+    get-genesis-blockhash                Get the genesis blockhash
+    get-slot                             Get current slot
+    get-transaction-count                Get current transaction count
+    help                                 Prints this message or the help of the given subcommand(s)
+    pay                                  Send a payment
+    ping                                 Submit transactions sequentially
+    redeem-vote-credits                  Redeem credits in the stake account
+    send-signature                       Send a signature to authorize a transfer
+    send-timestamp                       Send a timestamp to unlock a transfer
+    set                                  Set a cli config setting
+    show-account                         Show the contents of an account
+    show-stake-account                   Show the contents of a stake account
+    show-storage-account                 Show the contents of a storage account
+    show-vote-account                    Show the contents of a vote account
+    stake-authorize-staker               Authorize a new stake signing keypair for the given stake account
+    stake-authorize-withdrawer           Authorize a new withdraw signing keypair for the given stake account
+    uptime                               Show the uptime of a validator, based on epoch voting history
+    validator-info                       Publish/get Validator info on Solana
+    vote-authorize-voter                 Authorize a new vote signing keypair for the given vote account
+    vote-authorize-withdrawer            Authorize a new withdraw signing keypair for the given vote account
+    withdraw-stake                       Withdraw the unstaked lamports from the stake account
 ```
 
 #### solana-address
@@ -245,7 +246,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -263,7 +264,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>        Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>        Configuration file to use [default: ~/.config/solana/cli/config.yml]
         --drone-host <HOST>    Drone host to use [default: the --url host]
         --drone-port <PORT>    Drone port to use [default: 9900]
     -u, --url <URL>            JSON RPC URL for the solana cluster
@@ -288,7 +289,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -309,7 +310,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -330,7 +331,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -352,7 +353,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -370,7 +371,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -391,7 +392,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -413,10 +414,10 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-        --authorized-staker <PUBKEY>        Public key of authorized staker (defaults to wallet)
-        --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to wallet)
+        --authorized-staker <PUBKEY>        Public key of authorized staker (defaults to cli config pubkey)
+        --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to cli config pubkey)
     -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/wallet/config.yml]
+                                            ~/.config/solana/cli/config.yml]
         --custodian <PUBKEY>                Identity of the custodian (can withdraw before lockup expires)
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
@@ -426,29 +427,6 @@ ARGS:
     <STAKE ACCOUNT>    Address of the stake account to fund (pubkey or keypair)
     <AMOUNT>           The amount of send to the vote account (default unit SOL)
     <UNIT>             Specify unit to use for request [possible values: SOL, lamports]
-```
-
-#### solana-create-storage-mining-pool-account
-```text
-solana-create-storage-mining-pool-account 
-Create mining pool account
-
-USAGE:
-    solana create-storage-mining-pool-account [OPTIONS] <STORAGE ACCOUNT PUBKEY> <AMOUNT> [UNIT]
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
-    -u, --url <URL>         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>    /path/to/id.json
-
-ARGS:
-    <STORAGE ACCOUNT PUBKEY>    Storage mining pool account address to fund
-    <AMOUNT>                    The amount to assign to the storage mining pool account (default unit SOL)
-    <UNIT>                      Specify unit to use for request [possible values: SOL, lamports]
 ```
 
 #### solana-create-validator-storage-account
@@ -464,7 +442,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -479,7 +457,7 @@ solana-create-vote-account
 Create a vote account
 
 USAGE:
-    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY> <AMOUNT> [UNIT]
+    solana create-vote-account [OPTIONS] <VOTE ACCOUNT PUBKEY> <VALIDATOR PUBKEY>
 
 FLAGS:
     -h, --help       Prints help information
@@ -487,18 +465,16 @@ FLAGS:
 
 OPTIONS:
         --authorized-voter <PUBKEY>         Public key of the authorized voter (defaults to vote account)
-        --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to wallet)
+        --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to cli config pubkey)
         --commission <NUM>                  The commission taken on reward redemption (0-255), default: 0
     -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/wallet/config.yml]
+                                            ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>    Vote account address to fund
     <VALIDATOR PUBKEY>       Validator that will vote with this account
-    <AMOUNT>                 The amount of send to the vote account (default unit SOL)
-    <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
 ```
 
 #### solana-deactivate-stake
@@ -514,7 +490,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -536,7 +512,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -558,7 +534,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -579,7 +555,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -587,7 +563,7 @@ OPTIONS:
 #### solana-get
 ```text
 solana-get 
-Get wallet config settings
+Get cli config settings
 
 USAGE:
     solana get [OPTIONS] [CONFIG_FIELD]
@@ -597,12 +573,48 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
     <CONFIG_FIELD>    Return a specific config setting [possible values: url, keypair]
+```
+
+#### solana-get-epoch-info
+```text
+solana-get-epoch-info 
+Get information about the current epoch
+
+USAGE:
+    solana get-epoch-info [OPTIONS]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
+    -u, --url <URL>         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>    /path/to/id.json
+```
+
+#### solana-get-genesis-blockhash
+```text
+solana-get-genesis-blockhash 
+Get the genesis blockhash
+
+USAGE:
+    solana get-genesis-blockhash [OPTIONS]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
+    -u, --url <URL>         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>    /path/to/id.json
 ```
 
 #### solana-get-slot
@@ -618,7 +630,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -636,7 +648,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -668,7 +680,7 @@ FLAGS:
 
 OPTIONS:
     -C, --config <PATH>                         Configuration file to use [default:
-                                                ~/.config/solana/wallet/config.yml]
+                                                ~/.config/solana/cli/config.yml]
     -u, --url <URL>                             JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                        /path/to/id.json
         --after <DATETIME>                      A timestamp after which transaction will execute
@@ -694,7 +706,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>         Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>         Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -c, --count <NUMBER>        Stop after submitting count transactions
     -i, --interval <SECONDS>    Wait interval seconds between submitting the next transaction [default: 2]
     -u, --url <URL>             JSON RPC URL for the solana cluster
@@ -715,7 +727,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -737,7 +749,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -759,7 +771,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>      Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>      Configuration file to use [default: ~/.config/solana/cli/config.yml]
         --date <DATETIME>    Optional arbitrary timestamp to apply
     -u, --url <URL>          JSON RPC URL for the solana cluster
     -k, --keypair <PATH>     /path/to/id.json
@@ -772,7 +784,7 @@ ARGS:
 #### solana-set
 ```text
 solana-set 
-Set a wallet config setting
+Set a cli config setting
 
 USAGE:
     solana set [OPTIONS] <--url <URL>|--keypair <PATH>>
@@ -782,7 +794,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 ```
@@ -801,7 +813,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
     -o, --output <FILE>     Write the account data to this file
@@ -824,7 +836,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -845,7 +857,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -867,7 +879,7 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -888,7 +900,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -910,7 +922,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -933,7 +945,7 @@ FLAGS:
     -V, --version      Prints version information
 
 OPTIONS:
-    -C, --config <PATH>           Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>           Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>               JSON RPC URL for the solana cluster
     -k, --keypair <PATH>          /path/to/id.json
         --span <NUM OF EPOCHS>    Number of recent epochs to examine
@@ -955,7 +967,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -978,7 +990,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -1000,7 +1012,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 
@@ -1022,7 +1034,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/wallet/config.yml]
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
     -u, --url <URL>         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>    /path/to/id.json
 

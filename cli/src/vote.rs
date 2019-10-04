@@ -1,10 +1,10 @@
 use crate::{
+    cli::{
+        build_balance_message, check_account_for_fee, check_unique_pubkeys,
+        log_instruction_custom_error, CliCommand, CliConfig, CliError, ProcessResult,
+    },
     input_parsers::*,
     input_validators::*,
-    wallet::{
-        build_balance_message, check_account_for_fee, check_unique_pubkeys,
-        log_instruction_custom_error, ProcessResult, WalletCommand, WalletConfig, WalletError,
-    },
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
@@ -65,7 +65,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to wallet)"),
+                        .help("Public key of the authorized withdrawer (defaults to cli config pubkey)"),
                 ),
         )
         .subcommand(
@@ -162,14 +162,14 @@ impl VoteSubCommands for App<'_, '_> {
 pub fn parse_vote_create_account(
     pubkey: &Pubkey,
     matches: &ArgMatches<'_>,
-) -> Result<WalletCommand, WalletError> {
+) -> Result<CliCommand, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
     let commission = value_of(&matches, "commission").unwrap_or(0);
     let authorized_voter = pubkey_of(matches, "authorized_voter").unwrap_or(vote_account_pubkey);
     let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer").unwrap_or(*pubkey);
 
-    Ok(WalletCommand::CreateVoteAccount(
+    Ok(CliCommand::CreateVoteAccount(
         vote_account_pubkey,
         VoteInit {
             node_pubkey,
@@ -183,29 +183,27 @@ pub fn parse_vote_create_account(
 pub fn parse_vote_authorize(
     matches: &ArgMatches<'_>,
     vote_authorize: VoteAuthorize,
-) -> Result<WalletCommand, WalletError> {
+) -> Result<CliCommand, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let new_authorized_pubkey = pubkey_of(matches, "new_authorized_pubkey").unwrap();
 
-    Ok(WalletCommand::VoteAuthorize(
+    Ok(CliCommand::VoteAuthorize(
         vote_account_pubkey,
         new_authorized_pubkey,
         vote_authorize,
     ))
 }
 
-pub fn parse_vote_get_account_command(
-    matches: &ArgMatches<'_>,
-) -> Result<WalletCommand, WalletError> {
+pub fn parse_vote_get_account_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let use_lamports_unit = matches.is_present("lamports");
-    Ok(WalletCommand::ShowVoteAccount {
+    Ok(CliCommand::ShowVoteAccount {
         pubkey: vote_account_pubkey,
         use_lamports_unit,
     })
 }
 
-pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
+pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let aggregate = matches.is_present("aggregate");
     let span = if matches.is_present("span") {
@@ -213,7 +211,7 @@ pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<WalletComma
     } else {
         None
     };
-    Ok(WalletCommand::Uptime {
+    Ok(CliCommand::Uptime {
         pubkey: vote_account_pubkey,
         aggregate,
         span,
@@ -222,7 +220,7 @@ pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<WalletComma
 
 pub fn process_create_vote_account(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     vote_init: &VoteInit,
 ) -> ProcessResult {
@@ -231,7 +229,7 @@ pub fn process_create_vote_account(
         (&vote_init.node_pubkey, "node_pubkey".to_string()),
     )?;
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
     )?;
     let required_balance =
@@ -256,7 +254,7 @@ pub fn process_create_vote_account(
 
 pub fn process_vote_authorize(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     new_authorized_pubkey: &Pubkey,
     vote_authorize: VoteAuthorize,
@@ -281,21 +279,21 @@ pub fn process_vote_authorize(
 
 pub fn process_show_vote_account(
     rpc_client: &RpcClient,
-    _config: &WalletConfig,
+    _config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
     if vote_account.owner != solana_vote_api::id() {
-        return Err(WalletError::RpcRequestError(
+        return Err(CliError::RpcRequestError(
             format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
         )
         .into());
     }
 
     let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
-        WalletError::RpcRequestError(
+        CliError::RpcRequestError(
             "Account data could not be deserialized to vote state".to_string(),
         )
     })?;
@@ -354,7 +352,7 @@ pub fn process_show_vote_account(
 
 pub fn process_uptime(
     rpc_client: &RpcClient,
-    _config: &WalletConfig,
+    _config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     aggregate: bool,
     span: Option<u64>,
@@ -362,14 +360,14 @@ pub fn process_uptime(
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
     if vote_account.owner != solana_vote_api::id() {
-        return Err(WalletError::RpcRequestError(
+        return Err(CliError::RpcRequestError(
             format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
         )
         .into());
     }
 
     let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
-        WalletError::RpcRequestError(
+        CliError::RpcRequestError(
             "Account data could not be deserialized to vote state".to_string(),
         )
     })?;
@@ -424,7 +422,7 @@ pub fn process_uptime(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::{app, parse_command};
+    use crate::cli::{app, parse_command};
 
     #[test]
     fn test_parse_command() {
@@ -440,7 +438,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_authorize_voter).unwrap(),
-            WalletCommand::VoteAuthorize(pubkey, pubkey, VoteAuthorize::Voter)
+            CliCommand::VoteAuthorize(pubkey, pubkey, VoteAuthorize::Voter)
         );
 
         // Test CreateVoteAccount SubCommand
@@ -456,7 +454,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account).unwrap(),
-            WalletCommand::CreateVoteAccount(
+            CliCommand::CreateVoteAccount(
                 pubkey,
                 VoteInit {
                     node_pubkey,
@@ -474,7 +472,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account2).unwrap(),
-            WalletCommand::CreateVoteAccount(
+            CliCommand::CreateVoteAccount(
                 pubkey,
                 VoteInit {
                     node_pubkey,
@@ -496,7 +494,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account3).unwrap(),
-            WalletCommand::CreateVoteAccount(
+            CliCommand::CreateVoteAccount(
                 pubkey,
                 VoteInit {
                     node_pubkey,
@@ -517,7 +515,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account4).unwrap(),
-            WalletCommand::CreateVoteAccount(
+            CliCommand::CreateVoteAccount(
                 pubkey,
                 VoteInit {
                     node_pubkey,
@@ -540,7 +538,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &matches).unwrap(),
-            WalletCommand::Uptime {
+            CliCommand::Uptime {
                 pubkey,
                 aggregate: true,
                 span: Some(4)

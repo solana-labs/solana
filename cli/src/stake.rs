@@ -1,10 +1,10 @@
 use crate::{
+    cli::{
+        build_balance_message, check_account_for_fee, check_unique_pubkeys,
+        log_instruction_custom_error, CliCommand, CliConfig, CliError, ProcessResult,
+    },
     input_parsers::*,
     input_validators::*,
-    wallet::{
-        build_balance_message, check_account_for_fee, check_unique_pubkeys,
-        log_instruction_custom_error, ProcessResult, WalletCommand, WalletConfig, WalletError,
-    },
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
@@ -73,7 +73,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of authorized staker (defaults to wallet)")
+                        .help("Public key of authorized staker (defaults to cli config pubkey)")
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -81,7 +81,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to wallet)")
+                        .help("Public key of the authorized withdrawer (defaults to cli config pubkey)")
                 )
         )
         .subcommand(
@@ -263,7 +263,7 @@ impl StakeSubCommands for App<'_, '_> {
 pub fn parse_stake_create_account(
     pubkey: &Pubkey,
     matches: &ArgMatches<'_>,
-) -> Result<WalletCommand, WalletError> {
+) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let slot = value_of(&matches, "lockup").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
@@ -271,7 +271,7 @@ pub fn parse_stake_create_account(
     let withdrawer = pubkey_of(matches, "authorized_withdrawer").unwrap_or(*pubkey); // defaults to config
     let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
 
-    Ok(WalletCommand::CreateStakeAccount(
+    Ok(CliCommand::CreateStakeAccount(
         stake_account_pubkey,
         Authorized { staker, withdrawer },
         Lockup { custodian, slot },
@@ -279,12 +279,12 @@ pub fn parse_stake_create_account(
     ))
 }
 
-pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
+pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let force = matches.is_present("force");
 
-    Ok(WalletCommand::DelegateStake(
+    Ok(CliCommand::DelegateStake(
         stake_account_pubkey,
         vote_account_pubkey,
         force,
@@ -294,53 +294,51 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<WalletComm
 pub fn parse_stake_authorize(
     matches: &ArgMatches<'_>,
     stake_authorize: StakeAuthorize,
-) -> Result<WalletCommand, WalletError> {
+) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let authorized_pubkey = pubkey_of(matches, "authorized_pubkey").unwrap();
 
-    Ok(WalletCommand::StakeAuthorize(
+    Ok(CliCommand::StakeAuthorize(
         stake_account_pubkey,
         authorized_pubkey,
         stake_authorize,
     ))
 }
 
-pub fn parse_redeem_vote_credits(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
+pub fn parse_redeem_vote_credits(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    Ok(WalletCommand::RedeemVoteCredits(
+    Ok(CliCommand::RedeemVoteCredits(
         stake_account_pubkey,
         vote_account_pubkey,
     ))
 }
 
-pub fn parse_stake_deactivate_stake(
-    matches: &ArgMatches<'_>,
-) -> Result<WalletCommand, WalletError> {
+pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    Ok(WalletCommand::DeactivateStake(
+    Ok(CliCommand::DeactivateStake(
         stake_account_pubkey,
         vote_account_pubkey,
     ))
 }
 
-pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
+pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
     let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
 
-    Ok(WalletCommand::WithdrawStake(
+    Ok(CliCommand::WithdrawStake(
         stake_account_pubkey,
         destination_account_pubkey,
         lamports,
     ))
 }
 
-pub fn parse_show_stake_account(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
+pub fn parse_show_stake_account(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let use_lamports_unit = matches.is_present("lamports");
-    Ok(WalletCommand::ShowStakeAccount {
+    Ok(CliCommand::ShowStakeAccount {
         pubkey: stake_account_pubkey,
         use_lamports_unit,
     })
@@ -348,19 +346,19 @@ pub fn parse_show_stake_account(matches: &ArgMatches<'_>) -> Result<WalletComman
 
 pub fn process_create_stake_account(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     authorized: &Authorized,
     lockup: &Lockup,
     lamports: u64,
 ) -> ProcessResult {
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
 
     if rpc_client.get_account(&stake_account_pubkey).is_ok() {
-        return Err(WalletError::BadParameter(format!(
+        return Err(CliError::BadParameter(format!(
             "Unable to create stake account. Stake account already exists: {}",
             stake_account_pubkey
         ))
@@ -371,7 +369,7 @@ pub fn process_create_stake_account(
         rpc_client.get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())?;
 
     if lamports < minimum_balance {
-        return Err(WalletError::BadParameter(format!(
+        return Err(CliError::BadParameter(format!(
             "need atleast {} lamports for stake account to be rent exempt, provided lamports: {}",
             minimum_balance, lamports
         ))
@@ -394,7 +392,7 @@ pub fn process_create_stake_account(
 
 pub fn process_stake_authorize(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
@@ -419,7 +417,7 @@ pub fn process_stake_authorize(
 
 pub fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
@@ -437,7 +435,7 @@ pub fn process_deactivate_stake_account(
 
 pub fn process_withdraw_stake(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     destination_account_pubkey: &Pubkey,
     lamports: u64,
@@ -459,7 +457,7 @@ pub fn process_withdraw_stake(
 
 pub fn process_redeem_vote_credits(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
@@ -481,13 +479,13 @@ pub fn process_redeem_vote_credits(
 
 pub fn process_show_stake_account(
     rpc_client: &RpcClient,
-    _config: &WalletConfig,
+    _config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_pubkey)?;
     if stake_account.owner != solana_stake_api::id() {
-        return Err(WalletError::RpcRequestError(
+        return Err(CliError::RpcRequestError(
             format!("{:?} is not a stake account", stake_account_pubkey).to_string(),
         )
         .into());
@@ -536,7 +534,7 @@ pub fn process_show_stake_account(
             show_lockup(&lockup);
             Ok("".to_string())
         }
-        Err(err) => Err(WalletError::RpcRequestError(format!(
+        Err(err) => Err(CliError::RpcRequestError(format!(
             "Account data could not be deserialized to stake state: {:?}",
             err
         ))
@@ -546,13 +544,13 @@ pub fn process_show_stake_account(
 
 pub fn process_delegate_stake(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
     force: bool,
 ) -> ProcessResult {
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
 
@@ -561,23 +559,23 @@ pub fn process_delegate_stake(
     let vote_account_data = rpc_client
         .get_account_data(vote_account_pubkey)
         .map_err(|_| {
-            WalletError::RpcRequestError(format!("Vote account not found: {}", vote_account_pubkey))
+            CliError::RpcRequestError(format!("Vote account not found: {}", vote_account_pubkey))
         })?;
 
     let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
-        WalletError::RpcRequestError(
+        CliError::RpcRequestError(
             "Account data could not be deserialized to vote state".to_string(),
         )
     })?;
 
     let sanity_check_result = match vote_state.root_slot {
-        None => Err(WalletError::BadParameter(
+        None => Err(CliError::BadParameter(
             "Unable to delegate. Vote account has no root slot".to_string(),
         )),
         Some(root_slot) => {
             let slot = rpc_client.get_slot()?;
             if root_slot + solana_sdk::clock::DEFAULT_SLOTS_PER_TURN < slot {
-                Err(WalletError::BadParameter(
+                Err(CliError::BadParameter(
                     format!(
                     "Unable to delegate. Vote account root slot ({}) is too old, the current slot is {}", root_slot, slot
                     )
@@ -613,7 +611,7 @@ pub fn process_delegate_stake(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::{app, parse_command};
+    use crate::cli::{app, parse_command};
 
     #[test]
     fn test_parse_command() {
@@ -629,7 +627,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_authorize_staker).unwrap(),
-            WalletCommand::StakeAuthorize(pubkey, pubkey, StakeAuthorize::Staker)
+            CliCommand::StakeAuthorize(pubkey, pubkey, StakeAuthorize::Staker)
         );
         let test_authorize_withdrawer = test_commands.clone().get_matches_from(vec![
             "test",
@@ -639,7 +637,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_authorize_withdrawer).unwrap(),
-            WalletCommand::StakeAuthorize(pubkey, pubkey, StakeAuthorize::Withdrawer)
+            CliCommand::StakeAuthorize(pubkey, pubkey, StakeAuthorize::Withdrawer)
         );
 
         // Test CreateStakeAccount SubCommand
@@ -664,7 +662,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_stake_account).unwrap(),
-            WalletCommand::CreateStakeAccount(
+            CliCommand::CreateStakeAccount(
                 pubkey,
                 Authorized {
                     staker: authorized,
@@ -686,7 +684,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_stake_account2).unwrap(),
-            WalletCommand::CreateStakeAccount(
+            CliCommand::CreateStakeAccount(
                 pubkey,
                 Authorized {
                     staker: pubkey,
@@ -711,7 +709,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
-            WalletCommand::DelegateStake(stake_pubkey, pubkey, false,)
+            CliCommand::DelegateStake(stake_pubkey, pubkey, false,)
         );
 
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
@@ -723,7 +721,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
-            WalletCommand::DelegateStake(stake_pubkey, pubkey, true)
+            CliCommand::DelegateStake(stake_pubkey, pubkey, true)
         );
 
         // Test WithdrawStake Subcommand
@@ -738,7 +736,7 @@ mod tests {
 
         assert_eq!(
             parse_command(&pubkey, &test_withdraw_stake).unwrap(),
-            WalletCommand::WithdrawStake(stake_pubkey, pubkey, 42)
+            CliCommand::WithdrawStake(stake_pubkey, pubkey, 42)
         );
 
         // Test DeactivateStake Subcommand
@@ -750,7 +748,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_deactivate_stake).unwrap(),
-            WalletCommand::DeactivateStake(stake_pubkey, pubkey)
+            CliCommand::DeactivateStake(stake_pubkey, pubkey)
         );
     }
     // TODO: Add process tests

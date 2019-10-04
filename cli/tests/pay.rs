@@ -1,8 +1,6 @@
 use chrono::prelude::*;
 use serde_json::Value;
-use solana_cli::wallet::{
-    process_command, request_and_confirm_airdrop, WalletCommand, WalletConfig,
-};
+use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
@@ -29,7 +27,7 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 }
 
 #[test]
-fn test_wallet_timestamp_tx() {
+fn test_cli_timestamp_tx() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
@@ -39,11 +37,11 @@ fn test_wallet_timestamp_tx() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
-    let mut config_payer = WalletConfig::default();
+    let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let mut config_witness = WalletConfig::default();
+    let mut config_witness = CliConfig::default();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(
@@ -66,7 +64,7 @@ fn test_wallet_timestamp_tx() {
     // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
     let date_string = "\"2018-09-19T17:30:59Z\"";
     let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
-    config_payer.command = WalletCommand::Pay {
+    config_payer.command = CliCommand::Pay {
         lamports: 10,
         to: bob_pubkey,
         timestamp: Some(dt),
@@ -88,7 +86,7 @@ fn test_wallet_timestamp_tx() {
     check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
-    config_witness.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
+    config_witness.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
     process_command(&config_witness).unwrap();
 
     check_balance(40, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance
@@ -100,7 +98,7 @@ fn test_wallet_timestamp_tx() {
 }
 
 #[test]
-fn test_wallet_witness_tx() {
+fn test_cli_witness_tx() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
@@ -110,11 +108,11 @@ fn test_wallet_witness_tx() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
-    let mut config_payer = WalletConfig::default();
+    let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let mut config_witness = WalletConfig::default();
+    let mut config_witness = CliConfig::default();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(
@@ -133,7 +131,7 @@ fn test_wallet_witness_tx() {
     .unwrap();
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
-    config_payer.command = WalletCommand::Pay {
+    config_payer.command = CliCommand::Pay {
         lamports: 10,
         to: bob_pubkey,
         timestamp: None,
@@ -155,7 +153,7 @@ fn test_wallet_witness_tx() {
     check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
-    config_witness.command = WalletCommand::Witness(bob_pubkey, process_id);
+    config_witness.command = CliCommand::Witness(bob_pubkey, process_id);
     process_command(&config_witness).unwrap();
 
     check_balance(40, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance
@@ -167,7 +165,7 @@ fn test_wallet_witness_tx() {
 }
 
 #[test]
-fn test_wallet_cancel_tx() {
+fn test_cli_cancel_tx() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
@@ -177,11 +175,11 @@ fn test_wallet_cancel_tx() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
-    let mut config_payer = WalletConfig::default();
+    let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let mut config_witness = WalletConfig::default();
+    let mut config_witness = CliConfig::default();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(
@@ -193,7 +191,7 @@ fn test_wallet_cancel_tx() {
         .unwrap();
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
-    config_payer.command = WalletCommand::Pay {
+    config_payer.command = CliCommand::Pay {
         lamports: 10,
         to: bob_pubkey,
         timestamp: None,
@@ -215,7 +213,7 @@ fn test_wallet_cancel_tx() {
     check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
-    config_payer.command = WalletCommand::Cancel(process_id);
+    config_payer.command = CliCommand::Cancel(process_id);
     process_command(&config_payer).unwrap();
 
     check_balance(50, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance

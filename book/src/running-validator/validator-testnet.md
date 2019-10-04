@@ -51,7 +51,7 @@ The Solana CLI tool points at testnet.solana.com by default. Include a `--url` a
 $ solana --url http://beta.testnet.solana.com:8899 balance
 ```
 
-The solana cli includes `get` and `set` configuration commands to automatically set the `--url` argument for future wallet commands. For example:
+The solana cli includes `get` and `set` configuration commands to automatically set the `--url` argument for future cli commands. For example:
 
 ```bash
 $ solana set --url http://beta.testnet.solana.com:8899
@@ -71,4 +71,3 @@ You can also submit JSON-RPC requests to a different testnet, like:
 ```bash
 $ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://beta.testnet.solana.com:8899
 ```
-

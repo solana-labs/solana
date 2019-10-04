@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use solana_cli::wallet::{process_command, WalletCommand, WalletConfig};
+use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_core::validator::new_validator_for_tests;
@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::channel;
 
 #[test]
-fn test_wallet_deploy_program() {
+fn test_cli_deploy_program() {
     solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -35,9 +35,9 @@ fn test_wallet_deploy_program() {
         .get_minimum_balance_for_rent_exemption(program_data.len())
         .unwrap();
 
-    let mut config = WalletConfig::default();
+    let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    config.command = WalletCommand::Airdrop {
+    config.command = CliCommand::Airdrop {
         drone_host: None,
         drone_port: drone_addr.port(),
         lamports: minimum_balance_for_rent_exemption + 1, // min balance for rent exemption + leftover for tx processing
@@ -45,7 +45,7 @@ fn test_wallet_deploy_program() {
     };
     process_command(&config).unwrap();
 
-    config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());
+    config.command = CliCommand::Deploy(pathbuf.to_str().unwrap().to_string());
 
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();

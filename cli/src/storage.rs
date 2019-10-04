@@ -1,10 +1,10 @@
 use crate::{
+    cli::{
+        check_account_for_fee, check_unique_pubkeys, log_instruction_custom_error, CliCommand,
+        CliConfig, CliError, ProcessResult,
+    },
     input_parsers::*,
     input_validators::*,
-    wallet::{
-        check_account_for_fee, check_unique_pubkeys, log_instruction_custom_error, ProcessResult,
-        WalletCommand, WalletConfig, WalletError,
-    },
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
@@ -100,10 +100,10 @@ impl StorageSubCommands for App<'_, '_> {
 
 pub fn parse_storage_create_replicator_account(
     matches: &ArgMatches<'_>,
-) -> Result<WalletCommand, WalletError> {
+) -> Result<CliCommand, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-    Ok(WalletCommand::CreateStorageAccount {
+    Ok(CliCommand::CreateStorageAccount {
         account_owner,
         storage_account_pubkey,
         account_type: StorageAccountType::Replicator,
@@ -112,41 +112,39 @@ pub fn parse_storage_create_replicator_account(
 
 pub fn parse_storage_create_validator_account(
     matches: &ArgMatches<'_>,
-) -> Result<WalletCommand, WalletError> {
+) -> Result<CliCommand, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-    Ok(WalletCommand::CreateStorageAccount {
+    Ok(CliCommand::CreateStorageAccount {
         account_owner,
         storage_account_pubkey,
         account_type: StorageAccountType::Validator,
     })
 }
 
-pub fn parse_storage_claim_reward(matches: &ArgMatches<'_>) -> Result<WalletCommand, WalletError> {
+pub fn parse_storage_claim_reward(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let node_account_pubkey = pubkey_of(matches, "node_account_pubkey").unwrap();
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-    Ok(WalletCommand::ClaimStorageReward {
+    Ok(CliCommand::ClaimStorageReward {
         node_account_pubkey,
         storage_account_pubkey,
     })
 }
 
-pub fn parse_storage_get_account_command(
-    matches: &ArgMatches<'_>,
-) -> Result<WalletCommand, WalletError> {
+pub fn parse_storage_get_account_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-    Ok(WalletCommand::ShowStorageAccount(storage_account_pubkey))
+    Ok(CliCommand::ShowStorageAccount(storage_account_pubkey))
 }
 
 pub fn process_create_storage_account(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
     account_type: StorageAccountType,
 ) -> ProcessResult {
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
         (
             &storage_account_pubkey,
             "storage_account_pubkey".to_string(),
@@ -168,7 +166,7 @@ pub fn process_create_storage_account(
 
 pub fn process_claim_storage_reward(
     rpc_client: &RpcClient,
-    config: &WalletConfig,
+    config: &CliConfig,
     node_account_pubkey: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
@@ -187,13 +185,13 @@ pub fn process_claim_storage_reward(
 
 pub fn process_show_storage_account(
     rpc_client: &RpcClient,
-    _config: &WalletConfig,
+    _config: &CliConfig,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let account = rpc_client.get_account(storage_account_pubkey)?;
 
     if account.owner != solana_storage_api::id() {
-        return Err(WalletError::RpcRequestError(
+        return Err(CliError::RpcRequestError(
             format!("{:?} is not a storage account", storage_account_pubkey).to_string(),
         )
         .into());
@@ -201,7 +199,7 @@ pub fn process_show_storage_account(
 
     use solana_storage_api::storage_contract::StorageContract;
     let storage_contract: StorageContract = account.state().map_err(|err| {
-        WalletError::RpcRequestError(
+        CliError::RpcRequestError(
             format!("Unable to deserialize storage account: {:?}", err).to_string(),
         )
     })?;
@@ -213,7 +211,7 @@ pub fn process_show_storage_account(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::{app, parse_command};
+    use crate::cli::{app, parse_command};
 
     #[test]
     fn test_parse_command() {
@@ -231,7 +229,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_replicator_storage_account).unwrap(),
-            WalletCommand::CreateStorageAccount {
+            CliCommand::CreateStorageAccount {
                 account_owner: pubkey,
                 storage_account_pubkey,
                 account_type: StorageAccountType::Replicator,
@@ -246,7 +244,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_validator_storage_account).unwrap(),
-            WalletCommand::CreateStorageAccount {
+            CliCommand::CreateStorageAccount {
                 account_owner: pubkey,
                 storage_account_pubkey,
                 account_type: StorageAccountType::Validator,
@@ -261,7 +259,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_claim_storage_reward).unwrap(),
-            WalletCommand::ClaimStorageReward {
+            CliCommand::ClaimStorageReward {
                 node_account_pubkey: pubkey,
                 storage_account_pubkey,
             }
