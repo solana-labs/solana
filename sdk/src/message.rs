@@ -127,6 +127,7 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
 pub struct MessageHeader {
     /// The number of signatures required for this message to be considered valid. The
     /// signatures must match the first `num_required_signatures` of `account_keys`.
+    /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
     pub num_required_signatures: u8,
 
     /// The last num_credit_only_signed_accounts of the signed keys are credit-only accounts.
@@ -142,6 +143,7 @@ pub struct MessageHeader {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Message {
     /// The message header, identifying signed and credit-only `account_keys`
+    /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
     pub header: MessageHeader,
 
     /// All the account keys used by this transaction
