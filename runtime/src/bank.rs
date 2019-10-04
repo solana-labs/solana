@@ -12,8 +12,7 @@ use crate::{
     message_processor::{MessageProcessor, ProcessInstruction},
     rent_collector::RentCollector,
     serde_utils::{
-        deserialize_atomicbool, deserialize_atomicusize, serialize_atomicbool,
-        serialize_atomicusize,
+        deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool, serialize_atomicu64,
     },
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -52,7 +51,7 @@ use solana_sdk::{
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Error as IOError, Read};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 pub const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
@@ -177,24 +176,24 @@ pub struct Bank {
     parent_hash: Hash,
 
     /// The number of transactions processed without error
-    #[serde(serialize_with = "serialize_atomicusize")]
-    #[serde(deserialize_with = "deserialize_atomicusize")]
-    transaction_count: AtomicUsize, // TODO: Use AtomicU64 if/when available
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    transaction_count: AtomicU64,
 
     /// Bank tick height
-    #[serde(serialize_with = "serialize_atomicusize")]
-    #[serde(deserialize_with = "deserialize_atomicusize")]
-    tick_height: AtomicUsize, // TODO: Use AtomicU64 if/when available
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    tick_height: AtomicU64,
 
     /// The number of signatures from valid transactions in this slot
-    #[serde(serialize_with = "serialize_atomicusize")]
-    #[serde(deserialize_with = "deserialize_atomicusize")]
-    signature_count: AtomicUsize,
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    signature_count: AtomicU64,
 
     /// Total capitalization, used to calculate inflation
-    #[serde(serialize_with = "serialize_atomicusize")]
-    #[serde(deserialize_with = "deserialize_atomicusize")]
-    capitalization: AtomicUsize, // TODO: Use AtomicU64 if/when available
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    capitalization: AtomicU64,
 
     // Bank max_tick_height
     max_tick_height: u64,
@@ -221,9 +220,9 @@ pub struct Bank {
     collector_id: Pubkey,
 
     /// Fees that have been collected
-    #[serde(serialize_with = "serialize_atomicusize")]
-    #[serde(deserialize_with = "deserialize_atomicusize")]
-    collector_fees: AtomicUsize, // TODO: Use AtomicU64 if/when available
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    collector_fees: AtomicU64,
 
     /// Latest transaction fees for transactions processed by this bank
     fee_calculator: FeeCalculator,
@@ -324,22 +323,22 @@ impl Bank {
             block_height: parent.block_height + 1,
             fee_calculator: FeeCalculator::new_derived(
                 &parent.fee_calculator,
-                parent.signature_count(),
+                parent.signature_count() as usize,
             ),
-            capitalization: AtomicUsize::new(parent.capitalization() as usize),
+            capitalization: AtomicU64::new(parent.capitalization()),
             inflation: parent.inflation,
-            transaction_count: AtomicUsize::new(parent.transaction_count() as usize),
+            transaction_count: AtomicU64::new(parent.transaction_count()),
             stakes: RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(epoch)),
             epoch_stakes: parent.epoch_stakes.clone(),
             storage_accounts: RwLock::new(parent.storage_accounts.read().unwrap().clone()),
             parent_hash: parent.hash(),
             collector_id: *collector_id,
-            collector_fees: AtomicUsize::new(0),
+            collector_fees: AtomicU64::new(0),
             ancestors: HashMap::new(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
-            tick_height: AtomicUsize::new(parent.tick_height.load(Ordering::Relaxed)),
-            signature_count: AtomicUsize::new(0),
+            tick_height: AtomicU64::new(parent.tick_height.load(Ordering::Relaxed)),
+            signature_count: AtomicU64::new(0),
             message_processor: MessageProcessor::default(),
         };
 
@@ -507,7 +506,7 @@ impl Bank {
         );
 
         self.capitalization.fetch_add(
-            (validator_rewards + storage_rewards) as usize,
+            (validator_rewards + storage_rewards) as u64,
             Ordering::Relaxed,
         );
     }
@@ -541,8 +540,7 @@ impl Bank {
             let (unburned, burned) = self.fee_calculator.burn(collector_fees);
             // burn a portion of fees
             self.deposit(&self.collector_id, unburned);
-            self.capitalization
-                .fetch_sub(burned as usize, Ordering::Relaxed);
+            self.capitalization.fetch_sub(burned, Ordering::Relaxed);
         }
     }
 
@@ -615,7 +613,7 @@ impl Bank {
         for (pubkey, account) in genesis_block.accounts.iter() {
             self.store_account(pubkey, account);
             self.capitalization
-                .fetch_add(account.lamports as usize, Ordering::Relaxed);
+                .fetch_add(account.lamports, Ordering::Relaxed);
         }
         for (pubkey, account) in genesis_block.rewards_pools.iter() {
             self.store_account(pubkey, account);
@@ -1023,8 +1021,8 @@ impl Bank {
         Vec<Result<TransactionLoadResult>>,
         Vec<Result<()>>,
         Vec<usize>,
-        usize,
-        usize,
+        u64,
+        u64,
     ) {
         let txs = batch.transactions();
         debug!("processing transactions: {}", txs.len());
@@ -1058,14 +1056,14 @@ impl Bank {
         load_time.stop();
 
         let mut execution_time = Measure::start("execution_time");
-        let mut signature_count = 0;
+        let mut signature_count: u64 = 0;
         let executed: Vec<Result<()>> = loaded_accounts
             .iter_mut()
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders, ref mut credits, ref mut _rents)) => {
-                    signature_count += tx.message().header.num_required_signatures as usize;
+                    signature_count += u64::from(tx.message().header.num_required_signatures);
                     self.message_processor
                         .process_message(tx.message(), loaders, accounts, credits)
                 }
@@ -1080,7 +1078,7 @@ impl Bank {
             execution_time.as_us(),
             txs.len(),
         );
-        let mut tx_count = 0;
+        let mut tx_count: u64 = 0;
         let mut err_count = 0;
         for (r, tx) in executed.iter().zip(txs.iter()) {
             if r.is_ok() {
@@ -1098,7 +1096,7 @@ impl Bank {
                 "bank-process_transactions-account_not_found",
                 error_counters.account_not_found
             );
-            inc_new_counter_error!("bank-process_transactions-error_count", err_count);
+            inc_new_counter_error!("bank-process_transactions-error_count", err_count as usize);
         }
 
         Self::update_error_counters(&error_counters);
@@ -1146,8 +1144,7 @@ impl Bank {
             })
             .collect();
 
-        self.collector_fees
-            .fetch_add(fees as usize, Ordering::Relaxed);
+        self.collector_fees.fetch_add(fees, Ordering::Relaxed);
         results
     }
 
@@ -1157,8 +1154,8 @@ impl Bank {
         iteration_order: Option<&[usize]>,
         loaded_accounts: &mut [Result<TransactionLoadResult>],
         executed: &[Result<()>],
-        tx_count: usize,
-        signature_count: usize,
+        tx_count: u64,
+        signature_count: u64,
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
             warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
@@ -1167,8 +1164,8 @@ impl Bank {
         self.increment_transaction_count(tx_count);
         self.increment_signature_count(signature_count);
 
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count);
-        inc_new_counter_info!("bank-process_transactions-sigs", signature_count);
+        inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
+        inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
         if executed.iter().any(|res| Self::can_commit(res)) {
             self.is_delta.store(true, Ordering::Relaxed);
@@ -1327,19 +1324,19 @@ impl Bank {
     }
 
     pub fn transaction_count(&self) -> u64 {
-        self.transaction_count.load(Ordering::Relaxed) as u64
+        self.transaction_count.load(Ordering::Relaxed)
     }
 
-    fn increment_transaction_count(&self, tx_count: usize) {
+    fn increment_transaction_count(&self, tx_count: u64) {
         self.transaction_count
             .fetch_add(tx_count, Ordering::Relaxed);
     }
 
-    pub fn signature_count(&self) -> usize {
+    pub fn signature_count(&self) -> u64 {
         self.signature_count.load(Ordering::Relaxed)
     }
 
-    fn increment_signature_count(&self, signature_count: usize) {
+    fn increment_signature_count(&self, signature_count: u64) {
         self.signature_count
             .fetch_add(signature_count, Ordering::Relaxed);
     }
@@ -1400,10 +1397,7 @@ impl Bank {
 
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
-        // tick_height is using an AtomicUSize because AtomicU64 is not yet a stable API.
-        // Until we can switch to AtomicU64, fail if usize is not the same as u64
-        assert_eq!(std::usize::MAX, 0xFFFF_FFFF_FFFF_FFFF);
-        self.tick_height.load(Ordering::Relaxed) as u64
+        self.tick_height.load(Ordering::Relaxed)
     }
 
     /// Return the inflation parameters of the Bank
@@ -1413,10 +1407,7 @@ impl Bank {
 
     /// Return the total capititalization of the Bank
     pub fn capitalization(&self) -> u64 {
-        // capitalization is using an AtomicUSize because AtomicU64 is not yet a stable API.
-        // Until we can switch to AtomicU64, fail if usize is not the same as u64
-        assert_eq!(std::usize::MAX, 0xFFFF_FFFF_FFFF_FFFF);
-        self.capitalization.load(Ordering::Relaxed) as u64
+        self.capitalization.load(Ordering::Relaxed)
     }
 
     /// Return this bank's max_tick_height
@@ -2927,7 +2918,7 @@ mod tests {
         let (genesis_block, _) = create_genesis_block(500);
         let bank = Arc::new(Bank::new(&genesis_block));
         //set tick height to max
-        let max_tick_height = ((bank.slot + 1) * bank.ticks_per_slot - 1) as usize;
+        let max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
         bank.tick_height.store(max_tick_height, Ordering::Relaxed);
         assert!(bank.is_votable());
     }
