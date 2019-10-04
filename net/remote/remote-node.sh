@@ -68,6 +68,9 @@ cat > ~/solana/on-reboot <<EOF
 #!/usr/bin/env bash
 cd ~/solana
 source scripts/oom-score-adj.sh
+
+now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+ln -sfT fullnode.log.\$now fullnode.log
 EOF
 chmod +x ~/solana/on-reboot
 echo "@reboot ~/solana/on-reboot" | crontab -
@@ -196,7 +199,7 @@ EOF
     args+=($extraNodeArgs)
 
 cat >> ~/solana/on-reboot <<EOF
-    nohup ./multinode-demo/bootstrap-leader.sh ${args[@]} > fullnode.log 2>&1 &
+    nohup ./multinode-demo/bootstrap-leader.sh ${args[@]} > fullnode.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
@@ -304,7 +307,7 @@ EOF
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
 cat >> ~/solana/on-reboot <<EOF
-    nohup multinode-demo/validator.sh ${args[@]} > fullnode.log 2>&1 &
+    nohup multinode-demo/validator.sh ${args[@]} > fullnode.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
@@ -351,7 +354,7 @@ EOF
     fi
 
 cat >> ~/solana/on-reboot <<EOF
-    nohup multinode-demo/replicator.sh ${args[@]} > fullnode.log 2>&1 &
+    nohup multinode-demo/replicator.sh ${args[@]} > fullnode.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
