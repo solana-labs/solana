@@ -61,8 +61,8 @@ pub enum CliCommand {
     Deploy(String),
     // Stake Commands
     CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
-    DelegateStake(Pubkey, Pubkey, bool),
     DeactivateStake(Pubkey, Pubkey),
+    DelegateStake(Pubkey, Pubkey, bool),
     RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeAccount {
         pubkey: Pubkey,
@@ -86,11 +86,6 @@ pub enum CliCommand {
     SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
     // Vote Commands
     CreateVoteAccount(Pubkey, VoteInit),
-    ShowAccount {
-        pubkey: Pubkey,
-        output_file: Option<String>,
-        use_lamports_unit: bool,
-    },
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
@@ -122,6 +117,11 @@ pub enum CliCommand {
         timestamp_pubkey: Option<Pubkey>,
         witnesses: Option<Vec<Pubkey>>,
         cancelable: Option<Pubkey>,
+    },
+    ShowAccount {
+        pubkey: Pubkey,
+        output_file: Option<String>,
+        use_lamports_unit: bool,
     },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
@@ -738,11 +738,170 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
     };
 
     match &config.command {
+        // Cluster Query Commands
+
+        // Return software version of solana-cli and cluster entrypoint node
+        CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
+        CliCommand::Fees => process_fees(&rpc_client),
+        CliCommand::GetGenesisBlockhash => process_get_genesis_blockhash(&rpc_client),
+        CliCommand::GetSlot => process_get_slot(&rpc_client),
+        CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
+        CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
+        CliCommand::Ping {
+            interval,
+            count,
+            timeout,
+        } => process_ping(&rpc_client, config, interval, count, timeout),
+
+        // Program Deployment
+
+        // Deploy a custom program to the chain
+        CliCommand::Deploy(ref program_location) => {
+            process_deploy(&rpc_client, config, program_location)
+        }
+
+        // Stake Commands
+
+        // Create stake account
+        CliCommand::CreateStakeAccount(stake_account_pubkey, authorized, lockup, lamports) => {
+            process_create_stake_account(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &authorized,
+                lockup,
+                *lamports,
+            )
+        }
+        // Deactivate stake account
+        CliCommand::DeactivateStake(stake_account_pubkey, vote_account_pubkey) => {
+            process_deactivate_stake_account(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &vote_account_pubkey,
+            )
+        }
+        CliCommand::DelegateStake(stake_account_pubkey, vote_account_pubkey, force) => {
+            process_delegate_stake(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &vote_account_pubkey,
+                *force,
+            )
+        }
+        CliCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey) => {
+            process_redeem_vote_credits(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &vote_account_pubkey,
+            )
+        }
+        CliCommand::ShowStakeAccount {
+            pubkey: stake_account_pubkey,
+            use_lamports_unit,
+        } => process_show_stake_account(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            *use_lamports_unit,
+        ),
+        CliCommand::StakeAuthorize(
+            stake_account_pubkey,
+            new_authorized_pubkey,
+            stake_authorize,
+        ) => process_stake_authorize(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            &new_authorized_pubkey,
+            *stake_authorize,
+        ),
+
+        CliCommand::WithdrawStake(stake_account_pubkey, destination_account_pubkey, lamports) => {
+            process_withdraw_stake(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &destination_account_pubkey,
+                *lamports,
+            )
+        }
+
+        // Storage Commands
+
+        // Create storage account
+        CliCommand::CreateStorageAccount {
+            account_owner,
+            storage_account_pubkey,
+            account_type,
+        } => process_create_storage_account(
+            &rpc_client,
+            config,
+            &account_owner,
+            &storage_account_pubkey,
+            *account_type,
+        ),
+        CliCommand::ClaimStorageReward {
+            node_account_pubkey,
+            storage_account_pubkey,
+        } => process_claim_storage_reward(
+            &rpc_client,
+            config,
+            node_account_pubkey,
+            &storage_account_pubkey,
+        ),
+        CliCommand::ShowStorageAccount(storage_account_pubkey) => {
+            process_show_storage_account(&rpc_client, config, &storage_account_pubkey)
+        }
+
+        // Validator Info Commands
+
+        // Return all or single validator info
+        CliCommand::GetValidatorInfo(info_pubkey) => {
+            process_get_validator_info(&rpc_client, *info_pubkey)
+        }
+        // Publish validator info
+        CliCommand::SetValidatorInfo(validator_info, info_pubkey) => {
+            process_set_validator_info(&rpc_client, config, &validator_info, *info_pubkey)
+        }
+
+        // Vote Commands
+
+        // Create vote account
+        CliCommand::CreateVoteAccount(vote_account_pubkey, vote_init) => {
+            process_create_vote_account(&rpc_client, config, &vote_account_pubkey, &vote_init)
+        }
+        CliCommand::ShowVoteAccount {
+            pubkey: vote_account_pubkey,
+            use_lamports_unit,
+        } => process_show_vote_account(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            *use_lamports_unit,
+        ),
+        CliCommand::VoteAuthorize(vote_account_pubkey, new_authorized_pubkey, vote_authorize) => {
+            process_vote_authorize(
+                &rpc_client,
+                config,
+                &vote_account_pubkey,
+                &new_authorized_pubkey,
+                *vote_authorize,
+            )
+        }
+        CliCommand::Uptime {
+            pubkey: vote_account_pubkey,
+            aggregate,
+            span,
+        } => process_uptime(&rpc_client, config, &vote_account_pubkey, *aggregate, *span),
+
+        // Wallet Commands
+
         // Get address of this client
         CliCommand::Address => unreachable!(),
-
-        CliCommand::Fees => process_fees(&rpc_client),
-
         // Request an airdrop from Solana Drone;
         CliCommand::Airdrop {
             drone_host,
@@ -772,169 +931,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
                 *use_lamports_unit,
             )
         }
-
         // Check client balance
         CliCommand::Balance {
             pubkey,
             use_lamports_unit,
         } => process_balance(&pubkey, &rpc_client, *use_lamports_unit),
-
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
-
         // Confirm the last client transaction by signature
         CliCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
-
-        // Create vote account
-        CliCommand::CreateVoteAccount(vote_account_pubkey, vote_init) => {
-            process_create_vote_account(&rpc_client, config, &vote_account_pubkey, &vote_init)
-        }
-
-        CliCommand::VoteAuthorize(vote_account_pubkey, new_authorized_pubkey, vote_authorize) => {
-            process_vote_authorize(
-                &rpc_client,
-                config,
-                &vote_account_pubkey,
-                &new_authorized_pubkey,
-                *vote_authorize,
-            )
-        }
-
-        CliCommand::ShowAccount {
-            pubkey,
-            output_file,
-            use_lamports_unit,
-        } => process_show_account(
-            &rpc_client,
-            config,
-            &pubkey,
-            &output_file,
-            *use_lamports_unit,
-        ),
-
-        CliCommand::ShowVoteAccount {
-            pubkey: vote_account_pubkey,
-            use_lamports_unit,
-        } => process_show_vote_account(
-            &rpc_client,
-            config,
-            &vote_account_pubkey,
-            *use_lamports_unit,
-        ),
-
-        CliCommand::Uptime {
-            pubkey: vote_account_pubkey,
-            aggregate,
-            span,
-        } => process_uptime(&rpc_client, config, &vote_account_pubkey, *aggregate, *span),
-
-        // Create stake account
-        CliCommand::CreateStakeAccount(stake_account_pubkey, authorized, lockup, lamports) => {
-            process_create_stake_account(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &authorized,
-                lockup,
-                *lamports,
-            )
-        }
-        CliCommand::DelegateStake(stake_account_pubkey, vote_account_pubkey, force) => {
-            process_delegate_stake(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-                *force,
-            )
-        }
-        CliCommand::StakeAuthorize(
-            stake_account_pubkey,
-            new_authorized_pubkey,
-            stake_authorize,
-        ) => process_stake_authorize(
-            &rpc_client,
-            config,
-            &stake_account_pubkey,
-            &new_authorized_pubkey,
-            *stake_authorize,
-        ),
-
-        CliCommand::WithdrawStake(stake_account_pubkey, destination_account_pubkey, lamports) => {
-            process_withdraw_stake(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &destination_account_pubkey,
-                *lamports,
-            )
-        }
-
-        // Deactivate stake account
-        CliCommand::DeactivateStake(stake_account_pubkey, vote_account_pubkey) => {
-            process_deactivate_stake_account(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-            )
-        }
-
-        CliCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey) => {
-            process_redeem_vote_credits(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-            )
-        }
-
-        CliCommand::ShowStakeAccount {
-            pubkey: stake_account_pubkey,
-            use_lamports_unit,
-        } => process_show_stake_account(
-            &rpc_client,
-            config,
-            &stake_account_pubkey,
-            *use_lamports_unit,
-        ),
-
-        CliCommand::CreateStorageAccount {
-            account_owner,
-            storage_account_pubkey,
-            account_type,
-        } => process_create_storage_account(
-            &rpc_client,
-            config,
-            &account_owner,
-            &storage_account_pubkey,
-            *account_type,
-        ),
-
-        CliCommand::ClaimStorageReward {
-            node_account_pubkey,
-            storage_account_pubkey,
-        } => process_claim_storage_reward(
-            &rpc_client,
-            config,
-            node_account_pubkey,
-            &storage_account_pubkey,
-        ),
-
-        CliCommand::ShowStorageAccount(storage_account_pubkey) => {
-            process_show_storage_account(&rpc_client, config, &storage_account_pubkey)
-        }
-
-        // Deploy a custom program to the chain
-        CliCommand::Deploy(ref program_location) => {
-            process_deploy(&rpc_client, config, program_location)
-        }
-
-        CliCommand::GetGenesisBlockhash => process_get_genesis_blockhash(&rpc_client),
-        CliCommand::GetSlot => process_get_slot(&rpc_client),
-        CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
-        CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
-
         // If client has positive balance, pay lamports to another address
         CliCommand::Pay {
             lamports,
@@ -953,33 +958,23 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             witnesses,
             *cancelable,
         ),
-
-        CliCommand::Ping {
-            interval,
-            count,
-            timeout,
-        } => process_ping(&rpc_client, config, interval, count, timeout),
-
+        CliCommand::ShowAccount {
+            pubkey,
+            output_file,
+            use_lamports_unit,
+        } => process_show_account(
+            &rpc_client,
+            config,
+            &pubkey,
+            &output_file,
+            *use_lamports_unit,
+        ),
         // Apply time elapsed to contract
         CliCommand::TimeElapsed(to, pubkey, dt) => {
             process_time_elapsed(&rpc_client, config, &to, &pubkey, *dt)
         }
-
         // Apply witness signature to contract
         CliCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
-
-        // Return software version of solana-cli and cluster entrypoint node
-        CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
-
-        // Return all or single validator info
-        CliCommand::GetValidatorInfo(info_pubkey) => {
-            process_get_validator_info(&rpc_client, *info_pubkey)
-        }
-
-        // Publish validator info
-        CliCommand::SetValidatorInfo(validator_info, info_pubkey) => {
-            process_set_validator_info(&rpc_client, config, &validator_info, *info_pubkey)
-        }
     }
 }
 
