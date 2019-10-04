@@ -1,5 +1,5 @@
 steps:
-  - command: "tests/testnet-performance/testnet-automation.sh"
+  - command: "system-test/testnet-performance/testnet-automation.sh"
     label: "COLO performance testnet on EDGE channel GPU ENABLED"
 #    branches: 'master'
     env:
@@ -18,7 +18,7 @@ steps:
   - wait: ~
     continue_on_failure: true
 
-  - command: "tests/testnet-performance/testnet-automation.sh"
+  - command: "system-test/testnet-performance/testnet-automation.sh"
     label: "COLO performance testnet on BETA channel GPU ENABLED"
 #    branches: 'v0.19'
     env:
