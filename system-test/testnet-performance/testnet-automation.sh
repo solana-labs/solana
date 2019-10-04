@@ -36,17 +36,13 @@ function cleanup_testnet {
     set +e
     collect_logs
   )
+
+  # TODO: Replace this with the cleanup from https://github.com/solana-labs/solana/issues/6216
+  echo --- Stop Network Software
+  net/net.sh stop
+
   (
     cat <<EOF
-- wait: ~
-  continue_on_failure: true
-
-# TODO: Replace this with the cleanup from https://github.com/solana-labs/solana/issues/6216
-- command: "net/colo.sh config -p ${TESTNET_TAG} ; net/net.sh stop"
-  label: "Stop Network software"
-  agents:
-    - "queue=colo-deploy"
-
 - wait: ~
   continue_on_failure: true
 
@@ -160,7 +156,7 @@ launchTestnet() {
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
-    python tests/testnet-performance/testnet-automation-json-parser.py >>"$RESULTS_FILE"
+    python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULTS_FILE"
 
   upload-ci-artifact "$RESULTS_FILE"
 }
