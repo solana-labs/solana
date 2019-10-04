@@ -1,3 +1,4 @@
+use log::*;
 use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
 use solana_bench_tps::cli;
 use solana_core::gossip_service::{discover_cluster, get_multi_client};
@@ -5,11 +6,7 @@ use solana_genesis::PrimordialAccountDetails;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_program;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
-use std::process::exit;
+use std::{collections::HashMap, fs::File, io::prelude::*, path::Path, process::exit};
 
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
@@ -37,7 +34,7 @@ fn main() {
     } = &cli_config;
 
     if *write_to_client_file {
-        println!("Generating {} keypairs", *tx_count * 2);
+        info!("Generating {} keypairs", *tx_count * 2);
         let (keypairs, _) = generate_keypairs(&id, *tx_count as u64 * 2);
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeCalculator::new(*target_lamports_per_signature).max_lamports_per_signature;
@@ -57,7 +54,7 @@ fn main() {
             );
         });
 
-        println!("Writing {}", client_ids_and_stake_file);
+        info!("Writing {}", client_ids_and_stake_file);
         let serialized = serde_yaml::to_string(&accounts).unwrap();
         let path = Path::new(&client_ids_and_stake_file);
         let mut file = File::create(path).unwrap();
@@ -65,7 +62,7 @@ fn main() {
         return;
     }
 
-    println!("Connecting to the cluster");
+    info!("Connecting to the cluster");
     let (nodes, _replicators) =
         discover_cluster(&entrypoint_addr, *num_nodes).unwrap_or_else(|err| {
             eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
@@ -86,7 +83,7 @@ fn main() {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
-        println!("Reading {}", client_ids_and_stake_file);
+        info!("Reading {}", client_ids_and_stake_file);
         let accounts: HashMap<String, PrimordialAccountDetails> =
             serde_yaml::from_reader(file).unwrap();
         let mut keypairs = vec![];

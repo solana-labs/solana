@@ -1,11 +1,8 @@
-use std::net::SocketAddr;
-use std::process::exit;
-use std::time::Duration;
-
 use clap::{crate_description, crate_name, crate_version, App, Arg, ArgMatches};
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use std::{net::SocketAddr, process::exit, time::Duration};
 
 const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = 64 * 1024;
 
