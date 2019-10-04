@@ -73,7 +73,7 @@ fn retransmit(
             ClusterInfo::retransmit_to(&cluster_info, &children, packet, leader, sock, true)?;
         }
     }
-    datapoint_info!("cluster_info-num_nodes", ("count", peers_len, i64));
+    datapoint_debug!("cluster_info-num_nodes", ("count", peers_len, i64));
     Ok(())
 }
 

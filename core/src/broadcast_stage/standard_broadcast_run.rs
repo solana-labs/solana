@@ -49,7 +49,7 @@ impl StandardBroadcastRun {
             self.stats.run_elapsed.clear();
         }
 
-        datapoint_info!(
+        datapoint_debug!(
             "broadcast-service",
             ("num_entries", num_entries as i64, i64),
             ("num_shreds", num_shreds as i64, i64),

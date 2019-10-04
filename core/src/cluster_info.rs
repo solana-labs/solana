@@ -729,7 +729,7 @@ impl ClusterInfo {
         });
 
         last_err?;
-        datapoint_info!("cluster_info-num_nodes", ("count", broadcast_len + 1, i64));
+        datapoint_debug!("cluster_info-num_nodes", ("count", broadcast_len + 1, i64));
         Ok(())
     }
 

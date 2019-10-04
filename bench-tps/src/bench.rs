@@ -9,7 +9,7 @@ use solana_drone::drone::request_airdrop_transaction;
 #[cfg(feature = "move")]
 use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_program};
 use solana_measure::measure::Measure;
-use solana_metrics::datapoint_info;
+use solana_metrics::datapoint_debug;
 use solana_sdk::{
     client::Client,
     clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
@@ -234,7 +234,7 @@ where
 
 fn metrics_submit_lamport_balance(lamport_balance: u64) {
     info!("Token balance: {}", lamport_balance);
-    datapoint_info!(
+    datapoint_debug!(
         "bench-tps-lamport_balance",
         ("balance", lamport_balance, i64)
     );
@@ -361,7 +361,7 @@ fn generate_txs(
         duration_as_ms(&duration),
         blockhash,
     );
-    datapoint_info!(
+    datapoint_debug!(
         "bench-tps-generate_txs",
         ("duration", duration_as_ms(&duration), i64)
     );
@@ -426,7 +426,7 @@ fn do_tx_transfers<T: Client>(
                 duration_as_ms(&transfer_start.elapsed()),
                 tx_len as f32 / duration_as_s(&transfer_start.elapsed()),
             );
-            datapoint_info!(
+            datapoint_debug!(
                 "bench-tps-do_tx_transfers",
                 ("duration", duration_as_ms(&transfer_start.elapsed()), i64),
                 ("count", tx_len, i64)

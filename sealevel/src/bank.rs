@@ -27,7 +27,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_metrics::{
-    datapoint_info, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
+    datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
 use solana_sdk::{
     account::Account,
@@ -342,7 +342,7 @@ impl Bank {
             message_processor: MessageProcessor::default(),
         };
 
-        datapoint_info!(
+        datapoint_debug!(
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
             ("block_height", new.block_height, i64)
@@ -593,7 +593,7 @@ impl Bank {
             .for_each(|slot| self.src.status_cache.write().unwrap().add_root(*slot));
         squash_cache_time.stop();
 
-        datapoint_info!(
+        datapoint_debug!(
             "tower-observed",
             ("squash_accounts_ms", squash_accounts_time.as_ms(), i64),
             ("squash_cache_ms", squash_cache_time.as_ms(), i64)

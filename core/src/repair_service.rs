@@ -6,7 +6,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_repair_listener::ClusterInfoRepairListener;
 use crate::result::Result;
 use crate::service::Service;
-use solana_metrics::datapoint_info;
+use solana_metrics::datapoint_debug;
 use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::BTreeSet;
@@ -170,7 +170,7 @@ impl RepairService {
 
                 for ((to, req), repair_request) in reqs {
                     if let Ok(local_addr) = repair_socket.local_addr() {
-                        datapoint_info!(
+                        datapoint_debug!(
                             "repair_service",
                             ("repair_request", format!("{:?}", repair_request), String),
                             ("to", to.to_string(), String),

@@ -9,7 +9,7 @@ use bincode::deserialize;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
-use solana_metrics::datapoint_info;
+use solana_metrics::datapoint_debug;
 use solana_sdk::{
     account::KeyedAccount,
     instruction::{AccountMeta, Instruction, InstructionError},
@@ -190,7 +190,7 @@ pub fn process_instruction(
             vote_state::authorize(me, rest, &voter_pubkey, vote_authorize)
         }
         VoteInstruction::Vote(vote) => {
-            datapoint_info!("vote-native", ("count", 1, i64));
+            datapoint_debug!("vote-native", ("count", 1, i64));
             if rest.len() < 2 {
                 return Err(InstructionError::InvalidInstructionData);
             }
