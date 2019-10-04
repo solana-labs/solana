@@ -11,12 +11,23 @@ use std::sync::{Arc, RwLock};
 type CachedSchedules = (HashMap<u64, Arc<LeaderSchedule>>, VecDeque<u64>);
 const MAX_SCHEDULES: usize = 10;
 
-#[derive(Default)]
 pub struct LeaderScheduleCache {
     // Map from an epoch to a leader schedule for that epoch
     pub cached_schedules: RwLock<CachedSchedules>,
     epoch_schedule: EpochSchedule,
     max_epoch: RwLock<u64>,
+    capacity: usize,
+}
+
+impl Default for LeaderScheduleCache {
+    fn default() -> Self {
+        Self {
+            cached_schedules: RwLock::default(),
+            epoch_schedule: EpochSchedule::default(),
+            max_epoch: RwLock::default(),
+            capacity: MAX_SCHEDULES,
+        }
+    }
 }
 
 impl LeaderScheduleCache {
@@ -25,10 +36,19 @@ impl LeaderScheduleCache {
     }
 
     pub fn new(epoch_schedule: EpochSchedule, root_bank: &Bank) -> Self {
+        Self::new_with_capacity(epoch_schedule, root_bank, MAX_SCHEDULES)
+    }
+
+    pub fn new_with_capacity(
+        epoch_schedule: EpochSchedule,
+        root_bank: &Bank,
+        capacity: usize,
+    ) -> Self {
         let cache = Self {
             cached_schedules: RwLock::new((HashMap::new(), VecDeque::new())),
             epoch_schedule,
             max_epoch: RwLock::new(0),
+            capacity,
         };
 
         // This sets the root and calculates the schedule at stakers_epoch(root)
@@ -189,14 +209,18 @@ impl LeaderScheduleCache {
             if let Entry::Vacant(v) = entry {
                 v.insert(leader_schedule.clone());
                 order.push_back(epoch);
-                Self::retain_latest(cached_schedules, order);
+                Self::retain_latest(cached_schedules, order, self.capacity);
             }
             leader_schedule
         })
     }
 
-    fn retain_latest(schedules: &mut HashMap<u64, Arc<LeaderSchedule>>, order: &mut VecDeque<u64>) {
-        if schedules.len() > MAX_SCHEDULES {
+    fn retain_latest(
+        schedules: &mut HashMap<u64, Arc<LeaderSchedule>>,
+        order: &mut VecDeque<u64>,
+        capacity: usize,
+    ) {
+        while schedules.len() > capacity {
             let first = order.pop_front().unwrap();
             schedules.remove(&first);
         }

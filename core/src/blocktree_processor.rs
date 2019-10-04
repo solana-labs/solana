@@ -155,27 +155,32 @@ pub enum BlocktreeProcessorError {
     LedgerVerificationFailed,
 }
 
+#[derive(Default)]
+pub struct ProcessOptions {
+    pub verify_ledger: bool,
+    pub full_leader_cache: bool,
+    pub dev_halt_at_slot: Option<Slot>,
+}
+
 pub fn process_blocktree(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     account_paths: Option<String>,
-    verify_ledger: bool,
-    dev_halt_at_slot: Option<Slot>,
+    opts: ProcessOptions,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
     info!("processing ledger from bank 0...");
 
     // Setup bank for slot 0
     let bank0 = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
-    process_bank_0(&bank0, blocktree, verify_ledger)?;
-    process_blocktree_from_root(blocktree, bank0, verify_ledger, dev_halt_at_slot)
+    process_bank_0(&bank0, blocktree, opts.verify_ledger)?;
+    process_blocktree_from_root(blocktree, bank0, opts)
 }
 
 // Process blocktree from a known root bank
 pub fn process_blocktree_from_root(
     blocktree: &Blocktree,
     bank: Arc<Bank>,
-    verify_ledger: bool,
-    dev_halt_at_slot: Option<Slot>,
+    opts: ProcessOptions,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
     info!("processing ledger from root: {}...", bank.slot());
     // Starting slot must be a root, and thus has no parents
@@ -183,7 +188,7 @@ pub fn process_blocktree_from_root(
     let start_slot = bank.slot();
     let now = Instant::now();
     let mut rooted_path = vec![start_slot];
-    let dev_halt_at_slot = dev_halt_at_slot.unwrap_or(std::u64::MAX);
+    let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
 
     blocktree
         .set_roots(&[start_slot])
@@ -195,14 +200,18 @@ pub fn process_blocktree_from_root(
     let (bank_forks, bank_forks_info, leader_schedule_cache) = {
         if let Some(meta) = meta {
             let epoch_schedule = bank.epoch_schedule();
-            let mut leader_schedule_cache = LeaderScheduleCache::new(*epoch_schedule, &bank);
+            let mut leader_schedule_cache = if opts.full_leader_cache {
+                LeaderScheduleCache::new_with_capacity(*epoch_schedule, &bank, std::usize::MAX)
+            } else {
+                LeaderScheduleCache::new(*epoch_schedule, &bank)
+            };
             let fork_info = process_pending_slots(
                 &bank,
                 &meta,
                 blocktree,
                 &mut leader_schedule_cache,
                 &mut rooted_path,
-                verify_ledger,
+                opts.verify_ledger,
                 dev_halt_at_slot,
             )?;
             let (banks, bank_forks_info): (Vec<_>, Vec<_>) = fork_info.into_iter().unzip();
