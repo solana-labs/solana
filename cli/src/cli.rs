@@ -1,13 +1,12 @@
 use crate::{
-    display::println_name_value, input_parsers::*, input_validators::*, stake::*, storage::*,
-    validator_info::*, vote::*,
+    cluster_query::*, display::println_name_value, input_parsers::*, input_validators::*, stake::*,
+    storage::*, validator_info::*, vote::*,
 };
 use chrono::prelude::*;
-use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
-use console::{style, Emoji};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
-use serde_json::{self, json, Value};
+use serde_json::{self, json};
 use solana_budget_api::budget_instruction::{self, BudgetError};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
@@ -15,7 +14,7 @@ use solana_drone::drone::request_airdrop_transaction;
 #[cfg(test)]
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::{
-    bpf_loader, clock,
+    bpf_loader,
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::InstructionError,
@@ -33,30 +32,26 @@ use solana_stake_api::stake_state::{Authorized, Lockup, StakeAuthorize};
 use solana_storage_api::storage_instruction::StorageAccountType;
 use solana_vote_api::vote_state::{VoteAuthorize, VoteInit};
 use std::{
-    collections::VecDeque,
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
     thread::sleep,
-    time::{Duration, Instant},
+    time::Duration,
     {error, fmt},
 };
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
-static CHECK_MARK: Emoji = Emoji("✅ ", "");
-static CROSS_MARK: Emoji = Emoji("❌ ", "");
-
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum CliCommand {
-    // Cluster Info Commands
+    // Cluster Query Commands
+    ClusterVersion,
     Fees,
     GetEpochInfo,
     GetGenesisBlockhash,
     GetSlot,
     GetTransactionCount,
-    GetVersion,
     Ping {
         interval: Duration,
         count: Option<u64>,
@@ -190,27 +185,14 @@ pub fn parse_command(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommand, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
-        // Cluster Info Commands
+        // Cluster Query Commands
+        ("cluster-version", Some(_matches)) => Ok(CliCommand::ClusterVersion),
         ("fees", Some(_fees_matches)) => Ok(CliCommand::Fees),
         ("get-epoch-info", Some(_matches)) => Ok(CliCommand::GetEpochInfo),
         ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommand::GetGenesisBlockhash),
         ("get-slot", Some(_matches)) => Ok(CliCommand::GetSlot),
         ("get-transaction-count", Some(_matches)) => Ok(CliCommand::GetTransactionCount),
-        ("cluster-version", Some(_matches)) => Ok(CliCommand::GetVersion),
-        ("ping", Some(ping_matches)) => {
-            let interval = Duration::from_secs(value_t_or_exit!(ping_matches, "interval", u64));
-            let count = if ping_matches.is_present("count") {
-                Some(value_t_or_exit!(ping_matches, "count", u64))
-            } else {
-                None
-            };
-            let timeout = Duration::from_secs(value_t_or_exit!(ping_matches, "timeout", u64));
-            Ok(CliCommand::Ping {
-                interval,
-                count,
-                timeout,
-            })
-        }
+        ("ping", Some(matches)) => parse_cluster_ping(matches),
         // Program Deployment
         ("deploy", Some(deploy_matches)) => Ok(CliCommand::Deploy(
             deploy_matches
@@ -439,14 +421,6 @@ pub fn check_unique_pubkeys(
     }
 }
 
-fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-    Ok(format!(
-        "blockhash: {}\nlamports per signature: {}",
-        recent_blockhash, fee_calculator.lamports_per_signature
-    ))
-}
 fn process_airdrop(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -715,50 +689,6 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
     log_instruction_custom_error::<BudgetError>(result)
 }
 
-fn process_get_genesis_blockhash(rpc_client: &RpcClient) -> ProcessResult {
-    let genesis_blockhash = rpc_client.get_genesis_blockhash()?;
-    Ok(genesis_blockhash.to_string())
-}
-
-fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
-    let slot = rpc_client.get_slot()?;
-    Ok(slot.to_string())
-}
-
-fn process_get_epoch_info(rpc_client: &RpcClient) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info()?;
-    println!();
-    println_name_value("Current epoch:", &epoch_info.epoch.to_string());
-    println_name_value("Current slot:", &epoch_info.absolute_slot.to_string());
-    println_name_value(
-        "Total slots in current epoch:",
-        &epoch_info.slots_in_epoch.to_string(),
-    );
-    let remaining_slots_in_epoch = epoch_info.slots_in_epoch - epoch_info.slot_index;
-    println_name_value(
-        "Remaining slots in current epoch:",
-        &remaining_slots_in_epoch.to_string(),
-    );
-
-    let remaining_time_in_epoch = Duration::from_secs(
-        remaining_slots_in_epoch * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
-    );
-    println_name_value(
-        "Time remaining in current epoch:",
-        &format!(
-            "{} minutes, {} seconds",
-            remaining_time_in_epoch.as_secs() / 60,
-            remaining_time_in_epoch.as_secs() % 60
-        ),
-    );
-    Ok("".to_string())
-}
-
-fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
-    let transaction_count = rpc_client.get_transaction_count()?;
-    Ok(transaction_count.to_string())
-}
-
 fn process_time_elapsed(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -788,139 +718,6 @@ fn process_witness(
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<BudgetError>(result)
-}
-
-fn process_get_version(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let remote_version: Value = serde_json::from_str(&rpc_client.get_version()?)?;
-    println!(
-        "{} {}",
-        style("Cluster versions from:").bold(),
-        config.json_rpc_url
-    );
-    if let Some(versions) = remote_version.as_object() {
-        for (key, value) in versions.iter() {
-            if let Some(value_string) = value.as_str() {
-                println_name_value(&format!("* {}:", key), &value_string);
-            }
-        }
-    }
-    Ok("".to_string())
-}
-
-fn process_ping(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    interval: &Duration,
-    count: &Option<u64>,
-    timeout: &Duration,
-) -> ProcessResult {
-    let to = Keypair::new().pubkey();
-
-    println_name_value("Source account:", &config.keypair.pubkey().to_string());
-    println_name_value("Destination account:", &to.to_string());
-    println!();
-
-    let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
-        let _ = signal_sender.send(());
-    })
-    .expect("Error setting Ctrl-C handler");
-
-    let mut last_blockhash = Hash::default();
-    let mut submit_count = 0;
-    let mut confirmed_count = 0;
-    let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
-
-    'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
-        let (recent_blockhash, fee_calculator) = rpc_client.get_new_blockhash(&last_blockhash)?;
-        last_blockhash = recent_blockhash;
-
-        let transaction = system_transaction::transfer(&config.keypair, &to, 1, recent_blockhash);
-        check_account_for_fee(rpc_client, config, &fee_calculator, &transaction.message)?;
-
-        match rpc_client.send_transaction(&transaction) {
-            Ok(signature) => {
-                let transaction_sent = Instant::now();
-                loop {
-                    let signature_status = rpc_client.get_signature_status(&signature)?;
-                    let elapsed_time = Instant::now().duration_since(transaction_sent);
-                    if let Some(transaction_status) = signature_status {
-                        match transaction_status {
-                            Ok(()) => {
-                                let elapsed_time_millis = elapsed_time.as_millis() as u64;
-                                confirmation_time.push_back(elapsed_time_millis);
-                                println!(
-                                    "{}1 lamport transferred: seq={:<3} time={:>4}ms signature={}",
-                                    CHECK_MARK, seq, elapsed_time_millis, signature
-                                );
-                                confirmed_count += 1;
-                            }
-                            Err(err) => {
-                                println!(
-                                    "{}Transaction failed:    seq={:<3} error={:?} signature={}",
-                                    CROSS_MARK, seq, err, signature
-                                );
-                            }
-                        }
-                        break;
-                    }
-
-                    if elapsed_time >= *timeout {
-                        println!(
-                            "{}Confirmation timeout:  seq={:<3}             signature={}",
-                            CROSS_MARK, seq, signature
-                        );
-                        break;
-                    }
-
-                    // Sleep for half a slot
-                    if signal_receiver
-                        .recv_timeout(Duration::from_millis(
-                            500 * solana_sdk::clock::DEFAULT_TICKS_PER_SLOT
-                                / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND,
-                        ))
-                        .is_ok()
-                    {
-                        break 'mainloop;
-                    }
-                }
-            }
-            Err(err) => {
-                println!(
-                    "{}Submit failed:         seq={:<3} error={:?}",
-                    CROSS_MARK, seq, err
-                );
-            }
-        }
-        submit_count += 1;
-
-        if signal_receiver.recv_timeout(*interval).is_ok() {
-            break 'mainloop;
-        }
-    }
-
-    println!();
-    println!("--- transaction statistics ---");
-    println!(
-        "{} transactions submitted, {} transactions confirmed, {:.1}% transaction loss",
-        submit_count,
-        confirmed_count,
-        (100. - f64::from(confirmed_count) / f64::from(submit_count) * 100.)
-    );
-    if !confirmation_time.is_empty() {
-        let samples: Vec<f64> = confirmation_time.iter().map(|t| *t as f64).collect();
-        let dist = criterion_stats::Distribution::from(samples.into_boxed_slice());
-        let mean = dist.mean();
-        println!(
-            "confirmation min/mean/max/stddev = {:.0}/{:.0}/{:.0}/{:.0} ms",
-            dist.min(),
-            mean,
-            dist.max(),
-            dist.std_dev(Some(mean))
-        );
-    }
-
-    Ok("".to_string())
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
@@ -1172,7 +969,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
 
         // Return software version of solana-cli and cluster entrypoint node
-        CliCommand::GetVersion => process_get_version(&rpc_client, config),
+        CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
 
         // Return all or single validator info
         CliCommand::GetValidatorInfo(info_pubkey) => {
@@ -1288,7 +1085,21 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .version(version)
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
-        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
+        .cluster_query_subcommands()
+        .subcommand(
+            SubCommand::with_name("deploy")
+                .about("Deploy a program")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PATH TO PROGRAM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.o"),
+                ), // TODO: Add "loader" argument; current default is bpf_loader
+        )
+        .stake_subcommands()
+        .storage_subcommands()
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request lamports")
@@ -1368,64 +1179,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show-account")
-                .about("Show the contents of an account")
-                .arg(
-                    Arg::with_name("account_pubkey")
-                        .index(1)
-                        .value_name("ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Account pubkey"),
-                )
-                .arg(
-                    Arg::with_name("output_file")
-                        .long("output")
-                        .short("o")
-                        .value_name("FILE")
-                        .takes_value(true)
-                        .help("Write the account data to this file"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
-                ),
-        )
-        .vote_subcommands()
-        .stake_subcommands()
-        .storage_subcommands()
-        .subcommand(
-            SubCommand::with_name("deploy")
-                .about("Deploy a program")
-                .arg(
-                    Arg::with_name("program_location")
-                        .index(1)
-                        .value_name("PATH TO PROGRAM")
-                        .takes_value(true)
-                        .required(true)
-                        .help("/path/to/program.o"),
-                ), // TODO: Add "loader" argument; current default is bpf_loader
-        )
-        .subcommand(
-            SubCommand::with_name("get-genesis-blockhash")
-                .about("Get the genesis blockhash"),
-        )
-        .subcommand(
-            SubCommand::with_name("get-slot")
-                .about("Get current slot"),
-        )
-        .subcommand(
-            SubCommand::with_name("get-epoch-info")
-                .about("Get information about the current epoch"),
-        )
-        .subcommand(
-            SubCommand::with_name("get-transaction-count")
-                .about("Get current transaction count"),
-        )
-        .subcommand(
             SubCommand::with_name("pay")
                 .about("Send a payment")
                 .arg(
@@ -1486,36 +1239,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("ping")
-                .about("Submit transactions sequentially")
-                .arg(
-                    Arg::with_name("interval")
-                        .short("i")
-                        .long("interval")
-                        .value_name("SECONDS")
-                        .takes_value(true)
-                        .default_value("2")
-                        .help("Wait interval seconds between submitting the next transaction"),
-                )
-                .arg(
-                    Arg::with_name("count")
-                        .short("c")
-                        .long("count")
-                        .value_name("NUMBER")
-                        .takes_value(true)
-                        .help("Stop after submitting count transactions"),
-                )
-                .arg(
-                    Arg::with_name("timeout")
-                        .short("t")
-                        .long("timeout")
-                        .value_name("SECONDS")
-                        .takes_value(true)
-                        .default_value("10")
-                        .help("Wait up to timeout seconds for transaction confirmation"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("send-signature")
                 .about("Send a signature to authorize a transfer")
                 .arg(
@@ -1565,8 +1288,31 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("cluster-version")
-                .about("Get the version of the cluster entrypoint"),
+            SubCommand::with_name("show-account")
+                .about("Show the contents of an account")
+                .arg(
+                    Arg::with_name("account_pubkey")
+                        .index(1)
+                        .value_name("ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("output_file")
+                        .long("output")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the account data to this file"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("validator-info")
@@ -1640,6 +1386,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         ),
                 )
         )
+        .vote_subcommands()
 }
 
 #[cfg(test)]
