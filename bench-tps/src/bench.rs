@@ -173,6 +173,10 @@ where
             sleep(Duration::from_millis(100));
             continue;
         }
+        info!(
+            "Took {} ms for new blockhash",
+            duration_as_ms(&blockhash_time.elapsed())
+        );
         blockhash_time = Instant::now();
         let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
         metrics_submit_lamport_balance(balance);
