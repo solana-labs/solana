@@ -44,6 +44,7 @@ members = [
     "programs/storage_program",
     "programs/vote_api",
     "programs/vote_program",
+    "sealevel",
     "replicator",
     "runtime",
     "sdk",
