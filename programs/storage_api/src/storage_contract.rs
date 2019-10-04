@@ -1,3 +1,4 @@
+use crate::storage_instruction::StorageAccountType;
 use log::*;
 use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
@@ -130,30 +131,27 @@ impl<'a> StorageAccount<'a> {
         Self { id, account }
     }
 
-    pub fn initialize_replicator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError> {
+    pub fn initialize_storage(
+        &mut self,
+        owner: Pubkey,
+        account_type: StorageAccountType,
+    ) -> Result<(), InstructionError> {
         let storage_contract = &mut self.account.state()?;
         if let StorageContract::Uninitialized = storage_contract {
-            *storage_contract = StorageContract::ReplicatorStorage {
-                owner,
-                proofs: BTreeMap::new(),
-                validations: BTreeMap::new(),
-                credits: Credits::default(),
-            };
-            self.account.set_state(storage_contract)
-        } else {
-            Err(InstructionError::AccountAlreadyInitialized)
-        }
-    }
-
-    pub fn initialize_validator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError> {
-        let storage_contract = &mut self.account.state()?;
-        if let StorageContract::Uninitialized = storage_contract {
-            *storage_contract = StorageContract::ValidatorStorage {
-                owner,
-                segment: 0,
-                hash: Hash::default(),
-                lockout_validations: BTreeMap::new(),
-                credits: Credits::default(),
+            *storage_contract = match account_type {
+                StorageAccountType::Replicator => StorageContract::ReplicatorStorage {
+                    owner,
+                    proofs: BTreeMap::new(),
+                    validations: BTreeMap::new(),
+                    credits: Credits::default(),
+                },
+                StorageAccountType::Validator => StorageContract::ValidatorStorage {
+                    owner,
+                    segment: 0,
+                    hash: Hash::default(),
+                    lockout_validations: BTreeMap::new(),
+                    credits: Credits::default(),
+                },
             };
             self.account.set_state(storage_contract)
         } else {

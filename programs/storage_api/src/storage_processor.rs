@@ -20,17 +20,14 @@ pub fn process_instruction(
     let mut storage_account = StorageAccount::new(*me[0].unsigned_key(), &mut me[0].account);
 
     match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        StorageInstruction::InitializeReplicatorStorage { owner } => {
+        StorageInstruction::InitializeStorage {
+            owner,
+            account_type,
+        } => {
             if !rest.is_empty() {
                 return Err(InstructionError::InvalidArgument);
             }
-            storage_account.initialize_replicator_storage(owner)
-        }
-        StorageInstruction::InitializeValidatorStorage { owner } => {
-            if !rest.is_empty() {
-                return Err(InstructionError::InvalidArgument);
-            }
-            storage_account.initialize_validator_storage(owner)
+            storage_account.initialize_storage(owner, account_type)
         }
         StorageInstruction::SubmitMiningProof {
             sha_state,
