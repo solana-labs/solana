@@ -19,7 +19,7 @@ fn get_month(start: Date<Utc>, n: u32) -> Date<Utc> {
     dt.unwrap()
 }
 
-/// Integer division that also returns the remainer.
+/// Integer division that also returns the remainder.
 fn div(dividend: u64, divisor: u64) -> (u64, u64) {
     (dividend / divisor, dividend % divisor)
 }
