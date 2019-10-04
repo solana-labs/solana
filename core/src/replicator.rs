@@ -35,7 +35,7 @@ use solana_sdk::timing::timestamp;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
 use solana_storage_api::storage_contract::StorageContract;
-use solana_storage_api::storage_instruction;
+use solana_storage_api::storage_instruction::{self, StorageAccountType};
 use std::fs::File;
 use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::mem::size_of;
@@ -600,11 +600,12 @@ impl Replicator {
                 }
             };
 
-            let ix = storage_instruction::create_replicator_storage_account(
+            let ix = storage_instruction::create_storage_account(
                 &keypair.pubkey(),
                 &keypair.pubkey(),
                 &storage_keypair.pubkey(),
                 1,
+                StorageAccountType::Replicator,
             );
             let tx = Transaction::new_signed_instructions(&[keypair], ix, blockhash);
             let signature = client.async_send_transaction(tx)?;

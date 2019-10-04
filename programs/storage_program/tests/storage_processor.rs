@@ -1,26 +1,32 @@
 use assert_matches::assert_matches;
 use bincode::deserialize;
 use log::*;
-use solana_runtime::bank::Bank;
-use solana_runtime::bank_client::BankClient;
-use solana_runtime::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
-use solana_sdk::account_utils::State;
-use solana_sdk::client::SyncClient;
-use solana_sdk::clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT};
-use solana_sdk::hash::{hash, Hash};
-use solana_sdk::instruction::{Instruction, InstructionError};
-use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_instruction;
-use solana_sdk::sysvar::clock::{self, Clock};
-use solana_sdk::sysvar::rewards::{self, Rewards};
-use solana_storage_api::id;
-use solana_storage_api::storage_contract::StorageAccount;
-use solana_storage_api::storage_contract::{ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE};
-use solana_storage_api::storage_instruction;
-use solana_storage_api::storage_processor::process_instruction;
+use solana_runtime::{
+    bank::Bank,
+    bank_client::BankClient,
+    genesis_utils::{create_genesis_block, GenesisBlockInfo},
+};
+use solana_sdk::{
+    account::{create_keyed_accounts, Account, KeyedAccount},
+    account_utils::State,
+    client::SyncClient,
+    clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    hash::{hash, Hash},
+    instruction::{Instruction, InstructionError},
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil, Signature},
+    system_instruction,
+    sysvar::clock::{self, Clock},
+    sysvar::rewards::{self, Rewards},
+};
+use solana_storage_api::{
+    id,
+    storage_contract::StorageAccount,
+    storage_contract::{ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE},
+    storage_instruction::{self, StorageAccountType},
+    storage_processor::process_instruction,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -61,11 +67,12 @@ fn test_account_owner() {
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
-    let message = Message::new(storage_instruction::create_validator_storage_account(
+    let message = Message::new(storage_instruction::create_storage_account(
         &mint_pubkey,
         &account_owner,
         &validator_storage_pubkey,
         1,
+        StorageAccountType::Validator,
     ));
     bank_client
         .send_message(&[&mint_keypair], message)
@@ -80,11 +87,12 @@ fn test_account_owner() {
         assert!(false, "wrong account type found")
     }
 
-    let message = Message::new(storage_instruction::create_replicator_storage_account(
+    let message = Message::new(storage_instruction::create_storage_account(
         &mint_pubkey,
         &account_owner,
         &replicator_storage_pubkey,
         1,
+        StorageAccountType::Replicator,
     ));
     bank_client
         .send_message(&[&mint_keypair], message)
@@ -111,7 +119,7 @@ fn test_proof_bounds() {
     {
         let mut storage_account = StorageAccount::new(pubkey, &mut account);
         storage_account
-            .initialize_replicator_storage(account_owner)
+            .initialize_storage(account_owner, StorageAccountType::Replicator)
             .unwrap();
     }
 
@@ -224,7 +232,7 @@ fn test_submit_mining_ok() {
     {
         let mut storage_account = StorageAccount::new(pubkey, &mut account);
         storage_account
-            .initialize_replicator_storage(account_owner)
+            .initialize_storage(account_owner, StorageAccountType::Replicator)
             .unwrap();
     }
 
@@ -473,11 +481,12 @@ fn init_storage_accounts(
         &mut validator_accounts_to_create
             .into_iter()
             .flat_map(|account| {
-                storage_instruction::create_validator_storage_account(
+                storage_instruction::create_storage_account(
                     &mint.pubkey(),
                     owner,
                     account,
                     lamports,
+                    StorageAccountType::Validator,
                 )
             })
             .collect(),
@@ -485,11 +494,12 @@ fn init_storage_accounts(
     replicator_accounts_to_create
         .into_iter()
         .for_each(|account| {
-            ixs.append(&mut storage_instruction::create_replicator_storage_account(
+            ixs.append(&mut storage_instruction::create_storage_account(
                 &mint.pubkey(),
                 owner,
                 account,
                 lamports,
+                StorageAccountType::Replicator,
             ))
         });
     let message = Message::new(ixs);
@@ -590,19 +600,21 @@ fn test_bank_storage() {
         .transfer(10, &mint_keypair, &replicator_pubkey)
         .unwrap();
 
-    let message = Message::new(storage_instruction::create_replicator_storage_account(
+    let message = Message::new(storage_instruction::create_storage_account(
         &mint_pubkey,
         &Pubkey::default(),
         &replicator_pubkey,
         1,
+        StorageAccountType::Replicator,
     ));
     bank_client.send_message(&[&mint_keypair], message).unwrap();
 
-    let message = Message::new(storage_instruction::create_validator_storage_account(
+    let message = Message::new(storage_instruction::create_storage_account(
         &mint_pubkey,
         &Pubkey::default(),
         &validator_pubkey,
         1,
+        StorageAccountType::Validator,
     ));
     bank_client.send_message(&[&mint_keypair], message).unwrap();
 

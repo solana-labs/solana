@@ -641,6 +641,7 @@ mod tests {
     use solana_sdk::hash::{Hash, Hasher};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_storage_api::storage_instruction::StorageAccountType;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -822,11 +823,12 @@ mod tests {
 
         // create accounts
         let bank = Arc::new(Bank::new_from_parent(&bank, &keypair.pubkey(), 1));
-        let account_ix = storage_instruction::create_replicator_storage_account(
+        let account_ix = storage_instruction::create_storage_account(
             &mint_keypair.pubkey(),
             &Pubkey::new_rand(),
             &replicator_keypair.pubkey(),
             1,
+            StorageAccountType::Replicator,
         );
         let account_tx = Transaction::new_signed_instructions(
             &[&mint_keypair],

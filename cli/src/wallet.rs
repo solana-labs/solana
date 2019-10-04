@@ -1,5 +1,5 @@
 use crate::{
-    display::println_name_value, input_parsers::*, input_validators::*, stake::*,
+    display::println_name_value, input_parsers::*, input_validators::*, stake::*, storage::*,
     validator_info::*, vote::*,
 };
 use chrono::prelude::*;
@@ -15,7 +15,6 @@ use solana_drone::drone::request_airdrop_transaction;
 #[cfg(test)]
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::{
-    account_utils::State,
     bpf_loader, clock,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -31,7 +30,7 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_stake_api::stake_state::{Authorized, Lockup, StakeAuthorize};
-use solana_storage_api::storage_instruction;
+use solana_storage_api::storage_instruction::StorageAccountType;
 use solana_vote_api::vote_state::{VoteAuthorize, VoteInit};
 use std::{
     collections::VecDeque,
@@ -51,21 +50,46 @@ static CROSS_MARK: Emoji = Emoji("❌ ", "");
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum WalletCommand {
-    Address,
+    // Cluster Info Commands
     Fees,
-    Airdrop {
-        drone_host: Option<IpAddr>,
-        drone_port: u16,
-        lamports: u64,
-        use_lamports_unit: bool,
+    GetGenesisBlockhash,
+    GetSlot,
+    GetEpochInfo,
+    GetTransactionCount,
+    GetVersion,
+    Ping {
+        interval: Duration,
+        count: Option<u64>,
+        timeout: Duration,
     },
-    Balance {
+    // Program Deployment
+    Deploy(String),
+    // Stake Commands
+    CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
+    DelegateStake(Pubkey, Pubkey, bool),
+    DeactivateStake(Pubkey, Pubkey),
+    RedeemVoteCredits(Pubkey, Pubkey),
+    ShowStakeAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
     },
-    Cancel(Pubkey),
-    Confirm(Signature),
-    VoteAuthorize(Pubkey, Pubkey, VoteAuthorize),
+    StakeAuthorize(Pubkey, Pubkey, StakeAuthorize),
+    WithdrawStake(Pubkey, Pubkey, u64),
+    // Storage Commands
+    CreateStorageAccount {
+        account_owner: Pubkey,
+        storage_account_pubkey: Pubkey,
+        account_type: StorageAccountType,
+    },
+    ClaimStorageReward {
+        node_account_pubkey: Pubkey,
+        storage_account_pubkey: Pubkey,
+    },
+    ShowStorageAccount(Pubkey),
+    // Validator Info Commands
+    GetValidatorInfo(Option<Pubkey>),
+    SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
+    // Vote Commands
     CreateVoteAccount(Pubkey, VoteInit),
     ShowAccount {
         pubkey: Pubkey,
@@ -81,26 +105,21 @@ pub enum WalletCommand {
         aggregate: bool,
         span: Option<u64>,
     },
-    CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
-    StakeAuthorize(Pubkey, Pubkey, StakeAuthorize),
-    DelegateStake(Pubkey, Pubkey, bool),
-    WithdrawStake(Pubkey, Pubkey, u64),
-    DeactivateStake(Pubkey, Pubkey),
-    RedeemVoteCredits(Pubkey, Pubkey),
-    ShowStakeAccount {
+    VoteAuthorize(Pubkey, Pubkey, VoteAuthorize),
+    // Wallet Commands
+    Address,
+    Airdrop {
+        drone_host: Option<IpAddr>,
+        drone_port: u16,
+        lamports: u64,
+        use_lamports_unit: bool,
+    },
+    Balance {
         pubkey: Pubkey,
         use_lamports_unit: bool,
     },
-    CreateReplicatorStorageAccount(Pubkey, Pubkey),
-    CreateValidatorStorageAccount(Pubkey, Pubkey),
-    ClaimStorageReward(Pubkey, Pubkey),
-    ShowStorageAccount(Pubkey),
-    Deploy(String),
-    GetGenesisBlockhash,
-    GetSlot,
-    GetEpochInfo,
-    GetTransactionCount,
-    GetVersion,
+    Cancel(Pubkey),
+    Confirm(Signature),
     Pay {
         lamports: u64,
         to: Pubkey,
@@ -109,15 +128,8 @@ pub enum WalletCommand {
         witnesses: Option<Vec<Pubkey>>,
         cancelable: Option<Pubkey>,
     },
-    Ping {
-        interval: Duration,
-        count: Option<u64>,
-        timeout: Duration,
-    },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
-    GetValidatorInfo(Option<Pubkey>),
-    SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
 }
 
 #[derive(Debug, Clone)]
@@ -265,33 +277,13 @@ pub fn parse_command(
         ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
         ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
         ("create-replicator-storage-account", Some(matches)) => {
-            let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
-            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-            Ok(WalletCommand::CreateReplicatorStorageAccount(
-                account_owner,
-                storage_account_pubkey,
-            ))
+            parse_storage_create_replicator_account(matches)
         }
         ("create-validator-storage-account", Some(matches)) => {
-            let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
-            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-            Ok(WalletCommand::CreateValidatorStorageAccount(
-                account_owner,
-                storage_account_pubkey,
-            ))
+            parse_storage_create_validator_account(matches)
         }
-        ("claim-storage-reward", Some(matches)) => {
-            let node_account_pubkey = pubkey_of(matches, "node_account_pubkey").unwrap();
-            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-            Ok(WalletCommand::ClaimStorageReward(
-                node_account_pubkey,
-                storage_account_pubkey,
-            ))
-        }
-        ("show-storage-account", Some(matches)) => {
-            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-            Ok(WalletCommand::ShowStorageAccount(storage_account_pubkey))
-        }
+        ("claim-storage-reward", Some(matches)) => parse_storage_claim_reward(matches),
+        ("show-storage-account", Some(matches)) => parse_storage_get_account_command(matches),
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
             deploy_matches
                 .value_of("program_location")
@@ -540,102 +532,6 @@ fn process_show_account(
         println!("{:?}", account.data.hex_dump());
     }
 
-    Ok("".to_string())
-}
-
-fn process_create_replicator_storage_account(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    account_owner: &Pubkey,
-    storage_account_pubkey: &Pubkey,
-) -> ProcessResult {
-    check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
-        (
-            &storage_account_pubkey,
-            "storage_account_pubkey".to_string(),
-        ),
-    )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = storage_instruction::create_replicator_storage_account(
-        &config.keypair.pubkey(),
-        &account_owner,
-        storage_account_pubkey,
-        1,
-    );
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<SystemError>(result)
-}
-
-fn process_create_validator_storage_account(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    account_owner: &Pubkey,
-    storage_account_pubkey: &Pubkey,
-) -> ProcessResult {
-    check_unique_pubkeys(
-        (&config.keypair.pubkey(), "wallet keypair".to_string()),
-        (
-            &storage_account_pubkey,
-            "storage_account_pubkey".to_string(),
-        ),
-    )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = storage_instruction::create_validator_storage_account(
-        &config.keypair.pubkey(),
-        account_owner,
-        storage_account_pubkey,
-        1,
-    );
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<SystemError>(result)
-}
-
-fn process_claim_storage_reward(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    node_account_pubkey: &Pubkey,
-    storage_account_pubkey: &Pubkey,
-) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-    let instruction =
-        storage_instruction::claim_reward(node_account_pubkey, storage_account_pubkey);
-    let signers = [&config.keypair];
-    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
-
-    let mut tx = Transaction::new(&signers, message, recent_blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &signers)?;
-    Ok(signature_str.to_string())
-}
-
-fn process_show_storage_account(
-    rpc_client: &RpcClient,
-    _config: &WalletConfig,
-    storage_account_pubkey: &Pubkey,
-) -> ProcessResult {
-    let account = rpc_client.get_account(storage_account_pubkey)?;
-
-    if account.owner != solana_storage_api::id() {
-        return Err(WalletError::RpcRequestError(
-            format!("{:?} is not a storage account", storage_account_pubkey).to_string(),
-        )
-        .into());
-    }
-
-    use solana_storage_api::storage_contract::StorageContract;
-    let storage_contract: StorageContract = account.state().map_err(|err| {
-        WalletError::RpcRequestError(
-            format!("Unable to deserialize storage account: {:?}", err).to_string(),
-        )
-    })?;
-    println!("{:#?}", storage_contract);
-    println!("account lamports: {}", account.lamports);
     Ok("".to_string())
 }
 
@@ -1211,33 +1107,27 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             *use_lamports_unit,
         ),
 
-        WalletCommand::CreateReplicatorStorageAccount(
-            storage_account_owner,
+        WalletCommand::CreateStorageAccount {
+            account_owner,
             storage_account_pubkey,
-        ) => process_create_replicator_storage_account(
+            account_type,
+        } => process_create_storage_account(
             &rpc_client,
             config,
-            &storage_account_owner,
+            &account_owner,
             &storage_account_pubkey,
+            *account_type,
         ),
 
-        WalletCommand::CreateValidatorStorageAccount(account_owner, storage_account_pubkey) => {
-            process_create_validator_storage_account(
-                &rpc_client,
-                config,
-                &account_owner,
-                &storage_account_pubkey,
-            )
-        }
-
-        WalletCommand::ClaimStorageReward(node_account_pubkey, storage_account_pubkey) => {
-            process_claim_storage_reward(
-                &rpc_client,
-                config,
-                node_account_pubkey,
-                &storage_account_pubkey,
-            )
-        }
+        WalletCommand::ClaimStorageReward {
+            node_account_pubkey,
+            storage_account_pubkey,
+        } => process_claim_storage_reward(
+            &rpc_client,
+            config,
+            node_account_pubkey,
+            &storage_account_pubkey,
+        ),
 
         WalletCommand::ShowStorageAccount(storage_account_pubkey) => {
             process_show_storage_account(&rpc_client, config, &storage_account_pubkey)
@@ -1483,95 +1373,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("vote-authorize-voter")
-                .about("Authorize a new vote signing keypair for the given vote account")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account in which to set the authorized voter"),
-                )
-                .arg(
-                    Arg::with_name("new_authorized_pubkey")
-                        .index(2)
-                        .value_name("NEW VOTER PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("New vote signer to authorize"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("vote-authorize-withdrawer")
-                .about("Authorize a new withdraw signing keypair for the given vote account")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account in which to set the authorized withdrawer"),
-                )
-                .arg(
-                    Arg::with_name("new_authorized_pubkey")
-                        .index(2)
-                        .value_name("NEW WITHDRAWER PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("New withdrawer to authorize"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("create-vote-account")
-                .about("Create a vote account")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account address to fund"),
-                )
-                .arg(
-                    Arg::with_name("node_pubkey")
-                        .index(2)
-                        .value_name("VALIDATOR PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Validator that will vote with this account"),
-                )
-                .arg(
-                    Arg::with_name("commission")
-                        .long("commission")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("The commission taken on reward redemption (0-255), default: 0"),
-                )
-                .arg(
-                    Arg::with_name("authorized_voter")
-                        .long("authorized-voter")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized voter (defaults to vote account)"),
-                )
-                .arg(
-                    Arg::with_name("authorized_withdrawer")
-                        .long("authorized-withdrawer")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to wallet)"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("show-account")
                 .about("Show the contents of an account")
                 .arg(
@@ -1598,154 +1399,9 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("show-vote-account")
-                .about("Show the contents of a vote account")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account pubkey"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("uptime")
-                .about("Show the uptime of a validator, based on epoch voting history")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account pubkey"),
-                )
-                .arg(
-                    Arg::with_name("span")
-                        .long("span")
-                        .value_name("NUM OF EPOCHS")
-                        .takes_value(true)
-                        .help("Number of recent epochs to examine")
-                )
-                .arg(
-                    Arg::with_name("aggregate")
-                        .long("aggregate")
-                        .help("Aggregate uptime data across span")
-                ),
-        )
+        .vote_subcommands()
         .stake_subcommands()
-        .subcommand(
-            SubCommand::with_name("create-storage-mining-pool-account")
-                .about("Create mining pool account")
-                .arg(
-                    Arg::with_name("storage_account_pubkey")
-                        .index(1)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Storage mining pool account address to fund"),
-                )
-                .arg(
-                    Arg::with_name("amount")
-                        .index(2)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The amount to assign to the storage mining pool account (default unit SOL)"),
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(3)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("create-replicator-storage-account")
-                .about("Create a replicator storage account")
-                .arg(
-                    Arg::with_name("storage_account_owner")
-                        .index(1)
-                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                )
-                .arg(
-                    Arg::with_name("storage_account_pubkey")
-                        .index(2)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("create-validator-storage-account")
-                .about("Create a validator storage account")
-                .arg(
-                    Arg::with_name("storage_account_owner")
-                        .index(1)
-                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                )
-                .arg(
-                    Arg::with_name("storage_account_pubkey")
-                        .index(2)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("claim-storage-reward")
-                .about("Redeem storage reward credits")
-                .arg(
-                    Arg::with_name("node_account_pubkey")
-                        .index(1)
-                        .value_name("NODE PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("The node account to credit the rewards to"),
-                )
-                .arg(
-                    Arg::with_name("storage_account_pubkey")
-                        .index(2)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Storage account address to redeem credits for"),
-                ))
-        .subcommand(
-            SubCommand::with_name("show-storage-account")
-                .about("Show the contents of a storage account")
-                .arg(
-                    Arg::with_name("storage_account_pubkey")
-                        .index(1)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Storage account pubkey"),
-                )
-        )
+        .storage_subcommands()
         .subcommand(
             SubCommand::with_name("deploy")
                 .about("Deploy a program")

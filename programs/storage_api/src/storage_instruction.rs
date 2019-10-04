@@ -8,17 +8,21 @@ use solana_sdk::signature::Signature;
 use solana_sdk::system_instruction;
 use solana_sdk::sysvar::{clock, rewards};
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub enum StorageAccountType {
+    Replicator,
+    Validator,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {
     /// Initialize the account as a validator or replicator
     ///
     /// Expects 1 Account:
     ///    0 - Account to be initialized
-    InitializeValidatorStorage {
+    InitializeStorage {
         owner: Pubkey,
-    },
-    InitializeReplicatorStorage {
-        owner: Pubkey,
+        account_type: StorageAccountType,
     },
 
     SubmitMiningProof {
@@ -81,11 +85,12 @@ pub fn proof_mask_limit() -> u64 {
     bytes - ratio
 }
 
-pub fn create_validator_storage_account(
+pub fn create_storage_account(
     from_pubkey: &Pubkey,
     storage_owner: &Pubkey,
     storage_pubkey: &Pubkey,
     lamports: u64,
+    account_type: StorageAccountType,
 ) -> Vec<Instruction> {
     vec![
         system_instruction::create_account(
@@ -97,32 +102,9 @@ pub fn create_validator_storage_account(
         ),
         Instruction::new(
             id(),
-            &StorageInstruction::InitializeValidatorStorage {
+            &StorageInstruction::InitializeStorage {
                 owner: *storage_owner,
-            },
-            vec![AccountMeta::new(*storage_pubkey, false)],
-        ),
-    ]
-}
-
-pub fn create_replicator_storage_account(
-    from_pubkey: &Pubkey,
-    storage_owner: &Pubkey,
-    storage_pubkey: &Pubkey,
-    lamports: u64,
-) -> Vec<Instruction> {
-    vec![
-        system_instruction::create_account(
-            from_pubkey,
-            storage_pubkey,
-            lamports,
-            STORAGE_ACCOUNT_SPACE,
-            &id(),
-        ),
-        Instruction::new(
-            id(),
-            &StorageInstruction::InitializeReplicatorStorage {
-                owner: *storage_owner,
+                account_type,
             },
             vec![AccountMeta::new(*storage_pubkey, false)],
         ),

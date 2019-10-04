@@ -25,7 +25,10 @@ use solana_stake_api::{
     config as stake_config, stake_instruction,
     stake_state::{Authorized as StakeAuthorized, StakeState},
 };
-use solana_storage_api::{storage_contract, storage_instruction};
+use solana_storage_api::{
+    storage_contract,
+    storage_instruction::{self, StorageAccountType},
+};
 use solana_vote_api::{
     vote_instruction,
     vote_state::{VoteInit, VoteState},
@@ -532,22 +535,19 @@ impl LocalCluster {
         from_keypair: &Arc<Keypair>,
         replicator: bool,
     ) -> Result<()> {
+        let storage_account_type = if replicator {
+            StorageAccountType::Replicator
+        } else {
+            StorageAccountType::Validator
+        };
         let message = Message::new_with_payer(
-            if replicator {
-                storage_instruction::create_replicator_storage_account(
-                    &from_keypair.pubkey(),
-                    &from_keypair.pubkey(),
-                    &storage_keypair.pubkey(),
-                    1,
-                )
-            } else {
-                storage_instruction::create_validator_storage_account(
-                    &from_keypair.pubkey(),
-                    &from_keypair.pubkey(),
-                    &storage_keypair.pubkey(),
-                    1,
-                )
-            },
+            storage_instruction::create_storage_account(
+                &from_keypair.pubkey(),
+                &from_keypair.pubkey(),
+                &storage_keypair.pubkey(),
+                1,
+                storage_account_type,
+            ),
             Some(&from_keypair.pubkey()),
         );
         let signer_keys = vec![from_keypair.as_ref()];
