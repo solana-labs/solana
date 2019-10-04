@@ -482,48 +482,17 @@ impl ClusterInfo {
             && !ContactInfo::is_valid_address(&contact_info.tpu)
     }
 
-    fn stake_weighted_shuffle<S: std::hash::BuildHasher>(
-        peers: &[ContactInfo],
-        stakes: Option<&HashMap<Pubkey, u64, S>>,
-        rng: ChaChaRng,
-    ) -> Vec<(u64, ContactInfo)> {
-        let (stake_weights, peers_with_stakes): (Vec<_>, Vec<_>) = peers
-            .iter()
-            .map(|c| {
-                let stake = stakes.map_or(0, |stakes| *stakes.get(&c.id).unwrap_or(&0));
-                // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
-                // assumed to be missing entry. So let's make sure stake weights are atleast 1
-                (cmp::max(1, stake), (stake, c.clone()))
-            })
-            .sorted_by(|(_, (l_stake, l_info)), (_, (r_stake, r_info))| {
-                if r_stake == l_stake {
-                    r_info.id.cmp(&l_info.id)
-                } else {
-                    r_stake.cmp(&l_stake)
-                }
-            })
-            .unzip();
-
-        let shuffle = weighted_shuffle(stake_weights, rng);
-
-        let mut out: Vec<(u64, ContactInfo)> = shuffle
-            .iter()
-            .map(|x| peers_with_stakes[*x].clone())
-            .collect();
-
-        out.dedup();
-        out
-    }
-
-    fn peers_and_stakes<S: std::hash::BuildHasher>(
+    fn sorted_stakes_with_index<S: std::hash::BuildHasher>(
         peers: &[ContactInfo],
         stakes: Option<&HashMap<Pubkey, u64, S>>,
     ) -> Vec<(u64, usize)> {
-        let mut stakes_and_index: Vec<_> = peers
+        let stakes_and_index: Vec<_> = peers
             .iter()
             .enumerate()
             .map(|(i, c)| {
-                let stake = stakes.map_or(0, |stakes| *stakes.get(&c.id).unwrap_or(&0));
+                // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
+                // assumed to be missing entry. So let's make sure stake weights are atleast 1
+                let stake = 1.max(stakes.map_or(1, |stakes| *stakes.get(&c.id).unwrap_or(&1)));
                 (stake, i)
             })
             .sorted_by(|(l_stake, l_info), (r_stake, r_info)| {
@@ -535,36 +504,50 @@ impl ClusterInfo {
             })
             .collect();
 
-        // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
-        // assumed to be missing entry. So let's make sure stake weights are atleast 1
-        stakes_and_index
-            .iter_mut()
-            .for_each(|(stake, _)| *stake = cmp::max(1, *stake));
-
         stakes_and_index
     }
 
-    /// Return sorted Retransmit peers and index of `Self.id()` as if it were in that list
-    pub fn shuffle_peers_and_index<S: std::hash::BuildHasher>(
-        &self,
-        stakes: Option<&HashMap<Pubkey, u64, S>>,
+    fn stake_weighted_shuffle(
+        stakes_and_index: &[(u64, usize)],
         rng: ChaChaRng,
-    ) -> (usize, Vec<ContactInfo>) {
+    ) -> Vec<(u64, usize)> {
+        let stake_weights = stakes_and_index.iter().map(|(w, _)| *w).collect();
+
+        let shuffle = weighted_shuffle(stake_weights, rng);
+
+        shuffle.iter().map(|x| stakes_and_index[*x]).collect()
+    }
+
+    // Return sorted_retransmit_peers(including self) and their stakes
+    pub fn sorted_retransmit_peers_and_stakes(
+        &self,
+        stakes: Option<&HashMap<Pubkey, u64>>,
+    ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
         let mut peers = self.retransmit_peers();
+        // insert "self" into this list for the layer and neighborhood computation
         peers.push(self.lookup(&self.id()).unwrap().clone());
-        let contacts_and_stakes: Vec<_> = ClusterInfo::stake_weighted_shuffle(&peers, stakes, rng);
-        let mut index = 0;
-        let peers: Vec<_> = contacts_and_stakes
-            .into_iter()
+        let stakes_and_index = ClusterInfo::sorted_stakes_with_index(&peers, stakes);
+        (peers, stakes_and_index)
+    }
+
+    /// Return sorted Retransmit peers and index of `Self.id()` as if it were in that list
+    pub fn shuffle_peers_and_index(
+        &self,
+        peers: &[ContactInfo],
+        stakes_and_index: &[(u64, usize)],
+        rng: ChaChaRng,
+    ) -> (usize, Vec<(u64, usize)>) {
+        let shuffled_stakes_and_index = ClusterInfo::stake_weighted_shuffle(stakes_and_index, rng);
+        let mut self_index = 0;
+        shuffled_stakes_and_index
+            .iter()
             .enumerate()
-            .map(|(i, (_, peer))| {
-                if peer.id == self.id() {
-                    index = i;
+            .for_each(|(i, (_stake, index))| {
+                if peers[*index].id == self.id() {
+                    self_index = i;
                 }
-                peer
-            })
-            .collect();
-        (index, peers)
+            });
+        (self_index, shuffled_stakes_and_index)
     }
 
     /// compute broadcast table
@@ -716,8 +699,8 @@ impl ClusterInfo {
     ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
         let mut peers = self.tvu_peers();
         peers.dedup();
-        let peers_and_stakes = ClusterInfo::peers_and_stakes(&peers, stakes);
-        (peers, peers_and_stakes)
+        let stakes_and_index = ClusterInfo::sorted_stakes_with_index(&peers, stakes);
+        (peers, stakes_and_index)
     }
 
     /// broadcast messages from the leader to layer 1 nodes
@@ -755,13 +738,13 @@ impl ClusterInfo {
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
     pub fn retransmit_to(
         obj: &Arc<RwLock<Self>>,
-        peers: &[ContactInfo],
+        peers: &[&ContactInfo],
         packet: &Packet,
         slot_leader_pubkey: Option<Pubkey>,
         s: &UdpSocket,
         forwarded: bool,
     ) -> Result<()> {
-        let (me, orders): (ContactInfo, &[ContactInfo]) = {
+        let (me, orders): (ContactInfo, &[&ContactInfo]) = {
             // copy to avoid locking during IO
             let s = obj.read().unwrap();
             (s.my_data().clone(), peers)
@@ -1524,27 +1507,28 @@ impl ClusterInfo {
 /// 1.2 - If no, then figure out what layer the node is in and who the neighbors are and only broadcast to them
 ///      1 - also check if there are nodes in the next layer and repeat the layer 1 to layer 2 logic
 
-/// Returns Neighbor Nodes and Children Nodes `(neighbors, children)` for a given node based on its stake (Bank Balance)
+/// Returns Neighbor Nodes and Children Nodes `(neighbors, children)` for a given node based on its stake
 pub fn compute_retransmit_peers(
     fanout: usize,
     my_index: usize,
-    peers: Vec<ContactInfo>,
-) -> (Vec<ContactInfo>, Vec<ContactInfo>) {
+    stakes_and_index: Vec<usize>,
+) -> (Vec<usize>, Vec<usize>) {
     //calc num_layers and num_neighborhoods using the total number of nodes
-    let (num_layers, layer_indices) = ClusterInfo::describe_data_plane(peers.len(), fanout);
+    let (num_layers, layer_indices) =
+        ClusterInfo::describe_data_plane(stakes_and_index.len(), fanout);
 
     if num_layers <= 1 {
         /* single layer data plane */
-        (peers, vec![])
+        (stakes_and_index, vec![])
     } else {
         //find my layer
         let locality = ClusterInfo::localize(&layer_indices, fanout, my_index);
-        let upper_bound = cmp::min(locality.neighbor_bounds.1, peers.len());
-        let neighbors = peers[locality.neighbor_bounds.0..upper_bound].to_vec();
+        let upper_bound = cmp::min(locality.neighbor_bounds.1, stakes_and_index.len());
+        let neighbors = stakes_and_index[locality.neighbor_bounds.0..upper_bound].to_vec();
         let mut children = Vec::new();
         for ix in locality.next_layer_peers {
-            if let Some(peer) = peers.get(ix) {
-                children.push(peer.clone());
+            if let Some(peer) = stakes_and_index.get(ix) {
+                children.push(*peer);
                 continue;
             }
             break;

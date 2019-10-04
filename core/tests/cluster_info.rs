@@ -50,15 +50,16 @@ fn retransmit(
         }
     });
     seed[0..4].copy_from_slice(&blob.to_le_bytes());
-    let (neighbors, children) = compute_retransmit_peers(fanout, my_index, shuffled_nodes);
-    children.iter().for_each(|p| {
-        let s = senders.get(&p.id).unwrap();
+    let shuffled_indices = (0..shuffled_nodes.len()).collect();
+    let (neighbors, children) = compute_retransmit_peers(fanout, my_index, shuffled_indices);
+    children.into_iter().for_each(|i| {
+        let s = senders.get(&shuffled_nodes[i].id).unwrap();
         let _ = s.send((blob, retransmit));
     });
 
     if retransmit {
-        neighbors.iter().for_each(|p| {
-            let s = senders.get(&p.id).unwrap();
+        neighbors.into_iter().for_each(|i| {
+            let s = senders.get(&shuffled_nodes[i].id).unwrap();
             let _ = s.send((blob, false));
         });
     }
@@ -113,8 +114,17 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
         .map(|i| {
             let mut seed = [0; 32];
             seed[0..4].copy_from_slice(&i.to_le_bytes());
-            let (_, peers) = cluster_info
-                .shuffle_peers_and_index(Some(&staked_nodes), ChaChaRng::from_seed(seed));
+            let (peers, stakes_and_index) =
+                cluster_info.sorted_retransmit_peers_and_stakes(Some(&staked_nodes));
+            let (_, shuffled_stakes_and_indexes) = cluster_info.shuffle_peers_and_index(
+                &peers,
+                &stakes_and_index,
+                ChaChaRng::from_seed(seed),
+            );
+            let peers = shuffled_stakes_and_indexes
+                .into_iter()
+                .map(|(_, i)| peers[i].clone())
+                .collect();
             peers
         })
         .collect();
