@@ -4,7 +4,7 @@ use solana_cli::{
     config::{self, Config},
     display::{println_name_value, println_name_value_or},
     input_validators::is_url,
-    wallet::{app, parse_command, process_command, WalletConfig, WalletError},
+    wallet::{app, parse_command, process_command, CliConfig, CliError},
 };
 use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
@@ -13,7 +13,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
     let parse_args = match matches.subcommand() {
         ("get", Some(subcommand_matches)) => {
             if let Some(config_file) = matches.value_of("config_file") {
-                let default_wallet_config = WalletConfig::default();
+                let default_wallet_config = CliConfig::default();
                 let config = Config::load(config_file).unwrap_or_default();
                 if let Some(field) = subcommand_matches.value_of("specific_setting") {
                     let (value, default_value) = match field {
@@ -69,7 +69,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
     Ok(parse_args)
 }
 
-pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn error::Error>> {
+pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
     } else {
@@ -80,7 +80,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
     } else if config.url != "" {
         config.url
     } else {
-        let default = WalletConfig::default();
+        let default = CliConfig::default();
         default.json_rpc_url
     };
 
@@ -89,9 +89,9 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
     } else if config.keypair != "" {
         config.keypair
     } else {
-        let default = WalletConfig::default();
+        let default = CliConfig::default();
         if !std::path::Path::new(&default.keypair_path).exists() {
-            return Err(WalletError::KeypairFileNotFound(
+            return Err(CliError::KeypairFileNotFound(
                 "Generate a new keypair with `solana-keygen new`".to_string(),
             )
             .into());
@@ -99,7 +99,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         default.keypair_path
     };
     let keypair = read_keypair(&keypair_path).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
+        Err(CliError::BadParameter(format!(
             "{}: Unable to open keypair file: {}",
             err, keypair_path
         )))
@@ -107,7 +107,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
 
     let command = parse_command(&keypair.pubkey(), &matches)?;
 
-    Ok(WalletConfig {
+    Ok(CliConfig {
         command,
         json_rpc_url,
         keypair,

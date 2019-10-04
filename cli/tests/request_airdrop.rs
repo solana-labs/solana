@@ -1,4 +1,4 @@
-use solana_cli::wallet::{process_command, WalletCommand, WalletConfig};
+use solana_cli::wallet::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
 use solana_drone::drone::run_local_drone;
@@ -13,9 +13,9 @@ fn test_wallet_request_airdrop() {
     run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
 
-    let mut bob_config = WalletConfig::default();
+    let mut bob_config = CliConfig::default();
     bob_config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    bob_config.command = WalletCommand::Airdrop {
+    bob_config.command = CliCommand::Airdrop {
         drone_host: None,
         drone_port: drone_addr.port(),
         lamports: 50,
