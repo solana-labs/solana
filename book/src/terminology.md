@@ -78,6 +78,10 @@ The time, i.e. number of [slots](terminology.md#slot), for which a [leader sched
 
 A proof which has the same format as a storage proof, but the sha state is actually from hashing a known ledger value which the storage client can reveal and is also easily verifiable by the network on-chain.
 
+## fee account
+
+The fee account in the transaction is the account pays for the cost of including the transaction in the ledger.  This is the first account in the transaction.  This account must be declared as Credit-Debit in the transaction since paying for the transaction reduces the account balance.
+
 ## finality
 
 When nodes representing 2/3rd of the stake have a common [root](terminology.md#root).
