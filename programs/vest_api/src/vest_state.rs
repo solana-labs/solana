@@ -19,13 +19,13 @@ pub struct VestState {
 
     /// The day from which the vesting contract begins
     #[serde(with = "ts_seconds")]
-    pub start_dt: DateTime<Utc>,
+    pub start_date_time: DateTime<Utc>,
 
     /// Address of an account containing a trusted date, used to drive the vesting schedule
     pub date_pubkey: Pubkey,
 
     /// The number of lamports to send the payee if the schedule completes
-    pub lamports: u64,
+    pub total_lamports: u64,
 
     /// The number of lamports the payee has already redeemed
     pub redeemed_lamports: u64,
@@ -36,9 +36,9 @@ impl Default for VestState {
         Self {
             terminator_pubkey: Pubkey::default(),
             payee_pubkey: Pubkey::default(),
-            start_dt: Utc.timestamp(0, 0),
+            start_date_time: Utc.timestamp(0, 0),
             date_pubkey: Pubkey::default(),
-            lamports: 0,
+            total_lamports: 0,
             redeemed_lamports: 0,
         }
     }
@@ -56,15 +56,15 @@ impl VestState {
     /// Redeem vested tokens.
     pub fn redeem_tokens(
         &mut self,
-        current_dt: Date<Utc>,
+        current_date: Date<Utc>,
         contract_account: &mut Account,
         payee_account: &mut Account,
     ) {
-        let schedule = create_vesting_schedule(self.start_dt.date(), self.lamports);
+        let schedule = create_vesting_schedule(self.start_date_time.date(), self.total_lamports);
 
         let vested_lamports = schedule
             .into_iter()
-            .take_while(|(dt, _)| *dt <= current_dt)
+            .take_while(|(dt, _)| *dt <= current_date)
             .map(|(_, lamports)| lamports)
             .sum::<u64>();
 

@@ -64,17 +64,17 @@ pub fn process_instruction(
         VestInstruction::InitializeAccount {
             terminator_pubkey,
             payee_pubkey,
-            start_dt,
+            start_date_time,
             date_pubkey,
-            lamports,
+            total_lamports,
         } => {
             let contract_account = &mut keyed_accounts[0].account;
             let vest_state = VestState {
                 terminator_pubkey,
                 payee_pubkey,
-                start_dt,
+                start_date_time,
                 date_pubkey,
-                lamports,
+                total_lamports,
                 redeemed_lamports: 0,
             };
             vest_state.serialize(&mut contract_account.data)
@@ -86,11 +86,11 @@ pub fn process_instruction(
                     _ => return Err(InstructionError::InvalidArgument),
                 };
             let mut vest_state = VestState::deserialize(&contract_keyed_account.account.data)?;
-            let current_dt = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
+            let current_date = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
             let contract_account = &mut contract_keyed_account.account;
             let payee_account = parse_account(payee_keyed_account, &vest_state.payee_pubkey)?;
 
-            vest_state.redeem_tokens(current_dt, contract_account, payee_account);
+            vest_state.redeem_tokens(current_date, contract_account, payee_account);
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::Terminate => {
@@ -181,7 +181,7 @@ mod tests {
         payer_keypair: &Keypair,
         payee_pubkey: &Pubkey,
         contract_pubkey: &Pubkey,
-        start_dt: Date<Utc>,
+        start_date: Date<Utc>,
         date_pubkey: &Pubkey,
         lamports: u64,
     ) -> Result<Signature, TransportError> {
@@ -189,7 +189,7 @@ mod tests {
             &payer_keypair.pubkey(),
             &payee_pubkey,
             &contract_pubkey,
-            start_dt,
+            start_date,
             &date_pubkey,
             lamports,
         );
@@ -295,19 +295,19 @@ mod tests {
         let date_keypair = Keypair::new();
         let date_pubkey = date_keypair.pubkey();
 
-        let current_dt = Utc.ymd(2019, 1, 1);
-        create_date_account(&bank_client, &alice_keypair, &date_keypair, current_dt).unwrap();
+        let current_date = Utc.ymd(2019, 1, 1);
+        create_date_account(&bank_client, &alice_keypair, &date_keypair, current_date).unwrap();
 
         let contract_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
-        let start_dt = Utc.ymd(2018, 1, 1);
+        let start_date = Utc.ymd(2018, 1, 1);
 
         create_vest_account(
             &bank_client,
             &alice_keypair,
             &bob_pubkey,
             &contract_pubkey,
-            start_dt,
+            start_date,
             &date_pubkey,
             36,
         )
@@ -360,20 +360,20 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let contract_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
-        let start_dt = Utc::now().date();
+        let start_date = Utc::now().date();
 
         let date_keypair = Keypair::new();
         let date_pubkey = date_keypair.pubkey();
 
-        let current_dt = Utc.ymd(2019, 1, 1);
-        create_date_account(&bank_client, &alice_keypair, &date_keypair, current_dt).unwrap();
+        let current_date = Utc.ymd(2019, 1, 1);
+        create_date_account(&bank_client, &alice_keypair, &date_keypair, current_date).unwrap();
 
         create_vest_account(
             &bank_client,
             &alice_keypair,
             &bob_pubkey,
             &contract_pubkey,
-            start_dt,
+            start_date,
             &date_pubkey,
             1,
         )

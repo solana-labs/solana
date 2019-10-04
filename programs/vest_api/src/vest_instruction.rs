@@ -49,9 +49,9 @@ pub enum VestInstruction {
     InitializeAccount {
         terminator_pubkey: Pubkey, // The address authorized to terminate this contract with a signed Terminate instruction
         payee_pubkey: Pubkey,      // The address authorized to redeem vested tokens
-        start_dt: DateTime<Utc>,   // The day from which the vesting contract begins
+        start_date_time: DateTime<Utc>, // The day from which the vesting contract begins
         date_pubkey: Pubkey, // Address of an account containing a trusted date, used to drive the vesting schedule
-        lamports: u64,       // The number of lamports to send the payee if the schedule completes
+        total_lamports: u64, // The number of lamports to send the payee if the schedule completes
     },
 
     /// Load an account and pass its data to the contract for inspection.
@@ -66,9 +66,9 @@ fn initialize_account(
     terminator_pubkey: &Pubkey,
     payee_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
-    start_dt: Date<Utc>,
+    start_date: Date<Utc>,
     date_pubkey: &Pubkey,
-    lamports: u64,
+    total_lamports: u64,
 ) -> Instruction {
     let keys = vec![AccountMeta::new(*contract_pubkey, false)];
     Instruction::new(
@@ -76,9 +76,9 @@ fn initialize_account(
         &VestInstruction::InitializeAccount {
             terminator_pubkey: *terminator_pubkey,
             payee_pubkey: *payee_pubkey,
-            start_dt: start_dt.and_hms(0, 0, 0),
+            start_date_time: start_date.and_hms(0, 0, 0),
             date_pubkey: *date_pubkey,
-            lamports,
+            total_lamports,
         },
         keys,
     )
@@ -88,7 +88,7 @@ pub fn create_account(
     terminator_pubkey: &Pubkey,
     payee_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
-    start_dt: Date<Utc>,
+    start_date: Date<Utc>,
     date_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
@@ -105,7 +105,7 @@ pub fn create_account(
             terminator_pubkey,
             payee_pubkey,
             contract_pubkey,
-            start_dt,
+            start_date,
             date_pubkey,
             lamports,
         ),
