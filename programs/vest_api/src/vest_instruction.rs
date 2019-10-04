@@ -123,7 +123,6 @@ pub fn terminate(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
     Instruction::new(id(), &VestInstruction::Terminate, account_metas)
 }
 
-/// Apply account data to a contract waiting on an AccountData witness.
 pub fn redeem_tokens(date_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new_credit_only(*date_pubkey, false),

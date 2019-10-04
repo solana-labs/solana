@@ -68,6 +68,7 @@ pub fn process_instruction(
             date_pubkey,
             lamports,
         } => {
+            let contract_account = &mut keyed_accounts[0].account;
             let vest_state = VestState {
                 terminator_pubkey,
                 payee_pubkey,
@@ -76,37 +77,40 @@ pub fn process_instruction(
                 lamports,
                 redeemed_lamports: 0,
             };
-            vest_state.serialize(&mut keyed_accounts[0].account.data)
+            vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::RedeemTokens => {
-            let (ka0, ka1, ka2) = match keyed_accounts {
-                [ka0, ka1, ka2] => (ka0, ka1, ka2),
-                _ => return Err(InstructionError::InvalidArgument),
-            };
-            let mut vest_state = VestState::deserialize(&ka1.account.data)?;
-            let current_dt = parse_date_account(ka0, &vest_state.date_pubkey)?;
-            let contract_account = &mut ka1.account;
-            let payee_account = parse_account(ka2, &vest_state.payee_pubkey)?;
+            let (date_keyed_account, contract_keyed_account, payee_keyed_account) =
+                match keyed_accounts {
+                    [ka0, ka1, ka2] => (ka0, ka1, ka2),
+                    _ => return Err(InstructionError::InvalidArgument),
+                };
+            let mut vest_state = VestState::deserialize(&contract_keyed_account.account.data)?;
+            let current_dt = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
+            let contract_account = &mut contract_keyed_account.account;
+            let payee_account = parse_account(payee_keyed_account, &vest_state.payee_pubkey)?;
 
             vest_state.redeem_tokens(current_dt, contract_account, payee_account);
-            vest_state.serialize(&mut ka1.account.data)
+            vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::Terminate => {
-            let (ka0, ka1, ka2) = match keyed_accounts {
-                [ka0, ka1] => (ka0, ka1, None),
-                [ka0, ka1, ka2] => (ka0, ka1, Some(ka2)),
-                _ => return Err(InstructionError::InvalidArgument),
-            };
-            let mut vest_state = VestState::deserialize(&ka1.account.data)?;
-            let terminator_account = parse_signed_account(ka0, &vest_state.terminator_pubkey)?;
-            let contract_account = &mut ka1.account;
-            let payee_account = if let Some(ka2) = ka2 {
-                &mut ka2.account
+            let (terminator_keyed_account, contract_keyed_account, payee_keyed_account) =
+                match keyed_accounts {
+                    [ka0, ka1] => (ka0, ka1, None),
+                    [ka0, ka1, ka2] => (ka0, ka1, Some(ka2)),
+                    _ => return Err(InstructionError::InvalidArgument),
+                };
+            let mut vest_state = VestState::deserialize(&contract_keyed_account.account.data)?;
+            let terminator_account =
+                parse_signed_account(terminator_keyed_account, &vest_state.terminator_pubkey)?;
+            let contract_account = &mut contract_keyed_account.account;
+            let payee_account = if let Some(payee_keyed_account) = payee_keyed_account {
+                &mut payee_keyed_account.account
             } else {
                 terminator_account
             };
             vest_state.terminate(contract_account, payee_account);
-            vest_state.serialize(&mut ka1.account.data)
+            vest_state.serialize(&mut contract_account.data)
         }
     }
 }
