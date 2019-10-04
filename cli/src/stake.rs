@@ -73,7 +73,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of authorized staker (defaults to cli)")
+                        .help("Public key of authorized staker (defaults to cli config pubkey)")
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -81,7 +81,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to cli)")
+                        .help("Public key of the authorized withdrawer (defaults to cli config pubkey)")
                 )
         )
         .subcommand(

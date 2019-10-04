@@ -7,7 +7,7 @@ use std::path::Path;
 lazy_static! {
     pub static ref CONFIG_FILE: Option<String> = {
         dirs::home_dir().map(|mut path| {
-            path.extend(&[".config", "solana", "wallet", "config.yml"]);
+            path.extend(&[".config", "solana", "cli", "config.yml"]);
             path.to_str().unwrap().to_string()
         })
     };
