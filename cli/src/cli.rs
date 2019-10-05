@@ -1,13 +1,12 @@
 use crate::{
-    display::println_name_value, input_parsers::*, input_validators::*, stake::*, storage::*,
-    validator_info::*, vote::*,
+    cluster_query::*, display::println_name_value, input_parsers::*, input_validators::*, stake::*,
+    storage::*, validator_info::*, vote::*,
 };
 use chrono::prelude::*;
-use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
-use console::{style, Emoji};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
-use serde_json::{self, json, Value};
+use serde_json::{self, json};
 use solana_budget_api::budget_instruction::{self, BudgetError};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
@@ -15,7 +14,7 @@ use solana_drone::drone::request_airdrop_transaction;
 #[cfg(test)]
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::{
-    bpf_loader, clock,
+    bpf_loader,
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::InstructionError,
@@ -33,30 +32,26 @@ use solana_stake_api::stake_state::{Authorized, Lockup, StakeAuthorize};
 use solana_storage_api::storage_instruction::StorageAccountType;
 use solana_vote_api::vote_state::{VoteAuthorize, VoteInit};
 use std::{
-    collections::VecDeque,
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
     thread::sleep,
-    time::{Duration, Instant},
+    time::Duration,
     {error, fmt},
 };
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
-static CHECK_MARK: Emoji = Emoji("✅ ", "");
-static CROSS_MARK: Emoji = Emoji("❌ ", "");
-
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum CliCommand {
-    // Cluster Info Commands
+    // Cluster Query Commands
+    ClusterVersion,
     Fees,
+    GetEpochInfo,
     GetGenesisBlockhash,
     GetSlot,
-    GetEpochInfo,
     GetTransactionCount,
-    GetVersion,
     Ping {
         interval: Duration,
         count: Option<u64>,
@@ -66,8 +61,8 @@ pub enum CliCommand {
     Deploy(String),
     // Stake Commands
     CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
-    DelegateStake(Pubkey, Pubkey, bool),
     DeactivateStake(Pubkey, Pubkey),
+    DelegateStake(Pubkey, Pubkey, bool),
     RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeAccount {
         pubkey: Pubkey,
@@ -91,11 +86,6 @@ pub enum CliCommand {
     SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
     // Vote Commands
     CreateVoteAccount(Pubkey, VoteInit),
-    ShowAccount {
-        pubkey: Pubkey,
-        output_file: Option<String>,
-        use_lamports_unit: bool,
-    },
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
@@ -127,6 +117,11 @@ pub enum CliCommand {
         timestamp_pubkey: Option<Pubkey>,
         witnesses: Option<Vec<Pubkey>>,
         cancelable: Option<Pubkey>,
+    },
+    ShowAccount {
+        pubkey: Pubkey,
+        output_file: Option<String>,
+        use_lamports_unit: bool,
     },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
@@ -190,8 +185,67 @@ pub fn parse_command(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommand, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
-        ("address", Some(_address_matches)) => Ok(CliCommand::Address),
+        // Cluster Query Commands
+        ("cluster-version", Some(_matches)) => Ok(CliCommand::ClusterVersion),
         ("fees", Some(_fees_matches)) => Ok(CliCommand::Fees),
+        ("get-epoch-info", Some(_matches)) => Ok(CliCommand::GetEpochInfo),
+        ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommand::GetGenesisBlockhash),
+        ("get-slot", Some(_matches)) => Ok(CliCommand::GetSlot),
+        ("get-transaction-count", Some(_matches)) => Ok(CliCommand::GetTransactionCount),
+        ("ping", Some(matches)) => parse_cluster_ping(matches),
+        // Program Deployment
+        ("deploy", Some(deploy_matches)) => Ok(CliCommand::Deploy(
+            deploy_matches
+                .value_of("program_location")
+                .unwrap()
+                .to_string(),
+        )),
+        // Stake Commands
+        ("create-stake-account", Some(matches)) => parse_stake_create_account(pubkey, matches),
+        ("delegate-stake", Some(matches)) => parse_stake_delegate_stake(matches),
+        ("withdraw-stake", Some(matches)) => parse_stake_withdraw_stake(matches),
+        ("deactivate-stake", Some(matches)) => parse_stake_deactivate_stake(matches),
+        ("stake-authorize-staker", Some(matches)) => {
+            parse_stake_authorize(matches, StakeAuthorize::Staker)
+        }
+        ("stake-authorize-withdrawer", Some(matches)) => {
+            parse_stake_authorize(matches, StakeAuthorize::Withdrawer)
+        }
+        ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
+        ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
+        // Storage Commands
+        ("create-replicator-storage-account", Some(matches)) => {
+            parse_storage_create_replicator_account(matches)
+        }
+        ("create-validator-storage-account", Some(matches)) => {
+            parse_storage_create_validator_account(matches)
+        }
+        ("claim-storage-reward", Some(matches)) => parse_storage_claim_reward(matches),
+        ("show-storage-account", Some(matches)) => parse_storage_get_account_command(matches),
+        // Validator Info Commands
+        ("validator-info", Some(matches)) => match matches.subcommand() {
+            ("publish", Some(matches)) => parse_validator_info_command(matches, pubkey),
+            ("get", Some(matches)) => parse_get_validator_info_command(matches),
+            ("", None) => {
+                eprintln!("{}", matches.usage());
+                Err(CliError::CommandNotRecognized(
+                    "no validator-info subcommand given".to_string(),
+                ))
+            }
+            _ => unreachable!(),
+        },
+        // Vote Commands
+        ("create-vote-account", Some(matches)) => parse_vote_create_account(pubkey, matches),
+        ("vote-authorize-voter", Some(matches)) => {
+            parse_vote_authorize(matches, VoteAuthorize::Voter)
+        }
+        ("vote-authorize-withdrawer", Some(matches)) => {
+            parse_vote_authorize(matches, VoteAuthorize::Withdrawer)
+        }
+        ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
+        ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
+        // Wallet Commands
+        ("address", Some(_address_matches)) => Ok(CliCommand::Address),
         ("airdrop", Some(airdrop_matches)) => {
             let drone_port = airdrop_matches
                 .value_of("drone_port")
@@ -245,55 +299,6 @@ pub fn parse_command(
                 }
             }
         }
-        ("show-account", Some(matches)) => {
-            let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
-            let output_file = matches.value_of("output_file");
-            let use_lamports_unit = matches.is_present("lamports");
-            Ok(CliCommand::ShowAccount {
-                pubkey: account_pubkey,
-                output_file: output_file.map(ToString::to_string),
-                use_lamports_unit,
-            })
-        }
-        ("create-vote-account", Some(matches)) => parse_vote_create_account(pubkey, matches),
-        ("vote-authorize-voter", Some(matches)) => {
-            parse_vote_authorize(matches, VoteAuthorize::Voter)
-        }
-        ("vote-authorize-withdrawer", Some(matches)) => {
-            parse_vote_authorize(matches, VoteAuthorize::Withdrawer)
-        }
-        ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
-        ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
-        ("create-stake-account", Some(matches)) => parse_stake_create_account(pubkey, matches),
-        ("delegate-stake", Some(matches)) => parse_stake_delegate_stake(matches),
-        ("withdraw-stake", Some(matches)) => parse_stake_withdraw_stake(matches),
-        ("deactivate-stake", Some(matches)) => parse_stake_deactivate_stake(matches),
-        ("stake-authorize-staker", Some(matches)) => {
-            parse_stake_authorize(matches, StakeAuthorize::Staker)
-        }
-        ("stake-authorize-withdrawer", Some(matches)) => {
-            parse_stake_authorize(matches, StakeAuthorize::Withdrawer)
-        }
-        ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
-        ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
-        ("create-replicator-storage-account", Some(matches)) => {
-            parse_storage_create_replicator_account(matches)
-        }
-        ("create-validator-storage-account", Some(matches)) => {
-            parse_storage_create_validator_account(matches)
-        }
-        ("claim-storage-reward", Some(matches)) => parse_storage_claim_reward(matches),
-        ("show-storage-account", Some(matches)) => parse_storage_get_account_command(matches),
-        ("deploy", Some(deploy_matches)) => Ok(CliCommand::Deploy(
-            deploy_matches
-                .value_of("program_location")
-                .unwrap()
-                .to_string(),
-        )),
-        ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommand::GetGenesisBlockhash),
-        ("get-slot", Some(_matches)) => Ok(CliCommand::GetSlot),
-        ("get-epoch-info", Some(_matches)) => Ok(CliCommand::GetEpochInfo),
-        ("get-transaction-count", Some(_matches)) => Ok(CliCommand::GetTransactionCount),
         ("pay", Some(pay_matches)) => {
             let lamports = amount_of(pay_matches, "amount", "unit").expect("Invalid amount");
             let to = value_of(&pay_matches, "to").unwrap_or(*pubkey);
@@ -325,18 +330,14 @@ pub fn parse_command(
                 cancelable,
             })
         }
-        ("ping", Some(ping_matches)) => {
-            let interval = Duration::from_secs(value_t_or_exit!(ping_matches, "interval", u64));
-            let count = if ping_matches.is_present("count") {
-                Some(value_t_or_exit!(ping_matches, "count", u64))
-            } else {
-                None
-            };
-            let timeout = Duration::from_secs(value_t_or_exit!(ping_matches, "timeout", u64));
-            Ok(CliCommand::Ping {
-                interval,
-                count,
-                timeout,
+        ("show-account", Some(matches)) => {
+            let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
+            let output_file = matches.value_of("output_file");
+            let use_lamports_unit = matches.is_present("lamports");
+            Ok(CliCommand::ShowAccount {
+                pubkey: account_pubkey,
+                output_file: output_file.map(ToString::to_string),
+                use_lamports_unit,
             })
         }
         ("send-signature", Some(sig_matches)) => {
@@ -364,18 +365,6 @@ pub fn parse_command(
             };
             Ok(CliCommand::TimeElapsed(to, process_id, dt))
         }
-        ("cluster-version", Some(_matches)) => Ok(CliCommand::GetVersion),
-        ("validator-info", Some(matches)) => match matches.subcommand() {
-            ("publish", Some(matches)) => parse_validator_info_command(matches, pubkey),
-            ("get", Some(matches)) => parse_get_validator_info_command(matches),
-            ("", None) => {
-                eprintln!("{}", matches.usage());
-                Err(CliError::CommandNotRecognized(
-                    "no validator-info subcommand given".to_string(),
-                ))
-            }
-            _ => unreachable!(),
-        },
         ("", None) => {
             eprintln!("{}", matches.usage());
             Err(CliError::CommandNotRecognized(
@@ -432,14 +421,6 @@ pub fn check_unique_pubkeys(
     }
 }
 
-fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-    Ok(format!(
-        "blockhash: {}\nlamports per signature: {}",
-        recent_blockhash, fee_calculator.lamports_per_signature
-    ))
-}
 fn process_airdrop(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -708,50 +689,6 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
     log_instruction_custom_error::<BudgetError>(result)
 }
 
-fn process_get_genesis_blockhash(rpc_client: &RpcClient) -> ProcessResult {
-    let genesis_blockhash = rpc_client.get_genesis_blockhash()?;
-    Ok(genesis_blockhash.to_string())
-}
-
-fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
-    let slot = rpc_client.get_slot()?;
-    Ok(slot.to_string())
-}
-
-fn process_get_epoch_info(rpc_client: &RpcClient) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info()?;
-    println!();
-    println_name_value("Current epoch:", &epoch_info.epoch.to_string());
-    println_name_value("Current slot:", &epoch_info.absolute_slot.to_string());
-    println_name_value(
-        "Total slots in current epoch:",
-        &epoch_info.slots_in_epoch.to_string(),
-    );
-    let remaining_slots_in_epoch = epoch_info.slots_in_epoch - epoch_info.slot_index;
-    println_name_value(
-        "Remaining slots in current epoch:",
-        &remaining_slots_in_epoch.to_string(),
-    );
-
-    let remaining_time_in_epoch = Duration::from_secs(
-        remaining_slots_in_epoch * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
-    );
-    println_name_value(
-        "Time remaining in current epoch:",
-        &format!(
-            "{} minutes, {} seconds",
-            remaining_time_in_epoch.as_secs() / 60,
-            remaining_time_in_epoch.as_secs() % 60
-        ),
-    );
-    Ok("".to_string())
-}
-
-fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
-    let transaction_count = rpc_client.get_transaction_count()?;
-    Ok(transaction_count.to_string())
-}
-
 fn process_time_elapsed(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -783,139 +720,6 @@ fn process_witness(
     log_instruction_custom_error::<BudgetError>(result)
 }
 
-fn process_get_version(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let remote_version: Value = serde_json::from_str(&rpc_client.get_version()?)?;
-    println!(
-        "{} {}",
-        style("Cluster versions from:").bold(),
-        config.json_rpc_url
-    );
-    if let Some(versions) = remote_version.as_object() {
-        for (key, value) in versions.iter() {
-            if let Some(value_string) = value.as_str() {
-                println_name_value(&format!("* {}:", key), &value_string);
-            }
-        }
-    }
-    Ok("".to_string())
-}
-
-fn process_ping(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    interval: &Duration,
-    count: &Option<u64>,
-    timeout: &Duration,
-) -> ProcessResult {
-    let to = Keypair::new().pubkey();
-
-    println_name_value("Source account:", &config.keypair.pubkey().to_string());
-    println_name_value("Destination account:", &to.to_string());
-    println!();
-
-    let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
-        let _ = signal_sender.send(());
-    })
-    .expect("Error setting Ctrl-C handler");
-
-    let mut last_blockhash = Hash::default();
-    let mut submit_count = 0;
-    let mut confirmed_count = 0;
-    let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
-
-    'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
-        let (recent_blockhash, fee_calculator) = rpc_client.get_new_blockhash(&last_blockhash)?;
-        last_blockhash = recent_blockhash;
-
-        let transaction = system_transaction::transfer(&config.keypair, &to, 1, recent_blockhash);
-        check_account_for_fee(rpc_client, config, &fee_calculator, &transaction.message)?;
-
-        match rpc_client.send_transaction(&transaction) {
-            Ok(signature) => {
-                let transaction_sent = Instant::now();
-                loop {
-                    let signature_status = rpc_client.get_signature_status(&signature)?;
-                    let elapsed_time = Instant::now().duration_since(transaction_sent);
-                    if let Some(transaction_status) = signature_status {
-                        match transaction_status {
-                            Ok(()) => {
-                                let elapsed_time_millis = elapsed_time.as_millis() as u64;
-                                confirmation_time.push_back(elapsed_time_millis);
-                                println!(
-                                    "{}1 lamport transferred: seq={:<3} time={:>4}ms signature={}",
-                                    CHECK_MARK, seq, elapsed_time_millis, signature
-                                );
-                                confirmed_count += 1;
-                            }
-                            Err(err) => {
-                                println!(
-                                    "{}Transaction failed:    seq={:<3} error={:?} signature={}",
-                                    CROSS_MARK, seq, err, signature
-                                );
-                            }
-                        }
-                        break;
-                    }
-
-                    if elapsed_time >= *timeout {
-                        println!(
-                            "{}Confirmation timeout:  seq={:<3}             signature={}",
-                            CROSS_MARK, seq, signature
-                        );
-                        break;
-                    }
-
-                    // Sleep for half a slot
-                    if signal_receiver
-                        .recv_timeout(Duration::from_millis(
-                            500 * solana_sdk::clock::DEFAULT_TICKS_PER_SLOT
-                                / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND,
-                        ))
-                        .is_ok()
-                    {
-                        break 'mainloop;
-                    }
-                }
-            }
-            Err(err) => {
-                println!(
-                    "{}Submit failed:         seq={:<3} error={:?}",
-                    CROSS_MARK, seq, err
-                );
-            }
-        }
-        submit_count += 1;
-
-        if signal_receiver.recv_timeout(*interval).is_ok() {
-            break 'mainloop;
-        }
-    }
-
-    println!();
-    println!("--- transaction statistics ---");
-    println!(
-        "{} transactions submitted, {} transactions confirmed, {:.1}% transaction loss",
-        submit_count,
-        confirmed_count,
-        (100. - f64::from(confirmed_count) / f64::from(submit_count) * 100.)
-    );
-    if !confirmation_time.is_empty() {
-        let samples: Vec<f64> = confirmation_time.iter().map(|t| *t as f64).collect();
-        let dist = criterion_stats::Distribution::from(samples.into_boxed_slice());
-        let mean = dist.mean();
-        println!(
-            "confirmation min/mean/max/stddev = {:.0}/{:.0}/{:.0}/{:.0} ms",
-            dist.min(),
-            mean,
-            dist.max(),
-            dist.std_dev(Some(mean))
-        );
-    }
-
-    Ok("".to_string())
-}
-
 pub fn process_command(config: &CliConfig) -> ProcessResult {
     println_name_value("Keypair:", &config.keypair_path);
     if let CliCommand::Address = config.command {
@@ -934,11 +738,170 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
     };
 
     match &config.command {
+        // Cluster Query Commands
+
+        // Return software version of solana-cli and cluster entrypoint node
+        CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
+        CliCommand::Fees => process_fees(&rpc_client),
+        CliCommand::GetGenesisBlockhash => process_get_genesis_blockhash(&rpc_client),
+        CliCommand::GetSlot => process_get_slot(&rpc_client),
+        CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
+        CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
+        CliCommand::Ping {
+            interval,
+            count,
+            timeout,
+        } => process_ping(&rpc_client, config, interval, count, timeout),
+
+        // Program Deployment
+
+        // Deploy a custom program to the chain
+        CliCommand::Deploy(ref program_location) => {
+            process_deploy(&rpc_client, config, program_location)
+        }
+
+        // Stake Commands
+
+        // Create stake account
+        CliCommand::CreateStakeAccount(stake_account_pubkey, authorized, lockup, lamports) => {
+            process_create_stake_account(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &authorized,
+                lockup,
+                *lamports,
+            )
+        }
+        // Deactivate stake account
+        CliCommand::DeactivateStake(stake_account_pubkey, vote_account_pubkey) => {
+            process_deactivate_stake_account(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &vote_account_pubkey,
+            )
+        }
+        CliCommand::DelegateStake(stake_account_pubkey, vote_account_pubkey, force) => {
+            process_delegate_stake(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &vote_account_pubkey,
+                *force,
+            )
+        }
+        CliCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey) => {
+            process_redeem_vote_credits(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &vote_account_pubkey,
+            )
+        }
+        CliCommand::ShowStakeAccount {
+            pubkey: stake_account_pubkey,
+            use_lamports_unit,
+        } => process_show_stake_account(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            *use_lamports_unit,
+        ),
+        CliCommand::StakeAuthorize(
+            stake_account_pubkey,
+            new_authorized_pubkey,
+            stake_authorize,
+        ) => process_stake_authorize(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            &new_authorized_pubkey,
+            *stake_authorize,
+        ),
+
+        CliCommand::WithdrawStake(stake_account_pubkey, destination_account_pubkey, lamports) => {
+            process_withdraw_stake(
+                &rpc_client,
+                config,
+                &stake_account_pubkey,
+                &destination_account_pubkey,
+                *lamports,
+            )
+        }
+
+        // Storage Commands
+
+        // Create storage account
+        CliCommand::CreateStorageAccount {
+            account_owner,
+            storage_account_pubkey,
+            account_type,
+        } => process_create_storage_account(
+            &rpc_client,
+            config,
+            &account_owner,
+            &storage_account_pubkey,
+            *account_type,
+        ),
+        CliCommand::ClaimStorageReward {
+            node_account_pubkey,
+            storage_account_pubkey,
+        } => process_claim_storage_reward(
+            &rpc_client,
+            config,
+            node_account_pubkey,
+            &storage_account_pubkey,
+        ),
+        CliCommand::ShowStorageAccount(storage_account_pubkey) => {
+            process_show_storage_account(&rpc_client, config, &storage_account_pubkey)
+        }
+
+        // Validator Info Commands
+
+        // Return all or single validator info
+        CliCommand::GetValidatorInfo(info_pubkey) => {
+            process_get_validator_info(&rpc_client, *info_pubkey)
+        }
+        // Publish validator info
+        CliCommand::SetValidatorInfo(validator_info, info_pubkey) => {
+            process_set_validator_info(&rpc_client, config, &validator_info, *info_pubkey)
+        }
+
+        // Vote Commands
+
+        // Create vote account
+        CliCommand::CreateVoteAccount(vote_account_pubkey, vote_init) => {
+            process_create_vote_account(&rpc_client, config, &vote_account_pubkey, &vote_init)
+        }
+        CliCommand::ShowVoteAccount {
+            pubkey: vote_account_pubkey,
+            use_lamports_unit,
+        } => process_show_vote_account(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            *use_lamports_unit,
+        ),
+        CliCommand::VoteAuthorize(vote_account_pubkey, new_authorized_pubkey, vote_authorize) => {
+            process_vote_authorize(
+                &rpc_client,
+                config,
+                &vote_account_pubkey,
+                &new_authorized_pubkey,
+                *vote_authorize,
+            )
+        }
+        CliCommand::Uptime {
+            pubkey: vote_account_pubkey,
+            aggregate,
+            span,
+        } => process_uptime(&rpc_client, config, &vote_account_pubkey, *aggregate, *span),
+
+        // Wallet Commands
+
         // Get address of this client
         CliCommand::Address => unreachable!(),
-
-        CliCommand::Fees => process_fees(&rpc_client),
-
         // Request an airdrop from Solana Drone;
         CliCommand::Airdrop {
             drone_host,
@@ -968,169 +931,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
                 *use_lamports_unit,
             )
         }
-
         // Check client balance
         CliCommand::Balance {
             pubkey,
             use_lamports_unit,
         } => process_balance(&pubkey, &rpc_client, *use_lamports_unit),
-
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
-
         // Confirm the last client transaction by signature
         CliCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
-
-        // Create vote account
-        CliCommand::CreateVoteAccount(vote_account_pubkey, vote_init) => {
-            process_create_vote_account(&rpc_client, config, &vote_account_pubkey, &vote_init)
-        }
-
-        CliCommand::VoteAuthorize(vote_account_pubkey, new_authorized_pubkey, vote_authorize) => {
-            process_vote_authorize(
-                &rpc_client,
-                config,
-                &vote_account_pubkey,
-                &new_authorized_pubkey,
-                *vote_authorize,
-            )
-        }
-
-        CliCommand::ShowAccount {
-            pubkey,
-            output_file,
-            use_lamports_unit,
-        } => process_show_account(
-            &rpc_client,
-            config,
-            &pubkey,
-            &output_file,
-            *use_lamports_unit,
-        ),
-
-        CliCommand::ShowVoteAccount {
-            pubkey: vote_account_pubkey,
-            use_lamports_unit,
-        } => process_show_vote_account(
-            &rpc_client,
-            config,
-            &vote_account_pubkey,
-            *use_lamports_unit,
-        ),
-
-        CliCommand::Uptime {
-            pubkey: vote_account_pubkey,
-            aggregate,
-            span,
-        } => process_uptime(&rpc_client, config, &vote_account_pubkey, *aggregate, *span),
-
-        // Create stake account
-        CliCommand::CreateStakeAccount(stake_account_pubkey, authorized, lockup, lamports) => {
-            process_create_stake_account(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &authorized,
-                lockup,
-                *lamports,
-            )
-        }
-        CliCommand::DelegateStake(stake_account_pubkey, vote_account_pubkey, force) => {
-            process_delegate_stake(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-                *force,
-            )
-        }
-        CliCommand::StakeAuthorize(
-            stake_account_pubkey,
-            new_authorized_pubkey,
-            stake_authorize,
-        ) => process_stake_authorize(
-            &rpc_client,
-            config,
-            &stake_account_pubkey,
-            &new_authorized_pubkey,
-            *stake_authorize,
-        ),
-
-        CliCommand::WithdrawStake(stake_account_pubkey, destination_account_pubkey, lamports) => {
-            process_withdraw_stake(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &destination_account_pubkey,
-                *lamports,
-            )
-        }
-
-        // Deactivate stake account
-        CliCommand::DeactivateStake(stake_account_pubkey, vote_account_pubkey) => {
-            process_deactivate_stake_account(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-            )
-        }
-
-        CliCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey) => {
-            process_redeem_vote_credits(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-            )
-        }
-
-        CliCommand::ShowStakeAccount {
-            pubkey: stake_account_pubkey,
-            use_lamports_unit,
-        } => process_show_stake_account(
-            &rpc_client,
-            config,
-            &stake_account_pubkey,
-            *use_lamports_unit,
-        ),
-
-        CliCommand::CreateStorageAccount {
-            account_owner,
-            storage_account_pubkey,
-            account_type,
-        } => process_create_storage_account(
-            &rpc_client,
-            config,
-            &account_owner,
-            &storage_account_pubkey,
-            *account_type,
-        ),
-
-        CliCommand::ClaimStorageReward {
-            node_account_pubkey,
-            storage_account_pubkey,
-        } => process_claim_storage_reward(
-            &rpc_client,
-            config,
-            node_account_pubkey,
-            &storage_account_pubkey,
-        ),
-
-        CliCommand::ShowStorageAccount(storage_account_pubkey) => {
-            process_show_storage_account(&rpc_client, config, &storage_account_pubkey)
-        }
-
-        // Deploy a custom program to the chain
-        CliCommand::Deploy(ref program_location) => {
-            process_deploy(&rpc_client, config, program_location)
-        }
-
-        CliCommand::GetGenesisBlockhash => process_get_genesis_blockhash(&rpc_client),
-        CliCommand::GetSlot => process_get_slot(&rpc_client),
-        CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
-        CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
-
         // If client has positive balance, pay lamports to another address
         CliCommand::Pay {
             lamports,
@@ -1149,33 +958,23 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             witnesses,
             *cancelable,
         ),
-
-        CliCommand::Ping {
-            interval,
-            count,
-            timeout,
-        } => process_ping(&rpc_client, config, interval, count, timeout),
-
+        CliCommand::ShowAccount {
+            pubkey,
+            output_file,
+            use_lamports_unit,
+        } => process_show_account(
+            &rpc_client,
+            config,
+            &pubkey,
+            &output_file,
+            *use_lamports_unit,
+        ),
         // Apply time elapsed to contract
         CliCommand::TimeElapsed(to, pubkey, dt) => {
             process_time_elapsed(&rpc_client, config, &to, &pubkey, *dt)
         }
-
         // Apply witness signature to contract
         CliCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
-
-        // Return software version of solana-cli and cluster entrypoint node
-        CliCommand::GetVersion => process_get_version(&rpc_client, config),
-
-        // Return all or single validator info
-        CliCommand::GetValidatorInfo(info_pubkey) => {
-            process_get_validator_info(&rpc_client, *info_pubkey)
-        }
-
-        // Publish validator info
-        CliCommand::SetValidatorInfo(validator_info, info_pubkey) => {
-            process_set_validator_info(&rpc_client, config, &validator_info, *info_pubkey)
-        }
     }
 }
 
@@ -1281,7 +1080,21 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .version(version)
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
-        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
+        .cluster_query_subcommands()
+        .subcommand(
+            SubCommand::with_name("deploy")
+                .about("Deploy a program")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PATH TO PROGRAM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.o"),
+                ), // TODO: Add "loader" argument; current default is bpf_loader
+        )
+        .stake_subcommands()
+        .storage_subcommands()
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request lamports")
@@ -1361,64 +1174,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show-account")
-                .about("Show the contents of an account")
-                .arg(
-                    Arg::with_name("account_pubkey")
-                        .index(1)
-                        .value_name("ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Account pubkey"),
-                )
-                .arg(
-                    Arg::with_name("output_file")
-                        .long("output")
-                        .short("o")
-                        .value_name("FILE")
-                        .takes_value(true)
-                        .help("Write the account data to this file"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
-                ),
-        )
-        .vote_subcommands()
-        .stake_subcommands()
-        .storage_subcommands()
-        .subcommand(
-            SubCommand::with_name("deploy")
-                .about("Deploy a program")
-                .arg(
-                    Arg::with_name("program_location")
-                        .index(1)
-                        .value_name("PATH TO PROGRAM")
-                        .takes_value(true)
-                        .required(true)
-                        .help("/path/to/program.o"),
-                ), // TODO: Add "loader" argument; current default is bpf_loader
-        )
-        .subcommand(
-            SubCommand::with_name("get-genesis-blockhash")
-                .about("Get the genesis blockhash"),
-        )
-        .subcommand(
-            SubCommand::with_name("get-slot")
-                .about("Get current slot"),
-        )
-        .subcommand(
-            SubCommand::with_name("get-epoch-info")
-                .about("Get information about the current epoch"),
-        )
-        .subcommand(
-            SubCommand::with_name("get-transaction-count")
-                .about("Get current transaction count"),
-        )
-        .subcommand(
             SubCommand::with_name("pay")
                 .about("Send a payment")
                 .arg(
@@ -1479,36 +1234,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("ping")
-                .about("Submit transactions sequentially")
-                .arg(
-                    Arg::with_name("interval")
-                        .short("i")
-                        .long("interval")
-                        .value_name("SECONDS")
-                        .takes_value(true)
-                        .default_value("2")
-                        .help("Wait interval seconds between submitting the next transaction"),
-                )
-                .arg(
-                    Arg::with_name("count")
-                        .short("c")
-                        .long("count")
-                        .value_name("NUMBER")
-                        .takes_value(true)
-                        .help("Stop after submitting count transactions"),
-                )
-                .arg(
-                    Arg::with_name("timeout")
-                        .short("t")
-                        .long("timeout")
-                        .value_name("SECONDS")
-                        .takes_value(true)
-                        .default_value("10")
-                        .help("Wait up to timeout seconds for transaction confirmation"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("send-signature")
                 .about("Send a signature to authorize a transfer")
                 .arg(
@@ -1558,8 +1283,31 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("cluster-version")
-                .about("Get the version of the cluster entrypoint"),
+            SubCommand::with_name("show-account")
+                .about("Show the contents of an account")
+                .arg(
+                    Arg::with_name("account_pubkey")
+                        .index(1)
+                        .value_name("ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("output_file")
+                        .long("output")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the account data to this file"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("validator-info")
@@ -1633,6 +1381,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         ),
                 )
         )
+        .vote_subcommands()
 }
 
 #[cfg(test)]
