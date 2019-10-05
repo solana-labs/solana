@@ -183,7 +183,7 @@ pub struct ProcessOptions {
     pub full_leader_cache: bool,
     pub dev_halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
-    pub num_threads: Option<usize>,
+    pub override_num_threads: Option<usize>,
 }
 
 pub fn process_blocktree(
@@ -192,9 +192,7 @@ pub fn process_blocktree(
     account_paths: Option<String>,
     opts: ProcessOptions,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
-    info!("processing ledger from bank 0...");
-
-    if let Some(num_threads) = opts.num_threads {
+    if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
             *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
@@ -205,6 +203,7 @@ pub fn process_blocktree(
 
     // Setup bank for slot 0
     let bank0 = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
+    info!("processing ledger from bank 0...");
     process_bank_0(&bank0, blocktree, &opts)?;
     process_blocktree_from_root(blocktree, bank0, &opts)
 }
