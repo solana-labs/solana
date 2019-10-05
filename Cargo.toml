@@ -45,7 +45,6 @@ members = [
     "programs/vest_api",
     "programs/vote_api",
     "programs/vote_program",
-    "sealevel",
     "replicator",
     "runtime",
     "sdk",

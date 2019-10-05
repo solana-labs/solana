@@ -1,6 +1,6 @@
-use sealevel::bank::Bank;
-use sealevel::bank_client::BankClient;
-use sealevel::loader_utils::create_invoke_instruction;
+use solana_runtime::bank::Bank;
+use solana_runtime::bank_client::BankClient;
+use solana_runtime::loader_utils::create_invoke_instruction;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::pubkey::Pubkey;
