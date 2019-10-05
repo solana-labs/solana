@@ -287,7 +287,7 @@ mod tests {
             cached_schedules.insert(i as u64, Arc::new(LeaderSchedule::default()));
             order.push_back(i as u64);
         }
-        LeaderScheduleCache::retain_latest(&mut cached_schedules, &mut order);
+        LeaderScheduleCache::retain_latest(&mut cached_schedules, &mut order, MAX_SCHEDULES);
         assert_eq!(cached_schedules.len(), MAX_SCHEDULES);
         let mut keys: Vec<_> = cached_schedules.keys().cloned().collect();
         keys.sort();

@@ -364,7 +364,7 @@ impl ReplayStage {
 
     // Returns the replay result and the number of replayed transactions
     fn replay_blocktree_into_bank(
-        bank: &Bank,
+        bank: &Arc<Bank>,
         blocktree: &Blocktree,
         progress: &mut HashMap<u64, ForkProgress>,
     ) -> (Result<()>, usize) {
@@ -675,7 +675,7 @@ impl ReplayStage {
     }
 
     fn replay_entries_into_bank(
-        bank: &Bank,
+        bank: &Arc<Bank>,
         entries: Vec<Entry>,
         progress: &mut HashMap<u64, ForkProgress>,
         num: usize,
@@ -698,7 +698,7 @@ impl ReplayStage {
     }
 
     pub fn verify_and_process_entries(
-        bank: &Bank,
+        bank: &Arc<Bank>,
         entries: &[Entry],
         last_entry: &Hash,
         shred_index: usize,

@@ -417,7 +417,7 @@ fn get_bank_forks(
             return blocktree_processor::process_blocktree_from_root(
                 blocktree,
                 Arc::new(deserialized_bank),
-                blocktree_processor::ProcessOptions {
+                &blocktree_processor::ProcessOptions {
                     verify_ledger,
                     dev_halt_at_slot,
                     ..blocktree_processor::ProcessOptions::default()
