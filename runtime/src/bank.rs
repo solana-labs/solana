@@ -228,6 +228,11 @@ pub struct Bank {
     /// latest rent collector, knows the epoch
     rent_collector: RentCollector,
 
+    /// tallied credit-debit rent for this slot
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    tallied_credit_debit_rent: AtomicU64,
+
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
 
@@ -333,6 +338,7 @@ impl Bank {
             parent_hash: parent.hash(),
             collector_id: *collector_id,
             collector_fees: AtomicU64::new(0),
+            tallied_credit_debit_rent: AtomicU64::new(0),
             ancestors: HashMap::new(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
@@ -559,7 +565,7 @@ impl Bank {
             // finish up any deferred changes to account state
             self.commit_credits();
             self.collect_fees();
-            self.commit_and_distribute_credit_only_collected_rent();
+            self.commit_and_distribute_rent();
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -1199,6 +1205,7 @@ impl Bank {
         write_time.stop();
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
         self.update_transaction_statuses(txs, iteration_order, &executed);
+        self.tally_credit_debit_rent(txs, iteration_order, &executed, loaded_accounts);
         self.filter_program_errors_and_collect_fee(txs, iteration_order, executed)
     }
 
@@ -1573,11 +1580,46 @@ impl Bank {
             .commit_credits(&self.ancestors, self.slot());
     }
 
-    fn commit_and_distribute_credit_only_collected_rent(&self) {
+    fn tally_credit_debit_rent(
+        &self,
+        txs: &[Transaction],
+        iteration_order: Option<&[usize]>,
+        res: &[Result<()>],
+        loaded_accounts: &[Result<TransactionLoadResult>],
+    ) {
+        let mut collected_rent = 0;
+        for (i, (raccs, tx)) in loaded_accounts
+            .iter()
+            .zip(OrderedIterator::new(txs, iteration_order))
+            .enumerate()
+        {
+            if res[i].is_err() || raccs.is_err() {
+                continue;
+            }
+
+            let message = &tx.message();
+            let acc = raccs.as_ref().unwrap();
+
+            for (_i, rent) in acc
+                .3
+                .iter()
+                .enumerate()
+                .filter(|(i, _rent)| !message.is_debitable(*i))
+            {
+                collected_rent += rent;
+            }
+        }
+
+        self.tallied_credit_debit_rent
+            .fetch_add(collected_rent, Ordering::Relaxed);
+    }
+
+    fn commit_and_distribute_rent(&self) {
         let total_rent_collected = self
             .rc
             .accounts
-            .commit_credit_only_collected_rent(&self.ancestors, self.slot());
+            .commit_credit_only_collected_rent(&self.ancestors, self.slot())
+            + self.tallied_credit_debit_rent.load(Ordering::Relaxed);
 
         if total_rent_collected != 0 {
             let burned_portion = (total_rent_collected
