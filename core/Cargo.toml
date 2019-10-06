@@ -112,5 +112,11 @@ name = "sigverify_stage"
 name = "poh"
 
 [[bench]]
+name = "retransmit_stage"
+
+[[bench]]
+name = "cluster_info"
+
+[[bench]]
 name = "chacha"
 required-features = ["chacha"]
