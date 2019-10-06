@@ -250,6 +250,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
         assert_eq!(bank.slot(), 0);
+        assert_eq!(cache.capacity, MAX_SCHEDULES);
 
         // Epoch schedule for all epochs in the range:
         // [0, stakers_epoch(bank.slot())] should

@@ -175,7 +175,7 @@ pub enum BlocktreeProcessorError {
 }
 
 /// Callback for accessing bank state while processing the blocktree
-pub type ProcessCallback = Arc<dyn Fn(&Arc<Bank>) -> () + Sync + Send>;
+pub type ProcessCallback = Arc<dyn Fn(&Bank) -> () + Sync + Send>;
 
 #[derive(Default)]
 pub struct ProcessOptions {
@@ -475,6 +475,7 @@ pub mod tests {
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::Transaction;
     use solana_sdk::transaction::TransactionError;
+    use std::sync::RwLock;
 
     pub fn fill_blocktree_slot_with_ticks(
         blocktree: &Blocktree,
@@ -959,6 +960,53 @@ pub mod tests {
         assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 });
         let bank = bank_forks[0].clone();
         assert_eq!(bank.tick_height(), 0);
+    }
+
+    #[test]
+    fn test_process_entries_with_callback() {
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(100);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
+        let blockhash = bank.last_blockhash();
+
+        let tx = system_transaction::create_user_account(
+            &mint_keypair,
+            &keypairs[0].pubkey(),
+            1,
+            blockhash,
+        );
+        let entry_1 = next_entry(&blockhash, 1, vec![tx]);
+
+        let tx = system_transaction::create_user_account(
+            &mint_keypair,
+            &keypairs[1].pubkey(),
+            1,
+            blockhash,
+        );
+        let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
+
+        let callback_counter: Arc<RwLock<usize>> = Arc::default();
+        let entry_callback = {
+            let counter = callback_counter.clone();
+            let pubkeys: Vec<Pubkey> = keypairs.iter().map(|k| k.pubkey()).collect();
+            Arc::new(move |bank: &Bank| {
+                let mut counter = counter.write().unwrap();
+                assert!(bank.get_balance(&pubkeys[*counter]) == 1);
+                assert!(bank.get_balance(&pubkeys[*counter + 1]) == 0);
+                *counter += 1;
+            })
+        };
+
+        assert_eq!(
+            process_entries_with_callback(&bank, &[entry_1, entry_2], true, &Some(entry_callback)),
+            Ok(())
+        );
+        assert_eq!(*callback_counter.write().unwrap(), 2);
+        assert_eq!(bank.last_blockhash(), blockhash);
     }
 
     #[test]
