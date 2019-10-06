@@ -68,7 +68,7 @@ impl Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             credit_only_account_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-            credit_only_collected_rent: Arc::new(RwLock::new(Some(HashMap::new())))
+            credit_only_collected_rent: Arc::new(RwLock::new(Some(HashMap::new()))),
         }
     }
     pub fn new_from_parent(parent: &Accounts, slot: Fork, parent_slot: Fork) -> Self {
@@ -78,7 +78,7 @@ impl Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             credit_only_account_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-            credit_only_collected_rent: Arc::new(RwLock::new(Some(HashMap::new())))
+            credit_only_collected_rent: Arc::new(RwLock::new(Some(HashMap::new()))),
         }
     }
 
@@ -113,7 +113,8 @@ impl Accounts {
                 return Err(TransactionError::AccountLoadedTwice);
             }
 
-            let credit_only_collected_rent = Self::get_write_access_credit_only_collected_rent(w_credit_only_collected_rent)?;
+            let credit_only_collected_rent =
+                Self::get_write_access_credit_only_collected_rent(w_credit_only_collected_rent)?;
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
@@ -135,7 +136,10 @@ impl Accounts {
                 rents.push(rent);
 
                 // Only record when, if rent is non-zero && key is credit-only && we haven't already recorded
-                if rent != 0 && !message.is_debitable(i) && !credit_only_collected_rent.contains_key(key) {
+                if rent != 0
+                    && !message.is_debitable(i)
+                    && !credit_only_collected_rent.contains_key(key)
+                {
                     credit_only_collected_rent.insert(*key, rent);
                 }
             }
@@ -261,7 +265,7 @@ impl Accounts {
                         fee,
                         error_counters,
                         rent_collector,
-                        &mut w_credit_only_collected_rent
+                        &mut w_credit_only_collected_rent,
                     )?;
                     let loaders = Self::load_loaders(
                         &storage,
@@ -384,7 +388,7 @@ impl Accounts {
     }
 
     fn take_credit_only_collected_rent(
-        credit_only_collected_rent: &Arc<RwLock<Option<HashMap<Pubkey, u64>>>>
+        credit_only_collected_rent: &Arc<RwLock<Option<HashMap<Pubkey, u64>>>>,
     ) -> Result<HashMap<Pubkey, u64>> {
         let mut w_credit_only_collected_rent = credit_only_collected_rent.write().unwrap();
         w_credit_only_collected_rent
@@ -591,9 +595,14 @@ impl Accounts {
     }
 
     /// Commit rent deduction, for the credit only accounts
-    pub fn commit_credit_only_collected_rent(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) -> u64 {
-        let credit_only_collected_rent = Self::take_credit_only_collected_rent(&self.credit_only_collected_rent)
-            .expect("Credit only collected rent didn't exists in commit_credit_only_rent");
+    pub fn commit_credit_only_collected_rent(
+        &self,
+        ancestors: &HashMap<Fork, usize>,
+        fork: Fork,
+    ) -> u64 {
+        let credit_only_collected_rent =
+            Self::take_credit_only_collected_rent(&self.credit_only_collected_rent)
+                .expect("Credit only collected rent didn't exists in commit_credit_only_rent");
         self.store_credit_only_collected_rent(credit_only_collected_rent, ancestors, fork)
     }
 
@@ -615,20 +624,24 @@ impl Accounts {
     ) -> u64 {
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
-        let mut accounts: Vec<(Pubkey, Account)> = Vec::with_capacity(credit_only_collected_rent.len());
+        let mut accounts: Vec<(Pubkey, Account)> =
+            Vec::with_capacity(credit_only_collected_rent.len());
         let mut total_rent_collected = 0;
 
         for (key, rent) in credit_only_collected_rent {
-            if let Some((mut account, _)) = AccountsDB::load(&storage, ancestors, &accounts_index, &key) {
+            if let Some((mut account, _)) =
+                AccountsDB::load(&storage, ancestors, &accounts_index, &key)
+            {
                 account.lamports -= rent;
                 accounts.push((key, account));
                 total_rent_collected += rent;
             }
         }
 
-        let account_to_store: Vec<(&Pubkey, &Account)> = accounts.iter().map(|(key, account)| {
-            (key, account)
-        }).collect();
+        let account_to_store: Vec<(&Pubkey, &Account)> = accounts
+            .iter()
+            .map(|(key, account)| (key, account))
+            .collect();
 
         self.accounts_db.store(fork, &account_to_store);
         total_rent_collected
