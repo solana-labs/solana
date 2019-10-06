@@ -1604,7 +1604,7 @@ impl Bank {
                 .3
                 .iter()
                 .enumerate()
-                .filter(|(i, _rent)| !message.is_debitable(*i))
+                .filter(|(i, _rent)| message.is_debitable(*i))
             {
                 collected_rent += rent;
             }
