@@ -60,6 +60,7 @@
   * [Bankless Leader](proposals/bankless-leader.md)
   * [Durable Transaction Nonces](proposals/durable-tx-nonces.md)
   * [Validator Timestamp Oracle](proposals/validator-timestamp-oracle.md)
+  * [Tower Lockout Slashing](proposals/tower-lockout-slashing.md)
 * [Implemented Design Proposals](implemented-proposals/README.md)
   * [Blocktree](implemented-proposals/blocktree.md)
   * [Cluster Software Installation and Updates](implemented-proposals/installer.md)
