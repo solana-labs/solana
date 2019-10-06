@@ -42,7 +42,10 @@ they may be for non-conflicting forks.
 ###  Guarding Against Accidental Slashing
 
 A Validator should stop voting but continue to retry old votes if
-it does not observe the cluster accepting N votes.
+it does not observe the cluster accepting N votes.  If the cluster
+is not accepting old votes because the blockhash has expired, it
+is safe for the validator to retry with a new blockhash, or wait
+for 2^N slots until all the pending votes have expired.
 
 If a validator is restarted and cannot recover the previous votes
 from persistent storage, the validator should wait for 2^N slots
