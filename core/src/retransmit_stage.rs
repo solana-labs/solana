@@ -23,7 +23,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
-fn retransmit(
+pub fn retransmit(
     bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
