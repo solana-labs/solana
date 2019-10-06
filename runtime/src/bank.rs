@@ -559,7 +559,7 @@ impl Bank {
             // finish up any deferred changes to account state
             self.commit_credits();
             self.collect_fees();
-            self.commit_credit_only_collected_rent();
+            self.commit_and_distribute_credit_only_collected_rent();
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -1562,10 +1562,17 @@ impl Bank {
             .commit_credits(&self.ancestors, self.slot());
     }
 
-    fn commit_credit_only_collected_rent(&self) {
-        self.rc
+    fn commit_and_distribute_credit_only_collected_rent(&self) {
+        let total_rent_collected = self
+            .rc
             .accounts
             .commit_credit_only_collected_rent(&self.ancestors, self.slot());
+        let burned_portion = (total_rent_collected
+            * u64::from(self.rent_collector.rent_calculator.burn_percent))
+            / 100;
+        let _rent_to_be_distributed = total_rent_collected - burned_portion;
+        // TODO: distribute remaining rent amount to validators
+        // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
     }
 }
 

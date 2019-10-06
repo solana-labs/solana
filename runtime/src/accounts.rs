@@ -590,7 +590,8 @@ impl Accounts {
         self.store_credit_only_credits(credit_only_account_locks, ancestors, fork);
     }
 
-    pub fn commit_credit_only_collected_rent(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
+    /// Commit rent deduction, for the credit only accounts
+    pub fn commit_credit_only_collected_rent(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) -> u64 {
         let credit_only_collected_rent = Self::take_credit_only_collected_rent(&self.credit_only_collected_rent)
             .expect("Credit only collected rent didn't exists in commit_credit_only_rent");
         self.store_credit_only_collected_rent(credit_only_collected_rent, ancestors, fork)
@@ -611,15 +612,17 @@ impl Accounts {
         credit_only_collected_rent: HashMap<Pubkey, u64>,
         ancestors: &HashMap<Fork, usize>,
         fork: Fork,
-    ) {
+    ) -> u64 {
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
         let mut accounts: Vec<(Pubkey, Account)> = Vec::with_capacity(credit_only_collected_rent.len());
+        let mut total_rent_collected = 0;
 
         for (key, rent) in credit_only_collected_rent {
             if let Some((mut account, _)) = AccountsDB::load(&storage, ancestors, &accounts_index, &key) {
                 account.lamports -= rent;
                 accounts.push((key, account));
+                total_rent_collected += rent;
             }
         }
 
@@ -628,6 +631,7 @@ impl Accounts {
         }).collect();
 
         self.accounts_db.store(fork, &account_to_store);
+        total_rent_collected
     }
 
     fn store_credit_only_credits<I>(
