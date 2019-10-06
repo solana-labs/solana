@@ -109,8 +109,10 @@ pub(super) fn entries_to_shreds(
     )
     .expect("Expected to create a new shredder");
 
+    let now = Instant::now();
     bincode::serialize_into(&mut shredder, &entries)
         .expect("Expect to write all entries to shreds");
+    let elapsed = now.elapsed().as_millis();
 
     let unfinished_slot = if last_tick == bank_max_tick {
         shredder.finalize_slot();
@@ -124,9 +126,20 @@ pub(super) fn entries_to_shreds(
         })
     };
 
+    let num_shreds = shredder.shreds.len();
     shreds.append(&mut shredder.shreds);
 
-    trace!("Inserting {:?} shreds in blocktree", shreds.len());
+    datapoint_info!(
+        "shredding-stats",
+        ("slot", slot as i64, i64),
+        ("num_shreds", num_shreds as i64, i64),
+        ("signing_coding", shredder.signing_coding_time as i64, i64),
+        (
+            "copying_serializing",
+            (elapsed - shredder.signing_coding_time) as i64,
+            i64
+        ),
+    );
 
     (shreds, unfinished_slot)
 }
