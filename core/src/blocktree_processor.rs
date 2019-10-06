@@ -962,6 +962,37 @@ pub mod tests {
     }
 
     #[test]
+    fn test_process_ledger_options_override_threads() {
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(123);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let opts = ProcessOptions {
+            override_num_threads: Some(1),
+            ..ProcessOptions::default()
+        };
+        process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+        PAR_THREAD_POOL.with(|pool| {
+            assert_eq!(pool.borrow().current_num_threads(), 1);
+        });
+    }
+
+    #[test]
+    fn test_process_ledger_options_full_leader_cache() {
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(123);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let opts = ProcessOptions {
+            full_leader_cache: true,
+            ..ProcessOptions::default()
+        };
+        let (_bank_forks, _bank_forks_info, cached_leader_schedule) =
+            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+        assert_eq!(cached_leader_schedule.max_schedules(), std::usize::MAX);
+    }
+
+    #[test]
     fn test_process_entries_with_callback() {
         let GenesisBlockInfo {
             genesis_block,
@@ -994,8 +1025,8 @@ pub mod tests {
             let pubkeys: Vec<Pubkey> = keypairs.iter().map(|k| k.pubkey()).collect();
             Arc::new(move |bank: &Bank| {
                 let mut counter = counter.write().unwrap();
-                assert!(bank.get_balance(&pubkeys[*counter]) == 1);
-                assert!(bank.get_balance(&pubkeys[*counter + 1]) == 0);
+                assert_eq!(bank.get_balance(&pubkeys[*counter]), 1);
+                assert_eq!(bank.get_balance(&pubkeys[*counter + 1]), 0);
                 *counter += 1;
             })
         };

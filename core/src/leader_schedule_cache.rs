@@ -58,6 +58,10 @@ impl LeaderScheduleCache {
         }
     }
 
+    pub fn max_schedules(&self) -> usize {
+        self.max_schedules.0
+    }
+
     pub fn set_root(&self, root_bank: &Bank) {
         let new_max_epoch = self.epoch_schedule.get_stakers_epoch(root_bank.slot());
         let old_max_epoch = {
@@ -204,7 +208,7 @@ impl LeaderScheduleCache {
             if let Entry::Vacant(v) = entry {
                 v.insert(leader_schedule.clone());
                 order.push_back(epoch);
-                Self::retain_latest(cached_schedules, order, self.max_schedules.0);
+                Self::retain_latest(cached_schedules, order, self.max_schedules());
             }
             leader_schedule
         })
@@ -245,7 +249,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
         assert_eq!(bank.slot(), 0);
-        assert_eq!(cache.max_schedules.0, MAX_SCHEDULES);
+        assert_eq!(cache.max_schedules(), MAX_SCHEDULES);
 
         // Epoch schedule for all epochs in the range:
         // [0, stakers_epoch(bank.slot())] should
@@ -568,9 +572,9 @@ mod tests {
 
         // Max schedules must be greater than 0
         cache.set_max_schedules(0);
-        assert_eq!(cache.max_schedules.0, MAX_SCHEDULES);
+        assert_eq!(cache.max_schedules(), MAX_SCHEDULES);
 
         cache.set_max_schedules(std::usize::MAX);
-        assert_eq!(cache.max_schedules.0, std::usize::MAX);
+        assert_eq!(cache.max_schedules(), std::usize::MAX);
     }
 }
