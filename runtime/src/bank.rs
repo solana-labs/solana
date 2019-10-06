@@ -611,11 +611,17 @@ impl Bank {
         self.update_fees();
 
         for (pubkey, account) in genesis_block.accounts.iter() {
+            if self.get_account(&pubkey).is_some() {
+                panic!("{} repeated in genesis block", pubkey);
+            }
             self.store_account(pubkey, account);
             self.capitalization
                 .fetch_add(account.lamports, Ordering::Relaxed);
         }
         for (pubkey, account) in genesis_block.rewards_pools.iter() {
+            if self.get_account(&pubkey).is_some() {
+                panic!("{} repeated in genesis block", pubkey);
+            }
             self.store_account(pubkey, account);
         }
 
@@ -1637,7 +1643,10 @@ mod tests {
     #[test]
     fn test_bank_capitalization() {
         let bank = Arc::new(Bank::new(&GenesisBlock {
-            accounts: vec![(Pubkey::default(), Account::new(42, 0, &Pubkey::default()),); 42],
+            accounts: (0..42)
+                .into_iter()
+                .map(|_| (Pubkey::new_rand(), Account::new(42, 0, &Pubkey::default())))
+                .collect(),
             ..GenesisBlock::default()
         }));
         assert_eq!(bank.capitalization(), 42 * 42);
@@ -1649,13 +1658,15 @@ mod tests {
     fn test_bank_update_rewards() {
         // create a bank that ticks really slowly...
         let bank = Arc::new(Bank::new(&GenesisBlock {
-            accounts: vec![
-                (
-                    Pubkey::default(),
-                    Account::new(1_000_000_000, 0, &Pubkey::default()),
-                );
-                42
-            ],
+            accounts: (0..42)
+                .into_iter()
+                .map(|_| {
+                    (
+                        Pubkey::new_rand(),
+                        Account::new(1_000_000_000, 0, &Pubkey::default()),
+                    )
+                })
+                .collect(),
             // set it up so the first epoch is a full year long
             poh_config: PohConfig {
                 target_tick_duration: Duration::from_secs(

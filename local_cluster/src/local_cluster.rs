@@ -155,7 +155,12 @@ impl LocalCluster {
             storage_contract::create_validator_storage_account(leader_pubkey, 1),
         ));
 
-        // override staking config
+        // Replace staking config
+        genesis_block.accounts = genesis_block
+            .accounts
+            .into_iter()
+            .filter(|(pubkey, _)| *pubkey != stake_config::id())
+            .collect();
         genesis_block.accounts.push((
             stake_config::id(),
             stake_config::create_account(
