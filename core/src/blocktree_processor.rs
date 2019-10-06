@@ -231,11 +231,10 @@ pub fn process_blocktree_from_root(
     let (bank_forks, bank_forks_info, leader_schedule_cache) = {
         if let Some(meta) = meta {
             let epoch_schedule = bank.epoch_schedule();
-            let mut leader_schedule_cache = if opts.full_leader_cache {
-                LeaderScheduleCache::new_with_capacity(*epoch_schedule, &bank, std::usize::MAX)
-            } else {
-                LeaderScheduleCache::new(*epoch_schedule, &bank)
-            };
+            let mut leader_schedule_cache = LeaderScheduleCache::new(*epoch_schedule, &bank);
+            if opts.full_leader_cache {
+                leader_schedule_cache.set_max_schedules(std::usize::MAX);
+            }
             let fork_info = process_pending_slots(
                 &bank,
                 &meta,
