@@ -1578,12 +1578,15 @@ impl Bank {
             .rc
             .accounts
             .commit_credit_only_collected_rent(&self.ancestors, self.slot());
-        let burned_portion = (total_rent_collected
-            * u64::from(self.rent_collector.rent_calculator.burn_percent))
-            / 100;
-        let _rent_to_be_distributed = total_rent_collected - burned_portion;
-        // TODO: distribute remaining rent amount to validators
-        // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
+
+        if total_rent_collected != 0 {
+            let burned_portion = (total_rent_collected
+                * u64::from(self.rent_collector.rent_calculator.burn_percent))
+                / 100;
+            let _rent_to_be_distributed = total_rent_collected - burned_portion;
+            // TODO: distribute remaining rent amount to validators
+            // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
+        }
     }
 }
 
