@@ -584,7 +584,6 @@ mod tests {
                 &Pubkey::default(),
                 &mut [
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
@@ -600,14 +599,11 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
-                    KeyedAccount::new(
-                        &sysvar::clock::id(),
-                        false,
-                        &mut sysvar::rewards::create_account(1, 0.0, 0.0)
-                    ),
-                ],
+                &mut [KeyedAccount::new(
+                    &sysvar::clock::id(),
+                    false,
+                    &mut sysvar::rewards::create_account(1, 0.0, 0.0)
+                ),],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
