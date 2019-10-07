@@ -36,7 +36,7 @@ The rewards lamports earned are split between your stake account and the vote ac
 Stake can be deactivated by running:
 
 ```bash
-$ solana deactivate-stake ~/validator-config/stake-keypair.json ~/validator-vote-keypair.json
+$ solana deactivate-stake ~/validator-config/stake-keypair.json
 ```
 
 The stake will cool down, deactivate over time. While cooling down, your stake will continue to earn rewards. Only after stake cooldown is it safe to turn off your validator or withdraw it from the network. Cooldown may take several epochs to complete, depending on active stake and the size of your stake.

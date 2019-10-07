@@ -430,7 +430,6 @@ pub trait StakeAccount {
     ) -> Result<(), InstructionError>;
     fn deactivate_stake(
         &mut self,
-        vote_account: &KeyedAccount,
         clock: &sysvar::clock::Clock,
         other_signers: &[KeyedAccount],
     ) -> Result<(), InstructionError>;
@@ -516,7 +515,6 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
     fn deactivate_stake(
         &mut self,
-        _vote_account: &KeyedAccount, // TODO: used in slashing
         clock: &sysvar::clock::Clock,
         other_signers: &[KeyedAccount],
     ) -> Result<(), InstructionError> {
@@ -1156,15 +1154,10 @@ mod tests {
             ..sysvar::clock::Clock::default()
         };
 
-        let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-        let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
-
         // signed keyed account but not staked yet
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.deactivate_stake(&vote_keyed_account, &clock, &[]),
+            stake_keyed_account.deactivate_stake(&clock, &[]),
             Err(InstructionError::InvalidAccountData)
         );
 
@@ -1187,16 +1180,13 @@ mod tests {
         // unsigned keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         assert_eq!(
-            stake_keyed_account.deactivate_stake(&vote_keyed_account, &clock, &[]),
+            stake_keyed_account.deactivate_stake(&clock, &[]),
             Err(InstructionError::MissingRequiredSignature)
         );
 
         // Deactivate after staking
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
-        assert_eq!(
-            stake_keyed_account.deactivate_stake(&vote_keyed_account, &clock, &[]),
-            Ok(())
-        );
+        assert_eq!(stake_keyed_account.deactivate_stake(&clock, &[]), Ok(()));
     }
 
     #[test]
@@ -1317,10 +1307,7 @@ mod tests {
         );
 
         // deactivate the stake before withdrawal
-        assert_eq!(
-            stake_keyed_account.deactivate_stake(&vote_keyed_account, &clock, &[]),
-            Ok(())
-        );
+        assert_eq!(stake_keyed_account.deactivate_stake(&clock, &[]), Ok(()));
         // simulate time passing
         clock.epoch += 100;
 
@@ -1896,11 +1883,7 @@ mod tests {
         let new_staker_keyed_account =
             KeyedAccount::new(&new_staker_pubkey, true, &mut new_staker_account);
         assert_eq!(
-            stake_keyed_account.deactivate_stake(
-                &vote_keyed_account,
-                &clock,
-                &[new_staker_keyed_account]
-            ),
+            stake_keyed_account.deactivate_stake(&clock, &[new_staker_keyed_account]),
             Ok(())
         );
     }

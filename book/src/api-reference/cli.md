@@ -483,7 +483,7 @@ solana-deactivate-stake
 Deactivate the delegated stake from the stake account
 
 USAGE:
-    solana deactivate-stake [OPTIONS] <STAKE ACCOUNT> <VOTE ACCOUNT>
+    solana deactivate-stake [OPTIONS] <STAKE ACCOUNT>
 
 FLAGS:
     -h, --help       Prints help information
@@ -496,7 +496,6 @@ OPTIONS:
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to be deactivated.
-    <VOTE ACCOUNT>     The vote account to which the stake is currently delegated
 ```
 
 #### solana-delegate-stake
