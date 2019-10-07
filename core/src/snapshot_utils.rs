@@ -136,10 +136,6 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
         bank.slot(),
         snapshot_file_path,
     );
-    if !bank.verify_hash_internal_state() {
-        // Sanity check that the new snapshot is valid.  If not then there's a bad bug somewhere
-        panic!("Snapshot bank failed to verify");
-    }
 
     let snapshot_file = File::create(&snapshot_file_path)?;
     // snapshot writer
