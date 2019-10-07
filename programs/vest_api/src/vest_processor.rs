@@ -139,7 +139,7 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-    use solana_sdk::transport::TransportError;
+    use solana_sdk::transport::Result;
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
@@ -164,7 +164,7 @@ mod tests {
         date_keypair: &Keypair,
         payer_keypair: &Keypair,
         date: Date<Utc>,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let date_pubkey = date_keypair.pubkey();
 
         let mut instructions =
@@ -180,7 +180,7 @@ mod tests {
         date_keypair: &Keypair,
         payer_keypair: &Keypair,
         date: Date<Utc>,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let date_pubkey = date_keypair.pubkey();
         let instruction = date_instruction::store(&date_pubkey, date);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
@@ -195,7 +195,7 @@ mod tests {
         start_date: Date<Utc>,
         date_pubkey: &Pubkey,
         lamports: u64,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let instructions = vest_instruction::create_account(
             &payer_keypair.pubkey(),
             &contract_pubkey,
@@ -213,7 +213,7 @@ mod tests {
         contract_pubkey: &Pubkey,
         old_payee_keypair: &Keypair,
         new_payee_pubkey: &Pubkey,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let instruction = vest_instruction::set_payee(
             &contract_pubkey,
             &old_payee_keypair.pubkey(),
@@ -228,7 +228,7 @@ mod tests {
         payer_keypair: &Keypair,
         payee_pubkey: &Pubkey,
         date_pubkey: &Pubkey,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let instruction =
             vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &payee_pubkey);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
