@@ -13,7 +13,7 @@ use crate::{
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_client::rpc_request::RpcEpochInfo;
+use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -261,37 +261,6 @@ pub struct RpcContactInfo {
     pub tpu: Option<SocketAddr>,
     /// JSON RPC port
     pub rpc: Option<SocketAddr>,
-}
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcVoteAccountStatus {
-    pub current: Vec<RpcVoteAccountInfo>,
-    pub delinquent: Vec<RpcVoteAccountInfo>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcVoteAccountInfo {
-    /// Vote account pubkey as base-58 encoded string
-    pub vote_pubkey: String,
-
-    /// The pubkey of the node that votes using this account
-    pub node_pubkey: String,
-
-    /// The current stake, in lamports, delegated to this vote account
-    pub activated_stake: u64,
-
-    /// An 8-bit integer used as a fraction (commission/MAX_U8) for rewards payout
-    pub commission: u8,
-
-    /// Whether this account is staked for the current epoch
-    pub epoch_vote_account: bool,
-
-    /// Most recent slot voted on by this vote account (0 if no votes exist)
-    pub last_vote: u64,
-
-    /// Current root slot for this vote account (0 if not root slot exists)
-    pub root_slot: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
