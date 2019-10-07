@@ -27,8 +27,8 @@ const RECEIVE_ENTRY_COUNT_THRESHOLD: usize = 8;
 
 pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result<ReceiveResults> {
     let timer = Duration::new(1, 0);
-    let (mut bank, (entry, mut last_tick)) = receiver.recv_timeout(timer)?;
     let recv_start = Instant::now();
+    let (mut bank, (entry, mut last_tick)) = receiver.recv_timeout(timer)?;
 
     let mut entries = vec![entry];
     let mut slot = bank.slot();
