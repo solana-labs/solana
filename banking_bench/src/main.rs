@@ -155,7 +155,7 @@ fn main() {
             Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blocktree);
+            create_test_recorder(&bank, &blocktree, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         let _banking_stage = BankingStage::new(

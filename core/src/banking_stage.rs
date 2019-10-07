@@ -936,10 +936,10 @@ pub fn create_test_recorder(
     Receiver<WorkingBankEntry>,
 ) {
     let exit = Arc::new(AtomicBool::new(false));
-    let poh_config = if poh_config.is_none() {
-        Arc::new(PohConfig::default())
+    let poh_config = if let Some(poh_config) = poh_config {
+        Arc::new(poh_config)
     } else {
-        Arc::new(poh_config.unwrap())
+        Arc::new(PohConfig::default())
     };
     let (mut poh_recorder, entry_receiver) = PohRecorder::new(
         bank.tick_height(),
