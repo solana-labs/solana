@@ -6,7 +6,7 @@ use solana_cli::{
     display::{println_name_value, println_name_value_or},
     input_validators::is_url,
 };
-use solana_sdk::signature::{read_keypair, KeypairUtil};
+use solana_sdk::signature::{read_keypair_file, KeypairUtil};
 use std::error;
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
@@ -94,7 +94,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
         }
         default.keypair_path
     };
-    let keypair = read_keypair(&keypair_path).or_else(|err| {
+    let keypair = read_keypair_file(&keypair_path).or_else(|err| {
         Err(CliError::BadParameter(format!(
             "{}: Unable to open keypair file: {}",
             err, keypair_path

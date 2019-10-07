@@ -2,7 +2,7 @@ use clap::ArgMatches;
 use solana_sdk::{
     native_token::sol_to_lamports,
     pubkey::Pubkey,
-    signature::{read_keypair, Keypair, KeypairUtil},
+    signature::{read_keypair_file, Keypair, KeypairUtil},
 };
 
 // Return parsed values from matches at `name`
@@ -32,7 +32,7 @@ where
 // Return the keypair for an argument with filename `name` or None if not present.
 pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
     if let Some(value) = matches.value_of(name) {
-        read_keypair(value).ok()
+        read_keypair_file(value).ok()
     } else {
         None
     }
@@ -56,7 +56,7 @@ pub fn amount_of(matches: &ArgMatches<'_>, name: &str, unit: &str) -> Option<u64
 mod tests {
     use super::*;
     use clap::{App, Arg};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::write_keypair_file;
     use std::fs;
 
     fn app<'ab, 'v>() -> App<'ab, 'v> {
@@ -120,7 +120,7 @@ mod tests {
     fn test_keypair_of() {
         let keypair = Keypair::new();
         let outfile = tmp_file_path("test_gen_keypair_file.json", &keypair.pubkey());
-        let _ = write_keypair(&keypair, &outfile).unwrap();
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
         let matches = app()
             .clone()
@@ -141,7 +141,7 @@ mod tests {
     fn test_pubkey_of() {
         let keypair = Keypair::new();
         let outfile = tmp_file_path("test_gen_keypair_file.json", &keypair.pubkey());
-        let _ = write_keypair(&keypair, &outfile).unwrap();
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
         let matches = app()
             .clone()

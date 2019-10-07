@@ -1385,7 +1385,7 @@ mod tests {
     use serde_json::Value;
     use solana_client::mock_rpc_client_request::SIGNATURE;
     use solana_sdk::{
-        signature::{gen_keypair_file, read_keypair},
+        signature::{gen_keypair_file, read_keypair_file},
         transaction::TransactionError,
     };
     use std::path::PathBuf;
@@ -1442,7 +1442,7 @@ mod tests {
         // Test Balance Subcommand, incl pubkey and keypair-file inputs
         let keypair_file = make_tmp_path("keypair_file");
         gen_keypair_file(&keypair_file).unwrap();
-        let keypair = read_keypair(&keypair_file).unwrap();
+        let keypair = read_keypair_file(&keypair_file).unwrap();
         let test_balance = test_commands.clone().get_matches_from(vec![
             "test",
             "balance",

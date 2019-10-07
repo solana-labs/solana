@@ -14,7 +14,7 @@ use solana_core::socketaddr;
 use solana_core::validator::{Validator, ValidatorConfig};
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::net::{SocketAddr, TcpListener};
@@ -219,7 +219,7 @@ fn initialize_ledger_path(
 
 // Return an error if a keypair file cannot be parsed.
 fn is_keypair(string: String) -> Result<(), String> {
-    read_keypair(&string)
+    read_keypair_file(&string)
         .map(|_| ())
         .map_err(|err| format!("{:?}", err))
 }
@@ -419,7 +419,7 @@ pub fn main() {
 
     let mut validator_config = ValidatorConfig::default();
     let keypair = if let Some(identity) = matches.value_of("identity") {
-        read_keypair(identity).unwrap_or_else(|err| {
+        read_keypair_file(identity).unwrap_or_else(|err| {
             error!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
         })
@@ -428,7 +428,7 @@ pub fn main() {
     };
 
     let voting_keypair = if let Some(identity) = matches.value_of("voting_keypair") {
-        read_keypair(identity).unwrap_or_else(|err| {
+        read_keypair_file(identity).unwrap_or_else(|err| {
             error!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
         })
@@ -436,7 +436,7 @@ pub fn main() {
         Keypair::new()
     };
     let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
-        read_keypair(storage_keypair).unwrap_or_else(|err| {
+        read_keypair_file(storage_keypair).unwrap_or_else(|err| {
             error!("{}: Unable to open keypair file: {}", err, storage_keypair);
             exit(1);
         })

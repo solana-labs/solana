@@ -1,7 +1,7 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg, ArgMatches};
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::{net::SocketAddr, process::exit, time::Duration};
 
 const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = 64 * 1024;
@@ -181,7 +181,7 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     }
 
     if matches.is_present("identity") {
-        args.id = read_keypair(matches.value_of("identity").unwrap())
+        args.id = read_keypair_file(matches.value_of("identity").unwrap())
             .expect("can't read client identity");
     }
 

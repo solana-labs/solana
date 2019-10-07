@@ -9,7 +9,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_config_api::{config_instruction, get_config_data};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil, Signable};
+use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil, Signable};
 use solana_sdk::transaction::Transaction;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read};
@@ -626,9 +626,9 @@ pub fn deploy(
     download_url: &str,
     update_manifest_keypair_file: &str,
 ) -> Result<(), String> {
-    let from_keypair = read_keypair(from_keypair_file)
+    let from_keypair = read_keypair_file(from_keypair_file)
         .map_err(|err| format!("Unable to read {}: {}", from_keypair_file, err))?;
-    let update_manifest_keypair = read_keypair(update_manifest_keypair_file)
+    let update_manifest_keypair = read_keypair_file(update_manifest_keypair_file)
         .map_err(|err| format!("Unable to read {}: {}", update_manifest_keypair_file, err))?;
 
     println_name_value("JSON RPC URL:", json_rpc_url);

@@ -3,7 +3,7 @@ use console::style;
 use solana_core::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
 use solana_core::replicator::Replicator;
-use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 // Return an error if a keypair file cannot be parsed.
 fn is_keypair(string: String) -> Result<(), String> {
-    read_keypair(&string)
+    read_keypair_file(&string)
         .map(|_| ())
         .map_err(|err| format!("{:?}", err))
 }
@@ -65,7 +65,7 @@ fn main() {
     let ledger_path = PathBuf::from(matches.value_of("ledger").unwrap());
 
     let keypair = if let Some(identity) = matches.value_of("identity") {
-        read_keypair(identity).unwrap_or_else(|err| {
+        read_keypair_file(identity).unwrap_or_else(|err| {
             eprintln!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
         })
@@ -73,7 +73,7 @@ fn main() {
         Keypair::new()
     };
     let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
-        read_keypair(storage_keypair).unwrap_or_else(|err| {
+        read_keypair_file(storage_keypair).unwrap_or_else(|err| {
             eprintln!("{}: Unable to open keypair file: {}", err, storage_keypair);
             exit(1);
         })

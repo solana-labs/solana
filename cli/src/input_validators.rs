@@ -1,5 +1,5 @@
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::read_keypair;
+use solana_sdk::signature::read_keypair_file;
 
 // Return an error if a pubkey cannot be parsed.
 pub fn is_pubkey(string: String) -> Result<(), String> {
@@ -11,7 +11,7 @@ pub fn is_pubkey(string: String) -> Result<(), String> {
 
 // Return an error if a keypair file cannot be parsed.
 pub fn is_keypair(string: String) -> Result<(), String> {
-    read_keypair(&string)
+    read_keypair_file(&string)
         .map(|_| ())
         .map_err(|err| format!("{:?}", err))
 }
