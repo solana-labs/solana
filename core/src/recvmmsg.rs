@@ -5,7 +5,7 @@ use std::cmp;
 use std::io;
 use std::net::UdpSocket;
 
-pub const NUM_RCVMMSGS: usize = 16;
+pub const NUM_RCVMMSGS: usize = 128;
 
 #[cfg(not(target_os = "linux"))]
 pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {

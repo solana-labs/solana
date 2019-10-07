@@ -52,7 +52,7 @@ impl ShredFetchStage {
                 &exit,
                 sender.clone(),
                 recycler.clone(),
-                "blob_fetch_stage",
+                "shred_fetch_stage",
             )
         });
 
@@ -63,7 +63,7 @@ impl ShredFetchStage {
                 &exit,
                 forward_sender.clone(),
                 recycler.clone(),
-                "blob_fetch_stage",
+                "shred_fetch_stage",
             )
         });
 
