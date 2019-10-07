@@ -13,7 +13,6 @@
 //! - Generating the keys used to encrypt the ledger and sample it for storage mining.
 
 use crate::bank_forks::BankForks;
-use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::ClusterInfo;
@@ -25,6 +24,7 @@ use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
+use crate::shred_fetch_stage::ShredFetchStage;
 use crate::snapshot_package::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
 use solana_sdk::pubkey::Pubkey;
@@ -37,7 +37,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 pub struct Tvu {
-    fetch_stage: BlobFetchStage,
+    fetch_stage: ShredFetchStage,
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
     blockstream_service: Option<BlockstreamService>,
@@ -104,7 +104,7 @@ impl Tvu {
         blob_sockets.push(repair_socket.clone());
         let blob_forward_sockets: Vec<Arc<UdpSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
-        let fetch_stage = BlobFetchStage::new_multi_socket_packet(
+        let fetch_stage = ShredFetchStage::new_multi_socket(
             blob_sockets,
             blob_forward_sockets,
             &fetch_sender,
