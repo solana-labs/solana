@@ -28,7 +28,7 @@ fn parse_date_account(
     let date_config =
         deserialize::<DateConfig>(config_data).map_err(|_| InstructionError::InvalidAccountData)?;
 
-    Ok(date_config.dt.date())
+    Ok(date_config.date_time.date())
 }
 
 fn parse_account<'a>(
@@ -80,7 +80,7 @@ pub fn process_instruction(
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::SetPayee(payee_pubkey) => {
-            let (old_payee_keyed_account, contract_keyed_account) = match keyed_accounts {
+            let (contract_keyed_account, old_payee_keyed_account) = match keyed_accounts {
                 [ka0, ka1] => (ka0, ka1),
                 _ => return Err(InstructionError::InvalidArgument),
             };
@@ -91,7 +91,7 @@ pub fn process_instruction(
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::RedeemTokens => {
-            let (date_keyed_account, contract_keyed_account, payee_keyed_account) =
+            let (contract_keyed_account, date_keyed_account, payee_keyed_account) =
                 match keyed_accounts {
                     [ka0, ka1, ka2] => (ka0, ka1, ka2),
                     _ => return Err(InstructionError::InvalidArgument),
@@ -101,11 +101,11 @@ pub fn process_instruction(
             let current_date = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
             let payee_account = parse_account(payee_keyed_account, &vest_state.payee_pubkey)?;
 
-            vest_state.redeem_tokens(current_date, contract_account, payee_account);
+            vest_state.redeem_tokens(contract_account, current_date, payee_account);
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::Terminate => {
-            let (terminator_keyed_account, contract_keyed_account, payee_keyed_account) =
+            let (contract_keyed_account, terminator_keyed_account, payee_keyed_account) =
                 match keyed_accounts {
                     [ka0, ka1] => (ka0, ka1, None),
                     [ka0, ka1, ka2] => (ka0, ka1, Some(ka2)),
@@ -161,15 +161,15 @@ mod tests {
     /// Create a config account and use it as a date oracle.
     fn create_date_account(
         bank_client: &BankClient,
-        payer_keypair: &Keypair,
         date_keypair: &Keypair,
-        dt: Date<Utc>,
+        payer_keypair: &Keypair,
+        date: Date<Utc>,
     ) -> Result<Signature, TransportError> {
         let date_pubkey = date_keypair.pubkey();
 
         let mut instructions =
             date_instruction::create_account(&payer_keypair.pubkey(), &date_pubkey, 1);
-        instructions.push(date_instruction::store(&date_pubkey, dt));
+        instructions.push(date_instruction::store(&date_pubkey, date));
 
         let message = Message::new(instructions);
         bank_client.send_message(&[&payer_keypair, &date_keypair], message)
@@ -177,29 +177,29 @@ mod tests {
 
     fn store_date(
         bank_client: &BankClient,
-        payer_keypair: &Keypair,
         date_keypair: &Keypair,
-        dt: Date<Utc>,
+        payer_keypair: &Keypair,
+        date: Date<Utc>,
     ) -> Result<Signature, TransportError> {
         let date_pubkey = date_keypair.pubkey();
-        let instruction = date_instruction::store(&date_pubkey, dt);
+        let instruction = date_instruction::store(&date_pubkey, date);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
         bank_client.send_message(&[&payer_keypair, &date_keypair], message)
     }
 
     fn create_vest_account(
         bank_client: &BankClient,
+        contract_pubkey: &Pubkey,
         payer_keypair: &Keypair,
         payee_pubkey: &Pubkey,
-        contract_pubkey: &Pubkey,
         start_date: Date<Utc>,
         date_pubkey: &Pubkey,
         lamports: u64,
     ) -> Result<Signature, TransportError> {
         let instructions = vest_instruction::create_account(
             &payer_keypair.pubkey(),
-            &payee_pubkey,
             &contract_pubkey,
+            &payee_pubkey,
             start_date,
             &date_pubkey,
             lamports,
@@ -210,13 +210,13 @@ mod tests {
 
     fn send_set_payee(
         bank_client: &BankClient,
-        old_payee_keypair: &Keypair,
         contract_pubkey: &Pubkey,
+        old_payee_keypair: &Keypair,
         new_payee_pubkey: &Pubkey,
     ) -> Result<Signature, TransportError> {
         let instruction = vest_instruction::set_payee(
-            &old_payee_keypair.pubkey(),
             &contract_pubkey,
+            &old_payee_keypair.pubkey(),
             &new_payee_pubkey,
         );
         bank_client.send_instruction(&old_payee_keypair, instruction)
@@ -224,13 +224,13 @@ mod tests {
 
     fn send_redeem_tokens(
         bank_client: &BankClient,
+        contract_pubkey: &Pubkey,
         payer_keypair: &Keypair,
         payee_pubkey: &Pubkey,
-        contract_pubkey: &Pubkey,
         date_pubkey: &Pubkey,
     ) -> Result<Signature, TransportError> {
         let instruction =
-            vest_instruction::redeem_tokens(&date_pubkey, &contract_pubkey, &payee_pubkey);
+            vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &payee_pubkey);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
         bank_client.send_message(&[&payer_keypair], message)
     }
@@ -321,9 +321,9 @@ mod tests {
 
         create_vest_account(
             &bank_client,
+            &contract_pubkey,
             &alice_keypair,
             &bob_pubkey,
-            &contract_pubkey,
             start_date,
             &date_pubkey,
             36,
@@ -340,8 +340,8 @@ mod tests {
             .unwrap();
         send_set_payee(
             &bank_client,
-            &mallory_keypair,
             &contract_pubkey,
+            &mallory_keypair,
             &new_bob_pubkey,
         )
         .unwrap_err();
@@ -352,8 +352,8 @@ mod tests {
             .unwrap();
         send_set_payee(
             &bank_client,
-            &bob_keypair,
             &contract_pubkey,
+            &bob_keypair,
             &new_bob_pubkey,
         )
         .unwrap();
@@ -370,7 +370,7 @@ mod tests {
         let date_pubkey = date_keypair.pubkey();
 
         let current_date = Utc.ymd(2019, 1, 1);
-        create_date_account(&bank_client, &alice_keypair, &date_keypair, current_date).unwrap();
+        create_date_account(&bank_client, &date_keypair, &alice_keypair, current_date).unwrap();
 
         let contract_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
@@ -378,9 +378,9 @@ mod tests {
 
         create_vest_account(
             &bank_client,
+            &contract_pubkey,
             &alice_keypair,
             &bob_pubkey,
-            &contract_pubkey,
             start_date,
             &date_pubkey,
             36,
@@ -391,9 +391,9 @@ mod tests {
 
         send_redeem_tokens(
             &bank_client,
+            &contract_pubkey,
             &alice_keypair,
             &bob_pubkey,
-            &contract_pubkey,
             &date_pubkey,
         )
         .unwrap();
@@ -404,8 +404,8 @@ mod tests {
         // Update the date oracle and redeem more tokens
         store_date(
             &bank_client,
-            &alice_keypair,
             &date_keypair,
+            &alice_keypair,
             Utc.ymd(2019, 2, 1),
         )
         .unwrap();
@@ -417,9 +417,9 @@ mod tests {
 
         send_redeem_tokens(
             &bank_client,
+            &contract_pubkey,
             &alice_keypair,
             &bob_pubkey,
-            &contract_pubkey,
             &date_pubkey,
         )
         .unwrap();
@@ -440,13 +440,13 @@ mod tests {
         let date_pubkey = date_keypair.pubkey();
 
         let current_date = Utc.ymd(2019, 1, 1);
-        create_date_account(&bank_client, &alice_keypair, &date_keypair, current_date).unwrap();
+        create_date_account(&bank_client, &date_keypair, &alice_keypair, current_date).unwrap();
 
         create_vest_account(
             &bank_client,
+            &contract_pubkey,
             &alice_keypair,
             &bob_pubkey,
-            &contract_pubkey,
             start_date,
             &date_pubkey,
             1,
@@ -458,7 +458,7 @@ mod tests {
         // Now, terminate the transaction. alice gets her funds back
         // Note: that tokens up until the oracle date are *not* redeemed automatically.
         let instruction =
-            vest_instruction::terminate(&alice_pubkey, &contract_pubkey, &alice_pubkey);
+            vest_instruction::terminate(&contract_pubkey, &alice_pubkey, &alice_pubkey);
         bank_client
             .send_instruction(&alice_keypair, instruction)
             .unwrap();
