@@ -24,4 +24,4 @@ solana-runtime = { path = "../../runtime", version = "0.20.0-pre0" }
 
 [lib]
 crate-type = ["lib"]
-name = "solana_budget_api"
+name = "solana_vest_api"
