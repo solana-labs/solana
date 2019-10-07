@@ -100,10 +100,9 @@ pub enum StakeInstruction {
     /// Deactivates the stake in the account
     ///    requires Authorized::staker signature
     ///
-    /// Expects 3 Accounts:
+    /// Expects 2 Accounts:
     ///    0 - Delegate StakeAccount
-    ///    1 - VoteAccount to which the Stake is delegated
-    ///    2 - Syscall Account that carries epoch
+    ///    1 - Syscall Account that carries epoch
     ///
     Deactivate,
 }
