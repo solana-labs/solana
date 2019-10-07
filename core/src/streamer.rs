@@ -50,9 +50,9 @@ fn recv_loop(
             datapoint_info!(
                 "receiver-stats",
                 ("received", recv_count as i64, i64),
-                ("call_count", call_count as i64, i64),
+                ("call_count", i64::from(call_count), i64),
                 ("elapsed", now.elapsed().as_millis() as i64, i64),
-                ("max_received", num_max_received as i64, i64),
+                ("max_received", i64::from(num_max_received), i64),
             );
             recv_count = 0;
             call_count = 0;
