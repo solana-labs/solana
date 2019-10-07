@@ -1,4 +1,3 @@
-use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
@@ -12,6 +11,7 @@ use crate::repair_service::{RepairService, RepairSlotRange, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::shred::Shred;
+use crate::shred_fetch_stage::ShredFetchStage;
 use crate::storage_stage::NUM_STORAGE_SAMPLES;
 use crate::streamer::{receiver, responder, PacketReceiver};
 use crate::window_service::WindowService;
@@ -263,7 +263,7 @@ impl Replicator {
             .map(Arc::new)
             .collect();
         let (blob_fetch_sender, blob_fetch_receiver) = channel();
-        let fetch_stage = BlobFetchStage::new_multi_socket_packet(
+        let fetch_stage = ShredFetchStage::new_multi_socket(
             blob_sockets,
             blob_forward_sockets,
             &blob_fetch_sender,

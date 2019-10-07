@@ -1,37 +1,21 @@
-//! The `blob_fetch_stage` pulls blobs from UDP sockets and sends it to a channel.
+//! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use crate::recycler::Recycler;
 use crate::result;
 use crate::result::Error;
 use crate::service::Service;
-use crate::streamer::{self, BlobSender, PacketReceiver, PacketSender};
+use crate::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, RecvTimeoutError};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 
-pub struct BlobFetchStage {
+pub struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-impl BlobFetchStage {
-    pub fn new(socket: Arc<UdpSocket>, sender: &BlobSender, exit: &Arc<AtomicBool>) -> Self {
-        Self::new_multi_socket(vec![socket], sender, exit)
-    }
-    pub fn new_multi_socket(
-        sockets: Vec<Arc<UdpSocket>>,
-        sender: &BlobSender,
-        exit: &Arc<AtomicBool>,
-    ) -> Self {
-        let thread_hdls: Vec<_> = sockets
-            .into_iter()
-            .map(|socket| streamer::blob_receiver(socket, &exit, sender.clone()))
-            .collect();
-
-        Self { thread_hdls }
-    }
-
+impl ShredFetchStage {
     fn handle_forwarded_packets(
         recvr: &PacketReceiver,
         sendr: &PacketSender,
@@ -55,7 +39,7 @@ impl BlobFetchStage {
         Ok(())
     }
 
-    pub fn new_multi_socket_packet(
+    pub fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
         forward_sockets: Vec<Arc<UdpSocket>>,
         sender: &PacketSender,
@@ -106,7 +90,7 @@ impl BlobFetchStage {
     }
 }
 
-impl Service for BlobFetchStage {
+impl Service for ShredFetchStage {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {

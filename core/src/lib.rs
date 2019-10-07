@@ -7,7 +7,6 @@
 
 pub mod bank_forks;
 pub mod banking_stage;
-pub mod blob_fetch_stage;
 pub mod broadcast_stage;
 pub mod chacha;
 pub mod chacha_cuda;
@@ -15,6 +14,7 @@ pub mod cluster_info_vote_listener;
 pub mod confidence;
 pub mod perf_libs;
 pub mod recycler;
+pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
 pub mod crds;
