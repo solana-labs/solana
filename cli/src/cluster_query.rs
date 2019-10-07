@@ -1,5 +1,8 @@
 use crate::{
-    cli::{check_account_for_fee, CliCommand, CliConfig, CliError, ProcessResult},
+    cli::{
+        build_balance_message, check_account_for_fee, CliCommand, CliConfig, CliError,
+        ProcessResult,
+    },
     display::println_name_value,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
@@ -72,6 +75,16 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("show-validators")
+                .about("Show information about the current validators")
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
+                ),
+        )
     }
 }
 
@@ -88,6 +101,12 @@ pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommand, CliErr
         count,
         timeout,
     })
+}
+
+pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
+    let use_lamports_unit = matches.is_present("lamports");
+
+    Ok(CliCommand::ShowValidators { use_lamports_unit })
 }
 
 pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
@@ -270,6 +289,65 @@ pub fn process_ping(
             mean,
             dist.max(),
             dist.std_dev(Some(mean))
+        );
+    }
+
+    Ok("".to_string())
+}
+
+pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) -> ProcessResult {
+    let vote_accounts = rpc_client.get_vote_accounts()?;
+    let total_activate_stake = vote_accounts
+        .current
+        .iter()
+        .chain(vote_accounts.delinquent.iter())
+        .fold(0, |acc, vote_account| acc + vote_account.activated_stake)
+        as f64;
+
+    println!(
+        "{}",
+        style(format!(
+            "{:<44}  {:<44}  {:<11}  {:>10}  {:>11}  {}",
+            "Identity Pubkey",
+            "Vote Pubkey",
+            "Commission",
+            "Last Vote",
+            "Root Block",
+            "Active Stake",
+        ))
+        .bold()
+    );
+
+    for vote_account in vote_accounts
+        .current
+        .iter()
+        .chain(vote_accounts.delinquent.iter())
+    {
+        fn non_zero_or_dash(v: u64) -> String {
+            if v == 0 {
+                "-".into()
+            } else {
+                format!("{}", v)
+            }
+        }
+
+        println!(
+            "{:<44}  {:<44}  {:>3} ({:>4.1}%)  {:>10}  {:>11}  {:>11}",
+            vote_account.node_pubkey,
+            vote_account.vote_pubkey,
+            vote_account.commission,
+            f64::from(vote_account.commission) * 100.0 / f64::from(std::u8::MAX),
+            non_zero_or_dash(vote_account.last_vote),
+            non_zero_or_dash(vote_account.root_slot),
+            if vote_account.activated_stake > 0 {
+                format!(
+                    "{} ({:.2}%)",
+                    build_balance_message(vote_account.activated_stake, use_lamports_unit),
+                    100. * vote_account.activated_stake as f64 / total_activate_stake
+                )
+            } else {
+                "-".into()
+            },
         );
     }
 
