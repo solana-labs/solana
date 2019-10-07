@@ -13,20 +13,20 @@ use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct DateConfig {
     #[serde(with = "ts_seconds")]
-    pub dt: DateTime<Utc>,
+    pub date_time: DateTime<Utc>,
 }
 
 impl Default for DateConfig {
     fn default() -> Self {
         Self {
-            dt: Utc.timestamp(0, 0),
+            date_time: Utc.timestamp(0, 0),
         }
     }
 }
 impl DateConfig {
-    pub fn new(dt: Date<Utc>) -> Self {
+    pub fn new(date: Date<Utc>) -> Self {
         Self {
-            dt: dt.and_hms(0, 0, 0),
+            date_time: date.and_hms(0, 0, 0),
         }
     }
 
@@ -52,7 +52,7 @@ pub fn create_account(
 
 /// Set the date in the date account. The account pubkey must be signed in the
 /// transaction containing this instruction.
-pub fn store(date_pubkey: &Pubkey, dt: Date<Utc>) -> Instruction {
-    let date_config = DateConfig::new(dt);
+pub fn store(date_pubkey: &Pubkey, date: Date<Utc>) -> Instruction {
+    let date_config = DateConfig::new(date);
     config_instruction::store(&date_pubkey, true, vec![], &date_config)
 }

@@ -56,8 +56,8 @@ impl VestState {
     /// Redeem vested tokens.
     pub fn redeem_tokens(
         &mut self,
-        current_date: Date<Utc>,
         contract_account: &mut Account,
+        current_date: Date<Utc>,
         payee_account: &mut Account,
     ) {
         let schedule = create_vesting_schedule(self.start_date_time.date(), self.total_lamports);

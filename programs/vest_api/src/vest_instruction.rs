@@ -89,8 +89,8 @@ fn initialize_account(
 
 pub fn create_account(
     terminator_pubkey: &Pubkey,
-    payee_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
+    payee_pubkey: &Pubkey,
     start_date: Date<Utc>,
     date_pubkey: &Pubkey,
     lamports: u64,
@@ -115,30 +115,30 @@ pub fn create_account(
     ]
 }
 
-pub fn set_payee(old_payee: &Pubkey, contract: &Pubkey, new_payee: &Pubkey) -> Instruction {
+pub fn set_payee(contract: &Pubkey, old_payee: &Pubkey, new_payee: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*old_payee, true),
         AccountMeta::new(*contract, false),
+        AccountMeta::new(*old_payee, true),
     ];
     Instruction::new(id(), &VestInstruction::SetPayee(*new_payee), account_metas)
 }
 
-pub fn terminate(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
-    let mut account_metas = vec![
-        AccountMeta::new(*from, true),
+pub fn redeem_tokens(contract: &Pubkey, date_pubkey: &Pubkey, to: &Pubkey) -> Instruction {
+    let account_metas = vec![
         AccountMeta::new(*contract, false),
+        AccountMeta::new_credit_only(*date_pubkey, false),
+        AccountMeta::new_credit_only(*to, false),
+    ];
+    Instruction::new(id(), &VestInstruction::RedeemTokens, account_metas)
+}
+
+pub fn terminate(contract: &Pubkey, from: &Pubkey, to: &Pubkey) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*contract, false),
+        AccountMeta::new(*from, true),
     ];
     if from != to {
         account_metas.push(AccountMeta::new_credit_only(*to, false));
     }
     Instruction::new(id(), &VestInstruction::Terminate, account_metas)
-}
-
-pub fn redeem_tokens(date_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new_credit_only(*date_pubkey, false),
-        AccountMeta::new(*contract, false),
-        AccountMeta::new_credit_only(*to, false),
-    ];
-    Instruction::new(id(), &VestInstruction::RedeemTokens, account_metas)
 }
