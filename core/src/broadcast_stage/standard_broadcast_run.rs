@@ -12,7 +12,6 @@ struct BroadcastStats {
 
 pub(super) struct StandardBroadcastRun {
     stats: BroadcastStats,
-    unfinished_slot: Option<UnfinishedSlotInfo>,
     current_slot: Option<u64>,
     shredding_elapsed: u128,
     insertion_elapsed: u128,
@@ -24,7 +23,6 @@ impl StandardBroadcastRun {
     pub(super) fn new() -> Self {
         Self {
             stats: BroadcastStats::default(),
-            unfinished_slot: None,
             current_slot: None,
             shredding_elapsed: 0,
             insertion_elapsed: 0,
@@ -117,7 +115,7 @@ impl BroadcastRun for StandardBroadcastRun {
         )
         .expect("Expected to create a new shredder");
 
-        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
+        let (data_shreds, coding_shreds, latest_shred_index) = shredder.entries_to_shreds(
             &receive_results.entries,
             last_tick == bank.max_tick_height(),
             next_shred_index,
@@ -159,13 +157,6 @@ impl BroadcastRun for StandardBroadcastRun {
         )?;
 
         let broadcast_elapsed = broadcast_start.elapsed();
-        let latest_shred_index = uninished_slot.map(|s| s.next_index).unwrap_or_else(|| {
-            blocktree
-                .meta(bank.slot())
-                .expect("Database error")
-                .map(|meta| meta.consumed)
-                .unwrap_or(0)
-        });
 
         self.insertion_elapsed += insert_shreds_elapsed.as_millis();
         self.shredding_elapsed += to_shreds_elapsed.as_millis();
@@ -178,7 +169,7 @@ impl BroadcastRun for StandardBroadcastRun {
                 ("shredding_time", self.shredding_elapsed as i64, i64),
                 ("insertion_time", self.insertion_elapsed as i64, i64),
                 ("broadcast_time", self.broadcast_elapsed as i64, i64),
-                ("num_shreds", latest_shred_index as i64, i64),
+                ("num_shreds", i64::from(latest_shred_index), i64),
                 (
                     "slot_broadcast_time",
                     self.slot_broadcast_start.unwrap().elapsed().as_millis() as i64,
