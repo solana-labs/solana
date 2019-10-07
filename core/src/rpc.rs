@@ -177,6 +177,7 @@ impl JsonRpcRequestProcessor {
                     node_pubkey: vote_state.node_pubkey.to_string(),
                     activated_stake: *activated_stake,
                     commission: vote_state.commission,
+                    root_slot: vote_state.root_slot.unwrap_or(0),
                     epoch_vote_account,
                     last_vote,
                 }
@@ -286,8 +287,11 @@ pub struct RpcVoteAccountInfo {
     /// Whether this account is staked for the current epoch
     pub epoch_vote_account: bool,
 
-    /// Most recent slot voted on by this vote account
+    /// Most recent slot voted on by this vote account (0 if no votes exist)
     pub last_vote: u64,
+
+    /// Current root slot for this vote account (0 if not root slot exists)
+    pub root_slot: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
