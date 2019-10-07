@@ -190,7 +190,6 @@ fn test_stake_account_delegate() {
         vec![stake_instruction::deactivate_stake(
             &staker_pubkey,
             &staker_pubkey,
-            &vote_pubkey,
         )],
         Some(&mint_pubkey),
     );

@@ -61,7 +61,7 @@ pub enum CliCommand {
     Deploy(String),
     // Stake Commands
     CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
-    DeactivateStake(Pubkey, Pubkey),
+    DeactivateStake(Pubkey),
     DelegateStake(Pubkey, Pubkey, bool),
     RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeAccount {
@@ -774,13 +774,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             )
         }
         // Deactivate stake account
-        CliCommand::DeactivateStake(stake_account_pubkey, vote_account_pubkey) => {
-            process_deactivate_stake_account(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-            )
+        CliCommand::DeactivateStake(stake_account_pubkey) => {
+            process_deactivate_stake_account(&rpc_client, config, &stake_account_pubkey)
         }
         CliCommand::DelegateStake(stake_account_pubkey, vote_account_pubkey, force) => {
             process_delegate_stake(
@@ -1733,8 +1728,7 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let stake_pubkey = Pubkey::new_rand();
-        let vote_pubkey = Pubkey::new_rand();
-        config.command = CliCommand::DeactivateStake(stake_pubkey, vote_pubkey);
+        config.command = CliCommand::DeactivateStake(stake_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 

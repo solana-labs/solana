@@ -168,15 +168,6 @@ impl StakeSubCommands for App<'_, '_> {
                         .required(true)
                         .help("Stake account to be deactivated.")
                 )
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(2)
-                        .value_name("VOTE ACCOUNT")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("The vote account to which the stake is currently delegated")
-                )
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")
@@ -316,11 +307,7 @@ pub fn parse_redeem_vote_credits(matches: &ArgMatches<'_>) -> Result<CliCommand,
 
 pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    Ok(CliCommand::DeactivateStake(
-        stake_account_pubkey,
-        vote_account_pubkey,
-    ))
+    Ok(CliCommand::DeactivateStake(stake_account_pubkey))
 }
 
 pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
@@ -419,13 +406,11 @@ pub fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
-    vote_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::deactivate_stake(
         stake_account_pubkey,
         &config.keypair.pubkey(),
-        vote_account_pubkey,
     )];
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
@@ -744,11 +729,10 @@ mod tests {
             "test",
             "deactivate-stake",
             &stake_pubkey_string,
-            &pubkey_string,
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_deactivate_stake).unwrap(),
-            CliCommand::DeactivateStake(stake_pubkey, pubkey)
+            CliCommand::DeactivateStake(stake_pubkey)
         );
     }
     // TODO: Add process tests

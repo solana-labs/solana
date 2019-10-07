@@ -29,9 +29,9 @@ VoteState is the current state of all the votes the validator has submitted to t
 * Account::lamports - The accumulated lamports from the commission. These do not count as stakes.
 * `authorized_voter` - Only this identity is authorized to submit votes. This field can only modified by this identity.
 * `node_pubkey` - The Solana node that votes in this account.
-* `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's 
+* `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's
                            address and the authorized vote signer
-                             
+
 
 ### VoteInstruction::Initialize(VoteInit)
 
@@ -77,12 +77,12 @@ StakeState::Stake is the current delegation preference of the **staker** and con
 * `deactivated` - the epoch at which this stake was de-activated, some cool down epochs are required before the account
                   is fully deactivated, and the stake available for withdrawal    
 * `authorized_staker` - the pubkey of the entity that must sign delegation, activation, and deactivation transactions
-* `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's 
+* `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's
                            address, and the authorized staker
 
 ### StakeState::RewardsPool
 
-To avoid a single network wide lock or contention in redemption, 256 RewardsPools are part of genesis under pre-determined 
+To avoid a single network wide lock or contention in redemption, 256 RewardsPools are part of genesis under pre-determined
 keys, each with std::u64::MAX credits to be able to satisfy redemptions according to point value.
 
 The Stakes and the RewardsPool are accounts that are owned by the same `Stake` program.
@@ -99,8 +99,8 @@ stake is re-delegated  The transaction must be signed by the stake's `authorized
 
 ### StakeInstruction::Authorize\(Pubkey, StakeAuthorize\)
 
-Updates the account with a new authorized staker or withdrawer, according to 
-  the StakeAuthorize parameter (`Staker` or `Withdrawer`).  The transaction must be by signed by the 
+Updates the account with a new authorized staker or withdrawer, according to
+  the StakeAuthorize parameter (`Staker` or `Withdrawer`).  The transaction must be by signed by the
   Stakee account's current `authorized_staker` or `authorized_withdrawer`.
 
 * `account[0]` - RW - The StakeState
@@ -119,7 +119,7 @@ The Vote account and the Stake account pair maintain a lifetime counter of total
 * `account[3]` - R - sysvar::rewards account from the Bank that carries point value.
 * `account[4]` - R - sysvar::stake\_history account from the Bank that carries stake warmup/cooldown history
 
-Reward is paid out for the difference between `VoteState::credits` to `StakeState::Stake::credits_observed`, multiplied by `sysvar::rewards::Rewards::validator_point_value`. `StakeState::Stake::credits_observed` is updated to`VoteState::credits`. The commission is deposited into the Vote account token balance, and the reward is deposited to the Stake account token balance and 
+Reward is paid out for the difference between `VoteState::credits` to `StakeState::Stake::credits_observed`, multiplied by `sysvar::rewards::Rewards::validator_point_value`. `StakeState::Stake::credits_observed` is updated to`VoteState::credits`. The commission is deposited into the Vote account token balance, and the reward is deposited to the Stake account token balance and
 the stake account's `stake` is increased by the same amount (re-invested).
 
 ```text
@@ -135,8 +135,7 @@ A staker may wish to withdraw from the network. To do so he must first deactivat
 The transaction must be signed by the stake's `authorized_staker`.
 
 * `account[0]` - RW - The StakeState::Stake instance that is deactivating.
-* `account[1]` - R - The VoteState instance to which this stake is delegated, required in case of slashing
-* `account[2]` - R - sysvar::clock account from the Bank that carries current epoch
+* `account[1]` - R - sysvar::clock account from the Bank that carries current epoch
 
 StakeState::Stake::deactivated is set to the current epoch + cool down. The account's stake will ramp down to zero by that epoch, and Account::lamports will be available for withdrawal.
 
@@ -230,4 +229,3 @@ Only lamports in excess of effective+activating stake may be withdrawn at any ti
 ### Lock-up
 
 Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as a slot height, i.e. the minimum slot height that must be reached by the network before the stake account balance is available for withdrawal, except to a specified custodian.  This information is gathered when the stake account is created.
-
