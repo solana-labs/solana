@@ -57,6 +57,9 @@ pub enum CliCommand {
         count: Option<u64>,
         timeout: Duration,
     },
+    ShowValidators {
+        use_lamports_unit: bool,
+    },
     // Program Deployment
     Deploy(String),
     // Stake Commands
@@ -193,6 +196,7 @@ pub fn parse_command(
         ("get-slot", Some(_matches)) => Ok(CliCommand::GetSlot),
         ("get-transaction-count", Some(_matches)) => Ok(CliCommand::GetTransactionCount),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
+        ("show-validators", Some(matches)) => parse_show_validators(matches),
         // Program Deployment
         ("deploy", Some(deploy_matches)) => Ok(CliCommand::Deploy(
             deploy_matches
@@ -752,6 +756,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             count,
             timeout,
         } => process_ping(&rpc_client, config, interval, count, timeout),
+        CliCommand::ShowValidators { use_lamports_unit } => {
+            process_show_validators(&rpc_client, *use_lamports_unit)
+        }
 
         // Program Deployment
 
