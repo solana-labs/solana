@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::with_name("silent")
                         .short("s")
                         .long("silent")
-                        .help("Do not display mnemonic phrase"),
+                        .help("Do not display mnemonic phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 ),
         )
         .subcommand(
@@ -145,13 +145,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 write_keypair(&keypair, &mut stdout)?;
             } else {
                 write_keypair_file(&keypair, outfile)?;
-                println!("Wrote new keypair to {}", outfile);
+                eprintln!("Wrote new keypair to {}", outfile);
             }
 
             let silent = matches.is_present("silent");
             if !silent {
                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-                println!(
+                eprintln!(
                     "{}\nSave this mnemonic phrase to recover your new keypair:\n{}\n{}",
                     &divider, phrase, &divider
                 );
@@ -170,7 +170,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(&outfile, &matches);
             }
 
-            let phrase = rpassword::prompt_password_stdout("Mnemonic recovery phrase: ").unwrap();
+            let phrase = rpassword::prompt_password_stderr("Mnemonic recovery phrase: ").unwrap();
             let mnemonic = Mnemonic::from_phrase(phrase.trim(), Language::English)?;
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;
@@ -179,7 +179,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             if outfile == "-" {
                 println!("{}", serialized_keypair);
             } else {
-                println!("Wrote recovered keypair to {}", outfile);
+                eprintln!("Wrote recovered keypair to {}", outfile);
             }
         }
         _ => unreachable!(),
