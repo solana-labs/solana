@@ -243,6 +243,9 @@ mod tests {
         let mut recv = 0;
         while let Ok(num) = recv_mmsg(&reader, &mut packets[..]) {
             recv += num.1;
+            if recv >= TEST_NUM_MSGS {
+                break;
+            }
         }
         assert_eq!(TEST_NUM_MSGS, recv);
         let elapsed_in_small_batch = now.elapsed().as_millis();
