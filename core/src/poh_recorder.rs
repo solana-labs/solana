@@ -163,8 +163,8 @@ impl PohRecorder {
     ) -> (Option<u64>, u64, u64) {
         next_leader_slot
             .map(|(first, last)| {
-                let first_tick = first * ticks_per_slot;
-                let last_tick = (last + 1) * ticks_per_slot - 1;
+                let first_tick = first * ticks_per_slot + 1;
+                let last_tick = (last + 1) * ticks_per_slot;
                 let grace_ticks = cmp::min(
                     MAX_GRACE_TICKS,
                     (last_tick - first_tick + 1) / GRACE_TICKS_FACTOR,
@@ -202,7 +202,7 @@ impl PohRecorder {
         std::mem::swap(&mut cache, &mut self.tick_cache);
 
         self.start_slot = start_slot;
-        self.start_tick = (start_slot + 1) * self.ticks_per_slot;
+        self.start_tick = (start_slot + 1) * self.ticks_per_slot + 1;
         self.tick_height = self.start_tick - 1;
 
         let (start_leader_at_tick, last_leader_tick, grace_ticks) =
@@ -279,8 +279,8 @@ impl PohRecorder {
                 working_bank.max_tick_height,
                 working_bank.bank.slot()
             );
-            self.start_slot = working_bank.max_tick_height / self.ticks_per_slot;
-            self.start_tick = (self.start_slot + 1) * self.ticks_per_slot;
+            self.start_slot = working_bank.max_tick_height / self.ticks_per_slot - 1;
+            self.start_tick = (self.start_slot + 1) * self.ticks_per_slot + 1;
             self.clear_bank();
         }
         if send_result.is_err() {
@@ -944,12 +944,13 @@ mod tests {
             poh_recorder.tick();
             poh_recorder.tick();
             poh_recorder.tick();
-            assert_eq!(poh_recorder.tick_cache.len(), 3);
-            assert_eq!(poh_recorder.tick_height, 3);
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 4);
+            assert_eq!(poh_recorder.tick_height, 4);
             poh_recorder.reset(hash(b"hello"), 0, Some((4, 4))); // parent slot 0 implies tick_height of 3
             assert_eq!(poh_recorder.tick_cache.len(), 0);
             poh_recorder.tick();
-            assert_eq!(poh_recorder.tick_height, 4);
+            assert_eq!(poh_recorder.tick_height, 5);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
@@ -1284,22 +1285,22 @@ mod tests {
 
         assert_eq!(
             PohRecorder::compute_leader_slot_ticks(Some((4, 4)), 8),
-            (Some(36), 39, 4)
+            (Some(37), 40, 4)
         );
 
         assert_eq!(
             PohRecorder::compute_leader_slot_ticks(Some((4, 7)), 8),
-            (Some(44), 63, MAX_GRACE_TICKS)
+            (Some(45), 64, MAX_GRACE_TICKS)
         );
 
         assert_eq!(
             PohRecorder::compute_leader_slot_ticks(Some((6, 7)), 8),
-            (Some(56), 63, 8)
+            (Some(57), 64, 8)
         );
 
         assert_eq!(
             PohRecorder::compute_leader_slot_ticks(Some((6, 7)), 4),
-            (Some(28), 31, 4)
+            (Some(29), 32, 4)
         );
     }
 }

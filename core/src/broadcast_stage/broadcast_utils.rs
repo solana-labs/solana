@@ -20,7 +20,7 @@ pub struct UnfinishedSlotInfo {
     pub parent: u64,
 }
 
-/// Theis parameter tunes how many entries are received in one iteration of recv loop
+/// This parameter tunes how many entries are received in one iteration of recv loop
 /// This will prevent broadcast stage from consuming more entries, that could have led
 /// to delays in shredding, and broadcasting shreds to peer validators
 const RECEIVE_ENTRY_COUNT_THRESHOLD: usize = 8;
@@ -106,7 +106,7 @@ mod tests {
         let mut last_hash = genesis_block.hash();
 
         assert!(bank1.max_tick_height() > 1);
-        let entries: Vec<_> = (0..bank1.max_tick_height() + 1)
+        let entries: Vec<_> = (1..bank1.max_tick_height() + 1)
             .map(|i| {
                 let entry = Entry::new(&last_hash, 1, vec![tx.clone()]);
                 last_hash = entry.hash;
