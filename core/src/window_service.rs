@@ -130,10 +130,10 @@ where
     let num_shreds = shreds.len();
     let now = Instant::now();
     let metrics = blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
-    let elapsed = now.elapsed().as_millis();
+    let elapsed = now.elapsed().as_micros();
 
     datapoint_info!(
-        "recv-window",
+        "recv-window-insert-shreds",
         ("num_shreds", num_shreds as i64, i64),
         ("elapsed", elapsed as i64, i64),
         (
