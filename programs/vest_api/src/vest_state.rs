@@ -15,7 +15,7 @@ pub struct VestState {
     pub custodian_pubkey: Pubkey,
 
     /// The address authorized to redeem vested tokens
-    pub payee_pubkey: Pubkey,
+    pub withdrawer_pubkey: Pubkey,
 
     /// The day from which the vesting contract begins
     #[serde(with = "ts_seconds")]
@@ -24,10 +24,10 @@ pub struct VestState {
     /// Address of an account containing a trusted date, used to drive the vesting schedule
     pub date_pubkey: Pubkey,
 
-    /// The number of lamports to send the payee if the schedule completes
+    /// The number of lamports to send the withdrawer if the schedule completes
     pub total_lamports: u64,
 
-    /// The number of lamports the payee has already redeemed
+    /// The number of lamports the withdrawer has already redeemed
     pub redeemed_lamports: u64,
 }
 
@@ -35,7 +35,7 @@ impl Default for VestState {
     fn default() -> Self {
         Self {
             custodian_pubkey: Pubkey::default(),
-            payee_pubkey: Pubkey::default(),
+            withdrawer_pubkey: Pubkey::default(),
             start_date_time: Utc.timestamp(0, 0),
             date_pubkey: Pubkey::default(),
             total_lamports: 0,
@@ -58,7 +58,7 @@ impl VestState {
         &mut self,
         contract_account: &mut Account,
         current_date: Date<Utc>,
-        payee_account: &mut Account,
+        withdrawer_account: &mut Account,
     ) {
         let schedule = create_vesting_schedule(self.start_date_time.date(), self.total_lamports);
 
@@ -71,7 +71,7 @@ impl VestState {
         let redeemable_lamports = vested_lamports.saturating_sub(self.redeemed_lamports);
 
         contract_account.lamports -= redeemable_lamports;
-        payee_account.lamports += redeemable_lamports;
+        withdrawer_account.lamports += redeemable_lamports;
 
         self.redeemed_lamports += redeemable_lamports;
     }

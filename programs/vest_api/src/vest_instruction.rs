@@ -48,14 +48,14 @@ pub enum VestInstruction {
     /// Declare and instantiate a vesting schedule
     InitializeAccount {
         custodian_pubkey: Pubkey, // The address authorized to terminate this contract with a signed Terminate instruction
-        payee_pubkey: Pubkey,     // The address authorized to redeem vested tokens
+        withdrawer_pubkey: Pubkey, // The address authorized to redeem vested tokens
         start_date_time: DateTime<Utc>, // The day from which the vesting contract begins
         date_pubkey: Pubkey, // Address of an account containing a trusted date, used to drive the vesting schedule
-        total_lamports: u64, // The number of lamports to send the payee if the schedule completes
+        total_lamports: u64, // The number of lamports to send the withdrawer if the schedule completes
     },
 
-    /// Change the payee pubkey
-    SetPayee(Pubkey),
+    /// Change the withdrawer pubkey
+    SetWithdrawer(Pubkey),
 
     /// Load an account and pass its data to the contract for inspection.
     RedeemTokens,
@@ -67,7 +67,7 @@ pub enum VestInstruction {
 
 fn initialize_account(
     custodian_pubkey: &Pubkey,
-    payee_pubkey: &Pubkey,
+    withdrawer_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
     start_date: Date<Utc>,
     date_pubkey: &Pubkey,
@@ -78,7 +78,7 @@ fn initialize_account(
         id(),
         &VestInstruction::InitializeAccount {
             custodian_pubkey: *custodian_pubkey,
-            payee_pubkey: *payee_pubkey,
+            withdrawer_pubkey: *withdrawer_pubkey,
             start_date_time: start_date.and_hms(0, 0, 0),
             date_pubkey: *date_pubkey,
             total_lamports,
@@ -90,7 +90,7 @@ fn initialize_account(
 pub fn create_account(
     custodian_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
-    payee_pubkey: &Pubkey,
+    withdrawer_pubkey: &Pubkey,
     start_date: Date<Utc>,
     date_pubkey: &Pubkey,
     lamports: u64,
@@ -106,7 +106,7 @@ pub fn create_account(
         ),
         initialize_account(
             custodian_pubkey,
-            payee_pubkey,
+            withdrawer_pubkey,
             contract_pubkey,
             start_date,
             date_pubkey,
@@ -115,12 +115,20 @@ pub fn create_account(
     ]
 }
 
-pub fn set_payee(contract: &Pubkey, old_payee: &Pubkey, new_payee: &Pubkey) -> Instruction {
+pub fn set_withdrawer(
+    contract: &Pubkey,
+    old_withdrawer: &Pubkey,
+    new_withdrawer: &Pubkey,
+) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*contract, false),
-        AccountMeta::new(*old_payee, true),
+        AccountMeta::new(*old_withdrawer, true),
     ];
-    Instruction::new(id(), &VestInstruction::SetPayee(*new_payee), account_metas)
+    Instruction::new(
+        id(),
+        &VestInstruction::SetWithdrawer(*new_withdrawer),
+        account_metas,
+    )
 }
 
 pub fn redeem_tokens(contract: &Pubkey, date_pubkey: &Pubkey, to: &Pubkey) -> Instruction {

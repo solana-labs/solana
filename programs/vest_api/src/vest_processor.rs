@@ -63,7 +63,7 @@ pub fn process_instruction(
     match instruction {
         VestInstruction::InitializeAccount {
             custodian_pubkey,
-            payee_pubkey,
+            withdrawer_pubkey,
             start_date_time,
             date_pubkey,
             total_lamports,
@@ -71,7 +71,7 @@ pub fn process_instruction(
             let contract_account = &mut keyed_accounts[0].account;
             let vest_state = VestState {
                 custodian_pubkey,
-                payee_pubkey,
+                withdrawer_pubkey,
                 start_date_time,
                 date_pubkey,
                 total_lamports,
@@ -79,19 +79,19 @@ pub fn process_instruction(
             };
             vest_state.serialize(&mut contract_account.data)
         }
-        VestInstruction::SetPayee(payee_pubkey) => {
-            let (contract_keyed_account, old_payee_keyed_account) = match keyed_accounts {
+        VestInstruction::SetWithdrawer(withdrawer_pubkey) => {
+            let (contract_keyed_account, old_withdrawer_keyed_account) = match keyed_accounts {
                 [ka0, ka1] => (ka0, ka1),
                 _ => return Err(InstructionError::InvalidArgument),
             };
             let contract_account = &mut contract_keyed_account.account;
             let mut vest_state = VestState::deserialize(&contract_account.data)?;
-            parse_signed_account(old_payee_keyed_account, &vest_state.payee_pubkey)?;
-            vest_state.payee_pubkey = payee_pubkey;
+            parse_signed_account(old_withdrawer_keyed_account, &vest_state.withdrawer_pubkey)?;
+            vest_state.withdrawer_pubkey = withdrawer_pubkey;
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::RedeemTokens => {
-            let (contract_keyed_account, date_keyed_account, payee_keyed_account) =
+            let (contract_keyed_account, date_keyed_account, withdrawer_keyed_account) =
                 match keyed_accounts {
                     [ka0, ka1, ka2] => (ka0, ka1, ka2),
                     _ => return Err(InstructionError::InvalidArgument),
@@ -99,9 +99,10 @@ pub fn process_instruction(
             let contract_account = &mut contract_keyed_account.account;
             let mut vest_state = VestState::deserialize(&contract_account.data)?;
             let current_date = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
-            let payee_account = parse_account(payee_keyed_account, &vest_state.payee_pubkey)?;
+            let withdrawer_account =
+                parse_account(withdrawer_keyed_account, &vest_state.withdrawer_pubkey)?;
 
-            vest_state.redeem_tokens(contract_account, current_date, payee_account);
+            vest_state.redeem_tokens(contract_account, current_date, withdrawer_account);
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::Terminate => {
@@ -191,7 +192,7 @@ mod tests {
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
         payer_keypair: &Keypair,
-        payee_pubkey: &Pubkey,
+        withdrawer_pubkey: &Pubkey,
         start_date: Date<Utc>,
         date_pubkey: &Pubkey,
         lamports: u64,
@@ -199,7 +200,7 @@ mod tests {
         let instructions = vest_instruction::create_account(
             &payer_keypair.pubkey(),
             &contract_pubkey,
-            &payee_pubkey,
+            &withdrawer_pubkey,
             start_date,
             &date_pubkey,
             lamports,
@@ -208,29 +209,29 @@ mod tests {
         bank_client.send_message(&[&payer_keypair], message)
     }
 
-    fn send_set_payee(
+    fn send_set_withdrawer(
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
-        old_payee_keypair: &Keypair,
-        new_payee_pubkey: &Pubkey,
+        old_withdrawer_keypair: &Keypair,
+        new_withdrawer_pubkey: &Pubkey,
     ) -> Result<Signature> {
-        let instruction = vest_instruction::set_payee(
+        let instruction = vest_instruction::set_withdrawer(
             &contract_pubkey,
-            &old_payee_keypair.pubkey(),
-            &new_payee_pubkey,
+            &old_withdrawer_keypair.pubkey(),
+            &new_withdrawer_pubkey,
         );
-        bank_client.send_instruction(&old_payee_keypair, instruction)
+        bank_client.send_instruction(&old_withdrawer_keypair, instruction)
     }
 
     fn send_redeem_tokens(
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
         payer_keypair: &Keypair,
-        payee_pubkey: &Pubkey,
+        withdrawer_pubkey: &Pubkey,
         date_pubkey: &Pubkey,
     ) -> Result<Signature> {
         let instruction =
-            vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &payee_pubkey);
+            vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &withdrawer_pubkey);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
         bank_client.send_message(&[&payer_keypair], message)
     }
@@ -311,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    fn test_set_payee() {
+    fn test_set_withdrawer() {
         let (bank_client, alice_keypair) = create_bank_client(38);
         let date_pubkey = Pubkey::new_rand();
         let contract_pubkey = Pubkey::new_rand();
@@ -332,13 +333,13 @@ mod tests {
 
         let new_bob_pubkey = Pubkey::new_rand();
 
-        // Ensure some rando can't change the payee.
+        // Ensure some rando can't change the withdrawer.
         // Transfer bob a token to pay the transaction fee.
         let mallory_keypair = Keypair::new();
         bank_client
             .transfer(1, &alice_keypair, &mallory_keypair.pubkey())
             .unwrap();
-        send_set_payee(
+        send_set_withdrawer(
             &bank_client,
             &contract_pubkey,
             &mallory_keypair,
@@ -350,7 +351,7 @@ mod tests {
         bank_client
             .transfer(1, &alice_keypair, &bob_pubkey)
             .unwrap();
-        send_set_payee(
+        send_set_withdrawer(
             &bank_client,
             &contract_pubkey,
             &bob_keypair,
