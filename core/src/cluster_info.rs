@@ -905,7 +905,7 @@ impl ClusterInfo {
         );
         let protocol_size =
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
-        PACKET_DATA_SIZE - (protocol_size - filter_size)
+        1232 - (protocol_size - filter_size)
     }
 
     fn new_pull_requests(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {

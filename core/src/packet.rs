@@ -28,7 +28,7 @@ pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
-pub const BLOB_SIZE: usize = (2 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
+pub const BLOB_SIZE: usize = (10 * 1024); // wikipedia says there should be 20b for ipv4 headers
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
 pub const BLOB_DATA_ALIGN: usize = 16; // safe for erasure input pointers, gf.c needs 16byte-aligned buffers
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
