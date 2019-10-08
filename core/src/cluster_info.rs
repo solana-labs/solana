@@ -532,7 +532,7 @@ impl ClusterInfo {
 
     /// Return sorted Retransmit peers and index of `Self.id()` as if it were in that list
     pub fn shuffle_peers_and_index(
-        &self,
+        id: &Pubkey,
         peers: &[ContactInfo],
         stakes_and_index: &[(u64, usize)],
         rng: ChaChaRng,
@@ -543,7 +543,7 @@ impl ClusterInfo {
             .iter()
             .enumerate()
             .for_each(|(i, (_stake, index))| {
-                if peers[*index].id == self.id() {
+                if &peers[*index].id == id {
                     self_index = i;
                 }
             });
@@ -737,25 +737,20 @@ impl ClusterInfo {
     /// # Remarks
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
     pub fn retransmit_to(
-        obj: &Arc<RwLock<Self>>,
+        id: &Pubkey,
         peers: &[&ContactInfo],
         packet: &Packet,
         slot_leader_pubkey: Option<Pubkey>,
         s: &UdpSocket,
         forwarded: bool,
     ) -> Result<()> {
-        let (me, orders): (ContactInfo, &[&ContactInfo]) = {
-            // copy to avoid locking during IO
-            let s = obj.read().unwrap();
-            (s.my_data().clone(), peers)
-        };
-        trace!("retransmit orders {}", orders.len());
-        let errs: Vec<_> = orders
+        trace!("retransmit orders {}", peers.len());
+        let errs: Vec<_> = peers
             .par_iter()
             .filter(|v| v.id != slot_leader_pubkey.unwrap_or_default())
             .map(|v| {
                 let dest = if forwarded { &v.tvu_forwards } else { &v.tvu };
-                debug!("{}: retransmit packet to {} {}", me.id, v.id, *dest,);
+                debug!("{}: retransmit packet to {} {}", id, v.id, *dest,);
                 s.send_to(&packet.data, dest)
             })
             .collect();

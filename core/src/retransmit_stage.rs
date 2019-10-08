@@ -36,11 +36,14 @@ pub fn retransmit(
     let mut timer_start = Measure::start("retransmit");
     let mut total_packets = packets.packets.len();
     let mut packet_v = vec![packets];
+    let mut extra_recv_time = Measure::start("recv_time");
     while let Ok(nq) = r.try_recv() {
         total_packets += nq.packets.len();
         packet_v.push(nq);
     }
+    extra_recv_time.stop();
 
+    let mut bank_time = Measure::start("bank_time");
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     let mut peers_len = 0;
@@ -49,17 +52,19 @@ pub fn retransmit(
         .read()
         .unwrap()
         .sorted_retransmit_peers_and_stakes(stakes.as_ref());
+    let me = cluster_info.read().unwrap().my_data().clone();
+    bank_time.stop();
     let mut retransmit_total = 0;
     let mut turbine_total = 0;
     for packets in packet_v {
         for packet in &packets.packets {
             let mut turbine_start = Measure::start("turbine_start");
-            let (my_index, mut shuffled_stakes_and_index) =
-                cluster_info.read().unwrap().shuffle_peers_and_index(
-                    &peers,
-                    &stakes_and_index,
-                    ChaChaRng::from_seed(packet.meta.seed),
-                );
+            let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
+                &me.id,
+                &peers,
+                &stakes_and_index,
+                ChaChaRng::from_seed(packet.meta.seed),
+            );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
             shuffled_stakes_and_index.remove(my_index);
             // split off the indexes, we don't need the stakes anymore
@@ -79,10 +84,10 @@ pub fn retransmit(
                 leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
             let mut retransmit_time = Measure::start("retransmit_to");
             if !packet.meta.forward {
-                ClusterInfo::retransmit_to(&cluster_info, &neighbors, packet, leader, sock, true)?;
-                ClusterInfo::retransmit_to(&cluster_info, &children, packet, leader, sock, false)?;
+                ClusterInfo::retransmit_to(&me.id, &neighbors, packet, leader, sock, true)?;
+                ClusterInfo::retransmit_to(&me.id, &children, packet, leader, sock, false)?;
             } else {
-                ClusterInfo::retransmit_to(&cluster_info, &children, packet, leader, sock, true)?;
+                ClusterInfo::retransmit_to(&me.id, &children, packet, leader, sock, true)?;
             }
             retransmit_time.stop();
             retransmit_total += retransmit_time.as_ms();
@@ -102,6 +107,8 @@ pub fn retransmit(
         ("total_packets", total_packets as i64, i64),
         ("retransmit_total", retransmit_total as i64, i64),
         ("turbine_total", turbine_total as i64, i64),
+        ("extra_recv", extra_recv_time.as_ms() as i64, i64),
+        ("bank_time", bank_time.as_ms() as i64, i64),
     );
     Ok(())
 }

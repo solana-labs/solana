@@ -177,8 +177,9 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
     let mut p = Packet::default();
     p.meta.size = 10;
     let peers = c1.read().unwrap().retransmit_peers();
+    let self_id = c1.read().unwrap().id();
     let retransmit_peers: Vec<_> = peers.iter().collect();
-    ClusterInfo::retransmit_to(&c1, &retransmit_peers, &p, None, &tn1, false)?;
+    ClusterInfo::retransmit_to(&self_id, &retransmit_peers, &p, None, &tn1, false)?;
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {
