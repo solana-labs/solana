@@ -36,14 +36,11 @@ pub fn retransmit(
     let mut timer_start = Measure::start("retransmit");
     let mut total_packets = packets.packets.len();
     let mut packet_v = vec![packets];
-    let mut extra_recv_time = Measure::start("recv_time");
     while let Ok(nq) = r.try_recv() {
         total_packets += nq.packets.len();
         packet_v.push(nq);
     }
-    extra_recv_time.stop();
 
-    let mut bank_time = Measure::start("bank_time");
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     let mut peers_len = 0;
@@ -53,7 +50,6 @@ pub fn retransmit(
         .unwrap()
         .sorted_retransmit_peers_and_stakes(stakes.as_ref());
     let me = cluster_info.read().unwrap().my_data().clone();
-    bank_time.stop();
     let mut retransmit_total = 0;
     let mut compute_turbine_peers_total = 0;
     for packets in packet_v {
@@ -107,8 +103,6 @@ pub fn retransmit(
         ("total_packets", total_packets as i64, i64),
         ("retransmit_total", retransmit_total as i64, i64),
         ("compute_turbine", compute_turbine_peers_total as i64, i64),
-        ("extra_recv", extra_recv_time.as_ms() as i64, i64),
-        ("bank_time", bank_time.as_ms() as i64, i64),
     );
     Ok(())
 }
