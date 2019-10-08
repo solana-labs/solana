@@ -128,7 +128,7 @@ The total stake allocated to a VoteState program can be calculated by the sum of
 
 ## Example Callflow
 
-![Passive Staking Callflow](../.gitbook/assets/passive-staking-callflow.svg)
+![Passive Staking Callflow](../.gitbook/assets/passive-staking-callflow%20%284%29.svg)
 
 ## Future work
 

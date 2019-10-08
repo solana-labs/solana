@@ -1,74 +1,92 @@
 <svg class="bob" font-family="arial" font-size="14" height="304" width="696" xmlns="http://www.w3.org/2000/svg">
 <defs>
 <marker id="triangle" markerHeight="8" markerWidth="8" orient="auto" refX="4" refY="2" viewBox="0 0 8 4">
-<polygon fill="black" points="0,0 0,4 8,2 0,0"/>
+<polygon class="fg_fill" points="0,0 0,4 8,2 0,0"/>
 </marker>
 <marker id="clear_triangle" markerHeight="10" markerWidth="10" orient="auto" refX="1" refY="7" viewBox="0 0 20 14">
-<polygon fill="none" points="2,2 2,12 18,7 2,2" stroke="black" stroke-width="2"/>
+<polygon class="bg_fill" points="2,2 2,12 18,7 2,2"/>
 </marker>
 <marker id="circle" markerHeight="5" markerWidth="5" orient="auto" refX="10" refY="10" viewBox="0 0 20 20">
-<circle cx="10" cy="10" fill="black" r="8"/>
+<circle class="fg_fill" cx="10" cy="10" r="8"/>
 </marker>
 <marker id="square" markerHeight="5" markerWidth="5" orient="auto" refX="10" refY="10" viewBox="0 0 20 20">
-<rect fill="black" height="20" width="20" x="0" y="0"/>
+<rect class="fg_fill" height="20" width="20" x="0" y="0"/>
 </marker>
 <marker id="open_circle" markerHeight="10" markerWidth="10" orient="auto" refX="10" refY="10" viewBox="0 0 20 20">
-<circle cx="10" cy="10" fill="white" r="4" stroke="black" stroke-width="2"/>
+<circle class="bg_fill" cx="10" cy="10" r="4"/>
 </marker>
 <marker id="big_open_circle" markerHeight="20" markerWidth="20" orient="auto" refX="20" refY="20" viewBox="0 0 40 40">
-<circle cx="20" cy="20" fill="white" r="6" stroke="black" stroke-width="2"/>
+<circle class="bg_fill" cx="20" cy="20" r="6"/>
 </marker>
 </defs>
 <style type="text/css">
 
-    line,path {
-      stroke: black;
-      stroke-width: 2;
-      stroke-opacity: 1;
-      fill-opacity: 1;
-      stroke-linecap: round;
-      stroke-linejoin: miter;
-    }
-    line.dashed {
-        stroke-dasharray: 5;
-    }
-    circle.solid {
-      fill:black;
-      stroke: black;
-      stroke-width: 2;
-      stroke-opacity: 1;
-      fill-opacity: 1;
-      stroke-linecap: round;
-      stroke-linejoin: miter;
-    }
-    circle.open {
-      fill:none;
-      stroke: black;
-      stroke-width: 2;
-      stroke-opacity: 1;
-      fill-opacity: 1;
-      stroke-linecap: round;
-      stroke-linejoin: miter;
-    }
-    tspan.head{
-        fill: none;
-        stroke: none;
-    }
+rect.backdrop {
+    fill: white;
+}
+text{
+    fill: black;
+}
+
+circle {
+    fill: none;
+    stroke: black;
+    stroke-width: 2;
+}
+
+line {
+    stroke: black;
+    stroke-width: 2;
+    stroke-opacity: 1;
+    fill-opacity: 1;
+    stroke-linecap: round;
+    stroke-linejoin: miter;
+}
+
+path {
+    fill: none;
+    stroke: black;
+    stroke-width: 2;
+    stroke-opacity: 1;
+    fill-opacity: 1;
+    stroke-linecap: round;
+    stroke-linejoin: miter;
+}
+
+line.dashed {
+    stroke-dasharray: 5;
+}
+
+.fg_fill {
+    fill: black;
+}
+
+
+.bg_fill {
+    fill: white;
+    stroke: black;
+    stroke-width: 2;
+}
+
+tspan.head{
+    fill: none;
+    stroke: none;
+}
     
 </style>
-<rect fill="white" height="304" width="696" x="0" y="0"/>
+<rect class="backdrop" height="304" width="696" x="0" y="0"/>
 <g>
 <line x1="12" x2="12" y1="140" y2="164"/>
-<path d="M 12 164 A 4 4 0 0 0 16 168" fill="none"/>
-<path d="M 16 136 A 4 4 0 0 0 12 140" fill="none"/>
+<path d="M 12 164 A 4 4 0 0 0 16 168"/>
+<path d="M 16 136 A 4 4 0 0 0 12 140"/>
 </g>
 <g>
 <line x1="16" x2="88" y1="136" y2="136"/>
-<path d="M 92 140 A 4 4 0 0 0 88 136" fill="none"/>
+<path d="M 92 140 A 4 4 0 0 0 88 136"/>
 </g>
 <g>
 <line x1="16" x2="88" y1="168" y2="168"/>
-<path d="M 88 168 A 4 4 0 0 0 92 164" fill="none"/>
+<path d="M 88 168 A 4 4 0 0 0 92 164"/>
 </g>
 <g>
 <line x1="92" x2="92" y1="140" y2="164"/>
@@ -78,35 +96,35 @@
 </g>
 <g>
 <line x1="108" x2="108" y1="92" y2="144"/>
-<path d="M 112 88 A 4 4 0 0 0 108 92" fill="none"/>
+<path d="M 112 88 A 4 4 0 0 0 108 92"/>
 </g>
 <g>
 <line x1="108" x2="108" y1="160" y2="212"/>
-<path d="M 108 212 A 4 4 0 0 0 112 216" fill="none"/>
+<path d="M 108 212 A 4 4 0 0 0 112 216"/>
 </g>
 <g>
 <line x1="112" x2="356" y1="88" y2="88"/>
 <line x1="356" x2="396" y1="88" y2="88"/>
 <line x1="396" x2="560" y1="88" y2="88"/>
-<path d="M 564 92 A 4 4 0 0 0 560 88" fill="none"/>
+<path d="M 564 92 A 4 4 0 0 0 560 88"/>
 </g>
 <g>
 <line x1="112" x2="380" y1="216" y2="216"/>
 <line x1="380" x2="560" y1="216" y2="216"/>
-<path d="M 560 216 A 4 4 0 0 0 564 212" fill="none"/>
+<path d="M 560 216 A 4 4 0 0 0 564 212"/>
 </g>
 <g>
 <line x1="132" x2="132" y1="124" y2="180"/>
-<path d="M 132 180 A 4 4 0 0 0 136 184" fill="none"/>
-<path d="M 136 120 A 4 4 0 0 0 132 124" fill="none"/>
+<path d="M 132 180 A 4 4 0 0 0 136 184"/>
+<path d="M 136 120 A 4 4 0 0 0 132 124"/>
 </g>
 <g>
 <line x1="136" x2="192" y1="120" y2="120"/>
-<path d="M 196 124 A 4 4 0 0 0 192 120" fill="none"/>
+<path d="M 196 124 A 4 4 0 0 0 192 120"/>
 </g>
 <g>
 <line x1="136" x2="192" y1="184" y2="184"/>
-<path d="M 192 184 A 4 4 0 0 0 196 180" fill="none"/>
+<path d="M 192 184 A 4 4 0 0 0 196 180"/>
 </g>
 <g>
 <line x1="196" x2="196" y1="124" y2="180"/>
@@ -116,16 +134,16 @@
 </g>
 <g>
 <line x1="220" x2="220" y1="124" y2="180"/>
-<path d="M 220 180 A 4 4 0 0 0 224 184" fill="none"/>
-<path d="M 224 120 A 4 4 0 0 0 220 124" fill="none"/>
+<path d="M 220 180 A 4 4 0 0 0 224 184"/>
+<path d="M 224 120 A 4 4 0 0 0 220 124"/>
 </g>
 <g>
 <line x1="224" x2="312" y1="120" y2="120"/>
-<path d="M 316 124 A 4 4 0 0 0 312 120" fill="none"/>
+<path d="M 316 124 A 4 4 0 0 0 312 120"/>
 </g>
 <g>
 <line x1="224" x2="312" y1="184" y2="184"/>
-<path d="M 312 184 A 4 4 0 0 0 316 180" fill="none"/>
+<path d="M 312 184 A 4 4 0 0 0 316 180"/>
 </g>
 <g>
 <line x1="316" x2="316" y1="124" y2="180"/>
@@ -135,51 +153,51 @@
 </g>
 <g>
 <line x1="324" x2="324" y1="28" y2="52"/>
-<path d="M 324 52 A 4 4 0 0 0 328 56" fill="none"/>
-<path d="M 328 24 A 4 4 0 0 0 324 28" fill="none"/>
+<path d="M 324 52 A 4 4 0 0 0 328 56"/>
+<path d="M 328 24 A 4 4 0 0 0 324 28"/>
 </g>
 <g>
 <line x1="328" x2="432" y1="24" y2="24"/>
-<path d="M 436 28 A 4 4 0 0 0 432 24" fill="none"/>
+<path d="M 436 28 A 4 4 0 0 0 432 24"/>
 </g>
 <g>
 <line x1="328" x2="396" y1="56" y2="56"/>
 <line marker-end="url(#triangle)" x1="396" x2="396" y1="56" y2="108"/>
 <line x1="396" x2="432" y1="56" y2="56"/>
-<path d="M 432 56 A 4 4 0 0 0 436 52" fill="none"/>
+<path d="M 432 56 A 4 4 0 0 0 436 52"/>
 </g>
 <g>
 <line x1="340" x2="340" y1="124" y2="180"/>
-<path d="M 340 180 A 4 4 0 0 0 344 184" fill="none"/>
-<path d="M 344 120 A 4 4 0 0 0 340 124" fill="none"/>
+<path d="M 340 180 A 4 4 0 0 0 344 184"/>
+<path d="M 344 120 A 4 4 0 0 0 340 124"/>
 </g>
 <g>
 <line x1="344" x2="356" y1="120" y2="120"/>
 <line x1="356" x2="356" y1="80" y2="120"/>
 <line x1="356" x2="416" y1="120" y2="120"/>
-<path d="M 420 124 A 4 4 0 0 0 416 120" fill="none"/>
+<path d="M 420 124 A 4 4 0 0 0 416 120"/>
 </g>
 <g>
 <line x1="344" x2="380" y1="184" y2="184"/>
 <line marker-end="url(#triangle)" x1="380" x2="380" y1="184" y2="252"/>
 <line x1="380" x2="416" y1="184" y2="184"/>
-<path d="M 416 184 A 4 4 0 0 0 420 180" fill="none"/>
+<path d="M 416 184 A 4 4 0 0 0 420 180"/>
 </g>
 <g>
 <line marker-end="url(#triangle)" x1="356" x2="356" y1="80" y2="68"/>
 </g>
 <g>
 <line x1="356" x2="356" y1="268" y2="292"/>
-<path d="M 356 292 A 4 4 0 0 0 360 296" fill="none"/>
-<path d="M 360 264 A 4 4 0 0 0 356 268" fill="none"/>
+<path d="M 356 292 A 4 4 0 0 0 360 296"/>
+<path d="M 360 264 A 4 4 0 0 0 356 268"/>
 </g>
 <g>
 <line x1="360" x2="408" y1="264" y2="264"/>
-<path d="M 412 268 A 4 4 0 0 0 408 264" fill="none"/>
+<path d="M 412 268 A 4 4 0 0 0 408 264"/>
 </g>
 <g>
 <line x1="360" x2="408" y1="296" y2="296"/>
-<path d="M 408 296 A 4 4 0 0 0 412 292" fill="none"/>
+<path d="M 408 296 A 4 4 0 0 0 412 292"/>
 </g>
 <g>
 <line x1="412" x2="412" y1="268" y2="292"/>
@@ -195,16 +213,16 @@
 </g>
 <g>
 <line x1="444" x2="444" y1="124" y2="180"/>
-<path d="M 444 180 A 4 4 0 0 0 448 184" fill="none"/>
-<path d="M 448 120 A 4 4 0 0 0 444 124" fill="none"/>
+<path d="M 444 180 A 4 4 0 0 0 448 184"/>
+<path d="M 448 120 A 4 4 0 0 0 444 124"/>
 </g>
 <g>
 <line x1="448" x2="536" y1="120" y2="120"/>
-<path d="M 540 124 A 4 4 0 0 0 536 120" fill="none"/>
+<path d="M 540 124 A 4 4 0 0 0 536 120"/>
 </g>
 <g>
 <line x1="448" x2="536" y1="184" y2="184"/>
-<path d="M 536 184 A 4 4 0 0 0 540 180" fill="none"/>
+<path d="M 536 184 A 4 4 0 0 0 540 180"/>
 </g>
 <g>
 <line x1="540" x2="540" y1="124" y2="180"/>
@@ -220,16 +238,16 @@
 </g>
 <g>
 <line x1="588" x2="588" y1="124" y2="180"/>
-<path d="M 588 180 A 4 4 0 0 0 592 184" fill="none"/>
-<path d="M 592 120 A 4 4 0 0 0 588 124" fill="none"/>
+<path d="M 588 180 A 4 4 0 0 0 592 184"/>
+<path d="M 592 120 A 4 4 0 0 0 588 124"/>
 </g>
 <g>
 <line x1="592" x2="688" y1="120" y2="120"/>
-<path d="M 692 124 A 4 4 0 0 0 688 120" fill="none"/>
+<path d="M 692 124 A 4 4 0 0 0 688 120"/>
 </g>
 <g>
 <line x1="592" x2="688" y1="184" y2="184"/>
-<path d="M 688 184 A 4 4 0 0 0 692 180" fill="none"/>
+<path d="M 688 184 A 4 4 0 0 0 692 180"/>
 </g>
 <g>
 <line x1="692" x2="692" y1="124" y2="180"/>
