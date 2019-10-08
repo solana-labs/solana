@@ -58,17 +58,6 @@ impl StandardBroadcastRun {
 
         // 2) Convert entries to blobs + generate coding blobs
         let keypair = &cluster_info.read().unwrap().keypair.clone();
-        let next_shred_index = self
-            .unfinished_slot
-            .map(|s| s.next_shred_index)
-            .unwrap_or_else(|| {
-                blocktree
-                    .meta(bank.slot())
-                    .expect("Database error")
-                    .map(|meta| meta.consumed)
-                    .unwrap_or(0) as u32
-            });
-
         let parent_slot = if let Some(parent_bank) = bank.parent() {
             parent_bank.slot()
         } else {
@@ -97,6 +86,11 @@ impl StandardBroadcastRun {
             })
             .unwrap_or(None);
 
+        // This shred should only be Some if the previous slot was interrupted
+        if last_unfinished_slot_shred.is_some() {
+            self.unfinished_slot = None;
+        }
+
         let shredder = Shredder::new(
             bank.slot(),
             parent_slot,
@@ -104,6 +98,17 @@ impl StandardBroadcastRun {
             keypair.clone(),
         )
         .expect("Expected to create a new shredder");
+
+        let next_shred_index = self
+            .unfinished_slot
+            .map(|s| s.next_shred_index)
+            .unwrap_or_else(|| {
+                blocktree
+                    .meta(bank.slot())
+                    .expect("Database error")
+                    .map(|meta| meta.consumed)
+                    .unwrap_or(0) as u32
+            });
 
         let (data_shreds, coding_shreds, next_shred_index) = shredder.entries_to_shreds(
             &receive_results.entries,
