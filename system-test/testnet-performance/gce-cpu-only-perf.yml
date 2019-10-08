@@ -1,0 +1,16 @@
+steps:
+  - command: "system-test/testnet-performance/testnet-automation.sh"
+    label: "GCE performance testnets CPU ONLY"
+    env:
+      CLOUD_PROVIDER: "gce"
+      TESTNET_TAG: "gce-edge-perf-cpu-only"
+      RAMP_UP_TIME: 60
+      TEST_DURATION: 300
+      NUMBER_OF_VALIDATOR_NODES: 10
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      NUMBER_OF_CLIENT_NODES: 1
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 80000 --thread-batch-sleep-ms 1000"
+      TESTNET_ZONES: "us-west1-a,us-west1-b,us-central1-a,europe-west4-a"
+      ADDITIONAL_FLAGS: ""
+    agents:
+      - "queue=testnet-deploy"

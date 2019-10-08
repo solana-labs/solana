@@ -38,10 +38,28 @@ function cleanup_testnet {
   )
 
   # TODO: Replace this with the cleanup from https://github.com/solana-labs/solana/issues/6216
-  echo --- Stop Network Software
-  net/net.sh stop
-
   (
+    set +e
+    echo --- Stop Network Software
+    net/net.sh stop
+  )
+
+  case $CLOUD_PROVIDER in
+  gce)
+  (
+    cat <<EOF
+- wait: ~
+  continue_on_failure: true
+
+- command: "net/gce.sh delete -p ${TESTNET_TAG}"
+  label: "Delete Testnet"
+  agents:
+    - "queue=testnet-deploy"
+EOF
+  ) | buildkite-agent pipeline upload
+  ;;
+  colo)
+    (
     cat <<EOF
 - wait: ~
   continue_on_failure: true
@@ -52,6 +70,11 @@ function cleanup_testnet {
     - "queue=colo-deploy"
 EOF
   ) | buildkite-agent pipeline upload
+  ;;
+  *)
+    echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
+    ;;
+  esac
 }
 trap cleanup_testnet EXIT
 
