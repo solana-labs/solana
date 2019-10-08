@@ -31,7 +31,6 @@ use itertools::Itertools;
 use rand::SeedableRng;
 use rand::{thread_rng, Rng};
 use rand_chacha::ChaChaRng;
-use rayon::prelude::*;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_netutil::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
@@ -747,7 +746,7 @@ impl ClusterInfo {
     ) -> Result<()> {
         trace!("retransmit orders {}", peers.len());
         let errs: Vec<_> = peers
-            .par_iter()
+            .iter()
             .filter(|v| v.id != slot_leader_pubkey.unwrap_or_default())
             .map(|v| {
                 let dest = if forwarded { &v.tvu_forwards } else { &v.tvu };
@@ -1565,7 +1564,7 @@ pub struct Sockets {
     pub tpu_forwards: Vec<UdpSocket>,
     pub broadcast: UdpSocket,
     pub repair: UdpSocket,
-    pub retransmit: UdpSocket,
+    pub retransmit_sockets: Vec<UdpSocket>,
     pub storage: Option<UdpSocket>,
 }
 
@@ -1613,7 +1612,7 @@ impl Node {
                 tpu_forwards: vec![],
                 broadcast,
                 repair,
-                retransmit,
+                retransmit_sockets: vec![retransmit],
                 storage: Some(storage),
                 ip_echo: None,
             },
@@ -1634,7 +1633,7 @@ impl Node {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
 
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
         let info = ContactInfo::new(
             pubkey,
@@ -1659,7 +1658,7 @@ impl Node {
                 tpu_forwards: vec![tpu_forwards],
                 broadcast,
                 repair,
-                retransmit,
+                retransmit_sockets: vec![retransmit_socket],
                 storage: None,
             },
         }
@@ -1692,16 +1691,18 @@ impl Node {
         let (tvu_port, tvu_sockets) = multi_bind_in_range(port_range, 8).expect("tvu multi_bind");
 
         let (tvu_forwards_port, tvu_forwards_sockets) =
-            multi_bind_in_range(port_range, 8).expect("tpu multi_bind");
+            multi_bind_in_range(port_range, 8).expect("tvu_forwards multi_bind");
 
         let (tpu_port, tpu_sockets) = multi_bind_in_range(port_range, 32).expect("tpu multi_bind");
 
         let (tpu_forwards_port, tpu_forwards_sockets) =
-            multi_bind_in_range(port_range, 8).expect("tpu multi_bind");
+            multi_bind_in_range(port_range, 8).expect("tpu_forwards multi_bind");
+
+        let (_, retransmit_sockets) =
+            multi_bind_in_range(port_range, 8).expect("retransmit multi_bind");
 
         let (_, repair) = Self::bind(port_range);
         let (_, broadcast) = Self::bind(port_range);
-        let (_, retransmit) = Self::bind(port_range);
 
         let info = ContactInfo::new(
             pubkey,
@@ -1727,7 +1728,7 @@ impl Node {
                 tpu_forwards: tpu_forwards_sockets,
                 broadcast,
                 repair,
-                retransmit,
+                retransmit_sockets,
                 storage: None,
                 ip_echo: Some(ip_echo),
             },
@@ -1774,6 +1775,7 @@ mod tests {
     use crate::shred::max_ticks_per_n_shreds;
     use crate::shred::{DataShredHeader, Shred};
     use crate::test_tx::test_tx;
+    use rayon::prelude::*;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
