@@ -116,7 +116,8 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
             seed[0..4].copy_from_slice(&i.to_le_bytes());
             let (peers, stakes_and_index) =
                 cluster_info.sorted_retransmit_peers_and_stakes(Some(&staked_nodes));
-            let (_, shuffled_stakes_and_indexes) = cluster_info.shuffle_peers_and_index(
+            let (_, shuffled_stakes_and_indexes) = ClusterInfo::shuffle_peers_and_index(
+                &cluster_info.id(),
                 &peers,
                 &stakes_and_index,
                 ChaChaRng::from_seed(seed),
