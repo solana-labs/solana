@@ -162,7 +162,7 @@ impl RpcClient {
         transaction: &mut Transaction,
         signer_keys: &[&T],
     ) -> Result<String, ClientError> {
-        let mut send_retries = 5;
+        let mut send_retries = 20;
         loop {
             let mut status_retries = 4;
             let signature_str = self.send_transaction(transaction)?;
