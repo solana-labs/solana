@@ -1,6 +1,6 @@
 # Anatomy of a Validator
 
-![Validator block diagrams](../.gitbook/assets/validator.svg)
+![Validator block diagrams](../.gitbook/assets/validator%20%281%29.svg)
 
 ## Pipelining
 

@@ -71,3 +71,4 @@ You can also submit JSON-RPC requests to a different testnet, like:
 ```bash
 $ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://beta.testnet.solana.com:8899
 ```
+
