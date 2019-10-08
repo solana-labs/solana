@@ -2,6 +2,7 @@
 //!
 
 use crate::packet::{Blob, Packets, PacketsRecycler, SharedBlobs, PACKETS_PER_BATCH};
+use crate::recvmmsg::NUM_RCVMMSGS;
 use crate::result::{Error, Result};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -23,6 +24,10 @@ fn recv_loop(
     recycler: &PacketsRecycler,
     name: &'static str,
 ) -> Result<()> {
+    let mut recv_count = 0;
+    let mut call_count = 0;
+    let mut now = Instant::now();
+    let mut num_max_received = 0; // Number of times maximum packets were received
     loop {
         let mut msgs = Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name);
         loop {
@@ -31,10 +36,28 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if let Ok(_len) = msgs.recv_from(sock) {
+            if let Ok(len) = msgs.recv_from(sock) {
+                if len == NUM_RCVMMSGS {
+                    num_max_received += 1;
+                }
+                recv_count += len;
+                call_count += 1;
                 channel.send(msgs)?;
                 break;
             }
+        }
+        if recv_count > 1024 {
+            datapoint_info!(
+                "receiver-stats",
+                ("received", recv_count as i64, i64),
+                ("call_count", i64::from(call_count), i64),
+                ("elapsed", now.elapsed().as_millis() as i64, i64),
+                ("max_received", i64::from(num_max_received), i64),
+            );
+            recv_count = 0;
+            call_count = 0;
+            now = Instant::now();
+            num_max_received = 0;
         }
     }
 }
