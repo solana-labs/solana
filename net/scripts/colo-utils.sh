@@ -47,9 +47,9 @@ colo_load_availability() {
     COLO_RES_AVAILABILITY=()
     COLO_RES_REQUISITIONED=()
     while read -r LINE; do
-      IFS=$'\v' read -r PRIV_IP STATUS LOCK_USER INSTNAME <<< "$LINE"
-      I=$(colo_res_index_from_ip "$PRIV_IP")
-      IP="${COLO_RES_IP[$I]}"
+      IFS=$'\v' read -r IP STATUS LOCK_USER INSTNAME <<< "$LINE"
+      I=$(colo_res_index_from_ip "$IP")
+      PRIV_IP="${COLO_RES_IP_PRIV[$I]}"
       HOST_NAME="${COLO_RES_HOSTNAME[$I]}"
       ZONE="${COLO_RES_ZONE[$I]}"
       COLO_RES_AVAILABILITY+=( "$(echo -e "$HOST_NAME\v$IP\v$PRIV_IP\v$STATUS\v$ZONE\v$LOCK_USER\v$INSTNAME")" )
@@ -61,7 +61,7 @@ colo_load_availability() {
 colo_res_index_from_ip() {
   declare IP="$1"
   for i in "${!COLO_RES_IP_PRIV[@]}"; do
-    if [ "$IP" = "${COLO_RES_IP_PRIV[$i]}" ]; then
+    if [[ "$IP" = "${COLO_RES_IP[$i]}" || "$IP" = "${COLO_RES_IP_PRIV[$i]}" ]]; then
       echo "$i"
       return 0
     fi
@@ -89,7 +89,7 @@ colo_instance_run_foreach() {
     CMD="$1"
     declare IPS=()
     for I in $(seq 0 $((COLO_RES_N-1))); do
-      IPS+=( "${COLO_RES_IP_PRIV[$I]}" )
+      IPS+=( "${COLO_RES_IP[$I]}" )
     done
     set "${IPS[@]}" "$CMD"
   fi
