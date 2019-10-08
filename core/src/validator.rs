@@ -417,8 +417,11 @@ fn get_bank_forks(
             return blocktree_processor::process_blocktree_from_root(
                 blocktree,
                 Arc::new(deserialized_bank),
-                verify_ledger,
-                dev_halt_at_slot,
+                &blocktree_processor::ProcessOptions {
+                    verify_ledger,
+                    dev_halt_at_slot,
+                    ..blocktree_processor::ProcessOptions::default()
+                },
             )
             .expect("processing blocktree after loading snapshot failed");
         } else {
@@ -433,8 +436,11 @@ fn get_bank_forks(
         &genesis_block,
         &blocktree,
         account_paths,
-        verify_ledger,
-        dev_halt_at_slot,
+        blocktree_processor::ProcessOptions {
+            verify_ledger,
+            dev_halt_at_slot,
+            ..blocktree_processor::ProcessOptions::default()
+        },
     )
     .expect("process_blocktree failed")
 }

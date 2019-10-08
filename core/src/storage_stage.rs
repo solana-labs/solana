@@ -737,14 +737,14 @@ mod tests {
         let mut last_bank = bank;
         let rooted_banks = (slot..slot + last_bank.slots_per_segment() + 1)
             .map(|i| {
-                let bank = Bank::new_from_parent(&last_bank, &keypair.pubkey(), i);
+                let bank = Arc::new(Bank::new_from_parent(&last_bank, &keypair.pubkey(), i));
                 blocktree_processor::process_entries(
                     &bank,
                     &entry::create_ticks(64, bank.last_blockhash()),
                     true,
                 )
                 .expect("failed process entries");
-                last_bank = Arc::new(bank);
+                last_bank = bank;
                 last_bank.clone()
             })
             .collect::<Vec<_>>();

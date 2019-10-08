@@ -275,7 +275,7 @@ fn simulate_process_entries(
     initial_lamports: u64,
     num_accounts: usize,
 ) {
-    let bank = Bank::new(genesis_block);
+    let bank = Arc::new(Bank::new(genesis_block));
 
     for i in 0..(num_accounts / 2) {
         bank.transfer(initial_lamports, mint_keypair, &keypairs[i * 2].pubkey())

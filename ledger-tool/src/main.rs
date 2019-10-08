@@ -1,6 +1,6 @@
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, SubCommand};
 use solana_core::blocktree::Blocktree;
-use solana_core::blocktree_processor::process_blocktree;
+use solana_core::blocktree_processor::{process_blocktree, ProcessOptions};
 use solana_sdk::clock::Slot;
 use solana_sdk::genesis_block::GenesisBlock;
 use std::collections::BTreeMap;
@@ -168,7 +168,11 @@ fn main() {
         }
         ("verify", _) => {
             println!("Verifying ledger...");
-            match process_blocktree(&genesis_block, &blocktree, None, true, None) {
+            let options = ProcessOptions {
+                verify_ledger: true,
+                ..ProcessOptions::default()
+            };
+            match process_blocktree(&genesis_block, &blocktree, None, options) {
                 Ok((_bank_forks, bank_forks_info, _)) => {
                     println!("{:?}", bank_forks_info);
                 }

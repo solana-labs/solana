@@ -11,12 +11,20 @@ use std::sync::{Arc, RwLock};
 type CachedSchedules = (HashMap<u64, Arc<LeaderSchedule>>, VecDeque<u64>);
 const MAX_SCHEDULES: usize = 10;
 
+struct CacheCapacity(usize);
+impl Default for CacheCapacity {
+    fn default() -> Self {
+        CacheCapacity(MAX_SCHEDULES)
+    }
+}
+
 #[derive(Default)]
 pub struct LeaderScheduleCache {
     // Map from an epoch to a leader schedule for that epoch
     pub cached_schedules: RwLock<CachedSchedules>,
     epoch_schedule: EpochSchedule,
     max_epoch: RwLock<u64>,
+    max_schedules: CacheCapacity,
 }
 
 impl LeaderScheduleCache {
@@ -29,6 +37,7 @@ impl LeaderScheduleCache {
             cached_schedules: RwLock::new((HashMap::new(), VecDeque::new())),
             epoch_schedule,
             max_epoch: RwLock::new(0),
+            max_schedules: CacheCapacity::default(),
         };
 
         // This sets the root and calculates the schedule at stakers_epoch(root)
@@ -41,6 +50,16 @@ impl LeaderScheduleCache {
             cache.slot_leader_at(first_slot_in_epoch, Some(root_bank));
         }
         cache
+    }
+
+    pub fn set_max_schedules(&mut self, max_schedules: usize) {
+        if max_schedules > 0 {
+            self.max_schedules = CacheCapacity(max_schedules);
+        }
+    }
+
+    pub fn max_schedules(&self) -> usize {
+        self.max_schedules.0
     }
 
     pub fn set_root(&self, root_bank: &Bank) {
@@ -189,14 +208,18 @@ impl LeaderScheduleCache {
             if let Entry::Vacant(v) = entry {
                 v.insert(leader_schedule.clone());
                 order.push_back(epoch);
-                Self::retain_latest(cached_schedules, order);
+                Self::retain_latest(cached_schedules, order, self.max_schedules());
             }
             leader_schedule
         })
     }
 
-    fn retain_latest(schedules: &mut HashMap<u64, Arc<LeaderSchedule>>, order: &mut VecDeque<u64>) {
-        if schedules.len() > MAX_SCHEDULES {
+    fn retain_latest(
+        schedules: &mut HashMap<u64, Arc<LeaderSchedule>>,
+        order: &mut VecDeque<u64>,
+        max_schedules: usize,
+    ) {
+        while schedules.len() > max_schedules {
             let first = order.pop_front().unwrap();
             schedules.remove(&first);
         }
@@ -226,6 +249,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
         assert_eq!(bank.slot(), 0);
+        assert_eq!(cache.max_schedules(), MAX_SCHEDULES);
 
         // Epoch schedule for all epochs in the range:
         // [0, stakers_epoch(bank.slot())] should
@@ -263,7 +287,7 @@ mod tests {
             cached_schedules.insert(i as u64, Arc::new(LeaderSchedule::default()));
             order.push_back(i as u64);
         }
-        LeaderScheduleCache::retain_latest(&mut cached_schedules, &mut order);
+        LeaderScheduleCache::retain_latest(&mut cached_schedules, &mut order, MAX_SCHEDULES);
         assert_eq!(cached_schedules.len(), MAX_SCHEDULES);
         let mut keys: Vec<_> = cached_schedules.keys().cloned().collect();
         keys.sort();
@@ -538,5 +562,19 @@ mod tests {
         assert!(cache.slot_leader_at(223, Some(&bank2)).is_some());
         assert_eq!(bank2.get_epoch_and_slot_index(224).0, 3);
         assert!(cache.slot_leader_at(224, Some(&bank2)).is_none());
+    }
+
+    #[test]
+    fn test_set_max_schedules() {
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let mut cache = LeaderScheduleCache::new_from_bank(&bank);
+
+        // Max schedules must be greater than 0
+        cache.set_max_schedules(0);
+        assert_eq!(cache.max_schedules(), MAX_SCHEDULES);
+
+        cache.set_max_schedules(std::usize::MAX);
+        assert_eq!(cache.max_schedules(), std::usize::MAX);
     }
 }
