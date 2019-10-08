@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+# XXX: This file isn't *quite* a script.  It is intended to be passed via stdin
+# to a node to execute cleanup logic upon deletion.  Currently this is done in
+# colo_node_free using the eval-cat trick.  While this gets us what we want,
+# care must be taken to ensure variable expansion happens at the right time.
+# Any unescaped variable references ($X) in this file will be expanded by eval
+# in colo_node_free. Escaped variable references (\$X) will be expanded upon
+# execution on the remote node.
+
+RC=false
+if [ -f "$SOLANA_LOCK_FILE" ]; then
+  exec 9<>"$SOLANA_LOCK_FILE"
+  flock -x -n 9 || exit 1
+  . "$SOLANA_LOCK_FILE"
+  if [ "\$SOLANA_LOCK_USER" = "\$SOLANA_USER" ]; then
+    git clean -qxdff
+    rm -f /solana-scratch/* /solana-scratch/.[^.]*
+    cat > "\${HOME}/.ssh/authorized_keys" <<EOAK
+$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
+EOAK
+    RC=true
+  fi
+  9>&-
+fi
+\$RC
+

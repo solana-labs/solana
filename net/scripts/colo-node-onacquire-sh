@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+# XXX: This file isn't *quite* a script.  It is intended to be passed via stdin
+# to a node to requisition logic up node creation.  Currently this is done in
+# colo_node_requisition using the eval-cat trick.  While this gets us what we
+# want, care must be taken to ensure variable expansion happens at the right
+# time. Any unescaped variable references ($X) in this file will be expanded by
+# eval in colo_node_requisition. Escaped variable references (\$X) will be
+# expanded upon execution on the remote node.
+
+if [ ! -f "$SOLANA_LOCK_FILE" ]; then
+  exec 9>>"$SOLANA_LOCK_FILE"
+  flock -x -n 9 || exit 1
+  [ -n "\$SOLANA_USER" ] && {
+    echo "export SOLANA_LOCK_USER=\$SOLANA_USER"
+    echo "export SOLANA_LOCK_INSTANCENAME=$INSTANCE_NAME"
+    echo "[ -v SSH_TTY -a -f \"\${HOME}/.solana-motd\" ] && cat \"\${HOME}/.solana-motd\" 1>&2"
+  } >&9 || ( rm "$SOLANA_LOCK_FILE" && false )
+  9>&-
+  cat > /solana-scratch/id_ecdsa <<EOK
+$(cat "$SSH_PRIVATE_KEY")
+EOK
+  cat > /solana-scratch/id_ecdsa.pub <<EOK
+$(cat "${SSH_PRIVATE_KEY}.pub")
+EOK
+  chmod 0600 /solana-scratch/id_ecdsa
+  cat > /solana-scratch/authorized_keys <<EOAK
+$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
+$(cat "${SSH_PRIVATE_KEY}.pub")
+EOAK
+  cp /solana-scratch/id_ecdsa "\${HOME}/.ssh/id_ecdsa"
+  cp /solana-scratch/id_ecdsa.pub "\${HOME}/.ssh/id_ecdsa.pub"
+  cp /solana-scratch/authorized_keys "\${HOME}/.ssh/authorized_keys"
+  cat > "\${HOME}/.solana-motd" <<EOM
+
+
+$(printNetworkInfo)
+$(creationInfo)
+EOM
+
+  # XXX: Stamp creation MUST be last!
+  touch /solana-scratch/.instance-startup-complete
+else
+  false
+fi

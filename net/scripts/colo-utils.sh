@@ -175,52 +175,19 @@ colo_node_status_all() {
 export COLO_RES_REQUISITIONED=()
 colo_node_requisition() {
   declare IP=$1
+  # shellcheck disable=SC2034
   declare INSTANCE_NAME=$2
+  # shellcheck disable=SC2034
   declare SSH_PRIVATE_KEY="$3"
 
   declare INDEX
   INDEX=$(colo_res_index_from_ip "$IP")
   declare RC=false
 
-  colo_instance_run "$IP" "$(
-cat <<EOF
-  if [ ! -f "$SOLANA_LOCK_FILE" ]; then
-    exec 9>>"$SOLANA_LOCK_FILE"
-    flock -x -n 9 || exit 1
-    [ -n "\$SOLANA_USER" ] && {
-      echo "export SOLANA_LOCK_USER=\$SOLANA_USER"
-      echo "export SOLANA_LOCK_INSTANCENAME=$INSTANCE_NAME"
-      echo "[ -v SSH_TTY -a -f \"\${HOME}/.solana-motd\" ] && cat \"\${HOME}/.solana-motd\" 1>&2"
-    } >&9 || ( rm "$SOLANA_LOCK_FILE" && false )
-    9>&-
-    cat > /solana-scratch/id_ecdsa <<EOK
-$(cat "$SSH_PRIVATE_KEY")
-EOK
-    cat > /solana-scratch/id_ecdsa.pub <<EOK
-$(cat "${SSH_PRIVATE_KEY}.pub")
-EOK
-    chmod 0600 /solana-scratch/id_ecdsa
-    cat > /solana-scratch/authorized_keys <<EOAK
-$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
-$(cat "${SSH_PRIVATE_KEY}.pub")
-EOAK
-    cp /solana-scratch/id_ecdsa "\${HOME}/.ssh/id_ecdsa"
-    cp /solana-scratch/id_ecdsa.pub "\${HOME}/.ssh/id_ecdsa.pub"
-    cp /solana-scratch/authorized_keys "\${HOME}/.ssh/authorized_keys"
-    cat > "\${HOME}/.solana-motd" <<EOM
-
-
-$(printNetworkInfo)
-$(creationInfo)
-EOM
-
-    # XXX: Stamp creation MUST be last!
-    touch /solana-scratch/.instance-startup-complete
-  else
-    false
-  fi
+  colo_instance_run "$IP" "$(eval "cat <<EOF
+  $(<"$__colo_here"/colo-node-onacquire-sh)
 EOF
-  )"
+  ")"
   # shellcheck disable=SC2181
   if [[ 0 -eq $? ]]; then
     COLO_RES_REQUISITIONED+=("$INDEX")
@@ -255,26 +222,10 @@ colo_machine_types_compatible() {
 
 colo_node_free() {
   declare IP=$1
-  colo_instance_run "$IP" "$(
-cat <<EOF
-  RC=false
-  if [ -f "$SOLANA_LOCK_FILE" ]; then
-    exec 9<>"$SOLANA_LOCK_FILE"
-    flock -x -n 9 || exit 1
-    . "$SOLANA_LOCK_FILE"
-    if [ "\$SOLANA_LOCK_USER" = "\$SOLANA_USER" ]; then
-      git clean -qxdff
-      rm -f /solana-scratch/* /solana-scratch/.[^.]*
-      cat > "\${HOME}/.ssh/authorized_keys" <<EOAK
-$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
-EOAK
-      RC=true
-    fi
-    9>&-
-  fi
-  \$RC
+  colo_instance_run "$IP" "$(eval "cat <<EOF
+  $(<"$__colo_here"/colo-node-onfree-sh)
 EOF
-  )"
+  ")"
 }
 
 
