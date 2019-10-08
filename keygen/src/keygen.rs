@@ -3,7 +3,10 @@ use clap::{
     crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
 use solana_sdk::pubkey::write_pubkey;
-use solana_sdk::signature::{keypair_from_seed, read_keypair, write_keypair, KeypairUtil};
+use solana_sdk::signature::{
+    keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
+    KeypairUtil,
+};
 use std::error;
 use std::path::Path;
 use std::process::exit;
@@ -104,7 +107,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 path.extend(&[".config", "solana", "id.json"]);
                 path.to_str().unwrap()
             };
-            let keypair = read_keypair(infile)?;
+            let keypair = if infile == "-" {
+                let mut stdin = std::io::stdin();
+                read_keypair(&mut stdin)?
+            } else {
+                read_keypair_file(infile)?
+            };
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
@@ -132,10 +140,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            let serialized_keypair = write_keypair(&keypair, outfile)?;
             if outfile == "-" {
-                println!("{}", serialized_keypair);
+                let mut stdout = std::io::stdout();
+                write_keypair(&keypair, &mut stdout)?;
             } else {
+                write_keypair_file(&keypair, outfile)?;
                 println!("Wrote new keypair to {}", outfile);
             }
 
@@ -166,7 +175,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            let serialized_keypair = write_keypair(&keypair, outfile)?;
+            let serialized_keypair = write_keypair_file(&keypair, outfile)?;
             if outfile == "-" {
                 println!("{}", serialized_keypair);
             } else {
