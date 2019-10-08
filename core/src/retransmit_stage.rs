@@ -55,10 +55,10 @@ pub fn retransmit(
     let me = cluster_info.read().unwrap().my_data().clone();
     bank_time.stop();
     let mut retransmit_total = 0;
-    let mut turbine_total = 0;
+    let mut compute_turbine_peers_total = 0;
     for packets in packet_v {
         for packet in &packets.packets {
-            let mut turbine_start = Measure::start("turbine_start");
+            let mut compute_turbine_peers = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &me.id,
                 &peers,
@@ -77,8 +77,8 @@ pub fn retransmit(
                 compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, indexes);
             let neighbors: Vec<_> = neighbors.into_iter().map(|index| &peers[index]).collect();
             let children: Vec<_> = children.into_iter().map(|index| &peers[index]).collect();
-            turbine_start.stop();
-            turbine_total += turbine_start.as_ms();
+            compute_turbine_peers.stop();
+            compute_turbine_peers_total += compute_turbine_peers.as_ms();
 
             let leader =
                 leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
@@ -106,7 +106,7 @@ pub fn retransmit(
         ("total_time", timer_start.as_ms() as i64, i64),
         ("total_packets", total_packets as i64, i64),
         ("retransmit_total", retransmit_total as i64, i64),
-        ("turbine_total", turbine_total as i64, i64),
+        ("compute_turbine", compute_turbine_peers_total as i64, i64),
         ("extra_recv", extra_recv_time.as_ms() as i64, i64),
         ("bank_time", bank_time.as_ms() as i64, i64),
     );
