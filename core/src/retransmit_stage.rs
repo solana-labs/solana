@@ -51,10 +51,13 @@ pub fn retransmit(
         .sorted_retransmit_peers_and_stakes(stakes.as_ref());
     let me = cluster_info.read().unwrap().my_data().clone();
     let mut retransmit_total = 0;
+    let mut total_skipped = 0;
     let mut compute_turbine_peers_total = 0;
     for packets in packet_v {
         for packet in &packets.packets {
             if packet.meta.is_repair {
+                total_packets -= 1;
+                total_skipped += 1;
                 continue;
             }
             let mut compute_turbine_peers = Measure::start("turbine_start");
@@ -106,6 +109,7 @@ pub fn retransmit(
         ("total_packets", total_packets as i64, i64),
         ("retransmit_total", retransmit_total as i64, i64),
         ("compute_turbine", compute_turbine_peers_total as i64, i64),
+        ("total_skipped", total_skipped as i64, i64),
     );
     Ok(())
 }
