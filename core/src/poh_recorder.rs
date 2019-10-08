@@ -279,8 +279,9 @@ impl PohRecorder {
                 working_bank.max_tick_height,
                 working_bank.bank.slot()
             );
-            self.start_slot = working_bank.max_tick_height / self.ticks_per_slot - 1;
-            self.start_tick = (self.start_slot + 1) * self.ticks_per_slot + 1;
+            let current_slot = working_bank.max_tick_height / self.ticks_per_slot;
+            self.start_slot = current_slot.saturating_sub(1);
+            self.start_tick = current_slot * self.ticks_per_slot + 1;
             self.clear_bank();
         }
         if send_result.is_err() {
@@ -1041,7 +1042,7 @@ mod tests {
             );
 
             let end_slot = 3;
-            let max_tick_height = (end_slot + 1) * ticks_per_slot - 1;
+            let max_tick_height = (end_slot + 1) * ticks_per_slot;
             let working_bank = WorkingBank {
                 bank: bank.clone(),
                 min_tick_height: 1,
