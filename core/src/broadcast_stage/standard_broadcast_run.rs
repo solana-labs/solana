@@ -9,16 +9,19 @@ struct BroadcastStats {
     num_entries: Vec<usize>,
     run_elapsed: Vec<u64>,
     to_blobs_elapsed: Vec<u64>,
+    slots: Vec<u64>,
+
+    // Per-slot elapsed time
+    shredding_elapsed: u64,
+    insert_shreds_elapsed: u64,
+    broadcast_elapsed: u64,
+    receive_elapsed: u64,
+    clone_and_seed_elapsed: u64,
 }
 
 pub(super) struct StandardBroadcastRun {
     stats: BroadcastStats,
     current_slot: Option<u64>,
-    shredding_elapsed: u128,
-    insertion_elapsed: u128,
-    broadcast_elapsed: u128,
-    receive_elapsed: u128,
-    clone_and_seed_elapsed: u128,
     slot_broadcast_start: Option<Instant>,
 }
 
@@ -27,15 +30,11 @@ impl StandardBroadcastRun {
         Self {
             stats: BroadcastStats::default(),
             current_slot: None,
-            shredding_elapsed: 0,
-            insertion_elapsed: 0,
-            broadcast_elapsed: 0,
-            receive_elapsed: 0,
-            clone_and_seed_elapsed: 0,
             slot_broadcast_start: None,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn update_broadcast_stats(
         &mut self,
         receive_entries_elapsed: u64,
@@ -43,23 +42,69 @@ impl StandardBroadcastRun {
         insert_shreds_elapsed: u64,
         broadcast_elapsed: u64,
         run_elapsed: u64,
+        clone_and_seed_elapsed: u64,
         num_entries: usize,
         num_shreds: usize,
         shred_index: u32,
+        slot: u64,
+        slot_ended: bool,
+        latest_shred_index: u32,
     ) {
+        self.stats.insert_shreds_elapsed += insert_shreds_elapsed;
+        self.stats.shredding_elapsed += shredding_elapsed;
+        self.stats.broadcast_elapsed += broadcast_elapsed;
+        self.stats.receive_elapsed += receive_entries_elapsed;
+        self.stats.clone_and_seed_elapsed += clone_and_seed_elapsed;
+
+        if slot_ended {
+            datapoint_info!(
+                "broadcast-bank-stats",
+                ("slot", slot as i64, i64),
+                ("shredding_time", self.stats.shredding_elapsed as i64, i64),
+                (
+                    "insertion_time",
+                    self.stats.insert_shreds_elapsed as i64,
+                    i64
+                ),
+                ("broadcast_time", self.stats.broadcast_elapsed as i64, i64),
+                ("receive_time", self.stats.receive_elapsed as i64, i64),
+                (
+                    "clone_and_seed",
+                    self.stats.clone_and_seed_elapsed as i64,
+                    i64
+                ),
+                ("num_shreds", i64::from(latest_shred_index), i64),
+                (
+                    "slot_broadcast_time",
+                    self.slot_broadcast_start.unwrap().elapsed().as_millis() as i64,
+                    i64
+                ),
+            );
+            self.stats.insert_shreds_elapsed = 0;
+            self.stats.shredding_elapsed = 0;
+            self.stats.broadcast_elapsed = 0;
+            self.stats.receive_elapsed = 0;
+            self.stats.clone_and_seed_elapsed = 0;
+        }
+
         inc_new_counter_info!("broadcast_service-time_ms", broadcast_elapsed as usize);
 
         self.stats.num_entries.push(num_entries);
         self.stats.to_blobs_elapsed.push(shredding_elapsed);
         self.stats.run_elapsed.push(run_elapsed);
+        self.stats.slots.push(slot);
         if self.stats.num_entries.len() >= 16 {
             info!(
-                "broadcast: entries: {:?} blob times ms: {:?} broadcast times ms: {:?}",
-                self.stats.num_entries, self.stats.to_blobs_elapsed, self.stats.run_elapsed
+                "broadcast: entries: {:?} blob times ms: {:?} broadcast times ms: {:?} slots: {:?}",
+                self.stats.num_entries,
+                self.stats.to_blobs_elapsed,
+                self.stats.run_elapsed,
+                self.stats.slots,
             );
             self.stats.num_entries.clear();
             self.stats.to_blobs_elapsed.clear();
             self.stats.run_elapsed.clear();
+            self.stats.slots.clear();
         }
 
         datapoint_debug!(
@@ -166,46 +211,21 @@ impl BroadcastRun for StandardBroadcastRun {
 
         let broadcast_elapsed = broadcast_start.elapsed();
 
-        self.insertion_elapsed += insert_shreds_elapsed.as_millis();
-        self.shredding_elapsed += to_shreds_elapsed.as_millis();
-        self.broadcast_elapsed += broadcast_elapsed.as_millis();
-        self.receive_elapsed += receive_elapsed.as_millis();
-        self.clone_and_seed_elapsed += clone_and_seed_elapsed.as_millis();
-
-        if last_tick == bank.max_tick_height() {
-            datapoint_info!(
-                "broadcast-bank-stats",
-                ("slot", bank.slot() as i64, i64),
-                ("shredding_time", self.shredding_elapsed as i64, i64),
-                ("insertion_time", self.insertion_elapsed as i64, i64),
-                ("broadcast_time", self.broadcast_elapsed as i64, i64),
-                ("receive_time", self.receive_elapsed as i64, i64),
-                ("clone_and_seed", self.clone_and_seed_elapsed as i64, i64),
-                ("num_shreds", i64::from(latest_shred_index), i64),
-                (
-                    "slot_broadcast_time",
-                    self.slot_broadcast_start.unwrap().elapsed().as_millis() as i64,
-                    i64
-                ),
-            );
-            self.insertion_elapsed = 0;
-            self.shredding_elapsed = 0;
-            self.broadcast_elapsed = 0;
-            self.receive_elapsed = 0;
-            self.clone_and_seed_elapsed = 0;
-        }
-
         self.update_broadcast_stats(
             duration_as_ms(&receive_elapsed),
             duration_as_ms(&to_shreds_elapsed),
             duration_as_ms(&insert_shreds_elapsed),
             duration_as_ms(&broadcast_elapsed),
+            duration_as_ms(&clone_and_seed_elapsed),
             duration_as_ms(
                 &(receive_elapsed + to_shreds_elapsed + insert_shreds_elapsed + broadcast_elapsed),
             ),
             num_entries,
             num_shreds,
             next_shred_index,
+            bank.slot(),
+            last_tick == bank.max_tick_height(),
+            latest_shred_index,
         );
 
         Ok(())
