@@ -44,7 +44,6 @@ __cloud_FindInstances() {
     for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
       IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
       if [[ $INSTNAME =~ $filter ]]; then
-        IP=$PRIV_IP  # Colo public IPs are firewalled to only allow UDP(8000-10000).  Reuse private IP as public and require VPN
         printf "%-40s | publicIp=%-16s privateIp=%s zone=%s\n" "$INSTNAME" "$IP" "$PRIV_IP" "$ZONE" 1>&2
         echo -e "${INSTNAME}:${IP}:${PRIV_IP}:$ZONE"
       fi
