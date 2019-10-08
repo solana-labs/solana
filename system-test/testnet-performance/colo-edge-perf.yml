@@ -1,7 +1,7 @@
 steps:
   - command: "system-test/testnet-performance/testnet-automation.sh"
     label: "COLO performance testnet on EDGE channel GPU ENABLED"
-    branches: 'master'
+    #branches: 'master'
     env:
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-edge-perf-gpu-enabled"
