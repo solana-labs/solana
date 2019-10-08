@@ -715,7 +715,7 @@ impl Shredder {
 }
 
 pub fn max_ticks_per_n_shreds(num_shreds: u64) -> u64 {
-    let ticks = create_ticks(1, Hash::default());
+    let ticks = create_ticks(1, 0, Hash::default());
     max_entries_per_n_shred(&ticks[0], num_shreds)
 }
 

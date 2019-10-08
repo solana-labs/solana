@@ -894,14 +894,7 @@ impl Blocktree {
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
         let mut current_slot = start_slot;
-        let mut parent_slot = parent.map_or(
-            if current_slot == 0 {
-                current_slot
-            } else {
-                current_slot - 1
-            },
-            |v| v,
-        );
+        let mut parent_slot = parent.map_or(current_slot.saturating_sub(1), |v| v);
         let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
             .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
@@ -1688,14 +1681,14 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
 //
 // Returns the blockhash that can be used to append entries with.
 pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Result<Hash> {
-    let ticks_per_slot = genesis_block.ticks_per_slot;
     Blocktree::destroy(ledger_path)?;
     genesis_block.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open(ledger_path)?;
-
-    let entries = create_ticks(ticks_per_slot, genesis_block.hash());
+    let ticks_per_slot = genesis_block.ticks_per_slot;
+    let hashes_per_tick = genesis_block.poh_config.hashes_per_tick.unwrap_or(0);
+    let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_block.hash());
     let last_hash = entries.last().unwrap().hash;
 
     let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()))
@@ -1789,16 +1782,18 @@ pub fn entries_to_test_shreds(
     shredder.entries_to_shreds(&entries, is_full_slot, 0).0
 }
 
+// used for tests only
 pub fn make_slot_entries(
     slot: u64,
     parent_slot: u64,
     num_entries: u64,
 ) -> (Vec<Shred>, Vec<Entry>) {
-    let entries = create_ticks(num_entries, Hash::default());
+    let entries = create_ticks(num_entries, 0, Hash::default());
     let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true);
     (shreds, entries)
 }
 
+// used for tests only
 pub fn make_many_slot_entries(
     start_slot: u64,
     num_slots: u64,
@@ -1818,6 +1813,7 @@ pub fn make_many_slot_entries(
 }
 
 // Create shreds for slots that have a parent-child relationship defined by the input `chain`
+// used for tests only
 pub fn make_chaining_slot_entries(
     chain: &[u64],
     entries_per_slot: u64,
@@ -1859,7 +1855,7 @@ pub mod tests {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
-        let ticks = create_ticks(genesis_block.ticks_per_slot, genesis_block.hash());
+        let ticks = create_ticks(genesis_block.ticks_per_slot, 0, genesis_block.hash());
         let entries = ledger.get_slot_entries(0, 0, None).unwrap();
 
         assert_eq!(ticks, entries);
@@ -1913,7 +1909,7 @@ pub mod tests {
             let mut shreds_per_slot = vec![];
 
             for i in 0..num_slots {
-                let mut new_ticks = create_ticks(ticks_per_slot, Hash::default());
+                let mut new_ticks = create_ticks(ticks_per_slot, 0, Hash::default());
                 let num_shreds = ledger
                     .write_entries(
                         i,
@@ -2243,7 +2239,7 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path("test_get_slot_entries1");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let entries = create_ticks(8, Hash::default());
+            let entries = create_ticks(8, 0, Hash::default());
             let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false);
             blocktree
                 .insert_shreds(shreds, None)
@@ -2278,7 +2274,7 @@ pub mod tests {
             let num_slots = 5 as u64;
             let mut index = 0;
             for slot in 0..num_slots {
-                let entries = create_ticks(slot + 1, Hash::default());
+                let entries = create_ticks(slot + 1, 0, Hash::default());
                 let last_entry = entries.last().unwrap().clone();
                 let mut shreds =
                     entries_to_test_shreds(entries, slot, slot.saturating_sub(1), false);
@@ -2310,13 +2306,13 @@ pub mod tests {
             let num_slots = 5 as u64;
             let shreds_per_slot = 5 as u64;
             let entry_serialized_size =
-                bincode::serialized_size(&create_ticks(1, Hash::default())).unwrap();
+                bincode::serialized_size(&create_ticks(1, 0, Hash::default())).unwrap();
             let entries_per_slot =
                 (shreds_per_slot * PACKET_DATA_SIZE as u64) / entry_serialized_size;
 
             // Write entries
             for slot in 0..num_slots {
-                let entries = create_ticks(entries_per_slot, Hash::default());
+                let entries = create_ticks(entries_per_slot, 0, Hash::default());
                 let shreds =
                     entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false);
                 assert!(shreds.len() as u64 >= shreds_per_slot);
@@ -3099,7 +3095,7 @@ pub mod tests {
         assert!(gap > 3);
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1) + 1;
-        let entries = create_ticks(num_entries, Hash::default());
+        let entries = create_ticks(num_entries, 0, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
         let num_shreds = shreds.len();
         assert!(num_shreds > 1);
@@ -3191,7 +3187,7 @@ pub mod tests {
         assert_eq!(blocktree.find_missing_data_indexes(slot, 4, 3, 1), empty);
         assert_eq!(blocktree.find_missing_data_indexes(slot, 1, 2, 0), empty);
 
-        let entries = create_ticks(100, Hash::default());
+        let entries = create_ticks(100, 0, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
         assert!(shreds.len() > 2);
         shreds.drain(2..);
@@ -3233,7 +3229,7 @@ pub mod tests {
 
         // Write entries
         let num_entries = 10;
-        let entries = create_ticks(num_entries, Hash::default());
+        let entries = create_ticks(num_entries, 0, Hash::default());
         let shreds = entries_to_test_shreds(entries, slot, 0, true);
         let num_shreds = shreds.len();
 
@@ -3748,7 +3744,7 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_ticks = 8;
-            let entries = create_ticks(num_ticks, Hash::default());
+            let entries = create_ticks(num_ticks, 0, Hash::default());
             let slot = 1;
             let shreds = entries_to_test_shreds(entries, slot, 0, false);
             let next_shred_index = shreds.len();
