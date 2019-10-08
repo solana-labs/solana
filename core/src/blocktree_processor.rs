@@ -68,7 +68,7 @@ fn execute_batch(batch: &TransactionBatch) -> Result<()> {
 fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatch],
-    entry_callback: &Option<ProcessCallback>,
+    entry_callback: Option<&ProcessCallback>,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
@@ -95,14 +95,14 @@ fn execute_batches(
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
 pub fn process_entries(bank: &Arc<Bank>, entries: &[Entry], randomize: bool) -> Result<()> {
-    process_entries_with_callback(bank, entries, randomize, &None)
+    process_entries_with_callback(bank, entries, randomize, None)
 }
 
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &[Entry],
     randomize: bool,
-    entry_callback: &Option<ProcessCallback>,
+    entry_callback: Option<&ProcessCallback>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -281,14 +281,16 @@ fn verify_and_process_entries(
         return Err(BlocktreeProcessorError::LedgerVerificationFailed);
     }
 
-    process_entries_with_callback(bank, &entries, true, &opts.entry_callback).map_err(|err| {
-        warn!(
-            "Failed to process entries for slot {}: {:?}",
-            bank.slot(),
-            err
-        );
-        BlocktreeProcessorError::LedgerVerificationFailed
-    })?;
+    process_entries_with_callback(bank, &entries, true, opts.entry_callback.as_ref()).map_err(
+        |err| {
+            warn!(
+                "Failed to process entries for slot {}: {:?}",
+                bank.slot(),
+                err
+            );
+            BlocktreeProcessorError::LedgerVerificationFailed
+        },
+    )?;
 
     Ok(entries.last().unwrap().hash)
 }
