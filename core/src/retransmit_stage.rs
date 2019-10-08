@@ -41,8 +41,6 @@ pub fn retransmit(
         packet_v.push(nq);
     }
 
-    datapoint_debug!("retransmit-stage", ("count", total_packets, i64));
-
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     let mut peers_len = 0;
@@ -52,8 +50,10 @@ pub fn retransmit(
         .unwrap()
         .sorted_retransmit_peers_and_stakes(stakes.as_ref());
     let mut retransmit_total = 0;
+    let mut turbine_total = 0;
     for packets in packet_v {
         for packet in &packets.packets {
+            let mut turbine_start = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) =
                 cluster_info.read().unwrap().shuffle_peers_and_index(
                     &peers,
@@ -72,6 +72,8 @@ pub fn retransmit(
                 compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, indexes);
             let neighbors: Vec<_> = neighbors.into_iter().map(|index| &peers[index]).collect();
             let children: Vec<_> = children.into_iter().map(|index| &peers[index]).collect();
+            turbine_start.stop();
+            turbine_total += turbine_start.as_ms();
 
             let leader =
                 leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
@@ -83,17 +85,24 @@ pub fn retransmit(
                 ClusterInfo::retransmit_to(&cluster_info, &children, packet, leader, sock, true)?;
             }
             retransmit_time.stop();
-            retransmit_total += retransmit_time.as_us();
+            retransmit_total += retransmit_time.as_ms();
         }
     }
     timer_start.stop();
     debug!(
-        "retransmitted {} packets in {}us retransmit_time: {}us",
+        "retransmitted {} packets in {}ms retransmit_time: {}ms",
         total_packets,
-        timer_start.as_us(),
+        timer_start.as_ms(),
         retransmit_total
     );
     datapoint_debug!("cluster_info-num_nodes", ("count", peers_len, i64));
+    datapoint_debug!(
+        "retransmit-stage",
+        ("total_time", timer_start.as_ms() as i64, i64),
+        ("total_packets", total_packets as i64, i64),
+        ("retransmit_total", retransmit_total as i64, i64),
+        ("turbine_total", turbine_total as i64, i64),
+    );
     Ok(())
 }
 
