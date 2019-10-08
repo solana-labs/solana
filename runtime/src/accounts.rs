@@ -620,8 +620,6 @@ impl Accounts {
                 account.lamports += credit;
                 total_credit_credited += credit;
 
-                // We don't want newly created credit account to be saved if it cannot even
-                // pay for current cycle of rent.
                 if let Some((account, rent)) = rent_collector.update(account) {
                     total_rent_collected += rent;
                     accounts.push((pubkey, account));
