@@ -12,7 +12,7 @@ use solana_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct VestState {
     /// The address authorized to terminate this contract with a signed Terminate instruction
-    pub terminator_pubkey: Pubkey,
+    pub custodian_pubkey: Pubkey,
 
     /// The address authorized to redeem vested tokens
     pub payee_pubkey: Pubkey,
@@ -34,7 +34,7 @@ pub struct VestState {
 impl Default for VestState {
     fn default() -> Self {
         Self {
-            terminator_pubkey: Pubkey::default(),
+            custodian_pubkey: Pubkey::default(),
             payee_pubkey: Pubkey::default(),
             start_date_time: Utc.timestamp(0, 0),
             date_pubkey: Pubkey::default(),

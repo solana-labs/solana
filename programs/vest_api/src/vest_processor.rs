@@ -62,7 +62,7 @@ pub fn process_instruction(
 
     match instruction {
         VestInstruction::InitializeAccount {
-            terminator_pubkey,
+            custodian_pubkey,
             payee_pubkey,
             start_date_time,
             date_pubkey,
@@ -70,7 +70,7 @@ pub fn process_instruction(
         } => {
             let contract_account = &mut keyed_accounts[0].account;
             let vest_state = VestState {
-                terminator_pubkey,
+                custodian_pubkey,
                 payee_pubkey,
                 start_date_time,
                 date_pubkey,
@@ -105,7 +105,7 @@ pub fn process_instruction(
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::Terminate => {
-            let (contract_keyed_account, terminator_keyed_account, payee_keyed_account) =
+            let (contract_keyed_account, custodian_keyed_account, payee_keyed_account) =
                 match keyed_accounts {
                     [ka0, ka1] => (ka0, ka1, None),
                     [ka0, ka1, ka2] => (ka0, ka1, Some(ka2)),
@@ -113,12 +113,12 @@ pub fn process_instruction(
                 };
             let contract_account = &mut contract_keyed_account.account;
             let mut vest_state = VestState::deserialize(&contract_account.data)?;
-            let terminator_account =
-                parse_signed_account(terminator_keyed_account, &vest_state.terminator_pubkey)?;
+            let custodian_account =
+                parse_signed_account(custodian_keyed_account, &vest_state.custodian_pubkey)?;
             let payee_account = if let Some(payee_keyed_account) = payee_keyed_account {
                 &mut payee_keyed_account.account
             } else {
-                terminator_account
+                custodian_account
             };
             vest_state.terminate(contract_account, payee_account);
             vest_state.serialize(&mut contract_account.data)

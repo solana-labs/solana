@@ -47,8 +47,8 @@ impl std::error::Error for VestError {}
 pub enum VestInstruction {
     /// Declare and instantiate a vesting schedule
     InitializeAccount {
-        terminator_pubkey: Pubkey, // The address authorized to terminate this contract with a signed Terminate instruction
-        payee_pubkey: Pubkey,      // The address authorized to redeem vested tokens
+        custodian_pubkey: Pubkey, // The address authorized to terminate this contract with a signed Terminate instruction
+        payee_pubkey: Pubkey,     // The address authorized to redeem vested tokens
         start_date_time: DateTime<Utc>, // The day from which the vesting contract begins
         date_pubkey: Pubkey, // Address of an account containing a trusted date, used to drive the vesting schedule
         total_lamports: u64, // The number of lamports to send the payee if the schedule completes
@@ -66,7 +66,7 @@ pub enum VestInstruction {
 }
 
 fn initialize_account(
-    terminator_pubkey: &Pubkey,
+    custodian_pubkey: &Pubkey,
     payee_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
     start_date: Date<Utc>,
@@ -77,7 +77,7 @@ fn initialize_account(
     Instruction::new(
         id(),
         &VestInstruction::InitializeAccount {
-            terminator_pubkey: *terminator_pubkey,
+            custodian_pubkey: *custodian_pubkey,
             payee_pubkey: *payee_pubkey,
             start_date_time: start_date.and_hms(0, 0, 0),
             date_pubkey: *date_pubkey,
@@ -88,7 +88,7 @@ fn initialize_account(
 }
 
 pub fn create_account(
-    terminator_pubkey: &Pubkey,
+    custodian_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
     payee_pubkey: &Pubkey,
     start_date: Date<Utc>,
@@ -98,14 +98,14 @@ pub fn create_account(
     let space = serialized_size(&VestState::default()).unwrap();
     vec![
         system_instruction::create_account(
-            &terminator_pubkey,
+            &custodian_pubkey,
             contract_pubkey,
             lamports,
             space,
             &id(),
         ),
         initialize_account(
-            terminator_pubkey,
+            custodian_pubkey,
             payee_pubkey,
             contract_pubkey,
             start_date,
