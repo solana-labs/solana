@@ -2,6 +2,7 @@ use super::broadcast_utils;
 use super::*;
 use crate::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::timing::duration_as_ms;
+use std::time::Duration;
 
 #[derive(Default)]
 struct BroadcastStats {
@@ -16,6 +17,8 @@ pub(super) struct StandardBroadcastRun {
     shredding_elapsed: u128,
     insertion_elapsed: u128,
     broadcast_elapsed: u128,
+    receive_elapsed: u128,
+    clone_and_seed_elapsed: u128,
     slot_broadcast_start: Option<Instant>,
 }
 
@@ -27,6 +30,8 @@ impl StandardBroadcastRun {
             shredding_elapsed: 0,
             insertion_elapsed: 0,
             broadcast_elapsed: 0,
+            receive_elapsed: 0,
+            clone_and_seed_elapsed: 0,
             slot_broadcast_start: None,
         }
     }
@@ -80,7 +85,7 @@ impl BroadcastRun for StandardBroadcastRun {
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
-        let receive_elapsed = receive_results.time_elapsed;
+        let mut receive_elapsed = receive_results.time_elapsed;
         let num_entries = receive_results.entries.len();
         let bank = receive_results.bank.clone();
         let last_tick = receive_results.last_tick;
@@ -89,6 +94,7 @@ impl BroadcastRun for StandardBroadcastRun {
         if Some(bank.slot()) != self.current_slot {
             self.slot_broadcast_start = Some(Instant::now());
             self.current_slot = Some(bank.slot());
+            receive_elapsed = Duration::new(0, 0);
         }
 
         // 2) Convert entries to blobs + generate coding blobs
@@ -122,6 +128,7 @@ impl BroadcastRun for StandardBroadcastRun {
         );
         let to_shreds_elapsed = to_shreds_start.elapsed();
 
+        let clone_and_seed_start = Instant::now();
         let all_shreds = data_shreds
             .iter()
             .cloned()
@@ -129,6 +136,7 @@ impl BroadcastRun for StandardBroadcastRun {
             .collect::<Vec<_>>();
         let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
         let num_shreds = all_shreds.len();
+        let clone_and_seed_elapsed = clone_and_seed_start.elapsed();
 
         // Insert shreds into blocktree
         let insert_shreds_start = Instant::now();
@@ -161,6 +169,8 @@ impl BroadcastRun for StandardBroadcastRun {
         self.insertion_elapsed += insert_shreds_elapsed.as_millis();
         self.shredding_elapsed += to_shreds_elapsed.as_millis();
         self.broadcast_elapsed += broadcast_elapsed.as_millis();
+        self.receive_elapsed += receive_elapsed.as_millis();
+        self.clone_and_seed_elapsed += clone_and_seed_elapsed.as_millis();
 
         if last_tick == bank.max_tick_height() {
             datapoint_info!(
@@ -169,6 +179,8 @@ impl BroadcastRun for StandardBroadcastRun {
                 ("shredding_time", self.shredding_elapsed as i64, i64),
                 ("insertion_time", self.insertion_elapsed as i64, i64),
                 ("broadcast_time", self.broadcast_elapsed as i64, i64),
+                ("receive_time", self.receive_elapsed as i64, i64),
+                ("clone_and_seed", self.clone_and_seed_elapsed as i64, i64),
                 ("num_shreds", i64::from(latest_shred_index), i64),
                 (
                     "slot_broadcast_time",
@@ -179,6 +191,8 @@ impl BroadcastRun for StandardBroadcastRun {
             self.insertion_elapsed = 0;
             self.shredding_elapsed = 0;
             self.broadcast_elapsed = 0;
+            self.receive_elapsed = 0;
+            self.clone_and_seed_elapsed = 0;
         }
 
         self.update_broadcast_stats(

@@ -330,6 +330,7 @@ impl Shredder {
         let now = Instant::now();
         let serialized_shreds =
             bincode::serialize(entries).expect("Expect to serialize all entries");
+        let serialize_time = now.elapsed().as_millis();
 
         let no_header_size = PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_HEADER;
         let num_shreds = (serialized_shreds.len() + no_header_size - 1) / no_header_size;
@@ -392,7 +393,6 @@ impl Shredder {
             })
         });
 
-        // TODO: pre-allocate this
         let elapsed = now.elapsed().as_millis();
 
         datapoint_info!(
@@ -400,13 +400,8 @@ impl Shredder {
             ("slot", self.slot as i64, i64),
             ("num_data_shreds", data_shreds.len() as i64, i64),
             ("num_coding_shreds", coding_shreds.len() as i64, i64),
-            // TODO: update signing_coding_time
-            ("signing_coding", self.signing_coding_time as i64, i64),
-            (
-                "copying_serialzing",
-                (elapsed - self.signing_coding_time) as i64,
-                i64
-            ),
+            ("signing_coding", (elapsed - serialize_time) as i64, i64),
+            ("serialzing", serialize_time as i64, i64),
         );
 
         (data_shreds, coding_shreds, last_shred_index + 1)
