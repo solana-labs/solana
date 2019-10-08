@@ -146,7 +146,7 @@ mod tests {
                 Some(0),
                 true,
                 &Arc::new(Keypair::new()),
-                &entries,
+                entries,
             )
             .unwrap();
 
@@ -193,10 +193,10 @@ mod tests {
             return;
         }
 
-        let entries = create_ticks(32, Hash::default());
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let ticks_per_slot = 16;
+        let ticks_per_slot = 90;
+        let entries = create_ticks(2 * ticks_per_slot, Hash::default());
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         blocktree
             .write_entries(
@@ -207,7 +207,7 @@ mod tests {
                 Some(0),
                 true,
                 &Arc::new(Keypair::new()),
-                &entries,
+                entries,
             )
             .unwrap();
 
