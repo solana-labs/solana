@@ -563,9 +563,10 @@ impl Bank {
 
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.commit_credits();
             self.collect_fees();
-            self.commit_and_distribute_rent();
+
+            let (_, collected_rent) = self.commit_credits_and_rents();
+            self.distribute_rent(collected_rent);
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -831,9 +832,11 @@ impl Bank {
         self.process_transactions(&txs)[0].clone()?;
         // Call this instead of commit_credits(), so that the credit-only locks hashmap on this
         // bank isn't deleted
-        self.rc
-            .accounts
-            .commit_credits_unsafe(&self.ancestors, self.slot());
+        self.rc.accounts.commit_credits_and_rents_unsafe(
+            &self.rent_collector,
+            &self.ancestors,
+            self.slot(),
+        );
         tx.signatures
             .get(0)
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
@@ -1574,10 +1577,12 @@ impl Bank {
         );
     }
 
-    fn commit_credits(&self) {
-        self.rc
-            .accounts
-            .commit_credits(&self.ancestors, self.slot());
+    fn commit_credits_and_rents(&self) -> (u64, u64) {
+        self.rc.accounts.commit_credits_and_rents(
+            &self.rent_collector,
+            &self.ancestors,
+            self.slot(),
+        )
     }
 
     fn tally_credit_debit_rent(
@@ -1614,12 +1619,9 @@ impl Bank {
             .fetch_add(collected_rent, Ordering::Relaxed);
     }
 
-    fn commit_and_distribute_rent(&self) {
-        let total_rent_collected = self
-            .rc
-            .accounts
-            .commit_credit_only_collected_rent(&self.ancestors, self.slot())
-            + self.tallied_credit_debit_rent.load(Ordering::Relaxed);
+    fn distribute_rent(&self, credit_only_collected_rent: u64) {
+        let total_rent_collected =
+            credit_only_collected_rent + self.tallied_credit_debit_rent.load(Ordering::Relaxed);
 
         if total_rent_collected != 0 {
             let burned_portion = (total_rent_collected
@@ -1823,7 +1825,7 @@ mod tests {
         let t1 = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_block.hash());
         let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_block.hash());
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
-        bank.commit_credits();
+        bank.commit_credits_and_rents();
 
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
@@ -2222,9 +2224,11 @@ mod tests {
             system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
-        bank.rc
-            .accounts
-            .commit_credits_unsafe(&bank.ancestors, bank.slot());
+        bank.rc.accounts.commit_credits_and_rents_unsafe(
+            &bank.rent_collector,
+            &bank.ancestors,
+            bank.slot(),
+        );
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
         // since System Transfer `To` accounts are given credit-only handling
@@ -2243,9 +2247,11 @@ mod tests {
             system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
-        bank.rc
-            .accounts
-            .commit_credits_unsafe(&bank.ancestors, bank.slot());
+        bank.rc.accounts.commit_credits_and_rents_unsafe(
+            &bank.rent_collector,
+            &bank.ancestors,
+            bank.slot(),
+        );
         // However, an account may not be locked as credit-only and credit-debit at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
