@@ -41,6 +41,7 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
             // If the bank changed, that implies the previous slot was interrupted and we do not have to
             // broadcast its entries.
             if try_bank.slot() != slot {
+                warn!("Broadcast for slot: {} interrupted", bank.slot());
                 entries.clear();
                 bank = try_bank;
                 slot = bank.slot();
