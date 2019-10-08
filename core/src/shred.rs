@@ -38,6 +38,7 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
 
 /// The constants that define if a shred is data or coding
 pub const DATA_SHRED: u8 = 0b1010_0101;
+pub const REPAIR_SHRED: u8 = 0b1010_0110;
 pub const CODING_SHRED: u8 = 0b0101_1010;
 
 /// This limit comes from reed solomon library, but unfortunately they don't have

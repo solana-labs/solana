@@ -7,7 +7,7 @@ use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::shred::Shred;
+use crate::shred::{Shred, DATA_SHRED, REPAIR_SHRED};
 use crate::streamer::{PacketReceiver, PacketSender};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rayon::ThreadPool;
@@ -94,7 +94,11 @@ where
             .packets
             .par_iter_mut()
             .enumerate()
-            .filter_map(|(i, packet)| {
+            .filter_map(|(i, mut packet)| {
+                if packet.data[0] == REPAIR_SHRED {
+                    packet.data[0] = DATA_SHRED;
+                    packet.meta.is_repair = true;
+                }
                 if let Ok(shred) = Shred::new_from_serialized_shred(packet.data.to_vec()) {
                     if shred_filter(&shred, last_root) {
                         packet.meta.slot = shred.slot();

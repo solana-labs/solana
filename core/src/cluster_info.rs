@@ -22,6 +22,7 @@ use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
 use crate::packet::{to_shared_blob, Blob, Packet, SharedBlob};
 use crate::repair_service::RepairType;
 use crate::result::Result;
+use crate::shred::REPAIR_SHRED;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
 use crate::weighted_shuffle::{weighted_best, weighted_shuffle};
@@ -1035,7 +1036,10 @@ impl ClusterInfo {
         shred_index: u64,
     ) -> Result<Option<Blob>> {
         let bytes = blocktree.get_data_shred(slot, shred_index)?;
-        Ok(bytes.map(|bytes| Blob::new(&bytes)))
+        Ok(bytes.map(|mut bytes| {
+            bytes[0] = REPAIR_SHRED;
+            Blob::new(&bytes)
+        }))
     }
 
     fn run_window_request(
