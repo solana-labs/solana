@@ -175,7 +175,9 @@ colo_node_status_all() {
 export COLO_RES_REQUISITIONED=()
 colo_node_requisition() {
   declare IP=$1
+  # shellcheck disable=SC2034
   declare INSTANCE_NAME=$2
+  # shellcheck disable=SC2034
   declare SSH_PRIVATE_KEY="$3"
 
   declare INDEX
