@@ -20,18 +20,9 @@ impl ShredFetchStage {
         recvr: &PacketReceiver,
         sendr: &PacketSender,
     ) -> result::Result<()> {
-        let msgs = recvr.recv()?;
-        let mut batch = vec![msgs];
-        while let Ok(more) = recvr.try_recv() {
-            batch.push(more);
-        }
-
-        batch
-            .iter_mut()
-            .for_each(|b| b.packets.iter_mut().for_each(|p| p.meta.forward = true));
-
-        for packets in batch {
-            if sendr.send(packets).is_err() {
+        while let Some(mut p) = recvr.iter().next() {
+            p.packets.iter_mut().for_each(|p| p.meta.forward = true);
+            if sendr.send(p).is_err() {
                 return Err(Error::SendError);
             }
         }
