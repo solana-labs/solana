@@ -45,14 +45,17 @@ impl BroadcastStageType {
         blocktree: &Arc<Blocktree>,
     ) -> BroadcastStage {
         match self {
-            BroadcastStageType::Standard => BroadcastStage::new(
-                sock,
-                cluster_info,
-                receiver,
-                exit_sender,
-                blocktree,
-                StandardBroadcastRun::new(),
-            ),
+            BroadcastStageType::Standard => {
+                let keypair = cluster_info.read().unwrap().keypair.clone();
+                BroadcastStage::new(
+                    sock,
+                    cluster_info,
+                    receiver,
+                    exit_sender,
+                    blocktree,
+                    StandardBroadcastRun::new(keypair),
+                )
+            }
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
                 sock,
@@ -235,6 +238,7 @@ mod test {
         let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
 
+        let leader_keypair = cluster_info.read().unwrap().keypair.clone();
         // Start up the broadcast stage
         let broadcast_service = BroadcastStage::new(
             leader_info.sockets.broadcast,
@@ -242,7 +246,7 @@ mod test {
             entry_receiver,
             &exit_sender,
             &blocktree,
-            StandardBroadcastRun::new(),
+            StandardBroadcastRun::new(leader_keypair),
         );
 
         MockBroadcastStage {
