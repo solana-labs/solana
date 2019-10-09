@@ -559,6 +559,26 @@ impl AccountsDB {
         false
     }
 
+    pub fn purge_zero_lamport_accounts(&self, ancestors: &HashMap<u64, usize>) {
+        let accounts_index = self.accounts_index.read().unwrap();
+        let mut purges = Vec::new();
+        accounts_index.scan_accounts(ancestors, |pubkey, (account_info, fork)| {
+            if account_info.lamports == 0 && accounts_index.is_root(fork) {
+                purges.push(*pubkey);
+            }
+        });
+        drop(accounts_index);
+        let mut reclaims = Vec::new();
+        let mut accounts_index = self.accounts_index.write().unwrap();
+        for purge in &purges {
+            reclaims.extend(accounts_index.purge(purge));
+        }
+        let last_root = accounts_index.last_root;
+        drop(accounts_index);
+        let mut dead_forks = self.remove_dead_accounts(reclaims);
+        self.cleanup_dead_forks(&mut dead_forks, last_root);
+    }
+
     pub fn scan_accounts<F, A>(&self, ancestors: &HashMap<Fork, usize>, scan_func: F) -> A
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Fork)>) -> (),
@@ -746,6 +766,10 @@ impl AccountsDB {
     }
 
     pub fn hash_account_data(fork: Fork, lamports: u64, data: &[u8], pubkey: &Pubkey) -> Hash {
+        if lamports == 0 {
+            return Hash::default();
+        }
+
         let mut hasher = Hasher::default();
         let mut buf = [0u8; 8];
 
