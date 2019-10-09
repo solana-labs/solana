@@ -586,6 +586,10 @@ impl Bank {
         &self.epoch_schedule
     }
 
+    pub fn get_tallied_credit_debit_rent(&self) -> u64 {
+        self.tallied_credit_debit_rent.load(Ordering::Relaxed)
+    }
+
     /// squash the parent's state up into this Bank,
     ///   this Bank becomes a root
     pub fn squash(&self) {
@@ -1653,6 +1657,7 @@ mod tests {
         status_cache::MAX_CACHE_ENTRIES,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
+    use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -1812,6 +1817,80 @@ mod tests {
         bank.transfer(500, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1_500);
         assert_eq!(bank.transaction_count(), 2);
+    }
+
+    #[test]
+    fn test_tallied_credit_debit_rent() {
+        let (mut genesis_block, mint_keypair) = create_genesis_block(10);
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let rich_keypair1: Keypair = Keypair::new();
+        let rich_keypair2: Keypair = Keypair::new();
+        genesis_block.rent_calculator = RentCalculator {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 21.0,
+            burn_percent: 10,
+        };
+
+        let root_bank = Bank::new(&genesis_block);
+        let bank = Bank::new_from_parent(
+            &Arc::new(root_bank),
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+        assert_eq!(bank.last_blockhash(), genesis_block.hash());
+
+        // Initialize credit-debit and credit only accounts
+        let rich_account1 = Account::new(20, 1, &Pubkey::default());
+        let rich_account2 = Account::new(20, 1, &Pubkey::default());
+        let account1 = Account::new(3, 1, &Pubkey::default());
+        let account2 = Account::new(3, 1, &Pubkey::default());
+        bank.store_account(&rich_keypair1.pubkey(), &rich_account1);
+        bank.store_account(&rich_keypair2.pubkey(), &rich_account2);
+        bank.store_account(&key1, &account1);
+        bank.store_account(&key2, &account2);
+
+        // Make native instruction loader rent exempt
+        let system_program_id = solana_system_program().1;
+        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+        system_program_account.lamports =
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
+        bank.store_account(&system_program_id, &system_program_account);
+
+        let t1 = system_transaction::transfer(&rich_keypair1, &key1, 1, genesis_block.hash());
+        let t2 = system_transaction::transfer(&rich_keypair2, &key2, 1, genesis_block.hash());
+        let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
+
+        // Both txs should be successful
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Ok(()));
+
+        // We haven't yet deducted rent + credited in credit only account
+        assert_eq!(bank.get_balance(&key1), 3);
+        assert_eq!(bank.get_balance(&key2), 3);
+
+        // Credit-debit account's rent is already deducted
+        // 20 - 1(Transferred) - 2(Rent)
+        assert_eq!(bank.get_balance(&rich_keypair1.pubkey()), 17);
+        assert_eq!(bank.get_balance(&rich_keypair2.pubkey()), 17);
+
+        // Credit-debit account's rent is stored in `tallied_credit_debit_rent`
+        assert_eq!(bank.get_tallied_credit_debit_rent(), 4);
+
+        bank.commit_credits_and_rents();
+
+        // Now, we have credited credits and debited rent
+        // 3 + 1(Transferred) - 2(Rent)
+        assert_eq!(bank.get_balance(&key1), 2);
+        assert_eq!(bank.get_balance(&key2), 2);
+
+        assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
+        assert_eq!(bank.get_signature_status(&t2.signatures[0]), Some(Ok(())));
     }
 
     #[test]
