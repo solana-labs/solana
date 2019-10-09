@@ -8,14 +8,9 @@ set -e
 # TODO: Remove all default values, force explicitness in the testcase definition
 [[ -n $TEST_DURATION ]] || TEST_DURATION=300
 [[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=60
-[[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES="10 25 50 100"
-[[ -n $VALIDATOR_NODE_MACHINE_TYPE ]] ||
-  VALIDATOR_NODE_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
-[[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=2
-[[ -n $CLIENT_OPTIONS ]] || CLIENT_OPTIONS=
-[[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
-[[ -n $CHANNEL ]] || CHANNEL=beta
-[[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
+[[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES=2
+[[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=1
+[[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-a"
 
 function collect_logs {
   echo --- collect logs from remote nodes
@@ -37,7 +32,6 @@ function cleanup_testnet {
     collect_logs
   )
 
-  # TODO: Replace this with the cleanup from https://github.com/solana-labs/solana/issues/6216
   (
     set +e
     echo --- Stop Network Software
@@ -80,7 +74,7 @@ trap cleanup_testnet EXIT
 
 cd "$(dirname "$0")/../.."
 
-if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
+if [[ -z $CHANNEL ]]; then
   echo --- downloading tar from build artifacts
   buildkite-agent artifact download "solana-release*.tar.bz2" .
 fi
@@ -102,6 +96,11 @@ if [[ -n $CLIENT_OPTIONS ]] ; then
   maybeClientOptions="-c"
 fi
 
+maybeMachineType=
+if [[ -n $VALIDATOR_NODE_MACHINE_TYPE ]] ; then
+  maybeMachineType="-G"
+fi
+
 TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TESTNET_ZONES},"
 
 launchTestnet() {
@@ -115,7 +114,7 @@ launchTestnet() {
       net/gce.sh create \
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
-        -G "$VALIDATOR_NODE_MACHINE_TYPE" \
+        "$maybeMachineType" "$VALIDATOR_NODE_MACHINE_TYPE" \
         -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/-z } "$ADDITIONAL_FLAGS"
       ;;
     colo)
@@ -131,12 +130,11 @@ launchTestnet() {
   echo --- configure database
   net/init-metrics.sh -e
 
-# TODO: Calling net.sh restart instead of start until https://github.com/solana-labs/solana/issues/6216 is fixed
   echo --- start "$NUMBER_OF_VALIDATOR_NODES" node test
-  if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
-    net/net.sh restart -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
+  if [[ -n $CHANNEL ]]; then
+    net/net.sh start -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
   else
-    net/net.sh restart -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
+    net/net.sh start -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
   fi
 
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
