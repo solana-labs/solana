@@ -35,7 +35,7 @@ use std::{
 
 // The point at which transactions become "too old", in seconds.
 const MAX_TX_QUEUE_AGE: u64 =
-    MAX_PROCESSING_AGE as u64 * DEFAULT_TICKS_PER_SECOND / DEFAULT_TICKS_PER_SLOT;
+    MAX_PROCESSING_AGE as u64 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
 
 #[cfg(feature = "move")]
 use solana_librapay_api::librapay_transaction;
