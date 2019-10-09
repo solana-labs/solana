@@ -5,7 +5,6 @@
 //    copies from host memory to GPU memory unless the memory is page-pinned and
 //    cannot be paged to disk. The cuda driver provides these interfaces to pin and unpin memory.
 
-#[cfg(feature = "pin_gpu_memory")]
 use crate::perf_libs;
 use crate::recycler::Reset;
 use std::ops::{Deref, DerefMut};
