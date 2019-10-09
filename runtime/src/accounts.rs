@@ -119,9 +119,7 @@ impl Accounts {
             {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
                     .and_then(|(mut account, _)| {
-                        if let (Some(_), rent_collected) =
-                            rent_collector.update(&mut account, false)
-                        {
+                        if let (Some(_), rent_collected) = rent_collector.update(&mut account) {
                             Some((account, rent_collected))
                         } else {
                             None
@@ -627,7 +625,7 @@ impl Accounts {
                         .unwrap_or_default();
                 account.lamports += credit;
 
-                if let (Some(_), rent) = rent_collector.update(&mut account, false) {
+                if let (Some(_), rent) = rent_collector.update(&mut account) {
                     total_rent_collected += rent;
                     accounts.push((pubkey, account));
                 }
