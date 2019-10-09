@@ -17,7 +17,7 @@ pub struct ShredFetchStage {
 
 impl ShredFetchStage {
     // updates packets received on a channel and sends them on another channel
-    fn modify_packets<F>(recvr: &PacketReceiver, sendr: &PacketSender, modify: F)
+    fn modify_packets<F>(recvr: PacketReceiver, sendr: PacketSender, modify: F)
     where
         F: Fn(&mut Packet),
     {
@@ -29,27 +29,35 @@ impl ShredFetchStage {
         }
     }
 
-    fn setup_repair_handler(
-        repair_socket: Arc<UdpSocket>,
+    fn packet_modifier<F>(
+        sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
         sender: PacketSender,
         recycler: Recycler<PinnedVec<Packet>>,
-    ) -> (JoinHandle<()>, JoinHandle<()>) {
-        let (repair_sender, repair_receiver) = channel();
-        let repair_streamer = streamer::receiver(
-            repair_socket,
-            &exit,
-            repair_sender.clone(),
-            recycler,
-            "repair_response_handler",
-        );
-        let repair_handler_hdl = Builder::new()
-            .name("solana-tvu-fetch-stage-repair-recvr".to_string())
-            .spawn(move || {
-                Self::modify_packets(&repair_receiver, &sender, |p| p.meta.repair = true)
+        modify: F,
+    ) -> (Vec<JoinHandle<()>>, JoinHandle<()>)
+    where
+        F: Fn(&mut Packet) + Send + 'static,
+    {
+        let (packet_sender, packet_receiver) = channel();
+        let streamers = sockets
+            .into_iter()
+            .map(|s| {
+                streamer::receiver(
+                    s,
+                    &exit,
+                    packet_sender.clone(),
+                    recycler.clone(),
+                    "packet_modifier",
+                )
             })
+            .collect();
+        let sender = sender.clone();
+        let modifier_hdl = Builder::new()
+            .name("solana-tvu-fetch-stage-packet-modifier".to_string())
+            .spawn(|| Self::modify_packets(packet_receiver, sender, modify))
             .unwrap();
-        (repair_streamer, repair_handler_hdl)
+        (streamers, modifier_hdl)
     }
 
     pub fn new(
@@ -70,31 +78,27 @@ impl ShredFetchStage {
             )
         });
 
-        let (forward_sender, forward_receiver) = channel();
-        let tvu_forwards_threads = forward_sockets.into_iter().map(|socket| {
-            streamer::receiver(
-                socket,
-                &exit,
-                forward_sender.clone(),
-                recycler.clone(),
-                "shred_fetch_stage",
-            )
-        });
+        let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
+            forward_sockets,
+            &exit,
+            sender.clone(),
+            recycler.clone(),
+            |p| p.meta.forward = true,
+        );
 
-        let fwd_sender = sender.clone();
-        let fwd_thread_hdl = Builder::new()
-            .name("solana-tvu-fetch-stage-fwd-rcvr".to_string())
-            .spawn(move || {
-                Self::modify_packets(&forward_receiver, &fwd_sender, |p| p.meta.forward = true)
-            })
-            .unwrap();
+        let (repair_receiver, repair_handler) = Self::packet_modifier(
+            vec![repair_socket],
+            &exit,
+            sender.clone(),
+            recycler.clone(),
+            |p| p.meta.repair = true,
+        );
 
-        let (repair_receiver, repair_handler) =
-            Self::setup_repair_handler(repair_socket, &exit, sender.clone(), recycler.clone());
-
-        let mut thread_hdls: Vec<_> = tvu_threads.chain(tvu_forwards_threads).collect();
+        let mut thread_hdls: Vec<_> = tvu_threads
+            .chain(tvu_forwards_threads.into_iter())
+            .collect();
+        thread_hdls.extend(repair_receiver.into_iter());
         thread_hdls.push(fwd_thread_hdl);
-        thread_hdls.push(repair_receiver);
         thread_hdls.push(repair_handler);
 
         Self { thread_hdls }
