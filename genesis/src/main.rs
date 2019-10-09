@@ -2,6 +2,7 @@
 
 use base64;
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use solana_core::blocktree::create_new_ledger;
 use solana_genesis::PrimordialAccountDetails;
 use solana_sdk::{
@@ -376,12 +377,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     match matches.value_of("hashes_per_tick").unwrap() {
         "auto" => {
-            let mut v = Hash::default();
-            println!("Running 1 million hashes...");
+            let v = Hash::default();
+            // calculate hash rate with the system under maximum load
+            println!("Running 1 million hashes in parallel on all threads...");
             let start = Instant::now();
-            for _ in 0..1_000_000 {
-                v = hash(&v.as_ref());
-            }
+            (0..sys_info::cpu_num().unwrap())
+                .into_par_iter()
+                .for_each_with(v, |v, _| {
+                    for _ in 0..1_000_000 {
+                        *v = hash(&v.as_ref());
+                    }
+                });
+
             let end = Instant::now();
             let elapsed = end.duration_since(start).as_millis();
 
