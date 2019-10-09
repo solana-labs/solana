@@ -456,6 +456,7 @@ impl ClusterInfo {
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me)
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .filter(|x| ContactInfo::is_valid_address(&x.tvu_forwards))
             .cloned()
             .collect()
     }

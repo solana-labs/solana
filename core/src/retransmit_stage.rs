@@ -58,6 +58,11 @@ pub fn retransmit(
     let mut compute_turbine_peers_total = 0;
     for packets in packet_v {
         for packet in &packets.packets {
+            // skip repair packets
+            if packet.meta.repair {
+                total_packets -= 1;
+                continue;
+            }
             let mut compute_turbine_peers = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &me.id,
@@ -227,5 +232,84 @@ impl Service for RetransmitStage {
         }
         self.window_service.join()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::blocktree::create_new_tmp_ledger;
+    use crate::blocktree_processor::{process_blocktree, ProcessOptions};
+    use crate::contact_info::ContactInfo;
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::packet::{Meta, Packet, Packets};
+    use solana_netutil::find_available_port_in_range;
+    use solana_sdk::pubkey::Pubkey;
+
+    #[test]
+    fn test_skip_repair() {
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(123);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let opts = ProcessOptions {
+            full_leader_cache: true,
+            ..ProcessOptions::default()
+        };
+        let (bank_forks, _, cached_leader_schedule) =
+            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+        let leader_schedule_cache = Arc::new(cached_leader_schedule);
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
+
+        let mut me = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
+        let port = find_available_port_in_range((8000, 10000)).unwrap();
+        let me_retransmit = UdpSocket::bind(format!("127.0.0.1:{}", port)).unwrap();
+        // need to make sure tvu and tpu are valid addresses
+        me.tvu_forwards = me_retransmit.local_addr().unwrap();
+        let port = find_available_port_in_range((8000, 10000)).unwrap();
+        me.tvu = UdpSocket::bind(format!("127.0.0.1:{}", port))
+            .unwrap()
+            .local_addr()
+            .unwrap();
+
+        let other = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(other);
+        cluster_info.insert_info(me);
+
+        let retransmit_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+
+        let (retransmit_sender, retransmit_receiver) = channel();
+        let t_retransmit = retransmitter(
+            retransmit_socket,
+            bank_forks,
+            &leader_schedule_cache,
+            cluster_info,
+            retransmit_receiver,
+        );
+        let _thread_hdls = vec![t_retransmit];
+
+        let packets = Packets::new(vec![Packet::default()]);
+        // it should send this over the sockets.
+        retransmit_sender.send(packets).unwrap();
+        let mut packets = Packets::new(vec![]);
+        packets.recv_from(&me_retransmit).unwrap();
+        assert_eq!(packets.packets.len(), 1);
+        assert_eq!(packets.packets[0].meta.repair, false);
+
+        let repair = Packet {
+            meta: Meta {
+                repair: true,
+                ..Meta::default()
+            },
+            ..Packet::default()
+        };
+
+        // send 1 repair and 1 "regular" packet so that we don't block forever on the recv_from
+        let packets = Packets::new(vec![repair, Packet::default()]);
+        retransmit_sender.send(packets).unwrap();
+        let mut packets = Packets::new(vec![]);
+        packets.recv_from(&me_retransmit).unwrap();
+        assert_eq!(packets.packets.len(), 1);
+        assert_eq!(packets.packets[0].meta.repair, false);
     }
 }

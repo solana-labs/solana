@@ -253,9 +253,8 @@ impl Replicator {
         };
 
         let repair_socket = Arc::new(node.sockets.repair);
-        let mut blob_sockets: Vec<Arc<UdpSocket>> =
+        let blob_sockets: Vec<Arc<UdpSocket>> =
             node.sockets.tvu.into_iter().map(Arc::new).collect();
-        blob_sockets.push(repair_socket.clone());
         let blob_forward_sockets: Vec<Arc<UdpSocket>> = node
             .sockets
             .tvu_forwards
@@ -266,6 +265,7 @@ impl Replicator {
         let fetch_stage = ShredFetchStage::new(
             blob_sockets,
             blob_forward_sockets,
+            repair_socket.clone(),
             &blob_fetch_sender,
             &exit,
         );
