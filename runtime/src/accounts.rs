@@ -713,6 +713,7 @@ mod tests {
     use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
+    use solana_sdk::rent_calculator::RentCalculator;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::sysvar;
     use solana_sdk::transaction::Transaction;
@@ -721,10 +722,11 @@ mod tests {
     use std::{thread, time};
     use tempfile::TempDir;
 
-    fn load_accounts_with_fee(
+    fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
+        rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<TransactionLoadResult>> {
         let mut hash_queue = BlockhashQueue::new(100);
@@ -735,7 +737,6 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let rent_collector = RentCollector::default();
         let res = accounts.load_accounts(
             &ancestors,
             &[tx],
@@ -754,7 +755,8 @@ mod tests {
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<TransactionLoadResult>> {
         let fee_calculator = FeeCalculator::default();
-        load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
+        let rent_collector: RentCollector = RentCollector::default();
+        load_accounts_with_fee_and_rent(tx, ka, &fee_calculator, &rent_collector, error_counters)
     }
 
     #[test]
@@ -858,8 +860,15 @@ mod tests {
         let fee_calculator = FeeCalculator::new(10, 0);
         assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
 
-        let loaded_accounts =
-            load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);
+        let rent_collector = RentCollector::default();
+
+        let loaded_accounts = load_accounts_with_fee_and_rent(
+            tx,
+            &accounts,
+            &fee_calculator,
+            &rent_collector,
+            &mut error_counters,
+        );
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -1463,19 +1472,26 @@ mod tests {
     }
 
     #[test]
-    fn test_commit_credits() {
+    fn test_commit_credits_and_rents() {
         let pubkey0 = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
         let pubkey2 = Pubkey::new_rand();
 
-        let account0 = Account::new(1, 0, &Pubkey::default());
-        let account1 = Account::new(2, 0, &Pubkey::default());
+        let account0 = Account::new(1, 1, &Pubkey::default());
+        let account1 = Account::new(2, 1, &Pubkey::default());
 
         let accounts = Accounts::new(None);
         accounts.store_slow(0, &pubkey0, &account0);
         accounts.store_slow(0, &pubkey1, &account1);
 
-        let rent_collector = RentCollector::default();
+        let mut rent_collector = RentCollector::default();
+        rent_collector.epoch = 2;
+        rent_collector.slots_per_year = 400_f64;
+        rent_collector.rent_calculator = RentCalculator {
+            burn_percent: 10,
+            exemption_threshold: 8.0,
+            lamports_per_byte_year: 1,
+        };
 
         {
             let mut credit_only_account_locks = accounts.credit_only_account_locks.write().unwrap();
@@ -1483,7 +1499,7 @@ mod tests {
             credit_only_account_locks.insert(
                 pubkey0,
                 CreditOnlyLock {
-                    credits: AtomicU64::new(0),
+                    credits: AtomicU64::new(1),
                     lock_count: Mutex::new(1),
                 },
             );
@@ -1504,19 +1520,28 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        accounts.commit_credits_and_rents_unsafe(&rent_collector, &ancestors, 0);
 
-        // No change when CreditOnlyLock credits are 0
+        // Total rent collected should be: rent from pubkey0(1) + rent from pubkey1(1)
+        assert_eq!(
+            accounts.commit_credits_and_rents_unsafe(&rent_collector, &ancestors, 0),
+            2
+        );
+
+        // New balance should be previous balance plus CreditOnlyLock credits - rent
+        // Balance(1) + Credit(1) - Rent(1)
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey0).unwrap().0.lamports,
             1
         );
-        // New balance should equal previous balance plus CreditOnlyLock credits
+
+        // New balance should equal previous balance plus CreditOnlyLock credits - rent
+        // Balance(2) + Credit(5) - Rent(1)
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey1).unwrap().0.lamports,
-            7
+            6
         );
-        // New account should be created
+
+        // New account should be created and no rent should be charged
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey2).unwrap().0.lamports,
             10
