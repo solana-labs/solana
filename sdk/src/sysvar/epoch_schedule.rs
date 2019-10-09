@@ -14,7 +14,7 @@ const ID: [u8; 32] = [
     30, 63, 80, 135, 25, 168, 5, 0, 0, 0,
 ];
 
-crate::solana_name_id!(ID, "SysvarEpochSchedu1e111111111111111111111111");
+crate::solana_sysvar_id!(ID, "SysvarEpochSchedu1e111111111111111111111111");
 
 impl EpochSchedule {
     pub fn deserialize(account: &Account) -> Result<Self, bincode::Error> {

@@ -11,7 +11,7 @@ const ID: [u8; 32] = [
     208, 190, 59, 19, 110, 45, 0, 85, 32, 0, 0, 0,
 ];
 
-crate::solana_name_id!(ID, "SysvarS1otHashes111111111111111111111111111");
+crate::solana_sysvar_id!(ID, "SysvarS1otHashes111111111111111111111111111");
 
 pub const MAX_SLOT_HASHES: usize = 512; // 512 slots to get your vote in
 

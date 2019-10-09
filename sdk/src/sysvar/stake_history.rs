@@ -13,7 +13,7 @@ const ID: [u8; 32] = [
     87, 184, 86, 108, 197, 55, 95, 244, 0, 0, 0,
 ];
 
-crate::solana_name_id!(ID, "SysvarStakeHistory1111111111111111111111111");
+crate::solana_sysvar_id!(ID, "SysvarStakeHistory1111111111111111111111111");
 
 pub const MAX_STAKE_HISTORY: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 

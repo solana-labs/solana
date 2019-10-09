@@ -12,7 +12,7 @@ const ID: [u8; 32] = [
     111, 196, 237, 82, 106, 156, 144, 0, 0, 0, 0,
 ];
 
-crate::solana_name_id!(ID, "SysvarFees111111111111111111111111111111111");
+crate::solana_sysvar_id!(ID, "SysvarFees111111111111111111111111111111111");
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default)]
