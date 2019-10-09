@@ -288,14 +288,14 @@ impl ReplayStage {
 
         assert!(!poh_recorder.lock().unwrap().has_bank());
 
-        let (reached_leader_tick, _grace_ticks, poh_slot, parent_slot) =
-            poh_recorder.lock().unwrap().reached_leader_tick();
+        let (reached_leader_slot, _grace_ticks, poh_slot, parent_slot) =
+            poh_recorder.lock().unwrap().reached_leader_slot();
 
-        if !reached_leader_tick {
-            trace!("{} poh_recorder hasn't reached_leader_tick", my_pubkey);
+        if !reached_leader_slot {
+            trace!("{} poh_recorder hasn't reached_leader_slot", my_pubkey);
             return;
         }
-        trace!("{} reached_leader_tick", my_pubkey,);
+        trace!("{} reached_leader_slot", my_pubkey);
 
         let parent = bank_forks
             .read()
