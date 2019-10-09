@@ -228,7 +228,11 @@ impl<T: Clone> PinnedVec<T> {
     }
 
     fn check_ptr(&mut self, _old_ptr: *mut T, _old_capacity: usize, _from: &'static str) {
-        if self.pinnable && (self.x.as_ptr() != _old_ptr || self.x.capacity() != _old_capacity) {
+        let api = perf_libs::api();
+        if api.is_some()
+            && self.pinnable
+            && (self.x.as_ptr() != _old_ptr || self.x.capacity() != _old_capacity)
+        {
             if self.pinned {
                 unpin(_old_ptr);
             }
