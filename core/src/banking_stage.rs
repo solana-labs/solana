@@ -700,12 +700,11 @@ impl BankingStage {
         //  2. The slot at which the next leader will actually process the transaction
         // Drop the transaction if it will expire by the time the next node receives and processes it
         let api = perf_libs::api();
-        let max_tx_fwd_delay;
-        if api.is_none() {
-            max_tx_fwd_delay = MAX_TRANSACTION_FORWARDING_DELAY;
+        let max_tx_fwd_delay = if api.is_none() {
+            MAX_TRANSACTION_FORWARDING_DELAY
         } else {
-            max_tx_fwd_delay = MAX_TRANSACTION_FORWARDING_DELAY_GPU;
-        }
+            MAX_TRANSACTION_FORWARDING_DELAY_GPU
+        };
         let result = bank.check_transactions(
             transactions,
             None,
