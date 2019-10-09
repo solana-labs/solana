@@ -19,7 +19,6 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
 pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
     use libc::{c_void, iovec, mmsghdr, sendmmsg, sockaddr_in, sockaddr_in6, socklen_t};
     use nix::sys::socket::InetAddr;
-    use std::iter::Iterator;
     use std::mem;
     use std::os::unix::io::AsRawFd;
 
@@ -32,29 +31,47 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
     let addr_in6_len = mem::size_of_val(&addr_in6) as socklen_t;
     let sock_fd = sock.as_raw_fd();
 
-    packets.iter_mut().enumerate().for_each(|(i, packet)| {
-        iovs.push(iovec {
-            iov_base: packet.data.as_mut_ptr() as *mut c_void,
-            iov_len: packet.data.len(),
-        });
+    let mut hdrs: Vec<mmsghdr> = packets
+        .iter_mut()
+        .enumerate()
+        .map(|(i, packet)| {
+            iovs.push(iovec {
+                iov_base: packet.data.as_mut_ptr() as *mut c_void,
+                iov_len: packet.data.len(),
+            });
 
-        let mut hdr: mmsghdr = unsafe { mem::zeroed() };
-        hdr.msg_hdr.msg_iov = &mut iovs[i];
-        hdr.msg_hdr.msg_iovlen = 1;
-        hdr.msg_len = packet.data.len() as u32;
-        match InetAddr::from_std(&packet.meta.addr()) {
-            InetAddr::V4(sock_addr) => {
-                addr_in.push(sock_addr);
-                hdr.msg_hdr.msg_name = &mut addr_in[i] as *mut _ as *mut _;
-                hdr.msg_hdr.msg_namelen = addr_in_len;
-            }
-            InetAddr::V6(sock_addr) => {
-                addr_in6.push(sock_addr);
-                hdr.msg_hdr.msg_name = &mut addr_in6[i] as *mut _ as *mut _;
-                hdr.msg_hdr.msg_namelen = addr_in6_len;
-            }
-        };
-        hdrs.push(hdr);
+            let mut hdr: mmsghdr = unsafe { mem::zeroed() };
+            hdr.msg_hdr.msg_iov = &mut iovs[i];
+            hdr.msg_hdr.msg_iovlen = 1;
+            hdr.msg_len = packet.data.len() as u32;
+            println!("Dest addr is {:?}", packet.meta.addr());
+            match InetAddr::from_std(&packet.meta.addr()) {
+                InetAddr::V4(ref addr) => unsafe {
+                    let sock_addr: &sockaddr_in = mem::transmute(addr);
+                    addr_in.insert(i, *sock_addr);
+                    hdr.msg_hdr.msg_name = &mut addr_in[i] as *mut _ as *mut _;
+                    println!(
+                        "{:?} V4 sock addr {:?} at {:?}",
+                        i, sock_addr, hdr.msg_hdr.msg_name
+                    );
+                    hdr.msg_hdr.msg_namelen = addr_in_len;
+                },
+                InetAddr::V6(ref addr) => unsafe {
+                    println!("V6 sock addr {:?}", addr);
+                    let sock_addr: &sockaddr_in6 = mem::transmute(addr);
+                    addr_in6.insert(i, *sock_addr);
+                    hdr.msg_hdr.msg_name = &mut addr_in6[i] as *mut _ as *mut _;
+                    hdr.msg_hdr.msg_namelen = addr_in6_len;
+                },
+            };
+            hdr
+        })
+        .collect();
+
+    hdrs.iter().enumerate().for_each(|(i, h)| {
+        println!("{:?} Hdr is {:?}", i, h);
+        let sock_addr: &sockaddr_in = unsafe { mem::transmute(h.msg_hdr.msg_name) };
+        println!("addr is {:?}", sock_addr);
     });
 
     let npkts = match unsafe { sendmmsg(sock_fd, &mut hdrs[0], packets.len() as u32, 0) } {
@@ -86,7 +103,7 @@ mod tests {
             .collect();
 
         let sent = send_mmsg(&sender, &mut packets);
-        assert!(sent.is_ok());
+        assert_matches!(sent, Ok(32));
 
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
@@ -116,7 +133,7 @@ mod tests {
             .collect();
 
         let sent = send_mmsg(&sender, &mut packets);
-        assert!(sent.is_ok());
+        assert_matches!(sent, Ok(32));
 
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
