@@ -1,7 +1,9 @@
 use super::broadcast_utils::{self, ReceiveResults};
 use super::*;
 use crate::broadcast_stage::broadcast_utils::UnfinishedSlotInfo;
+use crate::entry::Entry;
 use crate::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE};
+use solana_sdk::signature::Keypair;
 use solana_sdk::timing::duration_as_us;
 use std::time::Duration;
 
@@ -28,7 +30,7 @@ impl BroadcastStats {
 pub(super) struct StandardBroadcastRun {
     stats: BroadcastStats,
     unfinished_slot: Option<UnfinishedSlotInfo>,
-    current_slot: Option<u64>,
+    current_slot_and_parent: Option<(u64, u64)>,
     slot_broadcast_start: Option<Instant>,
 }
 
@@ -37,44 +39,17 @@ impl StandardBroadcastRun {
         Self {
             stats: BroadcastStats::default(),
             unfinished_slot: None,
-            current_slot: None,
+            current_slot_and_parent: None,
             slot_broadcast_start: None,
         }
     }
 
-    fn process_receive_results(
-        &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        sock: &UdpSocket,
-        blocktree: &Arc<Blocktree>,
-        receive_results: ReceiveResults,
-    ) -> Result<()> {
-        let mut receive_elapsed = receive_results.time_elapsed;
-        let num_entries = receive_results.entries.len();
-        let bank = receive_results.bank.clone();
-        let last_tick = receive_results.last_tick;
-        inc_new_counter_info!("broadcast_service-entries_received", num_entries);
-
-        if Some(bank.slot()) != self.current_slot {
-            self.slot_broadcast_start = Some(Instant::now());
-            self.current_slot = Some(bank.slot());
-            receive_elapsed = Duration::new(0, 0);
-        }
-
-        let keypair = &cluster_info.read().unwrap().keypair.clone();
-        let parent_slot = if let Some(parent_bank) = bank.parent() {
-            parent_bank.slot()
-        } else {
-            0
-        };
-
-        let to_shreds_start = Instant::now();
-
-        // 1) Check if slot was interrupted
+    fn check_for_interrupted_slot(&mut self) -> Option<Shred> {
+        let (slot, _) = self.current_slot_and_parent.unwrap();
         let last_unfinished_slot_shred = self
             .unfinished_slot
             .map(|last_unfinished_slot| {
-                if last_unfinished_slot.slot != bank.slot() {
+                if last_unfinished_slot.slot != slot {
                     self.report_and_reset_stats();
                     Some(Shred::new_from_data(
                         last_unfinished_slot.slot,
@@ -95,77 +70,130 @@ impl StandardBroadcastRun {
             self.unfinished_slot = None;
         }
 
-        let shredder = Shredder::new(
-            bank.slot(),
-            parent_slot,
-            RECOMMENDED_FEC_RATE,
-            keypair.clone(),
-        )
-        .expect("Expected to create a new shredder");
+        last_unfinished_slot_shred
+    }
+
+    fn coalesce_shreds(
+        data_shreds: Vec<Shred>,
+        coding_shreds: Vec<Shred>,
+        last_unfinished_slot_shred: Option<Shred>,
+    ) -> Vec<Shred> {
+        if let Some(shred) = last_unfinished_slot_shred {
+            data_shreds
+                .iter()
+                .chain(coding_shreds.iter())
+                .cloned()
+                .chain(std::iter::once(shred))
+                .collect::<Vec<_>>()
+        } else {
+            data_shreds
+                .iter()
+                .chain(coding_shreds.iter())
+                .cloned()
+                .collect::<Vec<_>>()
+        }
+    }
+
+    fn entries_to_shreds(
+        &mut self,
+        blocktree: &Blocktree,
+        entries: &[Entry],
+        keypair: Arc<Keypair>,
+        is_slot_end: bool,
+    ) -> (Vec<Shred>, Vec<Shred>) {
+        let (slot, parent_slot) = self.current_slot_and_parent.unwrap();
+        let shredder = Shredder::new(slot, parent_slot, RECOMMENDED_FEC_RATE, keypair)
+            .expect("Expected to create a new shredder");
 
         let next_shred_index = self
             .unfinished_slot
             .map(|s| s.next_shred_index)
             .unwrap_or_else(|| {
                 blocktree
-                    .meta(bank.slot())
+                    .meta(slot)
                     .expect("Database error")
                     .map(|meta| meta.consumed)
                     .unwrap_or(0) as u32
             });
 
-        // 2) Convert entries to shreds and coding shreds
-        let (data_shreds, coding_shreds, next_shred_index) = shredder.entries_to_shreds(
-            &receive_results.entries,
-            last_tick == bank.max_tick_height(),
-            next_shred_index,
-        );
+        let (data_shreds, coding_shreds, new_next_shred_index) =
+            shredder.entries_to_shreds(entries, is_slot_end, next_shred_index);
 
         self.unfinished_slot = Some(UnfinishedSlotInfo {
-            next_shred_index,
-            slot: bank.slot(),
+            next_shred_index: new_next_shred_index,
+            slot,
             parent: parent_slot,
         });
+
+        (data_shreds, coding_shreds)
+    }
+
+    fn process_receive_results(
+        &mut self,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        sock: &UdpSocket,
+        blocktree: &Arc<Blocktree>,
+        receive_results: ReceiveResults,
+    ) -> Result<()> {
+        let mut receive_elapsed = receive_results.time_elapsed;
+        let num_entries = receive_results.entries.len();
+        let bank = receive_results.bank.clone();
+        let last_tick = receive_results.last_tick;
+        inc_new_counter_info!("broadcast_service-entries_received", num_entries);
+
+        if self.current_slot_and_parent.is_none()
+            || bank.slot() != self.current_slot_and_parent.unwrap().0
+        {
+            self.slot_broadcast_start = Some(Instant::now());
+            let slot = bank.slot();
+            let parent_slot = {
+                if let Some(parent_bank) = bank.parent() {
+                    parent_bank.slot()
+                } else {
+                    0
+                }
+            };
+
+            self.current_slot_and_parent = Some((slot, parent_slot));
+            receive_elapsed = Duration::new(0, 0);
+        }
+
+        let keypair = cluster_info.read().unwrap().keypair.clone();
+
+        let to_shreds_start = Instant::now();
+
+        // 1) Check if slot was interrupted
+        let last_unfinished_slot_shred = self.check_for_interrupted_slot();
+
+        // 2) Convert entries to shreds and coding shreds
+        let (data_shreds, coding_shreds) = self.entries_to_shreds(
+            blocktree,
+            &receive_results.entries,
+            keypair,
+            last_tick == bank.max_tick_height(),
+        );
         let to_shreds_elapsed = to_shreds_start.elapsed();
 
         let clone_and_seed_start = Instant::now();
-        let all_shreds = {
-            if let Some(shred) = last_unfinished_slot_shred {
-                data_shreds
-                    .iter()
-                    .chain(coding_shreds.iter())
-                    .cloned()
-                    .chain(std::iter::once(shred))
-                    .collect::<Vec<_>>()
-            } else {
-                data_shreds
-                    .iter()
-                    .chain(coding_shreds.iter())
-                    .cloned()
-                    .collect::<Vec<_>>()
-            }
-        };
-
+        let all_shreds =
+            Self::coalesce_shreds(data_shreds, coding_shreds, last_unfinished_slot_shred);
+        let all_shreds_ = all_shreds.clone();
         let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
         let clone_and_seed_elapsed = clone_and_seed_start.elapsed();
 
         // 3) Insert shreds into blocktree
         let insert_shreds_start = Instant::now();
         blocktree
-            .insert_shreds(all_shreds, None)
+            .insert_shreds(all_shreds_, None)
             .expect("Failed to insert shreds in blocktree");
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
 
         // 4) Broadcast the shreds
         let broadcast_start = Instant::now();
-        let bank_epoch = bank.get_stakers_epoch(bank.slot());
+        let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        let all_shred_bufs: Vec<Vec<u8>> = data_shreds
-            .into_iter()
-            .chain(coding_shreds.into_iter())
-            .map(|s| s.payload)
-            .collect();
+        let all_shred_bufs: Vec<Vec<u8>> = all_shreds.into_iter().map(|s| s.payload).collect();
         trace!("Broadcasting {:?} shreds", all_shred_bufs.len());
 
         cluster_info.read().unwrap().broadcast_shreds(
@@ -255,7 +283,6 @@ impl BroadcastRun for StandardBroadcastRun {
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
-        // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         self.process_receive_results(cluster_info, sock, blocktree, receive_results)
     }
