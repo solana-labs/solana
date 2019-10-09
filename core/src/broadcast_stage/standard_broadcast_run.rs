@@ -313,6 +313,15 @@ mod test {
         // Modify the stats, should reset later
         standard_broadcast_run.stats.receive_elapsed = 10;
 
+        // Try to fetch ticks from blocktree, nothing should break
+        assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), ticks);
+        assert_eq!(
+            blocktree
+                .get_slot_entries(0, num_shreds_per_slot, None)
+                .unwrap(),
+            vec![],
+        );
+
         // Step 2: Make a transmission for another bank that interrupts the transmission for
         // slot 0
         let bank2 = Arc::new(Bank::new_from_parent(&bank0, &leader_pubkey, 2));
