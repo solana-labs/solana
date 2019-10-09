@@ -68,7 +68,11 @@ pub fn process_instruction(
             date_pubkey,
             total_lamports,
         } => {
-            let contract_account = &mut keyed_accounts[0].account;
+            let contract_keyed_account = match keyed_accounts {
+                [ka0] => ka0,
+                _ => return Err(InstructionError::InvalidArgument),
+            };
+            let contract_account = &mut contract_keyed_account.account;
             let vest_state = VestState {
                 terminator_pubkey,
                 payee_pubkey,
@@ -139,6 +143,7 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::transaction::TransactionError;
     use solana_sdk::transport::TransportError;
     use std::sync::Arc;
 
@@ -307,6 +312,30 @@ mod tests {
         assert_eq!(
             parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
             InstructionError::InvalidAccountData
+        );
+    }
+
+    #[test]
+    fn test_initialize_no_panic() {
+        let (bank_client, alice_keypair) = create_bank_client(3);
+
+        let mut instructions = vest_instruction::create_account(
+            &alice_keypair.pubkey(),
+            &Pubkey::new_rand(),
+            &Pubkey::new_rand(),
+            Utc::now().date(),
+            &Pubkey::new_rand(),
+            1,
+        );
+        instructions[1].accounts = vec![]; // <!-- Attack! Prevent accounts from being passed into processor.
+
+        let message = Message::new(instructions);
+        assert_eq!(
+            bank_client
+                .send_message(&[&alice_keypair], message)
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(1, InstructionError::InvalidArgument)
         );
     }
 
