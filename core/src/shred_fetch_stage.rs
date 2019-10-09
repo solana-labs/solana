@@ -1,13 +1,11 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use crate::recycler::Recycler;
-use crate::result;
-use crate::result::Error;
 use crate::service::Service;
-use crate::streamer::{self, PacketReceiver, PacketSender};
+use crate::streamer::{self, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::{channel, RecvTimeoutError};
+use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 
@@ -16,30 +14,7 @@ pub struct ShredFetchStage {
 }
 
 impl ShredFetchStage {
-    fn handle_forwarded_packets(
-        recvr: &PacketReceiver,
-        sendr: &PacketSender,
-    ) -> result::Result<()> {
-        let msgs = recvr.recv()?;
-        let mut batch = vec![msgs];
-        while let Ok(more) = recvr.try_recv() {
-            batch.push(more);
-        }
-
-        batch
-            .iter_mut()
-            .for_each(|b| b.packets.iter_mut().for_each(|p| p.meta.forward = true));
-
-        for packets in batch {
-            if sendr.send(packets).is_err() {
-                return Err(Error::SendError);
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn new_multi_socket(
+    pub fn new(
         sockets: Vec<Arc<UdpSocket>>,
         forward_sockets: Vec<Arc<UdpSocket>>,
         sender: &PacketSender,
@@ -70,14 +45,11 @@ impl ShredFetchStage {
         let sender = sender.clone();
         let fwd_thread_hdl = Builder::new()
             .name("solana-tvu-fetch-stage-fwd-rcvr".to_string())
-            .spawn(move || loop {
-                if let Err(e) = Self::handle_forwarded_packets(&forward_receiver, &sender) {
-                    match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::RecvError(_) => break,
-                        Error::SendError => break,
-                        _ => error!("{:?}", e),
+            .spawn(move || {
+                while let Some(mut p) = forward_receiver.iter().next() {
+                    p.packets.iter_mut().for_each(|p| p.meta.forward = true);
+                    if sender.send(p).is_err() {
+                        break;
                     }
                 }
             })
