@@ -22,7 +22,7 @@ impl ShredFetchStage {
         F: Fn(&mut Packet),
     {
         while let Some(mut p) = recvr.iter().next() {
-            p.packets.iter_mut().for_each(|p| p.meta.forward = true);
+            p.packets.iter_mut().for_each(|p| modify(p));
             if sendr.send(p).is_err() {
                 break;
             }
@@ -85,7 +85,7 @@ impl ShredFetchStage {
         let fwd_thread_hdl = Builder::new()
             .name("solana-tvu-fetch-stage-fwd-rcvr".to_string())
             .spawn(move || {
-                Self::modify_packets(&forward_receiver, &sender, |p| p.meta.forward = true)
+                Self::modify_packets(&forward_receiver, &fwd_sender, |p| p.meta.forward = true)
             })
             .unwrap();
 

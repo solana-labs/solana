@@ -99,8 +99,7 @@ impl Tvu {
         let (fetch_sender, fetch_receiver) = channel();
 
         let repair_socket = Arc::new(repair_socket);
-        let mut fetch_sockets: Vec<Arc<UdpSocket>> =
-            fetch_sockets.into_iter().map(Arc::new).collect();
+        let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
         let forward_sockets: Vec<Arc<UdpSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
         let fetch_stage = ShredFetchStage::new(
