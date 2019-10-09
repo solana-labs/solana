@@ -6,31 +6,32 @@ use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
 use solana_sdk::sysvar;
 
-const FROM_ACCOUNT_INDEX: usize = 0;
-const TO_ACCOUNT_INDEX: usize = 1;
-
 fn create_system_account(
-    keyed_accounts: &mut [KeyedAccount],
+    from: &mut KeyedAccount,
+    to: &mut KeyedAccount,
     lamports: u64,
     space: u64,
     program_id: &Pubkey,
-) -> Result<(), SystemError> {
-    if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
-        debug!(
-            "CreateAccount: invalid account[from] owner {} ",
-            &keyed_accounts[FROM_ACCOUNT_INDEX].account.owner
-        );
-        return Err(SystemError::SourceNotSystemAccount);
+) -> Result<(), InstructionError> {
+    if from.signer_key().is_none() {
+        debug!("from is unsigned");
+        return Err(InstructionError::MissingRequiredSignature);
     }
 
-    if !keyed_accounts[TO_ACCOUNT_INDEX].account.data.is_empty()
-        || !system_program::check_id(&keyed_accounts[TO_ACCOUNT_INDEX].account.owner)
-    {
+    if !system_program::check_id(&from.account.owner) {
+        debug!(
+            "CreateAccount: invalid account[from] owner {} ",
+            &from.account.owner
+        );
+        return Err(SystemError::SourceNotSystemAccount.into());
+    }
+
+    if !to.account.data.is_empty() || !system_program::check_id(&to.account.owner) {
         debug!(
             "CreateAccount: invalid argument; account {} already in use",
-            keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()
+            to.unsigned_key()
         );
-        return Err(SystemError::AccountAlreadyInUse);
+        return Err(SystemError::AccountAlreadyInUse.into());
     }
 
     if sysvar::check_id(&program_id) {
@@ -38,53 +39,89 @@ fn create_system_account(
             "CreateAccount: invalid argument; program id {} invalid",
             program_id
         );
-        return Err(SystemError::InvalidProgramId);
+        return Err(SystemError::InvalidProgramId.into());
     }
 
-    if sysvar::is_sysvar_id(&keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()) {
+    if sysvar::is_sysvar_id(&to.unsigned_key()) {
         debug!(
             "CreateAccount: invalid argument; account id {} invalid",
             program_id
         );
-        return Err(SystemError::InvalidAccountId);
+        return Err(SystemError::InvalidAccountId.into());
     }
 
-    if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
+    if lamports > from.account.lamports {
         debug!(
             "CreateAccount: insufficient lamports ({}, need {})",
-            keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
+            from.account.lamports, lamports
         );
-        return Err(SystemError::ResultWithNegativeLamports);
+        return Err(SystemError::ResultWithNegativeLamports.into());
     }
-    keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
-    keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
-    keyed_accounts[TO_ACCOUNT_INDEX].account.owner = *program_id;
-    keyed_accounts[TO_ACCOUNT_INDEX].account.data = vec![0; space as usize];
-    keyed_accounts[TO_ACCOUNT_INDEX].account.executable = false;
+    from.account.lamports -= lamports;
+    to.account.lamports += lamports;
+    to.account.owner = *program_id;
+    to.account.data = vec![0; space as usize];
+    to.account.executable = false;
     Ok(())
 }
 
 fn assign_account_to_program(
-    keyed_accounts: &mut [KeyedAccount],
+    account: &mut KeyedAccount,
     program_id: &Pubkey,
-) -> Result<(), SystemError> {
-    keyed_accounts[FROM_ACCOUNT_INDEX].account.owner = *program_id;
+) -> Result<(), InstructionError> {
+    if !system_program::check_id(&account.account.owner) {
+        return Err(InstructionError::IncorrectProgramId);
+    }
+
+    if account.signer_key().is_none() {
+        debug!("account is unsigned");
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    account.account.owner = *program_id;
     Ok(())
 }
 fn transfer_lamports(
-    keyed_accounts: &mut [KeyedAccount],
+    from: &mut KeyedAccount,
+    to: &mut KeyedAccount,
     lamports: u64,
-) -> Result<(), SystemError> {
-    if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
+) -> Result<(), InstructionError> {
+    if from.signer_key().is_none() {
+        debug!("from is unsigned");
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    if lamports > from.account.lamports {
         debug!(
             "Transfer: insufficient lamports ({}, need {})",
-            keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
+            from.account.lamports, lamports
         );
-        return Err(SystemError::ResultWithNegativeLamports);
+        return Err(SystemError::ResultWithNegativeLamports.into());
     }
-    keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
-    keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
+    from.account.lamports -= lamports;
+    to.account.lamports += lamports;
     Ok(())
+}
+
+macro_rules! count_tts {
+    () => {0usize};
+    ($_head:tt $($tail:tt)*) => {1usize + count_tts!($($tail)*)};
+}
+
+#[macro_export]
+macro_rules! with_keyed_accounts {
+    ($keyed_accounts:ident, ( $($x:tt),+ ), $do:expr) => (
+     {
+        let xs = count_tts!($( $x )*);
+        if $keyed_accounts.len() < xs {
+            Err(InstructionError::InvalidInstructionData)
+        } else if let &mut [ $( ref mut $x, )* ] = &mut $keyed_accounts[..xs] {
+            $do
+        } else {
+           Err(InstructionError::InvalidInstructionData)
+        }
+    }
+    )
 }
 
 pub fn process_instruction(
@@ -96,28 +133,29 @@ pub fn process_instruction(
         trace!("process_instruction: {:?}", instruction);
         trace!("keyed_accounts: {:?}", keyed_accounts);
 
-        // All system instructions require that accounts_keys[0] be a signer
-        if keyed_accounts[FROM_ACCOUNT_INDEX].signer_key().is_none() {
-            debug!("account[from] is unsigned");
-            return Err(InstructionError::MissingRequiredSignature);
-        }
-
         match instruction {
             SystemInstruction::CreateAccount {
                 lamports,
                 space,
                 program_id,
-            } => create_system_account(keyed_accounts, lamports, space, &program_id),
-            SystemInstruction::Assign { program_id } => {
-                if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
-                    return Err(InstructionError::IncorrectProgramId);
-                }
-                assign_account_to_program(keyed_accounts, &program_id)
-            }
-            SystemInstruction::Transfer { lamports } => transfer_lamports(keyed_accounts, lamports),
+            } => with_keyed_accounts!(
+                keyed_accounts,
+                (from, to),
+                create_system_account(from, to, lamports, space, &program_id)
+            ),
+            SystemInstruction::Assign { program_id } => with_keyed_accounts!(
+                keyed_accounts,
+                (account),
+                assign_account_to_program(account, &program_id)
+            ),
+            SystemInstruction::Transfer { lamports } => with_keyed_accounts!(
+                keyed_accounts,
+                (from, to),
+                transfer_lamports(from, to, lamports)
+            ),
         }
-        .map_err(|e| InstructionError::CustomError(e as u32))
     } else {
+        dbg!("foo!");
         debug!("Invalid instruction data: {:?}", data);
         Err(InstructionError::InvalidInstructionData)
     }
@@ -146,11 +184,14 @@ mod tests {
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&to, false, &mut to_account),
-        ];
-        create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner).unwrap();
+        create_system_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&to, false, &mut to_account),
+            50,
+            2,
+            &new_program_owner,
+        )
+        .unwrap();
         let from_lamports = from_account.lamports;
         let to_lamports = to_account.lamports;
         let to_owner = to_account.owner;
@@ -172,12 +213,14 @@ mod tests {
         let mut to_account = Account::new(0, 0, &Pubkey::default());
         let unchanged_account = to_account.clone();
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&to, false, &mut to_account),
-        ];
-        let result = create_system_account(&mut keyed_accounts, 150, 2, &new_program_owner);
-        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports));
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&to, false, &mut to_account),
+            150,
+            2,
+            &new_program_owner,
+        );
+        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         let from_lamports = from_account.lamports;
         assert_eq!(from_lamports, 100);
         assert_eq!(to_account, unchanged_account);
@@ -195,12 +238,14 @@ mod tests {
         let mut owned_account = Account::new(0, 0, &original_program_owner);
         let unchanged_account = owned_account.clone();
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&owned_key, false, &mut owned_account),
-        ];
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner);
-        assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&owned_key, false, &mut owned_account),
+            50,
+            2,
+            &new_program_owner,
+        );
+        assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         let from_lamports = from_account.lamports;
         assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
@@ -215,24 +260,28 @@ mod tests {
         let to = Pubkey::new_rand();
         let mut to_account = Account::default();
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&to, false, &mut to_account),
-        ];
         // fail to create a sysvar::id() owned account
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &sysvar::id());
-        assert_eq!(result, Err(SystemError::InvalidProgramId));
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&to, false, &mut to_account),
+            50,
+            2,
+            &sysvar::id(),
+        );
+        assert_eq!(result, Err(SystemError::InvalidProgramId.into()));
 
         let to = sysvar::fees::id();
         let mut to_account = Account::default();
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&to, false, &mut to_account),
-        ];
         // fail to create an account with a sysvar id
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &system_program::id());
-        assert_eq!(result, Err(SystemError::InvalidAccountId));
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&to, false, &mut to_account),
+            50,
+            2,
+            &system_program::id(),
+        );
+        assert_eq!(result, Err(SystemError::InvalidAccountId.into()));
 
         let from_lamports = from_account.lamports;
         assert_eq!(from_lamports, 100);
@@ -252,12 +301,14 @@ mod tests {
         };
         let unchanged_account = populated_account.clone();
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&populated_key, false, &mut populated_account),
-        ];
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner);
-        assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&populated_key, false, &mut populated_account),
+            50,
+            2,
+            &new_program_owner,
+        );
+        assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         assert_eq!(from_account.lamports, 100);
         assert_eq!(populated_account, unchanged_account);
     }
@@ -270,12 +321,14 @@ mod tests {
         let mut from_account = Account::new(100, 0, &other_program);
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new(&to, false, &mut to_account),
-        ];
-        let result = create_system_account(&mut keyed_accounts, 50, 2, &other_program);
-        assert_eq!(result, Err(SystemError::SourceNotSystemAccount));
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&to, false, &mut to_account),
+            50,
+            2,
+            &other_program,
+        );
+        assert_eq!(result, Err(SystemError::SourceNotSystemAccount.into()));
     }
 
     #[test]
@@ -284,14 +337,17 @@ mod tests {
 
         let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
-        let mut keyed_accounts = [KeyedAccount::new(&from, true, &mut from_account)];
-        assign_account_to_program(&mut keyed_accounts, &new_program_owner).unwrap();
+        assign_account_to_program(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &new_program_owner,
+        )
+        .unwrap();
         let from_owner = from_account.owner;
         assert_eq!(from_owner, new_program_owner);
 
         // Attempt to assign account not owned by system program
         let another_program_owner = Pubkey::new(&[8; 32]);
-        keyed_accounts = [KeyedAccount::new(&from, true, &mut from_account)];
+        let mut keyed_accounts = [KeyedAccount::new(&from, true, &mut from_account)];
         let instruction = SystemInstruction::Assign {
             program_id: another_program_owner,
         };
@@ -302,28 +358,52 @@ mod tests {
     }
 
     #[test]
+    fn test_process_bogus_instruction() {
+        // Attempt to assign with no accounts
+        let instruction = SystemInstruction::Assign {
+            program_id: Pubkey::new_rand(),
+        };
+        let data = serialize(&instruction).unwrap();
+        let result = process_instruction(&system_program::id(), &mut [], &data);
+        assert_eq!(result, Err(InstructionError::InvalidInstructionData));
+
+        let from = Pubkey::new_rand();
+        let mut from_account = Account::new(100, 0, &system_program::id());
+        // Attempt to transfer with no destination
+        let instruction = SystemInstruction::Transfer { lamports: 0 };
+        let data = serialize(&instruction).unwrap();
+        let result = process_instruction(
+            &system_program::id(),
+            &mut [KeyedAccount::new(&from, true, &mut from_account)],
+            &data,
+        );
+        assert_eq!(result, Err(InstructionError::InvalidInstructionData));
+    }
+
+    #[test]
     fn test_transfer_lamports() {
         let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new_credit_only(&to, false, &mut to_account),
-        ];
-        transfer_lamports(&mut keyed_accounts, 50).unwrap();
+        transfer_lamports(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new_credit_only(&to, false, &mut to_account),
+            50,
+        )
+        .unwrap();
         let from_lamports = from_account.lamports;
         let to_lamports = to_account.lamports;
         assert_eq!(from_lamports, 50);
         assert_eq!(to_lamports, 51);
 
         // Attempt to move more lamports than remaining in from_account
-        keyed_accounts = [
-            KeyedAccount::new(&from, true, &mut from_account),
-            KeyedAccount::new_credit_only(&to, false, &mut to_account),
-        ];
-        let result = transfer_lamports(&mut keyed_accounts, 100);
-        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports));
+        let result = transfer_lamports(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new_credit_only(&to, false, &mut to_account),
+            100,
+        );
+        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_account.lamports, 50);
         assert_eq!(to_account.lamports, 51);
     }
