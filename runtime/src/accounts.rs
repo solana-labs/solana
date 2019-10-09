@@ -118,7 +118,15 @@ impl Accounts {
                 .filter(|key| !message.program_ids().contains(&key))
             {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
-                    .and_then(|(account, _)| rent_collector.update(account))
+                    .and_then(|(mut account, _)| {
+                        if let (Some(_), rent_collected) =
+                            rent_collector.update(&mut account, false)
+                        {
+                            Some((account, rent_collected))
+                        } else {
+                            None
+                        }
+                    })
                     .unwrap_or_default();
 
                 accounts.push(account);
@@ -555,7 +563,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         ancestors: &HashMap<Fork, usize>,
         fork: Fork,
-    ) -> (u64, u64) {
+    ) -> u64 {
         // Clear the credit only hashmap so that no further transactions can modify it
         let credit_only_account_locks = Self::take_credit_only(&self.credit_only_account_locks)
             .expect("Credit only locks didn't exist in commit_credits");
@@ -573,7 +581,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         ancestors: &HashMap<Fork, usize>,
         fork: Fork,
-    ) -> (u64, u64) {
+    ) -> u64 {
         // Clear the credit only hashmap so that no further transactions can modify it
         let mut w_credit_only_account_locks = self.credit_only_account_locks.write().unwrap();
         let w_credit_only_account_locks =
@@ -593,13 +601,12 @@ impl Accounts {
         rent_collector: &RentCollector,
         ancestors: &HashMap<Fork, usize>,
         fork: Fork,
-    ) -> (u64, u64)
+    ) -> u64
     where
         I: IntoIterator<Item = (Pubkey, CreditOnlyLock)>,
     {
         let mut accounts: Vec<(Pubkey, Account)> = vec![];
         let mut total_rent_collected = 0;
-        let mut total_credit_credited = 0;
 
         {
             let accounts_index = self.accounts_db.accounts_index.read().unwrap();
@@ -618,9 +625,8 @@ impl Accounts {
                     AccountsDB::load(&storage, ancestors, &accounts_index, &pubkey)
                         .unwrap_or_default();
                 account.lamports += credit;
-                total_credit_credited += credit;
 
-                if let Some((account, rent)) = rent_collector.update(account) {
+                if let (Some(_), rent) = rent_collector.update(&mut account, false) {
                     total_rent_collected += rent;
                     accounts.push((pubkey, account));
                 }
@@ -634,7 +640,7 @@ impl Accounts {
 
         self.accounts_db.store(fork, &account_to_store);
 
-        (total_credit_credited, total_rent_collected)
+        total_rent_collected
     }
 
     fn collect_accounts_to_store<'a>(
