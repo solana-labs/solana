@@ -263,7 +263,7 @@ impl Replicator {
             .map(Arc::new)
             .collect();
         let (blob_fetch_sender, blob_fetch_receiver) = channel();
-        let fetch_stage = ShredFetchStage::new_multi_socket(
+        let fetch_stage = ShredFetchStage::new(
             blob_sockets,
             blob_forward_sockets,
             &blob_fetch_sender,
