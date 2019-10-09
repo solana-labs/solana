@@ -30,7 +30,7 @@ impl RentCollector {
         let (rent_due_per_slot, _) = self.rent_calculator.due(
             account.lamports,
             account.data.len(),
-            1 as f64 / self.slots_per_year,
+            1_f64 / self.slots_per_year,
         );
 
         let able_to_pay_for_slots = account.lamports / rent_due_per_slot;
