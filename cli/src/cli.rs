@@ -376,7 +376,7 @@ pub fn parse_command(
     Ok(response)
 }
 
-pub type ProcessResult = Result<String, Box<dyn error::Error>>;
+pub type ProcessResult = Result<String, Box<dyn std::error::Error>>;
 
 pub fn check_account_for_fee(
     rpc_client: &RpcClient,

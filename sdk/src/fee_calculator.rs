@@ -45,11 +45,11 @@ impl Default for FeeCalculator {
 }
 
 impl FeeCalculator {
-    pub fn new(target_lamports_per_signature: u64) -> Self {
+    pub fn new(target_lamports_per_signature: u64, target_signatures_per_slot: usize) -> Self {
         let base_fee_calculator = Self {
             target_lamports_per_signature,
             lamports_per_signature: target_lamports_per_signature,
-            target_signatures_per_slot: 0,
+            target_signatures_per_slot,
             ..FeeCalculator::default()
         };
 
@@ -160,20 +160,20 @@ mod tests {
         assert_eq!(FeeCalculator::default().calculate_fee(&message), 0);
 
         // No signature, no fee.
-        assert_eq!(FeeCalculator::new(1).calculate_fee(&message), 0);
+        assert_eq!(FeeCalculator::new(1, 0).calculate_fee(&message), 0);
 
         // One signature, a fee.
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let message = Message::new(vec![ix0]);
-        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 2);
+        assert_eq!(FeeCalculator::new(2, 0).calculate_fee(&message), 2);
 
         // Two signatures, double the fee.
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
         let message = Message::new(vec![ix0, ix1]);
-        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 4);
+        assert_eq!(FeeCalculator::new(2, 0).calculate_fee(&message), 4);
     }
 
     #[test]

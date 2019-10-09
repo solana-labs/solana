@@ -1,6 +1,7 @@
 //! calculate and collect rent from Accounts
-use crate::epoch_schedule::EpochSchedule;
-use solana_sdk::{account::Account, clock::Epoch, rent_calculator::RentCalculator};
+use solana_sdk::{
+    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, rent_calculator::RentCalculator,
+};
 
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct RentCollector {

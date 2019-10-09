@@ -1,35 +1,38 @@
 //! The `genesis_block` module is a library for generating the chain's genesis block.
 
-use crate::account::Account;
-use crate::clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT};
-use crate::fee_calculator::FeeCalculator;
-use crate::hash::{hash, Hash};
-use crate::inflation::Inflation;
-use crate::poh_config::PohConfig;
-use crate::pubkey::Pubkey;
-use crate::rent_calculator::RentCalculator;
-use crate::signature::{Keypair, KeypairUtil};
-use crate::system_program::{self, solana_system_program};
+use crate::{
+    account::Account,
+    clock::{DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    epoch_schedule::EpochSchedule,
+    fee_calculator::FeeCalculator,
+    hash::{hash, Hash},
+    inflation::Inflation,
+    poh_config::PohConfig,
+    pubkey::Pubkey,
+    rent_calculator::RentCalculator,
+    signature::{Keypair, KeypairUtil},
+    system_program::{self, solana_system_program},
+};
 use bincode::{deserialize, serialize};
 use memmap::Mmap;
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::path::Path;
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    path::Path,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GenesisBlock {
     pub accounts: Vec<(Pubkey, Account)>,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub rewards_pools: Vec<(Pubkey, Account)>,
-    pub slots_per_epoch: u64,
-    pub stakers_slot_offset: u64,
-    pub epoch_warmup: bool,
     pub ticks_per_slot: u64,
     pub slots_per_segment: u64,
     pub poh_config: PohConfig,
     pub fee_calculator: FeeCalculator,
     pub rent_calculator: RentCalculator,
     pub inflation: Inflation,
+    pub epoch_schedule: EpochSchedule,
 }
 
 // useful for basic tests
@@ -53,15 +56,13 @@ impl Default for GenesisBlock {
             accounts: Vec::new(),
             native_instruction_processors: Vec::new(),
             rewards_pools: Vec::new(),
-            epoch_warmup: true,
-            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
-            stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_segment: DEFAULT_SLOTS_PER_SEGMENT,
             poh_config: PohConfig::default(),
             inflation: Inflation::default(),
             fee_calculator: FeeCalculator::default(),
             rent_calculator: RentCalculator::default(),
+            epoch_schedule: EpochSchedule::default(),
         }
     }
 }
@@ -69,7 +70,6 @@ impl Default for GenesisBlock {
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Builder {
     genesis_block: GenesisBlock,
-    already_have_stakers_slot_offset: bool,
 }
 
 impl Builder {
@@ -114,21 +114,8 @@ impl Builder {
             Self::append(rewards_pools, self.genesis_block.rewards_pools);
         self
     }
-    // also sets stakers_slot_offset, unless already set explicitly
-    pub fn slots_per_epoch(mut self, slots_per_epoch: u64) -> Self {
-        self.genesis_block.slots_per_epoch = slots_per_epoch;
-        if !self.already_have_stakers_slot_offset {
-            self.genesis_block.stakers_slot_offset = slots_per_epoch;
-        }
-        self
-    }
-    pub fn stakers_slot_offset(mut self, stakers_slot_offset: u64) -> Self {
-        self.genesis_block.stakers_slot_offset = stakers_slot_offset;
-        self.already_have_stakers_slot_offset = true;
-        self
-    }
-    pub fn epoch_warmup(mut self, epoch_warmup: bool) -> Self {
-        self.genesis_block.epoch_warmup = epoch_warmup;
+    pub fn epoch_schedule(mut self, epoch_schedule: EpochSchedule) -> Self {
+        self.genesis_block.epoch_schedule = epoch_schedule;
         self
     }
     pub fn ticks_per_slot(mut self, ticks_per_slot: u64) -> Self {

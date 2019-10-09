@@ -37,7 +37,8 @@ fn main() {
         info!("Generating {} keypairs", *tx_count * 2);
         let (keypairs, _) = generate_keypairs(&id, *tx_count as u64 * 2);
         let num_accounts = keypairs.len() as u64;
-        let max_fee = FeeCalculator::new(*target_lamports_per_signature).max_lamports_per_signature;
+        let max_fee =
+            FeeCalculator::new(*target_lamports_per_signature, 0).max_lamports_per_signature;
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
             / num_accounts
             + num_lamports_per_account;

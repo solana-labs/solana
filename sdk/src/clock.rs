@@ -17,6 +17,7 @@ pub const DEFAULT_SLOTS_PER_SEGMENT: u64 = 1024;
 // 4 times longer than the max_lockout to allow enough time for PoRep (128 slots)
 pub const DEFAULT_SLOTS_PER_TURN: u64 = 32 * 4;
 
+// leader schedule is governed by this
 pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
 /// The time window of recent block hash values that the bank will track the signatures

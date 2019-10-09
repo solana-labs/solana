@@ -1005,7 +1005,7 @@ mod test {
             create_genesis_block_with_leader(50, &leader_pubkey, leader_lamports);
         let mut genesis_block = genesis_block_info.genesis_block;
         let leader_voting_pubkey = genesis_block_info.voting_keypair.pubkey();
-        genesis_block.epoch_warmup = false;
+        genesis_block.epoch_schedule.warmup = false;
         genesis_block.ticks_per_slot = 4;
         let bank0 = Bank::new(&genesis_block);
         for _ in 1..genesis_block.ticks_per_slot {

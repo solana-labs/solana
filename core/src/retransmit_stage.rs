@@ -1,28 +1,32 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
-use crate::bank_forks::BankForks;
-use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
-use crate::cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT};
-use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::repair_service::RepairStrategy;
-use crate::result::{Error, Result};
-use crate::service::Service;
-use crate::staking_utils;
-use crate::streamer::PacketReceiver;
-use crate::window_service::{should_retransmit_and_persist, WindowService};
+use crate::{
+    bank_forks::BankForks,
+    blocktree::{Blocktree, CompletedSlotsReceiver},
+    cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+    leader_schedule_cache::LeaderScheduleCache,
+    repair_service::RepairStrategy,
+    result::{Error, Result},
+    service::Service,
+    staking_utils,
+    streamer::PacketReceiver,
+    window_service::{should_retransmit_and_persist, WindowService},
+};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_debug, inc_new_counter_error};
-use solana_runtime::epoch_schedule::EpochSchedule;
-use std::cmp;
-use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::RecvTimeoutError;
-use std::sync::{Arc, RwLock};
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
+use solana_metrics::inc_new_counter_error;
+use solana_sdk::epoch_schedule::EpochSchedule;
+use std::{
+    cmp,
+    net::UdpSocket,
+    sync::atomic::AtomicBool,
+    sync::mpsc::channel,
+    sync::mpsc::RecvTimeoutError,
+    sync::{Arc, RwLock},
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
+};
 
 pub fn retransmit(
     bank_forks: &Arc<RwLock<BankForks>>,
@@ -42,7 +46,7 @@ pub fn retransmit(
     }
 
     let r_bank = bank_forks.read().unwrap().working_bank();
-    let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
+    let bank_epoch = r_bank.get_leader_schedule_epoch(r_bank.slot());
     let mut peers_len = 0;
     let stakes = staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch);
     let (peers, stakes_and_index) = cluster_info

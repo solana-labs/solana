@@ -1071,7 +1071,7 @@ mod tests {
     #[test]
     fn test_bench_tps_fund_keys_with_fees() {
         let (mut genesis_block, id) = create_genesis_block(10_000);
-        let fee_calculator = FeeCalculator::new(11);
+        let fee_calculator = FeeCalculator::new(11, 0);
         genesis_block.fee_calculator = fee_calculator;
         let bank = Bank::new(&genesis_block);
         let client = BankClient::new(bank);

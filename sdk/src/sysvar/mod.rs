@@ -3,6 +3,7 @@
 use crate::pubkey::Pubkey;
 
 pub mod clock;
+pub mod epoch_schedule;
 pub mod fees;
 pub mod rent;
 pub mod rewards;

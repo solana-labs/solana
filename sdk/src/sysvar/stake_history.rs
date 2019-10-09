@@ -24,6 +24,7 @@ pub struct StakeHistoryEntry {
     pub deactivating: u64, // requested to be cooled down, not fully deactivated yet
 }
 
+#[repr(C)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
 

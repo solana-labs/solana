@@ -1,9 +1,12 @@
 //! This account contains the current cluster rent
 //!
-use crate::account::Account;
-use crate::account_info::AccountInfo;
-use crate::rent_calculator::RentCalculator;
-use crate::sysvar;
+use crate::{
+    account::{Account, KeyedAccount},
+    account_info::AccountInfo,
+    instruction::InstructionError,
+    rent_calculator::RentCalculator,
+    sysvar,
+};
 use bincode::serialized_size;
 
 ///  rent account pubkey
@@ -48,9 +51,6 @@ pub fn create_account(lamports: u64, rent_calculator: &RentCalculator) -> Accoun
     )
     .unwrap()
 }
-
-use crate::account::KeyedAccount;
-use crate::instruction::InstructionError;
 
 pub fn from_keyed_account(account: &KeyedAccount) -> Result<Rent, InstructionError> {
     if !check_id(account.unsigned_key()) {

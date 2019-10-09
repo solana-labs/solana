@@ -9,11 +9,13 @@ use solana_core::{
     bank_forks::SnapshotConfig, blocktree::Blocktree, broadcast_stage::BroadcastStageType,
     gossip_service::discover_cluster, snapshot_utils, validator::ValidatorConfig,
 };
-use solana_runtime::{
-    accounts_db::AccountsDB,
+use solana_runtime::accounts_db::AccountsDB;
+use solana_sdk::{
+    client::SyncClient,
+    clock,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
+    poh_config::PohConfig,
 };
-use solana_sdk::{client::SyncClient, clock, poh_config::PohConfig};
 use std::path::{Path, PathBuf};
 use std::{
     collections::{HashMap, HashSet},
@@ -548,12 +550,12 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     };
 
     let cluster = LocalCluster::new(&cluster_config);
-    let epoch_schedule = EpochSchedule::new(
+    let epoch_schedule = EpochSchedule::custom(
         cluster_config.slots_per_epoch,
         cluster_config.stakers_slot_offset,
         true,
     );
-    let num_warmup_epochs = epoch_schedule.get_stakers_epoch(0) + 1;
+    let num_warmup_epochs = epoch_schedule.get_leader_schedule_epoch(0) + 1;
 
     // Wait for the corrupted leader to be scheduled afer the warmup epochs expire
     cluster_tests::sleep_n_epochs(
@@ -636,8 +638,8 @@ fn run_repairman_catchup(num_repairmen: u64) {
     });
 
     let repairman_pubkeys: HashSet<_> = cluster.get_node_pubkeys().into_iter().collect();
-    let epoch_schedule = EpochSchedule::new(num_slots_per_epoch, stakers_slot_offset, true);
-    let num_warmup_epochs = epoch_schedule.get_stakers_epoch(0) + 1;
+    let epoch_schedule = EpochSchedule::custom(num_slots_per_epoch, stakers_slot_offset, true);
+    let num_warmup_epochs = epoch_schedule.get_leader_schedule_epoch(0) + 1;
 
     // Sleep for longer than the first N warmup epochs, with a one epoch buffer for timing issues
     cluster_tests::sleep_n_epochs(

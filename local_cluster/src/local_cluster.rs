@@ -13,6 +13,7 @@ use solana_core::{
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    epoch_schedule::EpochSchedule,
     genesis_block::GenesisBlock,
     message::Message,
     poh_config::PohConfig,
@@ -138,9 +139,9 @@ impl LocalCluster {
             config.node_stakes[0],
         );
         genesis_block.ticks_per_slot = config.ticks_per_slot;
-        genesis_block.slots_per_epoch = config.slots_per_epoch;
         genesis_block.slots_per_segment = config.slots_per_segment;
-        genesis_block.stakers_slot_offset = config.stakers_slot_offset;
+        genesis_block.epoch_schedule =
+            EpochSchedule::custom(config.slots_per_epoch, config.stakers_slot_offset, true);
         genesis_block.poh_config = config.poh_config.clone();
         genesis_block
             .native_instruction_processors
@@ -638,7 +639,7 @@ impl Drop for LocalCluster {
 mod test {
     use super::*;
     use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
-    use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
+    use solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 
     #[test]
     fn test_local_cluster_start_and_exit() {

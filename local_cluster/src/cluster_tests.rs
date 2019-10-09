@@ -12,10 +12,10 @@ use solana_core::{
     entry::{Entry, EntrySlice},
     gossip_service::discover_cluster,
 };
-use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS},
+    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,

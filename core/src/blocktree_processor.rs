@@ -462,20 +462,21 @@ fn process_pending_slots(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::blocktree::create_new_tmp_ledger;
-    use crate::entry::{create_ticks, next_entry, next_entry_mut, Entry};
-    use crate::genesis_utils::{
-        create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
+    use crate::{
+        blocktree::create_new_tmp_ledger,
+        entry::{create_ticks, next_entry, next_entry_mut, Entry},
+        genesis_utils::{create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo},
     };
     use rand::{thread_rng, Rng};
-    use solana_runtime::epoch_schedule::EpochSchedule;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::instruction::InstructionError;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
-    use solana_sdk::transaction::Transaction;
-    use solana_sdk::transaction::TransactionError;
+    use solana_sdk::{
+        epoch_schedule::EpochSchedule,
+        hash::Hash,
+        instruction::InstructionError,
+        pubkey::Pubkey,
+        signature::{Keypair, KeypairUtil},
+        system_transaction,
+        transaction::{Transaction, TransactionError},
+    };
     use std::sync::RwLock;
 
     pub fn fill_blocktree_slot_with_ticks(

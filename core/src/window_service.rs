@@ -296,8 +296,8 @@ mod test {
         shred::SIZE_OF_SHRED_TYPE,
     };
     use rand::{seq::SliceRandom, thread_rng};
-    use solana_runtime::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
     use solana_sdk::{
+        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
         signature::{Keypair, KeypairUtil},
     };
