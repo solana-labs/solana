@@ -101,11 +101,15 @@ impl Tvu {
         let repair_socket = Arc::new(repair_socket);
         let mut fetch_sockets: Vec<Arc<UdpSocket>> =
             fetch_sockets.into_iter().map(Arc::new).collect();
-        fetch_sockets.push(repair_socket.clone());
         let forward_sockets: Vec<Arc<UdpSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
-        let fetch_stage =
-            ShredFetchStage::new(fetch_sockets, forward_sockets, &fetch_sender, &exit);
+        let fetch_stage = ShredFetchStage::new(
+            fetch_sockets,
+            forward_sockets,
+            repair_socket.clone(),
+            &fetch_sender,
+            &exit,
+        );
 
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified

@@ -58,6 +58,11 @@ pub fn retransmit(
     let mut compute_turbine_peers_total = 0;
     for packets in packet_v {
         for packet in &packets.packets {
+            // skip repair packets
+            if packet.meta.repair {
+                total_packets -= 1;
+                continue;
+            }
             let mut compute_turbine_peers = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &me.id,
