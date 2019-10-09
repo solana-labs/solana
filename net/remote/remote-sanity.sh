@@ -69,6 +69,7 @@ local|tar|skip)
   export USE_INSTALL=1
   solana_gossip=solana-gossip
   solana_install=solana-install
+  solana_cli=solana
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -84,6 +85,12 @@ else
     exit 1
   fi
 fi
+
+echo "+++ $sanityTargetIp: validators"
+(
+  set -x
+  $solana_cli --url http://"$sanityTargetIp":8899 show-validators
+)
 
 echo "+++ $sanityTargetIp: node count ($numSanityNodes expected)"
 (
