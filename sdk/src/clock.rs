@@ -36,11 +36,9 @@ pub const MAX_PROCESSING_AGE: usize = MAX_RECENT_BLOCKHASHES / 2;
 
 /// This is maximum time consumed in forwarding a transaction from one node to next, before
 /// it can be processed in the target node
-#[cfg(feature = "cuda")]
-pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 2;
+pub const MAX_TRANSACTION_FORWARDING_DELAY_GPU: usize = 2;
 
 /// More delay is expected if CUDA is not enabled (as signature verification takes longer)
-#[cfg(not(feature = "cuda"))]
 pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 6;
 
 /// Converts a slot to a storage segment. Does not indicate that a segment is complete.
