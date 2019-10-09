@@ -8,6 +8,7 @@ use crate::{
     leader_schedule_cache::LeaderScheduleCache,
     packet::PACKETS_PER_BATCH,
     packet::{Packet, Packets},
+    perf_libs,
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
     result::{Error, Result},
@@ -20,6 +21,7 @@ use itertools::Itertools;
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
 use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};
+use solana_sdk::clock::MAX_TRANSACTION_FORWARDING_DELAY_GPU;
 use solana_sdk::{
     clock::{
         DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
@@ -697,12 +699,18 @@ impl BankingStage {
         //  1. Transaction forwarding delay
         //  2. The slot at which the next leader will actually process the transaction
         // Drop the transaction if it will expire by the time the next node receives and processes it
+        let api = perf_libs::api();
+        let max_tx_fwd_delay = if api.is_none() {
+            MAX_TRANSACTION_FORWARDING_DELAY
+        } else {
+            MAX_TRANSACTION_FORWARDING_DELAY_GPU
+        };
         let result = bank.check_transactions(
             transactions,
             None,
             &filter,
             (MAX_PROCESSING_AGE)
-                .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY)
+                .saturating_sub(max_tx_fwd_delay)
                 .saturating_sub(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET * bank.ticks_per_slot()
                         / DEFAULT_TICKS_PER_SECOND) as usize,

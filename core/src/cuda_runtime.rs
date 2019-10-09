@@ -5,7 +5,6 @@
 //    copies from host memory to GPU memory unless the memory is page-pinned and
 //    cannot be paged to disk. The cuda driver provides these interfaces to pin and unpin memory.
 
-#[cfg(feature = "pin_gpu_memory")]
 use crate::perf_libs;
 use crate::recycler::Reset;
 use std::ops::{Deref, DerefMut};
@@ -195,12 +194,10 @@ impl<T: Clone> PinnedVec<T> {
         self.x.len()
     }
 
-    #[cfg(feature = "cuda")]
     pub fn as_ptr(&self) -> *const T {
         self.x.as_ptr()
     }
 
-    #[cfg(feature = "cuda")]
     pub fn as_mut_ptr(&mut self) -> *mut T {
         self.x.as_mut_ptr()
     }
@@ -230,23 +227,23 @@ impl<T: Clone> PinnedVec<T> {
     }
 
     fn check_ptr(&mut self, _old_ptr: *mut T, _old_capacity: usize, _from: &'static str) {
-        #[cfg(feature = "cuda")]
+        let api = perf_libs::api();
+        if api.is_some()
+            && self.pinnable
+            && (self.x.as_ptr() != _old_ptr || self.x.capacity() != _old_capacity)
         {
-            if self.pinnable && (self.x.as_ptr() != _old_ptr || self.x.capacity() != _old_capacity)
-            {
-                if self.pinned {
-                    unpin(_old_ptr);
-                }
-
-                trace!(
-                    "pinning from check_ptr old: {} size: {} from: {}",
-                    _old_capacity,
-                    self.x.capacity(),
-                    _from
-                );
-                pin(&mut self.x);
-                self.pinned = true;
+            if self.pinned {
+                unpin(_old_ptr);
             }
+
+            trace!(
+                "pinning from check_ptr old: {} size: {} from: {}",
+                _old_capacity,
+                self.x.capacity(),
+                _from
+            );
+            pin(&mut self.x);
+            self.pinned = true;
         }
     }
 }
