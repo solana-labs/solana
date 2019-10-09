@@ -1821,7 +1821,7 @@ mod tests {
 
     #[test]
     fn test_tallied_credit_debit_rent() {
-        let (mut genesis_block, mint_keypair) = create_genesis_block(10);
+        let (mut genesis_block, _mint_keypair) = create_genesis_block(10);
         let key1 = Pubkey::new_rand();
         let key2 = Pubkey::new_rand();
         let rich_keypair1: Keypair = Keypair::new();
