@@ -61,7 +61,6 @@ impl StandardBroadcastRun {
             receive_elapsed = Duration::new(0, 0);
         }
 
-        // 2) Convert entries to blobs + generate coding blobs
         let keypair = &cluster_info.read().unwrap().keypair.clone();
         let parent_slot = if let Some(parent_bank) = bank.parent() {
             parent_bank.slot()
@@ -69,10 +68,9 @@ impl StandardBroadcastRun {
             0
         };
 
-        // Create shreds from entries
         let to_shreds_start = Instant::now();
 
-        // Check if slot was interrupted
+        // 1) Check if slot was interrupted
         let last_unfinished_slot_shred = self
             .unfinished_slot
             .map(|last_unfinished_slot| {
@@ -116,6 +114,7 @@ impl StandardBroadcastRun {
                     .unwrap_or(0) as u32
             });
 
+        // 2) Convert entries to shreds and coding shreds
         let (data_shreds, coding_shreds, next_shred_index) = shredder.entries_to_shreds(
             &receive_results.entries,
             last_tick == bank.max_tick_height(),
@@ -127,7 +126,6 @@ impl StandardBroadcastRun {
             slot: bank.slot(),
             parent: parent_slot,
         });
-
         let to_shreds_elapsed = to_shreds_start.elapsed();
 
         let clone_and_seed_start = Instant::now();
@@ -151,14 +149,14 @@ impl StandardBroadcastRun {
         let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
         let clone_and_seed_elapsed = clone_and_seed_start.elapsed();
 
-        // Insert shreds into blocktree
+        // 3) Insert shreds into blocktree
         let insert_shreds_start = Instant::now();
         blocktree
             .insert_shreds(all_shreds, None)
             .expect("Failed to insert shreds in blocktree");
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
 
-        // 3) Start broadcast step
+        // 4) Broadcast the shreds
         let broadcast_start = Instant::now();
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
@@ -187,6 +185,10 @@ impl StandardBroadcastRun {
             duration_as_us(&clone_and_seed_elapsed),
             last_tick == bank.max_tick_height(),
         );
+
+        if last_tick == bank.max_tick_height() {
+            self.unfinished_slot = None;
+        }
 
         Ok(())
     }
@@ -268,12 +270,21 @@ mod test {
     use crate::genesis_utils::create_genesis_block;
     use crate::shred::max_ticks_per_n_shreds;
     use solana_runtime::bank::Bank;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
-    #[test]
-    fn test_slot_interrupt() {
+    fn setup(
+        num_shreds_per_slot: u64,
+    ) -> (
+        Arc<Blocktree>,
+        GenesisBlock,
+        Arc<RwLock<ClusterInfo>>,
+        Arc<Bank>,
+        Keypair,
+        UdpSocket,
+    ) {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(
@@ -287,9 +298,25 @@ mod test {
         )));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut genesis_block = create_genesis_block(10_000).genesis_block;
-        let num_shreds_per_slot = 2;
-        genesis_block.ticks_per_slot = max_ticks_per_n_shreds(2) + 1;
+        genesis_block.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot) + 1;
         let bank0 = Arc::new(Bank::new(&genesis_block));
+        (
+            blocktree,
+            genesis_block,
+            cluster_info,
+            bank0,
+            leader_keypair,
+            socket,
+        )
+    }
+
+    #[test]
+    fn test_slot_interrupt() {
+        // Setup
+        let num_shreds_per_slot = 2;
+        let (blocktree, genesis_block, cluster_info, bank0, leader_keypair, socket) =
+            setup(num_shreds_per_slot);
+
         // Insert 1 less than the number of ticks needed to finish the slot
         let ticks = create_ticks(genesis_block.ticks_per_slot - 1, genesis_block.hash());
         let receive_results = ReceiveResults {
@@ -324,7 +351,7 @@ mod test {
 
         // Step 2: Make a transmission for another bank that interrupts the transmission for
         // slot 0
-        let bank2 = Arc::new(Bank::new_from_parent(&bank0, &leader_pubkey, 2));
+        let bank2 = Arc::new(Bank::new_from_parent(&bank0, &leader_keypair.pubkey(), 2));
 
         // Interrupting the slot should cause the unfinished_slot and stats to reset
         let num_shreds = 1;
@@ -348,5 +375,27 @@ mod test {
         assert_eq!(unfinished_slot.parent, 0);
         // Check that the stats were reset as well
         assert_eq!(standard_broadcast_run.stats.receive_elapsed, 0);
+    }
+
+    #[test]
+    fn test_slot_finish() {
+        // Setup
+        let num_shreds_per_slot = 2;
+        let (blocktree, genesis_block, cluster_info, bank0, _, socket) = setup(num_shreds_per_slot);
+
+        // Insert complete slot of ticks needed to finish the slot
+        let ticks = create_ticks(genesis_block.ticks_per_slot, genesis_block.hash());
+        let receive_results = ReceiveResults {
+            entries: ticks.clone(),
+            time_elapsed: Duration::new(3, 0),
+            bank: bank0.clone(),
+            last_tick: (ticks.len() - 1) as u64,
+        };
+
+        let mut standard_broadcast_run = StandardBroadcastRun::new();
+        standard_broadcast_run
+            .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
+            .unwrap();
+        assert!(standard_broadcast_run.unfinished_slot.is_none())
     }
 }
