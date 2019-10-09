@@ -1034,7 +1034,7 @@ pub mod tests {
                 None,
                 true,
                 &Arc::new(Keypair::new()),
-                &entries,
+                entries,
             )
             .unwrap();
 
