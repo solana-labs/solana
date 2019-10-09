@@ -22,7 +22,7 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
     use std::mem;
     use std::os::unix::io::AsRawFd;
 
-    let mut iovs: Vec<iovec> = vec![];
+    let mut iovs: Vec<iovec> = Vec::with_capacity(packets.len());
     let mut addr_in: Vec<sockaddr_in> = Vec::with_capacity(packets.len());
     let mut addr_in6: Vec<sockaddr_in6> = Vec::with_capacity(packets.len());
 
@@ -43,22 +43,14 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
             hdr.msg_hdr.msg_iov = &mut iovs[i];
             hdr.msg_hdr.msg_iovlen = 1;
             hdr.msg_len = packet.data.len() as u32;
-            println!("Dest addr is {:?}", packet.meta.addr());
             match InetAddr::from_std(&packet.meta.addr()) {
                 InetAddr::V4(addr) => {
-                    let sock_addr: sockaddr_in = addr;
-                    addr_in.insert(i, sock_addr);
+                    addr_in.insert(i, addr);
                     hdr.msg_hdr.msg_name = &mut addr_in[i] as *mut _ as *mut _;
-                    println!(
-                        "{:?} V4 sock addr {:?} at {:?}",
-                        i, sock_addr, hdr.msg_hdr.msg_name
-                    );
                     hdr.msg_hdr.msg_namelen = addr_in_len;
                 }
                 InetAddr::V6(addr) => {
-                    println!("V6 sock addr {:?}", addr);
-                    let sock_addr: sockaddr_in6 = addr;
-                    addr_in6.insert(i, sock_addr);
+                    addr_in6.insert(i, addr);
                     hdr.msg_hdr.msg_name = &mut addr_in6[i] as *mut _ as *mut _;
                     hdr.msg_hdr.msg_namelen = addr_in6_len;
                 }
@@ -66,12 +58,6 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
             hdr
         })
         .collect();
-
-    hdrs.iter().enumerate().for_each(|(i, h)| {
-        println!("{:?} Hdr is {:?}", i, h);
-        let sock_addr: &sockaddr_in = unsafe { mem::transmute(h.msg_hdr.msg_name) };
-        println!("addr is {:?}", sock_addr);
-    });
 
     let npkts = match unsafe { sendmmsg(sock_fd, &mut hdrs[0], packets.len() as u32, 0) } {
         -1 => return Err(io::Error::last_os_error()),
