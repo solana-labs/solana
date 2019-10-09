@@ -122,14 +122,23 @@ impl Shred {
         index: u32,
         parent_offset: u16,
         data: Option<&[u8]>,
-        flags: u8,
+        is_last_data: bool,
+        is_last_in_slot: bool,
     ) -> Self {
         let mut shred_buf = vec![0; PACKET_DATA_SIZE];
         let mut header = DataShredHeader::default();
         header.data_header.slot = slot;
         header.data_header.index = index;
         header.parent_offset = parent_offset;
-        header.flags = flags;
+        header.flags = 0;
+
+        if is_last_data {
+            header.flags |= DATA_COMPLETE_SHRED
+        }
+
+        if is_last_in_slot {
+            header.flags |= LAST_SHRED_IN_SLOT
+        }
 
         if let Some(data) = data {
             bincode::serialize_into(&mut shred_buf[..*SIZE_OF_DATA_SHRED_HEADER], &header)
@@ -345,20 +354,21 @@ impl Shredder {
                     .map(|(i, shred_data)| {
                         let shred_index = next_shred_index + i as u32;
 
-                        let mut header: u8 = 0;
-                        if shred_index == last_shred_index {
-                            header |= DATA_COMPLETE_SHRED;
-                            if is_last_in_slot {
-                                header |= LAST_SHRED_IN_SLOT;
+                        let (is_last_data, is_last_in_slot) = {
+                            if shred_index == last_shred_index {
+                                (true, is_last_in_slot)
+                            } else {
+                                (false, false)
                             }
-                        }
+                        };
 
                         let mut shred = Shred::new_from_data(
                             self.slot,
                             shred_index,
                             (self.slot - self.parent_slot) as u16,
                             Some(shred_data),
-                            header,
+                            is_last_data,
+                            is_last_in_slot,
                         );
 
                         Shredder::sign_shred(
@@ -663,9 +673,9 @@ impl Shredder {
     }
 }
 
-pub fn max_ticks_per_shred() -> u64 {
+pub fn max_ticks_per_n_shreds(num_shreds: u64) -> u64 {
     let ticks = create_ticks(1, Hash::default());
-    max_entries_per_n_shred(&ticks[0], 1)
+    max_entries_per_n_shred(&ticks[0], num_shreds)
 }
 
 pub fn max_entries_per_n_shred(entry: &Entry, num_shreds: u64) -> u64 {
@@ -848,7 +858,7 @@ pub mod tests {
             .expect("Failed in creating shredder");
 
         // Create enough entries to make > 1 shred
-        let num_entries = max_ticks_per_shred() + 1;
+        let num_entries = max_ticks_per_n_shreds(1) + 1;
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
                 let keypair0 = Keypair::new();

@@ -1771,7 +1771,7 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
-    use crate::shred::max_ticks_per_shred;
+    use crate::shred::max_ticks_per_n_shreds;
     use crate::shred::{DataShredHeader, Shred};
     use crate::test_tx::test_tx;
     use solana_sdk::hash::Hash;
@@ -1976,7 +1976,7 @@ mod tests {
 
             let _ = fill_blocktree_slot_with_ticks(
                 &blocktree,
-                max_ticks_per_shred() + 1,
+                max_ticks_per_n_shreds(1) + 1,
                 2,
                 1,
                 Hash::default(),

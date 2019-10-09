@@ -15,7 +15,7 @@ pub(super) struct ReceiveResults {
 
 #[derive(Copy, Clone)]
 pub struct UnfinishedSlotInfo {
-    pub next_index: u64,
+    pub next_shred_index: u32,
     pub slot: u64,
     pub parent: u64,
 }

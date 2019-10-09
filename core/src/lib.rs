@@ -7,6 +7,8 @@
 
 pub mod bank_forks;
 pub mod banking_stage;
+#[macro_use]
+pub mod blocktree;
 pub mod broadcast_stage;
 pub mod chacha;
 pub mod chacha_cuda;
@@ -17,20 +19,18 @@ pub mod recycler;
 pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
-pub mod crds;
-pub mod crds_gossip;
-pub mod crds_gossip_error;
-pub mod crds_gossip_pull;
-pub mod crds_gossip_push;
-pub mod crds_value;
-#[macro_use]
-pub mod blocktree;
 pub mod blockstream;
 pub mod blockstream_service;
 pub mod blocktree_processor;
 pub mod cluster_info;
 pub mod cluster_info_repair_listener;
 pub mod consensus;
+pub mod crds;
+pub mod crds_gossip;
+pub mod crds_gossip_error;
+pub mod crds_gossip_pull;
+pub mod crds_gossip_push;
+pub mod crds_value;
 pub mod cuda_runtime;
 pub mod entry;
 pub mod erasure;
