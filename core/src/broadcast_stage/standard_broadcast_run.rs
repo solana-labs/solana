@@ -7,17 +7,22 @@ use std::time::Duration;
 
 #[derive(Default)]
 struct BroadcastStats {
-    num_entries: Vec<usize>,
-    run_elapsed: Vec<u64>,
-    to_blobs_elapsed: Vec<u64>,
-    slots: Vec<u64>,
-
     // Per-slot elapsed time
     shredding_elapsed: u64,
     insert_shreds_elapsed: u64,
     broadcast_elapsed: u64,
     receive_elapsed: u64,
     clone_and_seed_elapsed: u64,
+}
+
+impl BroadcastStats {
+    fn reset(&mut self) {
+        self.insert_shreds_elapsed = 0;
+        self.shredding_elapsed = 0;
+        self.broadcast_elapsed = 0;
+        self.receive_elapsed = 0;
+        self.clone_and_seed_elapsed = 0;
+    }
 }
 
 pub(super) struct StandardBroadcastRun {
@@ -72,6 +77,7 @@ impl StandardBroadcastRun {
             .unfinished_slot
             .map(|last_unfinished_slot| {
                 if last_unfinished_slot.slot != bank.slot() {
+                    self.report_and_reset_stats();
                     Some(Shred::new_from_data(
                         last_unfinished_slot.slot,
                         last_unfinished_slot.next_shred_index,
@@ -143,7 +149,6 @@ impl StandardBroadcastRun {
         };
 
         let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
-        let num_shreds = all_shreds.len();
         let clone_and_seed_elapsed = clone_and_seed_start.elapsed();
 
         // Insert shreds into blocktree
@@ -180,13 +185,6 @@ impl StandardBroadcastRun {
             duration_as_us(&insert_shreds_elapsed),
             duration_as_us(&broadcast_elapsed),
             duration_as_us(&clone_and_seed_elapsed),
-            duration_as_us(
-                &(receive_elapsed + to_shreds_elapsed + insert_shreds_elapsed + broadcast_elapsed),
-            ),
-            num_entries,
-            num_shreds,
-            next_shred_index,
-            bank.slot(),
             last_tick == bank.max_tick_height(),
         );
 
@@ -200,81 +198,50 @@ impl StandardBroadcastRun {
         shredding_elapsed: u64,
         insert_shreds_elapsed: u64,
         broadcast_elapsed: u64,
-        run_elapsed: u64,
         clone_and_seed_elapsed: u64,
-        num_entries: usize,
-        num_shreds: usize,
-        next_shred_index: u32,
-        slot: u64,
         slot_ended: bool,
     ) {
-        self.stats.insert_shreds_elapsed += insert_shreds_elapsed;
-        self.stats.shredding_elapsed += shredding_elapsed;
-        self.stats.broadcast_elapsed += broadcast_elapsed;
         self.stats.receive_elapsed += receive_entries_elapsed;
+        self.stats.shredding_elapsed += shredding_elapsed;
+        self.stats.insert_shreds_elapsed += insert_shreds_elapsed;
+        self.stats.broadcast_elapsed += broadcast_elapsed;
         self.stats.clone_and_seed_elapsed += clone_and_seed_elapsed;
 
         if slot_ended {
-            datapoint_info!(
-                "broadcast-bank-stats",
-                ("slot", slot as i64, i64),
-                ("shredding_time", self.stats.shredding_elapsed as i64, i64),
-                (
-                    "insertion_time",
-                    self.stats.insert_shreds_elapsed as i64,
-                    i64
-                ),
-                ("broadcast_time", self.stats.broadcast_elapsed as i64, i64),
-                ("receive_time", self.stats.receive_elapsed as i64, i64),
-                (
-                    "clone_and_seed",
-                    self.stats.clone_and_seed_elapsed as i64,
-                    i64
-                ),
-                ("num_shreds", i64::from(next_shred_index), i64),
-                (
-                    "slot_broadcast_time",
-                    self.slot_broadcast_start.unwrap().elapsed().as_millis() as i64,
-                    i64
-                ),
-            );
-            self.stats.insert_shreds_elapsed = 0;
-            self.stats.shredding_elapsed = 0;
-            self.stats.broadcast_elapsed = 0;
-            self.stats.receive_elapsed = 0;
-            self.stats.clone_and_seed_elapsed = 0;
+            self.report_and_reset_stats()
         }
+    }
 
-        inc_new_counter_info!("broadcast_service-time_ms", broadcast_elapsed as usize);
-
-        self.stats.num_entries.push(num_entries);
-        self.stats.to_blobs_elapsed.push(shredding_elapsed);
-        self.stats.run_elapsed.push(run_elapsed);
-        self.stats.slots.push(slot);
-        if self.stats.num_entries.len() >= 16 {
-            info!(
-                "broadcast: entries: {:?} blob times ms: {:?} broadcast times ms: {:?} slots: {:?}",
-                self.stats.num_entries,
-                self.stats.to_blobs_elapsed,
-                self.stats.run_elapsed,
-                self.stats.slots,
-            );
-            self.stats.num_entries.clear();
-            self.stats.to_blobs_elapsed.clear();
-            self.stats.run_elapsed.clear();
-            self.stats.slots.clear();
-        }
-
-        datapoint_debug!(
-            "broadcast-service",
-            ("num_entries", num_entries as i64, i64),
-            ("num_shreds", num_shreds as i64, i64),
-            ("receive_time", receive_entries_elapsed as i64, i64),
-            ("shredding_time", shredding_elapsed as i64, i64),
-            ("insert_shred_time", insert_shreds_elapsed as i64, i64),
-            ("broadcast_time", broadcast_elapsed as i64, i64),
-            ("transmit-index", i64::from(next_shred_index), i64),
+    fn report_and_reset_stats(&mut self) {
+        assert!(self.unfinished_slot.is_some());
+        datapoint_info!(
+            "broadcast-bank-stats",
+            ("slot", self.unfinished_slot.unwrap().slot as i64, i64),
+            ("shredding_time", self.stats.shredding_elapsed as i64, i64),
+            (
+                "insertion_time",
+                self.stats.insert_shreds_elapsed as i64,
+                i64
+            ),
+            ("broadcast_time", self.stats.broadcast_elapsed as i64, i64),
+            ("receive_time", self.stats.receive_elapsed as i64, i64),
+            (
+                "clone_and_seed",
+                self.stats.clone_and_seed_elapsed as i64,
+                i64
+            ),
+            (
+                "num_shreds",
+                i64::from(self.unfinished_slot.unwrap().next_shred_index),
+                i64
+            ),
+            (
+                "slot_broadcast_time",
+                self.slot_broadcast_start.unwrap().elapsed().as_millis() as i64,
+                i64
+            ),
         );
+        self.stats.reset();
     }
 }
 
@@ -289,5 +256,88 @@ impl BroadcastRun for StandardBroadcastRun {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         self.process_receive_results(cluster_info, sock, blocktree, receive_results)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
+    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::entry::create_ticks;
+    use crate::genesis_utils::create_genesis_block;
+    use crate::shred::max_ticks_per_n_shreds;
+    use solana_runtime::bank::Bank;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::sync::{Arc, RwLock};
+    use std::time::Duration;
+
+    #[test]
+    fn test_slot_interrupt() {
+        // Setup
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Arc::new(
+            Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+        );
+        let leader_keypair = Keypair::new();
+        let leader_pubkey = leader_keypair.pubkey();
+        let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            leader_info.info.clone(),
+        )));
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut genesis_block = create_genesis_block(10_000).genesis_block;
+        let num_shreds_per_slot = 2;
+        genesis_block.ticks_per_slot = max_ticks_per_n_shreds(2) + 1;
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        // Insert 1 less than the number of ticks needed to finish the slot
+        let ticks = create_ticks(genesis_block.ticks_per_slot - 1, genesis_block.hash());
+        let receive_results = ReceiveResults {
+            entries: ticks.clone(),
+            time_elapsed: Duration::new(3, 0),
+            bank: bank0.clone(),
+            last_tick: (ticks.len() - 1) as u64,
+        };
+
+        // Step 1: Make an incomplete transmission for slot 0
+        let mut standard_broadcast_run = StandardBroadcastRun::new();
+        standard_broadcast_run
+            .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
+            .unwrap();
+        let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
+        assert_eq!(unfinished_slot.next_shred_index as u64, num_shreds_per_slot);
+        assert_eq!(unfinished_slot.slot, 0);
+        assert_eq!(unfinished_slot.parent, 0);
+        // Make sure the slot is not complete
+        assert!(!blocktree.is_full(0));
+        // Modify the stats, should reset later
+        standard_broadcast_run.stats.receive_elapsed = 10;
+
+        // Step 2: Make a transmission for another bank that interrupts the transmission for
+        // slot 0
+        let bank2 = Arc::new(Bank::new_from_parent(&bank0, &leader_pubkey, 2));
+
+        // Interrupting the slot should cause the unfinished_slot and stats to reset
+        let num_shreds = 1;
+        assert!(num_shreds < num_shreds_per_slot);
+        let ticks = create_ticks(max_ticks_per_n_shreds(num_shreds), genesis_block.hash());
+        let receive_results = ReceiveResults {
+            entries: ticks.clone(),
+            time_elapsed: Duration::new(2, 0),
+            bank: bank2.clone(),
+            last_tick: (ticks.len() - 1) as u64,
+        };
+        standard_broadcast_run
+            .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
+            .unwrap();
+        let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
+
+        // The shred index should have reset to 0, which makes it possible for the
+        // index < the previous shred index for slot 0
+        assert_eq!(unfinished_slot.next_shred_index as u64, num_shreds);
+        assert_eq!(unfinished_slot.slot, 2);
+        assert_eq!(unfinished_slot.parent, 0);
+        // Check that the stats were reset as well
+        assert_eq!(standard_broadcast_run.stats.receive_elapsed, 0);
     }
 }

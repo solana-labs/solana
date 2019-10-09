@@ -673,9 +673,9 @@ impl Shredder {
     }
 }
 
-pub fn max_ticks_per_shred() -> u64 {
+pub fn max_ticks_per_n_shreds(num_shreds: u64) -> u64 {
     let ticks = create_ticks(1, Hash::default());
-    max_entries_per_n_shred(&ticks[0], 1)
+    max_entries_per_n_shred(&ticks[0], num_shreds)
 }
 
 pub fn max_entries_per_n_shred(entry: &Entry, num_shreds: u64) -> u64 {
@@ -858,7 +858,7 @@ pub mod tests {
             .expect("Failed in creating shredder");
 
         // Create enough entries to make > 1 shred
-        let num_entries = max_ticks_per_shred() + 1;
+        let num_entries = max_ticks_per_n_shreds(1) + 1;
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
                 let keypair0 = Keypair::new();

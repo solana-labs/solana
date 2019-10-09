@@ -8,7 +8,7 @@ use crate::poh_recorder::WorkingBankEntry;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
-use solana_metrics::{datapoint_debug, inc_new_counter_error, inc_new_counter_info};
+use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
