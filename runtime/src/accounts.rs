@@ -548,7 +548,8 @@ impl Accounts {
         self.accounts_db.add_root(fork)
     }
 
-    /// Commit remaining credit-only changes, regardless of reference count
+    /// Commit remaining credit-only changes (crediting credit and deducting rent),
+    /// regardless of reference count
     ///
     /// We do a take() on `self.credit_only_account_locks` so that the hashmap is no longer
     /// available to be written to. This prevents any transactions from reinserting into the hashmap.
