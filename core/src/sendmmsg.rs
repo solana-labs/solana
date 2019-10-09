@@ -22,10 +22,9 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
     use std::mem;
     use std::os::unix::io::AsRawFd;
 
-    let mut hdrs: Vec<mmsghdr> = vec![];
     let mut iovs: Vec<iovec> = vec![];
-    let mut addr_in: Vec<sockaddr_in> = vec![];
-    let mut addr_in6: Vec<sockaddr_in6> = vec![];
+    let mut addr_in: Vec<sockaddr_in> = Vec::with_capacity(packets.len());
+    let mut addr_in6: Vec<sockaddr_in6> = Vec::with_capacity(packets.len());
 
     let addr_in_len = mem::size_of_val(&addr_in) as socklen_t;
     let addr_in6_len = mem::size_of_val(&addr_in6) as socklen_t;
@@ -46,23 +45,23 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
             hdr.msg_len = packet.data.len() as u32;
             println!("Dest addr is {:?}", packet.meta.addr());
             match InetAddr::from_std(&packet.meta.addr()) {
-                InetAddr::V4(ref addr) => unsafe {
-                    let sock_addr: &sockaddr_in = mem::transmute(addr);
-                    addr_in.insert(i, *sock_addr);
+                InetAddr::V4(addr) => {
+                    let sock_addr: sockaddr_in = addr;
+                    addr_in.insert(i, sock_addr);
                     hdr.msg_hdr.msg_name = &mut addr_in[i] as *mut _ as *mut _;
                     println!(
                         "{:?} V4 sock addr {:?} at {:?}",
                         i, sock_addr, hdr.msg_hdr.msg_name
                     );
                     hdr.msg_hdr.msg_namelen = addr_in_len;
-                },
-                InetAddr::V6(ref addr) => unsafe {
+                }
+                InetAddr::V6(addr) => {
                     println!("V6 sock addr {:?}", addr);
-                    let sock_addr: &sockaddr_in6 = mem::transmute(addr);
-                    addr_in6.insert(i, *sock_addr);
+                    let sock_addr: sockaddr_in6 = addr;
+                    addr_in6.insert(i, sock_addr);
                     hdr.msg_hdr.msg_name = &mut addr_in6[i] as *mut _ as *mut _;
                     hdr.msg_hdr.msg_namelen = addr_in6_len;
-                },
+                }
             };
             hdr
         })
