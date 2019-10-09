@@ -565,7 +565,7 @@ impl Bank {
             // finish up any deferred changes to account state
             self.collect_fees();
 
-            let (_, collected_rent) = self.commit_credits_and_rents();
+            let collected_rent = self.commit_credits_and_rents();
             self.distribute_rent(collected_rent);
 
             // freeze is a one-way trip, idempotent
@@ -1566,7 +1566,7 @@ impl Bank {
         );
     }
 
-    fn commit_credits_and_rents(&self) -> (u64, u64) {
+    fn commit_credits_and_rents(&self) -> u64 {
         self.rc.accounts.commit_credits_and_rents(
             &self.rent_collector,
             &self.ancestors,
