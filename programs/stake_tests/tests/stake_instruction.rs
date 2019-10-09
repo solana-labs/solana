@@ -252,7 +252,7 @@ fn test_stake_account_delegate() {
     let mut bank = Bank::new_from_parent(
         &bank,
         &Pubkey::default(),
-        genesis_block.slots_per_epoch * 10 + bank.slot(),
+        genesis_block.epoch_schedule.slots_per_epoch * 10 + bank.slot(),
     );
     bank.add_instruction_processor(id(), process_instruction);
     let bank = Arc::new(bank);

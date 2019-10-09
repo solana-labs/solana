@@ -4,27 +4,31 @@ use base64;
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana_core::blocktree::create_new_ledger;
 use solana_genesis::PrimordialAccountDetails;
-use solana_sdk::account::Account;
-use solana_sdk::clock;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::genesis_block::Builder;
-use solana_sdk::hash::{hash, Hash};
-use solana_sdk::poh_config::PohConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::rent_calculator::RentCalculator;
-use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
-use solana_sdk::system_program;
-use solana_sdk::timing;
+use solana_sdk::{
+    account::Account,
+    clock,
+    epoch_schedule::EpochSchedule,
+    fee_calculator::FeeCalculator,
+    genesis_block::Builder,
+    hash::{hash, Hash},
+    poh_config::PohConfig,
+    pubkey::Pubkey,
+    rent_calculator::RentCalculator,
+    signature::{read_keypair, Keypair, KeypairUtil},
+    system_program, timing,
+};
 use solana_stake_api::stake_state;
 use solana_storage_api::storage_contract;
 use solana_vote_api::vote_state;
-use std::collections::HashMap;
-use std::error;
-use std::fs::File;
-use std::io;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    error,
+    fs::File,
+    io,
+    path::PathBuf,
+    str::FromStr,
+    time::{Duration, Instant},
+};
 
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
@@ -87,18 +91,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_target_lamports_per_signature = &FeeCalculator::default()
         .target_lamports_per_signature
         .to_string();
+    let default_target_signatures_per_slot = &FeeCalculator::default()
+        .target_signatures_per_slot
+        .to_string();
     let default_lamports_per_byte_year =
         &RentCalculator::default().lamports_per_byte_year.to_string();
     let default_rent_exemption_threshold =
         &RentCalculator::default().exemption_threshold.to_string();
     let default_rent_burn_percentage = &RentCalculator::default().burn_percent.to_string();
-    let default_target_signatures_per_slot = &FeeCalculator::default()
-        .target_signatures_per_slot
-        .to_string();
     let default_target_tick_duration =
         &timing::duration_as_ms(&PohConfig::default().target_tick_duration).to_string();
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
-    let default_slots_per_epoch = &clock::DEFAULT_SLOTS_PER_EPOCH.to_string();
+    let default_slots_per_epoch = &EpochSchedule::default().slots_per_epoch.to_string();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -346,15 +350,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ),
         ])
         .native_instruction_processors(&solana_genesis_programs::get())
-        .ticks_per_slot(value_t_or_exit!(matches, "ticks_per_slot", u64))
-        .slots_per_epoch(value_t_or_exit!(matches, "slots_per_epoch", u64));
+        .ticks_per_slot(value_t_or_exit!(matches, "ticks_per_slot", u64));
 
-    let mut fee_calculator = FeeCalculator::default();
-    fee_calculator.target_lamports_per_signature =
-        value_t_or_exit!(matches, "target_lamports_per_signature", u64);
-    fee_calculator.target_signatures_per_slot =
-        value_t_or_exit!(matches, "target_signatures_per_slot", usize);
-    builder = builder.fee_calculator(FeeCalculator::new_derived(&fee_calculator, 0));
+    let slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
+    let epoch_schedule = EpochSchedule::new(slots_per_epoch);
+
+    builder = builder.epoch_schedule(epoch_schedule);
+
+    let fee_calculator = FeeCalculator::new(
+        value_t_or_exit!(matches, "target_lamports_per_signature", u64),
+        value_t_or_exit!(matches, "target_signatures_per_slot", usize),
+    );
+    builder = builder.fee_calculator(fee_calculator);
 
     let rent_calculator = RentCalculator {
         lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),

@@ -72,7 +72,7 @@ pub fn create_genesis_block_with_leader(
             solana_vote_program!(),
             solana_stake_program!(),
         ])
-        .fee_calculator(FeeCalculator::new(0)); // most tests don't want fees
+        .fee_calculator(FeeCalculator::new(0, 0)); // most tests don't want fees
 
     builder = solana_stake_api::genesis(builder);
     builder = solana_storage_api::rewards_pools::genesis(builder);

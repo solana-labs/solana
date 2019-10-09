@@ -806,7 +806,7 @@ mod tests {
             instructions,
         );
 
-        let fee_calculator = FeeCalculator::new(10);
+        let fee_calculator = FeeCalculator::new(10, 0);
         assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
 
         let loaded_accounts =

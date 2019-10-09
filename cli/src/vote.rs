@@ -9,8 +9,8 @@ use crate::{
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
-    transaction::Transaction,
+    account::Account, epoch_schedule::EpochSchedule, pubkey::Pubkey, signature::KeypairUtil,
+    system_instruction::SystemError, sysvar, transaction::Transaction,
 };
 use solana_vote_api::{
     vote_instruction::{self, VoteError},
@@ -277,12 +277,26 @@ pub fn process_vote_authorize(
     log_instruction_custom_error::<VoteError>(result)
 }
 
-pub fn process_show_vote_account(
+fn get_epoch_schedule(rpc_client: &RpcClient) -> Result<EpochSchedule, Box<dyn std::error::Error>> {
+    let epoch_schedule_account = rpc_client.get_account(&sysvar::epoch_schedule::id())?;
+
+    if epoch_schedule_account.owner != sysvar::id() {
+        return Err(CliError::RpcRequestError(format!(
+            "{:?} is not an epoch_schedule account",
+            sysvar::epoch_schedule::id()
+        ))
+        .into());
+    }
+
+    let epoch_schedule = EpochSchedule::deserialize(&epoch_schedule_account)?;
+
+    Ok(epoch_schedule)
+}
+
+fn get_vote_account(
     rpc_client: &RpcClient,
-    _config: &CliConfig,
     vote_account_pubkey: &Pubkey,
-    use_lamports_unit: bool,
-) -> ProcessResult {
+) -> Result<(Account, VoteState), Box<dyn std::error::Error>> {
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
     if vote_account.owner != solana_vote_api::id() {
@@ -291,12 +305,24 @@ pub fn process_show_vote_account(
         )
         .into());
     }
-
     let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
         CliError::RpcRequestError(
             "Account data could not be deserialized to vote state".to_string(),
         )
     })?;
+
+    Ok((vote_account, vote_state))
+}
+
+pub fn process_show_vote_account(
+    rpc_client: &RpcClient,
+    _config: &CliConfig,
+    vote_account_pubkey: &Pubkey,
+    use_lamports_unit: bool,
+) -> ProcessResult {
+    let (vote_account, vote_state) = get_vote_account(rpc_client, vote_account_pubkey)?;
+
+    let epoch_schedule = get_epoch_schedule(rpc_client)?;
 
     println!(
         "account balance: {}",
@@ -329,14 +355,6 @@ pub fn process_show_vote_account(
             );
         }
 
-        // TODO: Use the real GenesisBlock from the cluster.
-        let genesis_block = solana_sdk::genesis_block::GenesisBlock::default();
-        let epoch_schedule = solana_runtime::epoch_schedule::EpochSchedule::new(
-            genesis_block.slots_per_epoch,
-            genesis_block.stakers_slot_offset,
-            genesis_block.epoch_warmup,
-        );
-
         println!("epoch voting history:");
         for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
             let credits_earned = credits - prev_credits;
@@ -357,33 +375,14 @@ pub fn process_uptime(
     aggregate: bool,
     span: Option<u64>,
 ) -> ProcessResult {
-    let vote_account = rpc_client.get_account(vote_account_pubkey)?;
+    let (_vote_account, vote_state) = get_vote_account(rpc_client, vote_account_pubkey)?;
 
-    if vote_account.owner != solana_vote_api::id() {
-        return Err(CliError::RpcRequestError(
-            format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
-        )
-        .into());
-    }
-
-    let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {
-        CliError::RpcRequestError(
-            "Account data could not be deserialized to vote state".to_string(),
-        )
-    })?;
+    let epoch_schedule = get_epoch_schedule(rpc_client)?;
 
     println!("Node id: {}", vote_state.node_pubkey);
     println!("Authorized voter: {}", vote_state.authorized_voter);
     if !vote_state.votes.is_empty() {
         println!("Uptime:");
-
-        // TODO: Use the real GenesisBlock from the cluster.
-        let genesis_block = solana_sdk::genesis_block::GenesisBlock::default();
-        let epoch_schedule = solana_runtime::epoch_schedule::EpochSchedule::new(
-            genesis_block.slots_per_epoch,
-            genesis_block.stakers_slot_offset,
-            genesis_block.epoch_warmup,
-        );
 
         let epoch_credits_vec: Vec<(u64, u64, u64)> = vote_state.epoch_credits().copied().collect();
 

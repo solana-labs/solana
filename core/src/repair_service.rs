@@ -1,22 +1,24 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing blobs in the ledger and sends repair requests for those blobs
-use crate::bank_forks::BankForks;
-use crate::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
-use crate::cluster_info::ClusterInfo;
-use crate::cluster_info_repair_listener::ClusterInfoRepairListener;
-use crate::result::Result;
-use crate::service::Service;
-use solana_metrics::datapoint_debug;
-use solana_runtime::epoch_schedule::EpochSchedule;
-use solana_sdk::pubkey::Pubkey;
-use std::collections::BTreeSet;
-use std::net::UdpSocket;
-use std::ops::Bound::{Excluded, Unbounded};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
+use crate::{
+    bank_forks::BankForks,
+    blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta},
+    cluster_info::ClusterInfo,
+    cluster_info_repair_listener::ClusterInfoRepairListener,
+    result::Result,
+    service::Service,
+};
+use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
+use std::{
+    collections::BTreeSet,
+    net::UdpSocket,
+    ops::Bound::{Excluded, Unbounded},
+    sync::atomic::{AtomicBool, Ordering},
+    sync::{Arc, RwLock},
+    thread::sleep,
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
+};
 
 pub const MAX_REPAIR_LENGTH: usize = 16;
 pub const REPAIR_MS: u64 = 100;
@@ -299,7 +301,7 @@ impl RepairService {
         root: u64,
         epoch_schedule: &EpochSchedule,
     ) {
-        let last_confirmed_epoch = epoch_schedule.get_stakers_epoch(root);
+        let last_confirmed_epoch = epoch_schedule.get_leader_schedule_epoch(root);
         let last_epoch_slot = epoch_schedule.get_last_slot_in_epoch(last_confirmed_epoch);
 
         let meta_iter = blocktree
@@ -652,7 +654,7 @@ mod test {
                 .unwrap();
 
             // Test that only slots > root from fork1 were included
-            let epoch_schedule = EpochSchedule::new(32, 32, false);
+            let epoch_schedule = EpochSchedule::custom(32, 32, false);
 
             RepairService::get_completed_slots_past_root(
                 &blocktree,
@@ -665,7 +667,7 @@ mod test {
             assert_eq!(full_slots, expected);
 
             // Test that slots past the last confirmed epoch boundary don't get included
-            let last_epoch = epoch_schedule.get_stakers_epoch(root);
+            let last_epoch = epoch_schedule.get_leader_schedule_epoch(root);
             let last_slot = epoch_schedule.get_last_slot_in_epoch(last_epoch);
             let fork3 = vec![last_slot, last_slot + 1];
             let fork3_shreds: Vec<_> = make_chaining_slot_entries(&fork3, num_entries_per_slot)

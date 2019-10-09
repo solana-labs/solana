@@ -4,7 +4,6 @@ use crate::{id, vote_instruction::VoteError};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::sysvar::slot_hashes::SlotHash;
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
@@ -12,11 +11,12 @@ use solana_sdk::{
     hash::Hash,
     instruction::InstructionError,
     pubkey::Pubkey,
+    slot_hashes::SlotHash,
     sysvar::clock::Clock,
 };
 use std::collections::VecDeque;
 
-// Maximum number of votes to keep around
+// Maximum number of votes to keep around, tightly coupled with epoch_schedule::MIN_SLOTS_PER_EPOCH
 pub const MAX_LOCKOUT_HISTORY: usize = 31;
 pub const INITIAL_LOCKOUT: usize = 2;
 

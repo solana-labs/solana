@@ -192,7 +192,7 @@ impl BroadcastRun for StandardBroadcastRun {
 
         // 3) Start broadcast step
         let broadcast_start = Instant::now();
-        let bank_epoch = bank.get_stakers_epoch(bank.slot());
+        let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
         let all_shred_bufs: Vec<Vec<u8>> = data_shreds

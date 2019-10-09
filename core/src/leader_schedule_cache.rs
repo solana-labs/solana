@@ -1,12 +1,10 @@
-use crate::blocktree::Blocktree;
-use crate::leader_schedule::LeaderSchedule;
-use crate::leader_schedule_utils;
+use crate::{blocktree::Blocktree, leader_schedule::LeaderSchedule, leader_schedule_utils};
 use solana_runtime::bank::Bank;
-use solana_runtime::epoch_schedule::EpochSchedule;
-use solana_sdk::pubkey::Pubkey;
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, RwLock};
+use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
+use std::{
+    collections::{hash_map::Entry, HashMap, VecDeque},
+    sync::{Arc, RwLock},
+};
 
 type CachedSchedules = (HashMap<u64, Arc<LeaderSchedule>>, VecDeque<u64>);
 const MAX_SCHEDULES: usize = 10;
@@ -40,11 +38,11 @@ impl LeaderScheduleCache {
             max_schedules: CacheCapacity::default(),
         };
 
-        // This sets the root and calculates the schedule at stakers_epoch(root)
+        // This sets the root and calculates the schedule at leader_schedule_epoch(root)
         cache.set_root(root_bank);
 
-        // Calculate the schedule for all epochs between 0 and stakers_epoch(root)
-        let stakers_epoch = epoch_schedule.get_stakers_epoch(root_bank.slot());
+        // Calculate the schedule for all epochs between 0 and leader_schedule_epoch(root)
+        let stakers_epoch = epoch_schedule.get_leader_schedule_epoch(root_bank.slot());
         for epoch in 0..stakers_epoch {
             let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
             cache.slot_leader_at(first_slot_in_epoch, Some(root_bank));
@@ -63,7 +61,9 @@ impl LeaderScheduleCache {
     }
 
     pub fn set_root(&self, root_bank: &Bank) {
-        let new_max_epoch = self.epoch_schedule.get_stakers_epoch(root_bank.slot());
+        let new_max_epoch = self
+            .epoch_schedule
+            .get_leader_schedule_epoch(root_bank.slot());
         let old_max_epoch = {
             let mut max_epoch = self.max_epoch.write().unwrap();
             let old_max_epoch = *max_epoch;
@@ -229,19 +229,20 @@ impl LeaderScheduleCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::tests::make_slot_entries;
-    use crate::genesis_utils::create_genesis_block;
-    use crate::genesis_utils::{
-        create_genesis_block_with_leader, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS,
+    use crate::{
+        blocktree::{get_tmp_ledger_path, tests::make_slot_entries},
+        genesis_utils::{
+            create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
+            BOOTSTRAP_LEADER_LAMPORTS,
+        },
+        staking_utils::tests::setup_vote_and_stake_accounts,
     };
-    use crate::staking_utils::tests::setup_vote_and_stake_accounts;
     use solana_runtime::bank::Bank;
-    use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::thread::Builder;
-
-    use crate::blocktree::get_tmp_ledger_path;
+    use solana_sdk::epoch_schedule::{
+        EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
+        MINIMUM_SLOTS_PER_EPOCH,
+    };
+    use std::{sync::mpsc::channel, sync::Arc, thread::Builder};
 
     #[test]
     fn test_new_cache() {
@@ -255,7 +256,7 @@ mod tests {
         // [0, stakers_epoch(bank.slot())] should
         // be calculated by constructor
         let epoch_schedule = bank.epoch_schedule();
-        let stakers_epoch = bank.get_stakers_epoch(bank.slot());
+        let stakers_epoch = bank.get_leader_schedule_epoch(bank.slot());
         for epoch in 0..=stakers_epoch {
             let first_slot_in_stakers_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
             let last_slot_in_stakers_epoch = epoch_schedule.get_last_slot_in_epoch(epoch);
@@ -307,7 +308,7 @@ mod tests {
 
     fn run_thread_race() {
         let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
-        let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
+        let epoch_schedule = EpochSchedule::custom(slots_per_epoch, slots_per_epoch / 2, true);
         let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule, &bank));
@@ -353,7 +354,11 @@ mod tests {
             BOOTSTRAP_LEADER_LAMPORTS,
         )
         .genesis_block;
-        genesis_block.epoch_warmup = false;
+        genesis_block.epoch_schedule = EpochSchedule::custom(
+            DEFAULT_SLOTS_PER_EPOCH,
+            DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET,
+            false,
+        );
 
         let bank = Bank::new(&genesis_block);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
@@ -373,7 +378,7 @@ mod tests {
         assert_eq!(
             cache.next_leader_slot(
                 &pubkey,
-                2 * genesis_block.slots_per_epoch - 1, // no schedule generated for epoch 2
+                2 * genesis_block.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
                 &bank,
                 None
             ),
@@ -400,7 +405,7 @@ mod tests {
             BOOTSTRAP_LEADER_LAMPORTS,
         )
         .genesis_block;
-        genesis_block.epoch_warmup = false;
+        genesis_block.epoch_schedule.warmup = false;
 
         let bank = Bank::new(&genesis_block);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
@@ -452,7 +457,7 @@ mod tests {
             assert_eq!(
                 cache.next_leader_slot(
                     &pubkey,
-                    2 * genesis_block.slots_per_epoch - 1, // no schedule generated for epoch 2
+                    2 * genesis_block.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
                     &bank,
                     Some(&blocktree)
                 ),
@@ -479,7 +484,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_block(10_000);
-        genesis_block.epoch_warmup = false;
+        genesis_block.epoch_schedule.warmup = false;
 
         let bank = Bank::new(&genesis_block);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
@@ -498,14 +503,14 @@ mod tests {
         // Have to wait until the epoch at after the epoch stakes generated at genesis
         // for the new votes to take effect.
         let mut target_slot = 1;
-        let epoch = bank.get_stakers_epoch(0);
-        while bank.get_stakers_epoch(target_slot) == epoch {
+        let epoch = bank.get_leader_schedule_epoch(0);
+        while bank.get_leader_schedule_epoch(target_slot) == epoch {
             target_slot += 1;
         }
 
         let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), target_slot);
         let mut expected_slot = 0;
-        let epoch = bank.get_stakers_epoch(target_slot);
+        let epoch = bank.get_leader_schedule_epoch(target_slot);
         for i in 0..epoch {
             expected_slot += bank.get_slots_in_epoch(i);
         }
@@ -514,7 +519,7 @@ mod tests {
         let mut index = 0;
         while schedule[index] != node_pubkey {
             index += 1;
-            assert_ne!(index, genesis_block.slots_per_epoch);
+            assert_ne!(index, genesis_block.epoch_schedule.slots_per_epoch);
         }
         expected_slot += index;
 

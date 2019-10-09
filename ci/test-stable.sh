@@ -61,7 +61,7 @@ test-stable-perf)
   _ make -C programs/bpf/c tests
   _ cargo +"$rust_stable" test \
     --manifest-path programs/bpf/Cargo.toml \
-    --no-default-features --features=bpf_c,bpf_rust
+    --no-default-features --features=bpf_c,bpf_rust -- --nocapture
 
   if [[ $(uname) = Linux ]]; then
     # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a

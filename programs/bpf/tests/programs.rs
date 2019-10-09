@@ -111,15 +111,16 @@ mod bpf {
                 file.read_to_end(&mut elf).unwrap();
 
                 let GenesisBlockInfo {
-                    mut genesis_block,
+                    genesis_block,
                     mint_keypair,
                     ..
                 } = create_genesis_block(50);
-                genesis_block.epoch_warmup = false;
                 let bank = Arc::new(Bank::new(&genesis_block));
                 // Create bank with specific slot, used by solana_bpf_rust_sysvar test
+                dbg!(bank.epoch());
                 let bank =
                     Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
+                dbg!(bank.epoch());
                 let bank_client = BankClient::new(bank);
 
                 // Call user program

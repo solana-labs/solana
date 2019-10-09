@@ -2,13 +2,11 @@
 //! programs. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use crate::transaction_utils::OrderedIterator;
 use crate::{
     accounts::{Accounts, TransactionLoadResult},
     accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
     accounts_index::Fork,
     blockhash_queue::BlockhashQueue,
-    epoch_schedule::EpochSchedule,
     message_processor::{MessageProcessor, ProcessInstruction},
     rent_collector::RentCollector,
     serde_utils::{
@@ -19,6 +17,7 @@ use crate::{
     storage_utils,
     storage_utils::StorageAccounts,
     transaction_batch::TransactionBatch,
+    transaction_utils::OrderedIterator,
 };
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
@@ -32,6 +31,7 @@ use solana_metrics::{
 use solana_sdk::{
     account::Account,
     clock::{get_segment_from_slot, Epoch, Slot, MAX_RECENT_BLOCKHASHES},
+    epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     genesis_block::GenesisBlock,
     hash::{hashv, Hash},
@@ -39,20 +39,18 @@ use solana_sdk::{
     native_loader,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
-    system_transaction,
-    sysvar::{
-        clock, fees, rent, rewards,
-        slot_hashes::{self, SlotHashes},
-        stake_history,
-    },
+    slot_hashes::SlotHashes,
+    system_transaction, sysvar,
     timing::duration_as_ns,
     transaction::{Result, Transaction, TransactionError},
 };
-use std::collections::HashMap;
-use std::io::{BufReader, Cursor, Error as IOError, Read};
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::{
+    collections::HashMap,
+    io::{BufReader, Cursor, Error as IOError, Read},
+    path::Path,
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::{Arc, RwLock, RwLockReadGuard},
+};
 
 pub const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
 
@@ -276,13 +274,14 @@ impl Bank {
         //  slot = 0 and genesis configuration
         {
             let stakes = bank.stakes.read().unwrap();
-            for epoch in 0..=bank.get_stakers_epoch(bank.slot) {
+            for epoch in 0..=bank.get_leader_schedule_epoch(bank.slot) {
                 bank.epoch_stakes.insert(epoch, stakes.clone());
             }
             bank.update_stake_history(None);
         }
         bank.update_clock();
         bank.update_rent();
+        bank.update_epoch_schedule();
         bank
     }
 
@@ -348,13 +347,13 @@ impl Bank {
             ("block_height", new.block_height, i64)
         );
 
-        let stakers_epoch = epoch_schedule.get_stakers_epoch(slot);
+        let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
         // update epoch_stakes cache
         //  if my parent didn't populate for this staker's epoch, we've
         //  crossed a boundary
-        if new.epoch_stakes.get(&stakers_epoch).is_none() {
+        if new.epoch_stakes.get(&leader_schedule_epoch).is_none() {
             new.epoch_stakes
-                .insert(stakers_epoch, new.stakes.read().unwrap().clone());
+                .insert(leader_schedule_epoch, new.stakes.read().unwrap().clone());
         }
 
         new.ancestors.insert(new.slot(), 0);
@@ -366,7 +365,6 @@ impl Bank {
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
         new.update_fees();
-        new.update_rent();
         new
     }
 
@@ -426,37 +424,47 @@ impl Bank {
 
     fn update_clock(&self) {
         self.store_account(
-            &clock::id(),
-            &clock::new_account(
+            &sysvar::clock::id(),
+            &sysvar::clock::new_account(
                 1,
                 self.slot,
                 get_segment_from_slot(self.slot, self.slots_per_segment),
                 self.epoch_schedule.get_epoch(self.slot),
-                self.epoch_schedule.get_stakers_epoch(self.slot),
+                self.epoch_schedule.get_leader_schedule_epoch(self.slot),
             ),
         );
     }
 
     fn update_slot_hashes(&self) {
         let mut account = self
-            .get_account(&slot_hashes::id())
-            .unwrap_or_else(|| slot_hashes::create_account(1, &[]));
+            .get_account(&sysvar::slot_hashes::id())
+            .unwrap_or_else(|| sysvar::slot_hashes::create_account(1, &[]));
 
         let mut slot_hashes = SlotHashes::from_account(&account).unwrap();
         slot_hashes.add(self.slot(), self.hash());
         slot_hashes.to_account(&mut account).unwrap();
 
-        self.store_account(&slot_hashes::id(), &account);
+        self.store_account(&sysvar::slot_hashes::id(), &account);
     }
 
     fn update_fees(&self) {
-        self.store_account(&fees::id(), &fees::create_account(1, &self.fee_calculator));
+        self.store_account(
+            &sysvar::fees::id(),
+            &sysvar::fees::create_account(1, &self.fee_calculator),
+        );
     }
 
     fn update_rent(&self) {
         self.store_account(
-            &rent::id(),
-            &rent::create_account(1, &self.rent_collector.rent_calculator),
+            &sysvar::rent::id(),
+            &sysvar::rent::create_account(1, &self.rent_collector.rent_calculator),
+        );
+    }
+
+    fn update_epoch_schedule(&self) {
+        self.store_account(
+            &sysvar::epoch_schedule::id(),
+            &sysvar::epoch_schedule::create_account(1, &self.epoch_schedule),
         );
     }
 
@@ -466,8 +474,8 @@ impl Bank {
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
         self.store_account(
-            &stake_history::id(),
-            &stake_history::create_account(1, self.stakes.read().unwrap().history()),
+            &sysvar::stake_history::id(),
+            &sysvar::stake_history::create_account(1, self.stakes.read().unwrap().history()),
         );
     }
 
@@ -501,8 +509,8 @@ impl Bank {
             storage_rewards / storage_points as f64,
         );
         self.store_account(
-            &rewards::id(),
-            &rewards::create_account(1, validator_point_value, storage_point_value),
+            &sysvar::rewards::id(),
+            &sysvar::rewards::create_account(1, validator_point_value, storage_point_value),
         );
 
         self.capitalization.fetch_add(
@@ -518,10 +526,10 @@ impl Bank {
         mut validator_point_value: f64,
         mut storage_point_value: f64,
     ) -> (f64, f64) {
-        let rewards = rewards::Rewards::from_account(
+        let rewards = sysvar::rewards::Rewards::from_account(
             &self
-                .get_account(&rewards::id())
-                .unwrap_or_else(|| rewards::create_account(1, 0.0, 0.0)),
+                .get_account(&sysvar::rewards::id())
+                .unwrap_or_else(|| sysvar::rewards::create_account(1, 0.0, 0.0)),
         )
         .unwrap_or_else(Default::default);
         if !validator_point_value.is_normal() {
@@ -651,11 +659,7 @@ impl Bank {
         // make bank 0 votable
         self.is_delta.store(true, Ordering::Relaxed);
 
-        self.epoch_schedule = EpochSchedule::new(
-            genesis_block.slots_per_epoch,
-            genesis_block.stakers_slot_offset,
-            genesis_block.epoch_warmup,
-        );
+        self.epoch_schedule = genesis_block.epoch_schedule;
 
         self.inflation = genesis_block.inflation;
 
@@ -1431,10 +1435,10 @@ impl Bank {
         self.epoch_schedule.get_slots_in_epoch(epoch)
     }
 
-    /// returns the epoch for which this bank's stakers_slot_offset and slot would
-    ///  need to cache stakers
-    pub fn get_stakers_epoch(&self, slot: u64) -> u64 {
-        self.epoch_schedule.get_stakers_epoch(slot)
+    /// returns the epoch for which this bank's leader_schedule_slot_offset and slot would
+    ///  need to cache leader_schedule
+    pub fn get_leader_schedule_epoch(&self, slot: u64) -> u64 {
+        self.epoch_schedule.get_leader_schedule_epoch(slot)
     }
 
     /// a bank-level cache of vote accounts
@@ -1579,29 +1583,33 @@ impl Drop for Bank {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::accounts_db::get_temp_accounts_paths;
-    use crate::accounts_db::tests::copy_append_vecs;
-    use crate::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
-    use crate::genesis_utils::{
-        create_genesis_block_with_leader, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS,
+    use crate::{
+        accounts_db::get_temp_accounts_paths,
+        accounts_db::tests::copy_append_vecs,
+        genesis_utils::{
+            create_genesis_block_with_leader, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS,
+        },
+        status_cache::MAX_CACHE_ENTRIES,
     };
-    use crate::status_cache::MAX_CACHE_ENTRIES;
     use bincode::{deserialize_from, serialize_into, serialized_size};
-    use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
-    use solana_sdk::genesis_block::create_genesis_block;
-    use solana_sdk::hash;
-    use solana_sdk::instruction::InstructionError;
-    use solana_sdk::poh_config::PohConfig;
-    use solana_sdk::rent_calculator::RentCalculator;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_instruction;
-    use solana_sdk::system_transaction;
-    use solana_sdk::sysvar::{fees::Fees, rewards::Rewards};
+    use solana_sdk::{
+        clock::DEFAULT_TICKS_PER_SLOT,
+        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+        genesis_block::create_genesis_block,
+        hash,
+        instruction::InstructionError,
+        poh_config::PohConfig,
+        rent_calculator::RentCalculator,
+        signature::{Keypair, KeypairUtil},
+        system_instruction, system_transaction,
+        sysvar::{fees::Fees, rewards::Rewards},
+    };
     use solana_stake_api::stake_state::Stake;
-    use solana_vote_api::vote_instruction;
-    use solana_vote_api::vote_state::{VoteInit, VoteState, MAX_LOCKOUT_HISTORY};
-    use std::io::Cursor;
-    use std::time::Duration;
+    use solana_vote_api::{
+        vote_instruction,
+        vote_state::{VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
+    };
+    use std::{io::Cursor, time::Duration};
     use tempfile::TempDir;
 
     #[test]
@@ -1632,12 +1640,12 @@ mod tests {
             dummy_leader_lamports /* 1 token goes to the vote account associated with dummy_leader_lamports */
         );
 
-        let rent_account = bank.get_account(&rent::id()).unwrap();
-        let rent_sysvar = rent::Rent::from_account(&rent_account).unwrap();
+        let rent_account = bank.get_account(&sysvar::rent::id()).unwrap();
+        let rent = sysvar::rent::Rent::from_account(&rent_account).unwrap();
 
-        assert_eq!(rent_sysvar.rent_calculator.burn_percent, 5);
-        assert_eq!(rent_sysvar.rent_calculator.exemption_threshold, 1.2);
-        assert_eq!(rent_sysvar.rent_calculator.lamports_per_byte_year, 5);
+        assert_eq!(rent.rent_calculator.burn_percent, 5);
+        assert_eq!(rent.rent_calculator.exemption_threshold, 1.2);
+        assert_eq!(rent.rent_calculator.lamports_per_byte_year, 5);
     }
 
     #[test]
@@ -1717,7 +1725,7 @@ mod tests {
         let inflation = bank1.capitalization() - bank.capitalization();
 
         let rewards = bank1
-            .get_account(&rewards::id())
+            .get_account(&sysvar::rewards::id())
             .map(|account| Rewards::from_account(&account).unwrap())
             .unwrap();
 
@@ -2645,10 +2653,10 @@ mod tests {
         // set this up weird, forces future generation, odd mod(), etc.
         //  this says: "vote_accounts for epoch X should be generated at slot index 3 in epoch X-2...
         const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
-        const STAKERS_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
-        genesis_block.slots_per_epoch = SLOTS_PER_EPOCH;
-        genesis_block.stakers_slot_offset = STAKERS_SLOT_OFFSET;
-        genesis_block.epoch_warmup = false; // allows me to do the normal division stuff below
+        const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
+        // no warmup allows me to do the normal division stuff below
+        genesis_block.epoch_schedule =
+            EpochSchedule::custom(SLOTS_PER_EPOCH, LEADER_SCHEDULE_SLOT_OFFSET, false);
 
         let parent = Arc::new(Bank::new(&genesis_block));
         let mut leader_vote_stake: Vec<_> = parent
@@ -2682,13 +2690,13 @@ mod tests {
 
         let mut epoch = 1;
         loop {
-            if epoch > STAKERS_SLOT_OFFSET / SLOTS_PER_EPOCH {
+            if epoch > LEADER_SCHEDULE_SLOT_OFFSET / SLOTS_PER_EPOCH {
                 break;
             }
             let vote_accounts = parent.epoch_vote_accounts(epoch);
             assert!(vote_accounts.is_some());
 
-            // epoch_stakes are a snapshot at the stakers_slot_offset boundary
+            // epoch_stakes are a snapshot at the leader_schedule_slot_offset boundary
             //   in the prior epoch (0 in this case)
             assert_eq!(
                 leader_stake.stake(0, None),
@@ -2702,7 +2710,7 @@ mod tests {
         let child = Bank::new_from_parent(
             &parent,
             &leader_pubkey,
-            SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH),
+            SLOTS_PER_EPOCH - (LEADER_SCHEDULE_SLOT_OFFSET % SLOTS_PER_EPOCH),
         );
 
         assert!(child.epoch_vote_accounts(epoch).is_some());
@@ -2721,7 +2729,7 @@ mod tests {
         let child = Bank::new_from_parent(
             &parent,
             &leader_pubkey,
-            SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
+            SLOTS_PER_EPOCH - (LEADER_SCHEDULE_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
         assert!(child.epoch_vote_accounts(epoch).is_some());
         assert_eq!(
@@ -2768,7 +2776,10 @@ mod tests {
             bank.get_slots_in_epoch(2),
             (MINIMUM_SLOTS_PER_EPOCH * 4) as u64
         );
-        assert_eq!(bank.get_slots_in_epoch(5000), genesis_block.slots_per_epoch);
+        assert_eq!(
+            bank.get_slots_in_epoch(5000),
+            genesis_block.epoch_schedule.slots_per_epoch
+        );
     }
 
     #[test]
@@ -2940,7 +2951,7 @@ mod tests {
         genesis_block.fee_calculator.lamports_per_signature = 12345;
         let bank = Arc::new(Bank::new(&genesis_block));
 
-        let fees_account = bank.get_account(&fees::id()).unwrap();
+        let fees_account = bank.get_account(&sysvar::fees::id()).unwrap();
         let fees = Fees::from_account(&fees_account).unwrap();
         assert_eq!(
             bank.fee_calculator.lamports_per_signature,
@@ -3037,7 +3048,10 @@ mod tests {
             (0.0, 0.0)
         );
 
-        bank.store_account(&rewards::id(), &rewards::create_account(1, 1.0, 1.0));
+        bank.store_account(
+            &sysvar::rewards::id(),
+            &sysvar::rewards::create_account(1, 1.0, 1.0),
+        );
         // check that point values are the previous value if current values are not normal
         assert_eq!(
             bank.check_point_values(std::f64::INFINITY, std::f64::NAN),

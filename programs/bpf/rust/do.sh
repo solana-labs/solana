@@ -28,7 +28,7 @@ perform_action() {
     set -e
     case "$1" in
     build)
-        "$sdkDir"/bpf/rust/build.sh "$2"
+        bash -x "$sdkDir"/bpf/rust/build.sh "$2"
 
         so_path="$targetDir/$profile/"
         so_name="solana_bpf_rust_${3%/}"

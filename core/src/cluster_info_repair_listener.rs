@@ -8,17 +8,18 @@ use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_metrics::datapoint;
-use solana_runtime::epoch_schedule::EpochSchedule;
-use solana_sdk::pubkey::Pubkey;
-use std::cmp;
-use std::collections::HashMap;
-use std::mem;
-use std::net::SocketAddr;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Duration;
+use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
+use std::{
+    cmp,
+    collections::HashMap,
+    mem,
+    net::SocketAddr,
+    net::UdpSocket,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::{Arc, RwLock},
+    thread::{self, sleep, Builder, JoinHandle},
+    time::Duration,
+};
 
 pub const REPAIRMEN_SLEEP_MILLIS: usize = 100;
 pub const REPAIR_REDUNDANCY: usize = 1;
@@ -278,7 +279,7 @@ impl ClusterInfoRepairListener {
         let mut total_coding_blobs_sent = 0;
         let mut num_slots_repaired = 0;
         let max_confirmed_repairee_epoch =
-            epoch_schedule.get_stakers_epoch(repairee_epoch_slots.root);
+            epoch_schedule.get_leader_schedule_epoch(repairee_epoch_slots.root);
         let max_confirmed_repairee_slot =
             epoch_schedule.get_last_slot_in_epoch(max_confirmed_repairee_epoch);
 
@@ -655,7 +656,7 @@ mod tests {
         let eligible_repairmen_refs: Vec<_> = eligible_repairmen.iter().collect();
 
         // Have all the repairman send the repairs
-        let epoch_schedule = EpochSchedule::new(32, 16, false);
+        let epoch_schedule = EpochSchedule::custom(32, 16, false);
         let num_missing_slots = num_slots / 2;
         for repairman_pubkey in &eligible_repairmen {
             ClusterInfoRepairListener::serve_repairs_to_repairee(
@@ -699,7 +700,7 @@ mod tests {
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         let stakers_slot_offset = 16;
         let slots_per_epoch = stakers_slot_offset * 2;
-        let epoch_schedule = EpochSchedule::new(slots_per_epoch, stakers_slot_offset, false);
+        let epoch_schedule = EpochSchedule::custom(slots_per_epoch, stakers_slot_offset, false);
 
         // Create blobs for first two epochs and write them to blocktree
         let total_slots = slots_per_epoch * 2;

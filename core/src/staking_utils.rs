@@ -211,27 +211,27 @@ pub(crate) mod tests {
             ..Stake::default()
         };
 
-        let first_stakers_epoch = bank.get_stakers_epoch(bank.slot());
-        // find the first slot in the next staker's epoch
+        let first_leader_schedule_epoch = bank.get_leader_schedule_epoch(bank.slot());
+        // find the first slot in the next leader schedule epoch
         let mut slot = bank.slot();
         loop {
             slot += 1;
-            if bank.get_stakers_epoch(slot) != first_stakers_epoch {
+            if bank.get_leader_schedule_epoch(slot) != first_leader_schedule_epoch {
                 break;
             }
         }
         let bank = new_from_parent(&Arc::new(bank), slot);
-        let next_stakers_epoch = bank.get_stakers_epoch(slot);
+        let next_leader_schedule_epoch = bank.get_leader_schedule_epoch(slot);
 
-        let result: Vec<_> = epoch_stakes_and_lockouts(&bank, first_stakers_epoch);
+        let result: Vec<_> = epoch_stakes_and_lockouts(&bank, first_leader_schedule_epoch);
         assert_eq!(
             result,
-            vec![(leader_stake.stake(first_stakers_epoch, None), None)]
+            vec![(leader_stake.stake(first_leader_schedule_epoch, None), None)]
         );
 
         // epoch stakes and lockouts are saved off for the future epoch, should
         //  match current bank state
-        let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, next_stakers_epoch);
+        let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, next_leader_schedule_epoch);
         result.sort();
         let stake_history =
             StakeHistory::from_account(&bank.get_account(&stake_history::id()).unwrap()).unwrap();
