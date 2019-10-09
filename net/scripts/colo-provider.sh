@@ -204,7 +204,7 @@ cloud_CreateInstances() {
     while [[ $NI -lt $numNodes && $RI -lt $COLO_RES_N ]]; do
       node="${nodes[$NI]}"
       RES_MACH="${COLO_RES_MACHINE[$RI]}"
-      IP="${COLO_RES_IP_PRIV[$RI]}"
+      IP="${COLO_RES_IP[$RI]}"
       if colo_machine_types_compatible "$RES_MACH" "$machineType"; then
         if colo_node_requisition "$IP" "$node" "$sshPrivateKey" >/dev/null; then
           NI=$((NI+1))
@@ -235,10 +235,10 @@ cloud_DeleteInstances() {
 #
 cloud_WaitForInstanceReady() {
   #declare instanceName="$1" # unused
-  declare instanceIp="$2"
-  declare timeout="$4"
+  #declare instanceIp="$2" # unused
+  #declare timeout="$4" # unused
 
-  timeout "${timeout}"s bash -c "set -o pipefail; until ping -c 3 $instanceIp | tr - _; do echo .; done"
+  true
 }
 
 #
