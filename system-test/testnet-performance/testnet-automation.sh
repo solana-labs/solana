@@ -16,8 +16,7 @@ function collect_logs {
   echo --- collect logs from remote nodes
   rm -rf net/log
   net/net.sh logs
-  # shellcheck disable=SC2045
-  for logfile in $(ls -A net/log) ; do
+  for logfile in net/log/* ; do
     (
       cd net/log
       new_log="$TESTNET_TAG"_"$NUMBER_OF_VALIDATOR_NODES"-nodes_"$(basename "$logfile")"
@@ -73,37 +72,6 @@ EOF
 }
 trap cleanup_testnet EXIT
 
-cd "$(dirname "$0")/../.."
-
-if [[ -z $CHANNEL ]]; then
-  echo --- downloading tar from build artifacts
-  buildkite-agent artifact download "solana-release*.tar.bz2" .
-fi
-
-# shellcheck disable=SC1091
-source ci/upload-ci-artifact.sh
-
-if [[ -z $SOLANA_METRICS_CONFIG ]]; then
-  if [[ -z $SOLANA_METRICS_PARTIAL_CONFIG ]]; then
-    echo SOLANA_METRICS_PARTIAL_CONFIG not defined
-    exit 1
-  fi
-  export SOLANA_METRICS_CONFIG="db=$TESTNET_TAG,host=$INFLUX_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
-fi
-echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
-
-maybeClientOptions=
-if [[ -n $CLIENT_OPTIONS ]] ; then
-  maybeClientOptions="-c"
-fi
-
-maybeMachineType=
-if [[ -n $VALIDATOR_NODE_MACHINE_TYPE ]] ; then
-  maybeMachineType="-G"
-fi
-
-TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TESTNET_ZONES},"
-
 launchTestnet() {
   set -x
 
@@ -117,7 +85,7 @@ launchTestnet() {
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         "$maybeMachineType" "$VALIDATOR_NODE_MACHINE_TYPE" \
-        -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/-z } "$ADDITIONAL_FLAGS"
+        -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/"-z "} "$ADDITIONAL_FLAGS"
       ;;
     colo)
       net/colo.sh create \
@@ -183,5 +151,29 @@ launchTestnet() {
 
   upload-ci-artifact "$RESULTS_FILE"
 }
+
+cd "$(dirname "$0")/../.."
+
+if [[ -z $SOLANA_METRICS_CONFIG ]]; then
+  if [[ -z $SOLANA_METRICS_PARTIAL_CONFIG ]]; then
+    echo SOLANA_METRICS_PARTIAL_CONFIG not defined
+    exit 1
+  fi
+  export SOLANA_METRICS_CONFIG="db=$TESTNET_TAG,host=$INFLUX_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
+fi
+echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
+
+if [[ -z $CHANNEL ]]; then
+  echo --- downloading tar from build artifacts
+  buildkite-agent artifact download "solana-release*.tar.bz2" .
+fi
+
+# shellcheck disable=SC1091
+source ci/upload-ci-artifact.sh
+
+maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
+maybeMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"-G"}
+
+IFS=, read -r -a TESTNET_CLOUD_ZONES <<<"${TESTNET_ZONES}"
 
 launchTestnet
