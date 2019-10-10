@@ -67,6 +67,7 @@ fn bench_poh_lock_time_per_batch(bencher: &mut Bencher) {
 }
 
 #[bench]
+#[ignore]
 fn bench_multi_core_poh(bencher: &mut Bencher) {
     let num_threads = 1;
     let threads: Vec<_> = (0..num_threads)
