@@ -4,7 +4,7 @@ use clap::{
 };
 use solana_sdk::pubkey::write_pubkey;
 use solana_sdk::signature::{
-    keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
+    keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file, Keypair,
     KeypairUtil,
 };
 use std::error;
@@ -19,6 +19,21 @@ fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
         eprintln!("Refusing to overwrite {} without --force flag", outfile);
         exit(1);
     }
+}
+
+fn output_keypair(
+    keypair: &Keypair,
+    outfile: &str,
+    source: &str,
+) -> Result<(), Box<dyn error::Error>> {
+    if outfile == "-" {
+        let mut stdout = std::io::stdout();
+        write_keypair(&keypair, &mut stdout)?;
+    } else {
+        write_keypair_file(&keypair, outfile)?;
+        eprintln!("Wrote {} keypair to {}", source, outfile);
+    }
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -140,13 +155,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            if outfile == "-" {
-                let mut stdout = std::io::stdout();
-                write_keypair(&keypair, &mut stdout)?;
-            } else {
-                write_keypair_file(&keypair, outfile)?;
-                eprintln!("Wrote new keypair to {}", outfile);
-            }
+            output_keypair(&keypair, &outfile, "new")?;
 
             let silent = matches.is_present("silent");
             if !silent {
@@ -175,12 +184,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            let serialized_keypair = write_keypair_file(&keypair, outfile)?;
-            if outfile == "-" {
-                println!("{}", serialized_keypair);
-            } else {
-                eprintln!("Wrote recovered keypair to {}", outfile);
-            }
+            output_keypair(&keypair, &outfile, "recovered")?;
         }
         _ => unreachable!(),
     }
