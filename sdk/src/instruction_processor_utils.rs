@@ -43,7 +43,7 @@ pub fn next_arg<'a, I>(iter: &mut I) -> Result<I::Item, InstructionError>
 where
     I: Iterator,
 {
-    iter.next().ok_or(InstructionError::InvalidArgument)
+    iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
 }
 
 pub trait DecodeError<E> {

@@ -327,7 +327,7 @@ mod tests {
                 .send_message(&[&alice_keypair], message)
                 .unwrap_err()
                 .unwrap(),
-            TransactionError::InstructionError(1, InstructionError::InvalidArgument)
+            TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
         );
     }
 
