@@ -67,11 +67,7 @@ impl BlockstreamService {
             Some(blocktree_meta.parent_slot)
         };
         let ticks_per_slot = entries.iter().filter(|entry| entry.is_tick()).count() as u64;
-        let mut tick_height = if slot > 0 && ticks_per_slot > 0 {
-            ticks_per_slot * slot
-        } else {
-            0
-        };
+        let mut tick_height = ticks_per_slot * slot;
 
         for (i, entry) in entries.iter().enumerate() {
             if entry.is_tick() {

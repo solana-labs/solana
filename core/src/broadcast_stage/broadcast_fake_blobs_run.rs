@@ -28,7 +28,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
-        let last_tick = receive_results.last_tick;
+        let last_tick_height = receive_results.last_tick_height;
 
         let keypair = &cluster_info.read().unwrap().keypair.clone();
         let next_shred_index = blocktree
@@ -49,7 +49,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
 
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
             &receive_results.entries,
-            last_tick == bank.max_tick_height(),
+            last_tick_height == bank.max_tick_height(),
             next_shred_index,
         );
 
@@ -65,13 +65,13 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
 
         let (fake_data_shreds, fake_coding_shreds, _) = shredder.entries_to_shreds(
             &fake_entries,
-            last_tick == bank.max_tick_height(),
+            last_tick_height == bank.max_tick_height(),
             next_shred_index,
         );
 
         // If it's the last tick, reset the last block hash to default
         // this will cause next run to grab last bank's blockhash
-        if last_tick == bank.max_tick_height() {
+        if last_tick_height == bank.max_tick_height() {
             self.last_blockhash = Hash::default();
         }
 

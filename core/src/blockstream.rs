@@ -215,7 +215,7 @@ mod test {
         let mut entries = Vec::new();
         let mut expected_entries = Vec::new();
 
-        let tick_height_initial = 0;
+        let tick_height_initial = 1;
         let tick_height_final = tick_height_initial + ticks_per_slot + 2;
         let mut curr_slot = 0;
         let leader_pubkey = Pubkey::new_rand();
@@ -223,7 +223,7 @@ mod test {
         for tick_height in tick_height_initial..=tick_height_final {
             if tick_height == 5 {
                 blockstream
-                    .emit_block_event(curr_slot, tick_height - 1, &leader_pubkey, blockhash)
+                    .emit_block_event(curr_slot, tick_height, &leader_pubkey, blockhash)
                     .unwrap();
                 curr_slot += 1;
             }
@@ -238,7 +238,7 @@ mod test {
 
         assert_eq!(
             blockstream.entries().len() as u64,
-            // one entry per tick (0..=N+2) is +3, plus one block
+            // one entry per tick (1..=N+2) is +3, plus one block
             ticks_per_slot + 3 + 1
         );
 

@@ -51,9 +51,9 @@ pub struct PohRecorder {
     pub poh: Arc<Mutex<Poh>>,
     tick_height: u64,
     clear_bank_signal: Option<SyncSender<bool>>,
-    start_slot: Slot,       // parent slot
-    start_tick_height: u64, // first tick_height this recorder will observe
-    tick_cache: Vec<(Entry, u64)>,
+    start_slot: Slot,              // parent slot
+    start_tick_height: u64,        // first tick_height this recorder will observe
+    tick_cache: Vec<(Entry, u64)>, // cache of entry and its tick_height
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntry>,
     leader_first_tick_height: Option<u64>,
