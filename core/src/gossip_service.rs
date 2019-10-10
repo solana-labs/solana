@@ -6,13 +6,13 @@ use crate::cluster_info::{ClusterInfo, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::service::Service;
 use crate::streamer;
+use crossbeam::crossbeam_channel::unbounded;
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, JoinHandle};
 use std::time::{Duration, Instant};
@@ -29,7 +29,7 @@ impl GossipService {
         gossip_socket: UdpSocket,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let (request_sender, request_receiver) = channel();
+        let (request_sender, request_receiver) = unbounded();
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "GossipService: id: {}, listening on: {:?}",
@@ -37,7 +37,7 @@ impl GossipService {
             gossip_socket.local_addr().unwrap()
         );
         let t_receiver = streamer::blob_receiver(gossip_socket.clone(), &exit, request_sender);
-        let (response_sender, response_receiver) = channel();
+        let (response_sender, response_receiver) = unbounded();
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),

@@ -6,11 +6,11 @@ use crate::recycler::Recycler;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
+use crossbeam::crossbeam_channel::{unbounded, RecvTimeoutError};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::{channel, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 
@@ -26,7 +26,7 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> (Self, PacketReceiver) {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         (
             Self::new_with_sender(sockets, tpu_forwards_sockets, exit, &sender, &poh_recorder),
             receiver,
@@ -99,7 +99,7 @@ impl FetchStage {
             )
         });
 
-        let (forward_sender, forward_receiver) = channel();
+        let (forward_sender, forward_receiver) = unbounded();
         let tpu_forwards_threads = tpu_forwards_sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
@@ -120,10 +120,10 @@ impl FetchStage {
                     Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
                 {
                     match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::RecvError(_) => break,
-                        Error::SendError => break,
+                        Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        Error::CrossbeamRecvError(_) => break,
+                        Error::CrossbeamSendError => break,
                         _ => error!("{:?}", e),
                     }
                 }

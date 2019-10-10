@@ -4,7 +4,7 @@ use crate::result::Result;
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use crate::{packet, sigverify};
-use crossbeam_channel::Sender as CrossbeamSender;
+use crossbeam::crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::inc_new_counter_debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};

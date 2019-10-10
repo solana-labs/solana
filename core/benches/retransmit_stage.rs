@@ -3,6 +3,7 @@
 extern crate solana_core;
 extern crate test;
 
+use crossbeam::crossbeam_channel::unbounded;
 use log::*;
 use solana_core::bank_forks::BankForks;
 use solana_core::cluster_info::{ClusterInfo, Node};
@@ -18,8 +19,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::channel;
-use std::sync::Mutex;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::Builder;
@@ -52,8 +51,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let bank_forks = BankForks::new(0, bank0);
     let bank = bank_forks.working_bank();
     let bank_forks = Arc::new(RwLock::new(bank_forks));
-    let (packet_sender, packet_receiver) = channel();
-    let packet_receiver = Arc::new(Mutex::new(packet_receiver));
+    let (packet_sender, packet_receiver) = unbounded();
+    let packet_receiver = Arc::new(packet_receiver);
     const NUM_THREADS: usize = 2;
     let sockets = (0..NUM_THREADS)
         .map(|_| UdpSocket::bind("0.0.0.0:0").unwrap())

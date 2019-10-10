@@ -27,6 +27,7 @@ use crate::service::Service;
 use crate::shred_fetch_stage::ShredFetchStage;
 use crate::snapshot_package::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
+use crossbeam::crossbeam_channel::unbounded;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -96,7 +97,7 @@ impl Tvu {
             forwards: tvu_forward_sockets,
         } = sockets;
 
-        let (fetch_sender, fetch_receiver) = channel();
+        let (fetch_sender, fetch_receiver) = unbounded();
 
         let repair_socket = Arc::new(repair_socket);
         let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();

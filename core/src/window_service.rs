@@ -295,6 +295,7 @@ mod test {
         shred::Shredder,
         shred::SIZE_OF_SHRED_TYPE,
     };
+    use crossbeam::crossbeam_channel::{unbounded, Receiver};
     use rand::{seq::SliceRandom, thread_rng};
     use solana_sdk::{
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -304,7 +305,6 @@ mod test {
     use std::{
         net::UdpSocket,
         sync::atomic::{AtomicBool, Ordering},
-        sync::mpsc::{channel, Receiver},
         sync::{Arc, RwLock},
         thread::sleep,
         time::Duration,
@@ -435,7 +435,7 @@ mod test {
             .expect("Expected to be able to open database ledger");
 
         let blocktree = Arc::new(blocktree);
-        let (retransmit_sender, _retransmit_receiver) = channel();
+        let (retransmit_sender, _retransmit_receiver) = unbounded();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::new_localhost(&Pubkey::default(), 0),
         )));
@@ -456,7 +456,7 @@ mod test {
 
     #[test]
     fn test_recv_window() {
-        let (packet_sender, packet_receiver) = channel();
+        let (packet_sender, packet_receiver) = unbounded();
         let exit = Arc::new(AtomicBool::new(false));
         let window = make_test_window(packet_receiver, exit.clone());
         // send 5 slots worth of data to the window

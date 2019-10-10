@@ -14,11 +14,10 @@ use crate::service::Service;
 use crate::sigverify;
 use crate::sigverify::TxOffset;
 use crate::streamer::{self, PacketReceiver};
-use crossbeam_channel::Sender as CrossbeamSender;
+use crossbeam::crossbeam_channel::{Receiver, RecvTimeoutError, Sender as CrossbeamSender};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_info};
 use solana_sdk::timing;
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 
@@ -141,9 +140,9 @@ impl SigVerifyStage {
                         &recycler_out,
                     ) {
                         match e {
-                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                            Error::SendError => {
+                            Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                            Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                            Error::CrossbeamSendError => {
                                 break;
                             }
                             _ => error!("{:?}", e),

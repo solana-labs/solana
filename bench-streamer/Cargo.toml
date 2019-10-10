@@ -12,3 +12,4 @@ clap = "2.33.0"
 solana-core = { path = "../core", version = "0.20.0" }
 solana-logger = { path = "../logger", version = "0.20.0" }
 solana-netutil = { path = "../netutil", version = "0.20.0" }
+crossbeam = "0.7.2"

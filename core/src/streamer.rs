@@ -4,10 +4,10 @@
 use crate::packet::{Blob, Packets, PacketsRecycler, SharedBlobs, PACKETS_PER_BATCH};
 use crate::recvmmsg::NUM_RCVMMSGS;
 use crate::result::{Error, Result};
+use crossbeam::crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
@@ -115,8 +115,8 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> J
         .spawn(move || loop {
             if let Err(e) = recv_send(&sock, &r) {
                 match e {
-                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                    Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
                     _ => warn!("{} responder error: {:?}", name, e),
                 }
             }
@@ -163,11 +163,11 @@ mod test {
     use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use crate::recycler::Recycler;
     use crate::streamer::{receiver, responder};
+    use crossbeam::crossbeam_channel::unbounded;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -201,10 +201,10 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let (s_reader, r_reader) = channel();
+        let (s_reader, r_reader) = unbounded();
         let t_receiver = receiver(Arc::new(read), &exit, s_reader, Recycler::default(), "test");
         let t_responder = {
-            let (s_responder, r_responder) = channel();
+            let (s_responder, r_responder) = unbounded();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
             for i in 0..5 {

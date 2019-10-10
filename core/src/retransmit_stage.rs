@@ -12,6 +12,7 @@ use crate::{
     streamer::PacketReceiver,
     window_service::{should_retransmit_and_persist, WindowService},
 };
+use crossbeam::crossbeam_channel::{unbounded, RecvTimeoutError};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_measure::measure::Measure;
@@ -21,9 +22,6 @@ use std::{
     cmp,
     net::UdpSocket,
     sync::atomic::AtomicBool,
-    sync::mpsc::channel,
-    sync::mpsc::RecvTimeoutError,
-    sync::Mutex,
     sync::{Arc, RwLock},
     thread::{self, Builder, JoinHandle},
     time::Duration,
@@ -37,24 +35,22 @@ fn retransmit(
     bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
-    r: &Arc<Mutex<PacketReceiver>>,
+    r: &Arc<PacketReceiver>,
     sock: &UdpSocket,
     id: u32,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
-    let r_lock = r.lock().unwrap();
-    let packets = r_lock.recv_timeout(timer)?;
+    let packets = r.recv_timeout(timer)?;
     let mut timer_start = Measure::start("retransmit");
     let mut total_packets = packets.packets.len();
     let mut packet_v = vec![packets];
-    while let Ok(nq) = r_lock.try_recv() {
+    while let Ok(nq) = r.try_recv() {
         total_packets += nq.packets.len();
         packet_v.push(nq);
         if total_packets >= MAX_PACKET_BATCH_SIZE {
             break;
         }
     }
-    drop(r_lock);
 
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_leader_schedule_epoch(r_bank.slot());
@@ -141,7 +137,7 @@ pub fn retransmitter(
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
-    r: Arc<Mutex<PacketReceiver>>,
+    r: Arc<PacketReceiver>,
 ) -> Vec<JoinHandle<()>> {
     (0..sockets.len())
         .map(|s| {
@@ -165,8 +161,10 @@ pub fn retransmitter(
                             s as u32,
                         ) {
                             match e {
-                                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                                Error::CrossbeamRecvTimeoutError(
+                                    RecvTimeoutError::Disconnected,
+                                ) => break,
+                                Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
                                 _ => {
                                     inc_new_counter_error!("streamer-retransmit-error", 1, 1);
                                 }
@@ -200,9 +198,9 @@ impl RetransmitStage {
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
     ) -> Self {
-        let (retransmit_sender, retransmit_receiver) = channel();
+        let (retransmit_sender, retransmit_receiver) = unbounded();
 
-        let retransmit_receiver = Arc::new(Mutex::new(retransmit_receiver));
+        let retransmit_receiver = Arc::new(retransmit_receiver);
         let t_retransmit = retransmitter(
             retransmit_sockets,
             bank_forks.clone(),
@@ -300,13 +298,13 @@ mod tests {
         let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
-        let (retransmit_sender, retransmit_receiver) = channel();
+        let (retransmit_sender, retransmit_receiver) = unbounded();
         let t_retransmit = retransmitter(
             retransmit_socket,
             bank_forks,
             &leader_schedule_cache,
             cluster_info,
-            Arc::new(Mutex::new(retransmit_receiver)),
+            Arc::new(retransmit_receiver),
         );
         let _thread_hdls = vec![t_retransmit];
 

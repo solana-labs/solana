@@ -17,8 +17,9 @@ pub enum Error {
     AddrParse(std::net::AddrParseError),
     JoinError(Box<dyn Any + Send + 'static>),
     RecvError(std::sync::mpsc::RecvError),
-    TryCrossbeamRecvError(crossbeam_channel::TryRecvError),
-    CrossbeamRecvTimeoutError(crossbeam_channel::RecvTimeoutError),
+    TryCrossbeamRecvError(crossbeam::crossbeam_channel::TryRecvError),
+    CrossbeamRecvError(crossbeam::crossbeam_channel::RecvError),
+    CrossbeamRecvTimeoutError(crossbeam::crossbeam_channel::RecvTimeoutError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     CrossbeamSendError,
     TryRecvError(std::sync::mpsc::TryRecvError),
@@ -49,9 +50,14 @@ impl std::convert::From<std::sync::mpsc::RecvError> for Error {
         Error::RecvError(e)
     }
 }
-impl std::convert::From<crossbeam_channel::TryRecvError> for Error {
-    fn from(e: crossbeam_channel::TryRecvError) -> Error {
+impl std::convert::From<crossbeam::crossbeam_channel::TryRecvError> for Error {
+    fn from(e: crossbeam::crossbeam_channel::TryRecvError) -> Error {
         Error::TryCrossbeamRecvError(e)
+    }
+}
+impl std::convert::From<crossbeam::crossbeam_channel::RecvError> for Error {
+    fn from(e: crossbeam::crossbeam_channel::RecvError) -> Error {
+        Error::CrossbeamRecvError(e)
     }
 }
 impl std::convert::From<std::sync::mpsc::TryRecvError> for Error {
@@ -59,8 +65,8 @@ impl std::convert::From<std::sync::mpsc::TryRecvError> for Error {
         Error::TryRecvError(e)
     }
 }
-impl std::convert::From<crossbeam_channel::RecvTimeoutError> for Error {
-    fn from(e: crossbeam_channel::RecvTimeoutError) -> Error {
+impl std::convert::From<crossbeam::crossbeam_channel::RecvTimeoutError> for Error {
+    fn from(e: crossbeam::crossbeam_channel::RecvTimeoutError) -> Error {
         Error::CrossbeamRecvTimeoutError(e)
     }
 }
@@ -84,8 +90,8 @@ impl std::convert::From<reed_solomon_erasure::Error> for Error {
         Error::ErasureError(e)
     }
 }
-impl<T> std::convert::From<crossbeam_channel::SendError<T>> for Error {
-    fn from(_e: crossbeam_channel::SendError<T>) -> Error {
+impl<T> std::convert::From<crossbeam::crossbeam_channel::SendError<T>> for Error {
+    fn from(_e: crossbeam::crossbeam_channel::SendError<T>) -> Error {
         Error::CrossbeamSendError
     }
 }

@@ -16,7 +16,7 @@ use crate::{
     sigverify_stage::VerifiedPackets,
 };
 use bincode::deserialize;
-use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
+use crossbeam::crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
@@ -973,7 +973,7 @@ mod tests {
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
     use crate::{get_tmp_ledger_path, tmp_ledger_name};
-    use crossbeam_channel::unbounded;
+    use crossbeam::crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};

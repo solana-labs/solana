@@ -10,10 +10,10 @@ use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::{PohRecorder, WorkingBankEntry};
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
-use crossbeam_channel::unbounded;
+use crossbeam::crossbeam_channel::unbounded;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
@@ -39,7 +39,7 @@ impl Tpu {
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let (packet_sender, packet_receiver) = channel();
+        let (packet_sender, packet_receiver) = unbounded();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,

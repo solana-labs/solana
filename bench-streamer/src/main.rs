@@ -1,4 +1,5 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
+use crossbeam::crossbeam_channel::unbounded;
 use solana_core::packet::PacketsRecycler;
 use solana_core::packet::{Packet, Packets, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana_core::result::Result;
@@ -6,7 +7,6 @@ use solana_core::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::sleep;
 use std::thread::{spawn, JoinHandle};
@@ -83,7 +83,7 @@ fn main() -> Result<()> {
         addr = read.local_addr().unwrap();
         port = addr.port();
 
-        let (s_reader, r_reader) = channel();
+        let (s_reader, r_reader) = unbounded();
         read_channels.push(r_reader);
         read_threads.push(receiver(
             Arc::new(read),

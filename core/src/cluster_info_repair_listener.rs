@@ -484,10 +484,9 @@ mod tests {
     use crate::cluster_info::Node;
     use crate::packet::{Blob, SharedBlob};
     use crate::streamer;
+    use crossbeam::crossbeam_channel::{unbounded, Receiver};
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::mpsc::Receiver;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
@@ -519,7 +518,7 @@ mod tests {
 
         pub fn make_mock_repairee() -> Self {
             let id = Pubkey::new_rand();
-            let (repairee_sender, repairee_receiver) = channel();
+            let (repairee_sender, repairee_receiver) = unbounded();
             let repairee_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
             let repairee_tvu_addr = repairee_socket.local_addr().unwrap();
             let repairee_exit = Arc::new(AtomicBool::new(false));

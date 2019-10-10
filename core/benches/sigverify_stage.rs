@@ -3,7 +3,7 @@
 extern crate solana_core;
 extern crate test;
 
-use crossbeam_channel::unbounded;
+use crossbeam::crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_core::packet::to_packets_chunked;
@@ -14,14 +14,13 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::duration_as_ms;
-use std::sync::mpsc::channel;
 use std::time::{Duration, Instant};
 use test::Bencher;
 
 #[bench]
 fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
-    let (packet_s, packet_r) = channel();
+    let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = unbounded();
     let sigverify_disabled = false;
     let stage = SigVerifyStage::new(packet_r, sigverify_disabled, verified_s);

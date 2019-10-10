@@ -16,6 +16,7 @@ use crate::storage_stage::NUM_STORAGE_SAMPLES;
 use crate::streamer::{receiver, responder, PacketReceiver};
 use crate::window_service::WindowService;
 use bincode::deserialize;
+use crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
 use rand::thread_rng;
 use rand::Rng;
 use rand::SeedableRng;
@@ -43,7 +44,6 @@ use std::net::{SocketAddr, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
@@ -131,8 +131,8 @@ fn create_request_processor(
     slot_receiver: Receiver<u64>,
 ) -> Vec<JoinHandle<()>> {
     let mut thread_handles = vec![];
-    let (s_reader, r_reader) = channel();
-    let (s_responder, r_responder) = channel();
+    let (s_reader, r_reader) = unbounded();
+    let (s_responder, r_responder) = unbounded();
     let storage_socket = Arc::new(socket);
     let recycler = Recycler::default();
     let t_receiver = receiver(
@@ -261,7 +261,7 @@ impl Replicator {
             .into_iter()
             .map(Arc::new)
             .collect();
-        let (blob_fetch_sender, blob_fetch_receiver) = channel();
+        let (blob_fetch_sender, blob_fetch_receiver) = unbounded();
         let fetch_stage = ShredFetchStage::new(
             blob_sockets,
             blob_forward_sockets,
@@ -269,7 +269,7 @@ impl Replicator {
             &blob_fetch_sender,
             &exit,
         );
-        let (slot_sender, slot_receiver) = channel();
+        let (slot_sender, slot_receiver) = unbounded();
         let request_processor =
             create_request_processor(node.sockets.storage.unwrap(), &exit, slot_receiver);
 
@@ -466,7 +466,7 @@ impl Replicator {
         repair_slot_range.end = slot + slots_per_segment;
         repair_slot_range.start = slot;
 
-        let (retransmit_sender, _) = channel();
+        let (retransmit_sender, _) = unbounded();
 
         let window_service = WindowService::new(
             blocktree.clone(),
@@ -804,7 +804,7 @@ impl Replicator {
         info!("Replicator download: start at {}", start_slot);
 
         let exit = Arc::new(AtomicBool::new(false));
-        let (s_reader, r_reader) = channel();
+        let (s_reader, r_reader) = unbounded();
         let repair_socket = Arc::new(bind_in_range(FULLNODE_PORT_RANGE).unwrap().1);
         let t_receiver = receiver(
             repair_socket.clone(),

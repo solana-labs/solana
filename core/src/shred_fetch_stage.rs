@@ -5,9 +5,9 @@ use crate::packet::Packet;
 use crate::recycler::Recycler;
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
+use crossbeam::crossbeam_channel::unbounded;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 
@@ -39,7 +39,7 @@ impl ShredFetchStage {
     where
         F: Fn(&mut Packet) + Send + 'static,
     {
-        let (packet_sender, packet_receiver) = channel();
+        let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
             .into_iter()
             .map(|s| {
