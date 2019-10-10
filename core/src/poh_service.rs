@@ -35,7 +35,11 @@ impl PohService {
                     if poh_config.target_tick_count.is_none() {
                         Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
                     } else {
-                        Self::short_lived_tick_producer(poh_recorder, &poh_config, &poh_exit_);
+                        Self::short_lived_sleepy_tick_producer(
+                            poh_recorder,
+                            &poh_config,
+                            &poh_exit_,
+                        );
                     }
                 } else {
                     // PoH service runs in a tight loop, generating hashes as fast as possible.
@@ -64,7 +68,7 @@ impl PohService {
         }
     }
 
-    fn short_lived_tick_producer(
+    fn short_lived_sleepy_tick_producer(
         poh_recorder: Arc<Mutex<PohRecorder>>,
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
