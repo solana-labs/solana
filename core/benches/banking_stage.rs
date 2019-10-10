@@ -4,7 +4,7 @@ extern crate test;
 #[macro_use]
 extern crate solana_core;
 
-use crossbeam_channel::unbounded;
+use crossbeam::crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;

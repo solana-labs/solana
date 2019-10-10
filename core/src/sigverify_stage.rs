@@ -14,7 +14,7 @@ use crate::service::Service;
 use crate::sigverify;
 use crate::sigverify::TxOffset;
 use crate::streamer::{self, PacketReceiver};
-use crossbeam_channel::Sender as CrossbeamSender;
+use crossbeam::crossbeam_channel::Sender as CrossbeamSender;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_info};
 use solana_sdk::timing;

@@ -106,7 +106,6 @@ extern crate solana_metrics;
 extern crate matches;
 
 extern crate bzip2;
-extern crate crossbeam_channel;
 extern crate dir_diff;
 extern crate fs_extra;
 extern crate symlink;

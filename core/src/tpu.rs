@@ -10,7 +10,7 @@ use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::{PohRecorder, WorkingBankEntry};
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
-use crossbeam_channel::unbounded;
+use crossbeam::crossbeam_channel::unbounded;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};

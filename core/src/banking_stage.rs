@@ -16,7 +16,7 @@ use crate::{
     sigverify_stage::VerifiedPackets,
 };
 use bincode::deserialize;
-use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
+use crossbeam::crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
