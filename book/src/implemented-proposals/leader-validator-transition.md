@@ -1,6 +1,6 @@
 # Leader-to-Validator Transition
 
-A fullnode typically operates as a validator. If, however, a staker delegates its stake to a fullnode, it will occasionally be selected as a _slot leader_. As a slot leader, the fullnode is responsible for producing blocks during an assigned _slot_. A slot has a duration of some number of preconfigured _ticks_. The duration of those ticks are estimated with a _PoH Recorder_ described later in this document.
+A validator typically spends its time validating blocks. If, however, a staker delegates its stake to a validator, it will occasionally be selected as a _slot leader_. As a slot leader, the validator is responsible for producing blocks during an assigned _slot_. A slot has a duration of some number of preconfigured _ticks_. The duration of those ticks are estimated with a _PoH Recorder_ described later in this document.
 
 ## BankFork
 

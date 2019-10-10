@@ -22,10 +22,10 @@ Creator of a new on-chain token \(ERC-20 interface\), may wish to do a worldwide
 
 The drone may prefer its airdrops only target a particular Solana cluster. To do that, it listens to the cluster for new entry IDs and ensure any requests reference a recent one.
 
-Note: to listen for new entry IDs assumes the drone is either a fullnode or a _light_ client. At the time of this writing, light clients have not been implemented and no proposal describes them. This document assumes one of the following approaches be taken:
+Note: to listen for new entry IDs assumes the drone is either a validator or a _light_ client. At the time of this writing, light clients have not been implemented and no proposal describes them. This document assumes one of the following approaches be taken:
 
 1. Define and implement a light client
-2. Embed a fullnode
+2. Embed a validator
 3. Query the jsonrpc API for the latest last id at a rate slightly faster than
 
    ticks are produced.

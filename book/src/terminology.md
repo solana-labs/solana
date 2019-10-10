@@ -10,6 +10,10 @@ A persistent file addressed by [public key](terminology.md#public-key) and with 
 
 A front-end application that interacts with a Solana cluster.
 
+## bank state
+
+The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-tokens).
+
 ## block
 
 A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [vote](terminology.md#ledger-vote). A [leader](terminology.md#leader) produces at most one block per [slot](terminology.md#slot).
@@ -24,7 +28,7 @@ The [entry id](terminology.md#entry-id) of the last entry in a [block](terminolo
 
 ## bootstrap leader
 
-The first [fullnode](terminology.md#fullnode) to take the [leader](terminology.md#leader) role.
+The first [validator](terminology.md#validator) to produce a [block](terminology.md#block).
 
 ## CBC block
 
@@ -36,7 +40,7 @@ A [node](terminology.md#node) that utilizes the [cluster](terminology.md#cluster
 
 ## cluster
 
-A set of [fullnodes](terminology.md#fullnode) maintaining a single [ledger](terminology.md#ledger).
+A set of [validators](terminology.md#validator) maintaining a single [ledger](terminology.md#ledger).
 
 ## confirmation
 
@@ -90,14 +94,6 @@ When nodes representing 2/3rd of the stake have a common [root](terminology.md#r
 
 A [ledger](terminology.md#ledger) derived from common entries but then diverged.
 
-## fullnode
-
-A full participant in the [cluster](terminology.md#cluster) either a [leader](terminology.md#leader) or [validator](terminology.md#validator) node.
-
-## fullnode state
-
-The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-tokens).
-
 ## genesis block
 
 The configuration file that prepares the [ledger](terminology.md#ledger) for the first [block](terminology.md#block).
@@ -124,11 +120,11 @@ A [program](terminology.md#program) with the ability to interpret the binary enc
 
 ## leader
 
-The role of a [fullnode](terminology.md#fullnode) when it is appending [entries](terminology.md#entry) to the [ledger](terminology.md#ledger).
+The role of a [validator](terminology.md#validator) when it is appending [entries](terminology.md#entry) to the [ledger](terminology.md#ledger).
 
 ## leader schedule
 
-A sequence of [fullnode](terminology.md#fullnode) [public keys](terminology.md#public-key). The cluster uses the leader schedule to determine which fullnode is the [leader](terminology.md#leader) at any moment in time.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
 
 ## ledger
 
@@ -140,15 +136,15 @@ Portion of the ledger which is downloaded by the replicator where storage proof 
 
 ## ledger vote
 
-A [hash](terminology.md#hash) of the [fullnode's state](terminology.md#fullnode-state) at a given [tick height](terminology.md#tick-height). It comprises a validator's affirmation that a [block](terminology.md#block) it has received has been verified, as well as a promise not to vote for a conflicting [block](terminology.md#block) \(i.e. [fork](terminology.md#fork)\) for a specific amount of time, the [lockout](terminology.md#lockout) period.
+A [hash](terminology.md#hash) of the [validator's state](terminology.md#bank-state) at a given [tick height](terminology.md#tick-height). It comprises a validator's affirmation that a [block](terminology.md#block) it has received has been verified, as well as a promise not to vote for a conflicting [block](terminology.md#block) \(i.e. [fork](terminology.md#fork)\) for a specific amount of time, the [lockout](terminology.md#lockout) period.
 
 ## light client
 
-A type of [client](terminology.md#client) that can verify it's pointing to a valid [cluster](terminology.md#cluster). It performs more ledger verification than a [thin client](terminology.md#thin-client) and less than a [fullnode](terminology.md#fullnode).
+A type of [client](terminology.md#client) that can verify it's pointing to a valid [cluster](terminology.md#cluster). It performs more ledger verification than a [thin client](terminology.md#thin-client) and less than a [validator](terminology.md#validator).
 
 ## lockout
 
-The duration of time for which a [fullnode](terminology.md#fullnode) is unable to [vote](terminology.md#ledger-vote) on another [fork](terminology.md#fork).
+The duration of time for which a [validator](terminology.md#validator) is unable to [vote](terminology.md#ledger-vote) on another [fork](terminology.md#fork).
 
 ## native token
 
@@ -160,7 +156,7 @@ A computer participating in a [cluster](terminology.md#cluster).
 
 ## node count
 
-The number of [fullnodes](terminology.md#fullnode) participating in a [cluster](terminology.md#cluster).
+The number of [validators](terminology.md#validator) participating in a [cluster](terminology.md#cluster).
 
 ## PoH
 
@@ -200,11 +196,11 @@ A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached 
 
 ## runtime
 
-The component of a [fullnode](terminology.md#fullnode) responsible for [program](terminology.md#program) execution.
+The component of a [validator](terminology.md#validator) responsible for [program](terminology.md#program) execution.
 
 ## shred
 
-A fraction of a [block](terminology.md#block); the smallest unit sent between [fullnodes](terminology.md#fullnode).
+A fraction of a [block](terminology.md#block); the smallest unit sent between [validators](terminology.md#validator).
 
 ## slot
 
@@ -220,7 +216,7 @@ The [native token](terminology.md#native-token) tracked by a [cluster](terminolo
 
 ## stake
 
-Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [fullnode](terminology.md#fullnode) behavior can be proven.
+Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
 
 ## storage proof
 
@@ -276,7 +272,7 @@ A set of [transactions](terminology.md#transaction) that may be executed in para
 
 ## validator
 
-The role of a [fullnode](terminology.md#fullnode) when it is validating the [leader's](terminology.md#leader) latest [entries](terminology.md#entry).
+A full participant in the [cluster](terminology.md#cluster) reponsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
 
 ## VDF
 

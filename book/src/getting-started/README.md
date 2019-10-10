@@ -41,7 +41,7 @@ $ ./multinode-demo/setup.sh
 
 ### Drone
 
-In order for the fullnodes and clients to work, we'll need to spin up a drone to give out some test tokens. The drone delivers Milton Friedman-style "air drops" \(free tokens to requesting clients\) to be used in test transactions.
+In order for the validators and clients to work, we'll need to spin up a drone to give out some test tokens. The drone delivers Milton Friedman-style "air drops" \(free tokens to requesting clients\) to be used in test transactions.
 
 Start the drone with:
 

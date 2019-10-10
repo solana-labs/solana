@@ -4,17 +4,17 @@ It is often useful to allow low resourced clients to participate in a Solana clu
 
 ## A Naive Approach
 
-Validators store the signatures of recently confirmed transactions for a short period of time to ensure that they are not processed more than once. Validators provide a JSON RPC endpoint, which clients can use to query the cluster if a transaction has been recently processed. Validators also provide a PubSub notification, whereby a client registers to be notified when a given signature is observed by the validator. While these two mechanisms allow a client to verify a payment, they are not a proof and rely on completely trusting a fullnode.
+Validators store the signatures of recently confirmed transactions for a short period of time to ensure that they are not processed more than once. Validators provide a JSON RPC endpoint, which clients can use to query the cluster if a transaction has been recently processed. Validators also provide a PubSub notification, whereby a client registers to be notified when a given signature is observed by the validator. While these two mechanisms allow a client to verify a payment, they are not a proof and rely on completely trusting a validator.
 
-We will describe a way to minimize this trust using Merkle Proofs to anchor the fullnode's response in the ledger, allowing the client to confirm on their own that a sufficient number of their preferred validators have confirmed a transaction. Requiring multiple validator attestations further reduces trust in the fullnode, as it increases both the technical and economic difficulty of compromising several other network participants.
+We will describe a way to minimize this trust using Merkle Proofs to anchor the validator's response in the ledger, allowing the client to confirm on their own that a sufficient number of their preferred validators have confirmed a transaction. Requiring multiple validator attestations further reduces trust in the validator, as it increases both the technical and economic difficulty of compromising several other network participants.
 
 ## Light Clients
 
-A 'light client' is a cluster participant that does not itself run a fullnode. This light client would provide a level of security greater than trusting a remote fullnode, without requiring the light client to spend a lot of resources verifying the ledger.
+A 'light client' is a cluster participant that does not itself run a validator. This light client would provide a level of security greater than trusting a remote validator, without requiring the light client to spend a lot of resources verifying the ledger.
 
-Rather than providing transaction signatures directly to a light client, the fullnode instead generates a Merkle Proof from the transaction of interest to the root of a Merkle Tree of all transactions in the including block. This Merkle Root is stored in a ledger entry which is voted on by validators, providing it consensus legitimacy. The additional level of security for a light client depends on an initial canonical set of validators the light client considers to be the stakeholders of the cluster. As that set is changed, the client can update its internal set of known validators with [receipts](simple-payment-and-state-verification.md#receipts). This may become challenging with a large number of delegated stakes.
+Rather than providing transaction signatures directly to a light client, the validator instead generates a Merkle Proof from the transaction of interest to the root of a Merkle Tree of all transactions in the including block. This Merkle Root is stored in a ledger entry which is voted on by validators, providing it consensus legitimacy. The additional level of security for a light client depends on an initial canonical set of validators the light client considers to be the stakeholders of the cluster. As that set is changed, the client can update its internal set of known validators with [receipts](simple-payment-and-state-verification.md#receipts). This may become challenging with a large number of delegated stakes.
 
-Fullnodes themselves may want to use light client APIs for performance reasons. For example, during the initial launch of a fullnode, the fullnode may use a cluster provided checkpoint of the state and verify it with a receipt.
+Validators themselves may want to use light client APIs for performance reasons. For example, during the initial launch of a validator, the validator may use a cluster provided checkpoint of the state and verify it with a receipt.
 
 ## Receipts
 

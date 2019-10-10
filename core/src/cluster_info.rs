@@ -52,7 +52,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
-pub const FULLNODE_PORT_RANGE: PortRange = (8000, 10_000);
+pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
 
 /// The Data plane fanout size, also used as the neighborhood size
 pub const DATA_PLANE_FANOUT: usize = 200;
@@ -1483,7 +1483,7 @@ impl ClusterInfo {
 
     /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
     pub fn gossip_node(id: &Pubkey, gossip_addr: &SocketAddr) -> (ContactInfo, UdpSocket) {
-        let (port, (gossip_socket, _)) = Node::get_gossip_port(gossip_addr, FULLNODE_PORT_RANGE);
+        let (port, (gossip_socket, _)) = Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE);
         let daddr = socketaddr_any!();
 
         let node = ContactInfo::new(
@@ -1503,7 +1503,7 @@ impl ClusterInfo {
 
     /// A Node with invalid ports to spy on gossip via pull requests
     pub fn spy_node(id: &Pubkey) -> (ContactInfo, UdpSocket) {
-        let (_, gossip_socket) = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
+        let (_, gossip_socket) = bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
         let daddr = socketaddr_any!();
 
         let node = ContactInfo::new(
@@ -2089,27 +2089,27 @@ mod tests {
         let node = Node::new_with_external_ip(
             &Pubkey::new_rand(),
             &socketaddr!(ip, 0),
-            FULLNODE_PORT_RANGE,
+            VALIDATOR_PORT_RANGE,
         );
 
-        check_node_sockets(&node, IpAddr::V4(ip), FULLNODE_PORT_RANGE);
+        check_node_sockets(&node, IpAddr::V4(ip), VALIDATOR_PORT_RANGE);
     }
 
     #[test]
     fn new_with_external_ip_test_gossip() {
         let ip = IpAddr::V4(Ipv4Addr::from(0));
         let port = {
-            bind_in_range(FULLNODE_PORT_RANGE)
+            bind_in_range(VALIDATOR_PORT_RANGE)
                 .expect("Failed to bind")
                 .0
         };
         let node = Node::new_with_external_ip(
             &Pubkey::new_rand(),
             &socketaddr!(0, port),
-            FULLNODE_PORT_RANGE,
+            VALIDATOR_PORT_RANGE,
         );
 
-        check_node_sockets(&node, ip, FULLNODE_PORT_RANGE);
+        check_node_sockets(&node, ip, VALIDATOR_PORT_RANGE);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), port);
     }
@@ -2120,15 +2120,15 @@ mod tests {
         let node = Node::new_replicator_with_external_ip(
             &Pubkey::new_rand(),
             &socketaddr!(ip, 0),
-            FULLNODE_PORT_RANGE,
+            VALIDATOR_PORT_RANGE,
         );
 
         let ip = IpAddr::V4(ip);
-        check_socket(&node.sockets.storage.unwrap(), ip, FULLNODE_PORT_RANGE);
-        check_socket(&node.sockets.gossip, ip, FULLNODE_PORT_RANGE);
-        check_socket(&node.sockets.repair, ip, FULLNODE_PORT_RANGE);
+        check_socket(&node.sockets.storage.unwrap(), ip, VALIDATOR_PORT_RANGE);
+        check_socket(&node.sockets.gossip, ip, VALIDATOR_PORT_RANGE);
+        check_socket(&node.sockets.repair, ip, VALIDATOR_PORT_RANGE);
 
-        check_sockets(&node.sockets.tvu, ip, FULLNODE_PORT_RANGE);
+        check_sockets(&node.sockets.tvu, ip, VALIDATOR_PORT_RANGE);
     }
 
     //test that all cluster_info objects only generate signed messages

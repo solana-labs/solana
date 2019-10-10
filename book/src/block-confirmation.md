@@ -17,7 +17,7 @@ height of the block it is voting on. The account stores the 32 highest heights.
 * Only the validator knows how to find its own votes directly.
 
   Other components, such as the one that calculates confirmation time, needs to
-  be baked into the fullnode code. The fullnode code queries the bank for all
+  be baked into the validator code. The validator code queries the bank for all
   accounts owned by the vote program.
 
 * Voting ballots do not contain a PoH hash. The validator is only voting that

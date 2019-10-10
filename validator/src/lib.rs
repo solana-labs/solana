@@ -5,7 +5,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use solana_client::rpc_client::RpcClient;
 use solana_core::bank_forks::SnapshotConfig;
-use solana_core::cluster_info::{Node, FULLNODE_PORT_RANGE};
+use solana_core::cluster_info::{Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
 use solana_core::gossip_service::discover;
 use solana_core::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
@@ -229,7 +229,7 @@ pub fn main() {
     solana_metrics::set_panic_hook("validator");
 
     let default_dynamic_port_range =
-        &format!("{}-{}", FULLNODE_PORT_RANGE.0, FULLNODE_PORT_RANGE.1);
+        &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(crate_version!())

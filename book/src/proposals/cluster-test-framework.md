@@ -12,9 +12,9 @@ Tests should verify a single bug or scenario, and should be written with the lea
 
 Tests are provided an entry point, which is a `contact_info::ContactInfo` structure, and a keypair that has already been funded.
 
-Each node in the cluster is configured with a `fullnode::ValidatorConfig` at boot time. At boot time this configuration specifies any extra cluster configuration required for the test. The cluster should boot with the configuration when it is run in-process or in a data center.
+Each node in the cluster is configured with a `validator::ValidatorConfig` at boot time. At boot time this configuration specifies any extra cluster configuration required for the test. The cluster should boot with the configuration when it is run in-process or in a data center.
 
-Once booted, the test will discover the cluster through a gossip entry point and configure any runtime behaviors via fullnode RPC.
+Once booted, the test will discover the cluster through a gossip entry point and configure any runtime behaviors via validator RPC.
 
 ## Test Interface
 
@@ -43,13 +43,13 @@ let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 
 ## Cluster Configuration
 
-To enable specific scenarios, the cluster needs to be booted with special configurations. These configurations can be captured in `fullnode::ValidatorConfig`.
+To enable specific scenarios, the cluster needs to be booted with special configurations. These configurations can be captured in `validator::ValidatorConfig`.
 
 For example:
 
 ```text
 let mut validator_config = ValidatorConfig::default();
-validator_config.rpc_config.enable_fullnode_exit = true;
+validator_config.rpc_config.enable_validator_exit = true;
 let local = LocalCluster::new_with_config(
                 num_nodes,
                 10_000,
@@ -81,7 +81,7 @@ pub fn test_large_invalid_gossip_nodes(
     let cluster = discover_nodes(&entry_point_info, num_nodes);
 
     // Poison the cluster.
-    let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(entry_point_info.client_facing_addr(), VALIDATOR_PORT_RANGE);
     for _ in 0..(num_nodes * 100) {
         client.gossip_push(
             cluster_info::invalid_contact_info()
@@ -91,7 +91,7 @@ pub fn test_large_invalid_gossip_nodes(
 
     // Force refresh of the active set.
     for node in &cluster {
-        let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         client.gossip_refresh_active_set();
     }
 

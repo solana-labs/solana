@@ -2,7 +2,7 @@
 
 ## Persistent Account Storage
 
-The set of Accounts represent the current computed state of all the transactions that have been processed by a fullnode. Each fullnode needs to maintain this entire set. Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point the changes need to be reversible.
+The set of Accounts represent the current computed state of all the transactions that have been processed by a validator. Each validator needs to maintain this entire set. Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point the changes need to be reversible.
 
 Persistent storage like NVMEs are 20 to 40 times cheaper than DDR. The problem with persistent storage is that write and read performance is much slower than DDR and care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
 

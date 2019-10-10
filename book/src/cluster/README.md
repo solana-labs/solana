@@ -1,10 +1,10 @@
 # A Solana Cluster
 
-A Solana cluster is a set of fullnodes working together to serve client transactions and maintain the integrity of the ledger. Many clusters may coexist. When two clusters share a common genesis block, they attempt to converge. Otherwise, they simply ignore the existence of the other. Transactions sent to the wrong one are quietly rejected. In this chapter, we'll discuss how a cluster is created, how nodes join the cluster, how they share the ledger, how they ensure the ledger is replicated, and how they cope with buggy and malicious nodes.
+A Solana cluster is a set of validators working together to serve client transactions and maintain the integrity of the ledger. Many clusters may coexist. When two clusters share a common genesis block, they attempt to converge. Otherwise, they simply ignore the existence of the other. Transactions sent to the wrong one are quietly rejected. In this chapter, we'll discuss how a cluster is created, how nodes join the cluster, how they share the ledger, how they ensure the ledger is replicated, and how they cope with buggy and malicious nodes.
 
 ## Creating a Cluster
 
-Before starting any fullnodes, one first needs to create a _genesis block_. The block contains entries referencing two public keys, a _mint_ and a _bootstrap leader_. The fullnode holding the bootstrap leader's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis block. The second fullnode then contacts the bootstrap leader to register as a _validator_ or _replicator_. Additional fullnodes then register with any registered member of the cluster.
+Before starting any validators, one first needs to create a _genesis block_. The block contains entries referencing two public keys, a _mint_ and a _bootstrap leader_. The validator holding the bootstrap leader's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis block. The second validator then contacts the bootstrap leader to register as a _validator_ or _replicator_. Additional validators then register with any registered member of the cluster.
 
 A validator receives all entries from the leader and submits votes confirming those entries are valid. After voting, the validator is expected to store those entries until replicator nodes submit proofs that they have stored copies of it. Once the validator observes a sufficient number of copies exist, it deletes its copy.
 
@@ -14,7 +14,7 @@ Validators and replicators enter the cluster via registration messages sent to i
 
 ## Sending Transactions to a Cluster
 
-Clients send transactions to any fullnode's Transaction Processing Unit \(TPU\) port. If the node is in the validator role, it forwards the transaction to the designated leader. If in the leader role, the node bundles incoming transactions, timestamps them creating an _entry_, and pushes them onto the cluster's _data plane_. Once on the data plane, the transactions are validated by validator nodes and replicated by replicator nodes, effectively appending them to the ledger.
+Clients send transactions to any validator's Transaction Processing Unit \(TPU\) port. If the node is in the validator role, it forwards the transaction to the designated leader. If in the leader role, the node bundles incoming transactions, timestamps them creating an _entry_, and pushes them onto the cluster's _data plane_. Once on the data plane, the transactions are validated by validator nodes and replicated by replicator nodes, effectively appending them to the ledger.
 
 ## Confirming Transactions
 

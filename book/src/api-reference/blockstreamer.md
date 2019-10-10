@@ -1,6 +1,6 @@
 # Blockstreamer
 
-Solana supports a node type called an _blockstreamer_. This fullnode variation is intended for applications that need to observe the data plane without participating in transaction validation or ledger replication.
+Solana supports a node type called an _blockstreamer_. This validator variation is intended for applications that need to observe the data plane without participating in transaction validation or ledger replication.
 
 A blockstreamer runs without a vote signer, and can optionally stream ledger entries out to a Unix domain socket as they are processed. The JSON-RPC service still functions as on any other node.
 

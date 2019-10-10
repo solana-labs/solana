@@ -2,7 +2,7 @@ use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
     blocktree::create_new_tmp_ledger,
-    cluster_info::{Node, FULLNODE_PORT_RANGE},
+    cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
     gossip_service::discover_cluster,
@@ -269,7 +269,7 @@ impl LocalCluster {
     pub fn add_validator(&mut self, validator_config: &ValidatorConfig, stake: u64) {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
-            FULLNODE_PORT_RANGE,
+            VALIDATOR_PORT_RANGE,
         );
 
         // Must have enough tokens to fund vote account and set delegate
@@ -350,7 +350,7 @@ impl LocalCluster {
         let storage_pubkey = storage_keypair.pubkey();
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
-            FULLNODE_PORT_RANGE,
+            VALIDATOR_PORT_RANGE,
         );
 
         // Give the replicator some lamports to setup its storage accounts
@@ -397,7 +397,7 @@ impl LocalCluster {
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
-            FULLNODE_PORT_RANGE,
+            VALIDATOR_PORT_RANGE,
         );
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
@@ -574,7 +574,7 @@ impl Cluster for LocalCluster {
         self.fullnode_infos.get(pubkey).map(|f| {
             create_client(
                 f.info.contact_info.client_facing_addr(),
-                FULLNODE_PORT_RANGE,
+                VALIDATOR_PORT_RANGE,
             )
         })
     }
