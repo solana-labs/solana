@@ -21,7 +21,8 @@ use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
 use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
 use crate::packet::{to_shared_blob, Blob, Packet, SharedBlob};
 use crate::repair_service::RepairType;
-use crate::result::Result;
+use crate::result::{Error, Result};
+use crate::sendmmsg::multicast;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
 use crate::weighted_shuffle::{weighted_best, weighted_shuffle};
@@ -737,29 +738,33 @@ impl ClusterInfo {
     /// # Remarks
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
     pub fn retransmit_to(
-        id: &Pubkey,
         peers: &[&ContactInfo],
-        packet: &Packet,
+        packet: &mut Packet,
         slot_leader_pubkey: Option<Pubkey>,
         s: &UdpSocket,
         forwarded: bool,
     ) -> Result<()> {
         trace!("retransmit orders {}", peers.len());
-        let errs: Vec<_> = peers
+        let dests: Vec<_> = peers
             .iter()
             .filter(|v| v.id != slot_leader_pubkey.unwrap_or_default())
-            .map(|v| {
-                let dest = if forwarded { &v.tvu_forwards } else { &v.tvu };
-                debug!("{}: retransmit packet to {} {}", id, v.id, *dest,);
-                s.send_to(&packet.data, dest)
-            })
+            .map(|v| if forwarded { &v.tvu_forwards } else { &v.tvu })
             .collect();
-        for e in errs {
-            if let Err(e) = &e {
-                inc_new_counter_error!("cluster_info-retransmit-send_to_error", 1, 1);
-                error!("retransmit result {:?}", e);
+
+        let mut sent = 0;
+        while sent < dests.len() {
+            match multicast(s, packet, &dests[sent..]) {
+                Ok(n) => sent += n,
+                Err(e) => {
+                    inc_new_counter_error!(
+                        "cluster_info-retransmit-send_to_error",
+                        dests.len() - sent,
+                        1
+                    );
+                    error!("retransmit result {:?}", e);
+                    return Err(Error::IO(e));
+                }
             }
-            e?;
         }
         Ok(())
     }
