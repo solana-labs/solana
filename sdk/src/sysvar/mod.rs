@@ -11,8 +11,29 @@ pub mod slot_hashes;
 pub mod stake_history;
 
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
-    clock::check_id(id) || fees::check_id(id) || rewards::check_id(id) || slot_hashes::check_id(id)
+    clock::check_id(id)
+        || epoch_schedule::check_id(id)
+        || fees::check_id(id)
+        || rent::check_id(id)
+        || rewards::check_id(id)
+        || slot_hashes::check_id(id)
+        || stake_history::check_id(id)
 }
+
+#[macro_export]
+macro_rules! solana_sysvar_id(
+    ($id:ident, $name:expr) => (
+        $crate::solana_name_id!($id, $name);
+
+        #[cfg(test)]
+        #[test]
+        fn test_sysvar_id() {
+            if !$crate::sysvar::is_sysvar_id(&id()) {
+                panic!("sysvar::is_sysvar_id() doesn't know about {}", $name);
+            }
+        }
+    )
+);
 
 /// "Sysvar1111111111111111111111111111111111111"
 ///   owner pubkey for sysvar accounts
