@@ -86,12 +86,19 @@ pub fn process_instruction(
 
     match instruction {
         VestInstruction::InitializeAccount { .. } => {}
-        VestInstruction::SetPayee(payee_pubkey) => {
+        VestInstruction::SetTerminator(new_pubkey) => {
+            verify_signed_account(
+                next_keyed_account(keyed_accounts_iter)?,
+                &vest_state.terminator_pubkey,
+            )?;
+            vest_state.terminator_pubkey = new_pubkey;
+        }
+        VestInstruction::SetPayee(new_pubkey) => {
             verify_signed_account(
                 next_keyed_account(keyed_accounts_iter)?,
                 &vest_state.payee_pubkey,
             )?;
-            vest_state.payee_pubkey = payee_pubkey;
+            vest_state.payee_pubkey = new_pubkey;
         }
         VestInstruction::RedeemTokens => {
             let current_date = verify_date_account(
@@ -207,18 +214,26 @@ mod tests {
         bank_client.send_message(&[&payer_keypair], message)
     }
 
+    fn send_set_terminator(
+        bank_client: &BankClient,
+        contract_pubkey: &Pubkey,
+        old_keypair: &Keypair,
+        new_pubkey: &Pubkey,
+    ) -> Result<Signature> {
+        let instruction =
+            vest_instruction::set_terminator(&contract_pubkey, &old_keypair.pubkey(), &new_pubkey);
+        bank_client.send_instruction(&old_keypair, instruction)
+    }
+
     fn send_set_payee(
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
-        old_payee_keypair: &Keypair,
-        new_payee_pubkey: &Pubkey,
+        old_keypair: &Keypair,
+        new_pubkey: &Pubkey,
     ) -> Result<Signature> {
-        let instruction = vest_instruction::set_payee(
-            &contract_pubkey,
-            &old_payee_keypair.pubkey(),
-            &new_payee_pubkey,
-        );
-        bank_client.send_instruction(&old_payee_keypair, instruction)
+        let instruction =
+            vest_instruction::set_payee(&contract_pubkey, &old_keypair.pubkey(), &new_pubkey);
+        bank_client.send_instruction(&old_keypair, instruction)
     }
 
     fn send_redeem_tokens(
@@ -332,6 +347,75 @@ mod tests {
                 .unwrap(),
             TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
         );
+    }
+    #[test]
+    fn test_set_payee_and_terminator() {
+        let (bank_client, alice_keypair) = create_bank_client(39);
+        let alice_pubkey = alice_keypair.pubkey();
+        let date_pubkey = Pubkey::new_rand();
+        let contract_pubkey = Pubkey::new_rand();
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
+        let start_date = Utc.ymd(2018, 1, 1);
+
+        create_vest_account(
+            &bank_client,
+            &contract_pubkey,
+            &alice_keypair,
+            &alice_pubkey,
+            &bob_pubkey,
+            start_date,
+            &date_pubkey,
+            36,
+        )
+        .unwrap();
+
+        let new_bob_pubkey = Pubkey::new_rand();
+
+        // Ensure some rando can't change the payee.
+        // Transfer bob a token to pay the transaction fee.
+        let mallory_keypair = Keypair::new();
+        bank_client
+            .transfer(1, &alice_keypair, &mallory_keypair.pubkey())
+            .unwrap();
+        send_set_payee(
+            &bank_client,
+            &contract_pubkey,
+            &mallory_keypair,
+            &new_bob_pubkey,
+        )
+        .unwrap_err();
+
+        // Ensure bob can update which account he wants vested funds transfered to.
+        bank_client
+            .transfer(1, &alice_keypair, &bob_pubkey)
+            .unwrap();
+        send_set_payee(
+            &bank_client,
+            &contract_pubkey,
+            &bob_keypair,
+            &new_bob_pubkey,
+        )
+        .unwrap();
+
+        // Ensure the rando can't change the terminator either.
+        let new_alice_pubkey = Pubkey::new_rand();
+        send_set_terminator(
+            &bank_client,
+            &contract_pubkey,
+            &mallory_keypair,
+            &new_alice_pubkey,
+        )
+        .unwrap_err();
+
+        // Ensure alice can update which pubkey she uses to terminate contracts.
+        send_set_terminator(
+            &bank_client,
+            &contract_pubkey,
+            &alice_keypair,
+            &new_alice_pubkey,
+        )
+        .unwrap();
     }
 
     #[test]
