@@ -39,7 +39,7 @@ where
 }
 
 /// Return the next argument or an error
-pub fn next_arg<'a, I>(iter: &mut I) -> Result<I::Item, InstructionError>
+pub fn next_arg<I>(iter: &mut I) -> Result<I::Item, InstructionError>
 where
     I: Iterator,
 {
