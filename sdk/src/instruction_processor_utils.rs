@@ -38,6 +38,14 @@ where
     }
 }
 
+/// Return the next argument or an error
+pub fn next_arg<'a, I>(iter: &mut I) -> Result<I::Item, InstructionError>
+where
+    I: Iterator,
+{
+    iter.next().ok_or(InstructionError::InvalidArgument)
+}
+
 pub trait DecodeError<E> {
     fn decode_custom_error_to_enum(custom: u32) -> Option<E>
     where
