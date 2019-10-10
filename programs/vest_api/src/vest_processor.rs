@@ -188,6 +188,7 @@ mod tests {
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
         payer_keypair: &Keypair,
+        terminator_pubkey: &Pubkey,
         payee_pubkey: &Pubkey,
         start_date: Date<Utc>,
         date_pubkey: &Pubkey,
@@ -195,6 +196,7 @@ mod tests {
     ) -> Result<Signature, TransportError> {
         let instructions = vest_instruction::create_account(
             &payer_keypair.pubkey(),
+            &terminator_pubkey,
             &contract_pubkey,
             &payee_pubkey,
             start_date,
@@ -315,6 +317,7 @@ mod tests {
             &alice_keypair.pubkey(),
             &Pubkey::new_rand(),
             &Pubkey::new_rand(),
+            &Pubkey::new_rand(),
             Utc::now().date(),
             &Pubkey::new_rand(),
             1,
@@ -334,6 +337,7 @@ mod tests {
     #[test]
     fn test_set_payee() {
         let (bank_client, alice_keypair) = create_bank_client(38);
+        let alice_pubkey = alice_keypair.pubkey();
         let date_pubkey = Pubkey::new_rand();
         let contract_pubkey = Pubkey::new_rand();
         let bob_keypair = Keypair::new();
@@ -344,6 +348,7 @@ mod tests {
             &bank_client,
             &contract_pubkey,
             &alice_keypair,
+            &alice_pubkey,
             &bob_pubkey,
             start_date,
             &date_pubkey,
@@ -401,6 +406,7 @@ mod tests {
             &bank_client,
             &contract_pubkey,
             &alice_keypair,
+            &alice_pubkey,
             &bob_pubkey,
             start_date,
             &date_pubkey,
@@ -467,6 +473,7 @@ mod tests {
             &bank_client,
             &contract_pubkey,
             &alice_keypair,
+            &alice_pubkey,
             &bob_pubkey,
             start_date,
             &date_pubkey,
