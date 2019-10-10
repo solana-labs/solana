@@ -2,8 +2,8 @@
 
 use base64;
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use solana_core::blocktree::create_new_ledger;
+use solana_core::poh::compute_hashes_per_tick;
 use solana_genesis::PrimordialAccountDetails;
 use solana_sdk::{
     account::Account,
@@ -11,7 +11,6 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     genesis_block::Builder,
-    hash::{hash, Hash},
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent_calculator::RentCalculator,
@@ -21,15 +20,7 @@ use solana_sdk::{
 use solana_stake_api::stake_state;
 use solana_storage_api::storage_contract;
 use solana_vote_api::vote_state;
-use std::{
-    collections::HashMap,
-    error,
-    fs::File,
-    io,
-    path::PathBuf,
-    str::FromStr,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, error, fs::File, io, path::PathBuf, str::FromStr, time::Duration};
 
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
@@ -377,23 +368,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     match matches.value_of("hashes_per_tick").unwrap() {
         "auto" => {
-            let v = Hash::default();
-            // calculate hash rate with the system under maximum load
-            println!("Running 1 million hashes in parallel on all threads...");
-            let start = Instant::now();
-            (0..sys_info::cpu_num().unwrap())
-                .into_par_iter()
-                .for_each_with(v, |v, _| {
-                    for _ in 0..1_000_000 {
-                        *v = hash(&v.as_ref());
-                    }
-                });
-
-            let end = Instant::now();
-            let elapsed = end.duration_since(start).as_millis();
-
             let hashes_per_tick =
-                (poh_config.target_tick_duration.as_millis() * 1_000_000 / elapsed) as u64;
+                compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
             println!("Hashes per tick: {}", hashes_per_tick);
             poh_config.hashes_per_tick = Some(hashes_per_tick);
         }

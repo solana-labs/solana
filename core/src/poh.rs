@@ -1,5 +1,7 @@
 //! The `Poh` module provides an object for generating a Proof of History.
 use solana_sdk::hash::{hash, hashv, Hash};
+use std::thread::{Builder, JoinHandle};
+use std::time::{Duration, Instant};
 
 pub struct Poh {
     pub hash: Hash,
@@ -78,6 +80,37 @@ impl Poh {
             hash: self.hash,
         })
     }
+}
+
+pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u64 {
+    let num_cpu = sys_info::cpu_num().unwrap();
+    // calculate hash rate with the system under maximum load
+    info!(
+        "Running {} hashes in parallel on all threads...",
+        hashes_sample_size
+    );
+    let threads: Vec<JoinHandle<u64>> = (0..num_cpu)
+        .map(|_| {
+            Builder::new()
+                .name("solana-poh".to_string())
+                .spawn(move || {
+                    let mut v = Hash::default();
+                    let start = Instant::now();
+                    for _ in 0..hashes_sample_size {
+                        v = hash(&v.as_ref());
+                    }
+                    start.elapsed().as_millis() as u64
+                })
+                .unwrap()
+        })
+        .collect();
+
+    let avg_elapsed = (threads
+        .into_iter()
+        .map(|elapsed| elapsed.join().unwrap())
+        .sum::<u64>())
+        / u64::from(num_cpu);
+    duration.as_millis() as u64 * hashes_sample_size / avg_elapsed
 }
 
 #[cfg(test)]
