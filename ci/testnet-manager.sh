@@ -425,7 +425,7 @@ deploy() {
       # shellcheck disable=SC2068
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u --allow-boot-failures \
           --skip-remote-log-retrieval \
           -a demo-testnet-solana-com \
           ${skipCreate:+-e} \
@@ -437,7 +437,7 @@ deploy() {
         # shellcheck disable=SC2068
         NO_VALIDATOR_SANITY=1 \
           ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
-            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
+            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P --allow-boot-failures -x \
             --skip-remote-log-retrieval \
             ${skipCreate:+-e} \
             ${skipStart:+-s} \

@@ -119,7 +119,9 @@ Manage testnet instances
                       zone
    -x               - append to the existing configuration instead of creating a
                       new configuration
-   -f               - Discard validator nodes that didn't bootup successfully
+   --allow-boot-failures
+                    - Discard from config validator nodes that didn't bootup
+                      successfully
 
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
@@ -174,6 +176,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 == --machine-type* || $1 == --custom-cpu* ]]; then # Bypass quoted long args for GPUs
       shortArgs+=("$1")
+      shift
+    elif [[ $1 == --allow-boot-failures ]]; then
+      failOnValidatorBootupFailure=false
       shift
     else
       usage "Unknown long option: $1"
@@ -231,9 +236,6 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
     ;;
   x)
     externalNodes=true
-    ;;
-  f)
-    failOnValidatorBootupFailure=false
     ;;
   *)
     usage "unhandled option: $opt"
