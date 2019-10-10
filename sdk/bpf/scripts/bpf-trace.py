@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # 
 # Prints a BPF program call trace with instruction counts for each call
 #
