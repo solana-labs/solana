@@ -1,0 +1,14 @@
+steps:
+  - command: "system-test/testnet-performance/testnet-automation.sh"
+    label: "COLO performance testnet GPU enabled"
+    env:
+      CLOUD_PROVIDER: "colo"
+      TESTNET_TAG: "colo-edge-perf-gpu-enabled"
+      RAMP_UP_TIME: 60
+      TEST_DURATION: 300
+      NUMBER_OF_VALIDATOR_NODES: 4
+      NUMBER_OF_CLIENT_NODES: 2
+      CLIENT_OPTIONS: "bench-tps=2=--tx_count 80000 --thread-batch-sleep-ms 1000"
+      ADDITIONAL_FLAGS: ""
+    agents:
+      - "queue=colo-deploy"
