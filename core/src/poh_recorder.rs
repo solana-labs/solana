@@ -1,4 +1,4 @@
-//! The `poh_recorder` modul2 provides an object for synchronizing with Proof of History.
+//! The `poh_recorder` module provides an object for synchronizing with Proof of History.
 //! It synchronizes PoH, bank's register_tick and the ledger
 //!
 //! PohRecorder will send ticks or entries to a WorkingBank, if the current range of ticks is
@@ -101,7 +101,7 @@ impl PohRecorder {
     }
 
     pub fn leader_after_slots(&self, slots: u64) -> Option<Pubkey> {
-        let current_slot = (self.tick_height - 1) / self.ticks_per_slot;
+        let current_slot = self.tick_height.saturating_sub(1) / self.ticks_per_slot;
         self.leader_schedule_cache
             .slot_leader_at(current_slot + slots, None)
     }
@@ -141,18 +141,18 @@ impl PohRecorder {
 
         let next_tick_height = self.tick_height + 1;
         let next_leader_slot = (next_tick_height - 1) / self.ticks_per_slot;
-
-        if let Some(target_tick_height) = self.leader_first_tick_height {
-            // we've reached target_tick_height OR poh was reset to run immediately
-            if next_tick_height >= target_tick_height
-                || self.start_tick_height + self.grace_ticks == target_tick_height
+        if let Some(leader_first_tick_height) = self.leader_first_tick_height {
+            let target_tick_height = leader_first_tick_height.saturating_sub(1);
+            // we've approached target_tick_height OR poh was reset to run immediately
+            if self.tick_height >= target_tick_height
+                || self.start_tick_height + self.grace_ticks == leader_first_tick_height
             {
                 assert!(next_tick_height >= self.start_tick_height);
                 let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
 
                 return (
                     true,
-                    next_tick_height.saturating_sub(ideal_target_tick_height),
+                    self.tick_height.saturating_sub(ideal_target_tick_height),
                     next_leader_slot,
                     self.start_slot,
                 );
@@ -169,7 +169,7 @@ impl PohRecorder {
     ) -> (Option<u64>, u64, u64) {
         next_leader_slot
             .map(|(first_slot, last_slot)| {
-                let first_tick_height = first_slot * ticks_per_slot + 1;
+                let leader_first_tick_height = first_slot * ticks_per_slot + 1;
                 let last_tick_height = (last_slot + 1) * ticks_per_slot;
                 let num_slots = last_slot - first_slot + 1;
                 let grace_ticks = cmp::min(
@@ -177,7 +177,7 @@ impl PohRecorder {
                     ticks_per_slot * num_slots / GRACE_TICKS_FACTOR,
                 );
                 (
-                    Some(first_tick_height + grace_ticks),
+                    Some(leader_first_tick_height + grace_ticks),
                     last_tick_height,
                     grace_ticks,
                 )
@@ -290,9 +290,10 @@ impl PohRecorder {
                 working_bank.max_tick_height,
                 working_bank.bank.slot()
             );
-            let current_slot = (working_bank.max_tick_height - 1) / self.ticks_per_slot;
-            self.start_slot = current_slot.saturating_sub(1);
-            self.start_tick_height = current_slot * self.ticks_per_slot + 1;
+            let working_slot =
+                (working_bank.max_tick_height / self.ticks_per_slot).saturating_sub(1);
+            self.start_slot = working_slot;
+            self.start_tick_height = working_slot * self.ticks_per_slot + 1;
             self.clear_bank();
         }
         if send_result.is_err() {
@@ -1028,6 +1029,7 @@ mod tests {
 
     #[test]
     fn test_poh_recorder_reset_start_slot() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree =

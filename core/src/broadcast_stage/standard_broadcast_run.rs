@@ -353,7 +353,7 @@ mod test {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),
             bank: bank0.clone(),
-            last_tick: (ticks.len() - 1) as u64,
+            last_tick_height: (ticks.len() - 1) as u64,
         };
 
         // Step 1: Make an incomplete transmission for slot 0
@@ -391,7 +391,7 @@ mod test {
             entries: ticks.clone(),
             time_elapsed: Duration::new(2, 0),
             bank: bank2.clone(),
-            last_tick: (ticks.len() - 1) as u64,
+            last_tick_height: (ticks.len() - 1) as u64,
         };
         standard_broadcast_run
             .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
@@ -420,7 +420,7 @@ mod test {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),
             bank: bank0.clone(),
-            last_tick: (ticks.len() - 1) as u64,
+            last_tick_height: (ticks.len() - 1) as u64,
         };
 
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair);

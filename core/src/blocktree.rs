@@ -805,7 +805,6 @@ impl Blocktree {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
-    #[cfg(test)]
     pub fn write_entries(
         &self,
         start_slot: u64,
