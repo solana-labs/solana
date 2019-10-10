@@ -86,12 +86,19 @@ pub fn process_instruction(
 
     match instruction {
         VestInstruction::InitializeAccount { .. } => {}
-        VestInstruction::SetPayee(payee_pubkey) => {
+        VestInstruction::SetTerminator(new_pubkey) => {
+            verify_signed_account(
+                next_keyed_account(keyed_accounts_iter)?,
+                &vest_state.terminator_pubkey,
+            )?;
+            vest_state.terminator_pubkey = new_pubkey;
+        }
+        VestInstruction::SetPayee(new_pubkey) => {
             verify_signed_account(
                 next_keyed_account(keyed_accounts_iter)?,
                 &vest_state.payee_pubkey,
             )?;
-            vest_state.payee_pubkey = payee_pubkey;
+            vest_state.payee_pubkey = new_pubkey;
         }
         VestInstruction::RedeemTokens => {
             let current_date = verify_date_account(
@@ -136,7 +143,7 @@ mod tests {
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
     use solana_sdk::transaction::TransactionError;
-    use solana_sdk::transport::TransportError;
+    use solana_sdk::transport::Result;
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
@@ -161,7 +168,7 @@ mod tests {
         date_keypair: &Keypair,
         payer_keypair: &Keypair,
         date: Date<Utc>,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let date_pubkey = date_keypair.pubkey();
 
         let mut instructions =
@@ -177,7 +184,7 @@ mod tests {
         date_keypair: &Keypair,
         payer_keypair: &Keypair,
         date: Date<Utc>,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let date_pubkey = date_keypair.pubkey();
         let instruction = date_instruction::store(&date_pubkey, date);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
@@ -188,13 +195,15 @@ mod tests {
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
         payer_keypair: &Keypair,
+        terminator_pubkey: &Pubkey,
         payee_pubkey: &Pubkey,
         start_date: Date<Utc>,
         date_pubkey: &Pubkey,
         lamports: u64,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let instructions = vest_instruction::create_account(
             &payer_keypair.pubkey(),
+            &terminator_pubkey,
             &contract_pubkey,
             &payee_pubkey,
             start_date,
@@ -205,18 +214,26 @@ mod tests {
         bank_client.send_message(&[&payer_keypair], message)
     }
 
+    fn send_set_terminator(
+        bank_client: &BankClient,
+        contract_pubkey: &Pubkey,
+        old_keypair: &Keypair,
+        new_pubkey: &Pubkey,
+    ) -> Result<Signature> {
+        let instruction =
+            vest_instruction::set_terminator(&contract_pubkey, &old_keypair.pubkey(), &new_pubkey);
+        bank_client.send_instruction(&old_keypair, instruction)
+    }
+
     fn send_set_payee(
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
-        old_payee_keypair: &Keypair,
-        new_payee_pubkey: &Pubkey,
-    ) -> Result<Signature, TransportError> {
-        let instruction = vest_instruction::set_payee(
-            &contract_pubkey,
-            &old_payee_keypair.pubkey(),
-            &new_payee_pubkey,
-        );
-        bank_client.send_instruction(&old_payee_keypair, instruction)
+        old_keypair: &Keypair,
+        new_pubkey: &Pubkey,
+    ) -> Result<Signature> {
+        let instruction =
+            vest_instruction::set_payee(&contract_pubkey, &old_keypair.pubkey(), &new_pubkey);
+        bank_client.send_instruction(&old_keypair, instruction)
     }
 
     fn send_redeem_tokens(
@@ -225,7 +242,7 @@ mod tests {
         payer_keypair: &Keypair,
         payee_pubkey: &Pubkey,
         date_pubkey: &Pubkey,
-    ) -> Result<Signature, TransportError> {
+    ) -> Result<Signature> {
         let instruction =
             vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &payee_pubkey);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
@@ -315,6 +332,7 @@ mod tests {
             &alice_keypair.pubkey(),
             &Pubkey::new_rand(),
             &Pubkey::new_rand(),
+            &Pubkey::new_rand(),
             Utc::now().date(),
             &Pubkey::new_rand(),
             1,
@@ -330,10 +348,10 @@ mod tests {
             TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
         );
     }
-
     #[test]
-    fn test_set_payee() {
-        let (bank_client, alice_keypair) = create_bank_client(38);
+    fn test_set_payee_and_terminator() {
+        let (bank_client, alice_keypair) = create_bank_client(39);
+        let alice_pubkey = alice_keypair.pubkey();
         let date_pubkey = Pubkey::new_rand();
         let contract_pubkey = Pubkey::new_rand();
         let bob_keypair = Keypair::new();
@@ -344,6 +362,77 @@ mod tests {
             &bank_client,
             &contract_pubkey,
             &alice_keypair,
+            &alice_pubkey,
+            &bob_pubkey,
+            start_date,
+            &date_pubkey,
+            36,
+        )
+        .unwrap();
+
+        let new_bob_pubkey = Pubkey::new_rand();
+
+        // Ensure some rando can't change the payee.
+        // Transfer bob a token to pay the transaction fee.
+        let mallory_keypair = Keypair::new();
+        bank_client
+            .transfer(1, &alice_keypair, &mallory_keypair.pubkey())
+            .unwrap();
+        send_set_payee(
+            &bank_client,
+            &contract_pubkey,
+            &mallory_keypair,
+            &new_bob_pubkey,
+        )
+        .unwrap_err();
+
+        // Ensure bob can update which account he wants vested funds transfered to.
+        bank_client
+            .transfer(1, &alice_keypair, &bob_pubkey)
+            .unwrap();
+        send_set_payee(
+            &bank_client,
+            &contract_pubkey,
+            &bob_keypair,
+            &new_bob_pubkey,
+        )
+        .unwrap();
+
+        // Ensure the rando can't change the terminator either.
+        let new_alice_pubkey = Pubkey::new_rand();
+        send_set_terminator(
+            &bank_client,
+            &contract_pubkey,
+            &mallory_keypair,
+            &new_alice_pubkey,
+        )
+        .unwrap_err();
+
+        // Ensure alice can update which pubkey she uses to terminate contracts.
+        send_set_terminator(
+            &bank_client,
+            &contract_pubkey,
+            &alice_keypair,
+            &new_alice_pubkey,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_set_payee() {
+        let (bank_client, alice_keypair) = create_bank_client(38);
+        let alice_pubkey = alice_keypair.pubkey();
+        let date_pubkey = Pubkey::new_rand();
+        let contract_pubkey = Pubkey::new_rand();
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
+        let start_date = Utc.ymd(2018, 1, 1);
+
+        create_vest_account(
+            &bank_client,
+            &contract_pubkey,
+            &alice_keypair,
+            &alice_pubkey,
             &bob_pubkey,
             start_date,
             &date_pubkey,
@@ -401,6 +490,7 @@ mod tests {
             &bank_client,
             &contract_pubkey,
             &alice_keypair,
+            &alice_pubkey,
             &bob_pubkey,
             start_date,
             &date_pubkey,
@@ -467,6 +557,7 @@ mod tests {
             &bank_client,
             &contract_pubkey,
             &alice_keypair,
+            &alice_pubkey,
             &bob_pubkey,
             start_date,
             &date_pubkey,

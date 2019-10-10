@@ -54,6 +54,9 @@ pub enum VestInstruction {
         total_lamports: u64, // The number of lamports to send the payee if the schedule completes
     },
 
+    /// Change the terminator pubkey
+    SetTerminator(Pubkey),
+
     /// Change the payee pubkey
     SetPayee(Pubkey),
 
@@ -88,6 +91,7 @@ fn initialize_account(
 }
 
 pub fn create_account(
+    payer_pubkey: &Pubkey,
     terminator_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
     payee_pubkey: &Pubkey,
@@ -97,13 +101,7 @@ pub fn create_account(
 ) -> Vec<Instruction> {
     let space = serialized_size(&VestState::default()).unwrap();
     vec![
-        system_instruction::create_account(
-            &terminator_pubkey,
-            contract_pubkey,
-            lamports,
-            space,
-            &id(),
-        ),
+        system_instruction::create_account(&payer_pubkey, contract_pubkey, lamports, space, &id()),
         initialize_account(
             terminator_pubkey,
             payee_pubkey,
@@ -115,12 +113,24 @@ pub fn create_account(
     ]
 }
 
-pub fn set_payee(contract: &Pubkey, old_payee: &Pubkey, new_payee: &Pubkey) -> Instruction {
+pub fn set_terminator(contract: &Pubkey, old_pubkey: &Pubkey, new_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*contract, false),
-        AccountMeta::new(*old_payee, true),
+        AccountMeta::new(*old_pubkey, true),
     ];
-    Instruction::new(id(), &VestInstruction::SetPayee(*new_payee), account_metas)
+    Instruction::new(
+        id(),
+        &VestInstruction::SetTerminator(*new_pubkey),
+        account_metas,
+    )
+}
+
+pub fn set_payee(contract: &Pubkey, old_pubkey: &Pubkey, new_pubkey: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*contract, false),
+        AccountMeta::new(*old_pubkey, true),
+    ];
+    Instruction::new(id(), &VestInstruction::SetPayee(*new_pubkey), account_metas)
 }
 
 pub fn redeem_tokens(contract: &Pubkey, date_pubkey: &Pubkey, to: &Pubkey) -> Instruction {
