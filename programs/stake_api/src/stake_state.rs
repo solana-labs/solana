@@ -443,10 +443,9 @@ pub trait StakeAccount {
     fn withdraw(
         &mut self,
         lamports: u64,
-        to: &mut KeyedAccount,
         clock: &sysvar::clock::Clock,
         stake_history: &sysvar::stake_history::StakeHistory,
-        other_signers: &[KeyedAccount],
+        recipient_and_signer_accounts: &mut [KeyedAccount],
     ) -> Result<(), InstructionError>;
 }
 
@@ -575,14 +574,17 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     fn withdraw(
         &mut self,
         lamports: u64,
-        to: &mut KeyedAccount,
         clock: &sysvar::clock::Clock,
         stake_history: &sysvar::stake_history::StakeHistory,
-        other_signers: &[KeyedAccount],
+        recipient_and_signer_accounts: &mut [KeyedAccount],
     ) -> Result<(), InstructionError> {
         let lockup = match self.state()? {
             StakeState::Stake(authorized, lockup, stake) => {
-                authorized.check(self.signer_key(), other_signers, StakeAuthorize::Withdrawer)?;
+                authorized.check(
+                    self.signer_key(),
+                    recipient_and_signer_accounts,
+                    StakeAuthorize::Withdrawer,
+                )?;
                 // if we have a deactivation epoch and we're in cooldown
                 let staked = if clock.epoch >= stake.deactivation_epoch {
                     stake.stake(clock.epoch, Some(stake_history))
@@ -599,7 +601,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 lockup
             }
             StakeState::Initialized(authorized, lockup) => {
-                authorized.check(self.signer_key(), other_signers, StakeAuthorize::Withdrawer)?;
+                authorized.check(
+                    self.signer_key(),
+                    recipient_and_signer_accounts,
+                    StakeAuthorize::Withdrawer,
+                )?;
                 lockup
             }
             StakeState::Uninitialized => {
@@ -610,6 +616,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             }
             _ => return Err(InstructionError::InvalidAccountData),
         };
+        let mut to = &mut recipient_and_signer_accounts[0];
 
         if lockup.slot > clock.slot && lockup.custodian != *to.unsigned_key() {
             return Err(StakeError::LockupInForce.into());
@@ -1205,30 +1212,29 @@ mod tests {
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
-        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         // unsigned keyed account should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 stake_lamports,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
 
         // signed keyed account and uninitialized should work
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 stake_lamports,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Ok(())
         );
@@ -1249,13 +1255,13 @@ mod tests {
 
         // signed keyed account and locked up, more than available should fail
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 stake_lamports + 1,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -1280,13 +1286,13 @@ mod tests {
         stake_account.lamports += 10;
         // withdrawal before deactivate works for rewards amount
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 10,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Ok(())
         );
@@ -1295,13 +1301,13 @@ mod tests {
         stake_account.lamports += 10;
         // withdrawal of rewards fails if not in excess of stake
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 10 + 1,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -1312,25 +1318,25 @@ mod tests {
         clock.epoch += 100;
 
         // Try to withdraw more than what's available
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 stake_lamports + 10 + 1,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Err(InstructionError::InsufficientFunds)
         );
 
         // Try to withdraw all lamports
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 stake_lamports + 10,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Ok(())
         );
@@ -1356,7 +1362,7 @@ mod tests {
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
-        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
@@ -1386,10 +1392,9 @@ mod tests {
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports - stake_lamports + 1,
-                &mut to_keyed_account,
                 &clock,
                 &stake_history,
-                &[],
+                &mut [to_keyed_account],
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -1409,16 +1414,15 @@ mod tests {
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
-        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports,
-                &mut to_keyed_account,
                 &sysvar::clock::Clock::default(),
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -1442,7 +1446,7 @@ mod tests {
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
-        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
@@ -1451,25 +1455,22 @@ mod tests {
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Err(StakeError::LockupInForce.into())
         );
 
         // but we *can* send to the custodian
         let mut custodian_account = Account::new(1, 0, &system_program::id());
-        let mut custodian_keyed_account =
-            KeyedAccount::new(&custodian, false, &mut custodian_account);
+        let custodian_keyed_account = KeyedAccount::new(&custodian, false, &mut custodian_account);
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports,
-                &mut custodian_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [custodian_keyed_account],
             ),
             Ok(())
         );
@@ -1477,14 +1478,14 @@ mod tests {
         stake_keyed_account.account.lamports = total_lamports;
 
         // lockup has expired
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         clock.slot += 1;
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[],
+                &mut [to_keyed_account],
             ),
             Ok(())
         );
@@ -1724,7 +1725,7 @@ mod tests {
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &system_program::id());
-        let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         let clock = sysvar::clock::Clock::default();
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
@@ -1791,14 +1792,25 @@ mod tests {
         let mut staker_account2 = Account::new(1, 0, &system_program::id());
         let staker_keyed_account2 = KeyedAccount::new(&stake_pubkey2, true, &mut staker_account2);
 
-        // Test an action by the currently authorized withdrawer
+        // Test that withdrawal to account fails without authorized withdrawer
         assert_eq!(
             stake_keyed_account.withdraw(
                 stake_lamports,
-                &mut to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &[staker_keyed_account2],
+                &mut [to_keyed_account],
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // Test a successful action by the currently authorized withdrawer
+        let to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake_lamports,
+                &clock,
+                &StakeHistory::default(),
+                &mut [to_keyed_account, staker_keyed_account2],
             ),
             Ok(())
         );
