@@ -1822,10 +1822,16 @@ mod tests {
     #[test]
     fn test_tallied_credit_debit_rent() {
         let (mut genesis_block, _mint_keypair) = create_genesis_block(10);
-        let key1 = Pubkey::new_rand();
-        let key2 = Pubkey::new_rand();
-        let rich_keypair1: Keypair = Keypair::new();
-        let rich_keypair2: Keypair = Keypair::new();
+        let credit_only_key1 = Pubkey::new_rand();
+        let credit_only_key2 = Pubkey::new_rand();
+        let credit_debit_keypair1: Keypair = Keypair::new();
+        let credit_debit_keypair2: Keypair = Keypair::new();
+
+        let rent_overdue_credit_only_key1 = Pubkey::new_rand();
+        let rent_overdue_credit_only_key2 = Pubkey::new_rand();
+        let rent_overdue_credit_debit_keypair1 = Keypair::new();
+        let rent_overdue_credit_debit_keypair2 = Keypair::new();
+
         genesis_block.rent_calculator = RentCalculator {
             lamports_per_byte_year: 1,
             exemption_threshold: 21.0,
@@ -1845,14 +1851,37 @@ mod tests {
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
         // Initialize credit-debit and credit only accounts
-        let rich_account1 = Account::new(20, 1, &Pubkey::default());
-        let rich_account2 = Account::new(20, 1, &Pubkey::default());
-        let account1 = Account::new(3, 1, &Pubkey::default());
-        let account2 = Account::new(3, 1, &Pubkey::default());
-        bank.store_account(&rich_keypair1.pubkey(), &rich_account1);
-        bank.store_account(&rich_keypair2.pubkey(), &rich_account2);
-        bank.store_account(&key1, &account1);
-        bank.store_account(&key2, &account2);
+        let credit_debit_account1 = Account::new(20, 1, &Pubkey::default());
+        let credit_debit_account2 = Account::new(20, 1, &Pubkey::default());
+        let credit_only_account1 = Account::new(3, 1, &Pubkey::default());
+        let credit_only_account2 = Account::new(3, 1, &Pubkey::default());
+
+        bank.store_account(&credit_debit_keypair1.pubkey(), &credit_debit_account1);
+        bank.store_account(&credit_debit_keypair2.pubkey(), &credit_debit_account2);
+        bank.store_account(&credit_only_key1, &credit_only_account1);
+        bank.store_account(&credit_only_key2, &credit_only_account2);
+
+        let rent_overdue_credit_debit_account1 = Account::new(2, 1, &Pubkey::default());
+        let rent_overdue_credit_debit_account2 = Account::new(2, 1, &Pubkey::default());
+        let rent_overdue_credit_only_account1 = Account::new(1, 1, &Pubkey::default());
+        let rent_overdue_credit_only_account2 = Account::new(1, 1, &Pubkey::default());
+
+        bank.store_account(
+            &rent_overdue_credit_debit_keypair1.pubkey(),
+            &rent_overdue_credit_debit_account1,
+        );
+        bank.store_account(
+            &rent_overdue_credit_debit_keypair2.pubkey(),
+            &rent_overdue_credit_debit_account2,
+        );
+        bank.store_account(
+            &rent_overdue_credit_only_key1,
+            &rent_overdue_credit_only_account1,
+        );
+        bank.store_account(
+            &rent_overdue_credit_only_key2,
+            &rent_overdue_credit_only_account2,
+        );
 
         // Make native instruction loader rent exempt
         let system_program_id = solana_system_program().1;
@@ -1861,36 +1890,86 @@ mod tests {
             bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
         bank.store_account(&system_program_id, &system_program_account);
 
-        let t1 = system_transaction::transfer(&rich_keypair1, &key1, 1, genesis_block.hash());
-        let t2 = system_transaction::transfer(&rich_keypair2, &key2, 1, genesis_block.hash());
-        let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
+        let t1 = system_transaction::transfer(
+            &credit_debit_keypair1,
+            &rent_overdue_credit_only_key1,
+            1,
+            genesis_block.hash(),
+        );
+        let t2 = system_transaction::transfer(
+            &rent_overdue_credit_debit_keypair1,
+            &credit_only_key1,
+            1,
+            genesis_block.hash(),
+        );
+        let t3 = system_transaction::transfer(
+            &credit_debit_keypair2,
+            &credit_only_key2,
+            1,
+            genesis_block.hash(),
+        );
+        let t4 = system_transaction::transfer(
+            &rent_overdue_credit_debit_keypair2,
+            &rent_overdue_credit_only_key2,
+            1,
+            genesis_block.hash(),
+        );
+        let res = bank.process_transactions(&vec![t1.clone(), t2.clone(), t3.clone(), t4.clone()]);
 
-        // Both txs should be successful
-        assert_eq!(res.len(), 2);
+        assert_eq!(res.len(), 4);
         assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Ok(()));
+        assert_eq!(res[1], Err(TransactionError::AccountNotFound));
+        assert_eq!(res[2], Ok(()));
+        assert_eq!(res[3], Err(TransactionError::AccountNotFound));
 
-        // We haven't yet deducted rent + credited in credit only account
-        assert_eq!(bank.get_balance(&key1), 3);
-        assert_eq!(bank.get_balance(&key2), 3);
+        // We haven't yet made any changes to credit only accounts
+        assert_eq!(bank.get_balance(&credit_only_key1), 3);
+        assert_eq!(bank.get_balance(&credit_only_key2), 3);
+        assert_eq!(bank.get_balance(&rent_overdue_credit_only_key1), 1);
+        assert_eq!(bank.get_balance(&rent_overdue_credit_only_key2), 1);
 
         // Credit-debit account's rent is already deducted
         // 20 - 1(Transferred) - 2(Rent)
-        assert_eq!(bank.get_balance(&rich_keypair1.pubkey()), 17);
-        assert_eq!(bank.get_balance(&rich_keypair2.pubkey()), 17);
+        assert_eq!(bank.get_balance(&credit_debit_keypair1.pubkey()), 17);
+        assert_eq!(bank.get_balance(&credit_debit_keypair2.pubkey()), 17);
+        // Since this credit-debit accounts are unable to pay rent, load_tx_account failed, as they are
+        // the signer account. No change was done.
+        assert_eq!(
+            bank.get_balance(&rent_overdue_credit_debit_keypair1.pubkey()),
+            2
+        );
+        assert_eq!(
+            bank.get_balance(&rent_overdue_credit_debit_keypair2.pubkey()),
+            2
+        );
 
         // Credit-debit account's rent is stored in `tallied_credit_debit_rent`
+        // Rent deducted is: 2+2
         assert_eq!(bank.get_tallied_credit_debit_rent(), 4);
 
-        bank.commit_credits_and_rents();
+        // Rent deducted is: 2+1
+        assert_eq!(bank.commit_credits_and_rents(), 3);
 
+        // No rent deducted because tx failed
+        assert_eq!(bank.get_balance(&credit_only_key1), 3);
         // Now, we have credited credits and debited rent
         // 3 + 1(Transferred) - 2(Rent)
-        assert_eq!(bank.get_balance(&key1), 2);
-        assert_eq!(bank.get_balance(&key2), 2);
+        assert_eq!(bank.get_balance(&credit_only_key2), 2);
 
-        assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
-        assert_eq!(bank.get_signature_status(&t2.signatures[0]), Some(Ok(())));
+        // Since we were unable to pay rent, the account was reset, rent got deducted.
+        // And credit went to that overwritten account
+        // Rent deducted: 1
+        assert_eq!(bank.get_balance(&rent_overdue_credit_only_key1), 1);
+        assert_eq!(
+            bank.get_account(&rent_overdue_credit_only_key1)
+                .unwrap()
+                .data
+                .len(),
+            0
+        );
+
+        // No rent got deducted as, we were unable to load accouns (load_tx_accounts errored out)
+        assert_eq!(bank.get_balance(&rent_overdue_credit_only_key2), 1);
     }
 
     #[test]
