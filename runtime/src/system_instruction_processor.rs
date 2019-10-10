@@ -133,6 +133,7 @@ pub fn process_instruction(
         trace!("process_instruction: {:?}", instruction);
         trace!("keyed_accounts: {:?}", keyed_accounts);
 
+        #[allow(clippy::match_ref_pats)]
         match instruction {
             SystemInstruction::CreateAccount {
                 lamports,
@@ -155,7 +156,6 @@ pub fn process_instruction(
             ),
         }
     } else {
-        dbg!("foo!");
         debug!("Invalid instruction data: {:?}", data);
         Err(InstructionError::InvalidInstructionData)
     }
