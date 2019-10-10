@@ -96,6 +96,10 @@ pub fn process_instruction(
         trace!("process_instruction: {:?}", instruction);
         trace!("keyed_accounts: {:?}", keyed_accounts);
 
+        if keyed_accounts.is_empty() {
+            debug!("Invalid instruction data: {:?}", data);
+            return Err(InstructionError::NotEnoughAccountKeys);
+        }
         // All system instructions require that accounts_keys[0] be a signer
         if keyed_accounts[FROM_ACCOUNT_INDEX].signer_key().is_none() {
             debug!("account[from] is unsigned");
@@ -107,14 +111,19 @@ pub fn process_instruction(
                 lamports,
                 space,
                 program_id,
-            } => create_system_account(keyed_accounts, lamports, space, &program_id),
+            } if keyed_accounts.len() >= 2 => {
+                create_system_account(keyed_accounts, lamports, space, &program_id)
+            }
             SystemInstruction::Assign { program_id } => {
                 if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
                     return Err(InstructionError::IncorrectProgramId);
                 }
                 assign_account_to_program(keyed_accounts, &program_id)
             }
-            SystemInstruction::Transfer { lamports } => transfer_lamports(keyed_accounts, lamports),
+            SystemInstruction::Transfer { lamports } if keyed_accounts.len() >= 2 => {
+                transfer_lamports(keyed_accounts, lamports)
+            }
+            _ => return Err(InstructionError::NotEnoughAccountKeys),
         }
         .map_err(|e| InstructionError::CustomError(e as u32))
     } else {
@@ -299,6 +308,29 @@ mod tests {
         let result = process_instruction(&system_program::id(), &mut keyed_accounts, &data);
         assert_eq!(result, Err(InstructionError::IncorrectProgramId));
         assert_eq!(from_account.owner, new_program_owner);
+    }
+
+    #[test]
+    fn test_process_bogus_instruction() {
+        // Attempt to assign with no accounts
+        let instruction = SystemInstruction::Assign {
+            program_id: Pubkey::new_rand(),
+        };
+        let data = serialize(&instruction).unwrap();
+        let result = process_instruction(&system_program::id(), &mut [], &data);
+        assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
+
+        let from = Pubkey::new_rand();
+        let mut from_account = Account::new(100, 0, &system_program::id());
+        // Attempt to transfer with no destination
+        let instruction = SystemInstruction::Transfer { lamports: 0 };
+        let data = serialize(&instruction).unwrap();
+        let result = process_instruction(
+            &system_program::id(),
+            &mut [KeyedAccount::new(&from, true, &mut from_account)],
+            &data,
+        );
+        assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
     }
 
     #[test]
