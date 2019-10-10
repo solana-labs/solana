@@ -60,8 +60,11 @@ fn mmsghdr_for_packet(
 #[cfg(target_os = "linux")]
 pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
+    use std::mem;
     use std::os::unix::io::AsRawFd;
 
+    // The vectors are allocated with capacity, as later code inserts elements
+    // at specific indices, and uses the address of the vector index in hdrs
     let mut iovs: Vec<iovec> = Vec::with_capacity(packets.len());
     let mut addr_in: Vec<sockaddr_in> = Vec::with_capacity(packets.len());
     let mut addr_in6: Vec<sockaddr_in6> = Vec::with_capacity(packets.len());
@@ -115,8 +118,11 @@ pub fn multicast(
     dests: &[&SocketAddr],
 ) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
+    use std::mem;
     use std::os::unix::io::AsRawFd;
 
+    // The vectors are allocated with capacity, as later code inserts elements
+    // at specific indices, and uses the address of the vector index in hdrs
     let mut iovs: Vec<iovec> = Vec::with_capacity(dests.len());
     let mut addr_in: Vec<sockaddr_in> = Vec::with_capacity(dests.len());
     let mut addr_in6: Vec<sockaddr_in6> = Vec::with_capacity(dests.len());
