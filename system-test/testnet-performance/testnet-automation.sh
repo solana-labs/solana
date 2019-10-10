@@ -18,8 +18,7 @@ function collect_logs {
   net/net.sh logs
   for logfile in net/log/* ; do
     (
-      cd net/log
-      new_log="$TESTNET_TAG"_"$NUMBER_OF_VALIDATOR_NODES"-nodes_"$(basename "$logfile")"
+      new_log=net/log/"$TESTNET_TAG"_"$NUMBER_OF_VALIDATOR_NODES"-nodes_"$(basename "$logfile")"
       cp "$logfile" "$new_log"
       upload-ci-artifact "$new_log"
     )
