@@ -38,6 +38,11 @@ where
     }
 }
 
+/// Return the next KeyedAccount or a NotEnoughAccountKeys instruction error
+pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, InstructionError> {
+    iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
+}
+
 pub trait DecodeError<E> {
     fn decode_custom_error_to_enum(custom: u32) -> Option<E>
     where

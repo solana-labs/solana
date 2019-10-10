@@ -10,6 +10,7 @@ use solana_config_api::get_config_data;
 use solana_sdk::{
     account::{Account, KeyedAccount},
     instruction::InstructionError,
+    instruction_processor_utils::next_keyed_account,
     pubkey::Pubkey,
 };
 
@@ -58,6 +59,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
+    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
     let instruction = deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)?;
 
     match instruction {
@@ -68,10 +70,7 @@ pub fn process_instruction(
             date_pubkey,
             total_lamports,
         } => {
-            let contract_keyed_account = match keyed_accounts {
-                [ka0] => ka0,
-                _ => return Err(InstructionError::InvalidArgument),
-            };
+            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
             let contract_account = &mut contract_keyed_account.account;
             let vest_state = VestState {
                 terminator_pubkey,
@@ -84,10 +83,8 @@ pub fn process_instruction(
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::SetPayee(payee_pubkey) => {
-            let (contract_keyed_account, old_payee_keyed_account) = match keyed_accounts {
-                [ka0, ka1] => (ka0, ka1),
-                _ => return Err(InstructionError::InvalidArgument),
-            };
+            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let old_payee_keyed_account = next_keyed_account(keyed_accounts_iter)?;
             let contract_account = &mut contract_keyed_account.account;
             let mut vest_state = VestState::deserialize(&contract_account.data)?;
             parse_signed_account(old_payee_keyed_account, &vest_state.payee_pubkey)?;
@@ -95,11 +92,9 @@ pub fn process_instruction(
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::RedeemTokens => {
-            let (contract_keyed_account, date_keyed_account, payee_keyed_account) =
-                match keyed_accounts {
-                    [ka0, ka1, ka2] => (ka0, ka1, ka2),
-                    _ => return Err(InstructionError::InvalidArgument),
-                };
+            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let date_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let payee_keyed_account = next_keyed_account(keyed_accounts_iter)?;
             let contract_account = &mut contract_keyed_account.account;
             let mut vest_state = VestState::deserialize(&contract_account.data)?;
             let current_date = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
@@ -109,12 +104,9 @@ pub fn process_instruction(
             vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::Terminate => {
-            let (contract_keyed_account, terminator_keyed_account, payee_keyed_account) =
-                match keyed_accounts {
-                    [ka0, ka1] => (ka0, ka1, None),
-                    [ka0, ka1, ka2] => (ka0, ka1, Some(ka2)),
-                    _ => return Err(InstructionError::InvalidArgument),
-                };
+            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let terminator_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let payee_keyed_account = keyed_accounts_iter.next();
             let contract_account = &mut contract_keyed_account.account;
             let mut vest_state = VestState::deserialize(&contract_account.data)?;
             let terminator_account =
@@ -335,7 +327,7 @@ mod tests {
                 .send_message(&[&alice_keypair], message)
                 .unwrap_err()
                 .unwrap(),
-            TransactionError::InstructionError(1, InstructionError::InvalidArgument)
+            TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
         );
     }
 

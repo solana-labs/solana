@@ -67,6 +67,9 @@ pub enum InstructionError {
     /// Rent_epoch account changed, but shouldn't have
     RentEpochModified,
 
+    /// The instruction expected additional account keys
+    NotEnoughAccountKeys,
+
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is represented
     /// as or serialized to a u32 integer.
