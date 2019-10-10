@@ -237,15 +237,14 @@ pub fn withdraw(
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(
-        stake_pubkey,
-        authorized_pubkey,
-        &[
-            AccountMeta::new_credit_only(*to_pubkey, false),
-            AccountMeta::new_credit_only(sysvar::clock::id(), false),
-            AccountMeta::new_credit_only(sysvar::stake_history::id(), false),
-        ],
-    );
+    let mut accounts = vec![
+        AccountMeta::new_credit_only(sysvar::clock::id(), false),
+        AccountMeta::new_credit_only(sysvar::stake_history::id(), false),
+    ];
+    if to_pubkey != authorized_pubkey {
+        accounts.push(AccountMeta::new_credit_only(*to_pubkey, false));
+    }
+    let account_metas = metas_for_authorized_signer(stake_pubkey, authorized_pubkey, &accounts);
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
 
@@ -320,15 +319,12 @@ pub fn process_instruction(
             if rest.len() < 3 {
                 return Err(InstructionError::InvalidInstructionData);
             }
-            let (to, rest) = &mut rest.split_at_mut(1);
-            let mut to = &mut to[0];
 
             me.withdraw(
                 lamports,
-                &mut to,
                 &sysvar::clock::from_keyed_account(&rest[0])?,
                 &sysvar::stake_history::from_keyed_account(&rest[1])?,
-                &rest[2..],
+                &mut rest[2..],
             )
         }
         StakeInstruction::Deactivate => {
@@ -399,7 +395,7 @@ mod tests {
             process_instruction(&withdraw(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                &Pubkey::default(),
+                &Pubkey::new_rand(),
                 100
             )),
             Err(InstructionError::InvalidAccountData),
