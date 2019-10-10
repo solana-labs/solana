@@ -3,7 +3,10 @@ use clap::{
     crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
 use solana_sdk::pubkey::write_pubkey;
-use solana_sdk::signature::{keypair_from_seed, read_keypair, write_keypair, KeypairUtil};
+use solana_sdk::signature::{
+    keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file, Keypair,
+    KeypairUtil,
+};
 use std::error;
 use std::path::Path;
 use std::process::exit;
@@ -16,6 +19,21 @@ fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
         eprintln!("Refusing to overwrite {} without --force flag", outfile);
         exit(1);
     }
+}
+
+fn output_keypair(
+    keypair: &Keypair,
+    outfile: &str,
+    source: &str,
+) -> Result<(), Box<dyn error::Error>> {
+    if outfile == "-" {
+        let mut stdout = std::io::stdout();
+        write_keypair(&keypair, &mut stdout)?;
+    } else {
+        write_keypair_file(&keypair, outfile)?;
+        eprintln!("Wrote {} keypair to {}", source, outfile);
+    }
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -45,7 +63,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::with_name("silent")
                         .short("s")
                         .long("silent")
-                        .help("Do not display mnemonic phrase"),
+                        .help("Do not display mnemonic phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 ),
         )
         .subcommand(
@@ -104,7 +122,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 path.extend(&[".config", "solana", "id.json"]);
                 path.to_str().unwrap()
             };
-            let keypair = read_keypair(infile)?;
+            let keypair = if infile == "-" {
+                let mut stdin = std::io::stdin();
+                read_keypair(&mut stdin)?
+            } else {
+                read_keypair_file(infile)?
+            };
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
@@ -132,17 +155,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            let serialized_keypair = write_keypair(&keypair, outfile)?;
-            if outfile == "-" {
-                println!("{}", serialized_keypair);
-            } else {
-                println!("Wrote new keypair to {}", outfile);
-            }
+            output_keypair(&keypair, &outfile, "new")?;
 
             let silent = matches.is_present("silent");
             if !silent {
                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-                println!(
+                eprintln!(
                     "{}\nSave this mnemonic phrase to recover your new keypair:\n{}\n{}",
                     &divider, phrase, &divider
                 );
@@ -161,17 +179,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(&outfile, &matches);
             }
 
-            let phrase = rpassword::prompt_password_stdout("Mnemonic recovery phrase: ").unwrap();
+            let phrase = rpassword::prompt_password_stderr("Mnemonic recovery phrase: ").unwrap();
             let mnemonic = Mnemonic::from_phrase(phrase.trim(), Language::English)?;
             let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            let serialized_keypair = write_keypair(&keypair, outfile)?;
-            if outfile == "-" {
-                println!("{}", serialized_keypair);
-            } else {
-                println!("Wrote recovered keypair to {}", outfile);
-            }
+            output_keypair(&keypair, &outfile, "recovered")?;
         }
         _ => unreachable!(),
     }

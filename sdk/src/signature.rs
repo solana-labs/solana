@@ -12,7 +12,7 @@ use std::borrow::Cow;
 use std::error;
 use std::fmt;
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::mem;
 use std::path::Path;
 use std::str::FromStr;
@@ -125,26 +125,39 @@ impl KeypairUtil for Keypair {
     }
 }
 
-pub fn read_keypair(path: &str) -> Result<Keypair, Box<dyn error::Error>> {
-    let file = File::open(path.to_string())?;
-    let bytes: Vec<u8> = serde_json::from_reader(file)?;
+pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::Error>> {
+    let bytes: Vec<u8> = serde_json::from_reader(reader)?;
     let keypair = Keypair::from_bytes(&bytes)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     Ok(keypair)
 }
 
-pub fn write_keypair(keypair: &Keypair, outfile: &str) -> Result<String, Box<dyn error::Error>> {
+pub fn read_keypair_file(path: &str) -> Result<Keypair, Box<dyn error::Error>> {
+    assert!(path != "-");
+    let mut file = File::open(path.to_string())?;
+    read_keypair(&mut file)
+}
+
+pub fn write_keypair<W: Write>(
+    keypair: &Keypair,
+    writer: &mut W,
+) -> Result<String, Box<dyn error::Error>> {
     let keypair_bytes = keypair.to_bytes();
     let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
-
-    if outfile != "-" {
-        if let Some(outdir) = Path::new(outfile).parent() {
-            fs::create_dir_all(outdir)?;
-        }
-        let mut f = File::create(outfile)?;
-        f.write_all(&serialized.clone().into_bytes())?;
-    }
+    writer.write_all(&serialized.clone().into_bytes())?;
     Ok(serialized)
+}
+
+pub fn write_keypair_file(
+    keypair: &Keypair,
+    outfile: &str,
+) -> Result<String, Box<dyn error::Error>> {
+    assert!(outfile != "-");
+    if let Some(outdir) = Path::new(outfile).parent() {
+        fs::create_dir_all(outdir)?;
+    }
+    let mut f = File::create(outfile)?;
+    write_keypair(keypair, &mut f)
 }
 
 pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> {
@@ -159,7 +172,7 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> 
 }
 
 pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<dyn error::Error>> {
-    write_keypair(&Keypair::new(), outfile)
+    write_keypair_file(&Keypair::new(), outfile)
 }
 
 #[cfg(test)]
@@ -183,10 +196,10 @@ mod tests {
         assert!(Path::new(&outfile).exists());
         assert_eq!(
             keypair_vec,
-            read_keypair(&outfile).unwrap().to_bytes().to_vec()
+            read_keypair_file(&outfile).unwrap().to_bytes().to_vec()
         );
         assert_eq!(
-            read_keypair(&outfile).unwrap().pubkey().as_ref().len(),
+            read_keypair_file(&outfile).unwrap().pubkey().as_ref().len(),
             mem::size_of::<Pubkey>()
         );
         fs::remove_file(&outfile).unwrap();

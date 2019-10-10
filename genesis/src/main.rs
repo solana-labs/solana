@@ -14,7 +14,7 @@ use solana_sdk::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent_calculator::RentCalculator,
-    signature::{read_keypair, Keypair, KeypairUtil},
+    signature::{read_keypair_file, Keypair, KeypairUtil},
     system_program, timing,
 };
 use solana_stake_api::stake_state;
@@ -298,11 +298,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_stake_lamports =
         value_t_or_exit!(matches, "bootstrap_leader_stake_lamports", u64);
 
-    let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
-    let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
-    let bootstrap_stake_keypair = read_keypair(bootstrap_stake_keypair_file)?;
-    let bootstrap_storage_keypair = read_keypair(bootstrap_storage_keypair_file)?;
-    let mint_keypair = read_keypair(mint_keypair_file)?;
+    let bootstrap_leader_keypair = read_keypair_file(bootstrap_leader_keypair_file)?;
+    let bootstrap_vote_keypair = read_keypair_file(bootstrap_vote_keypair_file)?;
+    let bootstrap_stake_keypair = read_keypair_file(bootstrap_stake_keypair_file)?;
+    let bootstrap_storage_keypair = read_keypair_file(bootstrap_storage_keypair_file)?;
+    let mint_keypair = read_keypair_file(mint_keypair_file)?;
 
     let vote_account = vote_state::create_account(
         &bootstrap_vote_keypair.pubkey(),

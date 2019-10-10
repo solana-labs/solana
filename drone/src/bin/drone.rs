@@ -1,7 +1,7 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
 use solana_drone::drone::{run_drone, Drone, DRONE_PORT};
 use solana_drone::socketaddr;
-use solana_sdk::signature::read_keypair;
+use solana_sdk::signature::read_keypair_file;
 use std::error;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
@@ -38,8 +38,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .get_matches();
 
-    let mint_keypair =
-        read_keypair(matches.value_of("keypair").unwrap()).expect("failed to read client keypair");
+    let mint_keypair = read_keypair_file(matches.value_of("keypair").unwrap())
+        .expect("failed to read client keypair");
 
     let time_slice: Option<u64>;
     if let Some(secs) = matches.value_of("slice") {
