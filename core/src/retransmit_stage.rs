@@ -67,8 +67,8 @@ fn retransmit(
     let me = cluster_info.read().unwrap().my_data().clone();
     let mut retransmit_total = 0;
     let mut compute_turbine_peers_total = 0;
-    for packets in packet_v {
-        for packet in &packets.packets {
+    for mut packets in packet_v {
+        for packet in packets.packets.iter_mut() {
             // skip repair packets
             if packet.meta.repair {
                 total_packets -= 1;
@@ -100,10 +100,10 @@ fn retransmit(
                 leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
             let mut retransmit_time = Measure::start("retransmit_to");
             if !packet.meta.forward {
-                ClusterInfo::retransmit_to(&me.id, &neighbors, packet, leader, sock, true)?;
-                ClusterInfo::retransmit_to(&me.id, &children, packet, leader, sock, false)?;
+                ClusterInfo::retransmit_to(&neighbors, packet, leader, sock, true)?;
+                ClusterInfo::retransmit_to(&children, packet, leader, sock, false)?;
             } else {
-                ClusterInfo::retransmit_to(&me.id, &children, packet, leader, sock, true)?;
+                ClusterInfo::retransmit_to(&children, packet, leader, sock, true)?;
             }
             retransmit_time.stop();
             retransmit_total += retransmit_time.as_ms();
