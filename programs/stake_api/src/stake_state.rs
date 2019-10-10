@@ -445,7 +445,7 @@ pub trait StakeAccount {
         lamports: u64,
         clock: &sysvar::clock::Clock,
         stake_history: &sysvar::stake_history::StakeHistory,
-        other_signers: &mut [KeyedAccount],
+        recipient_and_signer_accounts: &mut [KeyedAccount],
     ) -> Result<(), InstructionError>;
 }
 
@@ -576,11 +576,15 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         lamports: u64,
         clock: &sysvar::clock::Clock,
         stake_history: &sysvar::stake_history::StakeHistory,
-        other_signers: &mut [KeyedAccount],
+        recipient_and_signer_accounts: &mut [KeyedAccount],
     ) -> Result<(), InstructionError> {
         let lockup = match self.state()? {
             StakeState::Stake(authorized, lockup, stake) => {
-                authorized.check(self.signer_key(), other_signers, StakeAuthorize::Withdrawer)?;
+                authorized.check(
+                    self.signer_key(),
+                    recipient_and_signer_accounts,
+                    StakeAuthorize::Withdrawer,
+                )?;
                 // if we have a deactivation epoch and we're in cooldown
                 let staked = if clock.epoch >= stake.deactivation_epoch {
                     stake.stake(clock.epoch, Some(stake_history))
@@ -597,7 +601,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 lockup
             }
             StakeState::Initialized(authorized, lockup) => {
-                authorized.check(self.signer_key(), other_signers, StakeAuthorize::Withdrawer)?;
+                authorized.check(
+                    self.signer_key(),
+                    recipient_and_signer_accounts,
+                    StakeAuthorize::Withdrawer,
+                )?;
                 lockup
             }
             StakeState::Uninitialized => {
@@ -608,7 +616,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             }
             _ => return Err(InstructionError::InvalidAccountData),
         };
-        let mut to = &mut other_signers[0];
+        let mut to = &mut recipient_and_signer_accounts[0];
 
         if lockup.slot > clock.slot && lockup.custodian != *to.unsigned_key() {
             return Err(StakeError::LockupInForce.into());
