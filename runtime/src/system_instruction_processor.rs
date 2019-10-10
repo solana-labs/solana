@@ -98,7 +98,7 @@ pub fn process_instruction(
 
         if keyed_accounts.is_empty() {
             debug!("Invalid instruction data: {:?}", data);
-            return Err(InstructionError::InvalidInstructionData);
+            return Err(InstructionError::NotEnoughAccountKeys);
         }
         // All system instructions require that accounts_keys[0] be a signer
         if keyed_accounts[FROM_ACCOUNT_INDEX].signer_key().is_none() {
@@ -123,7 +123,7 @@ pub fn process_instruction(
             SystemInstruction::Transfer { lamports } if keyed_accounts.len() >= 2 => {
                 transfer_lamports(keyed_accounts, lamports)
             }
-            _ => return Err(InstructionError::InvalidInstructionData),
+            _ => return Err(InstructionError::NotEnoughAccountKeys),
         }
         .map_err(|e| InstructionError::CustomError(e as u32))
     } else {
@@ -318,7 +318,7 @@ mod tests {
         };
         let data = serialize(&instruction).unwrap();
         let result = process_instruction(&system_program::id(), &mut [], &data);
-        assert_eq!(result, Err(InstructionError::InvalidInstructionData));
+        assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
 
         let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
@@ -330,7 +330,7 @@ mod tests {
             &mut [KeyedAccount::new(&from, true, &mut from_account)],
             &data,
         );
-        assert_eq!(result, Err(InstructionError::InvalidInstructionData));
+        assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
     }
 
     #[test]
