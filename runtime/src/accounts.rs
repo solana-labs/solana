@@ -1539,13 +1539,16 @@ mod tests {
         let pubkey0 = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
         let pubkey2 = Pubkey::new_rand();
+        let overdue_account_pubkey = Pubkey::new_rand();
 
         let account0 = Account::new(1, 1, &Pubkey::default());
         let account1 = Account::new(2, 1, &Pubkey::default());
+        let overdue_account = Account::new(1, 2, &Pubkey::default());
 
         let accounts = Accounts::new(None);
         accounts.store_slow(0, &pubkey0, &account0);
         accounts.store_slow(0, &pubkey1, &account1);
+        accounts.store_slow(0, &overdue_account_pubkey, &overdue_account);
 
         let mut rent_collector = RentCollector::default();
         rent_collector.epoch = 2;
@@ -1580,28 +1583,78 @@ mod tests {
                     lock_count: Mutex::new(1),
                 },
             );
+            credit_only_account_locks.insert(
+                overdue_account_pubkey,
+                CreditOnlyLock {
+                    credits: AtomicU64::new(3),
+                    lock_count: Mutex::new(1),
+                },
+            );
+        }
+
+        {
+            let mut credit_only_account_rent_debtors =
+                accounts.credit_only_account_rent_debtors.write().unwrap();
+            let credit_only_account_rent_debtors =
+                credit_only_account_rent_debtors.as_mut().unwrap();
+
+            credit_only_account_rent_debtors.insert(pubkey0);
+            credit_only_account_rent_debtors.insert(pubkey1);
+            credit_only_account_rent_debtors.insert(overdue_account_pubkey);
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
 
-        // Total rent collected should be: rent from pubkey0(1) + rent from pubkey1(1)
+        // This account has data length of 2
         assert_eq!(
-            accounts.commit_credits_and_rents_unsafe(&rent_collector, &ancestors, 0),
+            accounts
+                .load_slow(&ancestors, &overdue_account_pubkey)
+                .unwrap()
+                .0
+                .data
+                .len(),
             2
         );
 
+        // Total rent collected should be: rent from pubkey0(1) + rent from pubkey1(1)
+        assert_eq!(
+            accounts.commit_credits_and_rents_unsafe(&rent_collector, &ancestors, 0),
+            3
+        );
+
         // New balance should be previous balance plus CreditOnlyLock credits - rent
-        // Balance(1) + Credit(1) - Rent(1)
+        // Balance(1) - Rent(1) + Credit(1)
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey0).unwrap().0.lamports,
             1
         );
 
         // New balance should equal previous balance plus CreditOnlyLock credits - rent
-        // Balance(2) + Credit(5) - Rent(1)
+        // Balance(2) - Rent(1) + Credit(5)
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey1).unwrap().0.lamports,
             6
+        );
+
+        // Rent overdue account, will be reseted and it's lamport will be consumed
+        // Balance(1) - Rent(1)(Due to insufficient balance) + Credit(3)
+        assert_eq!(
+            accounts
+                .load_slow(&ancestors, &overdue_account_pubkey)
+                .unwrap()
+                .0
+                .lamports,
+            3
+        );
+        // The reseted account should have data length of zero
+        assert_eq!(
+            accounts
+                .load_slow(&ancestors, &overdue_account_pubkey)
+                .unwrap()
+                .0
+                .data
+                .len(),
+            0
         );
 
         // New account should be created and no rent should be charged
