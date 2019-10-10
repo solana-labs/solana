@@ -55,7 +55,7 @@ impl RentCollector {
                     account.lamports -= rent_due;
                     (Some(account), rent_due)
                 } else {
-                    (None, 0)
+                    (None, account.lamports)
                 }
             } else {
                 // maybe collect rent later, leave account alone
