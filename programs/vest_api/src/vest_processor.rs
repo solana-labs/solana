@@ -59,7 +59,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    let keyed_accounts_iter = &mut keyed_accounts.into_iter();
+    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
     let instruction = deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)?;
 
     match instruction {
