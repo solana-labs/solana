@@ -39,10 +39,7 @@ where
 }
 
 /// Return the next KeyedAccount or a NotEnoughAccountKeys instruction error
-pub fn next_keyed_account<I>(iter: &mut I) -> Result<I::Item, InstructionError>
-where
-    I: Iterator,
-{
+pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, InstructionError> {
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
 }
 
