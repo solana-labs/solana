@@ -101,8 +101,9 @@ impl PohRecorder {
     }
 
     pub fn leader_after_slots(&self, slots: u64) -> Option<Pubkey> {
+        let current_slot = (self.tick_height - 1) / self.ticks_per_slot;
         self.leader_schedule_cache
-            .slot_leader_at(self.tick_height / self.ticks_per_slot + slots, None)
+            .slot_leader_at(current_slot + slots, None)
     }
 
     pub fn next_slot_leader(&self) -> Option<Pubkey> {
@@ -139,6 +140,7 @@ impl PohRecorder {
         );
 
         let next_tick_height = self.tick_height + 1;
+        let next_leader_slot = (next_tick_height - 1) / self.ticks_per_slot;
 
         if let Some(target_tick_height) = self.leader_first_tick_height {
             // we've reached target_tick_height OR poh was reset to run immediately
@@ -151,17 +153,12 @@ impl PohRecorder {
                 return (
                     true,
                     next_tick_height.saturating_sub(ideal_target_tick_height),
-                    next_tick_height / self.ticks_per_slot,
+                    next_leader_slot,
                     self.start_slot,
                 );
             }
         }
-        (
-            false,
-            0,
-            next_tick_height / self.ticks_per_slot,
-            self.start_slot,
-        )
+        (false, 0, next_leader_slot, self.start_slot)
     }
 
     // returns (leader_first_tick_height, leader_last_tick_height, grace_ticks) given the next
@@ -293,7 +290,7 @@ impl PohRecorder {
                 working_bank.max_tick_height,
                 working_bank.bank.slot()
             );
-            let current_slot = working_bank.max_tick_height / self.ticks_per_slot;
+            let current_slot = (working_bank.max_tick_height - 1) / self.ticks_per_slot;
             self.start_slot = current_slot.saturating_sub(1);
             self.start_tick_height = current_slot * self.ticks_per_slot + 1;
             self.clear_bank();
