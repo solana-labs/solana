@@ -2,7 +2,7 @@
 
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
-use crate::cluster_info::{ClusterInfo, FULLNODE_PORT_RANGE};
+use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::service::Service;
 use crate::streamer;
@@ -119,7 +119,7 @@ pub fn get_clients(nodes: &[ContactInfo]) -> Vec<ThinClient> {
     nodes
         .iter()
         .filter_map(ContactInfo::valid_client_facing_addr)
-        .map(|addrs| create_client(addrs, FULLNODE_PORT_RANGE))
+        .map(|addrs| create_client(addrs, VALIDATOR_PORT_RANGE))
         .collect()
 }
 
@@ -130,7 +130,7 @@ pub fn get_client(nodes: &[ContactInfo]) -> ThinClient {
         .filter_map(ContactInfo::valid_client_facing_addr)
         .collect();
     let select = thread_rng().gen_range(0, nodes.len());
-    create_client(nodes[select], FULLNODE_PORT_RANGE)
+    create_client(nodes[select], VALIDATOR_PORT_RANGE)
 }
 
 pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
@@ -141,7 +141,7 @@ pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-    let (_, transactions_socket) = solana_netutil::bind_in_range(FULLNODE_PORT_RANGE).unwrap();
+    let (_, transactions_socket) = solana_netutil::bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
     let num_nodes = tpu_addrs.len();
     (
         ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),

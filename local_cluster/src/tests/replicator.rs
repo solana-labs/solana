@@ -2,7 +2,7 @@ use crate::local_cluster::{ClusterConfig, LocalCluster};
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
 use solana_core::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
-use solana_core::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
+use solana_core::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
 use solana_core::gossip_service::discover_cluster;
 use solana_core::replicator::Replicator;
@@ -171,7 +171,7 @@ fn test_account_setup() {
     // now check that the cluster actually has accounts for the replicator.
     let client = create_client(
         cluster.entry_point_info.client_facing_addr(),
-        FULLNODE_PORT_RANGE,
+        VALIDATOR_PORT_RANGE,
     );
     cluster.replicator_infos.iter().for_each(|(_, value)| {
         assert_eq!(

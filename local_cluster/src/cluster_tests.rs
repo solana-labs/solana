@@ -6,7 +6,7 @@ use solana_client::thin_client::create_client;
 /// discover the rest of the network.
 use solana_core::{
     blocktree::Blocktree,
-    cluster_info::FULLNODE_PORT_RANGE,
+    cluster_info::VALIDATOR_PORT_RANGE,
     consensus::VOTE_THRESHOLD_DEPTH,
     contact_info::ContactInfo,
     entry::{Entry, EntrySlice},
@@ -47,7 +47,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
             continue;
         }
         let random_keypair = Keypair::new();
-        let client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         let bal = client
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
@@ -63,7 +63,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
             if ignore_nodes.contains(&validator.id) {
                 continue;
             }
-            let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
+            let client = create_client(validator.client_facing_addr(), VALIDATOR_PORT_RANGE);
             client.poll_for_signature_confirmation(&sig, confs).unwrap();
         }
     }
@@ -73,7 +73,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
     expected_balances: HashMap<Pubkey, u64, S>,
     node: &ContactInfo,
 ) {
-    let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
     for (pk, b) in expected_balances {
         let bal = client.poll_get_balance(&pk).expect("balance in source");
         assert_eq!(bal, b);
@@ -86,7 +86,7 @@ pub fn send_many_transactions(
     max_tokens_per_transfer: u64,
     num_txs: u64,
 ) -> HashMap<Pubkey, u64> {
-    let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
     let mut expected_balances = HashMap::new();
     for _ in 0..num_txs {
         let random_keypair = Keypair::new();
@@ -118,12 +118,12 @@ pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
     let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for node in &cluster_nodes {
-        let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         assert!(client.fullnode_exit().unwrap());
     }
     sleep(Duration::from_millis(DEFAULT_SLOT_MILLIS));
     for node in &cluster_nodes {
-        let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         assert!(client.fullnode_exit().is_err());
     }
 }
@@ -183,7 +183,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     solana_logger::setup();
     let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
-    let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(entry_point_info.client_facing_addr(), VALIDATOR_PORT_RANGE);
     let first_two_epoch_slots = MINIMUM_SLOTS_PER_EPOCH * 3;
 
     for ingress_node in &cluster_nodes {
@@ -210,7 +210,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             continue;
         }
 
-        let client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         let balance = client
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
@@ -275,7 +275,7 @@ fn poll_all_nodes_for_signature(
         if validator.id == entry_point_info.id {
             continue;
         }
-        let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(validator.client_facing_addr(), VALIDATOR_PORT_RANGE);
         client.poll_for_signature_confirmation(&sig, confs)?;
     }
 

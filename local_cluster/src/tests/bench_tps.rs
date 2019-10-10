@@ -3,7 +3,7 @@ use serial_test_derive::serial;
 use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs};
 use solana_bench_tps::cli::Config;
 use solana_client::thin_client::create_client;
-use solana_core::cluster_info::FULLNODE_PORT_RANGE;
+use solana_core::cluster_info::VALIDATOR_PORT_RANGE;
 use solana_core::validator::ValidatorConfig;
 use solana_drone::drone::run_local_drone;
 #[cfg(feature = "move")]
@@ -38,7 +38,7 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     let client = create_client(
         (cluster.entry_point_info.rpc, cluster.entry_point_info.tpu),
-        FULLNODE_PORT_RANGE,
+        VALIDATOR_PORT_RANGE,
     );
 
     let (addr_sender, addr_receiver) = channel();

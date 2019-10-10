@@ -1,6 +1,6 @@
 use crate::blocktree::Blocktree;
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
-use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
+use crate::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
 use crate::leader_schedule_cache::LeaderScheduleCache;
@@ -805,7 +805,7 @@ impl Replicator {
 
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let repair_socket = Arc::new(bind_in_range(FULLNODE_PORT_RANGE).unwrap().1);
+        let repair_socket = Arc::new(bind_in_range(VALIDATOR_PORT_RANGE).unwrap().1);
         let t_receiver = receiver(
             repair_socket.clone(),
             &exit,
@@ -907,7 +907,7 @@ impl Replicator {
     }
 
     fn get_replicator_segment_slot(to: SocketAddr) -> u64 {
-        let (_port, socket) = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
+        let (_port, socket) = bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
         socket
             .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();
