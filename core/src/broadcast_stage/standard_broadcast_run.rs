@@ -201,7 +201,7 @@ impl StandardBroadcastRun {
 
         cluster_info.read().unwrap().broadcast_shreds(
             sock,
-            &all_shred_bufs,
+            all_shred_bufs,
             &all_seeds,
             stakes.as_ref(),
         )?;

@@ -1,14 +1,10 @@
 //! The `sendmmsg` module provides sendmmsg() API implementation
 
-use solana_sdk::packet::PACKET_DATA_SIZE;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
 
 #[cfg(not(target_os = "linux"))]
-pub fn send_mmsg(
-    sock: &UdpSocket,
-    packets: &mut [([u8; PACKET_DATA_SIZE], &SocketAddr)],
-) -> io::Result<usize> {
+pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
     let count = packets.len();
     for (p, a) in packets {
         sock.send_to(p, *a)?;
@@ -43,7 +39,7 @@ fn mmsghdr_for_packet(
     let mut hdr: mmsghdr = unsafe { mem::zeroed() };
     hdr.msg_hdr.msg_iov = &mut iovs[index];
     hdr.msg_hdr.msg_iovlen = 1;
-    hdr.msg_len = packet.data.len() as u32;
+    hdr.msg_len = packet.len() as u32;
 
     match InetAddr::from_std(dest) {
         InetAddr::V4(addr) => {
@@ -61,10 +57,7 @@ fn mmsghdr_for_packet(
 }
 
 #[cfg(target_os = "linux")]
-pub fn send_mmsg(
-    sock: &UdpSocket,
-    packets: &mut [([u8; PACKET_DATA_SIZE], &SocketAddr)],
-) -> io::Result<usize> {
+pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -167,7 +160,9 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let mut packets: Vec<_> = (0..32).map(|_| ([0u8; PACKET_DATA_SIZE], &addr)).collect();
+        let mut packets: Vec<_> = (0..32)
+            .map(|_| (vec![0u8; PACKET_DATA_SIZE], &addr))
+            .collect();
 
         let sent = send_mmsg(&sender, &mut packets);
         assert_matches!(sent, Ok(32));
@@ -190,9 +185,9 @@ mod tests {
         let mut packets: Vec<_> = (0..32)
             .map(|i| {
                 if i < 16 {
-                    ([0u8; PACKET_DATA_SIZE], &addr)
+                    (vec![0u8; PACKET_DATA_SIZE], &addr)
                 } else {
-                    ([0u8; PACKET_DATA_SIZE], &addr2)
+                    (vec![0u8; PACKET_DATA_SIZE], &addr2)
                 }
             })
             .collect();
