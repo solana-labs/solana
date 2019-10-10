@@ -1,6 +1,7 @@
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::next_keyed_account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
@@ -103,61 +104,38 @@ fn transfer_lamports(
     Ok(())
 }
 
-macro_rules! count_tts {
-    () => {0usize};
-    ($_head:tt $($tail:tt)*) => {1usize + count_tts!($($tail)*)};
-}
-
-#[macro_export]
-macro_rules! with_keyed_accounts {
-    ($keyed_accounts:ident, ( $($x:tt),+ ), $do:expr) => (
-     {
-        let xs = count_tts!($( $x )*);
-        if $keyed_accounts.len() < xs {
-            Err(InstructionError::InvalidInstructionData)
-        } else if let &mut [ $( ref mut $x, )* ] = &mut $keyed_accounts[..xs] {
-            $do
-        } else {
-           Err(InstructionError::InvalidInstructionData)
-        }
-    }
-    )
-}
-
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    if let Ok(instruction) = bincode::deserialize(data) {
-        trace!("process_instruction: {:?}", instruction);
-        trace!("keyed_accounts: {:?}", keyed_accounts);
+    let instruction =
+        bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)?;
 
-        match instruction {
-            SystemInstruction::CreateAccount {
-                lamports,
-                space,
-                program_id,
-            } => with_keyed_accounts!(
-                keyed_accounts,
-                (from, to),
-                create_system_account(from, to, lamports, space, &program_id)
-            ),
-            SystemInstruction::Assign { program_id } => with_keyed_accounts!(
-                keyed_accounts,
-                (account),
-                assign_account_to_program(account, &program_id)
-            ),
-            SystemInstruction::Transfer { lamports } => with_keyed_accounts!(
-                keyed_accounts,
-                (from, to),
-                transfer_lamports(from, to, lamports)
-            ),
+    trace!("process_instruction: {:?}", instruction);
+    trace!("keyed_accounts: {:?}", keyed_accounts);
+
+    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
+
+    match instruction {
+        SystemInstruction::CreateAccount {
+            lamports,
+            space,
+            program_id,
+        } => {
+            let from = next_keyed_account(keyed_accounts_iter)?;
+            let to = next_keyed_account(keyed_accounts_iter)?;
+            create_system_account(from, to, lamports, space, &program_id)
         }
-    } else {
-        dbg!("foo!");
-        debug!("Invalid instruction data: {:?}", data);
-        Err(InstructionError::InvalidInstructionData)
+        SystemInstruction::Assign { program_id } => {
+            let account = next_keyed_account(keyed_accounts_iter)?;
+            assign_account_to_program(account, &program_id)
+        }
+        SystemInstruction::Transfer { lamports } => {
+            let from = next_keyed_account(keyed_accounts_iter)?;
+            let to = next_keyed_account(keyed_accounts_iter)?;
+            transfer_lamports(from, to, lamports)
+        }
     }
 }
 
