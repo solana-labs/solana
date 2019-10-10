@@ -575,7 +575,6 @@ pub fn main() {
             &node.sockets.gossip,
             &node.sockets.broadcast,
             &node.sockets.repair,
-            &node.sockets.retransmit,
         ];
 
         let mut tcp_listeners: Vec<(_, _)> = tcp_ports

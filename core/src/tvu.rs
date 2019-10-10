@@ -49,7 +49,7 @@ pub struct Tvu {
 pub struct Sockets {
     pub fetch: Vec<UdpSocket>,
     pub repair: UdpSocket,
-    pub retransmit: UdpSocket,
+    pub retransmit: Vec<UdpSocket>,
     pub forwards: Vec<UdpSocket>,
 }
 
@@ -92,7 +92,7 @@ impl Tvu {
         let Sockets {
             repair: repair_socket,
             fetch: fetch_sockets,
-            retransmit: retransmit_socket,
+            retransmit: retransmit_sockets,
             forwards: tvu_forward_sockets,
         } = sockets;
 
@@ -118,7 +118,7 @@ impl Tvu {
             leader_schedule_cache,
             blocktree.clone(),
             &cluster_info,
-            Arc::new(retransmit_socket),
+            Arc::new(retransmit_sockets),
             repair_socket,
             fetch_receiver,
             &exit,
@@ -270,7 +270,7 @@ pub mod tests {
             {
                 Sockets {
                     repair: target1.sockets.repair,
-                    retransmit: target1.sockets.retransmit,
+                    retransmit: target1.sockets.retransmit_sockets,
                     fetch: target1.sockets.tvu,
                     forwards: target1.sockets.tvu_forwards,
                 }

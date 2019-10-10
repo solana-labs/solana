@@ -23,27 +23,38 @@ use std::{
     sync::atomic::AtomicBool,
     sync::mpsc::channel,
     sync::mpsc::RecvTimeoutError,
+    sync::Mutex,
     sync::{Arc, RwLock},
     thread::{self, Builder, JoinHandle},
     time::Duration,
 };
 
-pub fn retransmit(
+// Limit a given thread to consume about this many packets so that
+// it doesn't pull up too much work.
+const MAX_PACKET_BATCH_SIZE: usize = 100;
+
+fn retransmit(
     bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
-    r: &PacketReceiver,
+    r: &Arc<Mutex<PacketReceiver>>,
     sock: &UdpSocket,
+    id: u32,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
-    let packets = r.recv_timeout(timer)?;
+    let r_lock = r.lock().unwrap();
+    let packets = r_lock.recv_timeout(timer)?;
     let mut timer_start = Measure::start("retransmit");
     let mut total_packets = packets.packets.len();
     let mut packet_v = vec![packets];
-    while let Ok(nq) = r.try_recv() {
+    while let Ok(nq) = r_lock.try_recv() {
         total_packets += nq.packets.len();
         packet_v.push(nq);
+        if total_packets >= MAX_PACKET_BATCH_SIZE {
+            break;
+        }
     }
+    drop(r_lock);
 
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_leader_schedule_epoch(r_bank.slot());
@@ -100,10 +111,11 @@ pub fn retransmit(
     }
     timer_start.stop();
     debug!(
-        "retransmitted {} packets in {}ms retransmit_time: {}ms",
+        "retransmitted {} packets in {}ms retransmit_time: {}ms id: {}",
         total_packets,
         timer_start.as_ms(),
-        retransmit_total
+        retransmit_total,
+        id,
     );
     datapoint_debug!("cluster_info-num_nodes", ("count", peers_len, i64));
     datapoint_debug!(
@@ -124,39 +136,48 @@ pub fn retransmit(
 /// * `cluster_info` - This structure needs to be updated and populated by the bank and via gossip.
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
-fn retransmitter(
-    sock: Arc<UdpSocket>,
+pub fn retransmitter(
+    sockets: Arc<Vec<UdpSocket>>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
-    r: PacketReceiver,
-) -> JoinHandle<()> {
-    let bank_forks = bank_forks.clone();
-    let leader_schedule_cache = leader_schedule_cache.clone();
-    Builder::new()
-        .name("solana-retransmitter".to_string())
-        .spawn(move || {
-            trace!("retransmitter started");
-            loop {
-                if let Err(e) = retransmit(
-                    &bank_forks,
-                    &leader_schedule_cache,
-                    &cluster_info,
-                    &r,
-                    &sock,
-                ) {
-                    match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => {
-                            inc_new_counter_error!("streamer-retransmit-error", 1, 1);
+    r: Arc<Mutex<PacketReceiver>>,
+) -> Vec<JoinHandle<()>> {
+    (0..sockets.len())
+        .map(|s| {
+            let sockets = sockets.clone();
+            let bank_forks = bank_forks.clone();
+            let leader_schedule_cache = leader_schedule_cache.clone();
+            let r = r.clone();
+            let cluster_info = cluster_info.clone();
+
+            Builder::new()
+                .name("solana-retransmitter".to_string())
+                .spawn(move || {
+                    trace!("retransmitter started");
+                    loop {
+                        if let Err(e) = retransmit(
+                            &bank_forks,
+                            &leader_schedule_cache,
+                            &cluster_info,
+                            &r,
+                            &sockets[s],
+                            s as u32,
+                        ) {
+                            match e {
+                                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                                _ => {
+                                    inc_new_counter_error!("streamer-retransmit-error", 1, 1);
+                                }
+                            }
                         }
                     }
-                }
-            }
-            trace!("exiting retransmitter");
+                    trace!("exiting retransmitter");
+                })
+                .unwrap()
         })
-        .unwrap()
+        .collect()
 }
 
 pub struct RetransmitStage {
@@ -172,7 +193,7 @@ impl RetransmitStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         blocktree: Arc<Blocktree>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        retransmit_socket: Arc<UdpSocket>,
+        retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: PacketReceiver,
         exit: &Arc<AtomicBool>,
@@ -181,8 +202,9 @@ impl RetransmitStage {
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
+        let retransmit_receiver = Arc::new(Mutex::new(retransmit_receiver));
         let t_retransmit = retransmitter(
-            retransmit_socket,
+            retransmit_sockets,
             bank_forks.clone(),
             leader_schedule_cache,
             cluster_info.clone(),
@@ -215,7 +237,7 @@ impl RetransmitStage {
             },
         );
 
-        let thread_hdls = vec![t_retransmit];
+        let thread_hdls = t_retransmit;
         Self {
             thread_hdls,
             window_service,
@@ -275,7 +297,7 @@ mod tests {
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(other);
         cluster_info.insert_info(me);
 
-        let retransmit_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
+        let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
         let (retransmit_sender, retransmit_receiver) = channel();
@@ -284,7 +306,7 @@ mod tests {
             bank_forks,
             &leader_schedule_cache,
             cluster_info,
-            retransmit_receiver,
+            Arc::new(Mutex::new(retransmit_receiver)),
         );
         let _thread_hdls = vec![t_retransmit];
 

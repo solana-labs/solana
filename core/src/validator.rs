@@ -274,9 +274,10 @@ impl Validator {
                 .expect("Failed to clone repair socket"),
             retransmit: node
                 .sockets
-                .retransmit
-                .try_clone()
-                .expect("Failed to clone retransmit socket"),
+                .retransmit_sockets
+                .iter()
+                .map(|s| s.try_clone().expect("Failed to clone retransmit socket"))
+                .collect(),
             fetch: node
                 .sockets
                 .tvu
@@ -378,7 +379,7 @@ impl Validator {
         );
         info!(
             "local retransmit address: {}",
-            node.sockets.retransmit.local_addr().unwrap()
+            node.sockets.retransmit_sockets[0].local_addr().unwrap()
         );
     }
 }
