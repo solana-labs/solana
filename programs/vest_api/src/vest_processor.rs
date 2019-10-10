@@ -14,7 +14,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 
-fn parse_date_account(
+fn verify_date_account(
     keyed_account: &mut KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<Date<Utc>, InstructionError> {
@@ -22,7 +22,7 @@ fn parse_date_account(
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    let account = parse_account(keyed_account, expected_pubkey)?;
+    let account = verify_account(keyed_account, expected_pubkey)?;
 
     let config_data =
         get_config_data(&account.data).map_err(|_| InstructionError::InvalidAccountData)?;
@@ -32,7 +32,7 @@ fn parse_date_account(
     Ok(date_config.date_time.date())
 }
 
-fn parse_account<'a>(
+fn verify_account<'a>(
     keyed_account: &'a mut KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<&'a mut Account, InstructionError> {
@@ -43,7 +43,7 @@ fn parse_account<'a>(
     Ok(keyed_account.account)
 }
 
-fn parse_signed_account<'a>(
+fn verify_signed_account<'a>(
     keyed_account: &'a mut KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<&'a mut Account, InstructionError> {
@@ -51,7 +51,7 @@ fn parse_signed_account<'a>(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    parse_account(keyed_account, expected_pubkey)
+    verify_account(keyed_account, expected_pubkey)
 }
 
 pub fn process_instruction(
@@ -60,66 +60,66 @@ pub fn process_instruction(
     data: &[u8],
 ) -> Result<(), InstructionError> {
     let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
+    let contract_account = &mut next_keyed_account(keyed_accounts_iter)?.account;
+
     let instruction = deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)?;
 
-    match instruction {
-        VestInstruction::InitializeAccount {
+    let mut vest_state = if let VestInstruction::InitializeAccount {
+        terminator_pubkey,
+        payee_pubkey,
+        start_date_time,
+        date_pubkey,
+        total_lamports,
+    } = instruction
+    {
+        VestState {
             terminator_pubkey,
             payee_pubkey,
             start_date_time,
             date_pubkey,
             total_lamports,
-        } => {
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_account = &mut contract_keyed_account.account;
-            let vest_state = VestState {
-                terminator_pubkey,
-                payee_pubkey,
-                start_date_time,
-                date_pubkey,
-                total_lamports,
-                redeemed_lamports: 0,
-            };
-            vest_state.serialize(&mut contract_account.data)
+            redeemed_lamports: 0,
         }
+    } else {
+        VestState::deserialize(&contract_account.data)?
+    };
+
+    match instruction {
+        VestInstruction::InitializeAccount { .. } => {}
         VestInstruction::SetPayee(payee_pubkey) => {
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let old_payee_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_account = &mut contract_keyed_account.account;
-            let mut vest_state = VestState::deserialize(&contract_account.data)?;
-            parse_signed_account(old_payee_keyed_account, &vest_state.payee_pubkey)?;
+            verify_signed_account(
+                next_keyed_account(keyed_accounts_iter)?,
+                &vest_state.payee_pubkey,
+            )?;
             vest_state.payee_pubkey = payee_pubkey;
-            vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::RedeemTokens => {
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let date_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let payee_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_account = &mut contract_keyed_account.account;
-            let mut vest_state = VestState::deserialize(&contract_account.data)?;
-            let current_date = parse_date_account(date_keyed_account, &vest_state.date_pubkey)?;
-            let payee_account = parse_account(payee_keyed_account, &vest_state.payee_pubkey)?;
-
+            let current_date = verify_date_account(
+                next_keyed_account(keyed_accounts_iter)?,
+                &vest_state.date_pubkey,
+            )?;
+            let payee_account = verify_account(
+                next_keyed_account(keyed_accounts_iter)?,
+                &vest_state.payee_pubkey,
+            )?;
             vest_state.redeem_tokens(contract_account, current_date, payee_account);
-            vest_state.serialize(&mut contract_account.data)
         }
         VestInstruction::Terminate => {
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let terminator_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let terminator_account = verify_signed_account(
+                next_keyed_account(keyed_accounts_iter)?,
+                &vest_state.terminator_pubkey,
+            )?;
             let payee_keyed_account = keyed_accounts_iter.next();
-            let contract_account = &mut contract_keyed_account.account;
-            let mut vest_state = VestState::deserialize(&contract_account.data)?;
-            let terminator_account =
-                parse_signed_account(terminator_keyed_account, &vest_state.terminator_pubkey)?;
             let payee_account = if let Some(payee_keyed_account) = payee_keyed_account {
                 &mut payee_keyed_account.account
             } else {
                 terminator_account
             };
             vest_state.terminate(contract_account, payee_account);
-            vest_state.serialize(&mut contract_account.data)
         }
     }
+
+    vest_state.serialize(&mut contract_account.data)
 }
 
 #[cfg(test)]
@@ -233,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_account_unauthorized() {
+    fn test_verify_account_unauthorized() {
         // Ensure client can't sneak in with an untrusted date account.
         let date_pubkey = Pubkey::new_rand();
         let mut account = Account::new(1, 0, &solana_config_api::id());
@@ -241,68 +241,68 @@ mod tests {
 
         let mallory_pubkey = Pubkey::new_rand(); // <-- Attack! Not the expected account.
         assert_eq!(
-            parse_account(&mut keyed_account, &mallory_pubkey).unwrap_err(),
+            verify_account(&mut keyed_account, &mallory_pubkey).unwrap_err(),
             VestError::Unauthorized.into()
         );
     }
 
     #[test]
-    fn test_parse_signed_account_missing_signature() {
+    fn test_verify_signed_account_missing_signature() {
         // Ensure client can't sneak in with an unsigned account.
         let date_pubkey = Pubkey::new_rand();
         let mut account = Account::new(1, 0, &solana_config_api::id());
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account); // <-- Attack! Unsigned transaction.
 
         assert_eq!(
-            parse_signed_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            verify_signed_account(&mut keyed_account, &date_pubkey).unwrap_err(),
             InstructionError::MissingRequiredSignature.into()
         );
     }
 
     #[test]
-    fn test_parse_date_account_incorrect_program_id() {
+    fn test_verify_date_account_incorrect_program_id() {
         // Ensure client can't sneak in with a non-Config account.
         let date_pubkey = Pubkey::new_rand();
         let mut account = Account::new(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
         assert_eq!(
-            parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            verify_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
             InstructionError::IncorrectProgramId
         );
     }
 
     #[test]
-    fn test_parse_date_account_uninitialized_config() {
+    fn test_verify_date_account_uninitialized_config() {
         // Ensure no panic when `get_config_data()` returns an error.
         let date_pubkey = Pubkey::new_rand();
         let mut account = Account::new(1, 0, &solana_config_api::id()); // <-- Attack! Zero space.
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
         assert_eq!(
-            parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            verify_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
             InstructionError::InvalidAccountData
         );
     }
 
     #[test]
-    fn test_parse_date_account_invalid_date_config() {
+    fn test_verify_date_account_invalid_date_config() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
         let date_pubkey = Pubkey::new_rand();
         let mut account = Account::new(1, 1, &solana_config_api::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
         assert_eq!(
-            parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            verify_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
             InstructionError::InvalidAccountData
         );
     }
 
     #[test]
-    fn test_parse_date_account_deserialize() {
+    fn test_verify_date_account_deserialize() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
         let date_pubkey = Pubkey::new_rand();
         let mut account = Account::new(1, 1, &solana_config_api::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
         assert_eq!(
-            parse_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
+            verify_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
             InstructionError::InvalidAccountData
         );
     }
