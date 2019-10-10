@@ -38,8 +38,8 @@ where
     }
 }
 
-/// Return the next argument or an error
-pub fn next_arg<I>(iter: &mut I) -> Result<I::Item, InstructionError>
+/// Return the next KeyedAccount or a NotEnoughAccountKeys instruction error
+pub fn next_keyed_account<I>(iter: &mut I) -> Result<I::Item, InstructionError>
 where
     I: Iterator,
 {
