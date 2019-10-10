@@ -3,15 +3,11 @@
 #![feature(test)]
 extern crate test;
 
-use core_affinity;
 use solana_core::poh::Poh;
 use solana_core::poh_service::NUM_HASHES_PER_BATCH;
-use solana_sdk::hash::hash;
 use solana_sdk::hash::Hash;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread::Builder;
-use std::time::Instant;
 use test::Bencher;
 
 const NUM_HASHES: u64 = 30_000; // Should require ~10ms on a 2017 MacBook Pro
@@ -64,35 +60,4 @@ fn bench_poh_lock_time_per_batch(bencher: &mut Bencher) {
     bencher.iter(|| {
         poh.hash(NUM_HASHES_PER_BATCH);
     })
-}
-
-#[bench]
-#[ignore]
-fn bench_multi_core_poh(bencher: &mut Bencher) {
-    let num_threads = 1;
-    let threads: Vec<_> = (0..num_threads)
-        .map(|i| {
-            Builder::new()
-                .name("solana-poh".to_string())
-                .spawn(move || {
-                    if i == 0 {
-                        if let Some(cores) = core_affinity::get_core_ids() {
-                            core_affinity::set_for_current(cores[0]);
-                        }
-                    }
-                    let mut v = Hash::default();
-                    let start = Instant::now();
-                    for _ in 0..1_000_000 {
-                        v = hash(&v.as_ref());
-                    }
-                    let elapsed = start.elapsed().as_millis();
-                    println!("thread {}, elapsed: {}", i, elapsed);
-                })
-                .unwrap()
-        })
-        .collect();
-
-    for t in threads {
-        let _ = t.join();
-    }
 }
