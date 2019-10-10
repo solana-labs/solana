@@ -16,6 +16,7 @@ function collect_logs {
   echo --- collect logs from remote nodes
   rm -rf net/log
   net/net.sh logs
+  # shellcheck disable=SC2045
   for logfile in $(ls -A net/log) ; do
     (
       cd net/log
@@ -111,6 +112,7 @@ launchTestnet() {
 
   case $CLOUD_PROVIDER in
     gce)
+    # shellcheck disable=SC2068
       net/gce.sh create \
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
