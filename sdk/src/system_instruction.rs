@@ -2,9 +2,9 @@ use crate::instruction::{AccountMeta, Instruction};
 use crate::instruction_processor_utils::DecodeError;
 use crate::pubkey::Pubkey;
 use crate::system_program;
-use num_derive::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
 
-#[derive(Serialize, Debug, Clone, PartialEq, FromPrimitive)]
+#[derive(Serialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum SystemError {
     AccountAlreadyInUse,
     ResultWithNegativeLamports,
