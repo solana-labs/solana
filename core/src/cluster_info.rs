@@ -753,7 +753,7 @@ impl ClusterInfo {
 
         let mut sent = 0;
         while sent < dests.len() {
-            match multicast(s, packet, &dests[sent..]) {
+            match multicast(s, &mut packet.data[..packet.meta.size], &dests[sent..]) {
                 Ok(n) => sent += n,
                 Err(e) => {
                     inc_new_counter_error!(

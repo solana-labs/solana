@@ -1,15 +1,17 @@
 //! The `sendmmsg` module provides sendmmsg() API implementation
 
-use crate::packet::Packet;
+use solana_sdk::packet::PACKET_DATA_SIZE;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
 
 #[cfg(not(target_os = "linux"))]
-pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
+pub fn send_mmsg(
+    sock: &UdpSocket,
+    packets: &mut [([u8; PACKET_DATA_SIZE], &SocketAddr)],
+) -> io::Result<usize> {
     let count = packets.len();
-    for p in packets {
-        let a = p.meta.addr();
-        sock.send_to(&p.data[..p.meta.size], &a)?;
+    for (p, a) in packets {
+        sock.send_to(p, *a)?;
     }
 
     Ok(count)
@@ -20,7 +22,7 @@ use libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6};
 
 #[cfg(target_os = "linux")]
 fn mmsghdr_for_packet(
-    packet: &mut Packet,
+    packet: &mut [u8],
     dest: &SocketAddr,
     index: usize,
     addr_in_len: u32,
@@ -34,8 +36,8 @@ fn mmsghdr_for_packet(
     use std::mem;
 
     iovs.push(iovec {
-        iov_base: packet.data.as_mut_ptr() as *mut c_void,
-        iov_len: packet.data.len(),
+        iov_base: packet.as_mut_ptr() as *mut c_void,
+        iov_len: packet.len(),
     });
 
     let mut hdr: mmsghdr = unsafe { mem::zeroed() };
@@ -57,8 +59,12 @@ fn mmsghdr_for_packet(
     };
     hdr
 }
+
 #[cfg(target_os = "linux")]
-pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
+pub fn send_mmsg(
+    sock: &UdpSocket,
+    packets: &mut [([u8; PACKET_DATA_SIZE], &SocketAddr)],
+) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -76,10 +82,10 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
     let mut hdrs: Vec<mmsghdr> = packets
         .iter_mut()
         .enumerate()
-        .map(|(i, packet)| {
+        .map(|(i, (packet, dest))| {
             mmsghdr_for_packet(
                 packet,
-                &packet.meta.addr(),
+                dest,
                 i,
                 addr_in_len as u32,
                 addr_in6_len as u32,
@@ -98,25 +104,17 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn multicast(
-    sock: &UdpSocket,
-    packet: &mut Packet,
-    dests: &[&SocketAddr],
-) -> io::Result<usize> {
+pub fn multicast(sock: &UdpSocket, packet: &mut [u8], dests: &[&SocketAddr]) -> io::Result<usize> {
     let count = dests.len();
     for a in dests {
-        sock.send_to(&packet.data[..packet.meta.size], a)?;
+        sock.send_to(packet, a)?;
     }
 
     Ok(count)
 }
 
 #[cfg(target_os = "linux")]
-pub fn multicast(
-    sock: &UdpSocket,
-    packet: &mut Packet,
-    dests: &[&SocketAddr],
-) -> io::Result<usize> {
+pub fn multicast(sock: &UdpSocket, packet: &mut [u8], dests: &[&SocketAddr]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -160,6 +158,7 @@ mod tests {
     use crate::packet::Packet;
     use crate::recvmmsg::recv_mmsg;
     use crate::sendmmsg::{multicast, send_mmsg};
+    use solana_sdk::packet::PACKET_DATA_SIZE;
     use std::net::UdpSocket;
 
     #[test]
@@ -168,13 +167,7 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let mut packets: Vec<Packet> = (0..32)
-            .map(|_| {
-                let mut p = Packet::default();
-                p.meta.set_addr(&addr);
-                p
-            })
-            .collect();
+        let mut packets: Vec<_> = (0..32).map(|_| ([0u8; PACKET_DATA_SIZE], &addr)).collect();
 
         let sent = send_mmsg(&sender, &mut packets);
         assert_matches!(sent, Ok(32));
@@ -194,15 +187,13 @@ mod tests {
 
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let mut packets: Vec<Packet> = (0..32)
+        let mut packets: Vec<_> = (0..32)
             .map(|i| {
-                let mut p = Packet::default();
                 if i < 16 {
-                    p.meta.set_addr(&addr);
+                    ([0u8; PACKET_DATA_SIZE], &addr)
                 } else {
-                    p.meta.set_addr(&addr2);
+                    ([0u8; PACKET_DATA_SIZE], &addr2)
                 }
-                p
             })
             .collect();
 
@@ -236,7 +227,11 @@ mod tests {
 
         let mut packet = Packet::default();
 
-        let sent = multicast(&sender, &mut packet, &[&addr, &addr2, &addr3, &addr4]);
+        let sent = multicast(
+            &sender,
+            &mut packet.data[..packet.meta.size],
+            &[&addr, &addr2, &addr3, &addr4],
+        );
         assert_matches!(sent, Ok(4));
 
         let mut packets = vec![Packet::default(); 32];
