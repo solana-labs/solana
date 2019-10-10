@@ -132,7 +132,7 @@ pub fn multicast(
     let sock_fd = sock.as_raw_fd();
 
     let mut hdrs: Vec<mmsghdr> = dests
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(i, dest)| {
             mmsghdr_for_packet(
