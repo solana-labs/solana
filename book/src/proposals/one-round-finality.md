@@ -10,7 +10,9 @@ not to propose alternative forks.
 If only a part of the cluster has agreed not to propose alternative
 forks the deterministic leader schedule can be used to calculate
 the likelihood of a leader that is not committed of proposing a
-votable alternative fork.
+votable alternative fork. This calculation is based on the assumption
+that the partition is static, and that the same leaders will continue
+voting together.
 
 ## Overview
 
