@@ -48,9 +48,10 @@ is 98.07%, and the probability of a streak of size 4 is 97.7%, which
 should roughly equal the probability of the fork still being live
 after the non-voting leader produced an alternative fork.
 
-Each streak just needs to produce a lockout that is 2x longer than
-the streak.  Given that 20% of leaders are in the wrong partition,
-a rough estimate of the likelihood of each streak is as follows:
+Each streak needs to produce a lockout that is 2x longer than the
+lockout from the previous streak.  Given that 20% of leaders are
+in the wrong partition, a rough estimate of the likelihood of each
+streak is as follows:
 
 * streak of size 4 in 7 blocks 97.7%
 * streak of size 5 in 12 blocks 98.04%
