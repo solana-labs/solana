@@ -419,11 +419,11 @@ impl std::convert::From<rocksdb::Error> for Error {
 }
 
 fn get_cf_options(name: &'static str) -> Options {
-    use crate::blocktree::db::columns::{ShredCode, ShredData, Index};
+    use crate::blocktree::db::columns::{ErasureMeta, Index, ShredCode, ShredData};
 
     let mut options = Options::default();
     match name {
-        ShredCode::NAME | ShredData::NAME | Index::NAME => {
+        ShredCode::NAME | ShredData::NAME | Index::NAME | ErasureMeta::NAME => {
             // 512MB * 8 = 4GB. 2 of these columns should take no more than 8GB of RAM
             options.set_max_write_buffer_number(8);
             options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
