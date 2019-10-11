@@ -1811,7 +1811,165 @@ mod tests {
     }
 
     #[test]
-    fn test_tallied_credit_debit_rent() {
+    fn test_credit_debit_rent_no_side_effect_on_hash() {
+        let (mut genesis_block, _mint_keypair) = create_genesis_block(10);
+        let credit_only_key1 = Pubkey::new_rand();
+        let credit_only_key2 = Pubkey::new_rand();
+        let credit_debit_keypair1: Keypair = Keypair::new();
+        let credit_debit_keypair2: Keypair = Keypair::new();
+
+        let rent_overdue_credit_only_key1 = Pubkey::new_rand();
+        let rent_overdue_credit_only_key2 = Pubkey::new_rand();
+        let rent_overdue_credit_debit_keypair1 = Keypair::new();
+        let rent_overdue_credit_debit_keypair2 = Keypair::new();
+
+        genesis_block.rent_calculator = RentCalculator {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 21.0,
+            burn_percent: 10,
+        };
+
+        let root_bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Bank::new_from_parent(
+            &root_bank,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+
+        let root_bank_2 = Arc::new(Bank::new(&genesis_block));
+        let bank_with_success_txs = Bank::new_from_parent(
+            &root_bank_2,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+        assert_eq!(bank.last_blockhash(), genesis_block.hash());
+
+        // Initialize credit-debit and credit only accounts
+        let credit_debit_account1 = Account::new(20, 1, &Pubkey::default());
+        let credit_debit_account2 = Account::new(20, 1, &Pubkey::default());
+        let credit_only_account1 = Account::new(3, 1, &Pubkey::default());
+        let credit_only_account2 = Account::new(3, 1, &Pubkey::default());
+
+        bank.store_account(&credit_debit_keypair1.pubkey(), &credit_debit_account1);
+        bank.store_account(&credit_debit_keypair2.pubkey(), &credit_debit_account2);
+        bank.store_account(&credit_only_key1, &credit_only_account1);
+        bank.store_account(&credit_only_key2, &credit_only_account2);
+
+        bank_with_success_txs
+            .store_account(&credit_debit_keypair1.pubkey(), &credit_debit_account1);
+        bank_with_success_txs
+            .store_account(&credit_debit_keypair2.pubkey(), &credit_debit_account2);
+        bank_with_success_txs.store_account(&credit_only_key1, &credit_only_account1);
+        bank_with_success_txs.store_account(&credit_only_key2, &credit_only_account2);
+
+        let rent_overdue_credit_debit_account1 = Account::new(2, 1, &Pubkey::default());
+        let rent_overdue_credit_debit_account2 = Account::new(2, 1, &Pubkey::default());
+        let rent_overdue_credit_only_account1 = Account::new(1, 1, &Pubkey::default());
+        let rent_overdue_credit_only_account2 = Account::new(1, 1, &Pubkey::default());
+
+        bank.store_account(
+            &rent_overdue_credit_debit_keypair1.pubkey(),
+            &rent_overdue_credit_debit_account1,
+        );
+        bank.store_account(
+            &rent_overdue_credit_debit_keypair2.pubkey(),
+            &rent_overdue_credit_debit_account2,
+        );
+        bank.store_account(
+            &rent_overdue_credit_only_key1,
+            &rent_overdue_credit_only_account1,
+        );
+        bank.store_account(
+            &rent_overdue_credit_only_key2,
+            &rent_overdue_credit_only_account2,
+        );
+
+        bank_with_success_txs.store_account(
+            &rent_overdue_credit_debit_keypair1.pubkey(),
+            &rent_overdue_credit_debit_account1,
+        );
+        bank_with_success_txs.store_account(
+            &rent_overdue_credit_debit_keypair2.pubkey(),
+            &rent_overdue_credit_debit_account2,
+        );
+        bank_with_success_txs.store_account(
+            &rent_overdue_credit_only_key1,
+            &rent_overdue_credit_only_account1,
+        );
+        bank_with_success_txs.store_account(
+            &rent_overdue_credit_only_key2,
+            &rent_overdue_credit_only_account2,
+        );
+
+        // Make native instruction loader rent exempt
+        let system_program_id = solana_system_program().1;
+        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+        system_program_account.lamports =
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
+        bank.store_account(&system_program_id, &system_program_account);
+        bank_with_success_txs.store_account(&system_program_id, &system_program_account);
+
+        let t1 = system_transaction::transfer(
+            &credit_debit_keypair1,
+            &rent_overdue_credit_only_key1,
+            1,
+            genesis_block.hash(),
+        );
+        let t2 = system_transaction::transfer(
+            &rent_overdue_credit_debit_keypair1,
+            &credit_only_key1,
+            1,
+            genesis_block.hash(),
+        );
+        let t3 = system_transaction::transfer(
+            &credit_debit_keypair2,
+            &credit_only_key2,
+            1,
+            genesis_block.hash(),
+        );
+        let t4 = system_transaction::transfer(
+            &rent_overdue_credit_debit_keypair2,
+            &rent_overdue_credit_only_key2,
+            1,
+            genesis_block.hash(),
+        );
+        let res = bank.process_transactions(&vec![t1.clone(), t2.clone(), t3.clone(), t4.clone()]);
+
+        assert_eq!(res.len(), 4);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Err(TransactionError::AccountNotFound));
+        assert_eq!(res[2], Ok(()));
+        assert_eq!(res[3], Err(TransactionError::AccountNotFound));
+
+        bank.freeze();
+
+        let rwlockguard_bank_hash = bank.hash.read().unwrap();
+        let bank_hash = rwlockguard_bank_hash.as_ref();
+
+        let res = bank_with_success_txs.process_transactions(&vec![t3.clone(), t1.clone()]);
+
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Ok(()));
+
+        bank_with_success_txs.freeze();
+
+        let rwlockguard_bank_with_success_txs_hash = bank_with_success_txs.hash.read().unwrap();
+        let bank_with_success_txs_hash = rwlockguard_bank_with_success_txs_hash.as_ref();
+
+        assert_eq!(bank_with_success_txs_hash, bank_hash);
+    }
+
+    #[test]
+    fn test_credit_debit_rent() {
         let (mut genesis_block, _mint_keypair) = create_genesis_block(10);
         let credit_only_key1 = Pubkey::new_rand();
         let credit_only_key2 = Pubkey::new_rand();
