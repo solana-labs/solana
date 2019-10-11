@@ -229,7 +229,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
             println!("\nSending stop request to node {:?}", pubkey);
 
-            let result = RpcClient::new_socket(node.rpc).fullnode_exit()?;
+            let result = RpcClient::new_socket(node.rpc).validator_exit()?;
             if result {
                 println!("Stop signal accepted");
             } else {

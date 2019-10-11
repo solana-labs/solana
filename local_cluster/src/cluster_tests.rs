@@ -114,17 +114,17 @@ pub fn send_many_transactions(
     expected_balances
 }
 
-pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
+pub fn validator_exit(entry_point_info: &ContactInfo, nodes: usize) {
     let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for node in &cluster_nodes {
         let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
-        assert!(client.fullnode_exit().unwrap());
+        assert!(client.validator_exit().unwrap());
     }
     sleep(Duration::from_millis(DEFAULT_SLOT_MILLIS));
     for node in &cluster_nodes {
         let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
-        assert!(client.fullnode_exit().is_err());
+        assert!(client.validator_exit().is_err());
     }
 }
 
@@ -198,7 +198,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     ));
     info!("done sleeping for first 2 warmup epochs");
     info!("killing entry point: {}", entry_point_info.id);
-    assert!(client.fullnode_exit().unwrap());
+    assert!(client.validator_exit().unwrap());
     info!("sleeping for some time");
     sleep(Duration::from_millis(
         slot_millis * NUM_CONSECUTIVE_LEADER_SLOTS,

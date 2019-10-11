@@ -268,8 +268,8 @@ impl ThinClient {
         self.rpc_client().check_signature(signature)
     }
 
-    pub fn fullnode_exit(&self) -> io::Result<bool> {
-        self.rpc_client().fullnode_exit()
+    pub fn validator_exit(&self) -> io::Result<bool> {
+        self.rpc_client().validator_exit()
     }
 
     pub fn get_num_blocks_since_signature_confirmation(

@@ -21,7 +21,7 @@ pub struct RpcEpochInfo {
 pub enum RpcRequest {
     ConfirmTransaction,
     DeregisterNode,
-    FullnodeExit,
+    ValidatorExit,
     GetAccountInfo,
     GetBalance,
     GetClusterNodes,
@@ -54,7 +54,7 @@ impl RpcRequest {
         let method = match self {
             RpcRequest::ConfirmTransaction => "confirmTransaction",
             RpcRequest::DeregisterNode => "deregisterNode",
-            RpcRequest::FullnodeExit => "fullnodeExit",
+            RpcRequest::ValidatorExit => "validatorExit",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
             RpcRequest::GetClusterNodes => "getClusterNodes",

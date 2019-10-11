@@ -52,7 +52,7 @@ fn test_ledger_cleanup_service() {
     );
     cluster.close_preserve_ledgers();
     //check everyone's ledgers and make sure only ~100 slots are stored
-    for (_, info) in &cluster.fullnode_infos {
+    for (_, info) in &cluster.validator_infos {
         let mut slots = 0;
         let blocktree = Blocktree::open(&info.info.ledger_path).unwrap();
         blocktree
@@ -130,22 +130,22 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
 #[allow(unused_attributes)]
 #[test]
 #[should_panic]
-fn test_fullnode_exit_default_config_should_panic() {
+fn test_validator_exit_default_config_should_panic() {
     solana_logger::setup();
-    error!("test_fullnode_exit_default_config_should_panic");
+    error!("test_validator_exit_default_config_should_panic");
     let num_nodes = 2;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
-    cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
+    cluster_tests::validator_exit(&local.entry_point_info, num_nodes);
 }
 
 #[test]
 #[serial]
-fn test_fullnode_exit_2() {
+fn test_validator_exit_2() {
     solana_logger::setup();
-    error!("test_fullnode_exit_2");
+    error!("test_validator_exit_2");
     let num_nodes = 2;
     let mut validator_config = ValidatorConfig::default();
-    validator_config.rpc_config.enable_fullnode_exit = true;
+    validator_config.rpc_config.enable_validator_exit = true;
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; num_nodes],
@@ -153,7 +153,7 @@ fn test_fullnode_exit_2() {
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
-    cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
+    cluster_tests::validator_exit(&local.entry_point_info, num_nodes);
 }
 
 // Cluster needs a supermajority to remain, so the minimum size for this test is 4
@@ -164,7 +164,7 @@ fn test_leader_failure_4() {
     error!("test_leader_failure_4");
     let num_nodes = 4;
     let mut validator_config = ValidatorConfig::default();
-    validator_config.rpc_config.enable_fullnode_exit = true;
+    validator_config.rpc_config.enable_validator_exit = true;
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
@@ -189,7 +189,7 @@ fn test_two_unbalanced_stakes() {
     let num_ticks_per_slot = 10;
     let num_slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
 
-    validator_config.rpc_config.enable_fullnode_exit = true;
+    validator_config.rpc_config.enable_validator_exit = true;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 1_000_000,
@@ -208,7 +208,7 @@ fn test_two_unbalanced_stakes() {
     );
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
-    let leader_ledger = cluster.fullnode_infos[&leader_pubkey]
+    let leader_ledger = cluster.validator_infos[&leader_pubkey]
         .info
         .ledger_path
         .clone();
@@ -430,7 +430,7 @@ fn test_snapshots_blocktree_floor() {
 
     // Check the validator ledger doesn't contain any slots < slot_floor
     cluster.close_preserve_ledgers();
-    let validator_ledger_path = &cluster.fullnode_infos[&validator_id];
+    let validator_ledger_path = &cluster.validator_infos[&validator_id];
     let blocktree = Blocktree::open(&validator_ledger_path.info.ledger_path).unwrap();
 
     // Skip the zeroth slot in blocktree that the ledger is initialized with
@@ -490,7 +490,7 @@ fn test_snapshots_restart_validity() {
         let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
         wait_for_next_snapshot(&cluster, &tar);
 
-        // Create new account paths since fullnode exit is not guaranteed to cleanup RPC threads,
+        // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point
         let (new_account_storage_dirs, new_account_storage_paths) =
             generate_account_paths(num_account_paths);
@@ -566,7 +566,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     );
 
     let corrupt_node = cluster
-        .fullnode_infos
+        .validator_infos
         .iter()
         .find(|(_, v)| v.config.broadcast_stage_type == faulty_node_type)
         .unwrap()
@@ -616,7 +616,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     // their root could actually be much less than 31. This is why we give a num_root_buffer_slots buffer.
     let stakers_slot_offset = num_slots_per_epoch + num_root_buffer_slots;
 
-    validator_config.rpc_config.enable_fullnode_exit = true;
+    validator_config.rpc_config.enable_validator_exit = true;
 
     let lamports_per_repairman = 1000;
 
@@ -740,7 +740,7 @@ fn setup_snapshot_validator_config(
 
     // Create the validator config
     let mut validator_config = ValidatorConfig::default();
-    validator_config.rpc_config.enable_fullnode_exit = true;
+    validator_config.rpc_config.enable_validator_exit = true;
     validator_config.snapshot_config = Some(snapshot_config);
     validator_config.account_paths = Some(account_storage_paths);
 

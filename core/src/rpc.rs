@@ -28,14 +28,14 @@ use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
-    pub enable_fullnode_exit: bool, // Enable the 'fullnodeExit' command
+    pub enable_validator_exit: bool, // Enable the 'validatorExit' command
     pub drone_addr: Option<SocketAddr>,
 }
 
 impl Default for JsonRpcConfig {
     fn default() -> Self {
         Self {
-            enable_fullnode_exit: false,
+            enable_validator_exit: false,
             drone_addr: None,
         }
     }
@@ -197,15 +197,15 @@ impl JsonRpcRequestProcessor {
             .get_pubkeys_for_slot(slot, &self.bank_forks))
     }
 
-    pub fn fullnode_exit(&self) -> Result<bool> {
-        if self.config.enable_fullnode_exit {
-            warn!("fullnode_exit request...");
+    pub fn validator_exit(&self) -> Result<bool> {
+        if self.config.enable_validator_exit {
+            warn!("validator_exit request...");
             if let Some(x) = self.validator_exit.write().unwrap().take() {
                 x.exit()
             }
             Ok(true)
         } else {
-            debug!("fullnode_exit ignored");
+            debug!("validator_exit ignored");
             Ok(false)
         }
     }
@@ -356,8 +356,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "getStoragePubkeysForSlot")]
     fn get_storage_pubkeys_for_slot(&self, _: Self::Metadata, _: u64) -> Result<Vec<Pubkey>>;
 
-    #[rpc(meta, name = "fullnodeExit")]
-    fn fullnode_exit(&self, _: Self::Metadata) -> Result<bool>;
+    #[rpc(meta, name = "validatorExit")]
+    fn validator_exit(&self, _: Self::Metadata) -> Result<bool>;
 
     #[rpc(meta, name = "getNumBlocksSinceSignatureConfirmation")]
     fn get_num_blocks_since_signature_confirmation(
@@ -689,8 +689,8 @@ impl RpcSol for RpcSolImpl {
             .get_storage_pubkeys_for_slot(slot)
     }
 
-    fn fullnode_exit(&self, meta: Self::Metadata) -> Result<bool> {
-        meta.request_processor.read().unwrap().fullnode_exit()
+    fn validator_exit(&self, meta: Self::Metadata) -> Result<bool> {
+        meta.request_processor.read().unwrap().validator_exit()
     }
 
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
@@ -1238,7 +1238,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rpc_request_processor_config_default_trait_fullnode_exit_fails() {
+    fn test_rpc_request_processor_config_default_trait_validator_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let request_processor = JsonRpcRequestProcessor::new(
@@ -1247,23 +1247,23 @@ pub mod tests {
             new_bank_forks().0,
             &validator_exit,
         );
-        assert_eq!(request_processor.fullnode_exit(), Ok(false));
+        assert_eq!(request_processor.validator_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
 
     #[test]
-    fn test_rpc_request_processor_allow_fullnode_exit_config() {
+    fn test_rpc_request_processor_allow_validator_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let mut config = JsonRpcConfig::default();
-        config.enable_fullnode_exit = true;
+        config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             config,
             new_bank_forks().0,
             &validator_exit,
         );
-        assert_eq!(request_processor.fullnode_exit(), Ok(true));
+        assert_eq!(request_processor.validator_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
     }
 

@@ -58,7 +58,7 @@ impl ReplicatorInfo {
 
 #[derive(Clone, Debug)]
 pub struct ClusterConfig {
-    /// The fullnode config that should be applied to every node in the cluster
+    /// The validator config that should be applied to every node in the cluster
     pub validator_configs: Vec<ValidatorConfig>,
     /// Number of replicators in the cluster
     /// Note- replicators will timeout if ticks_per_slot is much larger than the default 8
@@ -100,9 +100,9 @@ pub struct LocalCluster {
     pub funding_keypair: Keypair,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: ContactInfo,
-    pub fullnode_infos: HashMap<Pubkey, ClusterValidatorInfo>,
+    pub validator_infos: HashMap<Pubkey, ClusterValidatorInfo>,
     pub listener_infos: HashMap<Pubkey, ClusterValidatorInfo>,
-    fullnodes: HashMap<Pubkey, Validator>,
+    validators: HashMap<Pubkey, Validator>,
     pub genesis_block: GenesisBlock,
     replicators: Vec<Replicator>,
     pub replicator_infos: HashMap<Pubkey, ReplicatorInfo>,
@@ -190,9 +190,9 @@ impl LocalCluster {
             &config.validator_configs[0],
         );
 
-        let mut fullnodes = HashMap::new();
-        let mut fullnode_infos = HashMap::new();
-        fullnodes.insert(leader_pubkey, leader_server);
+        let mut validators = HashMap::new();
+        let mut validator_infos = HashMap::new();
+        validators.insert(leader_pubkey, leader_server);
         let leader_info = ValidatorInfo {
             keypair: leader_keypair,
             voting_keypair: leader_voting_keypair,
@@ -204,15 +204,15 @@ impl LocalCluster {
         let cluster_leader =
             ClusterValidatorInfo::new(leader_info, config.validator_configs[0].clone());
 
-        fullnode_infos.insert(leader_pubkey, cluster_leader);
+        validator_infos.insert(leader_pubkey, cluster_leader);
 
         let mut cluster = Self {
             funding_keypair: mint_keypair,
             entry_point_info: leader_contact_info,
-            fullnodes,
+            validators,
             replicators: vec![],
             genesis_block,
-            fullnode_infos,
+            validator_infos,
             replicator_infos: HashMap::new(),
             listener_infos: HashMap::new(),
         };
@@ -250,14 +250,14 @@ impl LocalCluster {
     }
 
     pub fn exit(&mut self) {
-        for node in self.fullnodes.values_mut() {
+        for node in self.validators.values_mut() {
             node.exit();
         }
     }
 
     pub fn close_preserve_ledgers(&mut self) {
         self.exit();
-        for (_, node) in self.fullnodes.drain() {
+        for (_, node) in self.validators.drain() {
             node.join().unwrap();
         }
 
@@ -322,7 +322,7 @@ impl LocalCluster {
             &validator_config,
         );
 
-        self.fullnodes
+        self.validators
             .insert(validator_keypair.pubkey(), validator_server);
         let validator_pubkey = validator_keypair.pubkey();
         let validator_info = ClusterValidatorInfo::new(
@@ -339,7 +339,8 @@ impl LocalCluster {
         if validator_config.voting_disabled {
             self.listener_infos.insert(validator_pubkey, validator_info);
         } else {
-            self.fullnode_infos.insert(validator_pubkey, validator_info);
+            self.validator_infos
+                .insert(validator_pubkey, validator_info);
         }
     }
 
@@ -384,7 +385,7 @@ impl LocalCluster {
     fn close(&mut self) {
         self.close_preserve_ledgers();
         for ledger_path in self
-            .fullnode_infos
+            .validator_infos
             .values()
             .map(|f| &f.info.ledger_path)
             .chain(self.replicator_infos.values().map(|info| &info.ledger_path))
@@ -567,11 +568,11 @@ impl LocalCluster {
 
 impl Cluster for LocalCluster {
     fn get_node_pubkeys(&self) -> Vec<Pubkey> {
-        self.fullnodes.keys().cloned().collect()
+        self.validators.keys().cloned().collect()
     }
 
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
-        self.fullnode_infos.get(pubkey).map(|f| {
+        self.validator_infos.get(pubkey).map(|f| {
             create_client(
                 f.info.contact_info.client_facing_addr(),
                 VALIDATOR_PORT_RANGE,
@@ -580,13 +581,13 @@ impl Cluster for LocalCluster {
     }
 
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {
-        let mut node = self.fullnodes.remove(&pubkey).unwrap();
+        let mut node = self.validators.remove(&pubkey).unwrap();
 
-        // Shut down the fullnode
+        // Shut down the validator
         node.exit();
         node.join().unwrap();
 
-        self.fullnode_infos.remove(&pubkey).unwrap()
+        self.validator_infos.remove(&pubkey).unwrap()
     }
 
     fn restart_node(&mut self, pubkey: &Pubkey, mut cluster_validator_info: ClusterValidatorInfo) {
@@ -604,22 +605,22 @@ impl Cluster for LocalCluster {
         };
 
         // Restart the node
-        let fullnode_info = &cluster_validator_info.info;
+        let validator_info = &cluster_validator_info.info;
 
         let restarted_node = Validator::new(
             node,
-            &fullnode_info.keypair,
-            &fullnode_info.ledger_path,
-            &fullnode_info.voting_keypair.pubkey(),
-            &fullnode_info.voting_keypair,
-            &fullnode_info.storage_keypair,
+            &validator_info.keypair,
+            &validator_info.ledger_path,
+            &validator_info.voting_keypair.pubkey(),
+            &validator_info.voting_keypair,
+            &validator_info.storage_keypair,
             entry_point_info,
             true,
             &cluster_validator_info.config,
         );
 
-        self.fullnodes.insert(*pubkey, restarted_node);
-        self.fullnode_infos.insert(*pubkey, cluster_validator_info);
+        self.validators.insert(*pubkey, restarted_node);
+        self.validator_infos.insert(*pubkey, cluster_validator_info);
     }
 
     fn exit_restart_node(&mut self, pubkey: &Pubkey, validator_config: ValidatorConfig) {
@@ -646,7 +647,7 @@ mod test {
         solana_logger::setup();
         let num_nodes = 1;
         let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 3);
-        assert_eq!(cluster.fullnodes.len(), num_nodes);
+        assert_eq!(cluster.validators.len(), num_nodes);
         assert_eq!(cluster.replicators.len(), 0);
     }
 
@@ -654,7 +655,7 @@ mod test {
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
         let mut validator_config = ValidatorConfig::default();
-        validator_config.rpc_config.enable_fullnode_exit = true;
+        validator_config.rpc_config.enable_validator_exit = true;
         validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
         const NUM_NODES: usize = 1;
         let num_replicators = 1;
@@ -668,7 +669,7 @@ mod test {
             ..ClusterConfig::default()
         };
         let cluster = LocalCluster::new(&config);
-        assert_eq!(cluster.fullnodes.len(), NUM_NODES);
+        assert_eq!(cluster.validators.len(), NUM_NODES);
         assert_eq!(cluster.replicators.len(), num_replicators);
     }
 }
