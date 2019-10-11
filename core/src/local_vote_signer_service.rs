@@ -1,4 +1,4 @@
-//! The `local_vote_signer_service` can be started locally to sign fullnode votes
+//! The `local_vote_signer_service` can be started locally to sign validator votes
 
 use crate::service::Service;
 use solana_netutil::PortRange;

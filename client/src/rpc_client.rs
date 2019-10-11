@@ -679,20 +679,20 @@ impl RpcClient {
         })
     }
 
-    pub fn fullnode_exit(&self) -> io::Result<bool> {
+    pub fn validator_exit(&self) -> io::Result<bool> {
         let response = self
             .client
-            .send(&RpcRequest::FullnodeExit, None, 0)
+            .send(&RpcRequest::ValidatorExit, None, 0)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("FullnodeExit request failure: {:?}", err),
+                    format!("ValidatorExit request failure: {:?}", err),
                 )
             })?;
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("FullnodeExit parse failure: {:?}", err),
+                format!("ValidatorExit parse failure: {:?}", err),
             )
         })
     }

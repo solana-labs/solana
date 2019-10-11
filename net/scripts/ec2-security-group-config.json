@@ -24,7 +24,7 @@
             "FromPort": 8000,
             "IpRanges": [
                 {
-                    "Description": "fullnode UDP range",
+                    "Description": "validator UDP range",
                     "CidrIp": "0.0.0.0/0"
                 }
             ],
@@ -34,7 +34,7 @@
             "Ipv6Ranges": [
                 {
                     "CidrIpv6": "::/0",
-                    "Description": "fullnode UDP range"
+                    "Description": "validator UDP range"
                 }
             ]
         },
@@ -100,7 +100,7 @@
             "FromPort": 8000,
             "IpRanges": [
                 {
-                    "Description": "fullnode TCP range",
+                    "Description": "validator TCP range",
                     "CidrIp": "0.0.0.0/0"
                 }
             ],
@@ -110,7 +110,7 @@
             "Ipv6Ranges": [
                 {
                     "CidrIpv6": "::/0",
-                    "Description": "fullnode TCP range"
+                    "Description": "validator TCP range"
                 }
             ]
         },

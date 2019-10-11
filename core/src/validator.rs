@@ -1,4 +1,4 @@
-//! The `fullnode` module hosts all the fullnode microservices.
+//! The `validator` module hosts all the validator microservices.
 
 use crate::bank_forks::{BankForks, SnapshotConfig};
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};

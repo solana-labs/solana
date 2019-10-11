@@ -207,7 +207,7 @@ killNodes() {
       set -x
       curl --retry 5 --retry-delay 2 --retry-connrefused \
         -X POST -H 'Content-Type: application/json' \
-        -d '{"jsonrpc":"2.0","id":1, "method":"fullnodeExit"}' \
+        -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
         http://localhost:$port
     )
   done

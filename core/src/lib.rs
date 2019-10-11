@@ -2,7 +2,7 @@
 //! It includes a full Rust implementation of the architecture (see
 //! [Validator](server/struct.Validator.html)) as well as hooks to GPU implementations of its most
 //! paralellizable components (i.e. [SigVerify](sigverify/index.html)).  It also includes
-//! command-line tools to spin up fullnodes and a Rust library
+//! command-line tools to spin up validators and a Rust library
 //!
 
 pub mod bank_forks;

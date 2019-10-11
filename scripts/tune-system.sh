@@ -1,6 +1,6 @@
 # |source| this file
 #
-# Adjusts system settings for optimal fullnode performance
+# Adjusts system settings for optimal validator performance
 #
 
 sysctl_write() {

@@ -335,7 +335,7 @@ pub fn main() {
             Arg::with_name("enable_rpc_exit")
                 .long("enable-rpc-exit")
                 .takes_value(false)
-                .help("Enable the JSON RPC 'fullnodeExit' API.  Only enable in a debug environment"),
+                .help("Enable the JSON RPC 'validatorExit' API.  Only enable in a debug environment"),
         )
         .arg(
             Arg::with_name("rpc_drone_addr")
@@ -457,7 +457,7 @@ pub fn main() {
 
     validator_config.voting_disabled = matches.is_present("no_voting");
 
-    validator_config.rpc_config.enable_fullnode_exit = matches.is_present("enable_rpc_exit");
+    validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
 
     validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_addr").map(|address| {
         solana_netutil::parse_host_port(address).expect("failed to parse drone address")

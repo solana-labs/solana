@@ -194,7 +194,7 @@ pub fn ed25519_verify(
     // micro-benchmarks show GPU time for smallest batch around 15-20ms
     // and CPU speed for 64-128 sigverifies around 10-20ms. 64 is a nice
     // power-of-two number around that accounting for the fact that the CPU
-    // may be busy doing other things while being a real fullnode
+    // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
     if count < 64 {
         return ed25519_verify_cpu(batches);
