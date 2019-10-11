@@ -22,7 +22,7 @@ use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
 use crate::packet::{to_shared_blob, Blob, Packet, SharedBlob};
 use crate::repair_service::RepairType;
 use crate::result::{Error, Result};
-use crate::sendmmsg::multicast;
+use crate::sendmmsg::{multicast, send_mmsg};
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
 use crate::weighted_shuffle::{weighted_best, weighted_shuffle};
@@ -709,27 +709,36 @@ impl ClusterInfo {
     pub fn broadcast_shreds(
         &self,
         s: &UdpSocket,
-        shreds: &[Vec<u8>],
+        shreds: Vec<Vec<u8>>,
         seeds: &[[u8; 32]],
         stakes: Option<&HashMap<Pubkey, u64>>,
     ) -> Result<()> {
-        let mut last_err = Ok(());
         let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
         let broadcast_len = peers_and_stakes.len();
         if broadcast_len == 0 {
             datapoint_info!("cluster_info-num_nodes", ("count", 1, i64));
             return Ok(());
         }
-        shreds.iter().zip(seeds).for_each(|(shred, seed)| {
-            let broadcast_index = weighted_best(&peers_and_stakes, ChaChaRng::from_seed(*seed));
+        let mut packets: Vec<_> = shreds
+            .into_iter()
+            .zip(seeds)
+            .map(|(shred, seed)| {
+                let broadcast_index = weighted_best(&peers_and_stakes, ChaChaRng::from_seed(*seed));
 
-            if let Err(e) = s.send_to(shred, &peers[broadcast_index].tvu) {
-                trace!("{}: broadcast result {:?}", self.id(), e);
-                last_err = Err(e);
+                (shred, &peers[broadcast_index].tvu)
+            })
+            .collect();
+
+        let mut sent = 0;
+        while sent < packets.len() {
+            match send_mmsg(s, &mut packets[sent..]) {
+                Ok(n) => sent += n,
+                Err(e) => {
+                    return Err(Error::IO(e));
+                }
             }
-        });
+        }
 
-        last_err?;
         datapoint_debug!("cluster_info-num_nodes", ("count", broadcast_len + 1, i64));
         Ok(())
     }
@@ -753,7 +762,7 @@ impl ClusterInfo {
 
         let mut sent = 0;
         while sent < dests.len() {
-            match multicast(s, packet, &dests[sent..]) {
+            match multicast(s, &mut packet.data[..packet.meta.size], &dests[sent..]) {
                 Ok(n) => sent += n,
                 Err(e) => {
                     inc_new_counter_error!(

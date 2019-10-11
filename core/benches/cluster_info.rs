@@ -32,8 +32,9 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         stakes.insert(id, thread_rng().gen_range(1, NUM_PEERS) as u64);
     }
     bencher.iter(move || {
+        let shreds = shreds.clone();
         cluster_info
-            .broadcast_shreds(&socket, &shreds, &seeds, Some(&stakes))
+            .broadcast_shreds(&socket, shreds, &seeds, Some(&stakes))
             .unwrap();
     });
 }
