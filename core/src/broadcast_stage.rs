@@ -7,10 +7,12 @@ use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::{Error, Result};
 use crate::service::Service;
+use crate::shred::Shred;
 use crate::staking_utils;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
@@ -84,6 +86,7 @@ trait BroadcastRun {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntry>,
         sock: &UdpSocket,
+        shred_sender: &Sender<Vec<Shred>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()>;
 }
@@ -107,7 +110,8 @@ impl Drop for Finalizer {
 }
 
 pub struct BroadcastStage {
-    thread_hdl: JoinHandle<BroadcastStageReturnType>,
+    broadcast_thread_hdl: JoinHandle<BroadcastStageReturnType>,
+    blocktree_writer_thread_hdl: JoinHandle<()>,
 }
 
 impl BroadcastStage {
@@ -117,10 +121,13 @@ impl BroadcastStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntry>,
         blocktree: &Arc<Blocktree>,
+        shred_sender: Sender<Vec<Shred>>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
-            if let Err(e) = broadcast_stage_run.run(&cluster_info, receiver, sock, blocktree) {
+            if let Err(e) =
+                broadcast_stage_run.run(&cluster_info, receiver, sock, &shred_sender, blocktree)
+            {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastStageReturnType::ChannelDisconnected;
@@ -134,6 +141,27 @@ impl BroadcastStage {
                 }
             }
         }
+    }
+
+    pub fn run_blocktree_writer(
+        shred_receiver: Receiver<Vec<Shred>>,
+        blocktree: Arc<Blocktree>,
+    ) -> JoinHandle<()> {
+        Builder::new()
+            .name("solana-blocktree-writer".to_string())
+            .spawn(move || loop {
+                match shred_receiver.recv() {
+                    Ok(shreds) => {
+                        blocktree
+                            .insert_shreds(shreds, None)
+                            .expect("Failed to insert shreds in blocktree");
+                    }
+                    _ => {
+                        return;
+                    }
+                }
+            })
+            .unwrap()
     }
 
     /// Service to broadcast messages from the leader to layer 1 nodes.
@@ -160,9 +188,10 @@ impl BroadcastStage {
         blocktree: &Arc<Blocktree>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static,
     ) -> Self {
-        let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
-        let thread_hdl = Builder::new()
+        let (shred_sender, shred_receiver) = channel();
+        let blocktree_ = blocktree.clone();
+        let broadcast_thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit_sender);
@@ -170,13 +199,19 @@ impl BroadcastStage {
                     &sock,
                     &cluster_info,
                     &receiver,
-                    &blocktree,
+                    &blocktree_,
+                    shred_sender,
                     broadcast_stage_run,
                 )
             })
             .unwrap();
 
-        Self { thread_hdl }
+        let blocktree_writer_thread_hdl =
+            Self::run_blocktree_writer(shred_receiver, blocktree.clone());
+        Self {
+            broadcast_thread_hdl,
+            blocktree_writer_thread_hdl,
+        }
     }
 }
 
@@ -184,7 +219,8 @@ impl Service for BroadcastStage {
     type JoinReturnType = BroadcastStageReturnType;
 
     fn join(self) -> thread::Result<BroadcastStageReturnType> {
-        self.thread_hdl.join()
+        self.blocktree_writer_thread_hdl.join().unwrap();
+        self.broadcast_thread_hdl.join()
     }
 }
 

@@ -2,6 +2,7 @@ use super::*;
 use crate::entry::Entry;
 use crate::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
+use std::sync::mpsc::Sender;
 
 pub(super) struct BroadcastFakeBlobsRun {
     last_blockhash: Hash,
@@ -23,6 +24,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntry>,
         sock: &UdpSocket,
+        _insert_blocktree_sender: &Sender<Vec<Shred>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage

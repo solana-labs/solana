@@ -18,6 +18,7 @@ pub struct UnfinishedSlotInfo {
     pub next_shred_index: u32,
     pub slot: u64,
     pub parent: u64,
+    pub is_marked_in_blocktree: bool,
 }
 
 /// Theis parameter tunes how many entries are received in one iteration of recv loop
