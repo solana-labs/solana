@@ -27,7 +27,7 @@ fn verify_date_account(
     let config_data =
         get_config_data(&account.data).map_err(|_| InstructionError::InvalidAccountData)?;
     let date_config =
-        deserialize::<DateConfig>(config_data).map_err(|_| InstructionError::InvalidAccountData)?;
+        DateConfig::deserialize(config_data).ok_or(InstructionError::InvalidAccountData)?;
 
     Ok(date_config.date_time.date())
 }
@@ -540,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cancel_payment() {
+    fn test_terminate_and_refund() {
         let (bank_client, alice_keypair) = create_bank_client(3);
         let alice_pubkey = alice_keypair.pubkey();
         let contract_pubkey = Pubkey::new_rand();
@@ -575,6 +575,50 @@ mod tests {
             .send_instruction(&alice_keypair, instruction)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
+        assert_eq!(
+            bank_client.get_account_data(&contract_pubkey).unwrap(),
+            None
+        );
+        assert_eq!(bank_client.get_account_data(&bob_pubkey).unwrap(), None);
+    }
+
+    #[test]
+    fn test_terminate_and_send_funds() {
+        let (bank_client, alice_keypair) = create_bank_client(3);
+        let alice_pubkey = alice_keypair.pubkey();
+        let contract_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
+        let start_date = Utc::now().date();
+
+        let date_keypair = Keypair::new();
+        let date_pubkey = date_keypair.pubkey();
+
+        let current_date = Utc.ymd(2019, 1, 1);
+        create_date_account(&bank_client, &date_keypair, &alice_keypair, current_date).unwrap();
+
+        create_vest_account(
+            &bank_client,
+            &contract_pubkey,
+            &alice_keypair,
+            &alice_pubkey,
+            &bob_pubkey,
+            start_date,
+            &date_pubkey,
+            1,
+        )
+        .unwrap();
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 1);
+
+        // Now, terminate the transaction. carol gets the funds.
+        let carol_pubkey = Pubkey::new_rand();
+        let instruction =
+            vest_instruction::terminate(&contract_pubkey, &alice_pubkey, &carol_pubkey);
+        bank_client
+            .send_instruction(&alice_keypair, instruction)
+            .unwrap();
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&carol_pubkey).unwrap(), 1);
         assert_eq!(
             bank_client.get_account_data(&contract_pubkey).unwrap(),
             None
