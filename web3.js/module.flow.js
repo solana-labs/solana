@@ -123,7 +123,7 @@ declare module '@solana/web3.js' {
       callback: ProgramAccountChangeCallback,
     ): number;
     removeProgramAccountChangeListener(id: number): Promise<void>;
-    fullnodeExit(): Promise<boolean>;
+    validatorExit(): Promise<boolean>;
   }
 
   // === src/system-program.js ===
