@@ -4,7 +4,7 @@ use std::io;
 use std::net::{SocketAddr, UdpSocket};
 
 #[cfg(not(target_os = "linux"))]
-pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
+pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(&[u8], &SocketAddr)]) -> io::Result<usize> {
     let count = packets.len();
     for (p, a) in packets {
         sock.send_to(p, *a)?;
@@ -57,7 +57,7 @@ fn mmsghdr_for_packet(
 }
 
 #[cfg(target_os = "linux")]
-pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
+pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(&[u8], &SocketAddr)]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -160,9 +160,9 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let mut packets: Vec<_> = (0..32)
-            .map(|_| (vec![0u8; PACKET_DATA_SIZE], &addr))
-            .collect();
+        let packet = vec![0u8; PACKET_DATA_SIZE];
+
+        let mut packets: Vec<_> = (0..32).map(|_| (&packet[..], &addr)).collect();
 
         let sent = send_mmsg(&sender, &mut packets);
         assert_matches!(sent, Ok(32));
@@ -182,12 +182,13 @@ mod tests {
 
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
+        let packet = vec![0u8; PACKET_DATA_SIZE];
         let mut packets: Vec<_> = (0..32)
             .map(|i| {
                 if i < 16 {
-                    (vec![0u8; PACKET_DATA_SIZE], &addr)
+                    (&packet[..], &addr)
                 } else {
-                    (vec![0u8; PACKET_DATA_SIZE], &addr2)
+                    (&packet[..], &addr2)
                 }
             })
             .collect();

@@ -1,6 +1,7 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
+use crate::sendmmsg::send_mmsg;
 use crate::{
     blocktree::Blocktree,
     cluster_info::ClusterInfo,
@@ -145,8 +146,19 @@ impl BankingStage {
     ) -> std::io::Result<()> {
         let packets = Self::filter_valid_packets_for_forwarding(unprocessed_packets);
         inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
-        for p in packets {
-            socket.send_to(&p.data[..p.meta.size], &tpu_forwards)?;
+        let mut mmsg: Vec<_> = packets
+            .into_iter()
+            .map(|p| (&p.data[..p.meta.size], tpu_forwards))
+            .collect();
+
+        let mut sent = 0;
+        while sent < mmsg.len() {
+            match send_mmsg(socket, &mut mmsg[sent..]) {
+                Ok(n) => sent += n,
+                Err(e) => {
+                    return Err(e);
+                }
+            }
         }
 
         Ok(())
