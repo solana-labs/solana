@@ -21,7 +21,7 @@ Once a block has been voted on, the subsequent leader schedule will
 reflect the likelihood of the block being finalized.
 
 For example:
-* 80% of the cluster voted the block
+* 80% of the cluster voted for the block
 
 * The schedule for the next 5 leaders looks like:
 
@@ -60,9 +60,9 @@ a rough estimate of the likelihood of each streak is as follows:
 * streak of size 9 in 204 blocks 99.90%
 * streak of size 10 in 409 blocks 99.999%
 
-So the cumulative probability is roughly 93.8%.  This calculation
-would need to take into account how the non-voting leaders are
-distributed in the schedule.
+The cumulative probability is roughly 93.8%.  This calculation would
+need to take into account how the non-voting leaders are distributed
+in the schedule.
 
 At any point if all 100% have voted for a descendant, then there
 is no way a block could be proposed that doesn't include the parent.
