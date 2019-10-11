@@ -1,7 +1,6 @@
-use crate::account::KeyedAccount;
-use crate::instruction::InstructionError;
-use crate::pubkey::Pubkey;
+use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
 use num_traits::{FromPrimitive, ToPrimitive};
+use std::collections::HashSet;
 
 // All native programs export a symbol named process()
 pub const ENTRYPOINT: &str = "process";
@@ -41,6 +40,15 @@ where
 /// Return the next KeyedAccount or a NotEnoughAccountKeys instruction error
 pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, InstructionError> {
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
+}
+
+/// Return all the signers from a set of KeyedAccounts
+pub fn signers(keyed_accounts: &[KeyedAccount]) -> HashSet<Pubkey> {
+    keyed_accounts
+        .iter()
+        .filter_map(|keyed_account| keyed_account.signer_key())
+        .cloned()
+        .collect()
 }
 
 pub trait DecodeError<E> {
