@@ -346,7 +346,7 @@ deploy() {
     (
       set -x
       NO_VALIDATOR_SANITY=1 \
-      RUST_LOG=solana=warn \
+      RUST_LOG=solana=warn,sealevel=warn \
         ci/testnet-deploy.sh -p edge-perf-testnet-solana-com -C ec2 -z us-west-2b \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           ${skipCreate:+-e} \
@@ -372,7 +372,7 @@ deploy() {
     (
       set -x
       NO_VALIDATOR_SANITY=1 \
-      RUST_LOG=solana=warn \
+      RUST_LOG=solana=warn,sealevel=warn \
         ci/testnet-deploy.sh -p beta-perf-testnet-solana-com -C ec2 -z us-west-2b \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           ${skipCreate:+-e} \
@@ -403,7 +403,7 @@ deploy() {
     (
       set -x
       NO_VALIDATOR_SANITY=1 \
-      RUST_LOG=solana=warn \
+      RUST_LOG=solana=warn,sealevel=warn \
         ci/testnet-deploy.sh -p perf-testnet-solana-com -C gce -z us-west1-b \
           -G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
           -t "$CHANNEL_OR_TAG" -c 2 \

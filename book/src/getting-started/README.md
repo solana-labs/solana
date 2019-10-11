@@ -98,7 +98,7 @@ For example
 * To enable `info` everywhere and `debug` only in the solana::banking\_stage module:
 
   ```bash
-  $ export RUST_LOG=solana=info,solana::banking_stage=debug
+  $ export RUST_LOG=solana=info,sealevel=info,solana::banking_stage=debug
   ```
 
 * To enable BPF program logging:
