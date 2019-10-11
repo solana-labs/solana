@@ -1,11 +1,11 @@
 # Practical Finality in One Round of Consensus
 
 The cluster can achieve a high degree of finality though Tower
-consensus, and the cluster commits to an exponentially increasing
-of safety for a block.  This safety is based on the commitment of
-any validator from switching votes to an alternative fork.  It is
-possible to achieve finality a different way, leaders can agree not
-to propose alternative forks.
+consensus as the cluster commits to an exponentially increasing of
+safety for a block.  This safety is based on the commitment of any
+voting validator from switching votes to an alternative fork.  It
+is possible to achieve finality a different way, leaders can agree
+not to propose alternative forks.
 
 If only a part of the cluster has agreed not to propose alternative
 forks the deterministic leader schedule can be used to calculate
@@ -15,7 +15,7 @@ votable alternative fork.
 ## Overview
 
 Leaders commit to producing a block that chains to the leaders last
-vote.
+vote.  Breaking this commitment is slashable.
 
 Once a block has been voted on, the subsequent leader schedule will
 reflect the likelihood of the block being finalized.
@@ -60,7 +60,9 @@ a rough estimate of the likelihood of each streak is as follows:
 * streak of size 9 in 204 blocks 99.90%
 * streak of size 10 in 409 blocks 99.999%
 
-So the cumulative probability is roughly 93.8%.
+So the cumulative probability is roughly 93.8%.  This calculation
+would need to take into account how the non-voting leaders are
+distributed in the schedule.
 
 At any point if all 100% have voted for a descendant, then there
 is no way a block could be proposed that doesn't include the parent.
