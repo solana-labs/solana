@@ -12,7 +12,6 @@ use std::time::Duration;
 struct BroadcastStats {
     // Per-slot elapsed time
     shredding_elapsed: u64,
-    insert_shreds_elapsed: u64,
     broadcast_elapsed: u64,
     receive_elapsed: u64,
     clone_and_seed_elapsed: u64,
@@ -20,7 +19,6 @@ struct BroadcastStats {
 
 impl BroadcastStats {
     fn reset(&mut self) {
-        self.insert_shreds_elapsed = 0;
         self.shredding_elapsed = 0;
         self.broadcast_elapsed = 0;
         self.receive_elapsed = 0;
@@ -190,7 +188,7 @@ impl StandardBroadcastRun {
         let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
         let clone_and_seed_elapsed = clone_and_seed_start.elapsed();
 
-        // 3) Insert first shred into blocktree, send rest to separate thread to
+        // 3) Insert first shred into blocktree, send the remaining shreds to separate thread to
         // insert into blocktree
         let unfinished_slot = self
             .unfinished_slot
@@ -226,8 +224,6 @@ impl StandardBroadcastRun {
         self.update_broadcast_stats(
             duration_as_us(&receive_elapsed),
             duration_as_us(&to_shreds_elapsed),
-            0,
-            //duration_as_us(&insert_shreds_elapsed),
             duration_as_us(&broadcast_elapsed),
             duration_as_us(&clone_and_seed_elapsed),
             last_tick == bank.max_tick_height(),
@@ -245,14 +241,12 @@ impl StandardBroadcastRun {
         &mut self,
         receive_entries_elapsed: u64,
         shredding_elapsed: u64,
-        insert_shreds_elapsed: u64,
         broadcast_elapsed: u64,
         clone_and_seed_elapsed: u64,
         slot_ended: bool,
     ) {
         self.stats.receive_elapsed += receive_entries_elapsed;
         self.stats.shredding_elapsed += shredding_elapsed;
-        self.stats.insert_shreds_elapsed += insert_shreds_elapsed;
         self.stats.broadcast_elapsed += broadcast_elapsed;
         self.stats.clone_and_seed_elapsed += clone_and_seed_elapsed;
 
@@ -267,11 +261,6 @@ impl StandardBroadcastRun {
             "broadcast-bank-stats",
             ("slot", self.unfinished_slot.unwrap().slot as i64, i64),
             ("shredding_time", self.stats.shredding_elapsed as i64, i64),
-            (
-                "insertion_time",
-                self.stats.insert_shreds_elapsed as i64,
-                i64
-            ),
             ("broadcast_time", self.stats.broadcast_elapsed as i64, i64),
             ("receive_time", self.stats.receive_elapsed as i64, i64),
             (
