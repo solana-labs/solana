@@ -33,7 +33,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     }
     bencher.iter(move || {
         cluster_info
-            .broadcast_shreds(&socket, &shreds, &seeds, Some(&stakes))
+            .broadcast_shreds(&socket, shreds, &seeds, Some(&stakes))
             .unwrap();
     });
 }
