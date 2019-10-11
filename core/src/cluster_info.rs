@@ -720,7 +720,7 @@ impl ClusterInfo {
             return Ok(());
         }
         let mut packets: Vec<_> = shreds
-            .into_iter()
+            .iter_mut()
             .zip(seeds)
             .map(|(shred, seed)| {
                 let broadcast_index = weighted_best(&peers_and_stakes, ChaChaRng::from_seed(*seed));
