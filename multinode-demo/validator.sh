@@ -152,6 +152,11 @@ while [[ -n $1 ]]; do
   fi
 done
 
+if [[ "$SOLANA_GPU_MISSING" -eq 1 ]]; then
+  echo "Testnet requires GPUs, but none were found!  Aborting..."
+  exit 1
+fi
+
 if [[ ${#positional_args[@]} -gt 1 ]]; then
   usage "$@"
 fi
