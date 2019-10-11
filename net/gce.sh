@@ -487,10 +487,24 @@ EOF
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
-    for zone in "${zones[@]}"; do
+    numZones=${#zones[@]}
+    if [[ $additionalFullNodeCount -gt $numZones ]]; then
+      numNodesPerZone=$((additionalFullNodeCount / numZones))
+      numLeftOverNodes=$((additionalFullNodeCount % numZones))
+    else
+      numNodesPerZone=1
+      numLeftOverNodes=0
+    fi
+
+    for ((i=((numZones - 1)); i >= 0; i--)); do
+      zone=${zones[i]}
+      if [[ $i -eq 0 ]]; then
+        numNodesPerZone=$((numNodesPerZone + numLeftOverNodes))
+      fi
       echo "Looking for additional fullnode instances in $zone ..."
       cloud_FindInstances "$prefix-$zone-fullnode"
-      if [[ ${#instances[@]} -gt 0 ]]; then
+      declare numInstances=${#instances[@]}
+      if [[ $numInstances -eq $numNodesPerZone || ( ! $failOnValidatorBootupFailure && $numInstances -gt 0 ) ]]; then
         cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
       else
         echo "Unable to find additional fullnodes"
