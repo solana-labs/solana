@@ -4,7 +4,7 @@ use std::io;
 use std::net::{SocketAddr, UdpSocket};
 
 #[cfg(not(target_os = "linux"))]
-pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(&[u8], &SocketAddr)]) -> io::Result<usize> {
+pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(&mut [u8], &SocketAddr)]) -> io::Result<usize> {
     let count = packets.len();
     for (p, a) in packets {
         sock.send_to(p, *a)?;
@@ -57,7 +57,7 @@ fn mmsghdr_for_packet(
 }
 
 #[cfg(target_os = "linux")]
-pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(&[u8], &SocketAddr)]) -> io::Result<usize> {
+pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(&mut [u8], &SocketAddr)]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -160,9 +160,12 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let packet = vec![0u8; PACKET_DATA_SIZE];
+        let mut packet_bufs: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
 
-        let mut packets: Vec<_> = (0..32).map(|_| (&packet[..], &addr)).collect();
+        let mut packets: Vec<_> = packet_bufs
+            .iter_mut()
+            .map(|p| (&mut p[..], &addr))
+            .collect();
 
         let sent = send_mmsg(&sender, &mut packets);
         assert_matches!(sent, Ok(32));
@@ -182,13 +185,15 @@ mod tests {
 
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let packet = vec![0u8; PACKET_DATA_SIZE];
-        let mut packets: Vec<_> = (0..32)
-            .map(|i| {
+        let mut packet_bufs: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let mut packets: Vec<_> = packet_bufs
+            .iter_mut()
+            .enumerate()
+            .map(|(i, p)| {
                 if i < 16 {
-                    (&packet[..], &addr)
+                    (&mut p[..], &addr)
                 } else {
-                    (&packet[..], &addr2)
+                    (&mut p[..], &addr2)
                 }
             })
             .collect();

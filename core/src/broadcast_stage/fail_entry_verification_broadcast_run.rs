@@ -65,7 +65,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        let all_shred_bufs: Vec<Vec<u8>> = data_shreds
+        let mut all_shred_bufs: Vec<Vec<u8>> = data_shreds
             .into_iter()
             .chain(coding_shreds.into_iter())
             .map(|s| s.payload)
@@ -74,7 +74,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         // Broadcast data
         cluster_info.read().unwrap().broadcast_shreds(
             sock,
-            &all_shred_bufs,
+            &mut all_shred_bufs,
             &all_seeds,
             stakes.as_ref(),
         )?;

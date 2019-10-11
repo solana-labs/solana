@@ -132,23 +132,28 @@ impl BankingStage {
         Self { bank_thread_hdls }
     }
 
-    fn filter_valid_packets_for_forwarding(all_packets: &[PacketsAndOffsets]) -> Vec<&Packet> {
-        all_packets
-            .iter()
-            .flat_map(|(p, valid_indexes)| valid_indexes.iter().map(move |x| &p.packets[*x]))
-            .collect()
+    fn filter_valid_packets_for_forwarding(all_packets: Vec<PacketsAndOffsets>) -> Vec<Packet> {
+        let mut valid_packets = vec![];
+        for (mut packets, valid_indexes) in all_packets.into_iter().rev() {
+            for index in valid_indexes.iter().rev() {
+                let packet = packets.packets.remove(*index);
+                valid_packets.insert(0, packet);
+            }
+        }
+
+        valid_packets
     }
 
     fn forward_buffered_packets(
         socket: &std::net::UdpSocket,
         tpu_forwards: &std::net::SocketAddr,
-        unprocessed_packets: &[PacketsAndOffsets],
+        unprocessed_packets: Vec<PacketsAndOffsets>,
     ) -> std::io::Result<()> {
-        let packets = Self::filter_valid_packets_for_forwarding(unprocessed_packets);
+        let mut packets = Self::filter_valid_packets_for_forwarding(unprocessed_packets);
         inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
         let mut mmsg: Vec<_> = packets
-            .into_iter()
-            .map(|p| (&p.data[..p.meta.size], tpu_forwards))
+            .iter_mut()
+            .map(|p| (&mut p.data[..p.meta.size], tpu_forwards))
             .collect();
 
         let mut sent = 0;
@@ -337,12 +342,12 @@ impl BankingStage {
                         };
 
                         leader_addr.map_or(Ok(()), |leader_addr| {
+                            let buffered_packets = buffered_packets.drain(..).collect();
                             let _ = Self::forward_buffered_packets(
                                 &socket,
                                 &leader_addr,
-                                &buffered_packets,
+                                buffered_packets,
                             );
-                            buffered_packets.clear();
                             Ok(())
                         })
                     })
@@ -1764,7 +1769,7 @@ mod tests {
             })
             .collect_vec();
 
-        let result = BankingStage::filter_valid_packets_for_forwarding(&all_packets);
+        let result = BankingStage::filter_valid_packets_for_forwarding(all_packets);
 
         assert_eq!(result.len(), 256);
 

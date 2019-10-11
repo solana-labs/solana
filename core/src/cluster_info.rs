@@ -709,7 +709,7 @@ impl ClusterInfo {
     pub fn broadcast_shreds(
         &self,
         s: &UdpSocket,
-        shreds: &Vec<Vec<u8>>,
+        shreds: &mut Vec<Vec<u8>>,
         seeds: &[[u8; 32]],
         stakes: Option<&HashMap<Pubkey, u64>>,
     ) -> Result<()> {
@@ -725,7 +725,7 @@ impl ClusterInfo {
             .map(|(shred, seed)| {
                 let broadcast_index = weighted_best(&peers_and_stakes, ChaChaRng::from_seed(*seed));
 
-                (&shred[..], &peers[broadcast_index].tvu)
+                (&mut shred[..], &peers[broadcast_index].tvu)
             })
             .collect();
 

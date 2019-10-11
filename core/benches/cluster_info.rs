@@ -21,7 +21,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
 
     const SHRED_SIZE: usize = 1024;
     const NUM_SHREDS: usize = 32;
-    let shreds = vec![vec![0; SHRED_SIZE]; NUM_SHREDS];
+    let mut shreds = vec![vec![0; SHRED_SIZE]; NUM_SHREDS];
     let seeds = vec![[0u8; 32]; NUM_SHREDS];
     let mut stakes = HashMap::new();
     const NUM_PEERS: usize = 200;
@@ -33,7 +33,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     }
     bencher.iter(move || {
         cluster_info
-            .broadcast_shreds(&socket, &shreds, &seeds, Some(&stakes))
+            .broadcast_shreds(&socket, &mut shreds, &seeds, Some(&stakes))
             .unwrap();
     });
 }
