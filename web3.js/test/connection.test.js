@@ -86,9 +86,9 @@ test('get program accounts', async () => {
   });
 });
 
-test('fullnodeExit', async () => {
+test('validatorExit', async () => {
   if (!mockRpcEnabled) {
-    console.log('fullnodeExit skipped on live node');
+    console.log('validatorExit skipped on live node');
     return;
   }
   const connection = new Connection(url);
@@ -96,7 +96,7 @@ test('fullnodeExit', async () => {
   mockRpc.push([
     url,
     {
-      method: 'fullnodeExit',
+      method: 'validatorExit',
     },
     {
       error: null,
@@ -104,7 +104,7 @@ test('fullnodeExit', async () => {
     },
   ]);
 
-  const result = await connection.fullnodeExit();
+  const result = await connection.validatorExit();
   expect(result).toBe(false);
 });
 

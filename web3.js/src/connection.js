@@ -823,8 +823,8 @@ export class Connection {
   /**
    * @private
    */
-  async fullnodeExit(): Promise<boolean> {
-    const unsafeRes = await this._rpcRequest('fullnodeExit', []);
+  async validatorExit(): Promise<boolean> {
+    const unsafeRes = await this._rpcRequest('validatorExit', []);
     const res = jsonRpcResult('boolean')(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
