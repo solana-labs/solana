@@ -28,20 +28,6 @@ impl<T> DecodeError<T> for VestError {
     }
 }
 
-impl std::fmt::Display for VestError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                VestError::DestinationMissing => "destination missing",
-                VestError::Unauthorized => "unauthorized",
-            }
-        )
-    }
-}
-impl std::error::Error for VestError {}
-
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VestInstruction {
