@@ -1012,6 +1012,7 @@ mod tests {
             mut genesis_block, ..
         } = create_genesis_block(2);
         genesis_block.ticks_per_slot = 4;
+        let num_extra_ticks = 2;
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
@@ -1022,7 +1023,7 @@ mod tests {
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
             let mut poh_config = PohConfig::default();
-            poh_config.target_tick_count = Some(6);
+            poh_config.target_tick_count = Some(genesis_block.ticks_per_slot + num_extra_ticks);
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blocktree, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
@@ -1072,8 +1073,8 @@ mod tests {
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
             let mut poh_config = PohConfig::default();
-            // limit the tick to 1 to prevent clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
-            poh_config.target_tick_count = Some(1);
+            // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
+            poh_config.target_tick_count = Some(genesis_block.ticks_per_slot - 1);
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blocktree, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
@@ -1221,8 +1222,8 @@ mod tests {
                         .expect("Expected to be able to open database ledger"),
                 );
                 let mut poh_config = PohConfig::default();
-                // limit the tick to 1 to prevent clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
-                poh_config.target_tick_count = Some(1);
+                // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
+                poh_config.target_tick_count = Some(genesis_block.ticks_per_slot - 1);
                 let (exit, poh_recorder, poh_service, entry_receiver) =
                     create_test_recorder(&bank, &blocktree, Some(poh_config));
                 let cluster_info =
