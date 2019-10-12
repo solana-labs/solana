@@ -2039,6 +2039,16 @@ mod tests {
             bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
         bank.store_account(&system_program_id, &system_program_account);
 
+        let total_lamports_before_txs = system_program_account.lamports
+            + rent_overdue_credit_debit_account1.lamports
+            + rent_overdue_credit_debit_account2.lamports
+            + rent_overdue_credit_only_account1.lamports
+            + rent_overdue_credit_only_account2.lamports
+            + credit_debit_account1.lamports
+            + credit_debit_account2.lamports
+            + credit_only_account1.lamports
+            + credit_only_account2.lamports;
+
         let t1 = system_transaction::transfer(
             &credit_debit_keypair1,
             &rent_overdue_credit_only_key1,
@@ -2065,6 +2075,8 @@ mod tests {
         );
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone(), t3.clone(), t4.clone()]);
 
+        let mut total_lamports_after_txs = 0;
+
         assert_eq!(res.len(), 4);
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Err(TransactionError::AccountNotFound));
@@ -2077,33 +2089,48 @@ mod tests {
         assert_eq!(bank.get_balance(&rent_overdue_credit_only_key1), 1);
         assert_eq!(bank.get_balance(&rent_overdue_credit_only_key2), 1);
 
+        assert_eq!(
+            bank.get_balance(&system_program_id),
+            system_program_account.lamports
+        );
+        total_lamports_after_txs += bank.get_balance(&system_program_id);
+
         // Credit-debit account's rent is already deducted
         // 20 - 1(Transferred) - 2(Rent)
         assert_eq!(bank.get_balance(&credit_debit_keypair1.pubkey()), 17);
+        total_lamports_after_txs += bank.get_balance(&credit_debit_keypair1.pubkey());
         assert_eq!(bank.get_balance(&credit_debit_keypair2.pubkey()), 17);
+        total_lamports_after_txs += bank.get_balance(&credit_debit_keypair2.pubkey());
         // Since this credit-debit accounts are unable to pay rent, load_tx_account failed, as they are
         // the signer account. No change was done.
         assert_eq!(
             bank.get_balance(&rent_overdue_credit_debit_keypair1.pubkey()),
             2
         );
+        total_lamports_after_txs += bank.get_balance(&rent_overdue_credit_debit_keypair1.pubkey());
         assert_eq!(
             bank.get_balance(&rent_overdue_credit_debit_keypair2.pubkey()),
             2
         );
+        total_lamports_after_txs += bank.get_balance(&rent_overdue_credit_debit_keypair2.pubkey());
 
         // Credit-debit account's rent is stored in `tallied_credit_debit_rent`
         // Rent deducted is: 2+2
         assert_eq!(bank.get_tallied_credit_debit_rent(), 4);
+        total_lamports_after_txs += bank.get_tallied_credit_debit_rent();
 
         // Rent deducted is: 2+1
-        assert_eq!(bank.commit_credits_and_rents(), 3);
+        let commited_credit_only_rent = bank.commit_credits_and_rents();
+        assert_eq!(commited_credit_only_rent, 3);
+        total_lamports_after_txs += commited_credit_only_rent;
 
         // No rent deducted because tx failed
         assert_eq!(bank.get_balance(&credit_only_key1), 3);
+        total_lamports_after_txs += bank.get_balance(&credit_only_key1);
         // Now, we have credited credits and debited rent
         // 3 + 1(Transferred) - 2(Rent)
         assert_eq!(bank.get_balance(&credit_only_key2), 2);
+        total_lamports_after_txs += bank.get_balance(&credit_only_key2);
 
         // Since we were unable to pay rent, the account was reset, rent got deducted.
         // And credit went to that overwritten account
@@ -2116,9 +2143,14 @@ mod tests {
                 .len(),
             0
         );
+        total_lamports_after_txs += bank.get_balance(&rent_overdue_credit_only_key1);
 
-        // No rent got deducted as, we were unable to load accouns (load_tx_accounts errored out)
+        // No rent got deducted as, we were unable to load accounts (load_tx_accounts errored out)
         assert_eq!(bank.get_balance(&rent_overdue_credit_only_key2), 1);
+        total_lamports_after_txs += bank.get_balance(&rent_overdue_credit_only_key2);
+
+        // total lamports in circulation should be same
+        assert_eq!(total_lamports_after_txs, total_lamports_before_txs);
     }
 
     #[test]
