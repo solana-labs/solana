@@ -1074,7 +1074,7 @@ mod tests {
             );
             let mut poh_config = PohConfig::default();
             // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
-            poh_config.target_tick_count = Some(genesis_block.ticks_per_slot - 1);
+            poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blocktree, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
@@ -1223,7 +1223,7 @@ mod tests {
                 );
                 let mut poh_config = PohConfig::default();
                 // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
-                poh_config.target_tick_count = Some(genesis_block.ticks_per_slot - 1);
+                poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
                 let (exit, poh_recorder, poh_service, entry_receiver) =
                     create_test_recorder(&bank, &blocktree, Some(poh_config));
                 let cluster_info =
