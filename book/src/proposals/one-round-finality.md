@@ -16,7 +16,8 @@ same leaders will continue voting together.
 ## Overview
 
 Leaders commit to producing a block that chains to the leaders last
-vote.  Breaking this commitment is slashable.
+vote. Breaking this commitment is slashable.  The leader is free
+to switch forks and vote for an alternative chain.
 
 Once a block has been voted on, the subsequent leader schedule will
 reflect the likelihood of the block being finalized.
@@ -47,7 +48,10 @@ In the above example if the probability of any block being dropped
 is 2%, then probability of a streak of size 3 in the next 7 blocks
 is 98.07%, and the probability of a streak of size 4 is 97.7%, which
 should roughly equal the probability of the fork still being live
-after the non-voting leader produced an alternative fork.
+after the non-voting leader produced an alternative fork.  Looking
+at the leader schedule ahead of the block, the probability of the
+block surviving is at least equal to the probability of continuous
+run of streaks that keep doubling the lockout.
 
 Each streak needs to produce a lockout that is 2x longer than the
 lockout from the previous streak.  Given that 20% of leaders are
@@ -97,6 +101,10 @@ them to the cluster.
 
 * Leaders whose persistent storage is corrupted after restart should
 vote before submitting a block.
+
+* Leaders that vote for an incorrect bankhash due to a state
+corruption are still required to chain their next block to the
+previous vote.
 
 ## Slashing Size
 
