@@ -70,7 +70,7 @@ fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_1");
     let num_nodes = 1;
-    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
+    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100).0;
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -85,7 +85,7 @@ fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_2");
     let num_nodes = 2;
-    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
+    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100).0;
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -100,7 +100,7 @@ fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
     error!("test_spend_and_verify_all_nodes_3");
     let num_nodes = 3;
-    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
+    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100).0;
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -118,7 +118,7 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
         .expect("please set environment variable NUM_NODES")
         .parse()
         .expect("could not parse NUM_NODES as a number");
-    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
+    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100).0;
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -134,7 +134,7 @@ fn test_validator_exit_default_config_should_panic() {
     solana_logger::setup();
     error!("test_validator_exit_default_config_should_panic");
     let num_nodes = 2;
-    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
+    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100).0;
     cluster_tests::validator_exit(&local.entry_point_info, num_nodes);
 }
 
@@ -355,6 +355,75 @@ fn test_snapshot_restart_tower() {
         1,
         HashSet::new(),
     );
+}
+
+#[test]
+#[serial]
+// Simulate a leader that crashes before it's able to write its own slot
+// to blocktree. Should be able to restart and repair up to the tip.
+fn test_leader_repair_own_slot() {
+    let slots_to_ignore: HashSet<u64> = [1u64].to_vec().into_iter().collect();
+    // First set up the cluster with 4 nodes, where the bootstrap leader will
+    // fail to write the slots in `slots_to_ignore` to its own blocktree
+    let num_nodes = 4;
+    let validator_configs: Vec<_> = (0..num_nodes)
+        .map(|i| {
+            if i == 0 {
+                let mut error_leader_config = ValidatorConfig::default();
+                error_leader_config.broadcast_stage_type =
+                    BroadcastStageType::DropSlotsFromBlocktree(slots_to_ignore.clone());
+                error_leader_config
+            } else {
+                ValidatorConfig::default()
+            }
+        })
+        .collect();
+    let node_stakes: Vec<_> = vec![100; num_nodes];
+    let cluster_config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes,
+        validator_configs,
+        ..ClusterConfig::default()
+    };
+
+    let mut cluster = LocalCluster::new(&cluster_config);
+    let epoch_schedule = EpochSchedule::custom(
+        cluster_config.slots_per_epoch,
+        cluster_config.stakers_slot_offset,
+        true,
+    );
+    let num_warmup_epochs = epoch_schedule.get_leader_schedule_epoch(0) + 1;
+    // Wait for the other leaders to be scheduled
+    cluster_tests::sleep_n_epochs(
+        (num_warmup_epochs + 1) as f64,
+        &cluster.genesis_block.poh_config,
+        cluster_config.ticks_per_slot,
+        cluster_config.slots_per_epoch,
+    );
+
+    // Stop the bootstrap leader once the rest of the nodes are warmed up
+    let bootstrap_leader_id = cluster.entry_point_info.id;
+    let bootstrap_leader_info = cluster.exit_node(&bootstrap_leader_id);
+
+    // Restart bootstrap node, it should be able to restart and catch up, despite
+    // missing some of its own slots
+    cluster.restart_node(&bootstrap_leader_id, bootstrap_leader_info);
+
+    // Test cluster can still make progress and get confirmations in tower
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        1,
+        HashSet::new(),
+    );
+
+    // Exit, check ledger contains the slots that weren't written in broadcast
+    cluster.close_preserve_ledgers();
+    let leader_info = &cluster.validator_infos[&bootstrap_leader_id];
+    let blocktree = Blocktree::open(&leader_info.info.ledger_path).unwrap();
+    for slot in slots_to_ignore {
+        assert!(blocktree.meta(slot).unwrap().unwrap().is_full());
+    }
 }
 
 #[test]

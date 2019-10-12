@@ -1,5 +1,6 @@
 //! A stage to broadcast data from a leader node to validators
 use self::broadcast_fake_blobs_run::BroadcastFakeBlobsRun;
+use self::drop_slots_from_blocktree_run::DropSlotsFromBlocktreeRun;
 use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun;
 use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::blocktree::Blocktree;
@@ -10,6 +11,7 @@ use crate::service::Service;
 use crate::shred::Shred;
 use crate::staking_utils;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use std::collections::HashSet;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender};
@@ -20,6 +22,7 @@ use std::time::Instant;
 
 mod broadcast_fake_blobs_run;
 pub(crate) mod broadcast_utils;
+mod drop_slots_from_blocktree_run;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
 
@@ -35,6 +38,7 @@ pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
     BroadcastFakeBlobs,
+    DropSlotsFromBlocktree(HashSet<u64>),
 }
 
 impl BroadcastStageType {
@@ -76,6 +80,18 @@ impl BroadcastStageType {
                 blocktree,
                 BroadcastFakeBlobsRun::new(0),
             ),
+
+            BroadcastStageType::DropSlotsFromBlocktree(slots_to_ignore) => {
+                let keypair = cluster_info.read().unwrap().keypair.clone();
+                BroadcastStage::new(
+                    sock,
+                    cluster_info,
+                    receiver,
+                    exit_sender,
+                    blocktree,
+                    DropSlotsFromBlocktreeRun::new(slots_to_ignore.clone(), keypair),
+                )
+            }
         }
     }
 }

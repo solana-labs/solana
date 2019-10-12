@@ -113,7 +113,7 @@ impl LocalCluster {
         num_nodes: usize,
         cluster_lamports: u64,
         lamports_per_node: u64,
-    ) -> Self {
+    ) -> (Self, ClusterConfig) {
         let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
         let config = ClusterConfig {
             node_stakes: stakes,
@@ -121,7 +121,7 @@ impl LocalCluster {
             validator_configs: vec![ValidatorConfig::default(); num_nodes],
             ..ClusterConfig::default()
         };
-        Self::new(&config)
+        (Self::new(&config), config)
     }
 
     pub fn new(config: &ClusterConfig) -> Self {
@@ -646,7 +646,7 @@ mod test {
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
         let num_nodes = 1;
-        let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 3);
+        let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 3).0;
         assert_eq!(cluster.validators.len(), num_nodes);
         assert_eq!(cluster.replicators.len(), 0);
     }

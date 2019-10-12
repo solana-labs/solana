@@ -1003,8 +1003,8 @@ mod tests {
         }];
         // give 2 epochs of cooldown
         let epochs = 7;
-        // make boostrap stake smaller than warmup so warmup/cooldownn
-        //  increment is always smaller than 1
+        // make bootstrap stake smaller than warmup so warmup/cooldown
+        // increment is always smaller than 1
         let bootstrap = (stakes[0].config.warmup_rate * 100.0 / 2.0) as u64;
         let stake_history = create_stake_history_from_stakes(Some(bootstrap), 0..epochs, &stakes);
         let mut max_stake = 0;
