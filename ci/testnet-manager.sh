@@ -233,8 +233,8 @@ sanity() {
       NO_INSTALL_CHECK=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh edge-testnet-solana-com gce -P us-west1-b
+      maybe_deploy_software
     )
-    maybe_deploy_software
     ;;
   testnet-edge-perf)
     (
@@ -250,8 +250,8 @@ sanity() {
       NO_INSTALL_CHECK=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
+      maybe_deploy_software --deploy-if-newer
     )
-    maybe_deploy_software --deploy-if-newer
     ;;
   testnet-beta-perf)
     (
