@@ -1,6 +1,6 @@
 use crate::hash::Hash;
 use crate::{clock::Epoch, pubkey::Pubkey};
-use std::{cmp, fmt};
+use std::{cmp, fmt, iter::FromIterator};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
@@ -195,4 +195,16 @@ pub fn create_keyed_credit_only_accounts(accounts: &mut [(Pubkey, Account)]) -> 
             account,
         })
         .collect()
+}
+
+/// Return all the signers from a set of KeyedAccounts
+pub fn get_signers<A>(keyed_accounts: &[KeyedAccount]) -> A
+where
+    A: FromIterator<Pubkey>,
+{
+    keyed_accounts
+        .iter()
+        .filter_map(|keyed_account| keyed_account.signer_key())
+        .cloned()
+        .collect::<A>()
 }

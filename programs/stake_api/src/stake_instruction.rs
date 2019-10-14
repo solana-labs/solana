@@ -7,9 +7,9 @@ use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::KeyedAccount,
+    account::{get_signers, KeyedAccount},
     instruction::{AccountMeta, Instruction, InstructionError},
-    instruction_processor_utils::DecodeError,
+    instruction_processor_utils::{next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction, sysvar,
     sysvar::rent,
@@ -164,28 +164,24 @@ pub fn create_stake_account_and_delegate_stake(
     instructions
 }
 
-// for instructions that whose authorized signer may differ from the account's pubkey
-fn metas_for_authorized_signer(
-    account_pubkey: &Pubkey,
-    authorized_signer: &Pubkey, // currently authorized
-    other_params: &[AccountMeta],
+// for instructions whose authorized signer may already be in account parameters
+fn metas_with_signer(
+    metas: &[AccountMeta], // parameter metas, in order
+    signer: &Pubkey,       // might already appear in parameters
 ) -> Vec<AccountMeta> {
-    let is_own_signer = authorized_signer == account_pubkey;
+    let mut metas = metas.to_vec();
 
-    // vote account
-    let mut account_metas = vec![AccountMeta::new(*account_pubkey, is_own_signer)];
-
-    for meta in other_params {
-        account_metas.push(meta.clone());
+    for meta in metas.iter_mut() {
+        if &meta.pubkey == signer {
+            meta.is_signer = true; // found it, we're done
+            return metas;
+        }
     }
 
-    // append signer at the end
-    if !is_own_signer {
-        account_metas.push(AccountMeta::new_credit_only(*authorized_signer, true))
-        // signer
-    }
+    // signer wasn't in metas, append it after normal parameters
+    metas.push(AccountMeta::new_credit_only(*signer, true));
 
-    account_metas
+    metas
 }
 
 pub fn authorize(
@@ -194,7 +190,8 @@ pub fn authorize(
     new_authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(stake_pubkey, authorized_pubkey, &[]);
+    let account_metas =
+        metas_with_signer(&[AccountMeta::new(*stake_pubkey, false)], authorized_pubkey);
 
     Instruction::new(
         id(),
@@ -219,14 +216,14 @@ pub fn delegate_stake(
     authorized_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(
-        stake_pubkey,
-        authorized_pubkey,
+    let account_metas = metas_with_signer(
         &[
+            AccountMeta::new(*stake_pubkey, false),
             AccountMeta::new_credit_only(*vote_pubkey, false),
             AccountMeta::new_credit_only(sysvar::clock::id(), false),
             AccountMeta::new_credit_only(crate::config::id(), false),
         ],
+        authorized_pubkey,
     );
     Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
 }
@@ -237,22 +234,25 @@ pub fn withdraw(
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> Instruction {
-    let mut accounts = vec![
-        AccountMeta::new_credit_only(sysvar::clock::id(), false),
-        AccountMeta::new_credit_only(sysvar::stake_history::id(), false),
-    ];
-    if to_pubkey != authorized_pubkey {
-        accounts.push(AccountMeta::new_credit_only(*to_pubkey, false));
-    }
-    let account_metas = metas_for_authorized_signer(stake_pubkey, authorized_pubkey, &accounts);
+    let account_metas = metas_with_signer(
+        &[
+            AccountMeta::new(*stake_pubkey, false),
+            AccountMeta::new_credit_only(*to_pubkey, false),
+            AccountMeta::new_credit_only(sysvar::clock::id(), false),
+            AccountMeta::new_credit_only(sysvar::stake_history::id(), false),
+        ],
+        authorized_pubkey,
+    );
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
 
 pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
-    let account_metas = metas_for_authorized_signer(
-        stake_pubkey,
+    let account_metas = metas_with_signer(
+        &[
+            AccountMeta::new(*stake_pubkey, false),
+            AccountMeta::new_credit_only(sysvar::clock::id(), false),
+        ],
         authorized_pubkey,
-        &[AccountMeta::new_credit_only(sysvar::clock::id(), false)],
     );
     Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
 }
@@ -267,73 +267,55 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    if keyed_accounts.is_empty() {
-        return Err(InstructionError::InvalidInstructionData);
-    }
+    let signers = get_signers(keyed_accounts);
 
-    let (me, rest) = &mut keyed_accounts.split_at_mut(1);
-    let me = &mut me[0];
+    let keyed_accounts = &mut keyed_accounts.iter_mut();
+    let me = &mut next_keyed_account(keyed_accounts)?;
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StakeInstruction::Initialize(authorized, lockup) => {
-            if rest.is_empty() {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-            rent::verify_rent_exemption(me, &rest[0])?;
+            rent::verify_rent_exemption(me, next_keyed_account(keyed_accounts)?)?;
             me.initialize(&authorized, &lockup)
         }
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
-            me.authorize(&authorized_pubkey, stake_authorize, &rest)
+            me.authorize(&authorized_pubkey, stake_authorize, &signers)
         }
         StakeInstruction::DelegateStake => {
-            if rest.len() < 3 {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-            let vote = &rest[0];
+            let vote = next_keyed_account(keyed_accounts)?;
 
             me.delegate_stake(
-                vote,
-                &sysvar::clock::from_keyed_account(&rest[1])?,
-                &config::from_keyed_account(&rest[2])?,
-                &rest[3..],
+                &vote,
+                &sysvar::clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &config::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &signers,
             )
         }
         StakeInstruction::RedeemVoteCredits => {
-            if rest.len() != 4 {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-            let (vote, rest) = rest.split_at_mut(1);
-            let vote = &mut vote[0];
-            let (rewards_pool, rest) = rest.split_at_mut(1);
-            let rewards_pool = &mut rewards_pool[0];
+            let vote = &mut next_keyed_account(keyed_accounts)?;
+            let rewards_pool = &mut next_keyed_account(keyed_accounts)?;
 
             me.redeem_vote_credits(
                 vote,
                 rewards_pool,
-                &sysvar::rewards::from_keyed_account(&rest[0])?,
-                &sysvar::stake_history::from_keyed_account(&rest[1])?,
+                &sysvar::rewards::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &sysvar::stake_history::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             )
         }
         StakeInstruction::Withdraw(lamports) => {
-            if rest.len() < 3 {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-
+            let to = &mut next_keyed_account(keyed_accounts)?;
             me.withdraw(
                 lamports,
-                &sysvar::clock::from_keyed_account(&rest[0])?,
-                &sysvar::stake_history::from_keyed_account(&rest[1])?,
-                &mut rest[2..],
+                to,
+                &sysvar::clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &sysvar::stake_history::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &signers,
             )
         }
-        StakeInstruction::Deactivate => {
-            if rest.is_empty() {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-
-            me.deactivate_stake(&sysvar::clock::from_keyed_account(&rest[0])?, &rest[1..])
-        }
+        StakeInstruction::Deactivate => me.deactivate_stake(
+            &sysvar::clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &signers,
+        ),
     }
 }
 
@@ -421,7 +403,7 @@ mod tests {
                 ))
                 .unwrap(),
             ),
-            Err(InstructionError::InvalidInstructionData),
+            Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // gets the first check in delegate, wrong number of accounts
@@ -435,7 +417,7 @@ mod tests {
                 )],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
-            Err(InstructionError::InvalidInstructionData),
+            Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // gets the sub-check for number of args
@@ -449,7 +431,7 @@ mod tests {
                 ),],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
-            Err(InstructionError::InvalidInstructionData),
+            Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // catches the number of args check
@@ -462,7 +444,7 @@ mod tests {
                 ],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
             ),
-            Err(InstructionError::InvalidInstructionData),
+            Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // catches the type of args check
@@ -555,22 +537,14 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
-                    KeyedAccount::new(
-                        &sysvar::clock::id(),
-                        false,
-                        &mut sysvar::rewards::create_account(1, 0.0, 0.0)
-                    ),
-                    KeyedAccount::new(
-                        &sysvar::stake_history::id(),
-                        false,
-                        &mut sysvar::stake_history::create_account(1, &StakeHistory::default())
-                    ),
-                ],
+                &mut [KeyedAccount::new(
+                    &Pubkey::default(),
+                    false,
+                    &mut Account::default()
+                )],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
             ),
-            Err(InstructionError::InvalidInstructionData),
+            Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // Tests 2nd keyed account is of correct type (Clock instead of rewards) in deactivate
@@ -594,14 +568,10 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(
-                    &sysvar::clock::id(),
-                    false,
-                    &mut sysvar::rewards::create_account(1, 0.0, 0.0)
-                ),],
+                &mut [],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
             ),
-            Err(InstructionError::InvalidInstructionData),
+            Err(InstructionError::NotEnoughAccountKeys),
         );
     }
 

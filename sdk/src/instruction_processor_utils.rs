@@ -1,6 +1,4 @@
-use crate::account::KeyedAccount;
-use crate::instruction::InstructionError;
-use crate::pubkey::Pubkey;
+use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
 use num_traits::{FromPrimitive, ToPrimitive};
 
 // All native programs export a symbol named process()
