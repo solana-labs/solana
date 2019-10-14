@@ -7,9 +7,9 @@ use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::KeyedAccount,
+    account::{get_signers, KeyedAccount},
     instruction::{AccountMeta, Instruction, InstructionError},
-    instruction_processor_utils::{next_keyed_account, signers, DecodeError},
+    instruction_processor_utils::{next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction, sysvar,
     sysvar::rent,
@@ -166,17 +166,21 @@ pub fn create_stake_account_and_delegate_stake(
 
 // for instructions whose authorized signer may already be in account parameters
 fn metas_with_signer(
-    mut metas: Vec<AccountMeta>, // parameter metas, in order
-    signer: &Pubkey,             // might already appear in paramters
+    metas: &[AccountMeta], // parameter metas, in order
+    signer: &Pubkey,       // might already appear in parameters
 ) -> Vec<AccountMeta> {
+    let mut metas = metas.to_vec();
+
     for meta in metas.iter_mut() {
         if &meta.pubkey == signer {
             meta.is_signer = true; // found it, we're done
             return metas;
         }
     }
+
     // signer wasn't in metas, append it after normal parameters
     metas.push(AccountMeta::new_credit_only(*signer, true));
+
     metas
 }
 
@@ -187,7 +191,7 @@ pub fn authorize(
     stake_authorize: StakeAuthorize,
 ) -> Instruction {
     let account_metas = metas_with_signer(
-        vec![AccountMeta::new(*stake_pubkey, false)],
+        &mut [AccountMeta::new(*stake_pubkey, false)],
         authorized_pubkey,
     );
 
@@ -215,7 +219,7 @@ pub fn delegate_stake(
     vote_pubkey: &Pubkey,
 ) -> Instruction {
     let account_metas = metas_with_signer(
-        vec![
+        &[
             AccountMeta::new(*stake_pubkey, false),
             AccountMeta::new_credit_only(*vote_pubkey, false),
             AccountMeta::new_credit_only(sysvar::clock::id(), false),
@@ -233,7 +237,7 @@ pub fn withdraw(
     lamports: u64,
 ) -> Instruction {
     let account_metas = metas_with_signer(
-        vec![
+        &[
             AccountMeta::new(*stake_pubkey, false),
             AccountMeta::new_credit_only(*to_pubkey, false),
             AccountMeta::new_credit_only(sysvar::clock::id(), false),
@@ -246,7 +250,7 @@ pub fn withdraw(
 
 pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
     let account_metas = metas_with_signer(
-        vec![
+        &[
             AccountMeta::new(*stake_pubkey, false),
             AccountMeta::new_credit_only(sysvar::clock::id(), false),
         ],
@@ -265,7 +269,7 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    let signers = signers(keyed_accounts);
+    let signers = get_signers(keyed_accounts);
 
     let keyed_accounts = &mut keyed_accounts.iter_mut();
     let me = &mut next_keyed_account(keyed_accounts)?;
