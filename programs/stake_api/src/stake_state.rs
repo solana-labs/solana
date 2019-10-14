@@ -404,8 +404,13 @@ impl Stake {
         }
     }
 
-    fn deactivate(&mut self, epoch: u64) {
-        self.deactivation_epoch = epoch;
+    fn deactivate(&mut self, epoch: u64) -> Result<(), StakeError> {
+        if self.deactivation_epoch != std::u64::MAX {
+            Err(StakeError::AlreadyDeactivated)
+        } else {
+            self.deactivation_epoch = epoch;
+            Ok(())
+        }
     }
 }
 
@@ -519,7 +524,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         if let StakeState::Stake(authorized, lockup, mut stake) = self.state()? {
             authorized.check(self.signer_key(), other_signers, StakeAuthorize::Staker)?;
-            stake.deactivate(clock.epoch);
+            stake.deactivate(clock.epoch)?;
 
             self.set_state(&StakeState::Stake(authorized, lockup, stake))
         } else {
@@ -1156,7 +1161,7 @@ mod tests {
         )
         .expect("stake_account");
 
-        let clock = sysvar::clock::Clock {
+        let mut clock = sysvar::clock::Clock {
             epoch: 1,
             ..sysvar::clock::Clock::default()
         };
@@ -1194,6 +1199,16 @@ mod tests {
         // Deactivate after staking
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert_eq!(stake_keyed_account.deactivate_stake(&clock, &[]), Ok(()));
+        let state: StakeState = stake_keyed_account.state().unwrap();
+        let stake: Stake = state.stake().unwrap();
+        assert_eq!(stake.deactivation_epoch, clock.epoch);
+
+        // Deactivating stake can only be done once
+        clock.epoch += 1;
+        assert_eq!(
+            stake_keyed_account.deactivate_stake(&clock, &[]),
+            Err(StakeError::AlreadyDeactivated.into())
+        );
     }
 
     #[test]
