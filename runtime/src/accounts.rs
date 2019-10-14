@@ -27,6 +27,7 @@ use crate::transaction_utils::OrderedIterator;
 struct CreditOnlyLock {
     credits: AtomicU64,
     lock_count: Mutex<u64>,
+    rent_debtor: bool,
 }
 
 /// This structure handles synchronization for db
@@ -39,14 +40,9 @@ pub struct Accounts {
     account_locks: Mutex<HashSet<Pubkey>>,
 
     /// Set of credit-only accounts which are currently in the pipeline, caching account balance
-    /// and number of locks. On commit_credits(), we do a take() on the option so that the hashmap
+    /// number of locks and whether or not account owes rent. On commit_credits(), we do a take() on the option so that the hashmap
     /// is no longer available to be written to.
     credit_only_account_locks: Arc<RwLock<Option<HashMap<Pubkey, CreditOnlyLock>>>>,
-
-    /// Set the rent owed by credit only account in the tx
-    /// This cannot be inferred from `credit_only_account_locks` as lock entry
-    /// persist load_tx_accounts failure.
-    credit_only_account_rent_debtors: Arc<RwLock<Option<HashSet<Pubkey>>>>,
 }
 
 // for the load instructions
@@ -70,7 +66,6 @@ impl Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             credit_only_account_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-            credit_only_account_rent_debtors: Arc::new(RwLock::new(Some(HashSet::new()))),
         }
     }
     pub fn new_from_parent(parent: &Accounts, slot: Fork, parent_slot: Fork) -> Self {
@@ -80,7 +75,6 @@ impl Accounts {
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             credit_only_account_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-            credit_only_account_rent_debtors: Arc::new(RwLock::new(Some(HashSet::new()))),
         }
     }
 
@@ -102,7 +96,7 @@ impl Accounts {
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
-        w_credit_only_rent_debtors: &mut RwLockWriteGuard<Option<HashSet<Pubkey>>>,
+        w_credit_only_account_locks: &mut RwLockWriteGuard<Option<HashMap<Pubkey, CreditOnlyLock>>>,
     ) -> Result<(TransactionAccounts, TransactionCredits, TransactionRents)> {
         // Copy all the accounts
         let message = tx.message();
@@ -115,8 +109,8 @@ impl Accounts {
                 return Err(TransactionError::AccountLoadedTwice);
             }
 
-            let credit_only_rent_debtors = w_credit_only_rent_debtors.as_mut().unwrap();
-            let mut current_credit_only_pubkeys: HashSet<Pubkey> = HashSet::new();
+            let credit_only_account_locks = w_credit_only_account_locks.as_mut().unwrap();
+            let mut credit_only_keys: HashSet<Pubkey> = HashSet::new();
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
@@ -139,7 +133,7 @@ impl Accounts {
                     .unwrap_or_default();
 
                 if !message.is_debitable(i) {
-                    current_credit_only_pubkeys.insert(*key);
+                    credit_only_keys.insert(*key);
                 }
 
                 accounts.push(account);
@@ -158,7 +152,11 @@ impl Accounts {
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
                 accounts[0].lamports -= fee;
-                credit_only_rent_debtors.extend(&current_credit_only_pubkeys);
+                for key in credit_only_keys {
+                    credit_only_account_locks.entry(key).and_modify(|mut lock| {
+                        lock.rent_debtor = true;
+                    });
+                }
                 Ok((accounts, credits, rents))
             }
         }
@@ -251,8 +249,7 @@ impl Accounts {
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
-        let mut w_credit_only_account_rent_debtors =
-            self.credit_only_account_rent_debtors.write().unwrap();
+        let mut w_credit_only_account_locks = self.credit_only_account_locks.write().unwrap();
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
@@ -270,7 +267,7 @@ impl Accounts {
                         fee,
                         error_counters,
                         rent_collector,
-                        &mut w_credit_only_account_rent_debtors,
+                        &mut w_credit_only_account_locks,
                     )?;
                     let loaders = Self::load_loaders(
                         &storage,
@@ -393,24 +390,6 @@ impl Accounts {
             .ok_or(TransactionError::AccountInUse)
     }
 
-    fn get_write_access_credit_only_account_rent_debtors<'a>(
-        credit_only_account_rent_debtors: &'a mut RwLockWriteGuard<Option<HashSet<Pubkey>>>,
-    ) -> Result<&'a mut HashSet<Pubkey>> {
-        credit_only_account_rent_debtors
-            .as_mut()
-            .ok_or(TransactionError::AccountInUse)
-    }
-
-    fn take_credit_only_account_rent_debtors(
-        credit_only_account_rent_debtors: &Arc<RwLock<Option<HashSet<Pubkey>>>>,
-    ) -> Result<HashSet<Pubkey>> {
-        let mut w_credit_only_account_rent_debtors =
-            credit_only_account_rent_debtors.write().unwrap();
-        w_credit_only_account_rent_debtors
-            .take()
-            .ok_or(TransactionError::AccountInUse)
-    }
-
     fn lock_account(
         locks: &mut HashSet<Pubkey>,
         credit_only_locks: &Arc<RwLock<Option<HashMap<Pubkey, CreditOnlyLock>>>>,
@@ -463,6 +442,7 @@ impl Accounts {
                 CreditOnlyLock {
                     credits: AtomicU64::new(0),
                     lock_count: Mutex::new(1),
+                    rent_debtor: false,
                 },
             );
         }
@@ -602,14 +582,8 @@ impl Accounts {
         // Clear the credit only hashmap so that no further transactions can modify it
         let credit_only_account_locks = Self::take_credit_only(&self.credit_only_account_locks)
             .expect("Credit only locks didn't exist in commit_credits_and_rents");
-        let credit_only_account_rent_debtors =
-            Self::take_credit_only_account_rent_debtors(&self.credit_only_account_rent_debtors)
-                .expect(
-                    "Credit only account rent_debtors didn't exist in commit_credits_and_rents",
-                );
         self.store_credit_only_credits_and_rents(
             credit_only_account_locks,
-            credit_only_account_rent_debtors,
             rent_collector,
             ancestors,
             fork,
@@ -628,33 +602,23 @@ impl Accounts {
         let w_credit_only_account_locks =
             Self::get_write_access_credit_only(&mut w_credit_only_account_locks)
                 .expect("Credit only locks didn't exist in commit_credits");
-        let mut w_credit_only_account_rent_debtors =
-            self.credit_only_account_rent_debtors.write().unwrap();
-        let w_credit_only_account_rent_debtors =
-            Self::get_write_access_credit_only_account_rent_debtors(
-                &mut w_credit_only_account_rent_debtors,
-            )
-            .expect("Credit only rent debtors didn't exist in commit_credits");
         self.store_credit_only_credits_and_rents(
             w_credit_only_account_locks.drain(),
-            w_credit_only_account_rent_debtors.drain(),
             rent_collector,
             ancestors,
             fork,
         )
     }
 
-    fn store_credit_only_credits_and_rents<I, J>(
+    fn store_credit_only_credits_and_rents<I>(
         &self,
         credit_only_account_locks: I,
-        credit_only_account_rent_debtors: J,
         rent_collector: &RentCollector,
         ancestors: &HashMap<Fork, usize>,
         fork: Fork,
     ) -> u64
     where
         I: IntoIterator<Item = (Pubkey, CreditOnlyLock)>,
-        J: IntoIterator<Item = Pubkey>,
     {
         let mut accounts: HashMap<Pubkey, Account> = HashMap::new();
         let mut total_rent_collected = 0;
@@ -662,19 +626,6 @@ impl Accounts {
         {
             let accounts_index = self.accounts_db.accounts_index.read().unwrap();
             let storage = self.accounts_db.storage.read().unwrap();
-            for pubkey in credit_only_account_rent_debtors {
-                let (mut account, _) =
-                    AccountsDB::load(&storage, ancestors, &accounts_index, &pubkey)
-                        .unwrap_or_default();
-
-                let (account, rent_collected) = match rent_collector.update(&mut account) {
-                    (Some(_), rent_due) => (account, rent_due),
-                    (None, rent_due) => (Account::default(), rent_due),
-                };
-
-                total_rent_collected += rent_collected;
-                accounts.insert(pubkey, account);
-            }
 
             for (pubkey, lock) in credit_only_account_locks {
                 let lock_count = *lock.lock_count.lock().unwrap();
@@ -686,11 +637,19 @@ impl Accounts {
                 }
                 let credit = lock.credits.load(Ordering::Relaxed);
 
-                let mut account = accounts.remove(&pubkey).unwrap_or(
+                let (mut account, _) =
                     AccountsDB::load(&storage, ancestors, &accounts_index, &pubkey)
-                        .unwrap_or_default()
-                        .0,
-                );
+                        .unwrap_or_default();
+
+                if lock.rent_debtor {
+                    let (rent_debtor_account, rent_collected) =
+                        match rent_collector.update(&mut account) {
+                            (Some(_), rent_due) => (account, rent_due),
+                            (None, rent_due) => (Account::default(), rent_due),
+                        };
+                    total_rent_collected += rent_collected;
+                    account = rent_debtor_account;
+                }
 
                 account.lamports += credit;
                 accounts.insert(pubkey, account);
@@ -1567,6 +1526,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(1),
                     lock_count: Mutex::new(1),
+                    rent_debtor: true,
                 },
             );
             credit_only_account_locks.insert(
@@ -1574,6 +1534,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(5),
                     lock_count: Mutex::new(1),
+                    rent_debtor: true,
                 },
             );
             credit_only_account_locks.insert(
@@ -1581,6 +1542,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(10),
                     lock_count: Mutex::new(1),
+                    rent_debtor: false,
                 },
             );
             credit_only_account_locks.insert(
@@ -1588,19 +1550,9 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(3),
                     lock_count: Mutex::new(1),
+                    rent_debtor: true,
                 },
             );
-        }
-
-        {
-            let mut credit_only_account_rent_debtors =
-                accounts.credit_only_account_rent_debtors.write().unwrap();
-            let credit_only_account_rent_debtors =
-                credit_only_account_rent_debtors.as_mut().unwrap();
-
-            credit_only_account_rent_debtors.insert(pubkey0);
-            credit_only_account_rent_debtors.insert(pubkey1);
-            credit_only_account_rent_debtors.insert(overdue_account_pubkey);
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1743,6 +1695,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(0),
                     lock_count: Mutex::new(1),
+                    rent_debtor: false,
                 },
             );
         }
