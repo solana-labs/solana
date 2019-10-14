@@ -61,6 +61,7 @@ impl FetchStage {
         while let Ok(more) = recvr.try_recv() {
             len += more.packets.len();
             batch.push(more);
+            // Read at most 1K transactions in a loop
             if len > 1024 {
                 break;
             }
