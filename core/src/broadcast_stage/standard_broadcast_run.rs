@@ -217,7 +217,7 @@ impl StandardBroadcastRun {
             last_tick_height == bank.max_tick_height(),
         );
 
-        if last_tick == bank.max_tick_height() {
+        if last_tick_height == bank.max_tick_height() {
             self.unfinished_slot = None;
         }
 
