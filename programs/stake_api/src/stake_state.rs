@@ -274,7 +274,7 @@ impl Stake {
                 }
 
                 next_epoch += 1;
-                if next_epoch >= epoch {
+                if next_epoch >= epoch || next_epoch >= self.deactivation_epoch {
                     break;
                 }
                 if let Some(next_entry) = history.get(&next_epoch) {
@@ -978,6 +978,71 @@ mod tests {
             ),
             (stake.stake - increment, 0, stake.stake - increment) // hung, should be lower
         );
+    }
+
+    #[test]
+    fn test_stop_activating_after_deactivation() {
+        solana_logger::setup();
+        let stake = Stake {
+            stake: 1_000,
+            activation_epoch: 0,
+            deactivation_epoch: 3,
+            ..Stake::default()
+        };
+
+        let base_stake = 1_000;
+        let mut stake_history = StakeHistory::default();
+        let mut effective = base_stake;
+        let other_activation = 100;
+        let mut other_activations = vec![0];
+
+        // Build a stake history where the test staker always consumes all of the available warm
+        // up and cool down stake. However, simulate other stakers beginning to activate during
+        // the test staker's deactivation.
+        for epoch in 0..=stake.deactivation_epoch + 1 {
+            let (activating, deactivating) = if epoch < stake.deactivation_epoch {
+                (stake.stake + base_stake - effective, 0)
+            } else {
+                let other_activation_sum: u64 = other_activations.iter().sum();
+                let deactivating = effective - base_stake - other_activation_sum;
+                (other_activation, deactivating)
+            };
+
+            stake_history.add(
+                epoch,
+                StakeHistoryEntry {
+                    effective,
+                    activating,
+                    deactivating,
+                },
+            );
+
+            if epoch < stake.deactivation_epoch {
+                let increase = (effective as f64 * stake.config.warmup_rate) as u64;
+                effective += increase.min(activating);
+                other_activations.push(0);
+            } else {
+                let decrease = (effective as f64 * stake.config.cooldown_rate) as u64;
+                effective -= decrease.min(deactivating);
+                effective += other_activation;
+                other_activations.push(other_activation);
+            }
+        }
+
+        for epoch in 0..=stake.deactivation_epoch + 1 {
+            let history = stake_history.get(&epoch).unwrap();
+            let other_activations: u64 = other_activations[..=epoch as usize].iter().sum();
+            let expected_stake = history.effective - base_stake - other_activations;
+            let (expected_activating, expected_deactivating) = if epoch < stake.deactivation_epoch {
+                (history.activating, 0)
+            } else {
+                (0, history.deactivating)
+            };
+            assert_eq!(
+                stake.stake_activating_and_deactivating(epoch, Some(&stake_history)),
+                (expected_stake, expected_activating, expected_deactivating)
+            );
+        }
     }
 
     #[test]
