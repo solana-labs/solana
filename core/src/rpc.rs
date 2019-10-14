@@ -110,10 +110,10 @@ impl JsonRpcRequestProcessor {
         (blockhash.to_string(), fee_calculator)
     }
 
-    fn get_fork_confidence(&self, fork: u64) -> (Option<BankConfidence>, u64) {
+    fn get_block_confidence(&self, block: u64) -> (Option<BankConfidence>, u64) {
         let r_fork_confidence = self.fork_confidence_cache.read().unwrap();
         (
-            r_fork_confidence.get_fork_confidence(fork).cloned(),
+            r_fork_confidence.get_fork_confidence(block).cloned(),
             r_fork_confidence.total_stake(),
         )
     }
@@ -325,8 +325,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(&self, _: Self::Metadata) -> Result<RpcEpochInfo>;
 
-    #[rpc(meta, name = "getForkConfidence")]
-    fn get_fork_confidence(
+    #[rpc(meta, name = "getBlockConfidence")]
+    fn get_block_confidence(
         &self,
         _: Self::Metadata,
         _: u64,
@@ -512,16 +512,16 @@ impl RpcSol for RpcSolImpl {
         })
     }
 
-    fn get_fork_confidence(
+    fn get_block_confidence(
         &self,
         meta: Self::Metadata,
-        fork: u64,
+        block: u64,
     ) -> Result<(Option<BankConfidence>, u64)> {
         Ok(meta
             .request_processor
             .read()
             .unwrap()
-            .get_fork_confidence(fork))
+            .get_block_confidence(block))
     }
 
     fn get_genesis_blockhash(&self, meta: Self::Metadata) -> Result<String> {
@@ -1387,7 +1387,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rpc_processor_get_fork_confidence() {
+    fn test_rpc_processor_get_block_confidence() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let confidence_slot0 = BankConfidence::new([8; MAX_LOCKOUT_HISTORY]);
@@ -1408,18 +1408,18 @@ pub mod tests {
             &validator_exit,
         );
         assert_eq!(
-            request_processor.get_fork_confidence(0),
+            request_processor.get_block_confidence(0),
             (Some(confidence_slot0), 42)
         );
         assert_eq!(
-            request_processor.get_fork_confidence(1),
+            request_processor.get_block_confidence(1),
             (Some(confidence_slot1), 42)
         );
-        assert_eq!(request_processor.get_fork_confidence(2), (None, 42));
+        assert_eq!(request_processor.get_block_confidence(2), (None, 42));
     }
 
     #[test]
-    fn test_rpc_get_fork_confidence() {
+    fn test_rpc_get_block_confidence() {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler {
             io,
@@ -1429,7 +1429,7 @@ pub mod tests {
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getForkConfidence","params":[0]}}"#);
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockConfidence","params":[0]}}"#);
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -1454,7 +1454,7 @@ pub mod tests {
         assert_eq!(total_staked, 42);
 
         let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getForkConfidence","params":[2]}}"#);
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockConfidence","params":[2]}}"#);
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
