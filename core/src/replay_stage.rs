@@ -59,20 +59,62 @@ pub struct ReplayStage {
     confidence_service: AggregateConfidenceService,
 }
 
-#[derive(Default)]
+struct ReplaySlotStats {
+    // Per-slot elapsed time
+    slot: u64,
+    fetch_entries_elapsed: u64,
+    entry_verification_elapsed: u64,
+    replay_elapsed: u64,
+    replay_start: Instant,
+}
+
+impl ReplaySlotStats {
+    pub fn new(slot: u64) -> Self {
+        Self {
+            slot,
+            fetch_entries_elapsed: 0,
+            entry_verification_elapsed: 0,
+            replay_elapsed: 0,
+            replay_start: Instant::now(),
+        }
+    }
+
+    pub fn report_stats(&self) {
+        datapoint_info!(
+            "replay-slot-stats",
+            ("slot", self.slot as i64, i64),
+            ("fetch_entries_time", self.fetch_entries_elapsed as i64, i64),
+            (
+                "entry_verification_time",
+                self.entry_verification_elapsed as i64,
+                i64
+            ),
+            ("replay_time", self.replay_elapsed as i64, i64),
+            (
+                "replay_start",
+                self.replay_start.elapsed().as_micros() as i64,
+                i64
+            ),
+        );
+    }
+}
+
 struct ForkProgress {
     last_entry: Hash,
     num_blobs: usize,
     started_ms: u64,
     is_dead: bool,
+    stats: ReplaySlotStats,
 }
+
 impl ForkProgress {
-    pub fn new(last_entry: Hash) -> Self {
+    pub fn new(slot: u64, last_entry: Hash) -> Self {
         Self {
             last_entry,
             num_blobs: 0,
             started_ms: timing::timestamp(),
             is_dead: false,
+            stats: ReplaySlotStats::new(slot),
         }
     }
 }
@@ -369,12 +411,26 @@ impl ReplayStage {
         progress: &mut HashMap<u64, ForkProgress>,
     ) -> (Result<()>, usize) {
         let mut tx_count = 0;
-        let result =
-            Self::load_blocktree_entries(bank, blocktree, progress).and_then(|(entries, num)| {
-                debug!("Replaying {:?} entries, num {:?}", entries.len(), num);
+        let bank_progress = &mut progress
+            .entry(bank.slot())
+            .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
+        let now = Instant::now();
+        let result = Self::load_blocktree_entries(bank, blocktree, bank_progress).and_then(
+            |(entries, num)| {
+                let entry_len = entries.len();
+                let fetch_entries_elapsed = now.elapsed().as_micros();
+                trace!(
+                    "Fetch entries for slot {}, elapsed: {}, {:?} entries, num shreds {:?}",
+                    bank.slot(),
+                    fetch_entries_elapsed,
+                    entry_len,
+                    num
+                );
                 tx_count += entries.iter().map(|e| e.transactions.len()).sum::<usize>();
-                Self::replay_entries_into_bank(bank, entries, progress, num)
-            });
+                bank_progress.stats.fetch_entries_elapsed += fetch_entries_elapsed as u64;
+                Self::replay_entries_into_bank(bank, entries, bank_progress, num)
+            },
+        );
 
         if Self::is_replay_result_fatal(&result) {
             warn!(
@@ -542,6 +598,9 @@ impl ReplayStage {
             }
             assert_eq!(*bank_slot, bank.slot());
             if bank.tick_height() == bank.max_tick_height() {
+                if let Some(bank_progress) = &mut progress.get(&bank.slot()) {
+                    bank_progress.stats.report_stats();
+                }
                 did_complete_bank = true;
                 Self::process_completed_bank(my_pubkey, bank, slot_full_senders);
             } else {
@@ -665,29 +724,23 @@ impl ReplayStage {
     fn load_blocktree_entries(
         bank: &Bank,
         blocktree: &Blocktree,
-        progress: &mut HashMap<u64, ForkProgress>,
+        bank_progress: &mut ForkProgress,
     ) -> Result<(Vec<Entry>, usize)> {
         let bank_slot = bank.slot();
-        let bank_progress = &mut progress
-            .entry(bank_slot)
-            .or_insert_with(|| ForkProgress::new(bank.last_blockhash()));
         blocktree.get_slot_entries_with_shred_count(bank_slot, bank_progress.num_blobs as u64)
     }
 
     fn replay_entries_into_bank(
         bank: &Arc<Bank>,
         entries: Vec<Entry>,
-        progress: &mut HashMap<u64, ForkProgress>,
+        bank_progress: &mut ForkProgress,
         num: usize,
     ) -> Result<()> {
-        let bank_progress = &mut progress
-            .entry(bank.slot())
-            .or_insert_with(|| ForkProgress::new(bank.last_blockhash()));
         let result = Self::verify_and_process_entries(
             &bank,
             &entries,
-            &bank_progress.last_entry,
             bank_progress.num_blobs,
+            bank_progress,
         );
         bank_progress.num_blobs += num;
         if let Some(last_entry) = entries.last() {
@@ -697,15 +750,21 @@ impl ReplayStage {
         result
     }
 
-    pub fn verify_and_process_entries(
+    fn verify_and_process_entries(
         bank: &Arc<Bank>,
         entries: &[Entry],
-        last_entry: &Hash,
         shred_index: usize,
+        bank_progress: &mut ForkProgress,
     ) -> Result<()> {
-        if !entries.verify(last_entry) {
-            warn!(
-                "entry verification failed {} {} {} {} {}",
+        let now = Instant::now();
+        let last_entry = &bank_progress.last_entry;
+        let verify_result = entries.verify(last_entry);
+        let verify_entries_elapsed = now.elapsed().as_micros();
+        bank_progress.stats.entry_verification_elapsed += verify_entries_elapsed as u64;
+        if !verify_result {
+            info!(
+                "entry verification failed, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}",
+                bank.slot(),
                 entries.len(),
                 bank.tick_height(),
                 last_entry,
@@ -720,8 +779,13 @@ impl ReplayStage {
             );
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
-        blocktree_processor::process_entries(bank, entries, true)?;
 
+        let now = Instant::now();
+        let res = blocktree_processor::process_entries(bank, entries, true);
+        let replay_elapsed = now.elapsed().as_micros();
+        bank_progress.stats.replay_elapsed += replay_elapsed as u64;
+
+        res?;
         Ok(())
     }
 
@@ -859,7 +923,7 @@ mod test {
         let bank0 = Bank::new(&genesis_block);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
         let mut progress = HashMap::new();
-        progress.insert(5, ForkProgress::new(Hash::default()));
+        progress.insert(5, ForkProgress::new(0, Hash::default()));
         ReplayStage::handle_new_root(&bank_forks, &mut progress);
         assert!(progress.is_empty());
     }
@@ -963,7 +1027,7 @@ mod test {
             let bank0 = Arc::new(Bank::new(&genesis_block));
             let mut progress = HashMap::new();
             let last_blockhash = bank0.last_blockhash();
-            progress.insert(bank0.slot(), ForkProgress::new(last_blockhash));
+            progress.insert(bank0.slot(), ForkProgress::new(0, last_blockhash));
             let shreds = shred_to_insert(&last_blockhash, bank0.slot());
             blocktree.insert_shreds(shreds, None).unwrap();
             let (res, _tx_count) =
