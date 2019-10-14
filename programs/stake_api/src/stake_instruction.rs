@@ -20,6 +20,7 @@ use solana_sdk::{
 pub enum StakeError {
     NoCreditsToRedeem,
     LockupInForce,
+    AlreadyDeactivated,
 }
 impl<E> DecodeError<E> for StakeError {
     fn type_of() -> &'static str {
@@ -31,6 +32,7 @@ impl std::fmt::Display for StakeError {
         match self {
             StakeError::NoCreditsToRedeem => write!(f, "not enough credits to redeem"),
             StakeError::LockupInForce => write!(f, "lockup has not yet expired"),
+            StakeError::AlreadyDeactivated => write!(f, "stake already deactivated"),
         }
     }
 }
