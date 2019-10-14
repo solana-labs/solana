@@ -49,7 +49,13 @@ Operate a configured testnet
                                         This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                         to the bench-tps client.
    -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
-
+   --gpu-mode GPU_MODE                - Specify GPU mode to launch validators with (default: $gpuMode).
+                                        MODE must be one of
+                                          on - GPU *required*, any vendor *
+                                          off - No GPU, CPU-only
+                                          auto - Use GPU if available, any vendor *
+                                          cuda - GPU *required*, Nvidia CUDA only
+                                          *  Currently, Nvidia CUDA is the only supported GPU vendor
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
    --no-airdrop
@@ -130,6 +136,7 @@ maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 debugBuild=false
 doBuild=true
+gpuMode=auto
 
 command=$1
 [[ -n $command ]] || usage
@@ -187,6 +194,17 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --debug ]]; then
       debugBuild=true
       shift 1
+    elif [[ $1 = --gpu-mode ]]; then
+      gpuMode=$2
+      case "$gpuMode" in
+        on|off|auto|cuda)
+          ;;
+        *)
+          echo "Unexpected GPU mode: \"$gpuMode\""
+          exit 1
+          ;;
+      esac
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -424,6 +442,7 @@ startBootstrapLeader() {
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
+         \"$gpuMode\" \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -488,6 +507,7 @@ startNode() {
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
+         \"$gpuMode\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!

@@ -24,6 +24,7 @@ numBenchExchangeClients="${15}"
 benchExchangeExtraArgs="${16}"
 genesisOptions="${17}"
 extraNodeArgs="${18}"
+gpuMode="${19:-auto}"
 set +x
 
 # Use a very large stake (relative to the default multinode-demo/ stake of 42)
@@ -75,6 +76,28 @@ EOF
 chmod +x ~/solana/on-reboot
 echo "@reboot ~/solana/on-reboot" | crontab -
 
+GPU_CUDA_OK=false
+GPU_FAIL_IF_NONE=false
+case "$gpuMode" in
+  on) # GPU *required*, any vendor
+    GPU_CUDA_OK=true
+    GPU_FAIL_IF_NONE=true
+    ;;
+  off) # CPU-only
+    ;;
+  auto) # Use GPU if installed, any vendor
+    GPU_CUDA_OK=true
+    ;;
+  cuda) # GPU *required*, CUDA-only
+    GPU_CUDA_OK=true
+    GPU_FAIL_IF_NONE=true
+    ;;
+  *)
+    echo "Unexpected gpuMode: \"$gpuMode\""
+    exit 1
+    ;;
+esac
+
 waitForNodeToInit() {
   echo "--- waiting for node to boot up"
   SECONDS=
@@ -113,9 +136,12 @@ cat >> ~/solana/on-reboot <<EOF
   scripts/net-stats.sh  > net-stats.log 2>&1 &
   echo \$! > net-stats.pid
 
-  if [[ -e /dev/nvidia0 ]]; then
+  if ${GPU_CUDA_OK} && [[ -e /dev/nvidia0 ]]; then
     echo Selecting solana-validator-cuda
     export SOLANA_CUDA=1
+  elif ${GPU_FAIL_IF_NONE} ; then
+    echo "Expected GPU, found none!"
+    export SOLANA_GPU_MISSING=1
   fi
 EOF
 
