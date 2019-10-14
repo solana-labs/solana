@@ -228,11 +228,6 @@ pub struct Bank {
     /// latest rent collector, knows the epoch
     rent_collector: RentCollector,
 
-    /// tallied credit-debit rent for this slot
-    #[serde(serialize_with = "serialize_atomicu64")]
-    #[serde(deserialize_with = "deserialize_atomicu64")]
-    tallied_credit_debit_rent: AtomicU64,
-
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
 
@@ -338,7 +333,6 @@ impl Bank {
             parent_hash: parent.hash(),
             collector_id: *collector_id,
             collector_fees: AtomicU64::new(0),
-            tallied_credit_debit_rent: AtomicU64::new(0),
             ancestors: HashMap::new(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
@@ -563,10 +557,8 @@ impl Bank {
 
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
+            self.commit_credits();
             self.collect_fees();
-
-            let collected_rent = self.commit_credits_and_rents();
-            self.distribute_rent(collected_rent);
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -584,10 +576,6 @@ impl Bank {
 
     pub fn epoch_schedule(&self) -> &EpochSchedule {
         &self.epoch_schedule
-    }
-
-    pub fn get_tallied_credit_debit_rent(&self) -> u64 {
-        self.tallied_credit_debit_rent.load(Ordering::Relaxed)
     }
 
     /// squash the parent's state up into this Bank,
@@ -836,11 +824,9 @@ impl Bank {
         self.process_transactions(&txs)[0].clone()?;
         // Call this instead of commit_credits(), so that the credit-only locks hashmap on this
         // bank isn't deleted
-        self.rc.accounts.commit_credits_and_rents_unsafe(
-            &self.rent_collector,
-            &self.ancestors,
-            self.slot(),
-        );
+        self.rc
+            .accounts
+            .commit_credits_unsafe(&self.ancestors, self.slot());
         tx.signatures
             .get(0)
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
@@ -1212,7 +1198,6 @@ impl Bank {
         write_time.stop();
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
         self.update_transaction_statuses(txs, iteration_order, &executed);
-        self.tally_credit_debit_rent(txs, iteration_order, &executed, loaded_accounts);
         self.filter_program_errors_and_collect_fee(txs, iteration_order, executed)
     }
 
@@ -1581,60 +1566,10 @@ impl Bank {
         );
     }
 
-    fn commit_credits_and_rents(&self) -> u64 {
-        self.rc.accounts.commit_credits_and_rents(
-            &self.rent_collector,
-            &self.ancestors,
-            self.slot(),
-        )
-    }
-
-    fn tally_credit_debit_rent(
-        &self,
-        txs: &[Transaction],
-        iteration_order: Option<&[usize]>,
-        res: &[Result<()>],
-        loaded_accounts: &[Result<TransactionLoadResult>],
-    ) {
-        let mut collected_rent = 0;
-        for (i, (raccs, tx)) in loaded_accounts
-            .iter()
-            .zip(OrderedIterator::new(txs, iteration_order))
-            .enumerate()
-        {
-            if res[i].is_err() || raccs.is_err() {
-                continue;
-            }
-
-            let message = &tx.message();
-            let acc = raccs.as_ref().unwrap();
-
-            for (_i, rent) in acc
-                .3
-                .iter()
-                .enumerate()
-                .filter(|(i, _rent)| message.is_debitable(*i))
-            {
-                collected_rent += rent;
-            }
-        }
-
-        self.tallied_credit_debit_rent
-            .fetch_add(collected_rent, Ordering::Relaxed);
-    }
-
-    fn distribute_rent(&self, credit_only_collected_rent: u64) {
-        let total_rent_collected =
-            credit_only_collected_rent + self.tallied_credit_debit_rent.load(Ordering::Relaxed);
-
-        if total_rent_collected != 0 {
-            let burned_portion = (total_rent_collected
-                * u64::from(self.rent_collector.rent_calculator.burn_percent))
-                / 100;
-            let _rent_to_be_distributed = total_rent_collected - burned_portion;
-            // TODO: distribute remaining rent amount to validators
-            // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
-        }
+    fn commit_credits(&self) {
+        self.rc
+            .accounts
+            .commit_credits(&self.ancestors, self.slot());
     }
 }
 
@@ -1657,7 +1592,6 @@ mod tests {
         status_cache::MAX_CACHE_ENTRIES,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
-    use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -1820,349 +1754,6 @@ mod tests {
     }
 
     #[test]
-    fn test_credit_debit_rent_no_side_effect_on_hash() {
-        let (mut genesis_block, _mint_keypair) = create_genesis_block(10);
-        let credit_only_key1 = Pubkey::new_rand();
-        let credit_only_key2 = Pubkey::new_rand();
-        let credit_debit_keypair1: Keypair = Keypair::new();
-        let credit_debit_keypair2: Keypair = Keypair::new();
-
-        let rent_overdue_credit_only_key1 = Pubkey::new_rand();
-        let rent_overdue_credit_only_key2 = Pubkey::new_rand();
-        let rent_overdue_credit_debit_keypair1 = Keypair::new();
-        let rent_overdue_credit_debit_keypair2 = Keypair::new();
-
-        genesis_block.rent_calculator = RentCalculator {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 21.0,
-            burn_percent: 10,
-        };
-
-        let root_bank = Arc::new(Bank::new(&genesis_block));
-        let bank = Bank::new_from_parent(
-            &root_bank,
-            &Pubkey::default(),
-            2 * (SECONDS_PER_YEAR
-                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
-                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
-                //  / ticks/slot
-                / genesis_block.ticks_per_slot as f64) as u64,
-        );
-
-        let root_bank_2 = Arc::new(Bank::new(&genesis_block));
-        let bank_with_success_txs = Bank::new_from_parent(
-            &root_bank_2,
-            &Pubkey::default(),
-            2 * (SECONDS_PER_YEAR
-                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
-                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
-                //  / ticks/slot
-                / genesis_block.ticks_per_slot as f64) as u64,
-        );
-        assert_eq!(bank.last_blockhash(), genesis_block.hash());
-
-        // Initialize credit-debit and credit only accounts
-        let credit_debit_account1 = Account::new(20, 1, &Pubkey::default());
-        let credit_debit_account2 = Account::new(20, 1, &Pubkey::default());
-        let credit_only_account1 = Account::new(3, 1, &Pubkey::default());
-        let credit_only_account2 = Account::new(3, 1, &Pubkey::default());
-
-        bank.store_account(&credit_debit_keypair1.pubkey(), &credit_debit_account1);
-        bank.store_account(&credit_debit_keypair2.pubkey(), &credit_debit_account2);
-        bank.store_account(&credit_only_key1, &credit_only_account1);
-        bank.store_account(&credit_only_key2, &credit_only_account2);
-
-        bank_with_success_txs
-            .store_account(&credit_debit_keypair1.pubkey(), &credit_debit_account1);
-        bank_with_success_txs
-            .store_account(&credit_debit_keypair2.pubkey(), &credit_debit_account2);
-        bank_with_success_txs.store_account(&credit_only_key1, &credit_only_account1);
-        bank_with_success_txs.store_account(&credit_only_key2, &credit_only_account2);
-
-        let rent_overdue_credit_debit_account1 = Account::new(2, 1, &Pubkey::default());
-        let rent_overdue_credit_debit_account2 = Account::new(2, 1, &Pubkey::default());
-        let rent_overdue_credit_only_account1 = Account::new(1, 1, &Pubkey::default());
-        let rent_overdue_credit_only_account2 = Account::new(1, 1, &Pubkey::default());
-
-        bank.store_account(
-            &rent_overdue_credit_debit_keypair1.pubkey(),
-            &rent_overdue_credit_debit_account1,
-        );
-        bank.store_account(
-            &rent_overdue_credit_debit_keypair2.pubkey(),
-            &rent_overdue_credit_debit_account2,
-        );
-        bank.store_account(
-            &rent_overdue_credit_only_key1,
-            &rent_overdue_credit_only_account1,
-        );
-        bank.store_account(
-            &rent_overdue_credit_only_key2,
-            &rent_overdue_credit_only_account2,
-        );
-
-        bank_with_success_txs.store_account(
-            &rent_overdue_credit_debit_keypair1.pubkey(),
-            &rent_overdue_credit_debit_account1,
-        );
-        bank_with_success_txs.store_account(
-            &rent_overdue_credit_debit_keypair2.pubkey(),
-            &rent_overdue_credit_debit_account2,
-        );
-        bank_with_success_txs.store_account(
-            &rent_overdue_credit_only_key1,
-            &rent_overdue_credit_only_account1,
-        );
-        bank_with_success_txs.store_account(
-            &rent_overdue_credit_only_key2,
-            &rent_overdue_credit_only_account2,
-        );
-
-        // Make native instruction loader rent exempt
-        let system_program_id = solana_system_program().1;
-        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
-        system_program_account.lamports =
-            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
-        bank.store_account(&system_program_id, &system_program_account);
-        bank_with_success_txs.store_account(&system_program_id, &system_program_account);
-
-        let t1 = system_transaction::transfer(
-            &credit_debit_keypair1,
-            &rent_overdue_credit_only_key1,
-            1,
-            genesis_block.hash(),
-        );
-        let t2 = system_transaction::transfer(
-            &rent_overdue_credit_debit_keypair1,
-            &credit_only_key1,
-            1,
-            genesis_block.hash(),
-        );
-        let t3 = system_transaction::transfer(
-            &credit_debit_keypair2,
-            &credit_only_key2,
-            1,
-            genesis_block.hash(),
-        );
-        let t4 = system_transaction::transfer(
-            &rent_overdue_credit_debit_keypair2,
-            &rent_overdue_credit_only_key2,
-            1,
-            genesis_block.hash(),
-        );
-        let res = bank.process_transactions(&vec![t1.clone(), t2.clone(), t3.clone(), t4.clone()]);
-
-        assert_eq!(res.len(), 4);
-        assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Err(TransactionError::AccountNotFound));
-        assert_eq!(res[2], Ok(()));
-        assert_eq!(res[3], Err(TransactionError::AccountNotFound));
-
-        bank.freeze();
-
-        let rwlockguard_bank_hash = bank.hash.read().unwrap();
-        let bank_hash = rwlockguard_bank_hash.as_ref();
-
-        let res = bank_with_success_txs.process_transactions(&vec![t3.clone(), t1.clone()]);
-
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Ok(()));
-
-        bank_with_success_txs.freeze();
-
-        let rwlockguard_bank_with_success_txs_hash = bank_with_success_txs.hash.read().unwrap();
-        let bank_with_success_txs_hash = rwlockguard_bank_with_success_txs_hash.as_ref();
-
-        assert_eq!(bank_with_success_txs_hash, bank_hash);
-    }
-
-    #[test]
-    fn test_credit_debit_rent() {
-        let (mut genesis_block, _mint_keypair) = create_genesis_block(10);
-        let credit_only_key1 = Pubkey::new_rand();
-        let credit_only_key2 = Pubkey::new_rand();
-        let credit_debit_keypair1: Keypair = Keypair::new();
-        let credit_debit_keypair2: Keypair = Keypair::new();
-
-        let rent_overdue_credit_only_key1 = Pubkey::new_rand();
-        let rent_overdue_credit_only_key2 = Pubkey::new_rand();
-        let rent_overdue_credit_debit_keypair1 = Keypair::new();
-        let rent_overdue_credit_debit_keypair2 = Keypair::new();
-
-        genesis_block.rent_calculator = RentCalculator {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 21.0,
-            burn_percent: 10,
-        };
-
-        let root_bank = Bank::new(&genesis_block);
-        let bank = Bank::new_from_parent(
-            &Arc::new(root_bank),
-            &Pubkey::default(),
-            2 * (SECONDS_PER_YEAR
-                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
-                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
-                //  / ticks/slot
-                / genesis_block.ticks_per_slot as f64) as u64,
-        );
-        assert_eq!(bank.last_blockhash(), genesis_block.hash());
-
-        // Initialize credit-debit and credit only accounts
-        let credit_debit_account1 = Account::new(20, 1, &Pubkey::default());
-        let credit_debit_account2 = Account::new(20, 1, &Pubkey::default());
-        let credit_only_account1 = Account::new(3, 1, &Pubkey::default());
-        let credit_only_account2 = Account::new(3, 1, &Pubkey::default());
-
-        bank.store_account(&credit_debit_keypair1.pubkey(), &credit_debit_account1);
-        bank.store_account(&credit_debit_keypair2.pubkey(), &credit_debit_account2);
-        bank.store_account(&credit_only_key1, &credit_only_account1);
-        bank.store_account(&credit_only_key2, &credit_only_account2);
-
-        let rent_overdue_credit_debit_account1 = Account::new(2, 1, &Pubkey::default());
-        let rent_overdue_credit_debit_account2 = Account::new(2, 1, &Pubkey::default());
-        let rent_overdue_credit_only_account1 = Account::new(1, 1, &Pubkey::default());
-        let rent_overdue_credit_only_account2 = Account::new(1, 1, &Pubkey::default());
-
-        bank.store_account(
-            &rent_overdue_credit_debit_keypair1.pubkey(),
-            &rent_overdue_credit_debit_account1,
-        );
-        bank.store_account(
-            &rent_overdue_credit_debit_keypair2.pubkey(),
-            &rent_overdue_credit_debit_account2,
-        );
-        bank.store_account(
-            &rent_overdue_credit_only_key1,
-            &rent_overdue_credit_only_account1,
-        );
-        bank.store_account(
-            &rent_overdue_credit_only_key2,
-            &rent_overdue_credit_only_account2,
-        );
-
-        // Make native instruction loader rent exempt
-        let system_program_id = solana_system_program().1;
-        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
-        system_program_account.lamports =
-            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
-        bank.store_account(&system_program_id, &system_program_account);
-
-        let total_lamports_before_txs = system_program_account.lamports
-            + rent_overdue_credit_debit_account1.lamports
-            + rent_overdue_credit_debit_account2.lamports
-            + rent_overdue_credit_only_account1.lamports
-            + rent_overdue_credit_only_account2.lamports
-            + credit_debit_account1.lamports
-            + credit_debit_account2.lamports
-            + credit_only_account1.lamports
-            + credit_only_account2.lamports;
-
-        let t1 = system_transaction::transfer(
-            &credit_debit_keypair1,
-            &rent_overdue_credit_only_key1,
-            1,
-            genesis_block.hash(),
-        );
-        let t2 = system_transaction::transfer(
-            &rent_overdue_credit_debit_keypair1,
-            &credit_only_key1,
-            1,
-            genesis_block.hash(),
-        );
-        let t3 = system_transaction::transfer(
-            &credit_debit_keypair2,
-            &credit_only_key2,
-            1,
-            genesis_block.hash(),
-        );
-        let t4 = system_transaction::transfer(
-            &rent_overdue_credit_debit_keypair2,
-            &rent_overdue_credit_only_key2,
-            1,
-            genesis_block.hash(),
-        );
-        let res = bank.process_transactions(&vec![t1.clone(), t2.clone(), t3.clone(), t4.clone()]);
-
-        let mut total_lamports_after_txs = 0;
-
-        assert_eq!(res.len(), 4);
-        assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Err(TransactionError::AccountNotFound));
-        assert_eq!(res[2], Ok(()));
-        assert_eq!(res[3], Err(TransactionError::AccountNotFound));
-
-        // We haven't yet made any changes to credit only accounts
-        assert_eq!(bank.get_balance(&credit_only_key1), 3);
-        assert_eq!(bank.get_balance(&credit_only_key2), 3);
-        assert_eq!(bank.get_balance(&rent_overdue_credit_only_key1), 1);
-        assert_eq!(bank.get_balance(&rent_overdue_credit_only_key2), 1);
-
-        assert_eq!(
-            bank.get_balance(&system_program_id),
-            system_program_account.lamports
-        );
-        total_lamports_after_txs += bank.get_balance(&system_program_id);
-
-        // Credit-debit account's rent is already deducted
-        // 20 - 1(Transferred) - 2(Rent)
-        assert_eq!(bank.get_balance(&credit_debit_keypair1.pubkey()), 17);
-        total_lamports_after_txs += bank.get_balance(&credit_debit_keypair1.pubkey());
-        assert_eq!(bank.get_balance(&credit_debit_keypair2.pubkey()), 17);
-        total_lamports_after_txs += bank.get_balance(&credit_debit_keypair2.pubkey());
-        // Since this credit-debit accounts are unable to pay rent, load_tx_account failed, as they are
-        // the signer account. No change was done.
-        assert_eq!(
-            bank.get_balance(&rent_overdue_credit_debit_keypair1.pubkey()),
-            2
-        );
-        total_lamports_after_txs += bank.get_balance(&rent_overdue_credit_debit_keypair1.pubkey());
-        assert_eq!(
-            bank.get_balance(&rent_overdue_credit_debit_keypair2.pubkey()),
-            2
-        );
-        total_lamports_after_txs += bank.get_balance(&rent_overdue_credit_debit_keypair2.pubkey());
-
-        // Credit-debit account's rent is stored in `tallied_credit_debit_rent`
-        // Rent deducted is: 2+2
-        assert_eq!(bank.get_tallied_credit_debit_rent(), 4);
-        total_lamports_after_txs += bank.get_tallied_credit_debit_rent();
-
-        // Rent deducted is: 2+1
-        let commited_credit_only_rent = bank.commit_credits_and_rents();
-        assert_eq!(commited_credit_only_rent, 3);
-        total_lamports_after_txs += commited_credit_only_rent;
-
-        // No rent deducted because tx failed
-        assert_eq!(bank.get_balance(&credit_only_key1), 3);
-        total_lamports_after_txs += bank.get_balance(&credit_only_key1);
-        // Now, we have credited credits and debited rent
-        // 3 + 1(Transferred) - 2(Rent)
-        assert_eq!(bank.get_balance(&credit_only_key2), 2);
-        total_lamports_after_txs += bank.get_balance(&credit_only_key2);
-
-        // Since we were unable to pay rent, the account was reset, rent got deducted.
-        // And credit went to that overwritten account
-        // Rent deducted: 1
-        assert_eq!(bank.get_balance(&rent_overdue_credit_only_key1), 1);
-        assert_eq!(
-            bank.get_account(&rent_overdue_credit_only_key1)
-                .unwrap()
-                .data
-                .len(),
-            0
-        );
-        total_lamports_after_txs += bank.get_balance(&rent_overdue_credit_only_key1);
-
-        // No rent got deducted as, we were unable to load accounts (load_tx_accounts errored out)
-        assert_eq!(bank.get_balance(&rent_overdue_credit_only_key2), 1);
-        total_lamports_after_txs += bank.get_balance(&rent_overdue_credit_only_key2);
-
-        // total lamports in circulation should be same
-        assert_eq!(total_lamports_after_txs, total_lamports_before_txs);
-    }
-
-    #[test]
     fn test_one_source_two_tx_one_batch() {
         let (genesis_block, mint_keypair) = create_genesis_block(1);
         let key1 = Pubkey::new_rand();
@@ -2173,7 +1764,7 @@ mod tests {
         let t1 = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_block.hash());
         let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_block.hash());
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
-        bank.commit_credits_and_rents();
+        bank.commit_credits();
 
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
@@ -2572,11 +2163,9 @@ mod tests {
             system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
-        bank.rc.accounts.commit_credits_and_rents_unsafe(
-            &bank.rent_collector,
-            &bank.ancestors,
-            bank.slot(),
-        );
+        bank.rc
+            .accounts
+            .commit_credits_unsafe(&bank.ancestors, bank.slot());
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
         // since System Transfer `To` accounts are given credit-only handling
@@ -2595,11 +2184,9 @@ mod tests {
             system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
-        bank.rc.accounts.commit_credits_and_rents_unsafe(
-            &bank.rent_collector,
-            &bank.ancestors,
-            bank.slot(),
-        );
+        bank.rc
+            .accounts
+            .commit_credits_unsafe(&bank.ancestors, bank.slot());
         // However, an account may not be locked as credit-only and credit-debit at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));

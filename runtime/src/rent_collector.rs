@@ -35,9 +35,9 @@ impl RentCollector {
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
     //
-    pub fn update<'a>(&self, account: &'a mut Account) -> (Option<&'a Account>, u64) {
+    pub fn update(&self, mut account: Account) -> Option<(Account, u64)> {
         if account.data.is_empty() || account.rent_epoch > self.epoch {
-            (Some(account), 0)
+            Some((account, 0))
         } else {
             let slots_elapsed: u64 = (account.rent_epoch..=self.epoch)
                 .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
@@ -53,13 +53,13 @@ impl RentCollector {
                 if account.lamports > rent_due {
                     account.rent_epoch = self.epoch + 1;
                     account.lamports -= rent_due;
-                    (Some(account), rent_due)
+                    Some((account, rent_due))
                 } else {
-                    (None, account.lamports)
+                    None
                 }
             } else {
                 // maybe collect rent later, leave account alone
-                (Some(account), 0)
+                Some((account, 0))
             }
         }
     }
