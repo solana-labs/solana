@@ -20,7 +20,6 @@ use solana_sdk::transaction::Transaction;
 use std::mem::size_of;
 
 use solana_rayon_threadlimit::get_thread_count;
-pub const NUM_THREADS: u32 = 10;
 use std::cell::RefCell;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()

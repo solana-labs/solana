@@ -8,6 +8,7 @@ use log::*;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
+use solana_measure::measure::Measure;
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::*;
 use solana_rayon_threadlimit::get_thread_count;
@@ -18,9 +19,8 @@ use std::cell::RefCell;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Instant;
-
-pub const NUM_THREADS: u32 = 10;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -162,15 +162,70 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction
     }
 }
 
+pub struct EntryVerifyState {
+    thread_h: Option<JoinHandle<u64>>,
+    hashes: Option<Arc<Mutex<Vec<Hash>>>>,
+    verified: bool,
+    tx_hashes: Vec<Option<Hash>>,
+    start_time_ms: u64,
+}
+
+impl EntryVerifyState {
+    pub fn finish_verify(&mut self, entries: &[Entry]) -> bool {
+        if self.hashes.is_some() {
+            let gpu_time_ms = self.thread_h.take().unwrap().join().unwrap();
+
+            let mut verify_check_time = Measure::start("verify_check");
+            let hashes = self.hashes.take().expect("hashes.as_ref");
+            let hashes = Arc::try_unwrap(hashes)
+                .expect("unwrap Arc")
+                .into_inner()
+                .expect("into_inner");
+            let res = PAR_THREAD_POOL.with(|thread_pool| {
+                thread_pool.borrow().install(|| {
+                    hashes
+                        .into_par_iter()
+                        .zip(&self.tx_hashes)
+                        .zip(entries)
+                        .all(|((hash, tx_hash), answer)| {
+                            if answer.num_hashes == 0 {
+                                hash == answer.hash
+                            } else {
+                                let mut poh = Poh::new(hash, None);
+                                if let Some(mixin) = tx_hash {
+                                    poh.record(*mixin).unwrap().hash == answer.hash
+                                } else {
+                                    poh.tick().unwrap().hash == answer.hash
+                                }
+                            }
+                        })
+                })
+            });
+            verify_check_time.stop();
+            inc_new_counter_warn!(
+                "entry_verify-duration",
+                (gpu_time_ms + verify_check_time.as_ms() + self.start_time_ms) as usize
+            );
+            res
+        } else {
+            self.verified
+        }
+    }
+}
+
 // an EntrySlice is a slice of Entries
 pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
-    fn verify_cpu(&self, start_hash: &Hash) -> bool;
+    fn verify_cpu(&self, start_hash: &Hash) -> EntryVerifyState;
+    fn start_verify(&self, start_hash: &Hash) -> EntryVerifyState;
     fn verify(&self, start_hash: &Hash) -> bool;
 }
 
 impl EntrySlice for [Entry] {
-    fn verify_cpu(&self, start_hash: &Hash) -> bool {
+    fn verify(&self, start_hash: &Hash) -> bool {
+        self.start_verify(start_hash).finish_verify(self)
+    }
+    fn verify_cpu(&self, start_hash: &Hash) -> EntryVerifyState {
         let now = Instant::now();
         let genesis = [Entry {
             num_hashes: 0,
@@ -198,21 +253,22 @@ impl EntrySlice for [Entry] {
             "entry_verify-duration",
             timing::duration_as_ms(&now.elapsed()) as usize
         );
-        res
+        EntryVerifyState {
+            thread_h: None,
+            verified: res,
+            hashes: None,
+            tx_hashes: vec![],
+            start_time_ms: 0,
+        }
     }
 
-    fn verify(&self, start_hash: &Hash) -> bool {
+    fn start_verify(&self, start_hash: &Hash) -> EntryVerifyState {
         let api = perf_libs::api();
         if api.is_none() {
             return self.verify_cpu(start_hash);
         }
         let api = api.unwrap();
         inc_new_counter_warn!("entry_verify-num_entries", self.len() as usize);
-
-        // Use CPU verify if the batch length is < 1K
-        if self.len() < 1024 {
-            return self.verify_cpu(start_hash);
-        }
 
         let start = Instant::now();
 
@@ -238,9 +294,9 @@ impl EntrySlice for [Entry] {
         let hashes = Arc::new(Mutex::new(hashes));
         let hashes_clone = hashes.clone();
 
-        let gpu_wait = Instant::now();
         let gpu_verify_thread = thread::spawn(move || {
             let mut hashes = hashes_clone.lock().unwrap();
+            let gpu_wait = Instant::now();
             let res;
             unsafe {
                 res = (api.poh_verify_many)(
@@ -253,9 +309,14 @@ impl EntrySlice for [Entry] {
             if res != 0 {
                 panic!("GPU PoH verify many failed");
             }
+            inc_new_counter_warn!(
+                "entry_verify-gpu_thread",
+                timing::duration_as_ms(&gpu_wait.elapsed()) as usize
+            );
+            timing::duration_as_ms(&gpu_wait.elapsed())
         });
 
-        let tx_hashes: Vec<Option<Hash>> = PAR_THREAD_POOL.with(|thread_pool| {
+        let tx_hashes = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 self.into_par_iter()
                     .map(|entry| {
@@ -269,37 +330,13 @@ impl EntrySlice for [Entry] {
             })
         });
 
-        gpu_verify_thread.join().unwrap();
-        inc_new_counter_warn!(
-            "entry_verify-gpu_thread",
-            timing::duration_as_ms(&gpu_wait.elapsed()) as usize
-        );
-
-        let hashes = Arc::try_unwrap(hashes).unwrap().into_inner().unwrap();
-        let res =
-            PAR_THREAD_POOL.with(|thread_pool| {
-                thread_pool.borrow().install(|| {
-                    hashes.into_par_iter().zip(tx_hashes).zip(self).all(
-                        |((hash, tx_hash), answer)| {
-                            if answer.num_hashes == 0 {
-                                hash == answer.hash
-                            } else {
-                                let mut poh = Poh::new(hash, None);
-                                if let Some(mixin) = tx_hash {
-                                    poh.record(mixin).unwrap().hash == answer.hash
-                                } else {
-                                    poh.tick().unwrap().hash == answer.hash
-                                }
-                            }
-                        },
-                    )
-                })
-            });
-        inc_new_counter_warn!(
-            "entry_verify-duration",
-            timing::duration_as_ms(&start.elapsed()) as usize
-        );
-        res
+        EntryVerifyState {
+            thread_h: Some(gpu_verify_thread),
+            verified: false,
+            tx_hashes,
+            start_time_ms: timing::duration_as_ms(&start.elapsed()),
+            hashes: Some(hashes),
+        }
     }
 }
 

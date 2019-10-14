@@ -21,7 +21,6 @@ use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub const NUM_THREADS: u32 = 10;
 use solana_rayon_threadlimit::get_thread_count;
 use std::cell::RefCell;
 
