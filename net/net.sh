@@ -49,7 +49,7 @@ Operate a configured testnet
                                         This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                         to the bench-tps client.
    -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
-   -g / --gpu-mode GPU_MODE           - Specify GPU mode to launch validators with (default: $gpuMode).
+   --gpu-mode GPU_MODE                - Specify GPU mode to launch validators with (default: $gpuMode).
                                         MODE must be one of
                                           on - GPU *required*, any vendor *
                                           off - No GPU, CPU-only
@@ -196,6 +196,14 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --gpu-mode ]]; then
       gpuMode=$2
+      case "$gpuMode" in
+        on|off|auto|cuda)
+          ;;
+        *)
+          echo "Unexpected GPU mode: \"$gpuMode\""
+          exit 1
+          ;;
+      esac
       shift 2
     else
       usage "Unknown long option: $1"
@@ -206,7 +214,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:c:Fn:g:i:d" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -229,9 +237,6 @@ while getopts "h?T:t:o:f:rD:c:Fn:g:i:d" opt "${shortArgs[@]}"; do
     ;;
   n)
     numFullnodesRequested=$OPTARG
-    ;;
-  g)
-    gpuMode=$OPTARG
     ;;
   r)
     skipSetup=true
@@ -296,8 +301,6 @@ while getopts "h?T:t:o:f:rD:c:Fn:g:i:d" opt "${shortArgs[@]}"; do
     ;;
   esac
 done
-
-grep -qE '^(on|off|auto|cuda)$' <<<"$gpuMode" || ( echo "Unexpected GPU mode: \"$gpuMode\"" && exit 1 )
 
 loadConfigFile
 
