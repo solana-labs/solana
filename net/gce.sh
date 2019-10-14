@@ -575,6 +575,14 @@ delete() {
   $metricsWriteDatapoint "testnet-deploy net-delete-complete=1"
 }
 
+create_error_cleanup() {
+  declare RC=$?
+  if [[ "$RC" -ne 0 ]]; then
+    delete
+  fi
+  exit $RC
+}
+
 case $command in
 delete)
   delete
@@ -586,6 +594,10 @@ create)
   delete
 
   $metricsWriteDatapoint "testnet-deploy net-create-begin=1"
+
+  if $failOnValidatorBootupFailure; then
+    trap create_error_cleanup EXIT
+  fi
 
   rm -rf "$sshPrivateKey"{,.pub}
 
