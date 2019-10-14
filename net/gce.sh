@@ -576,7 +576,7 @@ delete() {
 }
 
 create_error_cleanup() {
-  RC=$?
+  declare RC=$?
   if [[ "$RC" -ne 0 ]]; then
     delete
   fi
