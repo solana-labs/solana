@@ -27,6 +27,7 @@ use crate::transaction_utils::OrderedIterator;
 struct CreditOnlyLock {
     credits: AtomicU64,
     lock_count: Mutex<u64>,
+    rent_debtor: bool,
 }
 
 /// This structure handles synchronization for db
@@ -39,7 +40,7 @@ pub struct Accounts {
     account_locks: Mutex<HashSet<Pubkey>>,
 
     /// Set of credit-only accounts which are currently in the pipeline, caching account balance
-    /// and number of locks. On commit_credits(), we do a take() on the option so that the hashmap
+    /// number of locks and whether or not account owes rent. On commit_credits(), we do a take() on the option so that the hashmap
     /// is no longer available to be written to.
     credit_only_account_locks: Arc<RwLock<Option<HashMap<Pubkey, CreditOnlyLock>>>>,
 }
@@ -95,6 +96,7 @@ impl Accounts {
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
+        w_credit_only_account_locks: &mut RwLockWriteGuard<Option<HashMap<Pubkey, CreditOnlyLock>>>,
     ) -> Result<(TransactionAccounts, TransactionCredits, TransactionRents)> {
         // Copy all the accounts
         let message = tx.message();
@@ -107,19 +109,32 @@ impl Accounts {
                 return Err(TransactionError::AccountLoadedTwice);
             }
 
+            let credit_only_account_locks = w_credit_only_account_locks.as_mut().unwrap();
+            let mut credit_only_keys: HashSet<Pubkey> = HashSet::new();
+
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut accounts: TransactionAccounts = vec![];
             let mut credits: TransactionCredits = vec![];
             let mut rents: TransactionRents = vec![];
-            for key in message
+            for (i, key) in message
                 .account_keys
                 .iter()
                 .filter(|key| !message.program_ids().contains(&key))
+                .enumerate()
             {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
-                    .and_then(|(account, _)| rent_collector.update(account))
+                    .and_then(
+                        |(mut account, _)| match rent_collector.update(&mut account) {
+                            (Some(_), rent_due) => Some((account, rent_due)),
+                            (None, rent_due) => Some((Account::default(), rent_due)),
+                        },
+                    )
                     .unwrap_or_default();
+
+                if !message.is_debitable(i) {
+                    credit_only_keys.insert(*key);
+                }
 
                 accounts.push(account);
                 credits.push(0);
@@ -137,6 +152,11 @@ impl Accounts {
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
                 accounts[0].lamports -= fee;
+                for key in credit_only_keys {
+                    credit_only_account_locks.entry(key).and_modify(|mut lock| {
+                        lock.rent_debtor = true;
+                    });
+                }
                 Ok((accounts, credits, rents))
             }
         }
@@ -229,6 +249,7 @@ impl Accounts {
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
+        let mut w_credit_only_account_locks = self.credit_only_account_locks.write().unwrap();
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
@@ -246,6 +267,7 @@ impl Accounts {
                         fee,
                         error_counters,
                         rent_collector,
+                        &mut w_credit_only_account_locks,
                     )?;
                     let loaders = Self::load_loaders(
                         &storage,
@@ -420,6 +442,7 @@ impl Accounts {
                 CreditOnlyLock {
                     credits: AtomicU64::new(0),
                     lock_count: Mutex::new(1),
+                    rent_debtor: false,
                 },
             );
         }
@@ -550,49 +573,97 @@ impl Accounts {
     //     so will fail the lock
     //  2) Any transaction that grabs a lock and then commit_credits clears the HashMap will find
     //     the HashMap is None on unlock_accounts, and will perform a no-op.
-    pub fn commit_credits(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
+    pub fn commit_credits_and_rents(
+        &self,
+        rent_collector: &RentCollector,
+        ancestors: &HashMap<Fork, usize>,
+        fork: Fork,
+    ) -> u64 {
         // Clear the credit only hashmap so that no further transactions can modify it
         let credit_only_account_locks = Self::take_credit_only(&self.credit_only_account_locks)
-            .expect("Credit only locks didn't exist in commit_credits");
-        self.store_credit_only_credits(credit_only_account_locks, ancestors, fork);
+            .expect("Credit only locks didn't exist in commit_credits_and_rents");
+        self.store_credit_only_credits_and_rents(
+            credit_only_account_locks,
+            rent_collector,
+            ancestors,
+            fork,
+        )
     }
 
     /// Used only for tests to store credit-only accounts after every transaction
-    pub fn commit_credits_unsafe(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
+    pub fn commit_credits_and_rents_unsafe(
+        &self,
+        rent_collector: &RentCollector,
+        ancestors: &HashMap<Fork, usize>,
+        fork: Fork,
+    ) -> u64 {
         // Clear the credit only hashmap so that no further transactions can modify it
         let mut w_credit_only_account_locks = self.credit_only_account_locks.write().unwrap();
         let w_credit_only_account_locks =
             Self::get_write_access_credit_only(&mut w_credit_only_account_locks)
                 .expect("Credit only locks didn't exist in commit_credits");
-        self.store_credit_only_credits(w_credit_only_account_locks.drain(), ancestors, fork);
+        self.store_credit_only_credits_and_rents(
+            w_credit_only_account_locks.drain(),
+            rent_collector,
+            ancestors,
+            fork,
+        )
     }
 
-    fn store_credit_only_credits<I>(
+    fn store_credit_only_credits_and_rents<I>(
         &self,
         credit_only_account_locks: I,
+        rent_collector: &RentCollector,
         ancestors: &HashMap<Fork, usize>,
         fork: Fork,
-    ) where
+    ) -> u64
+    where
         I: IntoIterator<Item = (Pubkey, CreditOnlyLock)>,
     {
-        for (pubkey, lock) in credit_only_account_locks {
-            let lock_count = *lock.lock_count.lock().unwrap();
-            if lock_count != 0 {
-                warn!(
-                    "dropping credit-only lock on {}, still has {} locks",
-                    pubkey, lock_count
-                );
-            }
-            let credit = lock.credits.load(Ordering::Relaxed);
-            if credit > 0 {
-                let mut account = self
-                    .load_slow(ancestors, &pubkey)
-                    .map(|(account, _)| account)
-                    .unwrap_or_default();
+        let mut accounts: HashMap<Pubkey, Account> = HashMap::new();
+        let mut total_rent_collected = 0;
+
+        {
+            let accounts_index = self.accounts_db.accounts_index.read().unwrap();
+            let storage = self.accounts_db.storage.read().unwrap();
+
+            for (pubkey, lock) in credit_only_account_locks {
+                let lock_count = *lock.lock_count.lock().unwrap();
+                if lock_count != 0 {
+                    warn!(
+                        "dropping credit-only lock on {}, still has {} locks",
+                        pubkey, lock_count
+                    );
+                }
+                let credit = lock.credits.load(Ordering::Relaxed);
+
+                let (mut account, _) =
+                    AccountsDB::load(&storage, ancestors, &accounts_index, &pubkey)
+                        .unwrap_or_default();
+
+                if lock.rent_debtor {
+                    let (rent_debtor_account, rent_collected) =
+                        match rent_collector.update(&mut account) {
+                            (Some(_), rent_due) => (account, rent_due),
+                            (None, rent_due) => (Account::default(), rent_due),
+                        };
+                    total_rent_collected += rent_collected;
+                    account = rent_debtor_account;
+                }
+
                 account.lamports += credit;
-                self.store_slow(fork, &pubkey, &account);
+                accounts.insert(pubkey, account);
             }
         }
+
+        let account_to_store: Vec<(&Pubkey, &Account)> = accounts
+            .iter()
+            .map(|(key, account)| (key, account))
+            .collect();
+
+        self.accounts_db.store(fork, &account_to_store);
+
+        total_rent_collected
     }
 
     fn collect_accounts_to_store<'a>(
@@ -664,6 +735,7 @@ mod tests {
     use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
+    use solana_sdk::rent_calculator::RentCalculator;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::sysvar;
     use solana_sdk::transaction::Transaction;
@@ -672,10 +744,11 @@ mod tests {
     use std::{thread, time};
     use tempfile::TempDir;
 
-    fn load_accounts_with_fee(
+    fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
+        rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<TransactionLoadResult>> {
         let mut hash_queue = BlockhashQueue::new(100);
@@ -686,7 +759,6 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let rent_collector = RentCollector::default();
         let res = accounts.load_accounts(
             &ancestors,
             &[tx],
@@ -705,7 +777,8 @@ mod tests {
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<TransactionLoadResult>> {
         let fee_calculator = FeeCalculator::default();
-        load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
+        let rent_collector: RentCollector = RentCollector::default();
+        load_accounts_with_fee_and_rent(tx, ka, &fee_calculator, &rent_collector, error_counters)
     }
 
     #[test]
@@ -809,8 +882,15 @@ mod tests {
         let fee_calculator = FeeCalculator::new(10, 0);
         assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
 
-        let loaded_accounts =
-            load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);
+        let rent_collector = RentCollector::default();
+
+        let loaded_accounts = load_accounts_with_fee_and_rent(
+            tx,
+            &accounts,
+            &fee_calculator,
+            &rent_collector,
+            &mut error_counters,
+        );
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -1414,17 +1494,29 @@ mod tests {
     }
 
     #[test]
-    fn test_commit_credits() {
+    fn test_commit_credits_and_rents() {
         let pubkey0 = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
         let pubkey2 = Pubkey::new_rand();
+        let overdue_account_pubkey = Pubkey::new_rand();
 
-        let account0 = Account::new(1, 0, &Pubkey::default());
-        let account1 = Account::new(2, 0, &Pubkey::default());
+        let account0 = Account::new(1, 1, &Pubkey::default());
+        let account1 = Account::new(2, 1, &Pubkey::default());
+        let overdue_account = Account::new(1, 2, &Pubkey::default());
 
         let accounts = Accounts::new(None);
         accounts.store_slow(0, &pubkey0, &account0);
         accounts.store_slow(0, &pubkey1, &account1);
+        accounts.store_slow(0, &overdue_account_pubkey, &overdue_account);
+
+        let mut rent_collector = RentCollector::default();
+        rent_collector.epoch = 2;
+        rent_collector.slots_per_year = 400_f64;
+        rent_collector.rent_calculator = RentCalculator {
+            burn_percent: 10,
+            exemption_threshold: 8.0,
+            lamports_per_byte_year: 1,
+        };
 
         {
             let mut credit_only_account_locks = accounts.credit_only_account_locks.write().unwrap();
@@ -1432,8 +1524,9 @@ mod tests {
             credit_only_account_locks.insert(
                 pubkey0,
                 CreditOnlyLock {
-                    credits: AtomicU64::new(0),
+                    credits: AtomicU64::new(1),
                     lock_count: Mutex::new(1),
+                    rent_debtor: true,
                 },
             );
             credit_only_account_locks.insert(
@@ -1441,6 +1534,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(5),
                     lock_count: Mutex::new(1),
+                    rent_debtor: true,
                 },
             );
             credit_only_account_locks.insert(
@@ -1448,24 +1542,74 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(10),
                     lock_count: Mutex::new(1),
+                    rent_debtor: false,
+                },
+            );
+            credit_only_account_locks.insert(
+                overdue_account_pubkey,
+                CreditOnlyLock {
+                    credits: AtomicU64::new(3),
+                    lock_count: Mutex::new(1),
+                    rent_debtor: true,
                 },
             );
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        accounts.commit_credits_unsafe(&ancestors, 0);
 
-        // No change when CreditOnlyLock credits are 0
+        // This account has data length of 2
+        assert_eq!(
+            accounts
+                .load_slow(&ancestors, &overdue_account_pubkey)
+                .unwrap()
+                .0
+                .data
+                .len(),
+            2
+        );
+
+        // Total rent collected should be: rent from pubkey0(1) + rent from pubkey1(1)
+        assert_eq!(
+            accounts.commit_credits_and_rents_unsafe(&rent_collector, &ancestors, 0),
+            3
+        );
+
+        // New balance should be previous balance plus CreditOnlyLock credits - rent
+        // Balance(1) - Rent(1) + Credit(1)
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey0).unwrap().0.lamports,
             1
         );
-        // New balance should equal previous balance plus CreditOnlyLock credits
+
+        // New balance should equal previous balance plus CreditOnlyLock credits - rent
+        // Balance(2) - Rent(1) + Credit(5)
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey1).unwrap().0.lamports,
-            7
+            6
         );
-        // New account should be created
+
+        // Rent overdue account, will be reseted and it's lamport will be consumed
+        // Balance(1) - Rent(1)(Due to insufficient balance) + Credit(3)
+        assert_eq!(
+            accounts
+                .load_slow(&ancestors, &overdue_account_pubkey)
+                .unwrap()
+                .0
+                .lamports,
+            3
+        );
+        // The reseted account should have data length of zero
+        assert_eq!(
+            accounts
+                .load_slow(&ancestors, &overdue_account_pubkey)
+                .unwrap()
+                .0
+                .data
+                .len(),
+            0
+        );
+
+        // New account should be created and no rent should be charged
         assert_eq!(
             accounts.load_slow(&ancestors, &pubkey2).unwrap().0.lamports,
             10
@@ -1551,6 +1695,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(0),
                     lock_count: Mutex::new(1),
+                    rent_debtor: false,
                 },
             );
         }
