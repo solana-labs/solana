@@ -1,30 +1,37 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use crate::bank_forks::BankForks;
-use crate::cluster_info::ClusterInfo;
-use crate::contact_info::ContactInfo;
-use crate::packet::PACKET_DATA_SIZE;
-use crate::storage_stage::StorageState;
-use crate::validator::ValidatorExit;
-use crate::version::VERSION;
+use crate::{
+    bank_forks::BankForks,
+    cluster_info::ClusterInfo,
+    confidence::{BankConfidence, ForkConfidenceCache},
+    contact_info::ContactInfo,
+    packet::PACKET_DATA_SIZE,
+    storage_stage::StorageState,
+    validator::ValidatorExit,
+    version::VERSION,
+};
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::RpcEpochInfo;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::Bank;
-use solana_sdk::account::Account;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::inflation::Inflation;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::transaction::{self, Transaction};
+use solana_sdk::{
+    account::Account,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    inflation::Inflation,
+    pubkey::Pubkey,
+    signature::Signature,
+    transaction::{self, Transaction},
+};
 use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
-use std::net::{SocketAddr, UdpSocket};
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::{
+    net::{SocketAddr, UdpSocket},
+    sync::{Arc, RwLock},
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
@@ -44,6 +51,7 @@ impl Default for JsonRpcConfig {
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
+    fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
     storage_state: StorageState,
     config: JsonRpcConfig,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
@@ -58,10 +66,12 @@ impl JsonRpcRequestProcessor {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
+        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         JsonRpcRequestProcessor {
             bank_forks,
+            fork_confidence_cache,
             storage_state,
             config,
             validator_exit: validator_exit.clone(),
@@ -98,6 +108,14 @@ impl JsonRpcRequestProcessor {
     fn get_recent_blockhash(&self) -> (String, FeeCalculator) {
         let (blockhash, fee_calculator) = self.bank().confirmed_last_blockhash();
         (blockhash.to_string(), fee_calculator)
+    }
+
+    fn get_block_confidence(&self, block: u64) -> (Option<BankConfidence>, u64) {
+        let r_fork_confidence = self.fork_confidence_cache.read().unwrap();
+        (
+            r_fork_confidence.get_fork_confidence(block).cloned(),
+            r_fork_confidence.total_stake(),
+        )
     }
 
     pub fn get_signature_status(&self, signature: Signature) -> Option<transaction::Result<()>> {
@@ -307,6 +325,13 @@ pub trait RpcSol {
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(&self, _: Self::Metadata) -> Result<RpcEpochInfo>;
 
+    #[rpc(meta, name = "getBlockConfidence")]
+    fn get_block_confidence(
+        &self,
+        _: Self::Metadata,
+        _: u64,
+    ) -> Result<(Option<BankConfidence>, u64)>;
+
     #[rpc(meta, name = "getGenesisBlockhash")]
     fn get_genesis_blockhash(&self, _: Self::Metadata) -> Result<String>;
 
@@ -485,6 +510,18 @@ impl RpcSol for RpcSolImpl {
             slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
             absolute_slot: slot,
         })
+    }
+
+    fn get_block_confidence(
+        &self,
+        meta: Self::Metadata,
+        block: u64,
+    ) -> Result<(Option<BankConfidence>, u64)> {
+        Ok(meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_block_confidence(block))
     }
 
     fn get_genesis_blockhash(&self, meta: Self::Metadata) -> Result<String> {
@@ -708,25 +745,49 @@ impl RpcSol for RpcSolImpl {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::contact_info::ContactInfo;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::{
+        contact_info::ContactInfo,
+        genesis_utils::{create_genesis_block, GenesisBlockInfo},
+    };
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
-    use solana_sdk::fee_calculator::DEFAULT_BURN_PERCENT;
-    use solana_sdk::hash::{hash, Hash};
-    use solana_sdk::instruction::InstructionError;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
-    use solana_sdk::transaction::TransactionError;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::thread;
+    use solana_sdk::{
+        fee_calculator::DEFAULT_BURN_PERCENT,
+        hash::{hash, Hash},
+        instruction::InstructionError,
+        signature::{Keypair, KeypairUtil},
+        system_transaction,
+        transaction::TransactionError,
+    };
+    use std::{
+        collections::HashMap,
+        sync::atomic::{AtomicBool, Ordering},
+        thread,
+    };
 
     const TEST_MINT_LAMPORTS: u64 = 10_000;
 
-    fn start_rpc_handler_with_tx(
-        pubkey: &Pubkey,
-    ) -> (MetaIoHandler<Meta>, Meta, Arc<Bank>, Hash, Keypair, Pubkey) {
+    struct RpcHandler {
+        io: MetaIoHandler<Meta>,
+        meta: Meta,
+        bank: Arc<Bank>,
+        blockhash: Hash,
+        alice: Keypair,
+        leader_pubkey: Pubkey,
+        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+    }
+
+    fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> RpcHandler {
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
+
+        let confidence_slot0 = BankConfidence::new([8; MAX_LOCKOUT_HISTORY]);
+        let confidence_slot1 = BankConfidence::new([9; MAX_LOCKOUT_HISTORY]);
+        let mut bank_confidence: HashMap<u64, BankConfidence> = HashMap::new();
+        bank_confidence.entry(0).or_insert(confidence_slot0.clone());
+        bank_confidence.entry(1).or_insert(confidence_slot1.clone());
+        let fork_confidence_cache =
+            Arc::new(RwLock::new(ForkConfidenceCache::new(bank_confidence, 42)));
+
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
@@ -742,6 +803,7 @@ pub mod tests {
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
+            fork_confidence_cache.clone(),
             &validator_exit,
         )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
@@ -764,7 +826,15 @@ pub mod tests {
             cluster_info,
             genesis_blockhash: Hash::default(),
         };
-        (io, meta, bank, blockhash, alice, leader_pubkey)
+        RpcHandler {
+            io,
+            meta,
+            bank,
+            blockhash,
+            alice,
+            leader_pubkey,
+            fork_confidence_cache,
+        }
     }
 
     #[test]
@@ -774,10 +844,12 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
+            fork_confidence_cache,
             &validator_exit,
         );
         thread::spawn(move || {
@@ -793,8 +865,7 @@ pub mod tests {
     #[test]
     fn test_rpc_get_balance() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
@@ -812,8 +883,12 @@ pub mod tests {
     #[test]
     fn test_rpc_get_cluster_nodes() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, _blockhash, _alice, leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler {
+            io,
+            meta,
+            leader_pubkey,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getClusterNodes"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -833,8 +908,12 @@ pub mod tests {
     #[test]
     fn test_rpc_get_slot_leader() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, _blockhash, _alice, leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler {
+            io,
+            meta,
+            leader_pubkey,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getSlotLeader"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -849,8 +928,7 @@ pub mod tests {
     #[test]
     fn test_rpc_get_tx_count() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -865,8 +943,7 @@ pub mod tests {
     #[test]
     fn test_rpc_get_total_supply() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTotalSupply"}}"#);
         let rep = io.handle_request_sync(&req, meta);
@@ -892,8 +969,7 @@ pub mod tests {
     fn test_rpc_get_minimum_balance_for_rent_exemption() {
         let bob_pubkey = Pubkey::new_rand();
         let data_len = 50;
-        let (io, meta, bank, _blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[{}]}}"#,
@@ -924,8 +1000,7 @@ pub mod tests {
     #[test]
     fn test_rpc_get_inflation() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, bank, _blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getInflation"}}"#);
         let rep = io.handle_request_sync(&req, meta);
@@ -946,8 +1021,7 @@ pub mod tests {
     #[test]
     fn test_rpc_get_account_info() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
@@ -975,8 +1049,13 @@ pub mod tests {
     #[test]
     fn test_rpc_get_program_accounts() {
         let bob = Keypair::new();
-        let (io, meta, bank, blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob.pubkey());
+        let RpcHandler {
+            io,
+            meta,
+            bank,
+            blockhash,
+            ..
+        } = start_rpc_handler_with_tx(&bob.pubkey());
 
         let new_program_id = Pubkey::new_rand();
         let tx = system_transaction::assign(&bob, blockhash, &new_program_id);
@@ -1011,8 +1090,13 @@ pub mod tests {
     #[test]
     fn test_rpc_confirm_tx() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, blockhash, alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler {
+            io,
+            meta,
+            blockhash,
+            alice,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
 
         let req = format!(
@@ -1031,8 +1115,13 @@ pub mod tests {
     #[test]
     fn test_rpc_get_signature_status() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, blockhash, alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler {
+            io,
+            meta,
+            blockhash,
+            alice,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
 
         let req = format!(
@@ -1096,8 +1185,12 @@ pub mod tests {
     #[test]
     fn test_rpc_get_recent_blockhash() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler {
+            io,
+            meta,
+            blockhash,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -1123,8 +1216,7 @@ pub mod tests {
     #[test]
     fn test_rpc_fail_request_airdrop() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, _bank, _blockhash, _alice, _leader_pubkey) =
-            start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         // Expect internal error because no drone is available
         let req = format!(
@@ -1145,6 +1237,7 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -1155,6 +1248,7 @@ pub mod tests {
                     StorageState::default(),
                     JsonRpcConfig::default(),
                     new_bank_forks().0,
+                    fork_confidence_cache,
                     &validator_exit,
                 );
                 Arc::new(RwLock::new(request_processor))
@@ -1241,10 +1335,12 @@ pub mod tests {
     fn test_rpc_request_processor_config_default_trait_validator_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             new_bank_forks().0,
+            fork_confidence_cache,
             &validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
@@ -1255,12 +1351,14 @@ pub mod tests {
     fn test_rpc_request_processor_allow_validator_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             config,
             new_bank_forks().0,
+            fork_confidence_cache,
             &validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
@@ -1270,7 +1368,7 @@ pub mod tests {
     #[test]
     fn test_rpc_get_version() {
         let bob_pubkey = Pubkey::new_rand();
-        let (io, meta, ..) = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVersion"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -1286,5 +1384,91 @@ pub mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_processor_get_block_confidence() {
+        let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
+        let confidence_slot0 = BankConfidence::new([8; MAX_LOCKOUT_HISTORY]);
+        let confidence_slot1 = BankConfidence::new([9; MAX_LOCKOUT_HISTORY]);
+        let mut bank_confidence: HashMap<u64, BankConfidence> = HashMap::new();
+        bank_confidence.entry(0).or_insert(confidence_slot0.clone());
+        bank_confidence.entry(1).or_insert(confidence_slot1.clone());
+        let fork_confidence_cache =
+            Arc::new(RwLock::new(ForkConfidenceCache::new(bank_confidence, 42)));
+
+        let mut config = JsonRpcConfig::default();
+        config.enable_validator_exit = true;
+        let request_processor = JsonRpcRequestProcessor::new(
+            StorageState::default(),
+            config,
+            new_bank_forks().0,
+            fork_confidence_cache,
+            &validator_exit,
+        );
+        assert_eq!(
+            request_processor.get_block_confidence(0),
+            (Some(confidence_slot0), 42)
+        );
+        assert_eq!(
+            request_processor.get_block_confidence(1),
+            (Some(confidence_slot1), 42)
+        );
+        assert_eq!(request_processor.get_block_confidence(2), (None, 42));
+    }
+
+    #[test]
+    fn test_rpc_get_block_confidence() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            fork_confidence_cache,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockConfidence","params":[0]}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let (confidence, total_staked): (Option<BankConfidence>, u64) =
+            if let Response::Single(res) = result {
+                if let Output::Success(res) = res {
+                    serde_json::from_value(res.result).unwrap()
+                } else {
+                    panic!("Expected success");
+                }
+            } else {
+                panic!("Expected single response");
+            };
+        assert_eq!(
+            confidence,
+            fork_confidence_cache
+                .read()
+                .unwrap()
+                .get_fork_confidence(0)
+                .cloned()
+        );
+        assert_eq!(total_staked, 42);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockConfidence","params":[2]}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let (confidence, total_staked): (Option<BankConfidence>, u64) =
+            if let Response::Single(res) = result {
+                if let Output::Success(res) = res {
+                    serde_json::from_value(res.result).unwrap()
+                } else {
+                    panic!("Expected success");
+                }
+            } else {
+                panic!("Expected single response");
+            };
+        assert_eq!(confidence, None);
+        assert_eq!(total_staked, 42);
     }
 }

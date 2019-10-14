@@ -1,23 +1,22 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
-use crate::bank_forks::BankForks;
-use crate::cluster_info::ClusterInfo;
-use crate::rpc::*;
-use crate::service::Service;
-use crate::storage_stage::StorageState;
-use crate::validator::ValidatorExit;
+use crate::{
+    bank_forks::BankForks, cluster_info::ClusterInfo, confidence::ForkConfidenceCache, rpc::*,
+    service::Service, storage_stage::StorageState, validator::ValidatorExit,
+};
 use jsonrpc_core::MetaIoHandler;
-use jsonrpc_http_server::CloseHandle;
 use jsonrpc_http_server::{
-    hyper, AccessControlAllowOrigin, DomainsValidation, RequestMiddleware, RequestMiddlewareAction,
-    ServerBuilder,
+    hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
+    RequestMiddlewareAction, ServerBuilder,
 };
 use solana_sdk::hash::Hash;
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
-use std::thread::{self, Builder, JoinHandle};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    sync::mpsc::channel,
+    sync::{Arc, RwLock},
+    thread::{self, Builder, JoinHandle},
+};
 use tokio::prelude::Future;
 
 pub struct JsonRpcService {
@@ -91,6 +90,7 @@ impl JsonRpcService {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
+        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
         ledger_path: &Path,
         genesis_blockhash: Hash,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
@@ -101,6 +101,7 @@ impl JsonRpcService {
             storage_state,
             config,
             bank_forks,
+            fork_confidence_cache,
             validator_exit,
         )));
         let request_processor_ = request_processor.clone();
@@ -197,12 +198,14 @@ mod tests {
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let mut rpc_service = JsonRpcService::new(
             &cluster_info,
             rpc_addr,
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
+            fork_confidence_cache,
             &PathBuf::from("farf"),
             Hash::default(),
             &validator_exit,

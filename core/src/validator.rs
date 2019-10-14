@@ -158,6 +158,7 @@ impl Validator {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -185,6 +186,7 @@ impl Validator {
                 storage_state.clone(),
                 config.rpc_config.clone(),
                 bank_forks.clone(),
+                fork_confidence_cache.clone(),
                 ledger_path,
                 genesis_blockhash,
                 &validator_exit,
@@ -298,7 +300,6 @@ impl Validator {
             Some(voting_keypair)
         };
 
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,

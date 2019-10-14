@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BankConfidence {
     confidence: [u64; MAX_LOCKOUT_HISTORY],
 }
@@ -25,24 +25,32 @@ impl BankConfidence {
         assert!(confirmation_count > 0 && confirmation_count <= MAX_LOCKOUT_HISTORY);
         self.confidence[confirmation_count - 1]
     }
+    #[cfg(test)]
+    pub(crate) fn new(confidence: [u64; MAX_LOCKOUT_HISTORY]) -> Self {
+        Self { confidence }
+    }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ForkConfidenceCache {
     bank_confidence: HashMap<u64, BankConfidence>,
-    _total_stake: u64,
+    total_stake: u64,
 }
 
 impl ForkConfidenceCache {
     pub fn new(bank_confidence: HashMap<u64, BankConfidence>, total_stake: u64) -> Self {
         Self {
             bank_confidence,
-            _total_stake: total_stake,
+            total_stake,
         }
     }
 
     pub fn get_fork_confidence(&self, fork: u64) -> Option<&BankConfidence> {
         self.bank_confidence.get(&fork)
+    }
+
+    pub fn total_stake(&self) -> u64 {
+        self.total_stake
     }
 }
 
