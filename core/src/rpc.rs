@@ -1,30 +1,32 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use crate::bank_forks::BankForks;
-use crate::cluster_info::ClusterInfo;
-use crate::contact_info::ContactInfo;
-use crate::packet::PACKET_DATA_SIZE;
-use crate::storage_stage::StorageState;
-use crate::validator::ValidatorExit;
-use crate::version::VERSION;
+use crate::{
+    bank_forks::BankForks, cluster_info::ClusterInfo, confidence::ForkConfidenceCache,
+    contact_info::ContactInfo, packet::PACKET_DATA_SIZE, storage_stage::StorageState,
+    validator::ValidatorExit, version::VERSION,
+};
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::RpcEpochInfo;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::Bank;
-use solana_sdk::account::Account;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::inflation::Inflation;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::transaction::{self, Transaction};
+use solana_sdk::{
+    account::Account,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    inflation::Inflation,
+    pubkey::Pubkey,
+    signature::Signature,
+    transaction::{self, Transaction},
+};
 use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
-use std::net::{SocketAddr, UdpSocket};
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::{
+    net::{SocketAddr, UdpSocket},
+    sync::{Arc, RwLock},
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
@@ -44,6 +46,7 @@ impl Default for JsonRpcConfig {
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
+    fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
     storage_state: StorageState,
     config: JsonRpcConfig,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
@@ -58,10 +61,12 @@ impl JsonRpcRequestProcessor {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
+        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         JsonRpcRequestProcessor {
             bank_forks,
+            fork_confidence_cache,
             storage_state,
             config,
             validator_exit: validator_exit.clone(),
@@ -727,6 +732,7 @@ pub mod tests {
     ) -> (MetaIoHandler<Meta>, Meta, Arc<Bank>, Hash, Keypair, Pubkey) {
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
@@ -742,6 +748,7 @@ pub mod tests {
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
+            fork_confidence_cache,
             &validator_exit,
         )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
@@ -774,10 +781,12 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
+            fork_confidence_cache,
             &validator_exit,
         );
         thread::spawn(move || {
@@ -1145,6 +1154,7 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -1155,6 +1165,7 @@ pub mod tests {
                     StorageState::default(),
                     JsonRpcConfig::default(),
                     new_bank_forks().0,
+                    fork_confidence_cache,
                     &validator_exit,
                 );
                 Arc::new(RwLock::new(request_processor))
@@ -1241,10 +1252,12 @@ pub mod tests {
     fn test_rpc_request_processor_config_default_trait_validator_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             new_bank_forks().0,
+            fork_confidence_cache,
             &validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
@@ -1255,12 +1268,14 @@ pub mod tests {
     fn test_rpc_request_processor_allow_validator_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
+        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             config,
             new_bank_forks().0,
+            fork_confidence_cache,
             &validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));

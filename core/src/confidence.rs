@@ -27,7 +27,7 @@ impl BankConfidence {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ForkConfidenceCache {
     bank_confidence: HashMap<u64, BankConfidence>,
     _total_stake: u64,
