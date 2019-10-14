@@ -190,10 +190,8 @@ pub fn authorize(
     new_authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
 ) -> Instruction {
-    let account_metas = metas_with_signer(
-        &mut [AccountMeta::new(*stake_pubkey, false)],
-        authorized_pubkey,
-    );
+    let account_metas =
+        metas_with_signer(&[AccountMeta::new(*stake_pubkey, false)], authorized_pubkey);
 
     Instruction::new(
         id(),
