@@ -18,7 +18,7 @@ use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufReader, Error as IOError, Read};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::transaction_utils::OrderedIterator;
@@ -27,7 +27,7 @@ use crate::transaction_utils::OrderedIterator;
 struct CreditOnlyLock {
     credits: AtomicU64,
     lock_count: Mutex<u64>,
-    rent_debtor: bool,
+    rent_debtor: AtomicBool,
 }
 
 /// This structure handles synchronization for db
@@ -424,7 +424,7 @@ impl Accounts {
                 CreditOnlyLock {
                     credits: AtomicU64::new(0),
                     lock_count: Mutex::new(1),
-                    rent_debtor: false,
+                    rent_debtor: AtomicBool::new(false),
                 },
             );
         }
@@ -623,7 +623,7 @@ impl Accounts {
                     AccountsDB::load(&storage, ancestors, &accounts_index, &pubkey)
                         .unwrap_or_default();
 
-                if lock.rent_debtor {
+                if lock.rent_debtor.load(Ordering::Relaxed) {
                     let rent_collected = rent_collector.update(&mut account);
                     total_rent_collected += rent_collected;
                 }
@@ -672,16 +672,18 @@ impl Accounts {
                 if message.is_debitable(i) {
                     accounts.push((key, account));
                 } else {
-                    self.credit_only_account_locks
-                        .write()
-                        .unwrap()
-                        .as_mut()
+                    let r_credit_only_account_locks =
+                        self.credit_only_account_locks.read().unwrap();
+
+                    let credit_only_lock = r_credit_only_account_locks.as_ref()
                         .expect("Collect accounts should only be called before a commit, and credit only account locks should exist before a commit")
-                        .entry(*key)
-                        .and_modify(|lock| {
-                            lock.rent_debtor = true;
-                            lock.credits.fetch_add(*credit, Ordering::Relaxed);
-                        });
+                        .get(key)
+                        .unwrap();
+
+                    credit_only_lock.rent_debtor.store(true, Ordering::Relaxed);
+                    credit_only_lock
+                        .credits
+                        .fetch_add(*credit, Ordering::Relaxed);
                 }
             }
         }
@@ -1502,7 +1504,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(1),
                     lock_count: Mutex::new(1),
-                    rent_debtor: true,
+                    rent_debtor: AtomicBool::new(true),
                 },
             );
             credit_only_account_locks.insert(
@@ -1510,7 +1512,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(5),
                     lock_count: Mutex::new(1),
-                    rent_debtor: true,
+                    rent_debtor: AtomicBool::new(true),
                 },
             );
             credit_only_account_locks.insert(
@@ -1518,7 +1520,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(10),
                     lock_count: Mutex::new(1),
-                    rent_debtor: false,
+                    rent_debtor: AtomicBool::new(false),
                 },
             );
             credit_only_account_locks.insert(
@@ -1526,7 +1528,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(3),
                     lock_count: Mutex::new(1),
-                    rent_debtor: true,
+                    rent_debtor: AtomicBool::new(true),
                 },
             );
         }
@@ -1671,7 +1673,7 @@ mod tests {
                 CreditOnlyLock {
                     credits: AtomicU64::new(0),
                     lock_count: Mutex::new(1),
-                    rent_debtor: false,
+                    rent_debtor: AtomicBool::new(false),
                 },
             );
         }
