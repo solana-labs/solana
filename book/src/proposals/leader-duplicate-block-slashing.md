@@ -1,7 +1,10 @@
 # Leader Duplicate Block Slashing
 
-This design describes how slashing leaders that produce duplicate
-blocks is implemented in the cluster.
+This design describes how the cluster slashes leaders that produce
+duplicate blocks.
+
+Leaders that produce multiple blocks for the same slot increase the
+number of potential forks that the cluster has to resolve.
 
 ## Shred Format
 
