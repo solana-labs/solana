@@ -12,7 +12,7 @@ read -d '' payLoad << EOF
 			"text": {
 				"type": "mrkdwn",
 				"text":
-"\*$BUILDKITE_MESSAGE\*
+"$BUILDKITE_MESSAGE
 Commit SHA: $BUILDKITE_COMMIT
 Link to Build: $BUILDKITE_BUILD_URL
 "
@@ -36,5 +36,5 @@ EOF
 curl -X POST \
 -H 'Content-type: application/json' \
 --data "$payLoad" \
-"https://hooks.slack.com/services/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"
+"$SLACK_WEBHOOK_URL"
 }
