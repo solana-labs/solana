@@ -155,6 +155,14 @@ impl Shred {
         Self::new(header, shred_buf)
     }
 
+    fn deserialize_obj<'de, T>(index: &mut usize, size: usize, buf: &'de [u8]) -> result::Result<T>
+    where
+        T: Deserialize<'de>,
+    {
+        let ret = bincode::deserialize(&buf[*index..*index + size])?;
+        *index += size;
+        Ok(ret)
+    }
     pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> result::Result<Self> {
         let shred_type: u8 = bincode::deserialize(&shred_buf[..*SIZE_OF_SHRED_TYPE])?;
         let header = if shred_type == CODING_SHRED {
@@ -163,19 +171,16 @@ impl Shred {
             header.common_header = bincode::deserialize(&shred_buf[..end])?;
             header
         } else {
-            let start = *SIZE_OF_CODING_SHRED_HEADER;
-            let end = start + *SIZE_OF_COMMON_SHRED_HEADER;
-            let common_hdr: ShredCommonHeader = bincode::deserialize(&shred_buf[start..end])?;
+            let mut start = *SIZE_OF_CODING_SHRED_HEADER;
+            let common_hdr: ShredCommonHeader =
+                Self::deserialize_obj(&mut start, *SIZE_OF_COMMON_SHRED_HEADER, &shred_buf)?;
 
-            let start = end;
-            let end = start + *SIZE_OF_PARENT_OFFSET;
-            let parent_offset: u16 = bincode::deserialize(&shred_buf[start..end])?;
+            let parent_offset: u16 =
+                Self::deserialize_obj(&mut start, *SIZE_OF_PARENT_OFFSET, &shred_buf)?;
 
-            let start = end;
-            let end = start + *SIZE_OF_FLAGS;
-            let flags: u8 = bincode::deserialize(&shred_buf[start..end])?;
+            let flags: u8 = Self::deserialize_obj(&mut start, *SIZE_OF_FLAGS, &shred_buf)?;
             let mut hdr = DataShredHeader {
-                common_header: Default::default(),
+                common_header: CodingShredHeader::default(),
                 data_header: common_hdr,
                 parent_offset,
                 flags,
