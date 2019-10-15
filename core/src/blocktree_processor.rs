@@ -177,11 +177,15 @@ pub enum BlocktreeProcessorError {
 /// Callback for accessing bank state while processing the blocktree
 pub type ProcessCallback = Arc<dyn Fn(&Bank) -> () + Sync + Send>;
 
+/// Callback for accessing mutable bank state while processing the blocktree
+pub type ProcessCallbackMut = Arc<dyn Fn(&mut Bank) -> () + Sync + Send>;
+
 #[derive(Default)]
 pub struct ProcessOptions {
     pub verify_ledger: bool,
     pub full_leader_cache: bool,
     pub dev_halt_at_slot: Option<Slot>,
+    pub new_bank_callback: Option<ProcessCallbackMut>,
     pub entry_callback: Option<ProcessCallback>,
     pub override_num_threads: Option<usize>,
 }
@@ -202,7 +206,12 @@ pub fn process_blocktree(
     }
 
     // Setup bank for slot 0
-    let bank0 = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
+    let mut bank0 = Bank::new_with_paths(&genesis_block, account_paths);
+    if let Some(new_bank_callback) = &opts.new_bank_callback {
+        new_bank_callback(&mut bank0);
+    }
+    let bank0 = Arc::new(bank0);
+
     info!("processing ledger from bank 0...");
     process_bank_0(&bank0, blocktree, &opts)?;
     process_blocktree_from_root(blocktree, bank0, &opts)
@@ -342,6 +351,7 @@ fn process_next_slots(
     leader_schedule_cache: &LeaderScheduleCache,
     pending_slots: &mut Vec<(u64, SlotMeta, Arc<Bank>, Hash)>,
     fork_info: &mut Vec<(Arc<Bank>, BankForksInfo)>,
+    new_bank_callback: Option<&ProcessCallbackMut>,
 ) -> result::Result<(), BlocktreeProcessorError> {
     if meta.next_slots.is_empty() {
         // Reached the end of this fork.  Record the final entry height and last entry.hash
@@ -365,15 +375,23 @@ fn process_next_slots(
         // Only process full slots in blocktree_processor, replay_stage
         // handles any partials
         if next_meta.is_full() {
-            let next_bank = Arc::new(Bank::new_from_parent(
+            let mut next_bank = Bank::new_from_parent(
                 &bank,
                 &leader_schedule_cache
                     .slot_leader_at(*next_slot, Some(&bank))
                     .unwrap(),
                 *next_slot,
-            ));
+            );
+            if let Some(new_bank_callback) = new_bank_callback {
+                new_bank_callback(&mut next_bank);
+            }
             trace!("Add child bank {} of slot={}", next_slot, bank.slot());
-            pending_slots.push((*next_slot, next_meta, next_bank, bank.last_blockhash()));
+            pending_slots.push((
+                *next_slot,
+                next_meta,
+                Arc::new(next_bank),
+                bank.last_blockhash(),
+            ));
         } else {
             let bfi = BankForksInfo {
                 bank_slot: bank.slot(),
@@ -408,6 +426,7 @@ fn process_pending_slots(
         leader_schedule_cache,
         &mut pending_slots,
         &mut fork_info,
+        opts.new_bank_callback.as_ref(),
     )?;
 
     let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
@@ -453,6 +472,7 @@ fn process_pending_slots(
             leader_schedule_cache,
             &mut pending_slots,
             &mut fork_info,
+            opts.new_bank_callback.as_ref(),
         )?;
     }
 
@@ -993,6 +1013,45 @@ pub mod tests {
         let (_bank_forks, _bank_forks_info, cached_leader_schedule) =
             process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
         assert_eq!(cached_leader_schedule.max_schedules(), std::usize::MAX);
+    }
+
+    #[test]
+    fn test_process_ledger_options_new_bank_callback() {
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(100);
+        let (ledger_path, last_entry_hash) = create_new_tmp_ledger!(&genesis_block);
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+
+        let num_blocks = 3;
+        let entries = create_ticks(num_blocks * genesis_block.ticks_per_slot, last_entry_hash);
+        blocktree
+            .write_entries(
+                1,
+                0,
+                0,
+                genesis_block.ticks_per_slot,
+                None,
+                true,
+                &Arc::new(Keypair::new()),
+                entries,
+            )
+            .unwrap();
+
+        let callback_counter: Arc<RwLock<u64>> = Arc::default();
+        let new_bank_callback = {
+            let counter = callback_counter.clone();
+            Arc::new(move |bank: &mut Bank| {
+                assert_eq!(bank.slot(), *counter.read().unwrap());
+                *counter.write().unwrap() += 1;
+            })
+        };
+
+        let opts = ProcessOptions {
+            new_bank_callback: Some(new_bank_callback),
+            ..ProcessOptions::default()
+        };
+        process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+        assert_eq!(*callback_counter.write().unwrap(), num_blocks + 1);
     }
 
     #[test]
