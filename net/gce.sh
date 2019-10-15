@@ -78,6 +78,7 @@ letsEncryptDomainName=
 enableGpu=false
 customMachineType=
 customAddress=
+selfDestructMinutes=480 # 8hrs
 zones=()
 
 containsZone() {
@@ -151,6 +152,9 @@ Manage testnet instances
                       (by default preemptible instances are used to reduce
                       cost).  Note that the bootstrap leader, archiver,
                       blockstreamer and client nodes are always dedicated.
+   --self-destruct-minutes [number]
+                    - Specify lifetime of the allocated instances in minutes. 0 to
+                      disable. Only supported on GCE. (default: $selfDestructMinutes)
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -199,6 +203,15 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --custom-machine-type ]]; then
       customMachineType="$2"
+      shift 2
+    elif [[ $1 == --self-destruct-minutes ]]; then
+      maybeTimeout=$2
+      if [[ $maybeTimeout =~ ^[0-9]+$ ]]; then
+        selfDestructMinutes=$maybeTimeout
+      else
+        echo "  Invalid parameter ($maybeTimeout) to $1"
+        usage 1
+      fi
       shift 2
     else
       usage "Unknown long option: $1"
@@ -745,6 +758,22 @@ See startup script log messages in /var/log/syslog for status:
 $(printNetworkInfo)
 $(creationInfo)
 EOM
+
+metadata_req() {
+  endpoint="\$1"
+  url="http://metadata.google.internal/computeMetadata/v1/\$endpoint"
+  curl -sf -H Metadata-Flavor:Google "\$url"
+}
+
+timeout=$selfDestructMinutes
+if [[ "\$timeout" -gt 0 ]]; then
+  zone=\$(metadata_req "instance/zone")
+  zone=\$(basename "\$zone")
+  gcloudBase=\$(dirname \$(command -v gcloud))  # XXX: gcloud is installed in /snap/bin,
+  gcloudBase=\${gcloudBase:-/snap/bin}          #   but /snap/bin isn't in root's PATH...
+  cmd="\$gcloudBase/gcloud compute instances delete \$(hostname) --zone \$zone"
+  at Now + \$timeout Minutes <<<"\$cmd"
+fi
 
 touch /solana-scratch/.instance-startup-complete
 
