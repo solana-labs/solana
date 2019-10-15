@@ -69,7 +69,7 @@ esac
 
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalFullNodeCount=2
-clientNodeCount=1
+clientNodeCount=0
 replicatorNodeCount=0
 blockstreamer=false
 fullNodeBootDiskSizeInGb=500
