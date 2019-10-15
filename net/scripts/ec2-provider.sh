@@ -7,6 +7,10 @@ cloud_DefaultZone() {
   echo "us-east-1b"
 }
 
+cloud_RestartPreemptedInstances() {
+  : # Not implemented
+}
+
 # AWS region is zone with the last character removed
 __cloud_GetRegion() {
   declare zone="$1"

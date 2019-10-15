@@ -16,6 +16,10 @@ cloud_DefaultZone() {
   echo "Denver"
 }
 
+cloud_RestartPreemptedInstances() {
+  : # Not implemented
+}
+
 #
 # __cloud_FindInstances
 #
@@ -134,6 +138,7 @@ cloud_Initialize() {
 #                 has been provisioned in the GCE region that is hosting `$zone`
 # bootDiskType  - Optional specify SSD or HDD boot disk
 # additionalDiskSize - Optional specify size of additional storage volume
+# preemptible - Optionally request a preemptible instance ("true")
 #
 # Tip: use cloud_FindInstances to locate the instances once this function
 #      returns
@@ -149,7 +154,8 @@ cloud_CreateInstances() {
   #declare optionalAddress="$9" # unused
   #declare optionalBootDiskType="${10}" # unused
   #declare optionalAdditionalDiskSize="${11}" # unused
-  declare sshPrivateKey="${12}"
+  #declare optionalPreemptible="${12}" # unused
+  declare sshPrivateKey="${13}"
 
   declare -a nodes
   if [[ $numNodes = 1 ]]; then

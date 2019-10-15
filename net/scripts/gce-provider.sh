@@ -9,6 +9,29 @@ cloud_DefaultZone() {
 }
 
 #
+# cloud_RestartPreemptedInstances [namePrefix]
+#
+# Restart any preempted instances matching the specified prefix
+#
+# namePrefix - The instance name prefix of the preempted instances
+#
+cloud_RestartPreemptedInstances() {
+  declare filter="$1"
+
+  declare name status zone
+  while read -r name status zone; do
+    echo "Starting $status instance: $name"
+    (
+      set -x
+      gcloud compute instances start --zone "$zone" "$name"
+    )
+  done < <(gcloud compute instances list \
+             --filter "$filter" \
+             --format 'value(name,status,zone)' \
+           | grep TERMINATED)
+}
+
+#
 # __cloud_FindInstances
 #
 # Find instances matching the specified pattern.
@@ -125,6 +148,7 @@ cloud_Initialize() {
 #                 has been provisioned in the GCE region that is hosting `$zone`
 # bootDiskType  - Optional specify SSD or HDD boot disk
 # additionalDiskSize - Optional specify size of additional storage volume
+# preemptible - Optionally request a preemptible instance ("true")
 #
 # Tip: use cloud_FindInstances to locate the instances once this function
 #      returns
@@ -140,6 +164,8 @@ cloud_CreateInstances() {
   declare optionalAddress="$9"
   declare optionalBootDiskType="${10}"
   declare optionalAdditionalDiskSize="${11}"
+  declare optionalPreemptible="${12}"
+  #declare sshPrivateKey="${13}"  # unused
 
   if $enableGpu; then
     # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
@@ -175,6 +201,10 @@ cloud_CreateInstances() {
 
   # shellcheck disable=SC2206 # Do not want to quote $imageName as it may contain extra args
   args+=(--image $imageName)
+
+  if [[ $optionalPreemptible = true ]]; then
+    args+=(--preemptible)
+  fi
 
   # shellcheck disable=SC2206 # Do not want to quote $machineType as it may contain extra args
   for word in $machineType; do

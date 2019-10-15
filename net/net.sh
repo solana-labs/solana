@@ -840,6 +840,32 @@ stop() {
   echo "Stopping nodes took $SECONDS seconds"
 }
 
+
+checkPremptibleInstances() {
+  # The fullnodeIpList nodes may be preemptible instances that can disappear at
+  # any time.  Try to detect when a fullnode has been preempted to help the user
+  # out.
+  #
+  # Of course this isn't airtight as an instance could always disappear
+  # immediately after its successfully pinged.
+  for ipAddress in "${fullnodeIpList[@]}"; do
+    (
+      set -x
+      ping -o -t 4 "$ipAddress"
+    ) || {
+      cat <<EOF
+
+Warning: $ipAddress may have been preempted.
+
+Run |./gce.sh config| to restart it
+EOF
+      exit 1
+    }
+  done
+}
+
+checkPremptibleInstances
+
 case $command in
 restart)
   prepare_deploy
