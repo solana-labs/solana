@@ -8,6 +8,10 @@ cloud_DefaultZone() {
   echo "westus"
 }
 
+cloud_RestartPreemptedInstances() {
+  : # Not implemented
+}
+
 #
 # __cloud_GetConfigValueFromInstanceName
 # Return a piece of configuration information about an instance

@@ -78,6 +78,7 @@ replicatorBootDiskSizeInGb=500
 fullNodeAdditionalDiskSizeInGb=
 externalNodes=false
 failOnValidatorBootupFailure=true
+preemptible=true
 
 publicNetwork=false
 letsEncryptDomainName=
@@ -146,6 +147,11 @@ Manage testnet instances
                     - Add an additional [number] GB SSD to all fullnodes to store the config directory.
                       If not set, config will be written to the boot disk by default.
                       Only supported on GCE.
+   --dedicated      - Use dedicated instances for additional full nodes
+                      (by default preemptible instances are used to reduce
+                      cost).  Note that the bootstrap leader, replicator,
+                      blockstreamer and client nodes are always dedicated.
+
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
 
@@ -179,6 +185,9 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 == --allow-boot-failures ]]; then
       failOnValidatorBootupFailure=false
+      shift
+    elif [[ $1 == --dedicated ]]; then
+      preemptible=false
       shift
     else
       usage "Unknown long option: $1"
@@ -377,6 +386,8 @@ EOF
   touch "$geoipConfigFile"
 
   buildSshOptions
+
+  cloud_RestartPreemptedInstances "$prefix"
 
   fetchPrivateKey() {
     declare nodeName
@@ -725,7 +736,7 @@ EOF
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
       "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" \
-      "$sshPrivateKey"
+      "never preemptible" "$sshPrivateKey"
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
@@ -746,7 +757,7 @@ EOF
       cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
         "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
         "$startupScript" "" "$bootDiskType" "$fullNodeAdditionalDiskSizeInGb" \
-        "$sshPrivateKey" &
+        "$preemptible" "$sshPrivateKey" &
     done
 
     wait
@@ -755,7 +766,7 @@ EOF
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$enableGpu" "$clientMachineType" "${zones[0]}" "$clientBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType" "" "$sshPrivateKey"
+      "$startupScript" "" "$bootDiskType" "" "never preemptible" "$sshPrivateKey"
   fi
 
   if $blockstreamer; then
@@ -767,7 +778,7 @@ EOF
   if [[ $replicatorNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-replicator" "$replicatorNodeCount" \
       false "$replicatorMachineType" "${zones[0]}" "$replicatorBootDiskSizeInGb" \
-      "$startupScript" "" "" "" "$sshPrivateKey"
+      "$startupScript" "" "" "" "never preemptible" "$sshPrivateKey"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
