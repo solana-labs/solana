@@ -2,178 +2,6 @@
 
 The [solana-cli crate](https://crates.io/crates/solana-cli) provides a command-line interface tool for Solana
 
-## Examples
-
-### Get Pubkey
-
-```bash
-// Command
-$ solana address
-
-// Return
-<PUBKEY>
-```
-
-### Airdrop SOL/Lamports
-
-```bash
-// Command
-$ solana airdrop 2
-
-// Return
-"2.00000000 SOL"
-
-// Command
-$ solana airdrop 123 --lamports
-
-// Return
-"123 lamports"
-```
-
-### Get Balance
-
-```bash
-// Command
-$ solana balance
-
-// Return
-"3.00050001 SOL"
-```
-
-### Confirm Transaction
-
-```bash
-// Command
-$ solana confirm <TX_SIGNATURE>
-
-// Return
-"Confirmed" / "Not found" / "Transaction failed with error <ERR>"
-```
-
-### Deploy program
-
-```bash
-// Command
-$ solana deploy <PATH>
-
-// Return
-<PROGRAM_ID>
-```
-
-### Unconditional Immediate Transfer
-
-```bash
-// Command
-$ solana pay <PUBKEY> 123
-
-// Return
-<TX_SIGNATURE>
-```
-
-### Post-Dated Transfer
-
-```bash
-// Command
-$ solana pay <PUBKEY> 123 \
-    --after 2018-12-24T23:59:00 --require-timestamp-from <PUBKEY>
-
-// Return
-{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
-```
-
-_`require-timestamp-from` is optional. If not provided, the transaction will expect a timestamp signed by this wallet's private key_
-
-### Authorized Transfer
-
-A third party must send a signature to unlock the lamports.
-
-```bash
-// Command
-$ solana pay <PUBKEY> 123 \
-    --require-signature-from <PUBKEY>
-
-// Return
-{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
-```
-
-### Post-Dated and Authorized Transfer
-
-```bash
-// Command
-$ solana pay <PUBKEY> 123 \
-    --after 2018-12-24T23:59 --require-timestamp-from <PUBKEY> \
-    --require-signature-from <PUBKEY>
-
-// Return
-{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
-```
-
-### Multiple Witnesses
-
-```bash
-// Command
-$ solana pay <PUBKEY> 123 \
-    --require-signature-from <PUBKEY> \
-    --require-signature-from <PUBKEY>
-
-// Return
-{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
-```
-
-### Cancelable Transfer
-
-```bash
-// Command
-$ solana pay <PUBKEY> 123 \
-    --require-signature-from <PUBKEY> \
-    --cancelable
-
-// Return
-{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
-```
-
-### Cancel Transfer
-
-```bash
-// Command
-$ solana cancel <PROCESS_ID>
-
-// Return
-<TX_SIGNATURE>
-```
-
-### Send Signature
-
-```bash
-// Command
-$ solana send-signature <PUBKEY> <PROCESS_ID>
-
-// Return
-<TX_SIGNATURE>
-```
-
-### Indicate Elapsed Time
-
-Use the current system time:
-
-```bash
-// Command
-$ solana send-timestamp <PUBKEY> <PROCESS_ID>
-
-// Return
-<TX_SIGNATURE>
-```
-
-Or specify some other arbitrary timestamp:
-
-```bash
-// Command
-$ solana send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
-
-// Return
-<TX_SIGNATURE>
-```
-
 ## Usage
 ### solana-cli
 ```text
@@ -196,7 +24,6 @@ SUBCOMMANDS:
     address                              Get your public key
     airdrop                              Request lamports
     balance                              Get your balance
-    cancel                               Cancel a transfer
     claim-storage-reward                 Redeem storage reward credits
     cluster-version                      Get the version of the cluster entrypoint
     confirm                              Confirm transaction by signature
@@ -217,8 +44,6 @@ SUBCOMMANDS:
     pay                                  Send a payment
     ping                                 Submit transactions sequentially
     redeem-vote-credits                  Redeem credits in the stake account
-    send-signature                       Send a signature to authorize a transfer
-    send-timestamp                       Send a timestamp to unlock a transfer
     set                                  Set a cli config setting
     show-account                         Show the contents of an account
     show-stake-account                   Show the contents of a stake account
@@ -296,27 +121,6 @@ OPTIONS:
 
 ARGS:
     <PUBKEY>    The public key of the balance to check
-```
-
-#### solana-cancel
-```text
-solana-cancel 
-Cancel a transfer
-
-USAGE:
-    solana cancel [OPTIONS] <PROCESS ID>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
-    -u, --url <URL>         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>    /path/to/id.json
-
-ARGS:
-    <PROCESS ID>    The process id of the transfer to cancel
 ```
 
 #### solana-claim-storage-reward
@@ -671,21 +475,16 @@ solana-pay
 Send a payment
 
 USAGE:
-    solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [UNIT]
+    solana pay [OPTIONS] <PUBKEY> <AMOUNT> [UNIT]
 
 FLAGS:
-        --cancelable    
-    -h, --help          Prints help information
-    -V, --version       Prints version information
+    -h, --help       Prints help information
+    -V, --version    Prints version information
 
 OPTIONS:
-    -C, --config <PATH>                         Configuration file to use [default:
-                                                ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                             JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                        /path/to/id.json
-        --after <DATETIME>                      A timestamp after which transaction will execute
-        --require-timestamp-from <PUBKEY>       Require timestamp from this third party
-        --require-signature-from <PUBKEY>...    Any third party signatures required to unlock the lamports
+    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
+    -u, --url <URL>         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
     <PUBKEY>    The pubkey of recipient
@@ -734,51 +533,6 @@ OPTIONS:
 ARGS:
     <STAKE ACCOUNT>    Address of the stake account in which to redeem credits
     <VOTE ACCOUNT>     The vote account to which the stake is currently delegated.
-```
-
-#### solana-send-signature
-```text
-solana-send-signature 
-Send a signature to authorize a transfer
-
-USAGE:
-    solana send-signature [OPTIONS] <PUBKEY> <PROCESS ID>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -C, --config <PATH>     Configuration file to use [default: ~/.config/solana/cli/config.yml]
-    -u, --url <URL>         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>    /path/to/id.json
-
-ARGS:
-    <PUBKEY>        The pubkey of recipient
-    <PROCESS ID>    The process id of the transfer to authorize
-```
-
-#### solana-send-timestamp
-```text
-solana-send-timestamp 
-Send a timestamp to unlock a transfer
-
-USAGE:
-    solana send-timestamp [OPTIONS] <PUBKEY> <PROCESS ID>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -C, --config <PATH>      Configuration file to use [default: ~/.config/solana/cli/config.yml]
-        --date <DATETIME>    Optional arbitrary timestamp to apply
-    -u, --url <URL>          JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>     /path/to/id.json
-
-ARGS:
-    <PUBKEY>        The pubkey of recipient
-    <PROCESS ID>    The process id of the transfer to unlock
 ```
 
 #### solana-set

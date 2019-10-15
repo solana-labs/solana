@@ -2,12 +2,10 @@ use crate::{
     cluster_query::*, display::println_name_value, input_parsers::*, input_validators::*, stake::*,
     storage::*, validator_info::*, vote::*,
 };
-use chrono::prelude::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json};
-use solana_budget_api::budget_instruction::{self, BudgetError};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
@@ -111,23 +109,16 @@ pub enum CliCommand {
         pubkey: Pubkey,
         use_lamports_unit: bool,
     },
-    Cancel(Pubkey),
     Confirm(Signature),
     Pay {
         lamports: u64,
         to: Pubkey,
-        timestamp: Option<DateTime<Utc>>,
-        timestamp_pubkey: Option<Pubkey>,
-        witnesses: Option<Vec<Pubkey>>,
-        cancelable: Option<Pubkey>,
     },
     ShowAccount {
         pubkey: Pubkey,
         output_file: Option<String>,
         use_lamports_unit: bool,
     },
-    TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
-    Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
 }
 
 #[derive(Debug, Clone)]
@@ -290,10 +281,6 @@ pub fn parse_command(
                 use_lamports_unit,
             })
         }
-        ("cancel", Some(cancel_matches)) => {
-            let process_id = value_of(cancel_matches, "process_id").unwrap();
-            Ok(CliCommand::Cancel(process_id))
-        }
         ("confirm", Some(confirm_matches)) => {
             match confirm_matches.value_of("signature").unwrap().parse() {
                 Ok(signature) => Ok(CliCommand::Confirm(signature)),
@@ -306,33 +293,8 @@ pub fn parse_command(
         ("pay", Some(pay_matches)) => {
             let lamports = amount_of(pay_matches, "amount", "unit").expect("Invalid amount");
             let to = value_of(&pay_matches, "to").unwrap_or(*pubkey);
-            let timestamp = if pay_matches.is_present("timestamp") {
-                // Parse input for serde_json
-                let date_string = if !pay_matches.value_of("timestamp").unwrap().contains('Z') {
-                    format!("\"{}Z\"", pay_matches.value_of("timestamp").unwrap())
-                } else {
-                    format!("\"{}\"", pay_matches.value_of("timestamp").unwrap())
-                };
-                Some(serde_json::from_str(&date_string)?)
-            } else {
-                None
-            };
-            let timestamp_pubkey = value_of(&pay_matches, "timestamp_pubkey");
-            let witnesses = values_of(&pay_matches, "witness");
-            let cancelable = if pay_matches.is_present("cancelable") {
-                Some(*pubkey)
-            } else {
-                None
-            };
 
-            Ok(CliCommand::Pay {
-                lamports,
-                to,
-                timestamp,
-                timestamp_pubkey,
-                witnesses,
-                cancelable,
-            })
+            Ok(CliCommand::Pay { lamports, to })
         }
         ("show-account", Some(matches)) => {
             let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
@@ -343,31 +305,6 @@ pub fn parse_command(
                 output_file: output_file.map(ToString::to_string),
                 use_lamports_unit,
             })
-        }
-        ("send-signature", Some(sig_matches)) => {
-            let to = value_of(&sig_matches, "to").unwrap();
-            let process_id = value_of(&sig_matches, "process_id").unwrap();
-            Ok(CliCommand::Witness(to, process_id))
-        }
-        ("send-timestamp", Some(timestamp_matches)) => {
-            let to = value_of(&timestamp_matches, "to").unwrap();
-            let process_id = value_of(&timestamp_matches, "process_id").unwrap();
-            let dt = if timestamp_matches.is_present("datetime") {
-                // Parse input for serde_json
-                let date_string = if !timestamp_matches
-                    .value_of("datetime")
-                    .unwrap()
-                    .contains('Z')
-                {
-                    format!("\"{}Z\"", timestamp_matches.value_of("datetime").unwrap())
-                } else {
-                    format!("\"{}\"", timestamp_matches.value_of("datetime").unwrap())
-                };
-                serde_json::from_str(&date_string)?
-            } else {
-                Utc::now()
-            };
-            Ok(CliCommand::TimeElapsed(to, process_id, dt))
         }
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -597,10 +534,6 @@ fn process_pay(
     config: &CliConfig,
     lamports: u64,
     to: &Pubkey,
-    timestamp: Option<DateTime<Utc>>,
-    timestamp_pubkey: Option<Pubkey>,
-    witnesses: &Option<Vec<Pubkey>>,
-    cancelable: Option<Pubkey>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
@@ -608,120 +541,10 @@ fn process_pay(
     )?;
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    if timestamp == None && *witnesses == None {
-        let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
-        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-        log_instruction_custom_error::<SystemError>(result)
-    } else if *witnesses == None {
-        let dt = timestamp.unwrap();
-        let dt_pubkey = match timestamp_pubkey {
-            Some(pubkey) => pubkey,
-            None => config.keypair.pubkey(),
-        };
-
-        let contract_state = Keypair::new();
-
-        // Initializing contract
-        let ixs = budget_instruction::on_date(
-            &config.keypair.pubkey(),
-            to,
-            &contract_state.pubkey(),
-            dt,
-            &dt_pubkey,
-            cancelable,
-            lamports,
-        );
-        let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
-        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-        let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
-
-        Ok(json!({
-            "signature": signature_str,
-            "processId": format!("{}", contract_state.pubkey()),
-        })
-        .to_string())
-    } else if timestamp == None {
-        let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-        let witness = if let Some(ref witness_vec) = *witnesses {
-            witness_vec[0]
-        } else {
-            return Err(CliError::BadParameter(
-                "Could not parse required signature pubkey(s)".to_string(),
-            )
-            .into());
-        };
-
-        let contract_state = Keypair::new();
-
-        // Initializing contract
-        let ixs = budget_instruction::when_signed(
-            &config.keypair.pubkey(),
-            to,
-            &contract_state.pubkey(),
-            &witness,
-            cancelable,
-            lamports,
-        );
-        let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-        let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
-
-        Ok(json!({
-            "signature": signature_str,
-            "processId": format!("{}", contract_state.pubkey()),
-        })
-        .to_string())
-    } else {
-        Ok("Combo transactions not yet handled".to_string())
-    }
-}
-
-fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ix = budget_instruction::apply_signature(
-        &config.keypair.pubkey(),
-        pubkey,
-        &config.keypair.pubkey(),
-    );
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<BudgetError>(result)
-}
-
-fn process_time_elapsed(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    to: &Pubkey,
-    pubkey: &Pubkey,
-    dt: DateTime<Utc>,
-) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-    let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<BudgetError>(result)
-}
-
-fn process_witness(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    to: &Pubkey,
-    pubkey: &Pubkey,
-) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-    let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<BudgetError>(result)
+    log_instruction_custom_error::<SystemError>(result)
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
@@ -938,28 +761,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             pubkey,
             use_lamports_unit,
         } => process_balance(&pubkey, &rpc_client, *use_lamports_unit),
-        // Cancel a contract by contract Pubkey
-        CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
         CliCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
-        // If client has positive balance, pay lamports to another address
-        CliCommand::Pay {
-            lamports,
-            to,
-            timestamp,
-            timestamp_pubkey,
-            ref witnesses,
-            cancelable,
-        } => process_pay(
-            &rpc_client,
-            config,
-            *lamports,
-            &to,
-            *timestamp,
-            *timestamp_pubkey,
-            witnesses,
-            *cancelable,
-        ),
+        // Pay lamports to another address
+        CliCommand::Pay { lamports, to } => process_pay(&rpc_client, config, *lamports, &to),
         CliCommand::ShowAccount {
             pubkey,
             output_file,
@@ -971,12 +776,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &output_file,
             *use_lamports_unit,
         ),
-        // Apply time elapsed to contract
-        CliCommand::TimeElapsed(to, pubkey, dt) => {
-            process_time_elapsed(&rpc_client, config, &to, &pubkey, *dt)
-        }
-        // Apply witness signature to contract
-        CliCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
     }
 }
 
@@ -1151,19 +950,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("cancel")
-                .about("Cancel a transfer")
-                .arg(
-                    Arg::with_name("process_id")
-                        .index(1)
-                        .value_name("PROCESS ID")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("The process id of the transfer to cancel"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("confirm")
                 .about("Confirm transaction by signature")
                 .arg(
@@ -1202,86 +988,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .possible_values(&["SOL", "lamports"])
                         .help("Specify unit to use for request"),
-                )
-                .arg(
-                    Arg::with_name("timestamp")
-                        .long("after")
-                        .value_name("DATETIME")
-                        .takes_value(true)
-                        .help("A timestamp after which transaction will execute"),
-                )
-                .arg(
-                    Arg::with_name("timestamp_pubkey")
-                        .long("require-timestamp-from")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .requires("timestamp")
-                        .validator(is_pubkey)
-                        .help("Require timestamp from this third party"),
-                )
-                .arg(
-                    Arg::with_name("witness")
-                        .long("require-signature-from")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .multiple(true)
-                        .use_delimiter(true)
-                        .validator(is_pubkey)
-                        .help("Any third party signatures required to unlock the lamports"),
-                )
-                .arg(
-                    Arg::with_name("cancelable")
-                        .long("cancelable")
-                        .takes_value(false),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("send-signature")
-                .about("Send a signature to authorize a transfer")
-                .arg(
-                    Arg::with_name("to")
-                        .index(1)
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("The pubkey of recipient"),
-                )
-                .arg(
-                    Arg::with_name("process_id")
-                        .index(2)
-                        .value_name("PROCESS ID")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The process id of the transfer to authorize"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("send-timestamp")
-                .about("Send a timestamp to unlock a transfer")
-                .arg(
-                    Arg::with_name("to")
-                        .index(1)
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("The pubkey of recipient"),
-                )
-                .arg(
-                    Arg::with_name("process_id")
-                        .index(2)
-                        .value_name("PROCESS ID")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The process id of the transfer to unlock"),
-                )
-                .arg(
-                    Arg::with_name("datetime")
-                        .long("date")
-                        .value_name("DATETIME")
-                        .takes_value(true)
-                        .help("Optional arbitrary timestamp to apply"),
                 ),
         )
         .subcommand(
@@ -1426,11 +1132,6 @@ mod tests {
 
         let pubkey = Pubkey::new_rand();
         let pubkey_string = format!("{}", pubkey);
-        let witness0 = Pubkey::new_rand();
-        let witness0_string = format!("{}", witness0);
-        let witness1 = Pubkey::new_rand();
-        let witness1_string = format!("{}", witness1);
-        let dt = Utc.ymd(2018, 9, 19).and_hms(17, 30, 59);
 
         // Test Airdrop Subcommand
         let test_airdrop = test_commands
@@ -1476,16 +1177,6 @@ mod tests {
             }
         );
 
-        // Test Cancel Subcommand
-        let test_cancel =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "cancel", &pubkey_string]);
-        assert_eq!(
-            parse_command(&pubkey, &test_cancel).unwrap(),
-            CliCommand::Cancel(pubkey)
-        );
-
         // Test Confirm Subcommand
         let signature = Signature::new(&vec![1; 64]);
         let signature_string = format!("{:?}", signature);
@@ -1525,141 +1216,8 @@ mod tests {
             CliCommand::Pay {
                 lamports: 50,
                 to: pubkey,
-                timestamp: None,
-                timestamp_pubkey: None,
-                witnesses: None,
-                cancelable: None
             }
         );
-
-        // Test Pay Subcommand w/ Witness
-        let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
-            "test",
-            "pay",
-            &pubkey_string,
-            "50",
-            "lamports",
-            "--require-signature-from",
-            &witness0_string,
-            "--require-signature-from",
-            &witness1_string,
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_pay_multiple_witnesses).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: None,
-                timestamp_pubkey: None,
-                witnesses: Some(vec![witness0, witness1]),
-                cancelable: None
-            }
-        );
-        let test_pay_single_witness = test_commands.clone().get_matches_from(vec![
-            "test",
-            "pay",
-            &pubkey_string,
-            "50",
-            "lamports",
-            "--require-signature-from",
-            &witness0_string,
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_pay_single_witness).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: None,
-                timestamp_pubkey: None,
-                witnesses: Some(vec![witness0]),
-                cancelable: None
-            }
-        );
-
-        // Test Pay Subcommand w/ Timestamp
-        let test_pay_timestamp = test_commands.clone().get_matches_from(vec![
-            "test",
-            "pay",
-            &pubkey_string,
-            "50",
-            "lamports",
-            "--after",
-            "2018-09-19T17:30:59",
-            "--require-timestamp-from",
-            &witness0_string,
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_pay_timestamp).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: Some(dt),
-                timestamp_pubkey: Some(witness0),
-                witnesses: None,
-                cancelable: None
-            }
-        );
-
-        // Test Send-Signature Subcommand
-        let test_send_signature = test_commands.clone().get_matches_from(vec![
-            "test",
-            "send-signature",
-            &pubkey_string,
-            &pubkey_string,
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_send_signature).unwrap(),
-            CliCommand::Witness(pubkey, pubkey)
-        );
-        let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
-            "test",
-            "pay",
-            &pubkey_string,
-            "50",
-            "lamports",
-            "--after",
-            "2018-09-19T17:30:59",
-            "--require-signature-from",
-            &witness0_string,
-            "--require-timestamp-from",
-            &witness0_string,
-            "--require-signature-from",
-            &witness1_string,
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_pay_multiple_witnesses).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: Some(dt),
-                timestamp_pubkey: Some(witness0),
-                witnesses: Some(vec![witness0, witness1]),
-                cancelable: None
-            }
-        );
-
-        // Test Send-Timestamp Subcommand
-        let test_send_timestamp = test_commands.clone().get_matches_from(vec![
-            "test",
-            "send-timestamp",
-            &pubkey_string,
-            &pubkey_string,
-            "--date",
-            "2018-09-19T17:30:59",
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_send_timestamp).unwrap(),
-            CliCommand::TimeElapsed(pubkey, pubkey, dt)
-        );
-        let test_bad_timestamp = test_commands.clone().get_matches_from(vec![
-            "test",
-            "send-timestamp",
-            &pubkey_string,
-            &pubkey_string,
-            "--date",
-            "20180919T17:30:59",
-        ]);
-        assert!(parse_command(&pubkey, &test_bad_timestamp).is_err());
     }
 
     #[test]
@@ -1685,10 +1243,6 @@ mod tests {
             use_lamports_unit: false,
         };
         assert_eq!(process_command(&config).unwrap(), "0 SOL");
-
-        let process_id = Pubkey::new_rand();
-        config.command = CliCommand::Cancel(process_id);
-        assert_eq!(process_command(&config).unwrap(), SIGNATURE);
 
         let good_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = CliCommand::Confirm(good_signature);
@@ -1748,64 +1302,7 @@ mod tests {
         config.command = CliCommand::Pay {
             lamports: 10,
             to: bob_pubkey,
-            timestamp: None,
-            timestamp_pubkey: None,
-            witnesses: None,
-            cancelable: None,
         };
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
-
-        let date_string = "\"2018-09-19T17:30:59Z\"";
-        let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
-        config.command = CliCommand::Pay {
-            lamports: 10,
-            to: bob_pubkey,
-            timestamp: Some(dt),
-            timestamp_pubkey: Some(config.keypair.pubkey()),
-            witnesses: None,
-            cancelable: None,
-        };
-        let result = process_command(&config);
-        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
-        assert_eq!(
-            json.as_object()
-                .unwrap()
-                .get("signature")
-                .unwrap()
-                .as_str()
-                .unwrap(),
-            SIGNATURE.to_string()
-        );
-
-        let witness = Pubkey::new_rand();
-        config.command = CliCommand::Pay {
-            lamports: 10,
-            to: bob_pubkey,
-            timestamp: None,
-            timestamp_pubkey: None,
-            witnesses: Some(vec![witness]),
-            cancelable: Some(config.keypair.pubkey()),
-        };
-        let result = process_command(&config);
-        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
-        assert_eq!(
-            json.as_object()
-                .unwrap()
-                .get("signature")
-                .unwrap()
-                .as_str()
-                .unwrap(),
-            SIGNATURE.to_string()
-        );
-
-        let process_id = Pubkey::new_rand();
-        config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
-
-        let witness = Pubkey::new_rand();
-        config.command = CliCommand::Witness(bob_pubkey, witness);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1817,16 +1314,6 @@ mod tests {
             use_lamports_unit: true,
         };
         assert!(process_command(&config).is_ok());
-
-        config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
-        config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
-
-        let witness = Pubkey::new_rand();
-        config.command = CliCommand::Witness(bob_pubkey, witness);
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // sig_not_found case
         config.rpc_client = Some(RpcClient::new_mock("sig_not_found".to_string()));
@@ -1886,34 +1373,7 @@ mod tests {
         config.command = CliCommand::Pay {
             lamports: 10,
             to: bob_pubkey,
-            timestamp: None,
-            timestamp_pubkey: None,
-            witnesses: None,
-            cancelable: None,
         };
-        assert!(process_command(&config).is_err());
-
-        config.command = CliCommand::Pay {
-            lamports: 10,
-            to: bob_pubkey,
-            timestamp: Some(dt),
-            timestamp_pubkey: Some(config.keypair.pubkey()),
-            witnesses: None,
-            cancelable: None,
-        };
-        assert!(process_command(&config).is_err());
-
-        config.command = CliCommand::Pay {
-            lamports: 10,
-            to: bob_pubkey,
-            timestamp: None,
-            timestamp_pubkey: None,
-            witnesses: Some(vec![witness]),
-            cancelable: Some(config.keypair.pubkey()),
-        };
-        assert!(process_command(&config).is_err());
-
-        config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
         assert!(process_command(&config).is_err());
     }
 
