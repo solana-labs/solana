@@ -1,7 +1,7 @@
 use solana_sdk::{
     account::Account,
     fee_calculator::FeeCalculator,
-    genesis_block::{Builder, GenesisBlock},
+    genesis_block::GenesisBlock,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_program::{self, solana_system_program},
@@ -47,38 +47,45 @@ pub fn create_genesis_block_with_leader(
         bootstrap_leader_stake_lamports,
     );
 
-    let mut builder = Builder::new()
-        .accounts(&[
-            // the mint
-            (
-                mint_keypair.pubkey(),
-                Account::new(mint_lamports, 0, &system_program::id()),
-            ),
-            // node needs an account to issue votes and storage proofs from, this will require
-            //  airdrops at some point to cover fees...
-            (
-                *bootstrap_leader_pubkey,
-                Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
-            ),
-            // where votes go to
-            (voting_keypair.pubkey(), vote_account),
-            // passive bootstrap leader stake, duplicates above temporarily
-            (staking_keypair.pubkey(), stake_account),
-        ])
-        // Bare minimum program set
-        .native_instruction_processors(&[
-            solana_system_program(),
-            solana_bpf_loader_program!(),
-            solana_vote_program!(),
-            solana_stake_program!(),
-        ])
-        .fee_calculator(FeeCalculator::new(0, 0)); // most tests don't want fees
+    let accounts = vec![
+        // the mint
+        (
+            mint_keypair.pubkey(),
+            Account::new(mint_lamports, 0, &system_program::id()),
+        ),
+        // node needs an account to issue votes and storage proofs from, this will require
+        //  airdrops at some point to cover fees...
+        (
+            *bootstrap_leader_pubkey,
+            Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
+        ),
+        // where votes go to
+        (voting_keypair.pubkey(), vote_account),
+        // passive bootstrap leader stake, duplicates above temporarily
+        (staking_keypair.pubkey(), stake_account),
+    ];
 
-    builder = solana_stake_api::genesis(builder);
-    builder = solana_storage_api::rewards_pools::genesis(builder);
+    // Bare minimum program set
+    let native_instruction_processors = vec![
+        solana_system_program(),
+        solana_bpf_loader_program!(),
+        solana_vote_program!(),
+        solana_stake_program!(),
+    ];
+    let fee_calculator = FeeCalculator::new(0, 0); // most tests don't want fees
+
+    let mut genesis_block = GenesisBlock {
+        accounts,
+        native_instruction_processors,
+        fee_calculator,
+        ..GenesisBlock::default()
+    };
+
+    solana_stake_api::add_genesis_accounts(&mut genesis_block);
+    solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_block);
 
     GenesisBlockInfo {
-        genesis_block: builder.build(),
+        genesis_block,
         mint_keypair,
         voting_keypair,
     }

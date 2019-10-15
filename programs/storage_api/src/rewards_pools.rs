@@ -5,7 +5,7 @@
 
 use crate::storage_contract::create_rewards_pool;
 use rand::{thread_rng, Rng};
-use solana_sdk::genesis_block::Builder;
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 
@@ -20,14 +20,13 @@ solana_sdk::solana_name_id!(ID, "StorageMiningPoo111111111111111111111111111");
 // to cut down on collisions for redemptions, we make multiple accounts
 pub const NUM_REWARDS_POOLS: usize = 32;
 
-pub fn genesis(mut builder: Builder) -> Builder {
+pub fn add_genesis_accounts(genesis_block: &mut GenesisBlock) {
     let mut pubkey = id();
 
     for _i in 0..NUM_REWARDS_POOLS {
-        builder = builder.rewards_pool(pubkey, create_rewards_pool());
+        genesis_block.add_rewards_pool(pubkey, create_rewards_pool());
         pubkey = Pubkey::new(hash(pubkey.as_ref()).as_ref());
     }
-    builder
 }
 
 pub fn random_id() -> Pubkey {
@@ -43,13 +42,11 @@ pub fn random_id() -> Pubkey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::genesis_block::Builder;
 
     #[test]
     fn test() {
-        let builder = Builder::new();
-
-        let genesis_block = genesis(builder).build();
+        let mut genesis_block = GenesisBlock::default();
+        add_genesis_accounts(&mut genesis_block);
 
         for _i in 0..NUM_REWARDS_POOLS {
             let id = random_id();

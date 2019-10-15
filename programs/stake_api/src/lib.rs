@@ -1,3 +1,7 @@
+use crate::config::create_genesis_account;
+use crate::rewards_pools::create_rewards_accounts;
+use solana_sdk::genesis_block::GenesisBlock;
+
 pub mod config;
 pub mod rewards_pools;
 pub mod stake_instruction;
@@ -13,11 +17,11 @@ solana_sdk::solana_name_id!(
     "Stake11111111111111111111111111111111111111"
 );
 
-use solana_sdk::genesis_block::Builder;
-
-pub fn genesis(mut builder: Builder) -> Builder {
-    for (pubkey, account) in crate::rewards_pools::genesis().iter() {
-        builder = builder.rewards_pool(*pubkey, account.clone());
+pub fn add_genesis_accounts(genesis_block: &mut GenesisBlock) {
+    for (pubkey, account) in create_rewards_accounts() {
+        genesis_block.add_rewards_pool(pubkey, account);
     }
-    builder.accounts(&[crate::config::genesis()])
+
+    let (pubkey, account) = create_genesis_account();
+    genesis_block.add_account(pubkey, account);
 }

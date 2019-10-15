@@ -2,7 +2,7 @@ use log::*;
 use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
 use solana_bench_tps::cli;
 use solana_core::gossip_service::{discover_cluster, get_multi_client};
-use solana_genesis::PrimordialAccountDetails;
+use solana_genesis::Base64Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_program;
@@ -46,7 +46,7 @@ fn main() {
         keypairs.iter().for_each(|keypair| {
             accounts.insert(
                 serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
-                PrimordialAccountDetails {
+                Base64Account {
                     balance: num_lamports_per_account,
                     executable: false,
                     owner: system_program::id().to_string(),
@@ -85,8 +85,7 @@ fn main() {
         let file = File::open(path).unwrap();
 
         info!("Reading {}", client_ids_and_stake_file);
-        let accounts: HashMap<String, PrimordialAccountDetails> =
-            serde_yaml::from_reader(file).unwrap();
+        let accounts: HashMap<String, Base64Account> = serde_yaml::from_reader(file).unwrap();
         let mut keypairs = vec![];
         let mut last_balance = 0;
 
