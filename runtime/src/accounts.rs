@@ -96,7 +96,6 @@ impl Accounts {
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
-        w_credit_only_account_locks: &mut RwLockWriteGuard<Option<HashMap<Pubkey, CreditOnlyLock>>>,
     ) -> Result<(TransactionAccounts, TransactionCredits, TransactionRents)> {
         // Copy all the accounts
         let message = tx.message();
@@ -109,19 +108,15 @@ impl Accounts {
                 return Err(TransactionError::AccountLoadedTwice);
             }
 
-            let credit_only_account_locks = w_credit_only_account_locks.as_mut().unwrap();
-            let mut credit_only_keys: HashSet<Pubkey> = HashSet::new();
-
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut accounts: TransactionAccounts = vec![];
             let mut credits: TransactionCredits = vec![];
             let mut rents: TransactionRents = vec![];
-            for (i, key) in message
+            for key in message
                 .account_keys
                 .iter()
                 .filter(|key| !message.program_ids().contains(&key))
-                .enumerate()
             {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
                     .and_then(
@@ -131,10 +126,6 @@ impl Accounts {
                         },
                     )
                     .unwrap_or_default();
-
-                if !message.is_debitable(i) {
-                    credit_only_keys.insert(*key);
-                }
 
                 accounts.push(account);
                 credits.push(0);
@@ -152,11 +143,6 @@ impl Accounts {
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
                 accounts[0].lamports -= fee;
-                for key in credit_only_keys {
-                    credit_only_account_locks.entry(key).and_modify(|mut lock| {
-                        lock.rent_debtor = true;
-                    });
-                }
                 Ok((accounts, credits, rents))
             }
         }
@@ -249,7 +235,6 @@ impl Accounts {
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
-        let mut w_credit_only_account_locks = self.credit_only_account_locks.write().unwrap();
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
@@ -267,7 +252,6 @@ impl Accounts {
                         fee,
                         error_counters,
                         rent_collector,
-                        &mut w_credit_only_account_locks,
                     )?;
                     let loaders = Self::load_loaders(
                         &storage,
@@ -694,18 +678,17 @@ impl Accounts {
             {
                 if message.is_debitable(i) {
                     accounts.push((key, account));
-                }
-                if *credit > 0 {
-                    // Increment credit-only account balance Atomic
+                } else {
                     self.credit_only_account_locks
-                        .read()
+                        .write()
                         .unwrap()
-                        .as_ref()
+                        .as_mut()
                         .expect("Collect accounts should only be called before a commit, and credit only account locks should exist before a commit")
-                        .get(key)
-                        .unwrap()
-                        .credits
-                        .fetch_add(*credit, Ordering::Relaxed);
+                        .entry(*key)
+                        .and_modify(|lock| {
+                            lock.rent_debtor = true;
+                            lock.credits.fetch_add(*credit, Ordering::Relaxed);
+                        });
                 }
             }
         }
