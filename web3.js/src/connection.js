@@ -259,6 +259,7 @@ const GetVoteAccounts = jsonRpcResult(
         epochVoteAccount: 'boolean',
         commission: 'number',
         lastVote: 'number',
+        rootSlot: 'number?',
       }),
     ]),
     delinquent: struct.list([
@@ -269,6 +270,7 @@ const GetVoteAccounts = jsonRpcResult(
         epochVoteAccount: 'boolean',
         commission: 'number',
         lastVote: 'number',
+        rootSlot: 'number?',
       }),
     ]),
   }),
