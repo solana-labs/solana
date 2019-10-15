@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
 upload_results() {
-
-read -d '' payLoad << EOF
+  payLoad="$(cat <<EOF
 {
 "blocks": [
  		{
@@ -30,6 +29,7 @@ $RESULT_DETAILS"
 	]
 }
 EOF
+)"
 
 curl -X POST \
 -H 'Content-type: application/json' \
