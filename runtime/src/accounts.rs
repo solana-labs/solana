@@ -119,12 +119,10 @@ impl Accounts {
                 .filter(|key| !message.program_ids().contains(&key))
             {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
-                    .and_then(
-                        |(mut account, _)| match rent_collector.update(&mut account) {
-                            (Some(_), rent_due) => Some((account, rent_due)),
-                            (None, rent_due) => Some((Account::default(), rent_due)),
-                        },
-                    )
+                    .and_then(|(mut account, _)| {
+                        let rent_due = rent_collector.update(&mut account);
+                        Some((account, rent_due))
+                    })
                     .unwrap_or_default();
 
                 accounts.push(account);
@@ -626,13 +624,8 @@ impl Accounts {
                         .unwrap_or_default();
 
                 if lock.rent_debtor {
-                    let (rent_debtor_account, rent_collected) =
-                        match rent_collector.update(&mut account) {
-                            (Some(_), rent_due) => (account, rent_due),
-                            (None, rent_due) => (Account::default(), rent_due),
-                        };
+                    let rent_collected = rent_collector.update(&mut account);
                     total_rent_collected += rent_collected;
-                    account = rent_debtor_account;
                 }
 
                 account.lamports += credit;
