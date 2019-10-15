@@ -174,7 +174,7 @@ impl ReplayStage {
                         if let Some(new_leader) =
                             leader_schedule_cache.slot_leader_at(next_slot, Some(&bank))
                         {
-                            datapoint_info!(
+                            datapoint_debug!(
                                 "replay_stage-new_leader",
                                 ("slot", next_slot, i64),
                                 ("leader", new_leader.to_string(), String),
