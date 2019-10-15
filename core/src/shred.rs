@@ -1,4 +1,5 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
+use crate::blocktree::BlocktreeError;
 use crate::entry::create_ticks;
 use crate::entry::Entry;
 use crate::erasure::Session;
@@ -26,9 +27,14 @@ lazy_static! {
         { serialized_size(&CodingShredHeader::default()).unwrap() as usize };
     pub static ref SIZE_OF_DATA_SHRED_HEADER: usize =
         { serialized_size(&DataShredHeader::default()).unwrap() as usize };
+    pub static ref SIZE_OF_COMMON_SHRED_HEADER: usize =
+        { serialized_size(&ShredCommonHeader::default()).unwrap() as usize };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
     pub static ref SIZE_OF_SHRED_TYPE: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
+    pub static ref SIZE_OF_PARENT_OFFSET: usize =
+        { bincode::serialized_size(&0u16).unwrap() as usize };
+    pub static ref SIZE_OF_FLAGS: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
 }
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
@@ -150,6 +156,14 @@ impl Shred {
         Self::new(header, shred_buf)
     }
 
+    fn deserialize_obj<'de, T>(index: &mut usize, size: usize, buf: &'de [u8]) -> result::Result<T>
+    where
+        T: Deserialize<'de>,
+    {
+        let ret = bincode::deserialize(&buf[*index..*index + size])?;
+        *index += size;
+        Ok(ret)
+    }
     pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> result::Result<Self> {
         let shred_type: u8 = bincode::deserialize(&shred_buf[..*SIZE_OF_SHRED_TYPE])?;
         let header = if shred_type == CODING_SHRED {
@@ -157,9 +171,27 @@ impl Shred {
             let mut header = DataShredHeader::default();
             header.common_header = bincode::deserialize(&shred_buf[..end])?;
             header
+        } else if shred_type == DATA_SHRED {
+            let mut start = *SIZE_OF_CODING_SHRED_HEADER;
+            let common_hdr: ShredCommonHeader =
+                Self::deserialize_obj(&mut start, *SIZE_OF_COMMON_SHRED_HEADER, &shred_buf)?;
+
+            let parent_offset: u16 =
+                Self::deserialize_obj(&mut start, *SIZE_OF_PARENT_OFFSET, &shred_buf)?;
+
+            let flags: u8 = Self::deserialize_obj(&mut start, *SIZE_OF_FLAGS, &shred_buf)?;
+            let mut hdr = DataShredHeader {
+                common_header: CodingShredHeader::default(),
+                data_header: common_hdr,
+                parent_offset,
+                flags,
+            };
+            hdr.common_header.shred_type = shred_type;
+            hdr
         } else {
-            let end = *SIZE_OF_DATA_SHRED_HEADER;
-            bincode::deserialize(&shred_buf[..end])?
+            return Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(
+                Box::new(bincode::ErrorKind::Custom("Invalid shred type".to_string())),
+            )));
         };
 
         Ok(Self::new(header, shred_buf))
