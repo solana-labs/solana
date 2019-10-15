@@ -362,7 +362,11 @@ if ! $skipStart; then
       op=start
     fi
     echo "--- net.sh $op"
-    args=("$op" -t "$tarChannelOrTag")
+    args=(
+      "$op"
+      -t "$tarChannelOrTag"
+      --dedicated
+    )
 
     if ! $publicNetwork; then
       args+=(-o rejectExtraNodes)
