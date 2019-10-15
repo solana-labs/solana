@@ -10,9 +10,10 @@ slashed by some percentage.
 ## Votes
 
 Validators submit votes which contain a list of slots.  To be
-accepted, the vote must contain the list of slots currently in the
-VoteState program, along with new votes.  The slots must match the
-VoteState exactly.
+accepted, the vote must contain the list of N slots currently in
+the VoteState program, along with new votes.  The first `N - new
+votes`, must match the VoteState exactly.  N should be large enough
+to enforce a lockout that spans a full epoch.
 
 * vote 0: 0
 * vote 1: 0, 1
@@ -25,6 +26,11 @@ prover needs to submit two votes.
 
 * vote 3: 0, 1, 2, 3
 * vote 4: 0, 1, 2, 5
+
+The second vote skips 3, and therefore allows the vote to be accepted
+on a fork that doesn't include it, such as `0,1,2,4,5`.  This
+violates the lockout rule for 3, since the earliest vote that can
+be accepted that doesn't contain it is 6.
 
 ##  Accidental Slashing
 
@@ -65,8 +71,9 @@ more damage to consensus then a validator that only violated the
 lockout rules for a single block.
 
 * Single block lockout should result in loss of rewards for the
-epoch.
+epoch and a minor slashing percentage.  This is a great candiate
+for quadratic slashing, where valiadtors that vote on the same
+single block have their slashing rate double.
 
 * Multiple block lockout results in slashing the validator as well
 as loss of rewards for the epoch.
-
