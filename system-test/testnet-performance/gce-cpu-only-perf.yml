@@ -2,6 +2,7 @@ steps:
   - command: "system-test/testnet-performance/testnet-automation.sh"
     label: "GCE performance testnets CPU ONLY"
     env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-edge-perf-cpu-only"
       RAMP_UP_TIME: 60
