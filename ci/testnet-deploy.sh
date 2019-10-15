@@ -338,6 +338,11 @@ if ! $skipCreate; then
     create_args+=($maybeValidatorAdditionalDiskSize)
   fi
 
+  # Disable GCE self-destruct
+  if [[ "$cloudProvider" == "gce" ]]; then
+    create_args+=( --self-destruct-minutes 0 )
+  fi
+
   time net/"$cloudProvider".sh create "${create_args[@]}"
 else
   echo "--- $cloudProvider.sh config"
