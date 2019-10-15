@@ -396,8 +396,13 @@ impl Stake {
         }
     }
 
-    fn deactivate(&mut self, epoch: u64) {
-        self.deactivation_epoch = epoch;
+    fn deactivate(&mut self, epoch: u64) -> Result<(), StakeError> {
+        if self.deactivation_epoch != std::u64::MAX {
+            Err(StakeError::AlreadyDeactivated)
+        } else {
+            self.deactivation_epoch = epoch;
+            Ok(())
+        }
     }
 }
 
@@ -512,7 +517,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         if let StakeState::Stake(authorized, lockup, mut stake) = self.state()? {
             authorized.check(signers, StakeAuthorize::Staker)?;
-            stake.deactivate(clock.epoch);
+            stake.deactivate(clock.epoch)?;
 
             self.set_state(&StakeState::Stake(authorized, lockup, stake))
         } else {
@@ -1249,6 +1254,12 @@ mod tests {
         assert_eq!(
             stake_keyed_account.deactivate_stake(&clock, &signers),
             Ok(())
+        );
+
+        // verify that deactivate() only works once
+        assert_eq!(
+            stake_keyed_account.deactivate_stake(&clock, &signers),
+            Err(StakeError::AlreadyDeactivated.into())
         );
     }
 
