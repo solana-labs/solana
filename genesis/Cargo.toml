@@ -10,7 +10,6 @@ homepage = "https://solana.com/"
 
 [dependencies]
 base64 = "0.10.1"
-bincode = "1.2.0"
 clap = "2.33.0"
 serde = "1.0.101"
 serde_derive = "1.0.101"
@@ -23,5 +22,3 @@ solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.20.0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.20.0" }
 tempfile = "3.1.0"
-sys-info = "0.5.8"
-rayon = "1.2.0"

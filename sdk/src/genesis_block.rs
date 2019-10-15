@@ -67,79 +67,6 @@ impl Default for GenesisBlock {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
-pub struct Builder {
-    genesis_block: GenesisBlock,
-}
-
-impl Builder {
-    pub fn new() -> Self {
-        Builder::default()
-    }
-    // consuming builder because I don't want to clone all the accounts
-    pub fn build(self) -> GenesisBlock {
-        self.genesis_block
-    }
-
-    fn append<T: Clone>(items: &[T], mut dest: Vec<T>) -> Vec<T> {
-        items.iter().cloned().for_each(|item| dest.push(item));
-        dest
-    }
-
-    pub fn account(self, pubkey: Pubkey, account: Account) -> Self {
-        self.accounts(&[(pubkey, account)])
-    }
-    pub fn accounts(mut self, accounts: &[(Pubkey, Account)]) -> Self {
-        self.genesis_block.accounts = Self::append(accounts, self.genesis_block.accounts);
-        self
-    }
-    pub fn native_instruction_processor(self, name: &str, pubkey: Pubkey) -> Self {
-        self.native_instruction_processors(&[(name.to_string(), pubkey)])
-    }
-    pub fn native_instruction_processors(
-        mut self,
-        native_instruction_processors: &[(String, Pubkey)],
-    ) -> Self {
-        self.genesis_block.native_instruction_processors = Self::append(
-            native_instruction_processors,
-            self.genesis_block.native_instruction_processors,
-        );
-        self
-    }
-    pub fn rewards_pool(self, pubkey: Pubkey, account: Account) -> Self {
-        self.rewards_pools(&[(pubkey, account)])
-    }
-    pub fn rewards_pools(mut self, rewards_pools: &[(Pubkey, Account)]) -> Self {
-        self.genesis_block.rewards_pools =
-            Self::append(rewards_pools, self.genesis_block.rewards_pools);
-        self
-    }
-    pub fn epoch_schedule(mut self, epoch_schedule: EpochSchedule) -> Self {
-        self.genesis_block.epoch_schedule = epoch_schedule;
-        self
-    }
-    pub fn ticks_per_slot(mut self, ticks_per_slot: u64) -> Self {
-        self.genesis_block.ticks_per_slot = ticks_per_slot;
-        self
-    }
-    pub fn poh_config(mut self, poh_config: PohConfig) -> Self {
-        self.genesis_block.poh_config = poh_config;
-        self
-    }
-    pub fn fee_calculator(mut self, fee_calculator: FeeCalculator) -> Self {
-        self.genesis_block.fee_calculator = fee_calculator;
-        self
-    }
-    pub fn inflation(mut self, inflation: Inflation) -> Self {
-        self.genesis_block.inflation = inflation;
-        self
-    }
-    pub fn rent_calculator(mut self, rent_calculator: RentCalculator) -> Self {
-        self.genesis_block.rent_calculator = rent_calculator;
-        self
-    }
-}
-
 impl GenesisBlock {
     pub fn new(
         accounts: &[(Pubkey, Account)],
@@ -179,6 +106,18 @@ impl GenesisBlock {
         let mut file = File::create(&ledger_path.join("genesis.bin"))?;
         file.write_all(&serialized)
     }
+
+    pub fn add_account(&mut self, pubkey: Pubkey, account: Account) {
+        self.accounts.push((pubkey, account));
+    }
+
+    pub fn add_native_instruction_processor(&mut self, name: String, program_id: Pubkey) {
+        self.native_instruction_processors.push((name, program_id));
+    }
+
+    pub fn add_rewards_pool(&mut self, pubkey: Pubkey, account: Account) {
+        self.rewards_pools.push((pubkey, account));
+    }
 }
 
 #[cfg(test)]
@@ -210,14 +149,13 @@ mod tests {
     #[test]
     fn test_genesis_block() {
         let mint_keypair = Keypair::new();
-        let block = Builder::new()
-            .account(
-                mint_keypair.pubkey(),
-                Account::new(10_000, 0, &Pubkey::default()),
-            )
-            .accounts(&[(Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()))])
-            .native_instruction_processor("hi", Pubkey::new_rand())
-            .build();
+        let mut block = GenesisBlock::default();
+        block.add_account(
+            mint_keypair.pubkey(),
+            Account::new(10_000, 0, &Pubkey::default()),
+        );
+        block.add_account(Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()));
+        block.add_native_instruction_processor("hi".to_string(), Pubkey::new_rand());
 
         assert_eq!(block.accounts.len(), 2);
         assert!(block.accounts.iter().any(

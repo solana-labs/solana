@@ -56,7 +56,7 @@ impl ConfigState for Config {
     }
 }
 
-pub fn genesis() -> (Pubkey, Account) {
+pub fn create_genesis_account() -> (Pubkey, Account) {
     (id(), create_config_account(vec![], &Config::default(), 100))
 }
 
@@ -83,7 +83,7 @@ mod tests {
             from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &mut account)),
             Err(InstructionError::InvalidArgument)
         );
-        let (pubkey, mut account) = genesis();
+        let (pubkey, mut account) = create_genesis_account();
         assert_eq!(
             from_keyed_account(&KeyedAccount::new(&pubkey, false, &mut account)),
             Ok(Config::default())

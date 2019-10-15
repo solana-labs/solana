@@ -11,7 +11,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
 use solana_exchange_api::id;
-use solana_genesis::PrimordialAccountDetails;
+use solana_genesis::Base64Account;
 use solana_metrics::datapoint_info;
 use solana_sdk::client::Client;
 use solana_sdk::client::SyncClient;
@@ -89,7 +89,7 @@ pub fn create_client_accounts_file(
     keypairs.iter().for_each(|keypair| {
         accounts.insert(
             serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
-            PrimordialAccountDetails {
+            Base64Account {
                 balance: fund_amount,
                 executable: false,
                 owner: system_program::id().to_string(),
@@ -140,8 +140,7 @@ where
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
-        let accounts: HashMap<String, PrimordialAccountDetails> =
-            serde_yaml::from_reader(file).unwrap();
+        let accounts: HashMap<String, Base64Account> = serde_yaml::from_reader(file).unwrap();
         accounts
             .into_iter()
             .map(|(keypair, _)| {
