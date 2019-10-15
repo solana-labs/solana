@@ -309,7 +309,7 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
         style(format!(
             "{:<44}  {:<44}  {:<11}  {:>10}  {:>11}  {}",
             "Identity Pubkey",
-            "Vote Pubkey",
+            "Vote Account Pubkey",
             "Commission",
             "Last Vote",
             "Root Block",
