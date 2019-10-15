@@ -2,8 +2,6 @@
 
 upload_results() {
 
-RESULT_DETAILS=$(<$RESULTS_FILE)
-
 read -d '' payLoad << EOF
 {
 "blocks": [

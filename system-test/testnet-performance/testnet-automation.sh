@@ -153,6 +153,7 @@ launchTestnet() {
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
     python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULTS_FILE"
 
+  RESULT_DETAILS=$(<$RESULTS_FILE)
   upload-ci-artifact "$RESULTS_FILE"
 }
 
