@@ -63,6 +63,7 @@ struct ReplaySlotStats {
     // Per-slot elapsed time
     slot: u64,
     fetch_entries_elapsed: u64,
+    fetch_entries_fail_elapsed: u64,
     entry_verification_elapsed: u64,
     replay_elapsed: u64,
     replay_start: Instant,
@@ -73,17 +74,23 @@ impl ReplaySlotStats {
         Self {
             slot,
             fetch_entries_elapsed: 0,
+            fetch_entries_fail_elapsed: 0,
             entry_verification_elapsed: 0,
             replay_elapsed: 0,
             replay_start: Instant::now(),
         }
     }
 
-    pub fn report_stats(&self) {
+    pub fn report_stats(&self, total_entries: usize, total_shreds: usize) {
         datapoint_info!(
             "replay-slot-stats",
             ("slot", self.slot as i64, i64),
             ("fetch_entries_time", self.fetch_entries_elapsed as i64, i64),
+            (
+                "fetch_entries_fail_time",
+                self.fetch_entries_fail_elapsed as i64,
+                i64
+            ),
             (
                 "entry_verification_time",
                 self.entry_verification_elapsed as i64,
@@ -91,17 +98,20 @@ impl ReplaySlotStats {
             ),
             ("replay_time", self.replay_elapsed as i64, i64),
             (
-                "replay_start",
+                "replay_total_elapsed",
                 self.replay_start.elapsed().as_micros() as i64,
                 i64
             ),
+            ("total_entries", total_entries as i64, i64),
+            ("total_shreds", total_shreds as i64, i64),
         );
     }
 }
 
 struct ForkProgress {
     last_entry: Hash,
-    num_blobs: usize,
+    num_shreds: usize,
+    num_entries: usize,
     started_ms: u64,
     is_dead: bool,
     stats: ReplaySlotStats,
@@ -111,7 +121,8 @@ impl ForkProgress {
     pub fn new(slot: u64, last_entry: Hash) -> Self {
         Self {
             last_entry,
-            num_blobs: 0,
+            num_shreds: 0,
+            num_entries: 0,
             started_ms: timing::timestamp(),
             is_dead: false,
             stats: ReplaySlotStats::new(slot),
@@ -415,34 +426,40 @@ impl ReplayStage {
             .entry(bank.slot())
             .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
         let now = Instant::now();
-        let result = Self::load_blocktree_entries(bank, blocktree, bank_progress).and_then(
-            |(entries, num)| {
-                let entry_len = entries.len();
-                let fetch_entries_elapsed = now.elapsed().as_micros();
-                trace!(
-                    "Fetch entries for slot {}, elapsed: {}, {:?} entries, num shreds {:?}",
-                    bank.slot(),
-                    fetch_entries_elapsed,
-                    entry_len,
-                    num
-                );
-                tx_count += entries.iter().map(|e| e.transactions.len()).sum::<usize>();
-                bank_progress.stats.fetch_entries_elapsed += fetch_entries_elapsed as u64;
-                Self::replay_entries_into_bank(bank, entries, bank_progress, num)
-            },
-        );
+        let load_result = Self::load_blocktree_entries(bank, blocktree, bank_progress);
+        let fetch_entries_elapsed = now.elapsed().as_micros();
 
-        if Self::is_replay_result_fatal(&result) {
+        if load_result.is_err() {
+            bank_progress.stats.fetch_entries_fail_elapsed += fetch_entries_elapsed as u64;
+        }
+        let replay_result = load_result.and_then(|(entries, num_shreds)| {
+            let entry_len = entries.len();
+            trace!(
+                "Fetch entries for slot {}, {:?} entries, num shreds {:?}",
+                bank.slot(),
+                entry_len,
+                num_shreds
+            );
+            tx_count += entries.iter().map(|e| e.transactions.len()).sum::<usize>();
+            if entry_len > 0 {
+                bank_progress.stats.fetch_entries_elapsed += fetch_entries_elapsed as u64;
+            } else {
+                bank_progress.stats.fetch_entries_fail_elapsed += fetch_entries_elapsed as u64;
+            }
+            Self::replay_entries_into_bank(bank, entries, bank_progress, num_shreds)
+        });
+
+        if Self::is_replay_result_fatal(&replay_result) {
             warn!(
                 "Fatal replay result in slot: {}, result: {:?}",
                 bank.slot(),
-                result
+                replay_result
             );
             datapoint_warn!("replay-stage-mark_dead_slot", ("slot", bank.slot(), i64),);
             Self::mark_dead_slot(bank.slot(), blocktree, progress);
         }
 
-        (result, tx_count)
+        (replay_result, tx_count)
     }
 
     fn mark_dead_slot(slot: u64, blocktree: &Blocktree, progress: &mut HashMap<u64, ForkProgress>) {
@@ -599,7 +616,9 @@ impl ReplayStage {
             assert_eq!(*bank_slot, bank.slot());
             if bank.tick_height() == bank.max_tick_height() {
                 if let Some(bank_progress) = &mut progress.get(&bank.slot()) {
-                    bank_progress.stats.report_stats();
+                    bank_progress
+                        .stats
+                        .report_stats(bank_progress.num_entries, bank_progress.num_shreds);
                 }
                 did_complete_bank = true;
                 Self::process_completed_bank(my_pubkey, bank, slot_full_senders);
@@ -727,7 +746,7 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
     ) -> Result<(Vec<Entry>, usize)> {
         let bank_slot = bank.slot();
-        blocktree.get_slot_entries_with_shred_count(bank_slot, bank_progress.num_blobs as u64)
+        blocktree.get_slot_entries_with_shred_count(bank_slot, bank_progress.num_shreds as u64)
     }
 
     fn replay_entries_into_bank(
@@ -739,10 +758,11 @@ impl ReplayStage {
         let result = Self::verify_and_process_entries(
             &bank,
             &entries,
-            bank_progress.num_blobs,
+            bank_progress.num_shreds,
             bank_progress,
         );
-        bank_progress.num_blobs += num;
+        bank_progress.num_shreds += num;
+        bank_progress.num_entries += entries.len();
         if let Some(last_entry) = entries.last() {
             bank_progress.last_entry = last_entry.hash;
         }
