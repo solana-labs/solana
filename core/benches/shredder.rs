@@ -5,7 +5,7 @@ extern crate test;
 use solana_core::entry::create_ticks;
 use solana_core::entry::Entry;
 use solana_core::shred::{
-    max_entries_per_n_shred, max_ticks_per_n_shreds, Shredder, RECOMMENDED_FEC_RATE,
+    max_entries_per_n_shred, max_ticks_per_n_shreds, Shred, Shredder, RECOMMENDED_FEC_RATE,
     SIZE_OF_DATA_SHRED_HEADER,
 };
 use solana_core::test_tx;
@@ -70,5 +70,17 @@ fn bench_deshredder(bencher: &mut Bencher) {
     bencher.iter(|| {
         let raw = &mut Shredder::deshred(&data_shreds).unwrap();
         assert_ne!(raw.len(), 0);
+    })
+}
+
+#[bench]
+fn bench_deserialize_hdr(bencher: &mut Bencher) {
+    let data = vec![0; PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_HEADER];
+
+    let shred = Shred::new_from_data(2, 1, 1, Some(&data), true, true);
+
+    bencher.iter(|| {
+        let payload = shred.payload.clone();
+        let _ = Shred::new_from_serialized_shred(payload).unwrap();
     })
 }

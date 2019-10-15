@@ -26,9 +26,14 @@ lazy_static! {
         { serialized_size(&CodingShredHeader::default()).unwrap() as usize };
     pub static ref SIZE_OF_DATA_SHRED_HEADER: usize =
         { serialized_size(&DataShredHeader::default()).unwrap() as usize };
+    pub static ref SIZE_OF_COMMON_SHRED_HEADER: usize =
+        { serialized_size(&ShredCommonHeader::default()).unwrap() as usize };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
     pub static ref SIZE_OF_SHRED_TYPE: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
+    pub static ref SIZE_OF_PARENT_OFFSET: usize =
+        { bincode::serialized_size(&0u16).unwrap() as usize };
+    pub static ref SIZE_OF_FLAGS: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
 }
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
@@ -158,8 +163,25 @@ impl Shred {
             header.common_header = bincode::deserialize(&shred_buf[..end])?;
             header
         } else {
-            let end = *SIZE_OF_DATA_SHRED_HEADER;
-            bincode::deserialize(&shred_buf[..end])?
+            let start = *SIZE_OF_CODING_SHRED_HEADER;
+            let end = start + *SIZE_OF_COMMON_SHRED_HEADER;
+            let common_hdr: ShredCommonHeader = bincode::deserialize(&shred_buf[start..end])?;
+
+            let start = end;
+            let end = start + *SIZE_OF_PARENT_OFFSET;
+            let parent_offset: u16 = bincode::deserialize(&shred_buf[start..end])?;
+
+            let start = end;
+            let end = start + *SIZE_OF_FLAGS;
+            let flags: u8 = bincode::deserialize(&shred_buf[start..end])?;
+            let mut hdr = DataShredHeader {
+                common_header: Default::default(),
+                data_header: common_hdr,
+                parent_offset,
+                flags,
+            };
+            hdr.common_header.shred_type = DATA_SHRED;
+            hdr
         };
 
         Ok(Self::new(header, shred_buf))
