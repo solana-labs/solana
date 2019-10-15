@@ -604,7 +604,7 @@ impl Accounts {
     where
         I: IntoIterator<Item = (Pubkey, CreditOnlyLock)>,
     {
-        let mut accounts: HashMap<Pubkey, Account> = HashMap::new();
+        let mut accounts: Vec<(Pubkey, Account)> = vec![];
         let mut total_rent_collected = 0;
 
         {
@@ -636,7 +636,7 @@ impl Accounts {
                 }
 
                 account.lamports += credit;
-                accounts.insert(pubkey, account);
+                accounts.push((pubkey, account));
             }
         }
 
