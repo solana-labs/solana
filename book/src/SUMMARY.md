@@ -61,6 +61,7 @@
   * [Tick Verification](proposals/tick-verification.md)
   * [Block Confirmation](proposals/block-confirmation.md)
   * [ABI Management](proposals/abi-management.md)
+  * [Handling Duplicate Leader Blocks](proposals/leader-duplicate-block-slashing.md)
 * [Implemented Design Proposals](implemented-proposals/README.md)
   * [Blockstore](implemented-proposals/blockstore.md)
   * [Cluster Software Installation and Updates](implemented-proposals/installer.md)
