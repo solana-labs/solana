@@ -52,6 +52,29 @@ impl ForkConfidenceCache {
     pub fn total_stake(&self) -> u64 {
         self.total_stake
     }
+
+    pub fn get_fork_with_depth_confidence(
+        &self,
+        minimum_depth: usize,
+        minimum_stake_percentage: f64,
+    ) -> Option<u64> {
+        self.bank_confidence
+            .iter()
+            .filter(|&(_, bank_confidence)| {
+                let fork_stake_minimum_depth: u64 = bank_confidence.confidence[minimum_depth..]
+                    .iter()
+                    .cloned()
+                    .sum();
+                fork_stake_minimum_depth as f64 / self.total_stake as f64
+                    >= minimum_stake_percentage
+            })
+            .map(|(slot, _)| *slot)
+            .max()
+    }
+
+    pub fn get_rooted_fork_with_confidence(&self, minimum_stake_percentage: f64) -> Option<u64> {
+        self.get_fork_with_depth_confidence(MAX_LOCKOUT_HISTORY - 1, minimum_stake_percentage)
+    }
 }
 
 pub struct ConfidenceAggregationData {
@@ -229,6 +252,87 @@ mod tests {
         assert_eq!(cache.get_confirmation_stake(1), 10);
         cache.increase_confirmation_stake(1, 20);
         assert_eq!(cache.get_confirmation_stake(1), 30);
+    }
+
+    #[test]
+    fn test_get_fork_with_depth_confidence() {
+        // Build ForkConfidenceCache with votes at depths 0 and 1 for 2 slots
+        let mut cache0 = BankConfidence::default();
+        cache0.increase_confirmation_stake(1, 15);
+        cache0.increase_confirmation_stake(2, 25);
+
+        let mut cache1 = BankConfidence::default();
+        cache1.increase_confirmation_stake(1, 10);
+        cache1.increase_confirmation_stake(2, 20);
+
+        let mut bank_confidence = HashMap::new();
+        bank_confidence.entry(0).or_insert(cache0.clone());
+        bank_confidence.entry(1).or_insert(cache1.clone());
+        let fork_confidence_cache = ForkConfidenceCache::new(bank_confidence, 50);
+
+        // Neither slot has rooted votes
+        assert_eq!(
+            fork_confidence_cache.get_rooted_fork_with_confidence(0.1),
+            None
+        );
+        // Neither slot meets the minimum level of confidence 0.6 at depth 1
+        assert_eq!(
+            fork_confidence_cache.get_fork_with_depth_confidence(1, 0.6),
+            None
+        );
+        // Only slot 0 meets the minimum level of confidence 0.5 at depth 1
+        assert_eq!(
+            fork_confidence_cache.get_fork_with_depth_confidence(1, 0.5),
+            Some(0)
+        );
+        // If multiple slots meet the minimum level of confidence, method should return the most recent
+        assert_eq!(
+            fork_confidence_cache.get_fork_with_depth_confidence(1, 0.4),
+            Some(1)
+        );
+        // If multiple slots meet the minimum level of confidence, method should return the most recent
+        assert_eq!(
+            fork_confidence_cache.get_fork_with_depth_confidence(0, 0.6),
+            Some(1)
+        );
+        // Neither slot meets the minimum level of confidence 0.9 at depth 0
+        assert_eq!(
+            fork_confidence_cache.get_fork_with_depth_confidence(0, 0.9),
+            None
+        );
+    }
+
+    #[test]
+    fn test_get_rooted_fork_with_confidence() {
+        // Build ForkConfidenceCache with rooted votes
+        let mut cache0 = BankConfidence::new([0; MAX_LOCKOUT_HISTORY]);
+        cache0.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, 40);
+        cache0.increase_confirmation_stake(MAX_LOCKOUT_HISTORY - 1, 10);
+        let mut cache1 = BankConfidence::new([0; MAX_LOCKOUT_HISTORY]);
+        cache1.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, 30);
+        cache1.increase_confirmation_stake(MAX_LOCKOUT_HISTORY - 1, 10);
+        cache1.increase_confirmation_stake(MAX_LOCKOUT_HISTORY - 2, 10);
+
+        let mut bank_confidence = HashMap::new();
+        bank_confidence.entry(0).or_insert(cache0.clone());
+        bank_confidence.entry(1).or_insert(cache1.clone());
+        let fork_confidence_cache = ForkConfidenceCache::new(bank_confidence, 50);
+
+        // Only slot 0 meets the minimum level of confidence 0.66 at root
+        assert_eq!(
+            fork_confidence_cache.get_rooted_fork_with_confidence(0.66),
+            Some(0)
+        );
+        // If multiple slots meet the minimum level of confidence, method should return the most recent
+        assert_eq!(
+            fork_confidence_cache.get_rooted_fork_with_confidence(0.6),
+            Some(1)
+        );
+        // Neither slot meets the minimum level of confidence 0.9 at root
+        assert_eq!(
+            fork_confidence_cache.get_rooted_fork_with_confidence(0.9),
+            None
+        );
     }
 
     #[test]
