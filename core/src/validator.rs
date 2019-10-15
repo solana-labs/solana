@@ -405,6 +405,7 @@ impl Validator {
             node.info.shred_version,
             transaction_status_sender.clone(),
             rewards_recorder_sender,
+            ledger_path,
         );
 
         if config.dev_sigverify_disabled {

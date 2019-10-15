@@ -34,6 +34,9 @@ use solana_sdk::{
 use solana_vote_program::vote_instruction;
 use std::{
     collections::{HashMap, HashSet},
+    fs::{self, File},
+    io::{self, BufReader, Write},
+    path::PathBuf,
     result,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -44,6 +47,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+static TOWER_SNAPSHOT_NAME: &str = "tower";
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
 // Implement a destructor for the ReplayStage thread to signal it exited
@@ -79,6 +83,7 @@ pub struct ReplayStageConfig {
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
+    pub tower_snapshot_path: PathBuf,
 }
 
 pub struct ReplayStage {
@@ -182,11 +187,13 @@ impl ReplayStage {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
+            tower_snapshot_path,
         } = config;
 
         let (root_bank_sender, root_bank_receiver) = channel();
         trace!("replay stage");
-        let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
+        let mut tower =
+            Self::reload_tower(&my_pubkey, &tower_snapshot_path, &vote_account, &bank_forks);
 
         // Start the replay stage loop
 
@@ -337,6 +344,7 @@ impl ReplayStage {
                                 &lockouts_sender,
                                 &snapshot_package_sender,
                                 &latest_root_senders,
+                                &tower_snapshot_path.to_path_buf(),
                             )?;
                         }
                         datapoint_debug!(
@@ -605,6 +613,7 @@ impl ReplayStage {
         lockouts_sender: &Sender<CommitmentAggregationData>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
+        tower_snapshot_path: &PathBuf,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -660,12 +669,66 @@ impl ReplayStage {
             let blockhash = bank.last_blockhash();
             vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
             vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
+            // before publishing the latest vote on the network, snapshot the tower for persistent save
+            if let Err(e) = Self::snapshot_tower(&tower_snapshot_path, &tower) {
+                panic!("Unable to backup tower, {:?}", e);
+            }
             cluster_info
                 .write()
                 .unwrap()
                 .push_vote(tower_index, vote_tx);
         }
         Ok(())
+    }
+
+    fn snapshot_tower(tower_snapshot_path: &PathBuf, tower: &Tower) -> Result<()> {
+        let timer = Instant::now();
+        fs::create_dir_all(tower_snapshot_path)?;
+        let mut snapshot_file = File::create(tower_snapshot_path.join(TOWER_SNAPSHOT_NAME))?;
+        snapshot_file.write_all(&bincode::serialize(&tower).expect("tower serialize failed"))?;
+        snapshot_file.flush()?;
+        let snapshot_time = timer.elapsed().as_millis() as usize;
+        inc_new_counter_info!("replay_stage-tower_snapshot_duration_ms", snapshot_time);
+        Ok(())
+    }
+
+    fn reload_tower(
+        my_pubkey: &Pubkey,
+        tower_snapshot_path: &PathBuf,
+        vote_account: &Pubkey,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) -> Tower {
+        // try to reload tower from disk, otherwise reconstruct one
+        let tower =
+            File::open(tower_snapshot_path.join(TOWER_SNAPSHOT_NAME)).and_then(|tower_file| {
+                let mut stream = BufReader::new(tower_file);
+                let tower: bincode::Result<Tower> = bincode::deserialize_from(&mut stream);
+                tower.map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))
+            });
+        // check that the tower actually belongs to this node
+        match tower {
+            Ok(tower) => {
+                if &tower.node_pubkey != my_pubkey {
+                    error!(
+                        "Wrong tower state found. My pubkey {:?} but found tower for {:?}",
+                        my_pubkey, tower.node_pubkey
+                    );
+                    Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
+                } else {
+                    info!("Restoring tower from saved state..");
+                    tower
+                }
+            }
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    error!(
+                            "Error: {:?} Unable to restore tower, generating a new one from from bank forks",
+                            e
+                        );
+                }
+                Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
+            }
+        }
     }
 
     fn update_commitment_cache(

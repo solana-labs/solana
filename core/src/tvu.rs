@@ -30,7 +30,7 @@ use solana_sdk::{
 };
 use std::{
     net::UdpSocket,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::AtomicBool,
         mpsc::{channel, Receiver},
@@ -88,6 +88,7 @@ impl Tvu {
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
+        tower_snapshot_path: &Path,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -173,6 +174,7 @@ impl Tvu {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
+            tower_snapshot_path: tower_snapshot_path.to_path_buf(),
         };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
@@ -316,6 +318,7 @@ pub mod tests {
             0,
             None,
             None,
+            &blockstore_path,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
