@@ -5,6 +5,7 @@ use bincode::deserialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::next_keyed_account;
 use solana_sdk::pubkey::Pubkey;
 
 pub fn process_instruction(
@@ -17,10 +18,13 @@ pub fn process_instruction(
         InstructionError::InvalidInstructionData
     })?;
 
-    let current_data: ConfigKeys = deserialize(&keyed_accounts[0].account.data).map_err(|err| {
-        error!("Invalid data in account[0]: {:?} {:?}", data, err);
-        InstructionError::InvalidAccountData
-    })?;
+    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
+    let config_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
+    let current_data: ConfigKeys =
+        deserialize(&config_keyed_account.account.data).map_err(|err| {
+            error!("Invalid data in account[0]: {:?} {:?}", data, err);
+            InstructionError::InvalidAccountData
+        })?;
     let current_signer_keys: Vec<Pubkey> = current_data
         .keys
         .iter()
@@ -31,23 +35,17 @@ pub fn process_instruction(
     if current_signer_keys.is_empty() {
         // Config account keypair must be a signer on account initilization,
         // or when no signers specified in Config data
-        if keyed_accounts[0].signer_key().is_none() {
+        if config_keyed_account.signer_key().is_none() {
             error!("account[0].signer_key().is_none()");
             return Err(InstructionError::MissingRequiredSignature);
         }
     }
 
     let mut counter = 0;
-    for (i, (signer, _)) in key_list
-        .keys
-        .iter()
-        .filter(|(_, is_signer)| *is_signer)
-        .enumerate()
-    {
+    for (signer, _) in key_list.keys.iter().filter(|(_, is_signer)| *is_signer) {
         counter += 1;
-        if signer != keyed_accounts[0].unsigned_key() {
-            let account_index = i + 1;
-            let signer_account = keyed_accounts.get(account_index);
+        if signer != config_keyed_account.unsigned_key() {
+            let signer_account = keyed_accounts_iter.next();
             if signer_account.is_none() {
                 error!("account {:?} is not in account list", signer);
                 return Err(InstructionError::MissingRequiredSignature);
@@ -60,7 +58,7 @@ pub fn process_instruction(
             if signer_key.unwrap() != signer {
                 error!(
                     "account[{:?}].signer_key() does not match Config data)",
-                    account_index
+                    counter + 1
                 );
                 return Err(InstructionError::MissingRequiredSignature);
             }
@@ -74,7 +72,7 @@ pub fn process_instruction(
                 error!("account {:?} is not in stored signer list", signer);
                 return Err(InstructionError::MissingRequiredSignature);
             }
-        } else if keyed_accounts[0].signer_key().is_none() {
+        } else if config_keyed_account.signer_key().is_none() {
             error!("account[0].signer_key().is_none()");
             return Err(InstructionError::MissingRequiredSignature);
         }
@@ -90,12 +88,12 @@ pub fn process_instruction(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    if keyed_accounts[0].account.data.len() < data.len() {
+    if config_keyed_account.account.data.len() < data.len() {
         error!("instruction data too large");
         return Err(InstructionError::InvalidInstructionData);
     }
 
-    keyed_accounts[0].account.data[0..data.len()].copy_from_slice(&data);
+    config_keyed_account.account.data[0..data.len()].copy_from_slice(&data);
     Ok(())
 }
 

@@ -10,10 +10,12 @@ use solana_runtime::{bank::Bank, bank_client::BankClient};
 use solana_sdk::{
     client::SyncClient,
     genesis_block::create_genesis_block,
+    instruction::InstructionError,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_instruction,
+    transaction::TransactionError,
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -363,4 +365,27 @@ fn test_config_updates_requiring_config() {
     bank_client
         .send_message(&[&mint_keypair, &config_keypair], message)
         .unwrap_err();
+}
+
+#[test]
+fn test_config_initialize_no_panic() {
+    let (bank, alice_keypair) = create_bank(3);
+    let bank_client = BankClient::new(bank);
+
+    let mut instructions = config_instruction::create_account::<MyConfig>(
+        &alice_keypair.pubkey(),
+        &Pubkey::new_rand(),
+        1,
+        vec![],
+    );
+    instructions[1].accounts = vec![]; // <!-- Attack! Prevent accounts from being passed into processor.
+
+    let message = Message::new(instructions);
+    assert_eq!(
+        bank_client
+            .send_message(&[&alice_keypair], message)
+            .unwrap_err()
+            .unwrap(),
+        TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
+    );
 }
