@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 pub use self::meta::*;
 pub use self::rooted_slot_iterator::*;
@@ -981,65 +982,73 @@ impl Blocktree {
         &self,
         slot: u64,
         mut start_index: u64,
-    ) -> Result<(Vec<Entry>, usize)> {
-        // Find the next consecutive block of shreds.
-        let mut serialized_shreds: Vec<Vec<u8>> = vec![];
-        let data_shred_cf = self.db.column::<cf::ShredData>();
-
-        while let Some(serialized_shred) = data_shred_cf.get_bytes((slot, start_index))? {
-            serialized_shreds.push(serialized_shred);
-            start_index += 1;
-        }
-
-        trace!(
-            "Found {:?} shreds for slot {:?}",
-            serialized_shreds.len(),
-            slot
-        );
-
-        let mut shreds: Vec<Shred> = serialized_shreds
-            .into_iter()
-            .filter_map(|serialized_shred| Shred::new_from_serialized_shred(serialized_shred).ok())
-            .collect();
+    ) -> Result<(Vec<Entry>, usize, u64, u64)> {
+        let mut useful_time = 0;
+        let mut wasted_time = 0;
 
         let mut all_entries = vec![];
-        let mut num = 0;
+        let mut num_shreds = 0;
         loop {
-            let mut look_for_last_shred = true;
+            let now = Instant::now();
+            let mut res = self.get_entries_in_data_block(slot, &mut start_index);
+            let elapsed = now.elapsed().as_micros();
 
-            let mut shred_chunk = vec![];
-            while look_for_last_shred && !shreds.is_empty() {
-                let shred = shreds.remove(0);
-                if shred.data_complete() || shred.last_in_slot() {
-                    look_for_last_shred = false;
+            if let Ok((ref mut entries, new_num_shreds)) = res {
+                if !entries.is_empty() {
+                    all_entries.append(entries);
+                    num_shreds += new_num_shreds;
+                    useful_time += elapsed;
+                    continue;
                 }
-                shred_chunk.push(shred);
             }
 
-            debug!(
-                "{:?} shreds in last FEC set. Looking for last shred {:?}",
-                shred_chunk.len(),
-                look_for_last_shred
-            );
-
-            // Break if we didn't find the last shred (as more data is required)
-            if look_for_last_shred {
-                break;
-            }
-
-            if let Ok(deshred_payload) = Shredder::deshred(&shred_chunk) {
-                let entries: Vec<Entry> = bincode::deserialize(&deshred_payload)?;
-                trace!("Found entries: {:#?}", entries);
-                all_entries.extend(entries);
-                num += shred_chunk.len();
-            } else {
-                debug!("Failed in deshredding shred payloads");
-                break;
-            }
+            // All unsuccessful cases (errors, incomplete data blocks) will count as wasted work
+            wasted_time += elapsed;
+            res?;
+            break;
         }
 
         trace!("Found {:?} entries", all_entries.len());
-        Ok((all_entries, num))
+        Ok((
+            all_entries,
+            num_shreds,
+            useful_time as u64,
+            wasted_time as u64,
+        ))
+    }
+
+    pub fn get_entries_in_data_block(
+        &self,
+        slot: u64,
+        start_index: &mut u64,
+    ) -> Result<(Vec<Entry>, usize)> {
+        let mut shred_chunk: Vec<Shred> = vec![];
+        let data_shred_cf = self.db.column::<cf::ShredData>();
+        while let Some(serialized_shred) = data_shred_cf.get_bytes((slot, *start_index))? {
+            *start_index += 1;
+            let new_shred = Shred::new_from_serialized_shred(serialized_shred).ok();
+            if let Some(shred) = new_shred {
+                let is_complete = shred.data_complete() || shred.last_in_slot();
+                shred_chunk.push(shred);
+                if is_complete {
+                    if let Ok(deshred_payload) = Shredder::deshred(&shred_chunk) {
+                        debug!("{:?} shreds in last FEC set", shred_chunk.len(),);
+                        let entries: Vec<Entry> = bincode::deserialize(&deshred_payload)?;
+                        return Ok((entries, shred_chunk.len()));
+                    } else {
+                        debug!("Failed in deshredding shred payloads");
+                        break;
+                    }
+                }
+            } else {
+                // Didn't find a valid shred, this slot is dead.
+                // TODO: Mark as dead, but have to carefully handle last shred of interrupted
+                // slots.
+                break;
+            }
+        }
+
+        Ok((vec![], 0))
     }
 
     // Returns slots connecting to any element of the list `slots`.
