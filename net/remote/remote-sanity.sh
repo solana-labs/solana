@@ -67,9 +67,10 @@ case $deployMethod in
 local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
+  solana_cli=solana
   solana_gossip=solana-gossip
   solana_install=solana-install
-  solana_cli=solana
+  solana_keygen=solana_keygen
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -88,8 +89,10 @@ fi
 
 echo "+++ $sanityTargetIp: validators"
 (
+  # Ensure solana-cli has a keypair even though it doesn't really need one...
+  $solana_keygen new -o temp-id.json
   set -x
-  $solana_cli --url http://"$sanityTargetIp":8899 show-validators
+  $solana_cli --keypair temp-id.json --url http://"$sanityTargetIp":8899 show-validators
 )
 
 echo "+++ $sanityTargetIp: node count ($numSanityNodes expected)"
