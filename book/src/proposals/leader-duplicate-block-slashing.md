@@ -18,7 +18,7 @@ Turbine. A shred contains the following
 
 The signature is of the merkle tree of the shred data.
 
-```
+```text
               merke root
     /                        \
 (slot index, shred index)        hash(msg)
