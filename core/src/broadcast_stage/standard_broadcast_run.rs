@@ -420,7 +420,7 @@ mod test {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),
             bank: bank0.clone(),
-            last_tick_height: (ticks.len() - 1) as u64,
+            last_tick_height: ticks.len() as u64,
         };
 
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair);
