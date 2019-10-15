@@ -1787,7 +1787,7 @@ mod tests {
     use crate::repair_service::RepairType;
     use crate::result::Error;
     use crate::shred::max_ticks_per_n_shreds;
-    use crate::shred::{DataShredHeader, Shred};
+    use crate::shred::{Shred, ShredHeader};
     use crate::test_tx::test_tx;
     use rayon::prelude::*;
     use solana_sdk::hash::Hash;
@@ -1947,10 +1947,10 @@ mod tests {
                 0,
             );
             assert!(rv.is_empty());
-            let mut data_shred = DataShredHeader::default();
-            data_shred.data_header.slot = 2;
-            data_shred.parent_offset = 1;
-            data_shred.data_header.index = 1;
+            let mut data_shred = ShredHeader::default();
+            data_shred.data_header.common_header.slot = 2;
+            data_shred.data_header.parent_offset = 1;
+            data_shred.data_header.common_header.index = 1;
             let shred_info = Shred::new_empty_from_header(data_shred);
 
             blocktree

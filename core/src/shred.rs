@@ -31,7 +31,8 @@ lazy_static! {
         { serialized_size(&ShredCommonHeader::default()).unwrap() as usize };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
-    pub static ref SIZE_OF_SHRED_TYPE: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
+    pub static ref SIZE_OF_SHRED_TYPE: usize =
+        { bincode::serialized_size(&ShredType(DATA_SHRED)).unwrap() as usize };
     pub static ref SIZE_OF_PARENT_OFFSET: usize =
         { bincode::serialized_size(&0u16).unwrap() as usize };
     pub static ref SIZE_OF_FLAGS: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
@@ -56,7 +57,10 @@ pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
 const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
 const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
 
-/// A common header that is present at start of every shred
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+pub struct ShredType(u8);
+
+/// A common header that is present in data and code shred headers
 #[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
 pub struct ShredCommonHeader {
     pub signature: Signature,
@@ -64,59 +68,49 @@ pub struct ShredCommonHeader {
     pub index: u32,
 }
 
-/// A common header that is present at start of every data shred
-#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+/// The data shred header has parent offset and flags
+#[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
 pub struct DataShredHeader {
-    pub common_header: CodingShredHeader,
-    pub data_header: ShredCommonHeader,
+    pub common_header: ShredCommonHeader,
     pub parent_offset: u16,
     pub flags: u8,
 }
 
 /// The coding shred header has FEC information
-#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
 pub struct CodingShredHeader {
-    pub shred_type: u8,
-    pub coding_header: ShredCommonHeader,
+    pub common_header: ShredCommonHeader,
     pub num_data_shreds: u16,
     pub num_coding_shreds: u16,
     pub position: u16,
 }
 
-impl Default for DataShredHeader {
-    fn default() -> Self {
-        DataShredHeader {
-            common_header: CodingShredHeader {
-                shred_type: DATA_SHRED,
-                ..CodingShredHeader::default()
-            },
-            data_header: ShredCommonHeader::default(),
-            parent_offset: 0,
-            flags: 0,
-        }
-    }
+/// A common header that is present at start of every shred
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+pub struct ShredHeader {
+    pub shred_type: ShredType,
+    pub coding_header: CodingShredHeader,
+    pub data_header: DataShredHeader,
 }
 
-impl Default for CodingShredHeader {
+impl Default for ShredHeader {
     fn default() -> Self {
-        CodingShredHeader {
-            shred_type: CODING_SHRED,
-            coding_header: ShredCommonHeader::default(),
-            num_data_shreds: 0,
-            num_coding_shreds: 0,
-            position: 0,
+        ShredHeader {
+            shred_type: ShredType(DATA_SHRED),
+            coding_header: CodingShredHeader::default(),
+            data_header: DataShredHeader::default(),
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Shred {
-    pub headers: DataShredHeader,
+    pub headers: ShredHeader,
     pub payload: Vec<u8>,
 }
 
 impl Shred {
-    fn new(header: DataShredHeader, shred_buf: Vec<u8>) -> Self {
+    fn new(header: ShredHeader, shred_buf: Vec<u8>) -> Self {
         Shred {
             headers: header,
             payload: shred_buf,
@@ -132,18 +126,18 @@ impl Shred {
         is_last_in_slot: bool,
     ) -> Self {
         let mut shred_buf = vec![0; PACKET_DATA_SIZE];
-        let mut header = DataShredHeader::default();
-        header.data_header.slot = slot;
-        header.data_header.index = index;
-        header.parent_offset = parent_offset;
-        header.flags = 0;
+        let mut header = ShredHeader::default();
+        header.data_header.common_header.slot = slot;
+        header.data_header.common_header.index = index;
+        header.data_header.parent_offset = parent_offset;
+        header.data_header.flags = 0;
 
         if is_last_data {
-            header.flags |= DATA_COMPLETE_SHRED
+            header.data_header.flags |= DATA_COMPLETE_SHRED
         }
 
         if is_last_in_slot {
-            header.flags |= LAST_SHRED_IN_SLOT
+            header.data_header.flags |= LAST_SHRED_IN_SLOT
         }
 
         if let Some(data) = data {
@@ -156,48 +150,31 @@ impl Shred {
         Self::new(header, shred_buf)
     }
 
-    fn deserialize_obj<'de, T>(index: &mut usize, size: usize, buf: &'de [u8]) -> result::Result<T>
-    where
-        T: Deserialize<'de>,
-    {
-        let ret = bincode::deserialize(&buf[*index..*index + size])?;
-        *index += size;
-        Ok(ret)
-    }
     pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> result::Result<Self> {
-        let shred_type: u8 = bincode::deserialize(&shred_buf[..*SIZE_OF_SHRED_TYPE])?;
-        let header = if shred_type == CODING_SHRED {
-            let end = *SIZE_OF_CODING_SHRED_HEADER;
-            let mut header = DataShredHeader::default();
-            header.common_header = bincode::deserialize(&shred_buf[..end])?;
+        let shred_type: ShredType = bincode::deserialize(&shred_buf[..*SIZE_OF_SHRED_TYPE])?;
+        let mut header = if shred_type == ShredType(CODING_SHRED) {
+            let start = *SIZE_OF_SHRED_TYPE;
+            let end = start + *SIZE_OF_CODING_SHRED_HEADER;
+            let mut header = ShredHeader::default();
+            header.coding_header = bincode::deserialize(&shred_buf[start..end])?;
             header
-        } else if shred_type == DATA_SHRED {
-            let mut start = *SIZE_OF_CODING_SHRED_HEADER;
-            let common_hdr: ShredCommonHeader =
-                Self::deserialize_obj(&mut start, *SIZE_OF_COMMON_SHRED_HEADER, &shred_buf)?;
-
-            let parent_offset: u16 =
-                Self::deserialize_obj(&mut start, *SIZE_OF_PARENT_OFFSET, &shred_buf)?;
-
-            let flags: u8 = Self::deserialize_obj(&mut start, *SIZE_OF_FLAGS, &shred_buf)?;
-            let mut hdr = DataShredHeader {
-                common_header: CodingShredHeader::default(),
-                data_header: common_hdr,
-                parent_offset,
-                flags,
-            };
-            hdr.common_header.shred_type = shred_type;
-            hdr
+        } else if shred_type == ShredType(DATA_SHRED) {
+            let start = *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_SHRED_TYPE;
+            let end = start + *SIZE_OF_DATA_SHRED_HEADER;
+            let mut header = ShredHeader::default();
+            header.data_header = bincode::deserialize(&shred_buf[start..end])?;
+            header
         } else {
             return Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(
                 Box::new(bincode::ErrorKind::Custom("Invalid shred type".to_string())),
             )));
         };
+        header.shred_type = shred_type;
 
         Ok(Self::new(header, shred_buf))
     }
 
-    pub fn new_empty_from_header(headers: DataShredHeader) -> Self {
+    pub fn new_empty_from_header(headers: ShredHeader) -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
         let mut wr = io::Cursor::new(&mut payload[..*SIZE_OF_DATA_SHRED_HEADER]);
         bincode::serialize_into(&mut wr, &headers).expect("Failed to serialize shred");
@@ -207,23 +184,23 @@ impl Shred {
     pub fn new_empty_data_shred() -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
         payload[0] = DATA_SHRED;
-        let headers = DataShredHeader::default();
+        let headers = ShredHeader::default();
         Shred { headers, payload }
     }
 
     pub fn header(&self) -> &ShredCommonHeader {
         if self.is_data() {
-            &self.headers.data_header
+            &self.headers.data_header.common_header
         } else {
-            &self.headers.common_header.coding_header
+            &self.headers.coding_header.common_header
         }
     }
 
     pub fn header_mut(&mut self) -> &mut ShredCommonHeader {
         if self.is_data() {
-            &mut self.headers.data_header
+            &mut self.headers.data_header.common_header
         } else {
-            &mut self.headers.common_header.coding_header
+            &mut self.headers.coding_header.common_header
         }
     }
 
@@ -233,7 +210,8 @@ impl Shred {
 
     pub fn parent(&self) -> u64 {
         if self.is_data() {
-            self.headers.data_header.slot - u64::from(self.headers.parent_offset)
+            self.headers.data_header.common_header.slot
+                - u64::from(self.headers.data_header.parent_offset)
         } else {
             std::u64::MAX
         }
@@ -268,12 +246,12 @@ impl Shred {
     }
 
     pub fn is_data(&self) -> bool {
-        self.headers.common_header.shred_type == DATA_SHRED
+        self.headers.shred_type == ShredType(DATA_SHRED)
     }
 
     pub fn last_in_slot(&self) -> bool {
         if self.is_data() {
-            self.headers.flags & LAST_SHRED_IN_SLOT == LAST_SHRED_IN_SLOT
+            self.headers.data_header.flags & LAST_SHRED_IN_SLOT == LAST_SHRED_IN_SLOT
         } else {
             false
         }
@@ -283,13 +261,13 @@ impl Shred {
     /// Use this only for test code which doesn't care about actual shred
     pub fn set_last_in_slot(&mut self) {
         if self.is_data() {
-            self.headers.flags |= LAST_SHRED_IN_SLOT
+            self.headers.data_header.flags |= LAST_SHRED_IN_SLOT
         }
     }
 
     pub fn data_complete(&self) -> bool {
         if self.is_data() {
-            self.headers.flags & DATA_COMPLETE_SHRED == DATA_COMPLETE_SHRED
+            self.headers.data_header.flags & DATA_COMPLETE_SHRED == DATA_COMPLETE_SHRED
         } else {
             false
         }
@@ -297,7 +275,7 @@ impl Shred {
 
     pub fn coding_params(&self) -> Option<(u16, u16, u16)> {
         if !self.is_data() {
-            let header = &self.headers.common_header;
+            let header = &self.headers.coding_header;
             Some((
                 header.num_data_shreds,
                 header.num_coding_shreds,
@@ -465,14 +443,14 @@ impl Shredder {
         num_data: usize,
         num_code: usize,
         position: usize,
-    ) -> DataShredHeader {
-        let mut header = DataShredHeader::default();
-        header.common_header.shred_type = CODING_SHRED;
-        header.common_header.coding_header.index = index;
-        header.common_header.coding_header.slot = slot;
-        header.common_header.num_coding_shreds = num_code as u16;
-        header.common_header.num_data_shreds = num_data as u16;
-        header.common_header.position = position as u16;
+    ) -> ShredHeader {
+        let mut header = ShredHeader::default();
+        header.shred_type = ShredType(CODING_SHRED);
+        header.coding_header.common_header.index = index;
+        header.coding_header.common_header.slot = slot;
+        header.coding_header.num_coding_shreds = num_code as u16;
+        header.coding_header.num_data_shreds = num_data as u16;
+        header.coding_header.position = position as u16;
         header
     }
 
@@ -807,8 +785,8 @@ pub mod tests {
         let mut data_shred_indexes = HashSet::new();
         let mut coding_shred_indexes = HashSet::new();
         for shred in data_shreds.iter() {
-            assert_eq!(shred.headers.common_header.shred_type, DATA_SHRED);
-            let index = shred.headers.data_header.index;
+            assert_eq!(shred.headers.shred_type, ShredType(DATA_SHRED));
+            let index = shred.headers.data_header.common_header.index;
             let is_last = index as u64 == num_expected_data_shreds - 1;
             verify_test_data_shred(
                 shred,
@@ -825,8 +803,8 @@ pub mod tests {
         }
 
         for shred in coding_shreds.iter() {
-            let index = shred.headers.data_header.index;
-            assert_eq!(shred.headers.common_header.shred_type, CODING_SHRED);
+            let index = shred.headers.data_header.common_header.index;
+            assert_eq!(shred.headers.shred_type, ShredType(CODING_SHRED));
             verify_test_code_shred(shred, index, slot, &keypair.pubkey(), true);
             assert!(!coding_shred_indexes.contains(&index));
             coding_shred_indexes.insert(index);
