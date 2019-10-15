@@ -90,7 +90,8 @@ fi
 echo "+++ $sanityTargetIp: validators"
 (
   # Ensure solana-cli has a keypair even though it doesn't really need one...
-  $solana_keygen new -o temp-id.json
+  # TODO: Remove when https://github.com/solana-labs/solana/issues/6375 is fixed
+  $solana_keygen new --force -o temp-id.json
   set -x
   $solana_cli --keypair temp-id.json --url http://"$sanityTargetIp":8899 show-validators
 )
