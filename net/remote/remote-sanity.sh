@@ -70,7 +70,7 @@ local|tar|skip)
   solana_cli=solana
   solana_gossip=solana-gossip
   solana_install=solana-install
-  solana_keygen=solana_keygen
+  solana_keygen=solana-keygen
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
