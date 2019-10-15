@@ -1,4 +1,5 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
+use crate::blocktree::BlocktreeError;
 use crate::entry::create_ticks;
 use crate::entry::Entry;
 use crate::erasure::Session;
@@ -170,7 +171,7 @@ impl Shred {
             let mut header = DataShredHeader::default();
             header.common_header = bincode::deserialize(&shred_buf[..end])?;
             header
-        } else {
+        } else if shred_type == DATA_SHRED {
             let mut start = *SIZE_OF_CODING_SHRED_HEADER;
             let common_hdr: ShredCommonHeader =
                 Self::deserialize_obj(&mut start, *SIZE_OF_COMMON_SHRED_HEADER, &shred_buf)?;
@@ -185,8 +186,12 @@ impl Shred {
                 parent_offset,
                 flags,
             };
-            hdr.common_header.shred_type = DATA_SHRED;
+            hdr.common_header.shred_type = shred_type;
             hdr
+        } else {
+            return Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(
+                Box::new(bincode::ErrorKind::Custom("Invalid shred type".to_string())),
+            )));
         };
 
         Ok(Self::new(header, shred_buf))
