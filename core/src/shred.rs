@@ -27,15 +27,12 @@ lazy_static! {
         { serialized_size(&CodingShredHeader::default()).unwrap() as usize };
     pub static ref SIZE_OF_DATA_SHRED_HEADER: usize =
         { serialized_size(&DataShredHeader::default()).unwrap() as usize };
-    pub static ref SIZE_OF_COMMON_SHRED_HEADER: usize =
-        { serialized_size(&ShredCommonHeader::default()).unwrap() as usize };
+    pub static ref SIZE_OF_SHRED_HEADER: usize =
+        { serialized_size(&ShredHeader::default()).unwrap() as usize };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
     pub static ref SIZE_OF_SHRED_TYPE: usize =
         { bincode::serialized_size(&ShredType(DATA_SHRED)).unwrap() as usize };
-    pub static ref SIZE_OF_PARENT_OFFSET: usize =
-        { bincode::serialized_size(&0u16).unwrap() as usize };
-    pub static ref SIZE_OF_FLAGS: usize = { bincode::serialized_size(&0u8).unwrap() as usize };
 }
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
@@ -141,9 +138,9 @@ impl Shred {
         }
 
         if let Some(data) = data {
-            bincode::serialize_into(&mut shred_buf[..*SIZE_OF_DATA_SHRED_HEADER], &header)
+            bincode::serialize_into(&mut shred_buf[..*SIZE_OF_SHRED_HEADER], &header)
                 .expect("Failed to write header into shred buffer");
-            shred_buf[*SIZE_OF_DATA_SHRED_HEADER..*SIZE_OF_DATA_SHRED_HEADER + data.len()]
+            shred_buf[*SIZE_OF_SHRED_HEADER..*SIZE_OF_SHRED_HEADER + data.len()]
                 .clone_from_slice(data);
         }
 
@@ -176,7 +173,7 @@ impl Shred {
 
     pub fn new_empty_from_header(headers: ShredHeader) -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
-        let mut wr = io::Cursor::new(&mut payload[..*SIZE_OF_DATA_SHRED_HEADER]);
+        let mut wr = io::Cursor::new(&mut payload[..*SIZE_OF_SHRED_HEADER]);
         bincode::serialize_into(&mut wr, &headers).expect("Failed to serialize shred");
         Shred { headers, payload }
     }
@@ -288,7 +285,7 @@ impl Shred {
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         let signed_payload_offset = if self.is_data() {
-            *SIZE_OF_CODING_SHRED_HEADER
+            *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_SHRED_TYPE
         } else {
             *SIZE_OF_SHRED_TYPE
         } + *SIZE_OF_SIGNATURE;
@@ -351,7 +348,7 @@ impl Shredder {
             bincode::serialize(entries).expect("Expect to serialize all entries");
         let serialize_time = now.elapsed().as_millis();
 
-        let no_header_size = PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_HEADER;
+        let no_header_size = PACKET_DATA_SIZE - *SIZE_OF_SHRED_HEADER;
         let num_shreds = (serialized_shreds.len() + no_header_size - 1) / no_header_size;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
 
@@ -384,7 +381,7 @@ impl Shredder {
                         Shredder::sign_shred(
                             &self.keypair,
                             &mut shred,
-                            *SIZE_OF_CODING_SHRED_HEADER,
+                            *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_SHRED_TYPE,
                         );
                         shred
                     })
@@ -470,7 +467,7 @@ impl Shredder {
             let start_index = data_shred_batch[0].header().index;
 
             // All information after coding shred field in a data shred is encoded
-            let coding_block_offset = *SIZE_OF_CODING_SHRED_HEADER;
+            let coding_block_offset = *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_SHRED_TYPE;
             let data_ptrs: Vec<_> = data_shred_batch
                 .iter()
                 .map(|data| &data.payload[coding_block_offset..])
@@ -566,7 +563,7 @@ impl Shredder {
         let fec_set_size = num_data + num_coding;
 
         if num_coding > 0 && shreds.len() < fec_set_size {
-            let coding_block_offset = *SIZE_OF_CODING_SHRED_HEADER;
+            let coding_block_offset = *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_SHRED_TYPE;
 
             // Let's try recovering missing shreds using erasure
             let mut present = &mut vec![true; fec_set_size];
@@ -675,7 +672,7 @@ impl Shredder {
         data_shred_bufs[..num_data]
             .iter()
             .flat_map(|data| {
-                let offset = *SIZE_OF_DATA_SHRED_HEADER;
+                let offset = *SIZE_OF_SHRED_HEADER;
                 data[offset as usize..].iter()
             })
             .cloned()
@@ -689,7 +686,7 @@ pub fn max_ticks_per_n_shreds(num_shreds: u64) -> u64 {
 }
 
 pub fn max_entries_per_n_shred(entry: &Entry, num_shreds: u64) -> u64 {
-    let shred_data_size = (PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_HEADER) as u64;
+    let shred_data_size = (PACKET_DATA_SIZE - *SIZE_OF_SHRED_HEADER) as u64;
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
     let count_size = vec_size - entry_size;
@@ -772,7 +769,7 @@ pub mod tests {
             .collect();
 
         let size = serialized_size(&entries).unwrap();
-        let no_header_size = (PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_HEADER) as u64;
+        let no_header_size = (PACKET_DATA_SIZE - *SIZE_OF_SHRED_HEADER) as u64;
         let num_expected_data_shreds = (size + no_header_size - 1) / no_header_size;
         let num_expected_coding_shreds =
             Shredder::calculate_num_coding_shreds(num_expected_data_shreds as f32, fec_rate);
