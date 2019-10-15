@@ -405,7 +405,7 @@ impl Shredder {
 
         let elapsed = now.elapsed().as_millis();
 
-        datapoint_info!(
+        datapoint_debug!(
             "shredding-stats",
             ("slot", self.slot as i64, i64),
             ("num_data_shreds", data_shreds.len() as i64, i64),

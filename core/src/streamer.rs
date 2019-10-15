@@ -47,7 +47,7 @@ fn recv_loop(
             }
         }
         if recv_count > 1024 {
-            datapoint_info!(
+            datapoint_debug!(
                 "receiver-stats",
                 ("received", recv_count as i64, i64),
                 ("call_count", i64::from(call_count), i64),
