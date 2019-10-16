@@ -851,7 +851,7 @@ checkPremptibleInstances() {
   for ipAddress in "${fullnodeIpList[@]}"; do
     (
       set -x
-      timeout 5s ping -c 1 "$ipAddress"
+      timeout 5s ping -c 1 "$ipAddress" | tr - _
     ) || {
       cat <<EOF
 
