@@ -1086,7 +1086,7 @@ impl Bank {
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders, ref mut credits, ref mut _rents)) => {
+                Ok((accounts, loaders, credits, _rents)) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
                     self.message_processor
                         .process_message(tx.message(), loaders, accounts, credits)
