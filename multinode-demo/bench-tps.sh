@@ -25,6 +25,7 @@ if [[ -z $1 ]]; then # default behavior
     --drone 127.0.0.1:9900 \
     --duration 90 \
     --tx_count 50000 \
+    --thread-batch-sleep-ms 0 \
 
 else
   $solana_bench_tps "$@"
