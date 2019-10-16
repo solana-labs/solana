@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 948,
-  "iteration": 1568522114560,
+  "id": null,
+  "iteration": 1571184520226,
   "links": [
     {
       "asDropdown": true,
@@ -6412,7 +6412,14 @@
       }
     },
     {
-      "aliasColors": {},
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-observed.squash_account": "#0a437c",
+        "tower-observed.squash_cache": "#ea6460",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
       "bars": false,
       "dashLength": 10,
       "dashes": false,
@@ -6424,7 +6431,7 @@
         "x": 16,
         "y": 63
       },
-      "id": 47,
+      "id": 68,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6438,9 +6445,9 @@
       "lines": true,
       "linewidth": 1,
       "links": [],
-      "nullPointMode": "null",
+      "nullPointMode": "connected",
       "percentage": false,
-      "pointradius": 5,
+      "pointradius": 2,
       "points": false,
       "renderer": "flot",
       "seriesOverrides": [],
@@ -6463,10 +6470,11 @@
               "type": "fill"
             }
           ],
+          "hide": false,
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT sum(\"count\") AS \"retransmit\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-retransmit\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "query": "SELECT mean(\"fetch_entries_time\") AS \"fetch_entries_micros\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -6501,9 +6509,11 @@
               "type": "fill"
             }
           ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-recv\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "policy": "autogen",
+          "query": "SELECT mean(\"fetch_entries_fail_time\") AS \"fetch_entries_fail_micros\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -6511,13 +6521,13 @@
             [
               {
                 "params": [
-                  "value"
+                  "count"
                 ],
                 "type": "field"
               },
               {
                 "params": [],
-                "type": "mean"
+                "type": "sum"
               }
             ]
           ],
@@ -6538,9 +6548,11 @@
               "type": "fill"
             }
           ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"broadcast sent\" FROM \"$testnet\".\"autogen\".\"streamer-broadcast-sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "policy": "autogen",
+          "query": "SELECT mean(\"entry_verification_time\") AS \"entry_verification_time_micros\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -6548,13 +6560,169 @@
             [
               {
                 "params": [
-                  "value"
+                  "count"
                 ],
                 "type": "field"
               },
               {
                 "params": [],
-                "type": "mean"
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"replay_time\") AS \"replay_time_micros\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"replay_total_elapsed\") AS \"replay_total_elapsed_micros\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"total_entries\") AS \"total_entries\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"total_shreds\") AS \"total_shreds\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
               }
             ]
           ],
@@ -6564,7 +6732,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Send/Receive/Retransmit",
+      "title": "Time spent in ReplayStage ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -6580,7 +6748,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -6877,23 +7045,19 @@
       }
     },
     {
-      "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
-        "window-service.receive": "#b7dbab",
-        "window-stage.consumed": "#5195ce"
-      },
+      "aliasColors": {},
       "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 8,
         "x": 16,
         "y": 69
       },
-      "id": 50,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6904,13 +7068,13 @@
         "total": false,
         "values": false
       },
-      "lines": false,
+      "lines": true,
       "linewidth": 1,
       "links": [],
-      "nullPointMode": "connected",
+      "nullPointMode": "null",
       "percentage": false,
-      "pointradius": 1,
-      "points": true,
+      "pointradius": 5,
+      "points": false,
       "renderer": "flot",
       "seriesOverrides": [],
       "spaceLength": 10,
@@ -6932,11 +7096,49 @@
               "type": "fill"
             }
           ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT sum(\"count\") AS \"retransmit\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-retransmit\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-highest-slot\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-recv\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
-          "refId": "C",
+          "refId": "B",
           "resultFormat": "time_series",
           "select": [
             [
@@ -6971,9 +7173,9 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-highest-ix\") AS \"ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") AS \"broadcast sent\" FROM \"$testnet\".\"autogen\".\"streamer-broadcast-sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
-          "refId": "A",
+          "refId": "C",
           "resultFormat": "time_series",
           "select": [
             [
@@ -6995,7 +7197,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Repair highest index in slot ($hostid)",
+      "title": "Send/Receive/Retransmit",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -7341,6 +7543,162 @@
       }
     },
     {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 75
+      },
+      "id": 50,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 1,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT last(\"repair-highest-slot\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT last(\"repair-highest-ix\") AS \"ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Repair highest index in slot ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -7351,9 +7709,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 74
+        "y": 80
       },
-      "id": 67,
+      "id": 53,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7463,9 +7821,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 85
       },
-      "id": 53,
+      "id": 54,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -7486,9 +7844,9 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 80
+        "y": 86
       },
-      "id": 54,
+      "id": 55,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7646,9 +8004,9 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 80
+        "y": 86
       },
-      "id": 55,
+      "id": 56,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7806,9 +8164,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 80
+        "y": 86
       },
-      "id": 56,
+      "id": 57,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7991,9 +8349,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 85
+        "y": 91
       },
-      "id": 57,
+      "id": 58,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -8010,9 +8368,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 86
+        "y": 92
       },
-      "id": 58,
+      "id": 59,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8243,9 +8601,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 86
+        "y": 92
       },
-      "id": 59,
+      "id": 60,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8396,9 +8754,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 91
+        "y": 97
       },
-      "id": 60,
+      "id": 61,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -8414,9 +8772,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 98
       },
-      "id": 61,
+      "id": 62,
       "legend": {
         "avg": false,
         "current": false,
@@ -8535,9 +8893,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 98
       },
-      "id": 62,
+      "id": 63,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8684,9 +9042,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 97
+        "y": 103
       },
-      "id": 63,
+      "id": 64,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -8702,9 +9060,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 98
+        "y": 104
       },
-      "id": 64,
+      "id": 65,
       "legend": {
         "avg": false,
         "current": false,
@@ -8894,9 +9252,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 98
+        "y": 104
       },
-      "id": 65,
+      "id": 66,
       "legend": {
         "avg": false,
         "current": false,
@@ -9086,9 +9444,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 98
+        "y": 104
       },
-      "id": 66,
+      "id": 67,
       "legend": {
         "avg": false,
         "current": false,
@@ -9278,6 +9636,7 @@
     "list": [
       {
         "current": {
+          "selected": true,
           "text": "$datasource",
           "value": "$datasource"
         },
@@ -9366,5 +9725,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 1
+  "version": 5
 }
