@@ -75,7 +75,7 @@ pub fn create_accounts(
                 &from.pubkey(),
                 to,
                 lamports,
-                128,
+                200,
                 &solana_move_loader_api::id(),
             )
         })
