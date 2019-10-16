@@ -12,8 +12,6 @@ set -e
 [[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=1
 [[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-a"
 
-RESULTS_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$NUMBER_OF_VALIDATOR_NODES".log
-
 function collect_logs {
   echo --- collect logs from remote nodes
   rm -rf net/log
@@ -29,7 +27,7 @@ function collect_logs {
 
 function cleanup_testnet {
   if [[ -n $UPLOAD_RESULTS_TO_SLACK ]] ; then
-    upload_results
+    upload_results_to_slack
   fi
 
   (
@@ -151,10 +149,10 @@ launchTestnet() {
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
-    python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULTS_FILE"
+    python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULT_FILE"
 
-  RESULT_DETAILS=$(<$RESULTS_FILE)
-  upload-ci-artifact "$RESULTS_FILE"
+  RESULT_DETAILS=$(<$RESULT_FILE)
+  upload-ci-artifact "$RESULT_FILE"
 }
 
 cd "$(dirname "$0")/../.."
@@ -181,5 +179,9 @@ maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
 maybeMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"-G"}
 
 IFS=, read -r -a TESTNET_CLOUD_ZONES <<<"${TESTNET_ZONES}"
+
+RESULT_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$NUMBER_OF_VALIDATOR_NODES".log
+rm -f $RESULT_FILE
+RESULT_DETAILS="Test failed to finish"
 
 launchTestnet
