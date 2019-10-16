@@ -355,7 +355,7 @@ mod tests {
 
         let message = Message {
             header: MessageHeader {
-                num_required_signatures: required_num_sigs as u8,
+                num_required_signatures: required_num_sigs,
                 num_credit_only_signed_accounts: 12,
                 num_credit_only_unsigned_accounts: 11,
             },
