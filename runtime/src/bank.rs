@@ -1540,8 +1540,13 @@ impl Bank {
         self.message_processor
             .add_instruction_processor(program_id, process_instruction);
 
-        // Register a bogus executable account, which will be loaded and ignored.
-        self.register_native_instruction_processor("", &program_id);
+        if let Some(program_account) = self.get_account(&program_id) {
+            // It is not valid to intercept instructions for a non-native loader account
+            assert_eq!(program_account.owner, solana_sdk::native_loader::id());
+        } else {
+            // Register a bogus executable account, which will be loaded and ignored.
+            self.register_native_instruction_processor("", &program_id);
+        }
     }
 
     pub fn compare_bank(&self, dbank: &Bank) {
@@ -1659,6 +1664,7 @@ mod tests {
     use bincode::{deserialize_from, serialize_into, serialized_size};
     use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
+        account::KeyedAccount,
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_block::create_genesis_block,
@@ -3535,5 +3541,109 @@ mod tests {
             bank.status_cache_ancestors(),
             (bank.slot() - MAX_CACHE_ENTRIES as u64..=bank.slot()).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_add_instruction_processor() {
+        let (genesis_block, mint_keypair) = create_genesis_block(500);
+        let mut bank = Bank::new(&genesis_block);
+
+        fn mock_vote_processor(
+            _pubkey: &Pubkey,
+            _ka: &mut [KeyedAccount],
+            _data: &[u8],
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::CustomError(42))
+        }
+
+        assert!(bank.get_account(&solana_vote_api::id()).is_none());
+        bank.add_instruction_processor(solana_vote_api::id(), mock_vote_processor);
+        assert!(bank.get_account(&solana_vote_api::id()).is_some());
+
+        let mock_account = Keypair::new();
+        let instructions = vote_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &mock_account.pubkey(),
+            &VoteInit::default(),
+            1,
+        );
+
+        let transaction = Transaction::new_signed_instructions(
+            &[&mint_keypair],
+            instructions,
+            bank.last_blockhash(),
+        );
+
+        assert_eq!(
+            bank.process_transaction(&transaction),
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::CustomError(42)
+            ))
+        );
+    }
+
+    #[test]
+    fn test_add_instruction_processor_for_existing_program() {
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block_with_leader(500, &Pubkey::new_rand(), 0);
+
+        let mut bank = Bank::new(&genesis_block);
+
+        fn mock_vote_processor(
+            _pubkey: &Pubkey,
+            _ka: &mut [KeyedAccount],
+            _data: &[u8],
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::CustomError(42))
+        }
+
+        let mock_account = Keypair::new();
+        let instructions = vote_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &mock_account.pubkey(),
+            &VoteInit::default(),
+            1,
+        );
+
+        let transaction = Transaction::new_signed_instructions(
+            &[&mint_keypair],
+            instructions,
+            bank.last_blockhash(),
+        );
+
+        let vote_loader_account = bank.get_account(&solana_vote_api::id()).unwrap();
+        bank.add_instruction_processor(solana_vote_api::id(), mock_vote_processor);
+        let new_vote_loader_account = bank.get_account(&solana_vote_api::id()).unwrap();
+        // Vote loader account should not be updated since it was included in the genesis block.
+        assert_eq!(vote_loader_account.data, new_vote_loader_account.data);
+        assert_eq!(
+            bank.process_transaction(&transaction),
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::CustomError(42)
+            ))
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_add_instruction_processor_for_invalid_account() {
+        let (genesis_block, mint_keypair) = create_genesis_block(500);
+        let mut bank = Bank::new(&genesis_block);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &mut [KeyedAccount],
+            _data: &[u8],
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::CustomError(42))
+        }
+
+        // Non-native loader accounts can not be used for instruction processing
+        bank.add_instruction_processor(mint_keypair.pubkey(), mock_ix_processor);
     }
 }
