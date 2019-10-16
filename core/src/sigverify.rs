@@ -84,13 +84,14 @@ fn batch_size(batches: &[Packets]) -> usize {
 pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u32, u32) {
     let (sig_len, sig_size) = decode_len(&packet.data);
     let msg_start_offset = sig_size + sig_len * size_of::<Signature>();
+    let msg_header_size = serialized_size(&MessageHeader::default()).unwrap() as usize;
 
-    let (_pubkey_len, pubkey_size) = decode_len(&packet.data[msg_start_offset..]);
+    let (_pubkey_len, pubkey_size) =
+        decode_len(&packet.data[(msg_start_offset + msg_header_size)..]);
 
     let sig_start = current_offset as usize + sig_size;
     let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start =
-        msg_start + serialized_size(&MessageHeader::default()).unwrap() as usize + pubkey_size;
+    let pubkey_start = msg_start + msg_header_size + pubkey_size;
 
     (
         sig_len as u32,
@@ -288,8 +289,12 @@ mod tests {
     use crate::recycler::Recycler;
     use crate::sigverify;
     use crate::test_tx::{test_multisig_tx, test_tx};
-    use bincode::{deserialize, serialize};
+    use bincode::{deserialize, serialize, serialized_size};
+    use solana_sdk::hash::Hash;
+    use solana_sdk::message::{Message, MessageHeader};
+    use solana_sdk::signature::Signature;
     use solana_sdk::transaction::Transaction;
+    use std::mem::size_of;
 
     const SIG_OFFSET: usize = 1;
 
@@ -340,6 +345,42 @@ mod tests {
             Some(sig_start as usize)
         );
         assert_eq!(sig_len, 1);
+    }
+
+    #[test]
+    fn test_large_sigs() {
+        // use any large number to be misinterpreted as 2 bytes when decoded as short_vec
+        let required_num_sigs = 214;
+        let actual_num_sigs = 5;
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: required_num_sigs,
+                num_credit_only_signed_accounts: 12,
+                num_credit_only_unsigned_accounts: 11,
+            },
+            account_keys: vec![],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let mut tx = Transaction::new_unsigned(message);
+        // reduce to actual_num_sigs to avoid packet error
+        tx.signatures = vec![Signature::default(); actual_num_sigs];
+        let packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        let (_sig_len, _sig_start, _msg_start_offset, pubkey_offset) =
+            sigverify::get_packet_offsets(&packet, 0);
+
+        let expected_sig_size = 1;
+        let expected_sigs_size = actual_num_sigs * size_of::<Signature>();
+        let expected_msg_header_size = serialized_size(&MessageHeader::default()).unwrap() as usize;
+        let expected_pubkey_size = 1;
+        let expected_pubkey_start = expected_sig_size
+            + expected_sigs_size
+            + expected_msg_header_size
+            + expected_pubkey_size;
+
+        assert_eq!(expected_pubkey_start, pubkey_offset as usize);
     }
 
     #[test]
