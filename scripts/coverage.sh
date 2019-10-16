@@ -14,13 +14,14 @@ reportName="lcov-${CI_COMMIT:0:9}"
 
 if [[ -n $1 ]]; then
   crate="--package $1"
+  shift
 else
   crate="--all --exclude solana-local-cluster"
 fi
 
 coverageFlags=(-Zprofile)                # Enable coverage
 coverageFlags+=("-Clink-dead-code")      # Dead code should appear red in the report
-coverageFlags+=("-Ccodegen-units=1")     # Disable ThinLTO which corrupts debuginfo (see [rustc issue #45511]).
+coverageFlags+=("-Ccodegen-units=1")     # Disable code generation parallelism which is unsupported under -Zprofile (see [rustc issue #51705]).
 coverageFlags+=("-Cinline-threshold=0")  # Disable inlining, which complicates control flow.
 coverageFlags+=("-Coverflow-checks=off") # Disable overflow checks, which create unnecessary branches.
 
@@ -37,7 +38,9 @@ rm -rf target/cov/$reportName
 
 source ci/rust-version.sh nightly
 # shellcheck disable=SC2086 #
-_ cargo +$rust_nightly test --target-dir target/cov --lib $crate
+RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --lib --no-run $crate "$@"
+# shellcheck disable=SC2086 #
+RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --lib $crate "$@" 2> target/cov/coverage-stderr.log
 
 echo "--- grcov"
 
