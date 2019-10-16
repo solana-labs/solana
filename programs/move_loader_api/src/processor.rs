@@ -111,10 +111,10 @@ impl MoveProcessor {
         Ok(())
     }
 
-    fn serialize_verified_program(
+    fn verify_program(
         script: &VerifiedScript,
         modules: &[VerifiedModule],
-    ) -> Result<(Vec<u8>), InstructionError> {
+    ) -> Result<(LibraAccountState), InstructionError> {
         let mut script_bytes = vec![];
         script
             .as_inner()
@@ -129,11 +129,10 @@ impl MoveProcessor {
                 .map_err(map_failure_error)?;
             modules_bytes.push(buf);
         }
-        bincode::serialize(&LibraAccountState::VerifiedProgram {
+        Ok(LibraAccountState::VerifiedProgram {
             script_bytes,
             modules_bytes,
         })
-        .map_err(map_data_error)
     }
 
     fn deserialize_compiled_program(
@@ -330,8 +329,11 @@ impl MoveProcessor {
             .collect::<Result<Vec<_>, _>>()
             .map_err(map_vm_verification_error)?;
 
-        keyed_accounts[PROGRAM_INDEX].account.data =
-            Self::serialize_verified_program(&verified_script, &verified_modules)?;
+        Self::serialize_and_enforce_length(
+            &Self::verify_program(&verified_script, &verified_modules)?,
+            &mut keyed_accounts[PROGRAM_INDEX].account.data,
+        )?;
+
         keyed_accounts[PROGRAM_INDEX].account.executable = true;
 
         info!(
