@@ -529,7 +529,7 @@ mod tests {
         let packet = sigverify::make_packet_from_transaction(tx);
         let packet_offsets = sigverify::get_packet_offsets(&packet, current_offset);
         PacketOffsets::new(
-            packet_offsets.sig_len - packet_offsets.sig_len,
+            packet_offsets.sig_len,
             packet_offsets.sig_start - current_offset,
             packet_offsets.msg_start - packet_offsets.sig_start,
             packet_offsets.pubkey_start - packet_offsets.msg_start,
