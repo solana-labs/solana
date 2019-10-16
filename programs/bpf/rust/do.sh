@@ -28,13 +28,13 @@ perform_action() {
     set -e
     case "$1" in
     build)
-        bash -x "$sdkDir"/bpf/rust/build.sh "$2"
+        "$sdkDir"/bpf/rust/build.sh "$2"
 
         so_path="$targetDir/$profile/"
         so_name="solana_bpf_rust_${3%/}"
         if [ -f "$so_path/${so_name}.so" ]; then
             cp "$so_path/${so_name}.so" "$so_path/${so_name}_debug.so"
-            "$sdkDir"/bpf/dependencies/llvm-native/bin/llvm-objcopy --strip-all "$so_path/${so_name}.so" "$so_path/$so_name.so"
+            "$sdkDir/bpf/dependencies/llvm-native/bin/llvm-objcopy" --strip-all "$so_path/${so_name}.so" "$so_path/$so_name.so"
         fi
         ;;
     clean)
@@ -67,11 +67,11 @@ perform_action() {
         # - rustfilt
         (
             pwd
-            ./do.sh build "$3"
+            "$0" build "$3"
 
             cd "$3"
-            so="$targetDir"/"$profile"/solana_bpf_rust_"${3%/}"_debug.so
-            dump="$targetDir"/"${3%/}"-dump
+            so="$targetDir/$profile/solana_bpf_rust_${3%/}_debug.so"
+            dump="$targetDir/${3%/}-dump"
 
             if [ -f "$so" ]; then
                 ls \
@@ -82,7 +82,7 @@ perform_action() {
                     -aW \
                     "$so" \
                     >>"${dump}-mangled.txt"
-                ../"$sdkDir"/bpf/dependencies/llvm-native/bin/llvm-objdump \
+                ../"$sdkDir/bpf/dependencies/llvm-native/bin/llvm-objdump" \
                     -print-imm-hex \
                     --source \
                     --disassemble \
