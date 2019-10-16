@@ -270,7 +270,7 @@ impl CrdsGossipPush {
         keys.shuffle(&mut rand::thread_rng());
         let num = keys.len() / ratio;
         for k in &keys[..num] {
-            self.active_set.remove(k);
+            self.active_set.swap_remove(k);
         }
         for (k, v) in new_items {
             self.active_set.insert(k, v);

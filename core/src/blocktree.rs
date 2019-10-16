@@ -36,28 +36,19 @@ mod db;
 mod meta;
 mod rooted_slot_iterator;
 
-macro_rules! db_imports {
-    { $mod:ident, $db:ident, $db_path:expr } => {
-        mod $mod;
+pub use db::columns;
+use db::{columns as cf, IteratorDirection, IteratorMode};
 
-        use $mod::$db;
-        use db::{columns as cf, IteratorMode, IteratorDirection};
-        pub use db::columns;
+pub type Database = db::Database;
+pub type Cursor<C> = db::Cursor<C>;
+pub type LedgerColumn<C> = db::LedgerColumn<C>;
+pub type WriteBatch = db::WriteBatch;
+type BatchProcessor = db::BatchProcessor;
 
-        pub type Database = db::Database<$db>;
-        pub type Cursor<C> = db::Cursor<$db, C>;
-        pub type LedgerColumn<C> = db::LedgerColumn<$db, C>;
-        pub type WriteBatch = db::WriteBatch<$db>;
-        type BatchProcessor = db::BatchProcessor<$db>;
+pub trait Column: db::Column {}
+impl<C: db::Column> Column for C {}
 
-        pub trait Column: db::Column<$db> {}
-        impl<C: db::Column<$db>> Column for C {}
-
-        pub const BLOCKTREE_DIRECTORY: &str = $db_path;
-    };
-}
-
-db_imports! {rocks, Rocks, "rocksdb"}
+pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 
