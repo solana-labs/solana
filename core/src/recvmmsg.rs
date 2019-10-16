@@ -226,7 +226,7 @@ mod tests {
         let sent = TEST_BATCH_SIZE;
 
         let mut elapsed_in_max_batch = 0;
-        (0..100).for_each(|_| {
+        (0..1000).for_each(|_| {
             for _ in 0..sent {
                 let data = [0; PACKET_DATA_SIZE];
                 sender.send_to(&data[..], &addr).unwrap();
@@ -239,7 +239,7 @@ mod tests {
         });
 
         let mut elapsed_in_small_batch = 0;
-        (0..100).for_each(|_| {
+        (0..1000).for_each(|_| {
             for _ in 0..sent {
                 let data = [0; PACKET_DATA_SIZE];
                 sender.send_to(&data[..], &addr).unwrap();
