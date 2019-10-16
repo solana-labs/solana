@@ -1023,7 +1023,7 @@ mod tests {
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
             let mut poh_config = PohConfig::default();
-            poh_config.target_tick_count = Some(genesis_block.ticks_per_slot + num_extra_ticks);
+            poh_config.target_tick_count = Some(bank.max_tick_height() + num_extra_ticks);
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blocktree, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
