@@ -380,7 +380,7 @@ mod tests {
             + expected_msg_header_size
             + expected_pubkey_size;
 
-        assert_eq!(expected_pubkey_start, pubkey_start as usize);
+        assert_eq!(expected_pubkey_start, pubkey_offset as usize);
     }
 
     #[test]
