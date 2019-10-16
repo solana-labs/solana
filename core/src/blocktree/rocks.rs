@@ -2,8 +2,7 @@ use crate::blocktree::db::columns as cf;
 use crate::blocktree::db::{
     Backend, Column, DbCursor, IWriteBatch, IteratorDirection, IteratorMode, TypedColumn,
 };
-use crate::blocktree::BlocktreeError;
-use crate::result::{Error, Result};
+use crate::blocktree::{BlocktreeError, Result};
 use solana_sdk::clock::Slot;
 
 use byteorder::{BigEndian, ByteOrder};
@@ -412,9 +411,9 @@ impl IWriteBatch<Rocks> for RWriteBatch {
     }
 }
 
-impl std::convert::From<rocksdb::Error> for Error {
-    fn from(e: rocksdb::Error) -> Error {
-        Error::BlocktreeError(BlocktreeError::RocksDb(e))
+impl std::convert::From<rocksdb::Error> for BlocktreeError {
+    fn from(e: rocksdb::Error) -> BlocktreeError {
+        BlocktreeError::RocksDb(e)
     }
 }
 

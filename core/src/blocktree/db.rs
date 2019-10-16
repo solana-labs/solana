@@ -1,4 +1,4 @@
-use crate::result::{Error, Result};
+use crate::blocktree::{BlocktreeError, Result};
 
 use bincode::{deserialize, serialize};
 
@@ -64,7 +64,7 @@ pub trait Backend: Sized + Send + Sync {
     type Cursor: DbCursor<Self>;
     type Iter: Iterator<Item = (Box<Self::Key>, Box<[u8]>)>;
     type WriteBatch: IWriteBatch<Self>;
-    type Error: Into<Error>;
+    type Error: Into<BlocktreeError>;
 
     fn open(path: &Path) -> Result<Self>;
 

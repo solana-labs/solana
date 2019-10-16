@@ -3,7 +3,6 @@
 //! access read to a persistent file-based ledger.
 use crate::entry::Entry;
 use crate::erasure::ErasureConfig;
-use crate::result::{Error, Result};
 use crate::shred::{Shred, Shredder};
 
 use bincode::deserialize;
@@ -23,6 +22,7 @@ use std::cmp;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::result;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -70,6 +70,29 @@ pub enum BlocktreeError {
     InvalidShredData(Box<bincode::ErrorKind>),
     RocksDb(rocksdb::Error),
     SlotNotRooted,
+    IO(std::io::Error),
+    Serialize(std::boxed::Box<bincode::ErrorKind>),
+}
+pub type Result<T> = result::Result<T, BlocktreeError>;
+
+impl std::error::Error for BlocktreeError {}
+
+impl std::fmt::Display for BlocktreeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "blocktree error")
+    }
+}
+
+impl std::convert::From<std::io::Error> for BlocktreeError {
+    fn from(e: std::io::Error) -> BlocktreeError {
+        BlocktreeError::IO(e)
+    }
+}
+
+impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for BlocktreeError {
+    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> BlocktreeError {
+        BlocktreeError::Serialize(e)
+    }
 }
 
 // ledger window
@@ -616,8 +639,8 @@ impl Blocktree {
         // `insert_coding_shred` is called
         if shred_index < u64::from(pos) {
             error!("Due to earlier validation, shred index must be >= pos");
-            return Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(
-                Box::new(bincode::ErrorKind::Custom("shred index < pos".to_string())),
+            return Err(BlocktreeError::InvalidShredData(Box::new(
+                bincode::ErrorKind::Custom("shred index < pos".to_string()),
             )));
         }
 
@@ -1035,11 +1058,11 @@ impl Blocktree {
                         debug!("{:?} shreds in last FEC set", shred_chunk.len(),);
                         let entries: Vec<Entry> =
                             bincode::deserialize(&deshred_payload).map_err(|_| {
-                                Error::BlocktreeError(BlocktreeError::InvalidShredData(Box::new(
+                                BlocktreeError::InvalidShredData(Box::new(
                                     bincode::ErrorKind::Custom(
                                         "could not construct entries".to_string(),
                                     ),
-                                )))
+                                ))
                             })?;
                         return Ok((entries, shred_chunk.len()));
                     } else {

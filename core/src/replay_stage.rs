@@ -743,7 +743,9 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
     ) -> Result<(Vec<Entry>, usize, u64, u64)> {
         let bank_slot = bank.slot();
-        blocktree.get_slot_entries_with_shred_count(bank_slot, bank_progress.num_shreds as u64)
+        let entries_and_count = blocktree
+            .get_slot_entries_with_shred_count(bank_slot, bank_progress.num_shreds as u64)?;
+        Ok(entries_and_count)
     }
 
     fn replay_entries_into_bank(
