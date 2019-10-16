@@ -67,7 +67,7 @@ fn verify_instruction(
     // Verify the transaction
 
     // Make sure that program_id is still the same or this was just assigned by the system program,
-    //  but even the system program can't touch a credit-only account
+    //  but even the system program can't touch a credit-only account.
     if pre.owner != post.owner && (!is_debitable || !system_program::check_id(&program_id)) {
         return Err(InstructionError::ModifiedProgramId);
     }
@@ -75,9 +75,13 @@ fn verify_instruction(
     if *program_id != post.owner && pre.lamports > post.lamports {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
-    // The balance of credit-only accounts may only increase
+    // The balance of credit-only accounts may only increase.
     if !is_debitable && pre.lamports > post.lamports {
         return Err(InstructionError::CreditOnlyLamportSpend);
+    }
+    // Only system accounts can change the size of the data.
+    if !system_program::check_id(&program_id) && pre.data.len() != post.data.len() {
+        return Err(InstructionError::AccountDataSizeChanged);
     }
     // For accounts unassigned to the program, the data may not change.
     if *program_id != post.owner && !system_program::check_id(&program_id) && pre.data != post.data
@@ -88,9 +92,8 @@ fn verify_instruction(
     if !is_debitable && pre.data != post.data {
         return Err(InstructionError::CreditOnlyDataModified);
     }
-
     // executable is one-way (false->true) and
-    //  only system or the account owner may modify
+    //  only system or the account owner may modify.
     if pre.executable != post.executable
         && (!is_debitable
             || pre.executable
@@ -98,8 +101,7 @@ fn verify_instruction(
     {
         return Err(InstructionError::ExecutableModified);
     }
-
-    // no one modifies rent_epoch (yet)
+    // No one modifies rent_epoch (yet).
     if pre.rent_epoch != post.rent_epoch {
         return Err(InstructionError::RentEpochModified);
     }
@@ -244,7 +246,7 @@ impl MessageProcessor {
         let program_id = instruction.program_id(&message.account_keys);
         assert_eq!(instruction.accounts.len(), program_accounts.len());
         // TODO: the runtime should be checking read/write access to memory
-        // we are trusting the hard-coded programs not to clobber or allocate
+        // we are trusting the hard-coded programs not to clobber
         let pre_total: u128 = program_accounts
             .iter()
             .map(|a| u128::from(a.lamports))
@@ -467,7 +469,7 @@ mod tests {
 
         let change_data =
             |program_id: &Pubkey, is_debitable: bool| -> Result<(), InstructionError> {
-                let pre = Account::new(0, 0, &alice_program_id);
+                let pre = Account::new_data(0, &[0], &alice_program_id).unwrap();
                 let post = Account::new_data(0, &[42], &alice_program_id).unwrap();
                 verify_instruction(is_debitable, &program_id, &pre, &post)
             };
@@ -532,6 +534,23 @@ mod tests {
             verify_instruction(false, &alice_program_id, &pre, &post,),
             Err(InstructionError::CreditOnlyLamportSpend),
             "debit should fail, even if owning program"
+        );
+    }
+
+    #[test]
+    fn test_verify_instruction_data_size_changed() {
+        let alice_program_id = Pubkey::new_rand();
+        let pre = Account::new_data(42, &[42], &alice_program_id).unwrap();
+        let post = Account::new_data(42, &[42, 42], &alice_program_id).unwrap();
+        assert_eq!(
+            verify_instruction(true, &system_program::id(), &pre, &post),
+            Ok(()),
+            "system program should be able to change account data size"
+        );
+        assert_eq!(
+            verify_instruction(true, &alice_program_id, &pre, &post),
+            Err(InstructionError::AccountDataSizeChanged),
+            "non-system programs cannot change their data size"
         );
     }
 

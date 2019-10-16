@@ -70,6 +70,9 @@ pub enum InstructionError {
     /// The instruction expected additional account keys
     NotEnoughAccountKeys,
 
+    /// A non-system program changed the size of the account data
+    AccountDataSizeChanged,
+
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is represented
     /// as or serialized to a u32 integer.
