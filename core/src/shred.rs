@@ -52,10 +52,10 @@ pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
 pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
 
 const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
-const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
+pub const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
 
 #[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
-pub struct ShredType(u8);
+pub struct ShredType(pub u8);
 
 /// A common header that is present in data and code shred headers
 #[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
@@ -245,6 +245,9 @@ impl Shred {
     pub fn is_data(&self) -> bool {
         self.headers.shred_type == ShredType(DATA_SHRED)
     }
+    pub fn is_code(&self) -> bool {
+        self.headers.shred_type == ShredType(CODING_SHRED)
+    }
 
     pub fn last_in_slot(&self) -> bool {
         if self.is_data() {
@@ -271,7 +274,7 @@ impl Shred {
     }
 
     pub fn coding_params(&self) -> Option<(u16, u16, u16)> {
-        if !self.is_data() {
+        if self.is_code() {
             let header = &self.headers.coding_header;
             Some((
                 header.num_data_shreds,
@@ -286,8 +289,10 @@ impl Shred {
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         let signed_payload_offset = if self.is_data() {
             *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_SHRED_TYPE
-        } else {
+        } else if self.is_code() {
             *SIZE_OF_SHRED_TYPE
+        } else {
+            return false;
         } + *SIZE_OF_SIGNATURE;
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[signed_payload_offset..])

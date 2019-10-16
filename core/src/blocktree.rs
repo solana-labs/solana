@@ -429,7 +429,7 @@ impl Blocktree {
                     &mut write_batch,
                     &mut just_inserted_data_shreds,
                 );
-            } else {
+            } else if shred.is_code() {
                 self.check_insert_coding_shred(
                     shred,
                     &mut erasure_metas,
@@ -1033,7 +1033,14 @@ impl Blocktree {
                 if is_complete {
                     if let Ok(deshred_payload) = Shredder::deshred(&shred_chunk) {
                         debug!("{:?} shreds in last FEC set", shred_chunk.len(),);
-                        let entries: Vec<Entry> = bincode::deserialize(&deshred_payload)?;
+                        let entries: Vec<Entry> =
+                            bincode::deserialize(&deshred_payload).map_err(|_| {
+                                Error::BlocktreeError(BlocktreeError::InvalidShredData(Box::new(
+                                    bincode::ErrorKind::Custom(
+                                        "could not construct entries".to_string(),
+                                    ),
+                                )))
+                            })?;
                         return Ok((entries, shred_chunk.len()));
                     } else {
                         debug!("Failed in deshredding shred payloads");

@@ -878,14 +878,15 @@ impl Service for ReplayStage {
 mod test {
     use super::*;
     use crate::blocktree::tests::make_slot_entries;
-    use crate::blocktree::{entries_to_test_shreds, get_tmp_ledger_path};
+    use crate::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, BlocktreeError};
     use crate::confidence::BankConfidence;
     use crate::entry;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::replay_stage::ReplayStage;
-    use crate::shred::Shred;
+    use crate::shred::{Shred, ShredHeader, DATA_COMPLETE_SHRED, SIZE_OF_SHRED_HEADER};
     use solana_runtime::genesis_utils::GenesisBlockInfo;
     use solana_sdk::hash::{hash, Hash};
+    use solana_sdk::packet::PACKET_DATA_SIZE;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::TransactionError;
@@ -1004,28 +1005,24 @@ mod test {
     }
 
     #[test]
-    fn test_dead_fork_blob_deserialize_failure() {
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        // Insert entry that causes blob deserialization failure
-
-        let res = check_dead_fork(|blockhash, slot| {
-            let entry = entry::next_entry(
-                &blockhash,
-                1,
-                vec![system_transaction::create_user_account(
-                    &keypair1,
-                    &keypair2.pubkey(),
-                    2,
-                    *blockhash,
-                )],
+    fn test_dead_fork_entry_deserialize_failure() {
+        // Insert entry that causes deserialization failure
+        let res = check_dead_fork(|_, _| {
+            let payload_len = PACKET_DATA_SIZE - *SIZE_OF_SHRED_HEADER;
+            let gibberish = [0xa5u8; PACKET_DATA_SIZE];
+            let mut header = ShredHeader::default();
+            header.data_header.flags = DATA_COMPLETE_SHRED;
+            let mut shred = Shred::new_empty_from_header(header);
+            let _ = bincode::serialize_into(
+                &mut shred.payload[*SIZE_OF_SHRED_HEADER..],
+                &gibberish[..payload_len],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
+            vec![shred]
         });
 
         assert_matches!(
             res,
-            Err(Error::TransactionError(TransactionError::AccountNotFound))
+            Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(_)))
         );
     }
 
