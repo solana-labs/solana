@@ -50,15 +50,6 @@ impl PacketOffsets {
             pubkey_start,
         }
     }
-
-    pub fn new_with_packet(packet_offsets: PacketOffsets) -> Self {
-        Self::new(
-            packet_offsets.sig_len,
-            packet_offsets.sig_start,
-            packet_offsets.msg_start,
-            packet_offsets.pubkey_start,
-        )
-    }
 }
 
 struct UnsanitizedPacketOffsets {
@@ -166,7 +157,7 @@ fn do_get_packet_offsets(packet: &Packet, current_offset: u32) -> UnsanitizedPac
 fn get_packet_offsets(packet: &Packet, current_offset: u32) -> PacketOffsets {
     let unsanitized_packet_offsets = do_get_packet_offsets(packet, current_offset);
     if unsanitized_packet_offsets.correct {
-        PacketOffsets::new_with_packet(unsanitized_packet_offsets.packet_offsets)
+        unsanitized_packet_offsets.packet_offsets
     } else {
         // force sigverify to fail by returning zeros
         PacketOffsets::new(0, 0, 0, 0)
