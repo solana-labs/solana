@@ -469,7 +469,7 @@ mod tests {
 
         let change_data =
             |program_id: &Pubkey, is_debitable: bool| -> Result<(), InstructionError> {
-                let pre = Account::new(0, 0, &alice_program_id);
+                let pre = Account::new_data(0, &[0], &alice_program_id).unwrap();
                 let post = Account::new_data(0, &[42], &alice_program_id).unwrap();
                 verify_instruction(is_debitable, &program_id, &pre, &post)
             };
@@ -540,8 +540,8 @@ mod tests {
     #[test]
     fn test_verify_instruction_data_size_changed() {
         let alice_program_id = Pubkey::new_rand();
-        let pre = Account::new(42, 0, &alice_program_id);
-        let post = Account::new(0, 0, &alice_program_id);
+        let pre = Account::new_data(42, &[42], &alice_program_id).unwrap();
+        let post = Account::new_data(42, &[42, 42], &alice_program_id).unwrap();
         assert_eq!(
             verify_instruction(true, &system_program::id(), &pre, &post),
             Ok(()),
