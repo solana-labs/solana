@@ -29,6 +29,7 @@ scripts/coverage.sh
 report=coverage-"${CI_COMMIT:0:9}".tar.gz
 mv target/cov/report.tar.gz "$report"
 upload-ci-artifact "$report"
+upload-ci-artifact target/cov/coverage-stderr.log
 annotate --style success --context lcov-report \
   "lcov report: <a href=\"artifact://$report\">$report</a>"
 

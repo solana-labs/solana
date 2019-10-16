@@ -40,7 +40,7 @@ source ci/rust-version.sh nightly
 # shellcheck disable=SC2086 #
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --lib --no-run $crate "$@"
 # shellcheck disable=SC2086 #
-RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --lib $crate "$@" 2> /dev/null
+RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --lib $crate "$@" 2> target/cov/coverage-stderr.log
 
 echo "--- grcov"
 
