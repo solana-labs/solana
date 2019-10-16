@@ -750,6 +750,21 @@ $(
   if [[ -n $validatorAdditionalDiskSizeInGb ]]; then
     cat mount-additional-disk.sh
   fi
+
+  if [[ $selfDestructMinutes -gt 0 ]]; then
+    cat <<EOSD
+
+# Setup GCE self-destruct
+cat >/solana-scratch/gce-self-destruct.sh <<EOS
+EOSD
+    sed -Ee 's/(^|[^\])\$/\1\\$/g' gce-self-destruct.sh
+    cat <<EOSD
+EOS
+
+source /solana-scratch/gce-self-destruct.sh
+gce_self_destruct_setup $selfDestructMinutes
+EOSD
+  fi
 )
 
 cat > /etc/motd <<EOM
@@ -758,22 +773,6 @@ See startup script log messages in /var/log/syslog for status:
 $(printNetworkInfo)
 $(creationInfo)
 EOM
-
-metadata_req() {
-  endpoint="\$1"
-  url="http://metadata.google.internal/computeMetadata/v1/\$endpoint"
-  curl -sf -H Metadata-Flavor:Google "\$url"
-}
-
-timeout=$selfDestructMinutes
-if [[ "\$timeout" -gt 0 ]]; then
-  zone=\$(metadata_req "instance/zone")
-  zone=\$(basename "\$zone")
-  gcloudBase=\$(dirname \$(command -v gcloud))  # XXX: gcloud is installed in /snap/bin,
-  gcloudBase=\${gcloudBase:-/snap/bin}          #   but /snap/bin isn't in root's PATH...
-  cmd="\$gcloudBase/gcloud compute instances delete \$(hostname) --zone \$zone"
-  at Now + \$timeout Minutes <<<"\$cmd"
-fi
 
 touch /solana-scratch/.instance-startup-complete
 
