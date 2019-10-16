@@ -20,6 +20,7 @@ fi
 
 coverageFlags=(-Zprofile)                # Enable coverage
 coverageFlags+=("-Clink-dead-code")      # Dead code should appear red in the report
+coverageFlags+=("-Ccodegen-units=1")     # Disable code generation parallelism which is unsupported under -Zprofile (see [rustc issue #51705]).
 coverageFlags+=("-Cinline-threshold=0")  # Disable inlining, which complicates control flow.
 coverageFlags+=("-Coverflow-checks=off") # Disable overflow checks, which create unnecessary branches.
 
