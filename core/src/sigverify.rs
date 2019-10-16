@@ -154,24 +154,13 @@ fn do_get_packet_offsets(packet: &Packet, current_offset: u32) -> UnsanitizedPac
     let msg_start = current_offset as usize + msg_start_offset;
     let pubkey_start = msg_start + msg_header_size + pubkey_len_size;
 
-    if sig_len_maybe_trusted == sig_len_untrusted {
-        UnsanitizedPacketOffsets::new(
-            true,
-            sig_len_maybe_trusted as u32,
-            sig_start as u32,
-            msg_start as u32,
-            pubkey_start as u32,
-        )
-    } else {
-        // a malformed packet is detected!!
-        UnsanitizedPacketOffsets::new(
-            false,
-            sig_len_untrusted as u32,
-            sig_start as u32,
-            msg_start as u32,
-            pubkey_start as u32,
-        )
-    }
+    UnsanitizedPacketOffsets::new(
+        sig_len_maybe_trusted == sig_len_untrusted,
+        sig_len_untrusted as u32,
+        sig_start as u32,
+        msg_start as u32,
+        pubkey_start as u32,
+    )
 }
 
 fn get_packet_offsets(packet: &Packet, current_offset: u32) -> PacketOffsets {
