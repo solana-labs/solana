@@ -23,7 +23,10 @@ pub fn map_vm_binary_error(err: vm::errors::BinaryError) -> InstructionError {
 #[allow(clippy::needless_pass_by_value)]
 pub fn map_data_error(err: std::boxed::Box<bincode::ErrorKind>) -> InstructionError {
     debug!("Error: Account data: {:?}", err);
-    InstructionError::InvalidAccountData
+    match err.as_ref() {
+        bincode::ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
+        _ => InstructionError::InvalidAccountData,
+    }
 }
 #[allow(clippy::needless_pass_by_value)]
 pub fn map_json_error(err: serde_json::error::Error) -> InstructionError {

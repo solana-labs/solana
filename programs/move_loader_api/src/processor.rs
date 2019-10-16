@@ -95,6 +95,22 @@ impl MoveProcessor {
         locals
     }
 
+    fn serialize_and_enforce_length(
+        state: &LibraAccountState,
+        data: &mut Vec<u8>,
+    ) -> Result<(), InstructionError> {
+        let original_len = data.len() as u64;
+        let mut writer = std::io::Cursor::new(data);
+        bincode::config()
+            .limit(original_len)
+            .serialize_into(&mut writer, &state)
+            .map_err(map_data_error)?;
+        if writer.position() < original_len {
+            writer.set_position(original_len);
+        }
+        Ok(())
+    }
+
     fn serialize_verified_program(
         script: &VerifiedScript,
         modules: &[VerifiedModule],
@@ -172,7 +188,7 @@ impl MoveProcessor {
 
     fn execute(
         sender_address: AccountAddress,
-        function_name: String,
+        function_name: &str,
         args: Vec<TransactionArgument>,
         script: VerifiedScript,
         modules: Vec<VerifiedModule>,
@@ -247,20 +263,20 @@ impl MoveProcessor {
         let write_set = write_sets
             .remove(&AccountAddress::default())
             .ok_or_else(Self::missing_account)?;
-        keyed_accounts[GENESIS_INDEX].account.data.clear();
-        let writer = std::io::BufWriter::new(&mut keyed_accounts[GENESIS_INDEX].account.data);
-        bincode::serialize_into(writer, &LibraAccountState::Genesis(write_set))
-            .map_err(map_data_error)?;
+        Self::serialize_and_enforce_length(
+            &LibraAccountState::Genesis(write_set),
+            &mut keyed_accounts[GENESIS_INDEX].account.data,
+        )?;
 
         // Now do the rest of the accounts
         for keyed_account in keyed_accounts[GENESIS_INDEX + 1..].iter_mut() {
             let write_set = write_sets
                 .remove(&pubkey_to_address(keyed_account.unsigned_key()))
                 .ok_or_else(Self::missing_account)?;
-            keyed_account.account.data.clear();
-            let writer = std::io::BufWriter::new(&mut keyed_account.account.data);
-            bincode::serialize_into(writer, &LibraAccountState::User(genesis_key, write_set))
-                .map_err(map_data_error)?;
+            Self::serialize_and_enforce_length(
+                &LibraAccountState::User(genesis_key, write_set),
+                &mut keyed_account.account.data,
+            )?;
         }
         if !write_sets.is_empty() {
             debug!("Error: Missing keyed accounts");
@@ -345,12 +361,10 @@ impl MoveProcessor {
                 match bincode::deserialize(&keyed_accounts[0].account.data)
                     .map_err(map_data_error)?
                 {
-                    LibraAccountState::Unallocated => {
-                        keyed_accounts[0].account.data.clear();
-                        let writer = std::io::BufWriter::new(&mut keyed_accounts[0].account.data);
-                        bincode::serialize_into(writer, &LibraAccountState::create_genesis(amount)?)
-                            .map_err(map_data_error)
-                    }
+                    LibraAccountState::Unallocated => Self::serialize_and_enforce_length(
+                        &LibraAccountState::create_genesis(amount)?,
+                        &mut keyed_accounts[0].account.data,
+                    ),
                     _ => {
                         debug!("Error: Must provide an unallocated account");
                         Err(InstructionError::InvalidArgument)
@@ -385,7 +399,7 @@ impl MoveProcessor {
 
                 let output = Self::execute(
                     sender_address,
-                    function_name,
+                    &function_name,
                     args,
                     verified_script,
                     verified_modules,
@@ -409,6 +423,34 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::rent_calculator::RentCalculator;
     use solana_sdk::sysvar::rent;
+
+    const BIG_ENOUGH: usize = 6_000;
+
+    #[test]
+    fn test_account_size() {
+        let mut data =
+            vec![0_u8; bincode::serialized_size(&LibraAccountState::Unallocated).unwrap() as usize];
+        let len = data.len();
+        assert_eq!(
+            MoveProcessor::serialize_and_enforce_length(&LibraAccountState::Unallocated, &mut data),
+            Ok(())
+        );
+        assert_eq!(len, data.len());
+
+        data.resize(6000, 0);
+        let len = data.len();
+        assert_eq!(
+            MoveProcessor::serialize_and_enforce_length(&LibraAccountState::Unallocated, &mut data),
+            Ok(())
+        );
+        assert_eq!(len, data.len());
+
+        data.resize(1, 0);
+        assert_eq!(
+            MoveProcessor::serialize_and_enforce_length(&LibraAccountState::Unallocated, &mut data),
+            Err(InstructionError::AccountDataTooSmall)
+        );
+    }
 
     #[test]
     fn test_finalize() {
@@ -439,6 +481,7 @@ mod tests {
             false,
             &mut unallocated.account,
         )];
+        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
             &bincode::serialize(&InvokeCommand::CreateGenesis(amount)).unwrap(),
@@ -584,6 +627,7 @@ mod tests {
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
+        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
@@ -593,6 +637,8 @@ mod tests {
             KeyedAccount::new(&sender.key, false, &mut sender.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
+        keyed_accounts[2].account.data.resize(BIG_ENOUGH, 0);
+        keyed_accounts[3].account.data.resize(BIG_ENOUGH, 0);
 
         let amount = 2;
         MoveProcessor::do_invoke_main(
@@ -656,6 +702,7 @@ mod tests {
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
+        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
@@ -664,6 +711,7 @@ mod tests {
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
+        keyed_accounts[2].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
@@ -700,6 +748,7 @@ mod tests {
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
+        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
@@ -708,6 +757,7 @@ mod tests {
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&module.key, false, &mut module.account),
         ];
+        keyed_accounts[2].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
@@ -784,6 +834,7 @@ mod tests {
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
+        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
@@ -792,6 +843,7 @@ mod tests {
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
+        keyed_accounts[2].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
