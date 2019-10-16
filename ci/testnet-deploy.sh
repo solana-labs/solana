@@ -278,6 +278,7 @@ if ! $skipCreate; then
     -a "$bootstrapFullNodeAddress"
     -c "$clientNodeCount"
     -n "$additionalFullNodeCount"
+    --dedicated
   )
   # shellcheck disable=SC2206
   create_args+=(${zone_args[@]})
@@ -365,7 +366,6 @@ if ! $skipStart; then
     args=(
       "$op"
       -t "$tarChannelOrTag"
-      --dedicated
     )
 
     if ! $publicNetwork; then
