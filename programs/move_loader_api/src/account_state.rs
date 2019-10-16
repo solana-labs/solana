@@ -53,7 +53,7 @@ pub enum LibraAccountState {
 }
 impl LibraAccountState {
     pub fn create_unallocated() -> Self {
-        LibraAccountState::Unallocated
+        Self::Unallocated
     }
 
     pub fn create_program(
@@ -66,7 +66,7 @@ impl LibraAccountState {
         let mut extra_deps: Vec<VerifiedModule> = vec![];
         for dep in deps {
             let state: Self = bincode::deserialize(&dep).unwrap();
-            if let LibraAccountState::User(_, write_set) = state {
+            if let Self::User(_, write_set) = state {
                 for (_, write_op) in write_set.iter() {
                     if let WriteOp::Value(raw_bytes) = write_op {
                         extra_deps.push(
@@ -99,13 +99,13 @@ impl LibraAccountState {
                 .expect("Unable to serialize module");
             modules_bytes.push(buf);
         }
-        LibraAccountState::CompiledProgram(
+        Self::CompiledProgram(
             serde_json::to_string(&Program::new(script_bytes, modules_bytes, vec![])).unwrap(),
         )
     }
 
     pub fn create_user(owner: &Pubkey, write_set: WriteSet) -> Self {
-        LibraAccountState::User(*owner, write_set)
+        Self::User(*owner, write_set)
     }
 
     pub fn create_genesis(mint_balance: u64) -> Result<(Self), InstructionError> {
@@ -172,6 +172,6 @@ impl LibraAccountState {
         .freeze()
         .map_err(map_failure_error)?;
 
-        Ok(LibraAccountState::Genesis(write_set))
+        Ok(Self::Genesis(write_set))
     }
 }
