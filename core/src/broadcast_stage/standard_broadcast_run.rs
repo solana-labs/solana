@@ -270,7 +270,7 @@ impl StandardBroadcastRun {
             ),
             (
                 "slot_broadcast_time",
-                self.slot_broadcast_start.unwrap().elapsed().as_millis() as i64,
+                self.slot_broadcast_start.unwrap().elapsed().as_micros() as i64,
                 i64
             ),
         );
