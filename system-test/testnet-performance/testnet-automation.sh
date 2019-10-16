@@ -107,9 +107,9 @@ launchTestnet() {
 
   echo --- start "$NUMBER_OF_VALIDATOR_NODES" node test
   if [[ -n $CHANNEL ]]; then
-    net/net.sh start -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
+    net/net.sh restart -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
   else
-    net/net.sh start -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
+    net/net.sh restart -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
   fi
 
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
