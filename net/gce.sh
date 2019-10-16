@@ -674,6 +674,11 @@ chmod 444 /solana-scratch/id_ecdsa
 
 USER=\$(id -un)
 export DEBIAN_FRONTEND=noninteractive
+
+# /bin/sh from dash to bash
+echo "dash dash/sh boolean false" | debconf-set-selections
+dpkg-reconfigure dash
+
 $(
   cd "$here"/scripts/
   cat \
