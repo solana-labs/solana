@@ -515,7 +515,7 @@ EOF
       echo "Looking for additional fullnode instances in $zone ..."
       cloud_FindInstances "$prefix-$zone-fullnode"
       declare numInstances=${#instances[@]}
-      if [[ $numInstances -eq $numNodesPerZone || ( ! $failOnValidatorBootupFailure && $numInstances -gt 0 ) ]]; then
+      if [[ $numInstances -ge $numNodesPerZone || ( ! $failOnValidatorBootupFailure && $numInstances -gt 0 ) ]]; then
         cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
       else
         echo "Unable to find additional fullnodes"
