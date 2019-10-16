@@ -158,7 +158,7 @@ fn main() {
             create_test_recorder(&bank, &blocktree, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
-        let _banking_stage = BankingStage::new(
+        let banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
             verified_receiver,
@@ -309,8 +309,11 @@ fn main() {
             tx_total / ITERS as u64,
         );
 
+        drop(verified_sender);
         drop(vote_sender);
         exit.store(true, Ordering::Relaxed);
+        banking_stage.join().unwrap();
+        debug!("waited for banking_stage");
         poh_service.join().unwrap();
         sleep(Duration::from_secs(1));
         debug!("waited for poh_service");
