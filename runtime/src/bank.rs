@@ -1525,7 +1525,10 @@ impl Bank {
         self.message_processor
             .add_instruction_processor(program_id, process_instruction);
 
-        if self.get_account(&program_id).is_none() {
+        if let Some(program_account) = self.get_account(&program_id) {
+            // It is not valid to intercept instructions for a non-native loader account
+            assert_eq!(program_account.owner, solana_sdk::native_loader::id());
+        } else {
             // Register a bogus executable account, which will be loaded and ignored.
             self.register_native_instruction_processor("", &program_id);
         }
@@ -3211,5 +3214,23 @@ mod tests {
                 InstructionError::CustomError(42)
             ))
         );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_add_instruction_processor_for_invalid_account() {
+        let (genesis_block, mint_keypair) = create_genesis_block(500);
+        let mut bank = Bank::new(&genesis_block);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &mut [KeyedAccount],
+            _data: &[u8],
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::CustomError(42))
+        }
+
+        // Non-native loader accounts can not be used for instruction processing
+        bank.add_instruction_processor(mint_keypair.pubkey(), mock_ix_processor);
     }
 }
