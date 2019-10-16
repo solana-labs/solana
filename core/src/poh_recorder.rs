@@ -963,7 +963,7 @@ mod tests {
             poh_recorder.reset(hash(b"hello"), 0, Some((4, 4))); // parent slot 0 implies tick_height of 3
             assert_eq!(poh_recorder.tick_cache.len(), 0);
             poh_recorder.tick();
-            assert_eq!(poh_recorder.tick_height, 5);
+            assert_eq!(poh_recorder.tick_height, DEFAULT_TICKS_PER_SLOT + 1);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }

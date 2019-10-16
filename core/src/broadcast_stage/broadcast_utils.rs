@@ -115,11 +115,15 @@ mod tests {
             })
             .collect();
 
-        let result = recv_slot_entries(&r).unwrap();
-
-        assert_eq!(result.bank.slot(), bank1.slot());
-        assert_eq!(result.last_tick_height, bank1.max_tick_height());
-        assert_eq!(result.entries, entries);
+        let mut res_entries = vec![];
+        let mut last_tick_height = 0;
+        while let Ok(result) = recv_slot_entries(&r) {
+            assert_eq!(result.bank.slot(), bank1.slot());
+            last_tick_height = result.last_tick_height;
+            res_entries.extend(result.entries);
+        }
+        assert_eq!(last_tick_height, bank1.max_tick_height());
+        assert_eq!(res_entries, entries);
     }
 
     #[test]
@@ -152,9 +156,16 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let result = recv_slot_entries(&r).unwrap();
-        assert_eq!(result.bank.slot(), bank2.slot());
-        assert_eq!(result.last_tick_height, expected_last_height);
-        assert_eq!(result.entries, vec![last_entry]);
+        let mut res_entries = vec![];
+        let mut last_tick_height = 0;
+        let mut bank_slot = 0;
+        while let Ok(result) = recv_slot_entries(&r) {
+            bank_slot = result.bank.slot();
+            last_tick_height = result.last_tick_height;
+            res_entries = result.entries;
+        }
+        assert_eq!(bank_slot, bank2.slot());
+        assert_eq!(last_tick_height, expected_last_height);
+        assert_eq!(res_entries, vec![last_entry]);
     }
 }

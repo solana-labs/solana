@@ -2,11 +2,11 @@
 
 // The default tick rate that the cluster attempts to achieve.  Note that the actual tick
 // rate at any given time should be expected to drift
-pub const DEFAULT_TICKS_PER_SECOND: u64 = 10;
+pub const DEFAULT_TICKS_PER_SECOND: u64 = 160;
 
-// At 10 ticks/s, 4 ticks per slot implies that leader rotation and voting will happen
+// At 160 ticks/s, 64 ticks per slot implies that leader rotation and voting will happen
 // every 400 ms. A fast voting cadence ensures faster finality and convergence
-pub const DEFAULT_TICKS_PER_SLOT: u64 = 4;
+pub const DEFAULT_TICKS_PER_SLOT: u64 = 64;
 
 // 1 Epoch = 400 * 8192 ms ~= 55 minutes
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 8192;
