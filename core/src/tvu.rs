@@ -256,7 +256,7 @@ pub mod tests {
         let blocktree = Arc::new(blocktree);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, &blocktree);
+            create_test_recorder(&bank, &blocktree, None);
         let voting_keypair = Keypair::new();
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));

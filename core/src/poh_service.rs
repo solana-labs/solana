@@ -32,7 +32,15 @@ impl PohService {
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 if poh_config.hashes_per_tick.is_none() {
-                    Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
+                    if poh_config.target_tick_count.is_none() {
+                        Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
+                    } else {
+                        Self::short_lived_sleepy_tick_producer(
+                            poh_recorder,
+                            &poh_config,
+                            &poh_exit_,
+                        );
+                    }
                 } else {
                     // PoH service runs in a tight loop, generating hashes as fast as possible.
                     // Let's dedicate one of the CPU cores to this thread so that it can gain
@@ -57,6 +65,22 @@ impl PohService {
         while !poh_exit.load(Ordering::Relaxed) {
             sleep(poh_config.target_tick_duration);
             poh_recorder.lock().unwrap().tick();
+        }
+    }
+
+    fn short_lived_sleepy_tick_producer(
+        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_config: &PohConfig,
+        poh_exit: &AtomicBool,
+    ) {
+        let mut warned = false;
+        for _ in 0..poh_config.target_tick_count.unwrap() {
+            sleep(poh_config.target_tick_duration);
+            poh_recorder.lock().unwrap().tick();
+            if poh_exit.load(Ordering::Relaxed) && !warned {
+                warned = true;
+                warn!("exit signal is ignored because PohService is scheduled to exit soon");
+            }
         }
     }
 
@@ -108,6 +132,7 @@ mod tests {
             let poh_config = Arc::new(PohConfig {
                 hashes_per_tick: Some(2),
                 target_tick_duration: Duration::from_millis(42),
+                target_tick_count: None,
             });
             let (poh_recorder, entry_receiver) = PohRecorder::new(
                 bank.tick_height(),

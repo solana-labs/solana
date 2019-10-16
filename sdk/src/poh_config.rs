@@ -6,6 +6,9 @@ pub struct PohConfig {
     /// The target tick rate of the cluster.
     pub target_tick_duration: Duration,
 
+    /// The target total tick count to be produced; used for testing only
+    pub target_tick_count: Option<u64>,
+
     /// How many hashes to roll before emitting the next tick entry.
     /// None enables "Low power mode", which implies:
     /// * sleep for `target_tick_duration` instead of hashing
@@ -18,6 +21,7 @@ impl PohConfig {
         Self {
             target_tick_duration,
             hashes_per_tick: None,
+            target_tick_count: None,
         }
     }
 }

@@ -66,7 +66,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(&bank, &blocktree);
+            create_test_recorder(&bank, &blocktree, None);
 
         let tx = test_tx();
         let len = 4096;
@@ -198,7 +198,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blocktree);
+            create_test_recorder(&bank, &blocktree, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         let _banking_stage = BankingStage::new(

@@ -1755,6 +1755,7 @@ mod tests {
                         / DEFAULT_TICKS_PER_SLOT,
                 ),
                 hashes_per_tick: None,
+                target_tick_count: None,
             },
 
             ..GenesisBlock::default()

@@ -936,6 +936,7 @@ impl Service for BankingStage {
 pub fn create_test_recorder(
     bank: &Arc<Bank>,
     blocktree: &Arc<Blocktree>,
+    poh_config: Option<PohConfig>,
 ) -> (
     Arc<AtomicBool>,
     Arc<Mutex<PohRecorder>>,
@@ -943,7 +944,7 @@ pub fn create_test_recorder(
     Receiver<WorkingBankEntry>,
 ) {
     let exit = Arc::new(AtomicBool::new(false));
-    let poh_config = Arc::new(PohConfig::default());
+    let poh_config = Arc::new(poh_config.unwrap_or_default());
     let (mut poh_recorder, entry_receiver) = PohRecorder::new(
         bank.tick_height(),
         bank.last_blockhash(),
@@ -994,7 +995,7 @@ mod tests {
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
-                create_test_recorder(&bank, &blocktree);
+                create_test_recorder(&bank, &blocktree, None);
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(RwLock::new(cluster_info));
             let banking_stage = BankingStage::new(
@@ -1019,6 +1020,7 @@ mod tests {
             mut genesis_block, ..
         } = create_genesis_block(2);
         genesis_block.ticks_per_slot = 4;
+        let num_extra_ticks = 2;
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
@@ -1028,8 +1030,10 @@ mod tests {
             let blocktree = Arc::new(
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
+            let mut poh_config = PohConfig::default();
+            poh_config.target_tick_count = Some(bank.max_tick_height() + num_extra_ticks);
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, &blocktree);
+                create_test_recorder(&bank, &blocktree, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(RwLock::new(cluster_info));
             let banking_stage = BankingStage::new(
@@ -1039,7 +1043,6 @@ mod tests {
                 vote_receiver,
             );
             trace!("sending bank");
-            sleep(Duration::from_millis(600));
             drop(verified_sender);
             drop(vote_sender);
             exit.store(true, Ordering::Relaxed);
@@ -1077,8 +1080,11 @@ mod tests {
             let blocktree = Arc::new(
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
+            let mut poh_config = PohConfig::default();
+            // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
+            poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, &blocktree);
+                create_test_recorder(&bank, &blocktree, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(RwLock::new(cluster_info));
             let banking_stage = BankingStage::new(
@@ -1128,6 +1134,9 @@ mod tests {
 
             drop(verified_sender);
             drop(vote_sender);
+            // wait until banking_stage to finish up all packets
+            banking_stage.join().unwrap();
+
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
             drop(poh_recorder);
@@ -1136,18 +1145,20 @@ mod tests {
             let bank = Bank::new(&genesis_block);
             bank.process_transaction(&fund_tx).unwrap();
             //receive entries + ticks
-            for _ in 0..10 {
+            loop {
                 let entries: Vec<Entry> = entry_receiver
                     .iter()
                     .map(|(_bank, (entry, _tick_height))| entry)
                     .collect();
 
                 assert!(entries.verify(&blockhash));
-                blockhash = entries.last().unwrap().hash;
-                for entry in entries {
-                    bank.process_transactions(&entry.transactions)
-                        .iter()
-                        .for_each(|x| assert_eq!(*x, Ok(())));
+                if !entries.is_empty() {
+                    blockhash = entries.last().unwrap().hash;
+                    for entry in entries {
+                        bank.process_transactions(&entry.transactions)
+                            .iter()
+                            .for_each(|x| assert_eq!(*x, Ok(())));
+                    }
                 }
 
                 if bank.get_balance(&to) == 1 {
@@ -1161,13 +1172,11 @@ mod tests {
             assert_eq!(bank.get_balance(&to2), 0);
 
             drop(entry_receiver);
-            banking_stage.join().unwrap();
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
-    #[ignore]
     fn test_banking_stage_entryfication() {
         solana_logger::setup();
         // In this attack we'll demonstrate that a verifier can interpret the ledger
@@ -1220,8 +1229,11 @@ mod tests {
                     Blocktree::open(&ledger_path)
                         .expect("Expected to be able to open database ledger"),
                 );
+                let mut poh_config = PohConfig::default();
+                // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
+                poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
                 let (exit, poh_recorder, poh_service, entry_receiver) =
-                    create_test_recorder(&bank, &blocktree);
+                    create_test_recorder(&bank, &blocktree, Some(poh_config));
                 let cluster_info =
                     ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
                 let cluster_info = Arc::new(RwLock::new(cluster_info));
