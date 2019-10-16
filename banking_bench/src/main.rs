@@ -41,7 +41,7 @@ fn check_txs(
     let now = Instant::now();
     let mut no_bank = false;
     loop {
-        if let Ok((_bank, (entry, _tick_count))) = receiver.recv_timeout(Duration::from_millis(10))
+        if let Ok((_bank, (entry, _tick_height))) = receiver.recv_timeout(Duration::from_millis(10))
         {
             total += entry.transactions.len();
         }

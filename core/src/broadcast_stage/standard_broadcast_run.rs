@@ -144,7 +144,7 @@ impl StandardBroadcastRun {
         let mut receive_elapsed = receive_results.time_elapsed;
         let num_entries = receive_results.entries.len();
         let bank = receive_results.bank.clone();
-        let last_tick = receive_results.last_tick;
+        let last_tick_height = receive_results.last_tick_height;
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 
         if self.current_slot_and_parent.is_none()
@@ -173,7 +173,7 @@ impl StandardBroadcastRun {
         let (data_shreds, coding_shreds) = self.entries_to_shreds(
             blocktree,
             &receive_results.entries,
-            last_tick == bank.max_tick_height(),
+            last_tick_height == bank.max_tick_height(),
         );
         let to_shreds_elapsed = to_shreds_start.elapsed();
 
@@ -214,10 +214,10 @@ impl StandardBroadcastRun {
             duration_as_us(&insert_shreds_elapsed),
             duration_as_us(&broadcast_elapsed),
             duration_as_us(&clone_and_seed_elapsed),
-            last_tick == bank.max_tick_height(),
+            last_tick_height == bank.max_tick_height(),
         );
 
-        if last_tick == bank.max_tick_height() {
+        if last_tick_height == bank.max_tick_height() {
             self.unfinished_slot = None;
         }
 
@@ -353,7 +353,7 @@ mod test {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),
             bank: bank0.clone(),
-            last_tick: (ticks.len() - 1) as u64,
+            last_tick_height: (ticks.len() - 1) as u64,
         };
 
         // Step 1: Make an incomplete transmission for slot 0
@@ -391,7 +391,7 @@ mod test {
             entries: ticks.clone(),
             time_elapsed: Duration::new(2, 0),
             bank: bank2.clone(),
-            last_tick: (ticks.len() - 1) as u64,
+            last_tick_height: (ticks.len() - 1) as u64,
         };
         standard_broadcast_run
             .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
@@ -420,7 +420,7 @@ mod test {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),
             bank: bank0.clone(),
-            last_tick: (ticks.len() - 1) as u64,
+            last_tick_height: ticks.len() as u64,
         };
 
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair);

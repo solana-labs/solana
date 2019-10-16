@@ -21,11 +21,11 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         // 1) Pull entries from banking stage
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
-        let last_tick = receive_results.last_tick;
+        let last_tick_height = receive_results.last_tick_height;
 
         // 2) Convert entries to blobs + generate coding blobs. Set a garbage PoH on the last entry
         // in the slot to make verification fail on validators
-        if last_tick == bank.max_tick_height() {
+        if last_tick_height == bank.max_tick_height() {
             let mut last_entry = receive_results.entries.last_mut().unwrap();
             last_entry.hash = Hash::default();
         }
@@ -47,7 +47,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
 
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
             &receive_results.entries,
-            last_tick == bank.max_tick_height(),
+            last_tick_height == bank.max_tick_height(),
             next_shred_index,
         );
 

@@ -304,29 +304,17 @@ fn process_bank_0(
     assert_eq!(bank0.slot(), 0);
 
     // Fetch all entries for this slot
-    let mut entries = blocktree.get_slot_entries(0, 0, None).map_err(|err| {
+    let entries = blocktree.get_slot_entries(0, 0, None).map_err(|err| {
         warn!("Failed to load entries for slot 0, err: {:?}", err);
         BlocktreeProcessorError::LedgerVerificationFailed
     })?;
 
-    // The first entry in the ledger is a pseudo-tick used only to ensure the number of ticks
-    // in slot 0 is the same as the number of ticks in all subsequent slots.  It is not
-    // processed by the bank, skip over it.
     if entries.is_empty() {
         warn!("entry0 not present");
         return Err(BlocktreeProcessorError::LedgerVerificationFailed);
     }
-    let entry0 = entries.remove(0);
-    if !(entry0.is_tick() && entry0.verify(&bank0.last_blockhash())) {
-        warn!("Ledger proof of history failed at entry0");
-        return Err(BlocktreeProcessorError::LedgerVerificationFailed);
-    }
 
-    if !entries.is_empty() {
-        verify_and_process_entries(bank0, &entries, entry0.hash, opts)?;
-    } else {
-        bank0.register_tick(&entry0.hash);
-    }
+    verify_and_process_entries(bank0, &entries, bank0.last_blockhash(), opts)?;
 
     bank0.freeze();
 
@@ -843,7 +831,7 @@ pub mod tests {
         } = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let keypair = Keypair::new();
-        let slot_entries = create_ticks(genesis_block.ticks_per_slot - 1, genesis_block.hash());
+        let slot_entries = create_ticks(genesis_block.ticks_per_slot, genesis_block.hash());
         let tx = system_transaction::create_user_account(
             &mint_keypair,
             &keypair.pubkey(),
@@ -938,7 +926,7 @@ pub mod tests {
             bank.get_balance(&mint_keypair.pubkey()),
             mint - deducted_from_mint
         );
-        assert_eq!(bank.tick_height(), 2 * genesis_block.ticks_per_slot - 1);
+        assert_eq!(bank.tick_height(), 2 * genesis_block.ticks_per_slot);
         assert_eq!(bank.last_blockhash(), last_blockhash);
     }
 

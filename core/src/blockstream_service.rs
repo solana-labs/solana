@@ -66,15 +66,8 @@ impl BlockstreamService {
         } else {
             Some(blocktree_meta.parent_slot)
         };
-        let ticks_per_slot = entries
-            .iter()
-            .filter(|entry| entry.is_tick())
-            .fold(0, |acc, _| acc + 1);
-        let mut tick_height = if slot > 0 && ticks_per_slot > 0 {
-            ticks_per_slot * slot - 1
-        } else {
-            0
-        };
+        let ticks_per_slot = entries.iter().filter(|entry| entry.is_tick()).count() as u64;
+        let mut tick_height = ticks_per_slot * slot;
 
         for (i, entry) in entries.iter().enumerate() {
             if entry.is_tick() {
@@ -158,7 +151,7 @@ mod test {
         entries.extend_from_slice(&final_tick);
 
         let expected_entries = entries.clone();
-        let expected_tick_heights = [5, 6, 7, 8, 8, 9];
+        let expected_tick_heights = [6, 7, 8, 9, 9, 10];
 
         blocktree
             .write_entries(
@@ -234,7 +227,7 @@ mod test {
             let slot = json["s"].as_u64().unwrap();
             assert_eq!(1, slot);
             let height = json["h"].as_u64().unwrap();
-            assert_eq!(2 * ticks_per_slot - 1, height);
+            assert_eq!(2 * ticks_per_slot, height);
         }
     }
 }

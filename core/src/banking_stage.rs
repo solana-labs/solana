@@ -1055,7 +1055,7 @@ mod tests {
                 .map(|(_bank, (entry, _tick_height))| entry)
                 .collect();
             trace!("done");
-            assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize - 1);
+            assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize);
             assert!(entries.verify(&start_hash));
             assert_eq!(entries[entries.len() - 1].hash, bank.last_blockhash());
             banking_stage.join().unwrap();

@@ -323,7 +323,7 @@ impl Bank {
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             rent_collector: parent.rent_collector.clone_with_epoch(epoch),
-            max_tick_height: (slot + 1) * parent.ticks_per_slot - 1,
+            max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
             fee_calculator: FeeCalculator::new_derived(
                 &parent.fee_calculator,
@@ -660,7 +660,7 @@ impl Bank {
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
         self.slots_per_segment = genesis_block.slots_per_segment;
-        self.max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
+        self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
         //   ticks/year     =      seconds/year ...
         self.slots_per_year = SECONDS_PER_YEAR
         //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
@@ -807,7 +807,7 @@ impl Bank {
         let should_register_hash = {
             if self.ticks_per_slot() != 1 || self.slot() != 0 {
                 let lock = {
-                    if (current_tick_height + 1) % self.ticks_per_slot == self.ticks_per_slot - 1 {
+                    if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
                         Some(self.blockhash_queue.write().unwrap())
                     } else {
                         None
@@ -816,7 +816,7 @@ impl Bank {
                 self.tick_height.fetch_add(1, Ordering::Relaxed);
                 inc_new_counter_debug!("bank-register_tick-registered", 1);
                 lock
-            } else if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
+            } else if current_tick_height % self.ticks_per_slot == 0 {
                 // Register a new block hash if at the last tick in the slot
                 Some(self.blockhash_queue.write().unwrap())
             } else {
@@ -3236,7 +3236,7 @@ mod tests {
         assert_eq!(bank.is_votable(), false);
 
         // Register enough ticks to hit max tick height
-        for i in 0..genesis_block.ticks_per_slot - 1 {
+        for i in 0..genesis_block.ticks_per_slot {
             bank.register_tick(&hash::hash(format!("hello world {}", i).as_bytes()));
         }
 
@@ -3249,7 +3249,7 @@ mod tests {
         assert_eq!(bank.is_votable(), false);
 
         // Register enough ticks to hit max tick height
-        for i in 0..genesis_block.ticks_per_slot - 1 {
+        for i in 0..genesis_block.ticks_per_slot {
             bank.register_tick(&hash::hash(format!("hello world {}", i).as_bytes()));
         }
         // empty banks aren't votable even at max tick height
@@ -3360,7 +3360,7 @@ mod tests {
         let (genesis_block, _) = create_genesis_block(500);
         let bank = Arc::new(Bank::new(&genesis_block));
         //set tick height to max
-        let max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
+        let max_tick_height = (bank.slot + 1) * bank.ticks_per_slot;
         bank.tick_height.store(max_tick_height, Ordering::Relaxed);
         assert!(bank.is_votable());
     }
