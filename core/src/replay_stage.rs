@@ -16,6 +16,7 @@ use solana_ledger::blocktree_processor;
 use solana_ledger::entry::{Entry, EntrySlice};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::snapshot_package::SnapshotPackageSender;
+use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
@@ -765,13 +766,14 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
     ) -> Result<()> {
         datapoint_info!("verify-batch-size", ("size", entries.len() as i64, i64));
+        let mut verify_total = Measure::start("verify_and_process_entries");
         let last_entry = &bank_progress.last_entry;
         let mut entry_state = entries.start_verify(last_entry);
 
-        let now = Instant::now();
+        let mut replay_elapsed = Measure::start("replay_elapsed");
         let res = blocktree_processor::process_entries(bank, entries, true);
-        let replay_elapsed = now.elapsed().as_micros();
-        bank_progress.stats.replay_elapsed += replay_elapsed as u64;
+        replay_elapsed.stop();
+        bank_progress.stats.replay_elapsed += replay_elapsed.as_us();
 
         if !entry_state.finish_verify(entries) {
             info!(
@@ -791,6 +793,9 @@ impl ReplayStage {
             );
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
+        verify_total.stop();
+        bank_progress.stats.entry_verification_elapsed =
+            verify_total.as_us() - replay_elapsed.as_us();
 
         res?;
         Ok(())
