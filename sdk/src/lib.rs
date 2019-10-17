@@ -12,7 +12,6 @@ pub mod loader_instruction;
 pub mod message;
 pub mod native_loader;
 pub mod native_token;
-pub mod packet;
 pub mod poh_config;
 pub mod pubkey;
 pub mod rent_calculator;
@@ -36,6 +35,8 @@ pub mod bank_hash;
 pub mod client;
 #[cfg(not(feature = "program"))]
 pub mod genesis_block;
+#[cfg(not(feature = "program"))]
+pub mod packet;
 #[cfg(not(feature = "program"))]
 pub mod signature;
 #[cfg(not(feature = "program"))]
