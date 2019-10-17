@@ -13,8 +13,8 @@
 use crate::blocktree::Blocktree;
 use crate::entry::Entry;
 use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::poh::Poh;
 use crate::result::{Error, Result};
+use solana_ledger::poh::Poh;
 use solana_runtime::bank::Bank;
 pub use solana_sdk::clock::Slot;
 use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;

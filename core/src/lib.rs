@@ -44,7 +44,6 @@ pub mod leader_schedule_utils;
 pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;
 pub mod packet;
-pub mod poh;
 pub mod poh_recorder;
 pub mod poh_service;
 pub mod recvmmsg;
