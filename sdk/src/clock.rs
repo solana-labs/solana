@@ -29,7 +29,8 @@ pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;
 
 // This must be <= MAX_HASH_AGE_IN_SECONDS, otherwise there's risk for DuplicateSignature errors
-pub const MAX_RECENT_BLOCKHASHES: usize = MAX_HASH_AGE_IN_SECONDS;
+pub const MAX_RECENT_BLOCKHASHES: usize =
+    MAX_HASH_AGE_IN_SECONDS * DEFAULT_TICKS_PER_SECOND as usize / DEFAULT_TICKS_PER_SLOT as usize;
 
 // The maximum age of a blockhash that will be accepted by the leader
 pub const MAX_PROCESSING_AGE: usize = MAX_RECENT_BLOCKHASHES / 2;
