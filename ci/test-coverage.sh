@@ -30,7 +30,7 @@ report=coverage-"${CI_COMMIT:0:9}".tar.gz
 mv target/cov/report.tar.gz "$report"
 upload-ci-artifact "$report"
 
-gzip target/cov/coverage-stderr.log
+gzip -f target/cov/coverage-stderr.log
 upload-ci-artifact target/cov/coverage-stderr.log.gz
 
 annotate --style success --context lcov-report \
