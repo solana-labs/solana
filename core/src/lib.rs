@@ -31,7 +31,6 @@ pub mod crds_gossip_pull;
 pub mod crds_gossip_push;
 pub mod crds_value;
 pub mod cuda_runtime;
-pub mod erasure;
 pub mod fetch_stage;
 pub mod gen_keys;
 pub mod genesis_utils;

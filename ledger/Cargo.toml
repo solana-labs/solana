@@ -14,6 +14,7 @@ dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
 log = { version = "0.4.8" }
 rayon = "1.2.0"
+reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0.1-3", features = ["simd-accel"] }
 serde = "1.0.101"
 serde_derive = "1.0.101"
 solana-logger = { path = "../logger", version = "0.20.0" }

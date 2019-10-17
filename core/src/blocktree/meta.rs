@@ -1,4 +1,4 @@
-use crate::erasure::ErasureConfig;
+use solana_ledger::erasure::ErasureConfig;
 use solana_metrics::datapoint;
 use std::cmp::Ordering;
 use std::{collections::BTreeSet, ops::Range, ops::RangeBounds};
