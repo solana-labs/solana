@@ -9,6 +9,7 @@ upload_results_to_slack() {
   [[ -n $BUILDKITE_MESSAGE ]] || BUILDKITE_MESSAGE="Message not defined"
   [[ -n $BUILDKITE_COMMIT ]] || BUILDKITE_COMMIT="Commit not defined"
   [[ -n $BUILDKITE_BUILD_URL ]] || BUILDKITE_BUILD_URL="Build URL not defined"
+  [[ -n $GRAFANA_URL ]] || GRAFANA_URL="Undefined"
   [[ -n $RESULT_DETAILS ]] || RESULT_DETAILS="Undefined"
   [[ -n $TEST_CONFIGURATION ]] || TEST_CONFIGURATION="Undefined"
 
@@ -20,9 +21,12 @@ upload_results_to_slack() {
 			"text": {
 				"type": "mrkdwn",
 				"text":
-"Buildkite Message: $BUILDKITE_MESSAGE
+
+"\*New Build Started at: $START_TIME\*
+Buildkite Message: $BUILDKITE_MESSAGE
 Commit SHA: $BUILDKITE_COMMIT
 Link to Build: $BUILDKITE_BUILD_URL
+Link to Grafana: $GRAFANA_URL
 "
 			},
 		},

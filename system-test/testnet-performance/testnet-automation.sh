@@ -201,4 +201,12 @@ for i in "${TEST_PARAMS_TO_DISPLAY[@]}" ; do
   fi
 done
 
+if [[ -n $CHANNEL ]] ; then
+  GRAFANA_URL="https://metrics.solana.com:3000/d/testnet-${CHANNEL}/testnet-monitor-${CHANNEL}?var-testnet=${TESTNET_TAG}"
+else
+  GRAFANA_URL="https://metrics.solana.com:3000/d/testnet-edge/testnet-monitor-edge?var-testnet=${TESTNET_TAG}"
+fi
+
+START_TIME="$(date -u)"
+
 launchTestnet
