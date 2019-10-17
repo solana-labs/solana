@@ -32,10 +32,10 @@ sysctl_write() {
 case $(uname) in
 Linux)
   # Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-  sysctl_write net.core.rmem_max 161061273
-  sysctl_write net.core.rmem_default 161061273
-  sysctl_write net.core.wmem_max 161061273
-  sysctl_write net.core.wmem_default 161061273
+  sysctl_write net.core.rmem_max 134217728
+  sysctl_write net.core.rmem_default 134217728
+  sysctl_write net.core.wmem_max 134217728
+  sysctl_write net.core.wmem_default 134217728
   ;;
 *)
   ;;
