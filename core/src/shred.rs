@@ -1,5 +1,4 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
-use crate::blocktree::BlocktreeError;
 use crate::entry::create_ticks;
 use crate::entry::Entry;
 use crate::erasure::Session;
@@ -16,7 +15,6 @@ use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::io;
-use std::io::{Error as IOError, ErrorKind};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -51,6 +49,22 @@ pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
 
 const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
 pub const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
+
+#[derive(Debug)]
+pub enum ShredError {
+    InvalidShredType,
+    InvalidFecRate(f32), // FEC rate must be more than 0.0 and less than 1.0
+    SlotTooLow { slot: u64, parent_slot: u64 }, // "Current slot must be > Parent slot, but the difference must not be > u16::MAX
+    Serialize(std::boxed::Box<bincode::ErrorKind>),
+}
+
+pub type Result<T> = std::result::Result<T, ShredError>;
+
+impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for ShredError {
+    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> ShredError {
+        ShredError::Serialize(e)
+    }
+}
 
 #[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub struct ShredType(pub u8);
@@ -145,7 +159,7 @@ impl Shred {
         Self::new(header, shred_buf)
     }
 
-    pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> Result<Self, BlocktreeError> {
+    pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> Result<Self> {
         let shred_type: ShredType = bincode::deserialize(&shred_buf[..*SIZE_OF_SHRED_TYPE])?;
         let mut header = if shred_type == ShredType(CODING_SHRED) {
             let start = *SIZE_OF_SHRED_TYPE;
@@ -160,9 +174,7 @@ impl Shred {
             header.data_header = bincode::deserialize(&shred_buf[start..end])?;
             header
         } else {
-            return Err(BlocktreeError::InvalidShredData(Box::new(
-                bincode::ErrorKind::Custom("Invalid shred type".to_string()),
-            )));
+            return Err(ShredError::InvalidShredType);
         };
         header.shred_type = shred_type;
 
@@ -307,30 +319,13 @@ pub struct Shredder {
 }
 
 impl Shredder {
-    pub fn new(
-        slot: u64,
-        parent_slot: u64,
-        fec_rate: f32,
-        keypair: Arc<Keypair>,
-    ) -> Result<Self, IOError> {
+    pub fn new(slot: u64, parent_slot: u64, fec_rate: f32, keypair: Arc<Keypair>) -> Result<Self> {
         if fec_rate > 1.0 || fec_rate < 0.0 {
-            Err(IOError::new(
-                ErrorKind::Other,
-                format!(
-                    "FEC rate {:?} must be more than 0.0 and less than 1.0",
-                    fec_rate
-                ),
-            ))
+            Err(ShredError::InvalidFecRate(fec_rate))
         } else if slot < parent_slot || slot - parent_slot > u64::from(std::u16::MAX) {
-            Err(IOError::new(
-                ErrorKind::Other,
-                format!(
-                    "Current slot {:?} must be > Parent slot {:?}, but the difference must not be > {:?}",
-                    slot, parent_slot, std::u16::MAX
-                ),
-            ))
+            Err(ShredError::SlotTooLow { slot, parent_slot })
         } else {
-            Ok(Shredder {
+            Ok(Self {
                 slot,
                 parent_slot,
                 fec_rate,
@@ -561,7 +556,7 @@ impl Shredder {
         num_coding: usize,
         first_index: usize,
         slot: u64,
-    ) -> Result<Vec<Shred>, reed_solomon_erasure::Error> {
+    ) -> std::result::Result<Vec<Shred>, reed_solomon_erasure::Error> {
         let mut recovered_data = vec![];
         let fec_set_size = num_data + num_coding;
 
@@ -642,7 +637,7 @@ impl Shredder {
     }
 
     /// Combines all shreds to recreate the original buffer
-    pub fn deshred(shreds: &[Shred]) -> Result<Vec<u8>, reed_solomon_erasure::Error> {
+    pub fn deshred(shreds: &[Shred]) -> std::result::Result<Vec<u8>, reed_solomon_erasure::Error> {
         let num_data = shreds.len();
         let data_shred_bufs = {
             let first_index = shreds.first().unwrap().index() as usize;
