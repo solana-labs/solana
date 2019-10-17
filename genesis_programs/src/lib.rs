@@ -17,6 +17,8 @@ extern crate solana_stake_program;
 #[macro_use]
 extern crate solana_storage_program;
 #[macro_use]
+extern crate solana_vest_program;
+#[macro_use]
 extern crate solana_vote_program;
 
 pub fn get() -> Vec<(String, Pubkey)> {
@@ -30,6 +32,7 @@ pub fn get() -> Vec<(String, Pubkey)> {
         solana_move_loader_program!(),
         solana_stake_program!(),
         solana_storage_program!(),
+        solana_vest_program!(),
         solana_vote_program!(),
     ]
 }
@@ -52,6 +55,7 @@ mod tests {
             solana_sdk::system_program::id(),
             solana_stake_api::id(),
             solana_storage_api::id(),
+            solana_vest_api::id(),
             solana_vote_api::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
