@@ -157,7 +157,7 @@ impl Crds {
     }
 
     pub fn remove(&mut self, key: &CrdsValueLabel) {
-        self.table.remove(key);
+        self.table.swap_remove(key);
     }
 }
 
