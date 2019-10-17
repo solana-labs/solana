@@ -21,6 +21,12 @@ use std::{
     path::Path,
 };
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum OperatingMode {
+    SoftLaunch,  // Cluster features incrementally enabled over time
+    Development, // All features (including experimental features) available immediately from genesis
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GenesisBlock {
     pub accounts: Vec<(Pubkey, Account)>,
@@ -33,6 +39,7 @@ pub struct GenesisBlock {
     pub rent_calculator: RentCalculator,
     pub inflation: Inflation,
     pub epoch_schedule: EpochSchedule,
+    pub operating_mode: OperatingMode,
 }
 
 // useful for basic tests
@@ -63,6 +70,7 @@ impl Default for GenesisBlock {
             fee_calculator: FeeCalculator::default(),
             rent_calculator: RentCalculator::default(),
             epoch_schedule: EpochSchedule::default(),
+            operating_mode: OperatingMode::Development,
         }
     }
 }

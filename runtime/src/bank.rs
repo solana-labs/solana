@@ -151,6 +151,8 @@ impl StatusCacheRc {
     }
 }
 
+pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) -> () + Sync + Send>;
+
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default, Deserialize, Serialize)]
 pub struct Bank {
@@ -252,6 +254,11 @@ pub struct Bank {
 
     /// The Message processor
     message_processor: MessageProcessor,
+
+    /// Callback to be notified when a bank enters a new Epoch
+    /// (used to adjust cluster features over time)
+    #[serde(skip)]
+    entered_epoch_callback: Arc<RwLock<Option<EnteredEpochCallback>>>,
 }
 
 impl Default for BlockhashQueue {
@@ -339,6 +346,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Ordering::Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: MessageProcessor::default(),
+            entered_epoch_callback: parent.entered_epoch_callback.clone(),
         };
 
         datapoint_debug!(
@@ -348,6 +356,15 @@ impl Bank {
         );
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+
+        if parent.epoch() < new.epoch() {
+            if let Some(entered_epoch_callback) =
+                parent.entered_epoch_callback.read().unwrap().as_ref()
+            {
+                entered_epoch_callback(&mut new)
+            }
+        }
+
         // update epoch_stakes cache
         //  if my parent didn't populate for this staker's epoch, we've
         //  crossed a boundary
@@ -1288,6 +1305,13 @@ impl Bank {
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
         self.rc.parent = RwLock::new(Some(parent.clone()));
+    }
+
+    pub fn set_entered_epoch_callback(&self, entered_epoch_callback: EnteredEpochCallback) {
+        std::mem::replace(
+            &mut *self.entered_epoch_callback.write().unwrap(),
+            Some(entered_epoch_callback),
+        );
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -2771,6 +2795,41 @@ mod tests {
             bank.get_slots_in_epoch(5000),
             genesis_block.epoch_schedule.slots_per_epoch
         );
+    }
+
+    #[test]
+    fn test_bank_entered_epoch_callback() {
+        let (genesis_block, _) = create_genesis_block(500);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let callback_count = Arc::new(AtomicU64::new(0));
+
+        bank0.set_entered_epoch_callback({
+            let callback_count = callback_count.clone();
+            //Box::new(move |_bank: &mut Bank| {
+            Box::new(move |_| {
+                callback_count.fetch_add(1, Ordering::SeqCst);
+            })
+        });
+
+        let _bank1 =
+            Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
+        // No callback called while within epoch 0
+        assert_eq!(callback_count.load(Ordering::SeqCst), 0);
+
+        let _bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0));
+        // Callback called as bank1 is in epoch 1
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+
+        callback_count.store(0, Ordering::SeqCst);
+        let _bank1 = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            std::u64::MAX / bank0.ticks_per_slot - 1,
+        );
+        // If the new bank jumps ahead multiple epochs the callback is still only called once.
+        // This was done to keep the callback implementation simpler as new bank will never jump
+        // cross multiple epochs in a real deployment.
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
     }
 
     #[test]

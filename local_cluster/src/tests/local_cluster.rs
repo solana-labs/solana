@@ -5,6 +5,7 @@ use crate::{
 };
 use log::*;
 use serial_test_derive::serial;
+use solana_client::thin_client::create_client;
 use solana_core::{
     broadcast_stage::BroadcastStageType, gossip_service::discover_cluster,
     validator::ValidatorConfig,
@@ -15,6 +16,7 @@ use solana_sdk::{
     client::SyncClient,
     clock,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
+    genesis_block::OperatingMode,
     poh_config::PohConfig,
 };
 use std::path::{Path, PathBuf};
@@ -294,6 +296,43 @@ fn test_listener_startup() {
     let cluster = LocalCluster::new(&config);
     let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
     assert_eq!(cluster_nodes.len(), 4);
+}
+
+#[test]
+#[serial]
+fn test_softlaunch_operating_mode() {
+    solana_logger::setup();
+
+    let config = ClusterConfig {
+        operating_mode: OperatingMode::SoftLaunch,
+        node_stakes: vec![100; 1],
+        cluster_lamports: 1_000,
+        validator_configs: vec![ValidatorConfig::default(); 1],
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&config);
+    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    assert_eq!(cluster_nodes.len(), 1);
+
+    let client = create_client(
+        cluster.entry_point_info.client_facing_addr(),
+        solana_core::cluster_info::VALIDATOR_PORT_RANGE,
+    );
+
+    // Programs that are not available at soft launch
+    for program_id in [
+        &solana_config_api::id(),
+        &solana_sdk::bpf_loader::id(),
+        &solana_sdk::system_program::id(),
+        &solana_vest_api::id(),
+    ]
+    .iter()
+    {
+        assert_eq!(
+            (program_id, client.get_account(program_id).unwrap()),
+            (program_id, None)
+        );
+    }
 }
 
 #[allow(unused_attributes)]

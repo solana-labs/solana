@@ -14,7 +14,7 @@ use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
     epoch_schedule::EpochSchedule,
-    genesis_block::GenesisBlock,
+    genesis_block::{GenesisBlock, OperatingMode},
     message::Message,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -74,6 +74,7 @@ pub struct ClusterConfig {
     pub slots_per_segment: u64,
     pub stakers_slot_offset: u64,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
+    pub operating_mode: OperatingMode,
     pub poh_config: PohConfig,
 }
 
@@ -90,6 +91,7 @@ impl Default for ClusterConfig {
             slots_per_segment: DEFAULT_SLOTS_PER_SEGMENT,
             stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             native_instruction_processors: vec![],
+            operating_mode: OperatingMode::Development,
             poh_config: PohConfig::default(),
         }
     }
@@ -142,7 +144,19 @@ impl LocalCluster {
         genesis_block.slots_per_segment = config.slots_per_segment;
         genesis_block.epoch_schedule =
             EpochSchedule::custom(config.slots_per_epoch, config.stakers_slot_offset, true);
+        genesis_block.operating_mode = config.operating_mode;
         genesis_block.poh_config = config.poh_config.clone();
+
+        match genesis_block.operating_mode {
+            OperatingMode::SoftLaunch => {
+                genesis_block.native_instruction_processors =
+                    solana_genesis_programs::get(genesis_block.operating_mode, 0).unwrap()
+            }
+            // create_genesis_block_with_leader() assumes OperatingMode::Development so do
+            // nothing...
+            OperatingMode::Development => (),
+        }
+
         genesis_block
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);

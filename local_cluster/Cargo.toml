@@ -13,11 +13,13 @@ log = "0.4.8"
 rand = "0.6.5"
 solana-bench-exchange = { path = "../bench-exchange", version = "0.20.0" }
 solana-bench-tps = { path = "../bench-tps", version = "0.20.0" }
+solana-config-api = { path = "../programs/config_api", version = "0.20.0" }
 solana-core = { path = "../core", version = "0.20.0" }
 solana-client = { path = "../client", version = "0.20.0" }
 solana-drone = { path = "../drone", version = "0.20.0" }
 solana-exchange-api = { path = "../programs/exchange_api", version = "0.20.0" }
 solana-exchange-program = { path = "../programs/exchange_program", version = "0.20.0" }
+solana-genesis-programs = { path = "../genesis_programs", version = "0.20.0" }
 solana-ledger = { path = "../ledger", version = "0.20.0" }
 solana-logger = { path = "../logger", version = "0.20.0" }
 solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.20.0", optional = true }
@@ -27,6 +29,7 @@ solana-sdk = { path = "../sdk", version = "0.20.0" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.20.0" }
 solana-storage-program = { path = "../programs/storage_program", version = "0.20.0" }
+solana-vest-api = { path = "../programs/vest_api", version = "0.20.0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.20.0" }
 symlink = "0.1.0"
 tempfile = "3.1.0"
