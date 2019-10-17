@@ -43,6 +43,7 @@ members = [
     "programs/storage_api",
     "programs/storage_program",
     "programs/vest_api",
+    "programs/vest_program",
     "programs/vote_api",
     "programs/vote_program",
     "replicator",
