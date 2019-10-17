@@ -1,4 +1,3 @@
-use crate::bank_forks::SnapshotConfig;
 use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackage;
 use bincode::{deserialize_from, serialize_into};
@@ -180,11 +179,11 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<u64> {
 
 pub fn bank_from_archive<P: AsRef<Path>>(
     account_paths: String,
-    snapshot_config: &SnapshotConfig,
+    snapshot_path: &PathBuf,
     snapshot_tar: P,
 ) -> Result<Bank> {
     // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
-    let unpack_dir = tempfile::tempdir_in(&snapshot_config.snapshot_path)?;
+    let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
     untar_snapshot_in(&snapshot_tar, &unpack_dir)?;
 
     let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
@@ -199,7 +198,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         panic!("Snapshot bank failed to verify");
     }
 
-    // Move the unpacked snapshots into `snapshot_config.snapshot_path`
+    // Move the unpacked snapshots into `snapshot_path`
     let dir_files = fs::read_dir(&unpacked_snapshots_dir).unwrap_or_else(|err| {
         panic!(
             "Invalid snapshot path {:?}: {}",
@@ -211,7 +210,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         .collect();
     let mut copy_options = CopyOptions::new();
     copy_options.overwrite = true;
-    fs_extra::move_items(&paths, &snapshot_config.snapshot_path, &copy_options)?;
+    fs_extra::move_items(&paths, &snapshot_path, &copy_options)?;
 
     Ok(bank)
 }

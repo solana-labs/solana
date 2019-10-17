@@ -376,7 +376,11 @@ mod tests {
 
         let deserialized_bank = snapshot_utils::bank_from_archive(
             account_paths,
-            old_bank_forks.snapshot_config.as_ref().unwrap(),
+            &old_bank_forks
+                .snapshot_config
+                .as_ref()
+                .unwrap()
+                .snapshot_path,
             snapshot_utils::get_snapshot_tar_path(snapshot_package_output_path),
         )
         .unwrap();
