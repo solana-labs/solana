@@ -1,7 +1,6 @@
 use crate::bank_forks::SnapshotConfig;
 use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackage;
-use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use bincode::{deserialize_from, serialize_into};
 use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
@@ -17,6 +16,8 @@ use std::path::{Path, PathBuf};
 use tar::Archive;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
+pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
+pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
@@ -285,7 +286,6 @@ fn get_io_error(error: &str) -> Error {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::snapshot_package::{TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
     use tempfile::TempDir;
 
     pub fn verify_snapshot_tar<P, Q, R>(

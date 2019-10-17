@@ -282,7 +282,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::service::Service;
-    use crate::snapshot_package::SnapshotPackagerService;
+    use crate::snapshot_packager_service::SnapshotPackagerService;
     use bincode::serialize_into;
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;

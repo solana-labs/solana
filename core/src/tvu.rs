@@ -23,7 +23,7 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::shred_fetch_stage::ShredFetchStage;
-use crate::snapshot_package::SnapshotPackagerService;
+use crate::snapshot_packager_service::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
 use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;

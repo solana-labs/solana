@@ -55,6 +55,7 @@ pub mod service;
 pub mod sigverify;
 pub mod sigverify_stage;
 pub mod snapshot_package;
+pub mod snapshot_packager_service;
 pub mod snapshot_utils;
 pub mod storage_stage;
 pub mod streamer;
