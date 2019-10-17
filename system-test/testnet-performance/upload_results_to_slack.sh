@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 upload_results_to_slack() {
   echo --- Uploading results to Slack Performance Results App
 
@@ -35,7 +33,7 @@ Link to Build: $BUILDKITE_BUILD_URL
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "Test Configuration: \n$TEST_CONFIGURATION"
+				"text": "Test Configuration: \n\`\`\`$TEST_CONFIGURATION\`\`\`"
 			},
 		},
 		{
@@ -45,7 +43,7 @@ Link to Build: $BUILDKITE_BUILD_URL
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "Result Details: \n$RESULT_DETAILS"
+				"text": "Result Details: \n\`\`\`$RESULT_DETAILS\`\`\`"
 			},
 		}
 	]
