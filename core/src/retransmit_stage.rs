@@ -69,8 +69,8 @@ fn retransmit(
     let mut compute_turbine_peers_total = 0;
     for mut packets in packet_v {
         for packet in packets.packets.iter_mut() {
-            // skip repair packets
-            if packet.meta.repair {
+            // skip discarded packets and repair packets
+            if packet.meta.discard || packet.meta.repair {
                 total_packets -= 1;
                 continue;
             }
