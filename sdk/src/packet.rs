@@ -13,6 +13,7 @@ pub struct Meta {
     pub size: usize,
     pub forward: bool,
     pub repair: bool,
+    pub discard: bool,
     pub addr: [u16; 8],
     pub port: u16,
     pub v6: bool,
