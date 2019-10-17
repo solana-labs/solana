@@ -120,7 +120,7 @@ impl Validator {
         warn!("vote pubkey: {:?}", vote_account);
         warn!(
             "CUDA is {}abled",
-            if crate::perf_libs::api().is_some() {
+            if solana_ledger::perf_libs::api().is_some() {
                 "en"
             } else {
                 "dis"

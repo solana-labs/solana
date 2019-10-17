@@ -2,7 +2,7 @@
 
 use crate::blocktree::Blocktree;
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use crate::perf_libs;
+use solana_ledger::perf_libs;
 use solana_sdk::hash::Hash;
 use std::io;
 use std::mem::size_of;

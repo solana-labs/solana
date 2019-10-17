@@ -7,7 +7,6 @@
 
 use crate::cuda_runtime::PinnedVec;
 use crate::packet::Packets;
-use crate::perf_libs;
 use crate::recycler::Recycler;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -15,6 +14,7 @@ use crate::sigverify;
 use crate::sigverify::TxOffset;
 use crate::streamer::{self, PacketReceiver};
 use crossbeam_channel::Sender as CrossbeamSender;
+use solana_ledger::perf_libs;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_info};
 use solana_sdk::timing;

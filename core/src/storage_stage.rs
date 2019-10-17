@@ -411,7 +411,7 @@ impl StorageStage {
         // TODO: cuda required to generate the reference values
         // but if it is missing, then we need to take care not to
         // process storage mining results.
-        if crate::perf_libs::api().is_some() {
+        if solana_ledger::perf_libs::api().is_some() {
             // Lock the keys, since this is the IV memory,
             // it will be updated in-place by the encryption.
             // Should be overwritten by the proof signatures which replace the
@@ -750,7 +750,7 @@ mod tests {
             .collect::<Vec<_>>();
         bank_sender.send(rooted_banks).unwrap();
 
-        if crate::perf_libs::api().is_some() {
+        if solana_ledger::perf_libs::api().is_some() {
             for _ in 0..5 {
                 result = storage_state.get_mining_result(&signature);
                 if result != Hash::default() {
@@ -766,7 +766,7 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
 
-        if crate::perf_libs::api().is_some() {
+        if solana_ledger::perf_libs::api().is_some() {
             assert_ne!(result, Hash::default());
         } else {
             assert_eq!(result, Hash::default());

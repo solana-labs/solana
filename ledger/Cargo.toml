@@ -9,6 +9,8 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
+dlopen = "0.1.8"
+dlopen_derive = "0.1.4"
 log = { version = "0.4.8" }
 solana-sdk = { path = "../sdk", version = "0.20.0" }
 sys-info = "0.5.8"

@@ -2,9 +2,9 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use crate::perf_libs;
 use rayon::prelude::*;
 use rayon::ThreadPool;
+use solana_ledger::perf_libs;
 use solana_ledger::poh::Poh;
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::inc_new_counter_warn;
