@@ -9,7 +9,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::shred::Shred;
 use crate::streamer::{PacketReceiver, PacketSender};
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use rayon::ThreadPool;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_rayon_threadlimit::get_thread_count;
@@ -22,8 +22,6 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
-
-pub const NUM_THREADS: u32 = 10;
 
 fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
     if shred.is_data() {
@@ -89,40 +87,26 @@ where
     inc_new_counter_debug!("streamer-recv_window-recv", packets.packets.len());
 
     let last_root = blocktree.last_root();
-    let (shreds, packets_ix): (Vec<_>, Vec<_>) = thread_pool.install(|| {
+    let shreds: Vec<_> = thread_pool.install(|| {
         packets
             .packets
             .par_iter_mut()
-            .enumerate()
-            .filter_map(|(i, packet)| {
+            .filter_map(|packet| {
                 if let Ok(shred) = Shred::new_from_serialized_shred(packet.data.to_vec()) {
                     if shred_filter(&shred, last_root) {
                         packet.meta.slot = shred.slot();
                         packet.meta.seed = shred.seed();
-                        Some((shred, i))
+                        Some(shred)
                     } else {
+                        packet.meta.discard = true;
                         None
                     }
                 } else {
+                    packet.meta.discard = true;
                     None
                 }
             })
-            .unzip()
-    });
-    // to avoid lookups into the `packets_ix` vec, this block manually tracks where we are in that vec
-    // and since `packets.packets.retain` and the `packets_ix` vec are both in order,
-    // we should be able to automatically drop any packets in the index gaps.
-    let mut retain_ix = 0;
-    let mut i = 0;
-    packets.packets.retain(|_| {
-        let retain = if !packets_ix.is_empty() && i == packets_ix[retain_ix] {
-            retain_ix = (packets_ix.len() - 1).min(retain_ix + 1);
-            true
-        } else {
-            false
-        };
-        i += 1;
-        retain
+            .collect()
     });
 
     trace!("{:?} shreds from packets", shreds.len());
