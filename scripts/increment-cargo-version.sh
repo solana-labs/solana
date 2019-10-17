@@ -114,7 +114,7 @@ for Doc_update in "${Doc_updates[@]}"; do
   # Set new crate version
   (
     set -x
-    sed -i "$Doc_update" -e "s/v[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]/$newVersion/g"
+    sed -i "$Doc_update" -e "s/$currentVersion/$newVersion/g"
   )
 done
 
