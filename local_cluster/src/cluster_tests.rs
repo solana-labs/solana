@@ -5,13 +5,10 @@ use solana_client::thin_client::create_client;
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
 use solana_core::{
-    blocktree::Blocktree,
-    cluster_info::VALIDATOR_PORT_RANGE,
-    consensus::VOTE_THRESHOLD_DEPTH,
-    contact_info::ContactInfo,
-    entry::{Entry, EntrySlice},
-    gossip_service::discover_cluster,
+    blocktree::Blocktree, cluster_info::VALIDATOR_PORT_RANGE, consensus::VOTE_THRESHOLD_DEPTH,
+    contact_info::ContactInfo, gossip_service::discover_cluster,
 };
+use solana_ledger::entry::{Entry, EntrySlice};
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS},

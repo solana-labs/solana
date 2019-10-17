@@ -75,8 +75,8 @@ mod tests {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use crate::entry::Entry;
     use crate::gen_keys::GenKeys;
+    use solana_ledger::entry::Entry;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction;

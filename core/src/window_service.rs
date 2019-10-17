@@ -271,7 +271,6 @@ mod test {
         blocktree::{get_tmp_ledger_path, Blocktree},
         cluster_info::ClusterInfo,
         contact_info::ContactInfo,
-        entry::{create_ticks, Entry},
         genesis_utils::create_genesis_block_with_leader,
         packet::{Packet, Packets},
         repair_service::RepairSlotRange,
@@ -280,6 +279,7 @@ mod test {
         shred::SIZE_OF_SHRED_TYPE,
     };
     use rand::{seq::SliceRandom, thread_rng};
+    use solana_ledger::entry::{create_ticks, Entry};
     use solana_sdk::{
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,

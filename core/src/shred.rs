@@ -1,6 +1,4 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
-use crate::entry::create_ticks;
-use crate::entry::Entry;
 use crate::erasure::Session;
 use bincode::serialized_size;
 use core::cell::RefCell;
@@ -9,6 +7,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelI
 use rayon::slice::ParallelSlice;
 use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
+use solana_ledger::entry::{create_ticks, Entry};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;

@@ -115,8 +115,8 @@ mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use crate::entry::create_ticks;
     use crate::replicator::sample_file;
+    use solana_ledger::entry::create_ticks;
     use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::{remove_dir_all, remove_file};

@@ -193,9 +193,9 @@ mod test {
     use super::*;
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::entry::create_ticks;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::service::Service;
+    use solana_ledger::entry::create_ticks;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;

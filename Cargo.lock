@@ -3523,10 +3523,19 @@ dependencies = [
 name = "solana-ledger"
 version = "0.20.0"
 dependencies = [
+ "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "dlopen 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "dlopen_derive 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "matches 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rayon 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-budget-api 0.20.0",
+ "solana-logger 0.20.0",
+ "solana-merkle-tree 0.20.0",
+ "solana-metrics 0.20.0",
+ "solana-rayon-threadlimit 0.20.0",
  "solana-sdk 0.20.0",
  "sys-info 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3577,6 +3586,7 @@ dependencies = [
  "solana-drone 0.20.0",
  "solana-exchange-api 0.20.0",
  "solana-exchange-program 0.20.0",
+ "solana-ledger 0.20.0",
  "solana-logger 0.20.0",
  "solana-move-loader-api 0.20.0",
  "solana-move-loader-program 0.20.0",

@@ -4,7 +4,6 @@
 use crate::{
     blocktree::Blocktree,
     cluster_info::ClusterInfo,
-    entry::hash_transactions,
     leader_schedule_cache::LeaderScheduleCache,
     packet::PACKETS_PER_BATCH,
     packet::{Packet, Packets},
@@ -17,7 +16,7 @@ use crate::{
 use bincode::deserialize;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
-use solana_ledger::perf_libs;
+use solana_ledger::{entry::hash_transactions, perf_libs};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
 use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};
@@ -969,13 +968,13 @@ mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::Node;
-    use crate::entry::{Entry, EntrySlice};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
     use crate::{get_tmp_ledger_path, tmp_ledger_name};
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
+    use solana_ledger::entry::{Entry, EntrySlice};
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;

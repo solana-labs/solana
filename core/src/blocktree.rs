@@ -1,9 +1,9 @@
 //! The `block_tree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-use crate::entry::Entry;
 use crate::erasure::ErasureConfig;
 use crate::shred::{Shred, Shredder};
+use solana_ledger::entry::Entry;
 
 use bincode::deserialize;
 
@@ -1593,7 +1593,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open(ledger_path)?;
 
-    let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
+    let entries = solana_ledger::entry::create_ticks(ticks_per_slot, genesis_block.hash());
     let last_hash = entries.last().unwrap().hash;
 
     let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()))
@@ -1690,12 +1690,12 @@ pub fn entries_to_test_shreds(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::entry::{create_ticks, Entry};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::shred::max_ticks_per_n_shreds;
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
+    use solana_ledger::entry::{create_ticks, Entry};
     use solana_sdk::hash::Hash;
     use solana_sdk::packet::PACKET_DATA_SIZE;
     use std::iter::FromIterator;

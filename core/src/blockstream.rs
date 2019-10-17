@@ -2,11 +2,11 @@
 //! local unix socket, to provide client services such as a block explorer with
 //! real-time access to entries.
 
-use crate::entry::Entry;
 use crate::result::Result;
 use bincode::serialize;
 use chrono::{SecondsFormat, Utc};
 use serde_json::json;
+use solana_ledger::entry::Entry;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cell::RefCell;
@@ -178,7 +178,6 @@ fn serialize_transactions(entry: &Entry) -> Vec<Vec<u8>> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::entry::Entry;
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
     use solana_sdk::hash::Hash;
