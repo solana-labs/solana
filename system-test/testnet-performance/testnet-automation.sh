@@ -150,7 +150,7 @@ launchTestnet() {
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
     python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULT_FILE"
 
-  RESULT_DETAILS=$(<$RESULT_FILE)
+  RESULT_DETAILS=$(<"$RESULT_FILE")
   upload-ci-artifact "$RESULT_FILE"
 }
 
@@ -195,7 +195,7 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         ADDITIONAL_FLAGS)
 
 TEST_CONFIGURATION=
-for i in ${TEST_PARAMS_TO_DISPLAY[@]} ; do
+for i in "${TEST_PARAMS_TO_DISPLAY[@]}" ; do
   if [[ -n ${!i} ]] ; then
     TEST_CONFIGURATION+="${i} = ${!i}\n"
   fi
