@@ -1585,7 +1585,7 @@ impl Bank {
         res: &[Result<()>],
         loaded_accounts: &[Result<TransactionLoadResult>],
     ) {
-        let mut collected_rent = 0;
+        let mut collected_rent: u64 = 0;
         for (i, (raccs, tx)) in loaded_accounts
             .iter()
             .zip(OrderedIterator::new(txs, iteration_order))
@@ -1604,7 +1604,7 @@ impl Bank {
                 .enumerate()
                 .filter(|(i, _rent)| message.is_debitable(*i))
             {
-                collected_rent += rent;
+                collected_rent += *rent;
             }
         }
 
