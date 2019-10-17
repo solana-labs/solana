@@ -12,6 +12,7 @@ upload_results_to_slack() {
   [[ -n $BUILDKITE_COMMIT ]] || BUILDKITE_COMMIT="Commit not defined"
   [[ -n $BUILDKITE_BUILD_URL ]] || BUILDKITE_BUILD_URL="Build URL not defined"
   [[ -n $RESULT_DETAILS ]] || RESULT_DETAILS="Undefined"
+  [[ -n $TEST_CONFIGURATION ]] || TEST_CONFIGURATION="Undefined"
 
   payLoad="$(cat <<EOF
 {
@@ -25,6 +26,16 @@ upload_results_to_slack() {
 Commit SHA: $BUILDKITE_COMMIT
 Link to Build: $BUILDKITE_BUILD_URL
 "
+			},
+		},
+		{
+			"type": "divider"
+    },
+    {
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Test Configuration: \n$TEST_CONFIGURATION"
 			},
 		},
 		{

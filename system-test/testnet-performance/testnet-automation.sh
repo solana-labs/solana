@@ -10,7 +10,6 @@ set -e
 [[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=60
 [[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES=2
 [[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=1
-[[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-a"
 
 function collect_logs {
   echo --- collect logs from remote nodes
@@ -183,5 +182,23 @@ IFS=, read -r -a TESTNET_CLOUD_ZONES <<<"${TESTNET_ZONES}"
 RESULT_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$NUMBER_OF_VALIDATOR_NODES".log
 rm -f $RESULT_FILE
 RESULT_DETAILS="Test failed to finish"
+
+TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
+                        TESTNET_TAG \
+                        NUMBER_OF_VALIDATOR_NODES \
+                        VALIDATOR_NODE_MACHINE_TYPE \
+                        NUMBER_OF_CLIENT_NODES \
+                        CLIENT_OPTIONS \
+                        TESTNET_ZONES \
+                        RAMP_UP_TIME \
+                        TEST_DURATION \
+                        ADDITIONAL_FLAGS)
+
+TEST_CONFIGURATION=
+for i in ${TEST_PARAMS_TO_DISPLAY[@]} ; do
+  if [[ -n ${!i} ]] ; then
+    TEST_CONFIGURATION+="${i} = ${!i}\n"
+  fi
+done
 
 launchTestnet

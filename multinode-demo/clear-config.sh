@@ -12,6 +12,5 @@ set -e
 (
   set -x
   setup_secondary_mount
-  echo "Removing config dir"
-  rm -rf ${SOLANA_CONFIG_DIR}/*
+  rm -rf "${SOLANA_CONFIG_DIR:?}"/*
 )
