@@ -61,6 +61,7 @@ airdropsEnabled=$airdropsEnabled
 EOF
 
 source net/common.sh
+source multinode-demo/common.sh
 loadConfigFile
 
 initCompleteFile=init-complete-node.log
@@ -149,7 +150,7 @@ EOF
   bootstrap-leader)
     set -x
     if [[ $skipSetup != true ]]; then
-      multinode-demo/clear-config.sh
+      clear_config_dir "$SOLANA_CONFIG_DIR"
 
       if [[ -n $internalNodesLamports ]]; then
         echo "---" >> config/fullnode-balances.yml
@@ -245,7 +246,7 @@ EOF
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
     fi
     if [[ $skipSetup != true ]]; then
-      multinode-demo/clear-config.sh
+      clear_config_dir "$SOLANA_CONFIG_DIR"
       [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
       "$entrypointIp":~/solana/config/fullnode-"$nodeIndex"-identity.json config/fullnode-identity.json
     fi

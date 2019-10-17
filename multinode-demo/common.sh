@@ -66,6 +66,17 @@ export RUST_BACKTRACE=1
 source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 
 SOLANA_CONFIG_DIR=$SOLANA_ROOT/config
+clear_config_dir() {
+  declare config_dir="$1"
+  (
+    set -x
+    rm -rf "${config_dir:?}/" # <-- $i might be a symlink, rm the other side of it first
+    rm -rf "$config_dir"
+    mkdir -p "$config_dir"
+  )
+
+  setup_secondary_mount
+}
 
 SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
 setup_secondary_mount() {
