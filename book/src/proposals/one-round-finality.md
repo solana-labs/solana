@@ -30,19 +30,31 @@ For example:
     * V,V,V, V,V,V,V, N,N,N,N, V,V,V,V, V,V,V,V
 
 Where V indicates that the leader voted on the block and N indicates
-that they haven't. By the time the `N` leader is reached, its likely
-this block would be voted on 7 times, and the lockout for this block
-would prevent the `N` leader from proposing an alternative fork
-which doesn't contain this block.
+that they haven't.  N is in some partition and N did not observe
+the block so N didn't vote. N is not slashed for proposing an
+alternative fork, N is allowed to propose forks. Only the validators
+that voted for the block can be slashed for proposing fork that
+doesn't contain it.
+
+
+By the time the `N` leader is reached, its likely this block would
+be voted on 7 times, and the lockout for this block would prevent
+the `N` leader from proposing an alternative fork which doesn't
+contain this block.
 
 ## Calculating the Probability of a block succeeding
 
-This calculation assumes that the voting nodes are on the same
-partition and will vote with the same response rate.
+This calculation assumes that the validators are on the same
+partition, that the partition is static and that validators will
+vote with the same response rate.
 
-The likelihood of the block being finalized will approach the
-probability of voting streaks that accumulate enough lockout to
-skip over all the non-voting leaders.
+To calculate the probability of the block being finalized we would
+need to count all the possible ways that future scheduled leaders
+will vote and produce blocks.  An approximation of this calculation
+is the probability of voting streaks that accumulate enough lockout
+to skip over all the non-voting leaders.  A voting streak is as
+series of votes that result in the lockout doubling for a block
+prior to the streak.
 
 In the above example if the probability of any block being dropped
 is 2%, then probability of a streak of size 3 in the next 7 blocks
@@ -54,9 +66,10 @@ block surviving is at least equal to the probability of continuous
 run of streaks that keep doubling the lockout.
 
 Each streak needs to produce a lockout that is 2x longer than the
-lockout from the previous streak.  Given that 20% of leaders are
-in the wrong partition, a rough estimate of the likelihood of each
-streak is as follows:
+lockout from the previous streak, and each streak has twice as many
+blocks in which that possibility can arise. Given that 20% of the
+stake weighted leaders are in the wrong partition, a rough estimate
+of the likelihood of each streak is as follows:
 
 * streak of size 4 in 7 blocks 97.7%
 * streak of size 5 in 12 blocks 98.04%
@@ -66,9 +79,9 @@ streak is as follows:
 * streak of size 9 in 204 blocks 99.90%
 * streak of size 10 in 409 blocks 99.999%
 
-The cumulative probability is roughly 93.8%.  This calculation would
-need to take into account how the non-voting leaders are distributed
-in the schedule.
+The cumulative probability is roughly 93.8%.  A better approximation
+of this calculation would take into account how the non-voting
+leaders are distributed in the schedule.
 
 At any point if all 100% have voted for a descendant, then there
 is no way a block could be proposed that doesn't include the parent.
