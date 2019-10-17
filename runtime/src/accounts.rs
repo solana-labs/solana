@@ -655,11 +655,11 @@ impl Accounts {
         txs: &'a [Transaction],
         txs_iteration_order: Option<&'a [usize]>,
         res: &'a [Result<()>],
-        loaded: &'a mut [Result<TransactionLoadResult>],
+        loaded: &'a [Result<TransactionLoadResult>],
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::new();
         for (i, (raccs, tx)) in loaded
-            .iter_mut()
+            .iter()
             .zip(OrderedIterator::new(txs, txs_iteration_order))
             .enumerate()
         {
@@ -668,15 +668,15 @@ impl Accounts {
             }
 
             let message = &tx.message();
-            let acc = raccs.as_mut().unwrap();
-            for (((i, key), account), credit) in message
+            let acc = raccs.as_ref().unwrap();
+            for (((j, key), account), credit) in message
                 .account_keys
                 .iter()
                 .enumerate()
                 .zip(acc.0.iter())
                 .zip(acc.2.iter())
             {
-                if message.is_debitable(i) {
+                if message.is_debitable(j) {
                     accounts.push((key, account));
                 } else {
                     self.credit_only_account_locks
