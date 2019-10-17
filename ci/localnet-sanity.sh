@@ -70,6 +70,7 @@ done
 
 source ci/upload-ci-artifact.sh
 source scripts/configure-metrics.sh
+source multinode-demo/common.sh
 
 nodes=(
   "multinode-demo/drone.sh"
@@ -173,7 +174,6 @@ startNodes() {
       waitForNodeToInit "$initCompleteFile"
 
       (
-        source multinode-demo/common.sh
         set -x
         $solana_cli --keypair config/bootstrap-leader/identity-keypair.json \
           --url http://127.0.0.1:8899 get-genesis-blockhash
@@ -277,7 +277,6 @@ verifyLedger() {
   for ledger in bootstrap-leader validator; do
     echo "--- $ledger ledger verification"
     (
-      source multinode-demo/common.sh
       set -x
       $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/$ledger verify
     ) || flag_error
@@ -312,7 +311,7 @@ flag_error() {
 }
 
 if ! $skipSetup; then
-  multinode-demo/clear-config.sh
+  clear_config_dir "$SOLANA_CONFIG_DIR"
   multinode-demo/setup.sh
 else
   verifyLedger
@@ -322,7 +321,6 @@ lastTransactionCount=
 while [[ $iteration -le $iterations ]]; do
   echo "--- Node count ($iteration)"
   (
-    source multinode-demo/common.sh
     set -x
     client_keypair=/tmp/client-id.json-$$
     $solana_keygen new -f -o $client_keypair || exit $?

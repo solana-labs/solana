@@ -7,7 +7,8 @@
 # shellcheck disable=2034
 #
 
-SOLANA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"
+# shellcheck source=net/common.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"/net/common.sh
 
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
@@ -61,21 +62,6 @@ solana_cli=$(solana_program)
 solana_replicator=$(solana_program replicator)
 
 export RUST_BACKTRACE=1
-
-# shellcheck source=scripts/configure-metrics.sh
-source "$SOLANA_ROOT"/scripts/configure-metrics.sh
-
-SOLANA_CONFIG_DIR=$SOLANA_ROOT/config
-
-SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
-setup_secondary_mount() {
-  # If there is a secondary disk, symlink the config/ dir there
-  if [[ -d $SECONDARY_DISK_MOUNT_POINT ]]; then
-    mkdir -p $SECONDARY_DISK_MOUNT_POINT/config
-    rm -rf "$SOLANA_CONFIG_DIR"
-    ln -sfT $SECONDARY_DISK_MOUNT_POINT/config "$SOLANA_CONFIG_DIR"
-  fi
-}
 
 default_arg() {
   declare name=$1
