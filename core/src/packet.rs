@@ -8,7 +8,7 @@ use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
 use solana_metrics::inc_new_counter_debug;
-pub use solana_sdk::packet::PACKET_DATA_SIZE;
+pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signable;
 use solana_sdk::signature::Signature;
@@ -19,7 +19,7 @@ use std::io;
 use std::io::Cursor;
 use std::mem;
 use std::mem::size_of;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
+use std::net::{SocketAddr, UdpSocket};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -35,100 +35,6 @@ pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
 pub const PACKETS_PER_BATCH: usize = 256;
 pub const PACKETS_BATCH_SIZE: usize = (PACKETS_PER_BATCH * PACKET_DATA_SIZE);
-
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-#[repr(C)]
-pub struct Meta {
-    pub size: usize,
-    pub forward: bool,
-    pub repair: bool,
-    pub addr: [u16; 8],
-    pub port: u16,
-    pub v6: bool,
-    pub seed: [u8; 32],
-    pub slot: u64,
-}
-
-#[derive(Clone)]
-#[repr(C)]
-pub struct Packet {
-    pub data: [u8; PACKET_DATA_SIZE],
-    pub meta: Meta,
-}
-
-impl Packet {
-    pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
-        Self { data, meta }
-    }
-}
-
-impl fmt::Debug for Packet {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Packet {{ size: {:?}, addr: {:?} }}",
-            self.meta.size,
-            self.meta.addr()
-        )
-    }
-}
-
-impl Default for Packet {
-    fn default() -> Packet {
-        Packet {
-            data: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
-            meta: Meta::default(),
-        }
-    }
-}
-
-impl PartialEq for Packet {
-    fn eq(&self, other: &Packet) -> bool {
-        let self_data: &[u8] = self.data.as_ref();
-        let other_data: &[u8] = other.data.as_ref();
-        self.meta == other.meta && self_data[..self.meta.size] == other_data[..other.meta.size]
-    }
-}
-
-impl Meta {
-    pub fn addr(&self) -> SocketAddr {
-        if !self.v6 {
-            let addr = [
-                self.addr[0] as u8,
-                self.addr[1] as u8,
-                self.addr[2] as u8,
-                self.addr[3] as u8,
-            ];
-            let ipv4: Ipv4Addr = From::<[u8; 4]>::from(addr);
-            SocketAddr::new(IpAddr::V4(ipv4), self.port)
-        } else {
-            let ipv6: Ipv6Addr = From::<[u16; 8]>::from(self.addr);
-            SocketAddr::new(IpAddr::V6(ipv6), self.port)
-        }
-    }
-
-    pub fn set_addr(&mut self, a: &SocketAddr) {
-        match *a {
-            SocketAddr::V4(v4) => {
-                let ip = v4.ip().octets();
-                self.addr[0] = u16::from(ip[0]);
-                self.addr[1] = u16::from(ip[1]);
-                self.addr[2] = u16::from(ip[2]);
-                self.addr[3] = u16::from(ip[3]);
-                self.addr[4] = 0;
-                self.addr[5] = 0;
-                self.addr[6] = 0;
-                self.addr[7] = 0;
-                self.v6 = false;
-            }
-            SocketAddr::V6(v6) => {
-                self.addr = v6.ip().segments();
-                self.v6 = true;
-            }
-        }
-        self.port = a.port();
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Packets {

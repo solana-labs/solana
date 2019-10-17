@@ -3,8 +3,6 @@ use crate::blocktree::BlocktreeError;
 use crate::entry::create_ticks;
 use crate::entry::Entry;
 use crate::erasure::Session;
-use crate::result;
-use crate::result::Error;
 use bincode::serialized_size;
 use core::cell::RefCell;
 use lazy_static::lazy_static;
@@ -147,7 +145,7 @@ impl Shred {
         Self::new(header, shred_buf)
     }
 
-    pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> result::Result<Self> {
+    pub fn new_from_serialized_shred(shred_buf: Vec<u8>) -> Result<Self, BlocktreeError> {
         let shred_type: ShredType = bincode::deserialize(&shred_buf[..*SIZE_OF_SHRED_TYPE])?;
         let mut header = if shred_type == ShredType(CODING_SHRED) {
             let start = *SIZE_OF_SHRED_TYPE;
@@ -162,8 +160,8 @@ impl Shred {
             header.data_header = bincode::deserialize(&shred_buf[start..end])?;
             header
         } else {
-            return Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(
-                Box::new(bincode::ErrorKind::Custom("Invalid shred type".to_string())),
+            return Err(BlocktreeError::InvalidShredData(Box::new(
+                bincode::ErrorKind::Custom("Invalid shred type".to_string()),
             )));
         };
         header.shred_type = shred_type;
@@ -314,23 +312,23 @@ impl Shredder {
         parent_slot: u64,
         fec_rate: f32,
         keypair: Arc<Keypair>,
-    ) -> result::Result<Self> {
+    ) -> Result<Self, IOError> {
         if fec_rate > 1.0 || fec_rate < 0.0 {
-            Err(Error::IO(IOError::new(
+            Err(IOError::new(
                 ErrorKind::Other,
                 format!(
                     "FEC rate {:?} must be more than 0.0 and less than 1.0",
                     fec_rate
                 ),
-            )))
+            ))
         } else if slot < parent_slot || slot - parent_slot > u64::from(std::u16::MAX) {
-            Err(Error::IO(IOError::new(
+            Err(IOError::new(
                 ErrorKind::Other,
                 format!(
                     "Current slot {:?} must be > Parent slot {:?}, but the difference must not be > {:?}",
                     slot, parent_slot, std::u16::MAX
                 ),
-            )))
+            ))
         } else {
             Ok(Shredder {
                 slot,

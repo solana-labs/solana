@@ -1,6 +1,6 @@
-use crate::packet::Packet;
 use core::ffi::c_void;
 use dlopen::symbor::{Container, SymBorApi, Symbol};
+use solana_sdk::packet::Packet;
 use std::env;
 use std::ffi::OsStr;
 use std::fs;

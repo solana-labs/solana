@@ -13,7 +13,7 @@ impl<'a> RootedSlotIterator<'a> {
                 blocktree,
             })
         } else {
-            Err(Error::BlocktreeError(BlocktreeError::SlotNotRooted))
+            Err(BlocktreeError::SlotNotRooted)
         }
     }
 }
