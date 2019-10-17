@@ -99,6 +99,10 @@ if [ -f "$SOLANA_LOCK_FILE" ]; then
     cat > "\${HOME}/.ssh/authorized_keys" <<EOAK
 $("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)
 EOAK
+    EXTERNAL_CONFIG_DIR="${SECONDARY_DISK_MOUNT_POINT}/config/"
+    if [[ -d "\$EXTERNAL_CONFIG_DIR" ]]; then
+      rm -rf "\$EXTERNAL_CONFIG_DIR"
+    fi
     # End filesystem cleanup
     RC=true
   fi

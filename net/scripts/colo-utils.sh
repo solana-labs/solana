@@ -3,6 +3,10 @@
 declare -r SOLANA_LOCK_FILE="/home/solana/.solana.lock"
 
 __colo_here="$(dirname "${BASH_SOURCE[0]}")"
+
+# shellcheck source=net/common.sh
+source "$__colo_here"/../common.sh
+
 # Load colo resource specs
 export COLO_RES_N=0
 export COLO_RES_HOSTNAME=()
