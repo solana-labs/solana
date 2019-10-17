@@ -2,11 +2,8 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use crate::packet::{Blob, SharedBlob};
 use crate::perf_libs;
 use crate::poh::Poh;
-use crate::result::Result;
-use bincode::{deserialize, serialized_size};
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_merkle_tree::MerkleTree;
@@ -15,10 +12,9 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
@@ -92,34 +88,6 @@ impl Entry {
         }
     }
 
-    pub fn to_shared_blob(&self) -> SharedBlob {
-        let blob = self.to_blob();
-        Arc::new(RwLock::new(blob))
-    }
-
-    pub fn to_blob(&self) -> Blob {
-        Blob::from_serializable(&vec![&self])
-    }
-
-    /// return serialized_size of a vector with a single Entry for given TXs
-    ///  since Blobs carry Vec<Entry>...
-    /// calculate the total without actually constructing the full Entry (which
-    ///  would require a clone() of the transactions)
-    pub fn serialized_to_blob_size(transactions: &[Transaction]) -> u64 {
-        let txs_size: u64 = transactions
-            .iter()
-            .map(|tx| serialized_size(tx).unwrap())
-            .sum();
-
-        serialized_size(&vec![Entry {
-            num_hashes: 0,
-            hash: Hash::default(),
-            transactions: vec![],
-        }])
-        .unwrap()
-            + txs_size
-    }
-
     pub fn new_mut(
         start_hash: &mut Hash,
         num_hashes: &mut u64,
@@ -190,27 +158,6 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction
     } else {
         poh.record(hash_transactions(transactions)).unwrap().hash
     }
-}
-
-pub fn reconstruct_entries_from_blobs<I>(blobs: I) -> Result<(Vec<Entry>, u64)>
-where
-    I: IntoIterator,
-    I::Item: Borrow<Blob>,
-{
-    let mut entries: Vec<Entry> = vec![];
-    let mut num_ticks = 0;
-
-    for blob in blobs.into_iter() {
-        let new_entries: Vec<Entry> = {
-            let msg_size = blob.borrow().size();
-            deserialize(&blob.borrow().data()[..msg_size])?
-        };
-
-        let num_new_ticks: u64 = new_entries.iter().map(|entry| entry.is_tick() as u64).sum();
-        num_ticks += num_new_ticks;
-        entries.extend(new_entries)
-    }
-    Ok((entries, num_ticks))
 }
 
 // an EntrySlice is a slice of Entries
@@ -480,18 +427,6 @@ mod tests {
         let keypair = Keypair::new();
         let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 0, zero);
         next_entry(&zero, 0, vec![tx]);
-    }
-
-    #[test]
-    fn test_serialized_to_blob_size() {
-        let zero = Hash::default();
-        let keypair = Keypair::new();
-        let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 0, zero);
-        let entry = next_entry(&zero, 1, vec![tx.clone()]);
-        assert_eq!(
-            Entry::serialized_to_blob_size(&[tx]),
-            serialized_size(&vec![entry]).unwrap() // blobs are Vec<Entry>
-        );
     }
 
     #[test]
