@@ -30,6 +30,13 @@ struct CreditOnlyLock {
     rent_debtor: AtomicBool,
 }
 
+impl CreditOnlyLock {
+    pub fn add_credits_and_mark_rent_debtor(&self, credits: u64) {
+        self.credits.fetch_add(credits, Ordering::Relaxed);
+        self.rent_debtor.store(true, Ordering::Relaxed);
+    }
+}
+
 /// This structure handles synchronization for db
 #[derive(Default, Debug)]
 pub struct Accounts {
@@ -672,18 +679,14 @@ impl Accounts {
                 if message.is_debitable(i) {
                     accounts.push((key, account));
                 } else {
-                    let r_credit_only_account_locks =
-                        self.credit_only_account_locks.read().unwrap();
-
-                    let credit_only_lock = r_credit_only_account_locks.as_ref()
+                    self.credit_only_account_locks
+                        .read()
+                        .unwrap()
+                        .as_ref()
                         .expect("Collect accounts should only be called before a commit, and credit only account locks should exist before a commit")
                         .get(key)
-                        .unwrap();
-
-                    credit_only_lock.rent_debtor.store(true, Ordering::Relaxed);
-                    credit_only_lock
-                        .credits
-                        .fetch_add(*credit, Ordering::Relaxed);
+                        .unwrap()
+                        .add_credits_and_mark_rent_debtor(*credit);
                 }
             }
         }
