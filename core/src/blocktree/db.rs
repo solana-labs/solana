@@ -457,15 +457,6 @@ pub struct BatchProcessor {
     backend: Arc<Rocks>,
 }
 
-pub struct Cursor<C>
-where
-    C: Column,
-{
-    db_cursor: DBRawIterator,
-    column: PhantomData<C>,
-    backend: PhantomData<Rocks>,
-}
-
 #[derive(Debug, Clone)]
 pub struct LedgerColumn<C>
 where
@@ -547,19 +538,6 @@ impl Database {
         )
     }
 
-    pub fn cursor<C>(&self) -> Result<Cursor<C>>
-    where
-        C: Column,
-    {
-        let db_cursor = self.backend.raw_iterator_cf(self.cf_handle::<C>())?;
-
-        Ok(Cursor {
-            db_cursor,
-            column: PhantomData,
-            backend: PhantomData,
-        })
-    }
-
     pub fn iter<C>(
         &self,
         iterator_mode: IteratorMode<C::Index>,
@@ -606,6 +584,11 @@ impl Database {
         }
     }
 
+    #[inline]
+    pub fn raw_iterator_cf(&self, cf: ColumnFamily) -> Result<DBRawIterator> {
+        self.backend.raw_iterator_cf(cf)
+    }
+
     // Note this returns an object that can be used to directly write to multiple column families.
     // This circumvents the synchronization around APIs that in Blocktree that use
     // blocktree.batch_processor, so this API should only be used if the caller is sure they
@@ -640,69 +623,12 @@ impl BatchProcessor {
     }
 }
 
-impl<C> Cursor<C>
-where
-    C: Column,
-{
-    pub fn valid(&self) -> bool {
-        self.db_cursor.valid()
-    }
-
-    pub fn seek(&mut self, key: C::Index) {
-        self.db_cursor.seek(C::key(key).borrow());
-    }
-
-    pub fn seek_to_first(&mut self) {
-        self.db_cursor.seek_to_first();
-    }
-
-    pub fn next(&mut self) {
-        self.db_cursor.next();
-    }
-
-    pub fn key(&self) -> Option<C::Index> {
-        if let Some(key) = self.db_cursor.key() {
-            Some(C::index(key.borrow()))
-        } else {
-            None
-        }
-    }
-
-    pub fn value_bytes(&self) -> Option<Vec<u8>> {
-        self.db_cursor.value()
-    }
-}
-
-impl<C> Cursor<C>
-where
-    C: TypedColumn,
-{
-    pub fn value(&self) -> Option<C::Type> {
-        if let Some(bytes) = self.db_cursor.value() {
-            let value = deserialize(&bytes).ok()?;
-            Some(value)
-        } else {
-            None
-        }
-    }
-}
-
 impl<C> LedgerColumn<C>
 where
     C: Column,
 {
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
         self.backend.get_cf(self.handle(), C::key(key).borrow())
-    }
-
-    pub fn cursor(&self) -> Result<Cursor<C>> {
-        let db_cursor = self.backend.raw_iterator_cf(self.handle())?;
-
-        Ok(Cursor {
-            db_cursor,
-            column: PhantomData,
-            backend: PhantomData,
-        })
     }
 
     pub fn iter(
@@ -766,9 +692,9 @@ where
     }
 
     pub fn is_empty(&self) -> Result<bool> {
-        let mut cursor = self.cursor()?;
-        cursor.seek_to_first();
-        Ok(!cursor.valid())
+        let mut iter = self.backend.raw_iterator_cf(self.handle())?;
+        iter.seek_to_first();
+        Ok(!iter.valid())
     }
 
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
