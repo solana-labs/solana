@@ -24,7 +24,10 @@ pub enum LoaderInstruction {
     /// Invoke the "main" entrypoint with the given data.
     ///
     /// * key[0] - an executable account
-    InvokeMain { data: Vec<u8> },
+    InvokeMain {
+        #[serde(with = "serde_bytes")]
+        data: Vec<u8>,
+    },
 }
 
 pub fn write(

@@ -9,6 +9,7 @@ pub struct Account {
     /// lamports in the account
     pub lamports: u64,
     /// data held in this account
+    #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
@@ -18,7 +19,7 @@ pub struct Account {
     pub rent_epoch: Epoch,
     /// Hash of this account's state, skip serializing as to not expose to external api
     /// Used for keeping the accounts state hash updated.
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(skip)]
     pub hash: Hash,
 }
 
