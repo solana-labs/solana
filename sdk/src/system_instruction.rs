@@ -8,7 +8,6 @@ use num_derive::{FromPrimitive, ToPrimitive};
 pub enum SystemError {
     AccountAlreadyInUse,
     ResultWithNegativeLamports,
-    SourceNotSystemAccount,
     InvalidProgramId,
     InvalidAccountId,
 }

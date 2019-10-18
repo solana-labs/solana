@@ -1231,7 +1231,7 @@ impl Bank {
     /// `n` lamports where `blockhash` is the last Entry ID observed by the client.
     pub fn transfer(&self, n: u64, keypair: &Keypair, to: &Pubkey) -> Result<Signature> {
         let blockhash = self.last_blockhash();
-        let tx = system_transaction::create_user_account(keypair, to, n, blockhash);
+        let tx = system_transaction::transfer(keypair, to, n, blockhash);
         let signature = tx.signatures[0];
         self.process_transaction(&tx).map(|_| signature)
     }

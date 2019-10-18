@@ -110,26 +110,20 @@ pub(crate) mod tests {
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
 
-        bank_client
-            .transfer(10, &mint_keypair, &replicator_pubkey)
-            .unwrap();
         let message = Message::new(storage_instruction::create_storage_account(
             &mint_pubkey,
             &Pubkey::default(),
             &replicator_pubkey,
-            1,
+            11,
             StorageAccountType::Replicator,
         ));
         bank_client.send_message(&[&mint_keypair], message).unwrap();
 
-        bank_client
-            .transfer(10, &mint_keypair, &validator_pubkey)
-            .unwrap();
         let message = Message::new(storage_instruction::create_storage_account(
             &mint_pubkey,
             &Pubkey::default(),
             &validator_pubkey,
-            1,
+            11,
             StorageAccountType::Validator,
         ));
         bank_client.send_message(&[&mint_keypair], message).unwrap();
