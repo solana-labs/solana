@@ -178,7 +178,7 @@ impl Shred {
         Self {
             common_header,
             data_header,
-            coding_header: Default::default(),
+            coding_header: CodingShredHeader::default(),
             payload,
         }
     }
@@ -532,7 +532,7 @@ impl Shredder {
                     );
                     Shred {
                         common_header,
-                        data_header: Default::default(),
+                        data_header: DataShredHeader::default(),
                         coding_header,
                         payload,
                     }
