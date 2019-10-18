@@ -10,10 +10,10 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
-use crate::blocktree::Blocktree;
-use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::result::{Error, Result};
+use solana_ledger::blocktree::Blocktree;
 use solana_ledger::entry::Entry;
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::poh::Poh;
 use solana_runtime::bank::Bank;
 pub use solana_sdk::clock::Slot;
@@ -459,9 +459,9 @@ impl PohRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::test_tx::test_tx;
+    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::sync_channel;

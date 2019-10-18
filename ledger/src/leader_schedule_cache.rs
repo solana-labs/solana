@@ -1,4 +1,5 @@
 use crate::{blocktree::Blocktree, leader_schedule::LeaderSchedule, leader_schedule_utils};
+use log::*;
 use solana_runtime::bank::Bank;
 use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
@@ -230,7 +231,7 @@ impl LeaderScheduleCache {
 mod tests {
     use super::*;
     use crate::{
-        blocktree::{get_tmp_ledger_path, tests::make_slot_entries},
+        blocktree::{get_tmp_ledger_path, make_slot_entries},
         genesis_utils::{
             create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
             BOOTSTRAP_LEADER_LAMPORTS,

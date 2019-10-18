@@ -294,9 +294,9 @@ impl BroadcastRun for StandardBroadcastRun {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::create_genesis_block;
+    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
     use solana_ledger::entry::create_ticks;
     use solana_ledger::shred::max_ticks_per_n_shreds;
     use solana_runtime::bank::Bank;

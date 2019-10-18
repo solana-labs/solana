@@ -1,9 +1,7 @@
-use crate::blocktree::Blocktree;
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
-use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::packet::to_shared_blob;
 use crate::recycler::Recycler;
 use crate::repair_service;
@@ -23,6 +21,8 @@ use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::ThinClient;
 use solana_ed25519_dalek as ed25519_dalek;
+use solana_ledger::blocktree::Blocktree;
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shred;
 use solana_netutil::bind_in_range;
 use solana_sdk::account_utils::State;

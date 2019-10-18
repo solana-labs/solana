@@ -1,7 +1,6 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
-    blocktree::create_new_tmp_ledger,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
@@ -10,6 +9,7 @@ use solana_core::{
     service::Service,
     validator::{Validator, ValidatorConfig},
 };
+use solana_ledger::blocktree::create_new_tmp_ledger;
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},

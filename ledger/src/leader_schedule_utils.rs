@@ -52,7 +52,6 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::staking_utils;
     use solana_runtime::genesis_utils::{
         create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS,
     };

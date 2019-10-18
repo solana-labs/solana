@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate solana_core;
+extern crate solana_ledger;
 extern crate crossbeam_channel;
 
 use crossbeam_channel::unbounded;
@@ -8,7 +8,6 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_core::bank_forks::BankForks;
 use solana_core::banking_stage::{create_test_recorder, BankingStage};
-use solana_core::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana_core::cluster_info::ClusterInfo;
 use solana_core::cluster_info::Node;
 use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
@@ -16,6 +15,7 @@ use solana_core::packet::to_packets_chunked;
 use solana_core::poh_recorder::PohRecorder;
 use solana_core::poh_recorder::WorkingBankEntry;
 use solana_core::service::Service;
+use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;

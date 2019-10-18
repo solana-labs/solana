@@ -1,12 +1,13 @@
-use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::crds_value::EpochSlots;
 use crate::result::Result;
+use crate::rooted_slot_iterator::RootedSlotIterator;
 use crate::service::Service;
 use byteorder::{ByteOrder, LittleEndian};
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use solana_ledger::blocktree::Blocktree;
 use solana_metrics::datapoint;
 use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
@@ -264,7 +265,7 @@ impl ClusterInfoRepairListener {
         num_slots_to_repair: usize,
         epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
-        let slot_iter = blocktree.rooted_slot_iterator(repairee_epoch_slots.root);
+        let slot_iter = RootedSlotIterator::new(repairee_epoch_slots.root, &blocktree);
         if slot_iter.is_err() {
             info!(
                 "Root for repairee is on different fork. My root: {}, repairee_root: {} repairee_pubkey: {:?}",
@@ -479,11 +480,11 @@ impl Service for ClusterInfoRepairListener {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries;
     use crate::cluster_info::Node;
     use crate::packet::{Blob, SharedBlob};
     use crate::streamer;
+    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::blocktree::make_many_slot_entries;
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;

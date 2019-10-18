@@ -30,7 +30,7 @@ impl LeaderSchedule {
         Self { slot_leaders }
     }
 
-    pub(crate) fn get_slot_leaders(&self) -> &[Pubkey] {
+    pub fn get_slot_leaders(&self) -> &[Pubkey] {
         &self.slot_leaders
     }
 }

@@ -1,8 +1,8 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
-use crate::blocktree::Blocktree;
 use crate::result::{Error, Result};
 use crate::service::Service;
+use solana_ledger::blocktree::Blocktree;
 use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::pubkey::Pubkey;
 use std::string::ToString;
@@ -75,8 +75,8 @@ impl Service for LedgerCleanupService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries;
+    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::blocktree::make_many_slot_entries;
     use std::sync::mpsc::channel;
 
     #[test]

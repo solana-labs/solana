@@ -3,13 +3,13 @@
 // to submit its proof for mining to be rewarded.
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::Blocktree;
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use crate::cluster_info::ClusterInfo;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use solana_ledger::blocktree::Blocktree;
 use solana_runtime::bank::Bank;
 use solana_runtime::storage_utils::replicator_accounts;
 use solana_sdk::account::Account;
@@ -629,13 +629,13 @@ impl Service for StorageStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::{create_new_tmp_ledger, Blocktree};
     use crate::blocktree_processor;
     use crate::cluster_info::ClusterInfo;
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::service::Service;
     use rayon::prelude::*;
+    use solana_ledger::blocktree::{create_new_tmp_ledger, Blocktree};
     use solana_ledger::entry;
     use solana_runtime::bank::Bank;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
