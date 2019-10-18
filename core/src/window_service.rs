@@ -91,11 +91,11 @@ where
     let last_root = blocktree.last_root();
     let shreds: Vec<_> = thread_pool.install(|| {
         packets
-            .iter_mut()
+            .par_iter_mut()
             .flat_map(|packets| {
                 packets
                     .packets
-                    .par_iter_mut()
+                    .iter_mut()
                     .filter_map(|packet| {
                         if let Ok(shred) = Shred::new_from_serialized_shred(packet.data.to_vec()) {
                             if shred_filter(&shred, last_root) {
