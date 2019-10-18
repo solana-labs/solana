@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 bincode = "1.2.0"
 bs58 = "0.3.0"
-jsonrpc-core = "14.0.0"
+jsonrpc-core = "14.0.1"
 log = "0.4.8"
 rand = "0.6.5"
 rayon = "1.2.0"
@@ -23,6 +23,6 @@ solana-netutil = { path = "../netutil", version = "0.20.0" }
 solana-sdk = { path = "../sdk", version = "0.20.0" }
 
 [dev-dependencies]
-jsonrpc-core = "14.0.0"
+jsonrpc-core = "14.0.1"
 jsonrpc-http-server = "14.0.1"
 solana-logger = { path = "../logger", version = "0.20.0" }
