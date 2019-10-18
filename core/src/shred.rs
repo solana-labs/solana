@@ -742,13 +742,19 @@ pub mod tests {
 
         // Test that parent cannot be > current slot
         assert_matches!(
-            Shredder::new(slot, slot + 1, 1.001, keypair.clone()),
-            Err(_)
+            Shredder::new(slot, slot + 1, 1.00, keypair.clone()),
+            Err(ShredError::SlotTooLow {
+                slot: _,
+                parent_slot: _,
+            })
         );
         // Test that slot - parent cannot be > u16 MAX
         assert_matches!(
-            Shredder::new(slot, slot - 1 - 0xffff, 1.001, keypair.clone()),
-            Err(_)
+            Shredder::new(slot, slot - 1 - 0xffff, 1.00, keypair.clone()),
+            Err(ShredError::SlotTooLow {
+                slot: _,
+                parent_slot: _,
+            })
         );
 
         let fec_rate = 0.25;
@@ -856,7 +862,7 @@ pub mod tests {
         // Test that FEC rate cannot be > 1.0
         assert_matches!(
             Shredder::new(slot, slot - 5, 1.001, keypair.clone()),
-            Err(_)
+            Err(ShredError::InvalidFecRate(_))
         );
 
         let shredder = Shredder::new(0x123456789abcdef0, slot - 5, 1.0, keypair.clone())
