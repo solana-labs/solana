@@ -1015,8 +1015,14 @@ impl Blocktree {
         slot: u64,
         start_index: u64,
     ) -> Result<(Vec<Entry>, usize)> {
+        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
+        let slot_meta = slot_meta_cf.get(slot)?;
+        if slot_meta.is_none() {
+            return Ok((vec![], 0));
+        }
+
         // Find all the ranges for the completed data blocks
-        let completed_ranges = self.get_completed_data_ranges(slot, start_index)?;
+        let completed_ranges = Self::get_completed_data_ranges(start_index, &slot_meta.unwrap());
         if completed_ranges.is_empty() {
             return Ok((vec![], 0));
         }
@@ -1040,45 +1046,34 @@ impl Blocktree {
         });
 
         let all_entries: Vec<Entry> = all_entries?.into_iter().flatten().collect();
-        trace!("Found {:?} entries", all_entries.len());
         Ok((all_entries, num_shreds.unwrap_or(0) as usize))
     }
 
     // Get the range of indexes [start_index, end_index] of every completed data block
-    fn get_completed_data_ranges(
-        &self,
-        slot: u64,
-        mut start_index: u64,
-    ) -> Result<Vec<(u64, u64)>> {
-        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
-        let slot_meta = slot_meta_cf.get(slot)?;
+    fn get_completed_data_ranges(mut start_index: u64, slot_meta: &SlotMeta) -> Vec<(u64, u64)> {
+        let mut completed_data_ranges = vec![];
+        let floor = slot_meta
+            .completed_data_indexes
+            .iter()
+            .position(|i| *i as u64 >= start_index)
+            .unwrap_or(slot_meta.completed_data_indexes.len());
 
-        if let Some(slot_meta) = slot_meta {
-            let mut completed_data_ranges = vec![];
-            let floor = slot_meta
-                .completed_data_indexes
-                .iter()
-                .position(|i| *i as u64 >= start_index)
-                .unwrap_or(slot_meta.completed_data_indexes.len());
+        for i in &slot_meta.completed_data_indexes[floor as usize..] {
+            let i = *i as u64;
+            // slot_meta_cf.consumed is the next missing shred index, but shred
+            // `i` existing in slot_meta_cf.completed_data_indexes implies it's not
+            // missing
+            assert!(i != slot_meta.consumed);
 
-            for i in &slot_meta.completed_data_indexes[floor as usize..] {
-                let i = *i as u64;
-                // slot_meta_cf.consumed is the next missing shred index, but shred
-                // `i` existing in slot_meta_cf.completed_data_indexes implies it's not
-                // missing
-                assert!(i != slot_meta.consumed);
-
-                // TODO: test i == the input start_index, means there's an entry that is
-                // one shred long
-                if i < slot_meta.consumed {
-                    completed_data_ranges.push((start_index, i));
-                    start_index = i + 1;
-                }
+            // TODO: test i == the input start_index, means there's an entry that is
+            // one shred long
+            if i < slot_meta.consumed {
+                completed_data_ranges.push((start_index, i));
+                start_index = i + 1;
             }
-            Ok(completed_data_ranges)
-        } else {
-            Ok(vec![])
         }
+
+        completed_data_ranges
     }
 
     fn get_entries_in_data_block(
@@ -1099,6 +1094,11 @@ impl Blocktree {
                             serialized_shred
                                 .expect("Shred must exist if shred index was included in a range"),
                         )
+                        .map_err(|_| {
+                            BlocktreeError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                                "Could not reconstruct shred from shred payload".to_string(),
+                            )))
+                        })
                     })
             })
             .collect();
@@ -1106,11 +1106,16 @@ impl Blocktree {
         let data_shreds = data_shreds?;
         assert!(data_shreds.last().unwrap().data_complete());
 
-        let deshred_payload = Shredder::deshred(&data_shreds)?;
+        let deshred_payload = Shredder::deshred(&data_shreds).map_err(|_| {
+            BlocktreeError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                "Could not reconstruct data block from constituent shreds".to_string(),
+            )))
+        })?;
+
         debug!("{:?} shreds in last FEC set", data_shreds.len(),);
         bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|_| {
-            Error::BlocktreeError(BlocktreeError::InvalidShredData(Box::new(
-                bincode::ErrorKind::Custom("could not reconstruct entries".to_string()),
+            BlocktreeError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                "could not reconstruct entries".to_string(),
             )))
         })
     }
@@ -2997,7 +3002,7 @@ pub mod tests {
                 shred
                     .iter_mut()
                     .enumerate()
-                    .for_each(|(i, shred)| shred.set_index(slot as u32 + i as u32));
+                    .for_each(|(_, shred)| shred.set_index(0));
                 shreds.extend(shred);
                 entries.extend(entry);
             }
@@ -3015,16 +3020,16 @@ pub mod tests {
 
             for i in 0..num_entries - 1 {
                 assert_eq!(
-                    blocktree.get_slot_entries(i, i, None).unwrap()[0],
+                    blocktree.get_slot_entries(i, 0, None).unwrap()[0],
                     entries[i as usize]
                 );
 
                 let meta = blocktree.meta(i).unwrap().unwrap();
-                assert_eq!(meta.received, i + num_shreds_per_slot);
-                assert_eq!(meta.last_index, i + num_shreds_per_slot - 1);
+                assert_eq!(meta.received, 1);
+                assert_eq!(meta.last_index, 0);
                 if i != 0 {
                     assert_eq!(meta.parent_slot, i - 1);
-                    assert_eq!(meta.consumed, 0);
+                    assert_eq!(meta.consumed, 1);
                 } else {
                     assert_eq!(meta.parent_slot, 0);
                     assert_eq!(meta.consumed, num_shreds_per_slot);
