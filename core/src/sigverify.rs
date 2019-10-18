@@ -57,6 +57,13 @@ pub enum PacketError {
     InvalidSignatureLen,
     InvalidPubkeyLen,
     MismatchSignatureLen,
+    InvalidShortVec,
+}
+
+impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for PacketError {
+    fn from(_e: std::boxed::Box<bincode::ErrorKind>) -> PacketError {
+        PacketError::InvalidShortVec
+    }
 }
 
 pub fn init() {
@@ -123,7 +130,7 @@ fn do_get_packet_offsets(
     }
 
     // read the length of Transaction.signatures (serialized with short_vec)
-    let (sig_len_untrusted, sig_size) = decode_len(&packet.data);
+    let (sig_len_untrusted, sig_size) = decode_len(&packet.data)?;
 
     // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
     // Ultimately, the actual sigverify will determine the uncertainty.
@@ -140,7 +147,8 @@ fn do_get_packet_offsets(
     let message_account_keys_len_offset = msg_start_offset + message_header_size;
 
     // read the length of Message.account_keys (serialized with short_vec)
-    let (pubkey_len, pubkey_len_size) = decode_len(&packet.data[message_account_keys_len_offset..]);
+    let (pubkey_len, pubkey_len_size) =
+        decode_len(&packet.data[message_account_keys_len_offset..])?;
 
     if (message_account_keys_len_offset + pubkey_len * size_of::<Pubkey>() + pubkey_len_size)
         > packet.meta.size
@@ -498,6 +506,21 @@ mod tests {
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidSignatureLen));
+    }
+
+    #[test]
+    fn test_really_large_sig_len() {
+        let tx = test_tx();
+        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        // Make the signatures len huge
+        packet.data[0] = 0xff;
+        packet.data[1] = 0xff;
+        packet.data[2] = 0xff;
+        packet.data[3] = 0xff;
+
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+        assert_eq!(res, Err(PacketError::InvalidShortVec));
     }
 
     #[test]
