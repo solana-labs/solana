@@ -619,15 +619,15 @@ impl Accounts {
                 );
             }
             let credit = lock.credits.load(Ordering::Relaxed);
-            if credit > 0 {
+            if credit > 0 || lock.rent_debtor.load(Ordering::Relaxed) {
                 let mut account = self
                     .load_slow(ancestors, &pubkey)
                     .map(|(account, _)| account)
                     .unwrap_or_default();
-                account.lamports += credit;
                 if lock.rent_debtor.load(Ordering::Relaxed) {
                     total_rent_collected += rent_collector.update(&mut account);
                 }
+                account.lamports += credit;
                 self.store_slow(fork, &pubkey, &account);
             }
         }
@@ -653,14 +653,14 @@ impl Accounts {
 
             let message = &tx.message();
             let acc = raccs.as_ref().unwrap();
-            for (((j, key), account), credit) in message
+            for (((i, key), account), credit) in message
                 .account_keys
                 .iter()
                 .enumerate()
                 .zip(acc.0.iter())
                 .zip(acc.2.iter())
             {
-                if message.is_debitable(j) {
+                if message.is_debitable(i) {
                     accounts.push((key, account));
                 } else {
                     self.credit_only_account_locks
