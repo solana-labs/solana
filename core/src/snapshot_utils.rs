@@ -1,4 +1,3 @@
-use crate::result::{Error, Result};
 use crate::snapshot_package::SnapshotPackage;
 use bincode::{deserialize_from, serialize_into};
 use bzip2::bufread::BzDecoder;
@@ -22,6 +21,32 @@ pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub struct SlotSnapshotPaths {
     pub slot: u64,
     pub snapshot_file_path: PathBuf,
+}
+
+#[derive(Debug)]
+pub enum SnapshotError {
+    IO(std::io::Error),
+    Serialize(std::boxed::Box<bincode::ErrorKind>),
+    FsExtra(fs_extra::error::Error),
+}
+pub type Result<T> = std::result::Result<T, SnapshotError>;
+
+impl std::convert::From<std::io::Error> for SnapshotError {
+    fn from(e: std::io::Error) -> SnapshotError {
+        SnapshotError::IO(e)
+    }
+}
+
+impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for SnapshotError {
+    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> SnapshotError {
+        SnapshotError::Serialize(e)
+    }
+}
+
+impl std::convert::From<fs_extra::error::Error> for SnapshotError {
+    fn from(e: fs_extra::error::Error) -> SnapshotError {
+        SnapshotError::FsExtra(e)
+    }
 }
 
 impl PartialOrd for SlotSnapshotPaths {
@@ -127,7 +152,7 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     let slot = bank.slot();
     // snapshot_path/slot
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
-    fs::create_dir_all(slot_snapshot_dir.clone()).map_err(Error::from)?;
+    fs::create_dir_all(slot_snapshot_dir.clone())?;
 
     // the snapshot is stored as snapshot_path/slot/slot
     let snapshot_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
@@ -276,9 +301,9 @@ fn get_bank_snapshot_dir<P: AsRef<Path>>(path: P, slot: u64) -> PathBuf {
     path.as_ref().join(slot.to_string())
 }
 
-fn get_io_error(error: &str) -> Error {
+fn get_io_error(error: &str) -> SnapshotError {
     warn!("Snapshot Error: {:?}", error);
-    Error::IO(IOError::new(ErrorKind::Other, error))
+    SnapshotError::IO(IOError::new(ErrorKind::Other, error))
 }
 
 #[cfg(test)]
