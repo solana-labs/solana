@@ -33,6 +33,45 @@ pub type TxOffset = PinnedVec<u32>;
 
 type TxOffsets = (TxOffset, TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>);
 
+#[derive(Debug, PartialEq, Eq)]
+struct PacketOffsets {
+    pub sig_len: u32,
+    pub sig_start: u32,
+    pub msg_start: u32,
+    pub pubkey_start: u32,
+}
+
+impl PacketOffsets {
+    pub fn new(sig_len: u32, sig_start: u32, msg_start: u32, pubkey_start: u32) -> Self {
+        Self {
+            sig_len,
+            sig_start,
+            msg_start,
+            pubkey_start,
+        }
+    }
+}
+
+struct UnsanitizedPacketOffsets {
+    pub correct: bool,
+    pub packet_offsets: PacketOffsets,
+}
+
+impl UnsanitizedPacketOffsets {
+    pub fn new(
+        correct: bool,
+        sig_len: u32,
+        sig_start: u32,
+        msg_start: u32,
+        pubkey_start: u32,
+    ) -> Self {
+        Self {
+            correct,
+            packet_offsets: PacketOffsets::new(sig_len, sig_start, msg_start, pubkey_start),
+        }
+    }
+}
+
 pub fn init() {
     if let Some(api) = perf_libs::api() {
         unsafe {
@@ -46,17 +85,21 @@ pub fn init() {
 }
 
 fn verify_packet(packet: &Packet) -> u8 {
-    let (sig_len, sig_start, msg_start, pubkey_start) = get_packet_offsets(packet, 0);
-    let mut sig_start = sig_start as usize;
-    let mut pubkey_start = pubkey_start as usize;
-    let msg_start = msg_start as usize;
+    let packet_offsets = get_packet_offsets(packet, 0);
+    let mut sig_start = packet_offsets.sig_start as usize;
+    let mut pubkey_start = packet_offsets.pubkey_start as usize;
+    let msg_start = packet_offsets.msg_start as usize;
+
+    if packet_offsets.sig_len == 0 {
+        return 0;
+    }
 
     if packet.meta.size <= msg_start {
         return 0;
     }
 
     let msg_end = packet.meta.size;
-    for _ in 0..sig_len {
+    for _ in 0..packet_offsets.sig_len {
         let pubkey_end = pubkey_start as usize + size_of::<Pubkey>();
         let sig_end = sig_start as usize + size_of::<Signature>();
 
@@ -81,24 +124,44 @@ fn batch_size(batches: &[Packets]) -> usize {
     batches.iter().map(|p| p.packets.len()).sum()
 }
 
-pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u32, u32) {
-    let (sig_len, sig_size) = decode_len(&packet.data);
-    let msg_start_offset = sig_size + sig_len * size_of::<Signature>();
+// internal function to be unit-tested; should be used only by get_packet_offsets
+fn do_get_packet_offsets(packet: &Packet, current_offset: u32) -> UnsanitizedPacketOffsets {
+    // This directly reads the length of Transaction.signatures (serialized with short_vec)
+    let (sig_len_untrusted, sig_size) = decode_len(&packet.data);
+
+    // This directly reads MessageHeader.num_required_signatures (serialized with u8)
+    let msg_start_offset = sig_size + sig_len_untrusted * size_of::<Signature>();
+    // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
+    // Ultimately, the actual sigverify will determine the uncertainty.
+    let sig_len_maybe_trusted = packet.data[msg_start_offset] as usize;
+
     let msg_header_size = serialized_size(&MessageHeader::default()).unwrap() as usize;
 
-    let (_pubkey_len, pubkey_size) =
+    // This directly reads the length of Message.account_keys (serialized with short_vec)
+    let (_pubkey_len, pubkey_len_size) =
         decode_len(&packet.data[(msg_start_offset + msg_header_size)..]);
 
     let sig_start = current_offset as usize + sig_size;
     let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start = msg_start + msg_header_size + pubkey_size;
+    let pubkey_start = msg_start + msg_header_size + pubkey_len_size;
 
-    (
-        sig_len as u32,
+    UnsanitizedPacketOffsets::new(
+        sig_len_maybe_trusted == sig_len_untrusted,
+        sig_len_untrusted as u32,
         sig_start as u32,
         msg_start as u32,
         pubkey_start as u32,
     )
+}
+
+fn get_packet_offsets(packet: &Packet, current_offset: u32) -> PacketOffsets {
+    let unsanitized_packet_offsets = do_get_packet_offsets(packet, current_offset);
+    if unsanitized_packet_offsets.correct {
+        unsanitized_packet_offsets.packet_offsets
+    } else {
+        // force sigverify to fail by returning zeros
+        PacketOffsets::new(0, 0, 0, 0)
+    }
 }
 
 pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> Result<TxOffsets> {
@@ -118,24 +181,25 @@ pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> R
         p.packets.iter().for_each(|packet| {
             let current_offset = current_packet as u32 * size_of::<Packet>() as u32;
 
-            let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
-                get_packet_offsets(packet, current_offset);
-            let mut pubkey_offset = pubkey_offset;
+            let packet_offsets = get_packet_offsets(packet, current_offset);
 
-            sig_lens.push(sig_len);
+            sig_lens.push(packet_offsets.sig_len);
 
-            trace!("pubkey_offset: {}", pubkey_offset);
-            let mut sig_offset = sig_start;
-            for _ in 0..sig_len {
+            trace!("pubkey_offset: {}", packet_offsets.pubkey_start);
+
+            let mut pubkey_offset = packet_offsets.pubkey_start;
+            let mut sig_offset = packet_offsets.sig_start;
+            for _ in 0..packet_offsets.sig_len {
                 signature_offsets.push(sig_offset);
                 sig_offset += size_of::<Signature>() as u32;
 
                 pubkey_offsets.push(pubkey_offset);
                 pubkey_offset += size_of::<Pubkey>() as u32;
 
-                msg_start_offsets.push(msg_start_offset);
+                msg_start_offsets.push(packet_offsets.msg_start);
 
-                msg_sizes.push(current_offset + (packet.meta.size as u32) - msg_start_offset);
+                msg_sizes
+                    .push(current_offset + (packet.meta.size as u32) - packet_offsets.msg_start);
             }
             current_packet += 1;
         });
@@ -250,14 +314,18 @@ pub fn ed25519_verify(
     let mut num = 0;
     for (vs, sig_vs) in rvs.iter_mut().zip(sig_lens.iter()) {
         for (v, sig_v) in vs.iter_mut().zip(sig_vs.iter()) {
-            let mut vout = 1;
-            for _ in 0..*sig_v {
-                if 0 == out[num] {
-                    vout = 0;
+            if *sig_v == 0 {
+                *v = 0;
+            } else {
+                let mut vout = 1;
+                for _ in 0..*sig_v {
+                    if 0 == out[num] {
+                        vout = 0;
+                    }
+                    num += 1;
                 }
-                num += 1;
+                *v = vout;
             }
-            *v = vout;
             if *v != 0 {
                 trace!("VERIFIED PACKET!!!!!");
             }
@@ -288,6 +356,7 @@ mod tests {
     use crate::packet::{Packet, Packets};
     use crate::recycler::Recycler;
     use crate::sigverify;
+    use crate::sigverify::PacketOffsets;
     use crate::test_tx::{test_multisig_tx, test_tx};
     use bincode::{deserialize, serialize, serialized_size};
     use solana_sdk::hash::Hash;
@@ -325,8 +394,7 @@ mod tests {
         let message_data = tx.message_data();
         let packet = sigverify::make_packet_from_transaction(tx.clone());
 
-        let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
-            sigverify::get_packet_offsets(&packet, 0);
+        let packet_offsets = sigverify::get_packet_offsets(&packet, 0);
 
         assert_eq!(
             memfind(&tx_bytes, &tx.signatures[0].as_ref()),
@@ -334,17 +402,45 @@ mod tests {
         );
         assert_eq!(
             memfind(&tx_bytes, &tx.message().account_keys[0].as_ref()),
-            Some(pubkey_offset as usize)
+            Some(packet_offsets.pubkey_start as usize)
         );
         assert_eq!(
             memfind(&tx_bytes, &message_data),
-            Some(msg_start_offset as usize)
+            Some(packet_offsets.msg_start as usize)
         );
         assert_eq!(
             memfind(&tx_bytes, &tx.signatures[0].as_ref()),
-            Some(sig_start as usize)
+            Some(packet_offsets.sig_start as usize)
         );
-        assert_eq!(sig_len, 1);
+        assert_eq!(packet_offsets.sig_len, 1);
+    }
+
+    #[test]
+    fn test_untrustworthy_sigs() {
+        let required_num_sigs = 14;
+        let actual_num_sigs = 5;
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: required_num_sigs,
+                num_credit_only_signed_accounts: 12,
+                num_credit_only_unsigned_accounts: 11,
+            },
+            account_keys: vec![],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let mut tx = Transaction::new_unsigned(message);
+        tx.signatures = vec![Signature::default(); actual_num_sigs as usize];
+        let packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0);
+
+        assert_eq!(unsanitized_packet_offsets.correct, false);
+        assert_eq!(
+            unsanitized_packet_offsets.packet_offsets.sig_len as usize,
+            actual_num_sigs
+        );
     }
 
     #[test]
@@ -368,8 +464,7 @@ mod tests {
         tx.signatures = vec![Signature::default(); actual_num_sigs];
         let packet = sigverify::make_packet_from_transaction(tx.clone());
 
-        let (_sig_len, _sig_start, _msg_start_offset, pubkey_offset) =
-            sigverify::get_packet_offsets(&packet, 0);
+        let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0);
 
         let expected_sig_size = 1;
         let expected_sigs_size = actual_num_sigs * size_of::<Signature>();
@@ -380,7 +475,10 @@ mod tests {
             + expected_msg_header_size
             + expected_pubkey_size;
 
-        assert_eq!(expected_pubkey_start, pubkey_offset as usize);
+        assert_eq!(
+            expected_pubkey_start,
+            unsanitized_packet_offsets.packet_offsets.pubkey_start as usize
+        );
     }
 
     #[test]
@@ -405,33 +503,38 @@ mod tests {
     }
 
     // Just like get_packet_offsets, but not returning redundant information.
-    fn get_packet_offsets_from_tx(tx: Transaction, current_offset: u32) -> (u32, u32, u32, u32) {
+    fn get_packet_offsets_from_tx(tx: Transaction, current_offset: u32) -> PacketOffsets {
         let packet = sigverify::make_packet_from_transaction(tx);
-        let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
-            sigverify::get_packet_offsets(&packet, current_offset);
-        (
-            sig_len,
-            sig_start - current_offset,
-            msg_start_offset - sig_start,
-            pubkey_offset - msg_start_offset,
+        let packet_offsets = sigverify::get_packet_offsets(&packet, current_offset);
+        PacketOffsets::new(
+            packet_offsets.sig_len,
+            packet_offsets.sig_start - current_offset,
+            packet_offsets.msg_start - packet_offsets.sig_start,
+            packet_offsets.pubkey_start - packet_offsets.msg_start,
         )
     }
 
     #[test]
     fn test_get_packet_offsets() {
-        assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 1, 64, 4));
-        assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 1, 64, 4));
+        assert_eq!(
+            get_packet_offsets_from_tx(test_tx(), 0),
+            PacketOffsets::new(1, 1, 64, 4)
+        );
+        assert_eq!(
+            get_packet_offsets_from_tx(test_tx(), 100),
+            PacketOffsets::new(1, 1, 64, 4)
+        );
 
         // Ensure we're not indexing packet by the `current_offset` parameter.
         assert_eq!(
             get_packet_offsets_from_tx(test_tx(), 1_000_000),
-            (1, 1, 64, 4)
+            PacketOffsets::new(1, 1, 64, 4)
         );
 
         // Ensure we're returning sig_len, not sig_size.
         assert_eq!(
             get_packet_offsets_from_tx(test_multisig_tx(), 0),
-            (2, 1, 128, 4)
+            PacketOffsets::new(2, 1, 128, 4)
         );
     }
 
@@ -476,6 +579,23 @@ mod tests {
         // check result
         let ref_ans = if modify_data { 0u8 } else { 1u8 };
         assert_eq!(ans, vec![vec![ref_ans; n], vec![ref_ans; n]]);
+    }
+
+    #[test]
+    fn test_verify_tampered_sig_len() {
+        let mut tx = test_tx().clone();
+        // pretend malicious leader dropped a signature...
+        tx.signatures.pop();
+        let packet = sigverify::make_packet_from_transaction(tx);
+
+        let batches = generate_packet_vec(&packet, 1, 1);
+
+        let recycler = Recycler::default();
+        let recycler_out = Recycler::default();
+        // verify packets
+        let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
+
+        assert_eq!(ans, vec![vec![0u8; 1]]);
     }
 
     #[test]

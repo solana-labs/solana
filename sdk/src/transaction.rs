@@ -60,6 +60,7 @@ pub type Result<T> = result::Result<T, TransactionError>;
 pub struct Transaction {
     /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, and `instructions`, signed by the first
     /// signatures.len() keys of account_keys
+    /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
     #[serde(with = "short_vec")]
     pub signatures: Vec<Signature>,
 
