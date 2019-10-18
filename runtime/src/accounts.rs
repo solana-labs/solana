@@ -609,44 +609,28 @@ impl Accounts {
     where
         I: IntoIterator<Item = (Pubkey, CreditOnlyLock)>,
     {
-        let mut accounts: Vec<(Pubkey, Account)> = vec![];
         let mut total_rent_collected = 0;
-
-        {
-            let accounts_index = self.accounts_db.accounts_index.read().unwrap();
-            let storage = self.accounts_db.storage.read().unwrap();
-
-            for (pubkey, lock) in credit_only_account_locks {
-                let lock_count = *lock.lock_count.lock().unwrap();
-                if lock_count != 0 {
-                    warn!(
-                        "dropping credit-only lock on {}, still has {} locks",
-                        pubkey, lock_count
-                    );
-                }
-                let credit = lock.credits.load(Ordering::Relaxed);
-
-                let (mut account, _) =
-                    AccountsDB::load(&storage, ancestors, &accounts_index, &pubkey)
-                        .unwrap_or_default();
-
-                if lock.rent_debtor.load(Ordering::Relaxed) {
-                    let rent_collected = rent_collector.update(&mut account);
-                    total_rent_collected += rent_collected;
-                }
-
+        for (pubkey, lock) in credit_only_account_locks {
+            let lock_count = *lock.lock_count.lock().unwrap();
+            if lock_count != 0 {
+                warn!(
+                    "dropping credit-only lock on {}, still has {} locks",
+                    pubkey, lock_count
+                );
+            }
+            let credit = lock.credits.load(Ordering::Relaxed);
+            if credit > 0 {
+                let mut account = self
+                    .load_slow(ancestors, &pubkey)
+                    .map(|(account, _)| account)
+                    .unwrap_or_default();
                 account.lamports += credit;
-                accounts.push((pubkey, account));
+                if lock.rent_debtor.load(Ordering::Relaxed) {
+                    total_rent_collected += rent_collector.update(&mut account);
+                }
+                self.store_slow(fork, &pubkey, &account);
             }
         }
-
-        let account_to_store: Vec<(&Pubkey, &Account)> = accounts
-            .iter()
-            .map(|(key, account)| (key, account))
-            .collect();
-
-        self.accounts_db.store(fork, &account_to_store);
-
         total_rent_collected
     }
 
