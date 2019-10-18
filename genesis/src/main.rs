@@ -10,6 +10,7 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     genesis_block::GenesisBlock,
+    native_token::sol_to_lamports,
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent_calculator::RentCalculator,
@@ -20,8 +21,6 @@ use solana_stake_api::stake_state;
 use solana_storage_api::storage_contract;
 use solana_vote_api::vote_state;
 use std::{collections::HashMap, error, fs::File, io, path::PathBuf, str::FromStr, time::Duration};
-
-pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
 pub enum AccountFileFormat {
     Pubkey,
@@ -78,7 +77,9 @@ pub fn add_genesis_accounts(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let default_bootstrap_leader_lamports = &BOOTSTRAP_LEADER_LAMPORTS.to_string();
+    let default_bootstrap_leader_lamports = &sol_to_lamports(500.0).to_string();
+    let default_bootstrap_leader_stake_lamports = &sol_to_lamports(0.5).to_string();
+    let default_lamports = &sol_to_lamports(500_000_000.0).to_string();
     let default_target_lamports_per_signature = &FeeCalculator::default()
         .target_lamports_per_signature
         .to_string();
@@ -122,6 +123,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
+                .default_value(default_lamports)
                 .required(true)
                 .help("Number of lamports to create in the mint"),
         )
@@ -174,7 +176,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("bootstrap-leader-stake-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
-                .default_value(default_bootstrap_leader_lamports)
+                .default_value(default_bootstrap_leader_stake_lamports)
                 .required(true)
                 .help("Number of lamports to assign to the bootstrap leader's stake account"),
         )

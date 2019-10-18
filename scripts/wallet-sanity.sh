@@ -36,7 +36,7 @@ fi
 (
   set -x
   $solana_cli "${args[@]}" address
-  $solana_cli "${args[@]}" airdrop 1000 lamports
+  $solana_cli "${args[@]}" airdrop 0.0001
   $solana_cli "${args[@]}" balance --lamports
   $solana_cli "${args[@]}" ping --count 5 --interval 0
   $solana_cli "${args[@]}" balance --lamports
