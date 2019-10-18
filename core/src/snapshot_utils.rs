@@ -141,9 +141,9 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     // snapshot writer
     let mut snapshot_stream = BufWriter::new(snapshot_file);
     // Create the snapshot
-    serialize_into(&mut snapshot_stream, &*bank).map_err(|e| get_io_error(&e.to_string()))?;
+    serialize_into(&mut snapshot_stream, &*bank)?;
     let mut bank_rc_serialize = Measure::start("bank_rc_serialize-ms");
-    serialize_into(&mut snapshot_stream, &bank.rc).map_err(|e| get_io_error(&e.to_string()))?;
+    serialize_into(&mut snapshot_stream, &bank.rc)?;
     bank_rc_serialize.stop();
     inc_new_counter_info!("bank-rc-serialize-ms", bank_rc_serialize.as_ms() as usize);
 
@@ -173,7 +173,7 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<u64> {
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
     let file = File::open(&last_root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank = deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()))?;
+    let bank: Bank = deserialize_from(&mut stream)?;
     Ok(bank.slot())
 }
 
@@ -250,7 +250,7 @@ where
     info!("Loading from {:?}", &root_paths.snapshot_file_path);
     let file = File::open(&root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank = deserialize_from(&mut stream).map_err(|e| get_io_error(&e.to_string()))?;
+    let bank: Bank = deserialize_from(&mut stream)?;
 
     // Rebuild accounts
     bank.rc
@@ -260,9 +260,8 @@ where
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
     let status_cache = File::open(status_cache_path)?;
     let mut stream = BufReader::new(status_cache);
-    let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = deserialize_from(&mut stream)
-        .map_err(|_| get_io_error("deserialize root error"))
-        .unwrap_or_default();
+    let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
+        deserialize_from(&mut stream).unwrap_or_default();
 
     bank.src.append(&slot_deltas);
 
