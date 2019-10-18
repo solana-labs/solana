@@ -3,9 +3,12 @@ mod bpf {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_runtime::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use solana_runtime::loader_utils::load_program;
+    use solana_runtime::loader_utils::{load_program, run_program};
+    use solana_sdk::bpf_loader;
+    use solana_sdk::instruction::AccountMeta;
     use std::env;
     use std::fs::File;
+    use std::io::Read;
     use std::path::PathBuf;
 
     /// BPF program file extension
@@ -26,11 +29,7 @@ mod bpf {
     #[cfg(feature = "bpf_c")]
     mod bpf_c {
         use super::*;
-        use solana_runtime::loader_utils::create_invoke_instruction;
-        use solana_sdk::bpf_loader;
-        use solana_sdk::client::SyncClient;
         use solana_sdk::signature::KeypairUtil;
-        use std::io::Read;
 
         #[test]
         fn test_program_bpf_c() {
@@ -62,9 +61,14 @@ mod bpf {
 
                 // Call user program
                 let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
-                let instruction =
-                    create_invoke_instruction(mint_keypair.pubkey(), program_id, &1u8);
-                let result = bank_client.send_instruction(&mint_keypair, instruction);
+                let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
+                let result = run_program(
+                    &bank_client,
+                    &mint_keypair,
+                    &program_id,
+                    account_metas,
+                    &1u8,
+                );
                 if program.1 {
                     assert!(result.is_ok());
                 } else {
@@ -77,14 +81,10 @@ mod bpf {
     #[cfg(feature = "bpf_rust")]
     mod bpf_rust {
         use super::*;
-        use solana_sdk::bpf_loader;
-        use solana_sdk::client::SyncClient;
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        use solana_sdk::instruction::{AccountMeta, Instruction};
         use solana_sdk::pubkey::Pubkey;
         use solana_sdk::signature::{Keypair, KeypairUtil};
         use solana_sdk::sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history};
-        use std::io::Read;
         use std::sync::Arc;
 
         #[test]
@@ -133,8 +133,13 @@ mod bpf {
                     AccountMeta::new(stake_history::id(), false),
                     AccountMeta::new(rent::id(), false),
                 ];
-                let instruction = Instruction::new(program_id, &1u8, account_metas);
-                let result = bank_client.send_instruction(&mint_keypair, instruction);
+                let result = run_program(
+                    &bank_client,
+                    &mint_keypair,
+                    &program_id,
+                    account_metas,
+                    &1u8,
+                );
                 if program.1 {
                     assert!(result.is_ok());
                 } else {

@@ -1777,6 +1777,7 @@ dependencies = [
 name = "solana-runtime"
 version = "0.20.0"
 dependencies = [
+ "backtrace 0.3.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bv 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
