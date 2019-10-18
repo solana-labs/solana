@@ -282,7 +282,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::service::Service;
-    use crate::snapshot_package::SnapshotPackagerService;
+    use crate::snapshot_packager_service::SnapshotPackagerService;
     use bincode::serialize_into;
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
@@ -376,7 +376,11 @@ mod tests {
 
         let deserialized_bank = snapshot_utils::bank_from_archive(
             account_paths,
-            old_bank_forks.snapshot_config.as_ref().unwrap(),
+            &old_bank_forks
+                .snapshot_config
+                .as_ref()
+                .unwrap()
+                .snapshot_path,
             snapshot_utils::get_snapshot_tar_path(snapshot_package_output_path),
         )
         .unwrap();

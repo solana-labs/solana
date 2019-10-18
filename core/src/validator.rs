@@ -411,7 +411,7 @@ fn get_bank_forks(
                 account_paths
                     .clone()
                     .expect("Account paths not present when booting from snapshot"),
-                snapshot_config,
+                &snapshot_config.snapshot_path,
                 &tar,
             )
             .expect("Load from snapshot failed");
