@@ -371,9 +371,6 @@ if ! $skipStart; then
     if ! $publicNetwork; then
       args+=(-o rejectExtraNodes)
     fi
-    if [[ -n $NO_VALIDATOR_SANITY ]]; then
-      args+=(-o noValidatorSanity)
-    fi
     if [[ -n $NO_INSTALL_CHECK ]]; then
       args+=(-o noInstallCheck)
     fi
