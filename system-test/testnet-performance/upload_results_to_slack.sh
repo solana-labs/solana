@@ -22,7 +22,7 @@ upload_results_to_slack() {
 				"type": "mrkdwn",
 				"text":
 
-"\*New Build Started at: $START_TIME\*
+"*New Build Started at: $START_TIME*
 Buildkite Message: $BUILDKITE_MESSAGE
 Commit SHA: $BUILDKITE_COMMIT
 Link to Build: $BUILDKITE_BUILD_URL
