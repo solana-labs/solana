@@ -7,7 +7,7 @@ set -e
 
 # TODO: Remove all default values, force explicitness in the testcase definition
 [[ -n $TEST_DURATION ]] || TEST_DURATION=300
-[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=60
+[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=0
 [[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES=2
 [[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=1
 
@@ -185,20 +185,18 @@ rm -f $RESULT_FILE
 RESULT_DETAILS="Test failed to finish"
 
 TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
-                        TESTNET_TAG \
                         NUMBER_OF_VALIDATOR_NODES \
                         VALIDATOR_NODE_MACHINE_TYPE \
                         NUMBER_OF_CLIENT_NODES \
                         CLIENT_OPTIONS \
                         TESTNET_ZONES \
-                        RAMP_UP_TIME \
                         TEST_DURATION \
                         ADDITIONAL_FLAGS)
 
 TEST_CONFIGURATION=
 for i in "${TEST_PARAMS_TO_DISPLAY[@]}" ; do
   if [[ -n ${!i} ]] ; then
-    TEST_CONFIGURATION+="${i} = ${!i}\n"
+    TEST_CONFIGURATION+="${i} = ${!i} | "
   fi
 done
 
