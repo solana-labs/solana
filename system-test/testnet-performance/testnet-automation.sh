@@ -25,6 +25,7 @@ function collect_logs {
 }
 
 function cleanup_testnet {
+  FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
   if [[ -n $UPLOAD_RESULTS_TO_SLACK ]] ; then
     upload_results_to_slack
   fi
@@ -201,12 +202,7 @@ for i in "${TEST_PARAMS_TO_DISPLAY[@]}" ; do
   fi
 done
 
-if [[ -n $CHANNEL ]] ; then
-  GRAFANA_URL="https://metrics.solana.com:3000/d/testnet-${CHANNEL}/testnet-monitor-${CHANNEL}?var-testnet=${TESTNET_TAG}"
-else
-  GRAFANA_URL="https://metrics.solana.com:3000/d/testnet-edge/testnet-monitor-edge?var-testnet=${TESTNET_TAG}"
-fi
-
 START_TIME="$(date -u)"
+START_UNIX_MSECS="$(($(date +%s%N)/1000000))"
 
 launchTestnet
