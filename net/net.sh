@@ -87,7 +87,6 @@ Operate a configured testnet
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
-   -o noValidatorSanity - Skip fullnode sanity
    -o noInstallCheck    - Skip solana-install sanity
    -o rejectExtraNodes  - Require the exact number of nodes
 
@@ -246,7 +245,7 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
     ;;
   o)
     case $OPTARG in
-    noValidatorSanity|rejectExtraNodes|noInstallCheck)
+    rejectExtraNodes|noInstallCheck)
       sanityExtraArgs="$sanityExtraArgs -o $OPTARG"
       ;;
     *)
@@ -562,7 +561,7 @@ sanity() {
       set -x
       # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
       ssh "${sshOptions[@]}" "$blockstreamer" \
-        "./solana/net/remote/remote-sanity.sh $blockstreamer $sanityExtraArgs -o noValidatorSanity \"$RUST_LOG\""
+        "./solana/net/remote/remote-sanity.sh $blockstreamer $sanityExtraArgs \"$RUST_LOG\""
     ) || ok=false
     $ok || exit 1
   fi

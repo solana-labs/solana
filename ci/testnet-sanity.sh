@@ -67,7 +67,6 @@ for zone in "$@"; do
   echo "--- net.sh sanity [$cloudProvider:$zone]"
   ok=true
   timeout 5m net/net.sh sanity \
-    ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
     ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} \
     ${NO_INSTALL_CHECK:+-o noInstallCheck} \
     $zone || ok=false
