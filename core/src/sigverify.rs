@@ -186,22 +186,20 @@ pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> R
             sig_lens.push(packet_offsets.sig_len);
 
             trace!("pubkey_offset: {}", packet_offsets.pubkey_start);
-            if packet_offsets.sig_len > 0 {
-                let mut pubkey_offset = packet_offsets.pubkey_start;
-                let mut sig_offset = packet_offsets.sig_start;
-                for _ in 0..packet_offsets.sig_len {
-                    signature_offsets.push(sig_offset);
-                    sig_offset += size_of::<Signature>() as u32;
 
-                    pubkey_offsets.push(pubkey_offset);
-                    pubkey_offset += size_of::<Pubkey>() as u32;
+            let mut pubkey_offset = packet_offsets.pubkey_start;
+            let mut sig_offset = packet_offsets.sig_start;
+            for _ in 0..packet_offsets.sig_len {
+                signature_offsets.push(sig_offset);
+                sig_offset += size_of::<Signature>() as u32;
 
-                    msg_start_offsets.push(packet_offsets.msg_start);
+                pubkey_offsets.push(pubkey_offset);
+                pubkey_offset += size_of::<Pubkey>() as u32;
 
-                    msg_sizes.push(
-                        current_offset + (packet.meta.size as u32) - packet_offsets.msg_start,
-                    );
-                }
+                msg_start_offsets.push(packet_offsets.msg_start);
+
+                msg_sizes
+                    .push(current_offset + (packet.meta.size as u32) - packet_offsets.msg_start);
             }
             current_packet += 1;
         });
@@ -420,11 +418,11 @@ mod tests {
     #[test]
     fn test_untrustworthy_sigs() {
         let required_num_sigs = 14;
-        let actual_num_sigs = 5 as u32;
+        let actual_num_sigs = 5;
 
         let message = Message {
             header: MessageHeader {
-                num_required_signatures: required_num_sigs as u8,
+                num_required_signatures: required_num_sigs,
                 num_credit_only_signed_accounts: 12,
                 num_credit_only_unsigned_accounts: 11,
             },
@@ -440,7 +438,7 @@ mod tests {
 
         assert_eq!(unsanitized_packet_offsets.correct, false);
         assert_eq!(
-            unsanitized_packet_offsets.packet_offsets.sig_len,
+            unsanitized_packet_offsets.packet_offsets.sig_len as usize,
             actual_num_sigs
         );
     }
