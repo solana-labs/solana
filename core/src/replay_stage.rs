@@ -223,17 +223,6 @@ impl ReplayStage {
                             );
                         }
 
-                        let next_slot = bank.slot() + 1;
-                        if let Some(new_leader) =
-                            leader_schedule_cache.slot_leader_at(next_slot, Some(&bank))
-                        {
-                            datapoint_debug!(
-                                "replay_stage-new_leader",
-                                ("slot", next_slot, i64),
-                                ("leader", new_leader.to_string(), String),
-                            );
-                        }
-
                         Self::handle_votable_bank(
                             &bank,
                             &bank_forks,
