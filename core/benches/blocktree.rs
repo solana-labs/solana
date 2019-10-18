@@ -4,13 +4,11 @@ use rand;
 extern crate test;
 
 #[macro_use]
-extern crate solana_core;
+extern crate solana_ledger;
 
 use rand::Rng;
-use solana_core::{
-    blocktree::{entries_to_test_shreds, get_tmp_ledger_path, Blocktree},
-    entry::{create_ticks, Entry},
-};
+use solana_ledger::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, Blocktree};
+use solana_ledger::entry::{create_ticks, Entry};
 use solana_sdk::hash::Hash;
 use std::path::Path;
 use test::Bencher;

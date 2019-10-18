@@ -505,7 +505,7 @@ impl RpcSol for RpcSolImpl {
     fn get_leader_schedule(&self, meta: Self::Metadata) -> Result<Option<Vec<String>>> {
         let bank = meta.request_processor.read().unwrap().bank();
         Ok(
-            crate::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
+            solana_ledger::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
                 |leader_schedule| {
                     leader_schedule
                         .get_slot_leaders()

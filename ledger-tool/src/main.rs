@@ -1,6 +1,7 @@
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, SubCommand};
-use solana_core::blocktree::Blocktree;
 use solana_core::blocktree_processor::{process_blocktree, ProcessOptions};
+use solana_core::rooted_slot_iterator::RootedSlotIterator;
+use solana_ledger::blocktree::Blocktree;
 use solana_sdk::clock::Slot;
 use solana_sdk::genesis_block::GenesisBlock;
 use std::collections::BTreeMap;
@@ -36,9 +37,8 @@ fn output_slot(blocktree: &Blocktree, slot: u64, method: &LedgerOutputMethod) {
 }
 
 fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputMethod) {
-    let rooted_slot_iterator = blocktree
-        .rooted_slot_iterator(starting_slot)
-        .unwrap_or_else(|err| {
+    let rooted_slot_iterator =
+        RootedSlotIterator::new(starting_slot, &blocktree).unwrap_or_else(|err| {
             eprintln!(
                 "Failed to load entries starting from slot {}: {:?}",
                 starting_slot, err
@@ -188,9 +188,8 @@ fn main() {
                 let slot_hashes: BTreeMap<u64, String> =
                     serde_yaml::from_reader(prune_file).unwrap();
 
-                let iter = blocktree
-                    .rooted_slot_iterator(0)
-                    .expect("Failed to get rooted slot");
+                let iter =
+                    RootedSlotIterator::new(0, &blocktree).expect("Failed to get rooted slot");
 
                 let potential_hashes: Vec<_> = iter
                     .filter_map(|(slot, meta)| {
@@ -231,9 +230,7 @@ fn main() {
                 usize::from_str(DEFAULT_ROOT_COUNT).unwrap()
             };
 
-            let iter = blocktree
-                .rooted_slot_iterator(0)
-                .expect("Failed to get rooted slot");
+            let iter = RootedSlotIterator::new(0, &blocktree).expect("Failed to get rooted slot");
 
             let slot_hash: Vec<_> = iter
                 .filter_map(|(slot, meta)| {

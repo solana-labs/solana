@@ -1,8 +1,8 @@
 use super::broadcast_utils::{self, ReceiveResults};
 use super::*;
 use crate::broadcast_stage::broadcast_utils::UnfinishedSlotInfo;
-use crate::entry::Entry;
-use crate::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE};
+use solana_ledger::entry::Entry;
+use solana_ledger::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::signature::Keypair;
 use solana_sdk::timing::duration_as_us;
 use std::time::Duration;
@@ -294,11 +294,11 @@ impl BroadcastRun for StandardBroadcastRun {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::entry::create_ticks;
     use crate::genesis_utils::create_genesis_block;
-    use crate::shred::max_ticks_per_n_shreds;
+    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
+    use solana_ledger::entry::create_ticks;
+    use solana_ledger::shred::max_ticks_per_n_shreds;
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};

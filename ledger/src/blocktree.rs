@@ -1,7 +1,7 @@
-//! The `block_tree` module provides functions for parallel verification of the
+//! The `blocktree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-use crate::entry::Entry;
+use crate::entry::{create_ticks, Entry};
 use crate::erasure::ErasureConfig;
 use crate::shred::{Shred, Shredder};
 
@@ -9,7 +9,7 @@ use bincode::deserialize;
 
 use std::collections::HashMap;
 
-use rocksdb;
+use log::*;
 
 use solana_metrics::{datapoint_debug, datapoint_error};
 
@@ -28,13 +28,11 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 pub use self::meta::*;
-pub use self::rooted_slot_iterator::*;
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use solana_sdk::clock::Slot;
 
 mod db;
 mod meta;
-mod rooted_slot_iterator;
 
 pub use db::columns;
 use db::{columns as cf, Column, IteratorDirection, IteratorMode};
@@ -289,10 +287,6 @@ impl Blocktree {
 
     pub fn orphan(&self, slot: u64) -> Result<Option<bool>> {
         self.orphans_cf.get(slot)
-    }
-
-    pub fn rooted_slot_iterator(&self, slot: u64) -> Result<RootedSlotIterator> {
-        RootedSlotIterator::new(slot, self)
     }
 
     pub fn slot_meta_iterator(&self, slot: u64) -> Result<impl Iterator<Item = (u64, SlotMeta)>> {
@@ -1687,10 +1681,59 @@ pub fn entries_to_test_shreds(
     shredder.entries_to_shreds(&entries, is_full_slot, 0).0
 }
 
+pub fn make_slot_entries(
+    slot: u64,
+    parent_slot: u64,
+    num_entries: u64,
+) -> (Vec<Shred>, Vec<Entry>) {
+    let entries = create_ticks(num_entries, Hash::default());
+    let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true);
+    (shreds, entries)
+}
+
+pub fn make_many_slot_entries(
+    start_slot: u64,
+    num_slots: u64,
+    entries_per_slot: u64,
+) -> (Vec<Shred>, Vec<Entry>) {
+    let mut shreds = vec![];
+    let mut entries = vec![];
+    for slot in start_slot..start_slot + num_slots {
+        let parent_slot = if slot == 0 { 0 } else { slot - 1 };
+
+        let (slot_shreds, slot_entries) = make_slot_entries(slot, parent_slot, entries_per_slot);
+        shreds.extend(slot_shreds);
+        entries.extend(slot_entries);
+    }
+
+    (shreds, entries)
+}
+
+// Create shreds for slots that have a parent-child relationship defined by the input `chain`
+pub fn make_chaining_slot_entries(
+    chain: &[u64],
+    entries_per_slot: u64,
+) -> Vec<(Vec<Shred>, Vec<Entry>)> {
+    let mut slots_shreds_and_entries = vec![];
+    for (i, slot) in chain.iter().enumerate() {
+        let parent_slot = {
+            if *slot == 0 || i == 0 {
+                0
+            } else {
+                chain[i - 1]
+            }
+        };
+
+        let result = make_slot_entries(*slot, parent_slot, entries_per_slot);
+        slots_shreds_and_entries.push(result);
+    }
+
+    slots_shreds_and_entries
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::entry::{create_ticks, Entry};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::shred::max_ticks_per_n_shreds;
     use itertools::Itertools;
@@ -3506,56 +3549,5 @@ pub mod tests {
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
-    }
-
-    pub fn make_slot_entries(
-        slot: u64,
-        parent_slot: u64,
-        num_entries: u64,
-    ) -> (Vec<Shred>, Vec<Entry>) {
-        let entries = create_ticks(num_entries, Hash::default());
-        let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true);
-        (shreds, entries)
-    }
-
-    pub fn make_many_slot_entries(
-        start_slot: u64,
-        num_slots: u64,
-        entries_per_slot: u64,
-    ) -> (Vec<Shred>, Vec<Entry>) {
-        let mut shreds = vec![];
-        let mut entries = vec![];
-        for slot in start_slot..start_slot + num_slots {
-            let parent_slot = if slot == 0 { 0 } else { slot - 1 };
-
-            let (slot_shreds, slot_entries) =
-                make_slot_entries(slot, parent_slot, entries_per_slot);
-            shreds.extend(slot_shreds);
-            entries.extend(slot_entries);
-        }
-
-        (shreds, entries)
-    }
-
-    // Create shreds for slots that have a parent-child relationship defined by the input `chain`
-    pub fn make_chaining_slot_entries(
-        chain: &[u64],
-        entries_per_slot: u64,
-    ) -> Vec<(Vec<Shred>, Vec<Entry>)> {
-        let mut slots_shreds_and_entries = vec![];
-        for (i, slot) in chain.iter().enumerate() {
-            let parent_slot = {
-                if *slot == 0 || i == 0 {
-                    0
-                } else {
-                    chain[i - 1]
-                }
-            };
-
-            let result = make_slot_entries(*slot, parent_slot, entries_per_slot);
-            slots_shreds_and_entries.push(result);
-        }
-
-        slots_shreds_and_entries
     }
 }

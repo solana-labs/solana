@@ -13,7 +13,6 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use crate::bank_forks::BankForks;
-use crate::blocktree::Blocktree;
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
@@ -23,7 +22,6 @@ use crate::packet::{to_shared_blob, Blob, Packet, SharedBlob};
 use crate::repair_service::RepairType;
 use crate::result::{Error, Result};
 use crate::sendmmsg::{multicast, send_mmsg};
-use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
 use crate::weighted_shuffle::{weighted_best, weighted_shuffle};
 use bincode::{deserialize, serialize, serialized_size};
@@ -32,6 +30,8 @@ use itertools::Itertools;
 use rand::SeedableRng;
 use rand::{thread_rng, Rng};
 use rand_chacha::ChaChaRng;
+use solana_ledger::blocktree::Blocktree;
+use solana_ledger::staking_utils;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_netutil::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
@@ -1779,17 +1779,16 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::make_many_slot_entries;
-    use crate::blocktree::Blocktree;
     use crate::blocktree_processor::tests::fill_blocktree_slot_with_ticks;
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
-    use crate::shred::max_ticks_per_n_shreds;
-    use crate::shred::{Shred, ShredHeader};
     use crate::test_tx::test_tx;
     use rayon::prelude::*;
+    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::blocktree::make_many_slot_entries;
+    use solana_ledger::blocktree::Blocktree;
+    use solana_ledger::shred::{max_ticks_per_n_shreds, Shred, ShredHeader};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;

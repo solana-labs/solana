@@ -1,12 +1,12 @@
-use super::*;
+use solana_ledger::blocktree::*;
 
 pub struct RootedSlotIterator<'a> {
     next_slots: Vec<u64>,
-    blocktree: &'a super::Blocktree,
+    blocktree: &'a Blocktree,
 }
 
 impl<'a> RootedSlotIterator<'a> {
-    pub fn new(start_slot: u64, blocktree: &'a super::Blocktree) -> Result<Self> {
+    pub fn new(start_slot: u64, blocktree: &'a Blocktree) -> Result<Self> {
         if blocktree.is_root(start_slot) {
             Ok(Self {
                 next_slots: vec![start_slot],
@@ -18,7 +18,7 @@ impl<'a> RootedSlotIterator<'a> {
     }
 }
 impl<'a> Iterator for RootedSlotIterator<'a> {
-    type Item = (u64, super::SlotMeta);
+    type Item = (u64, SlotMeta);
 
     fn next(&mut self) -> Option<Self::Item> {
         // Clone b/c passing the closure to the map below requires exclusive access to
@@ -53,6 +53,7 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
 mod tests {
     use super::*;
     use crate::blocktree_processor::tests::fill_blocktree_slot_with_ticks;
+    use solana_sdk::hash::Hash;
 
     #[test]
     fn test_rooted_slot_iterator() {

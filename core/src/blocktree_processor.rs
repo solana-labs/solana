@@ -1,11 +1,11 @@
 use crate::bank_forks::BankForks;
-use crate::blocktree::{Blocktree, SlotMeta};
-use crate::entry::{Entry, EntrySlice};
-use crate::leader_schedule_cache::LeaderScheduleCache;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rayon::prelude::*;
 use rayon::ThreadPool;
+use solana_ledger::blocktree::{Blocktree, SlotMeta};
+use solana_ledger::entry::{Entry, EntrySlice};
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_runtime::bank::Bank;
 use solana_runtime::transaction_batch::TransactionBatch;
@@ -450,12 +450,12 @@ fn process_pending_slots(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{
-        blocktree::create_new_tmp_ledger,
-        entry::{create_ticks, next_entry, next_entry_mut, Entry},
-        genesis_utils::{create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo},
+    use crate::genesis_utils::{
+        create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
     };
     use rand::{thread_rng, Rng};
+    use solana_ledger::blocktree::create_new_tmp_ledger;
+    use solana_ledger::entry::{create_ticks, next_entry, next_entry_mut, Entry};
     use solana_sdk::{
         epoch_schedule::EpochSchedule,
         hash::Hash,

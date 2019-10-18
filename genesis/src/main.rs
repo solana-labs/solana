@@ -1,9 +1,9 @@
 //! A command-line executable for generating the chain's genesis block.
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
-use solana_core::blocktree::create_new_ledger;
-use solana_core::poh::compute_hashes_per_tick;
 use solana_genesis::Base64Account;
+use solana_ledger::blocktree::create_new_ledger;
+use solana_ledger::poh::compute_hashes_per_tick;
 use solana_sdk::{
     account::Account,
     clock,

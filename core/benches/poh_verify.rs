@@ -1,8 +1,7 @@
 #![feature(test)]
 extern crate test;
 
-use solana_core::entry::EntrySlice;
-use solana_core::entry::{next_entry_mut, Entry};
+use solana_ledger::entry::{next_entry_mut, Entry, EntrySlice};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;

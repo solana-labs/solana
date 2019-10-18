@@ -11,6 +11,7 @@ homepage = "https://solana.com/"
 log = "0.4.6"
 rayon = "1.2.0"
 solana-core = { path = "../core", version = "0.20.0" }
+solana-ledger = { path = "../ledger", version = "0.20.0" }
 solana-logger = { path = "../logger", version = "0.20.0" }
 solana-runtime = { path = "../runtime", version = "0.20.0" }
 solana-measure = { path = "../measure", version = "0.20.0" }

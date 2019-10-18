@@ -19,7 +19,7 @@ extern crate solana_bench_tps;
 
 #[macro_use]
 #[cfg(test)]
-extern crate solana_core;
+extern crate solana_ledger;
 
 #[cfg(test)]
 extern crate solana_drone;

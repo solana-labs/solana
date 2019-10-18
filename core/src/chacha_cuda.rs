@@ -1,8 +1,8 @@
 // Module used by validators to approve storage mining proofs in parallel using the GPU
 
-use crate::blocktree::Blocktree;
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use crate::perf_libs;
+use solana_ledger::blocktree::Blocktree;
+use solana_ledger::perf_libs;
 use solana_sdk::hash::Hash;
 use std::io;
 use std::mem::size_of;
@@ -113,10 +113,10 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::get_tmp_ledger_path;
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use crate::entry::create_ticks;
     use crate::replicator::sample_file;
+    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::entry::create_ticks;
     use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::{remove_dir_all, remove_file};

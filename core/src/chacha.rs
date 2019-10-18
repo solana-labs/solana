@@ -1,4 +1,4 @@
-use crate::blocktree::Blocktree;
+use solana_ledger::blocktree::Blocktree;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -72,11 +72,11 @@ pub fn chacha_cbc_encrypt_ledger(
 
 #[cfg(test)]
 mod tests {
-    use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::Blocktree;
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use crate::entry::Entry;
     use crate::gen_keys::GenKeys;
+    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::blocktree::Blocktree;
+    use solana_ledger::entry::Entry;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction;

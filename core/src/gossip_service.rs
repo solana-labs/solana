@@ -1,13 +1,13 @@
 //! The `gossip_service` module implements the network control plane.
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::service::Service;
 use crate::streamer;
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
+use solana_ledger::blocktree::Blocktree;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::{IpAddr, SocketAddr, UdpSocket};

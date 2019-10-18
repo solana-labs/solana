@@ -1,13 +1,10 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing blobs in the ledger and sends repair requests for those blobs
 use crate::{
-    bank_forks::BankForks,
-    blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta},
-    cluster_info::ClusterInfo,
-    cluster_info_repair_listener::ClusterInfoRepairListener,
-    result::Result,
-    service::Service,
+    bank_forks::BankForks, cluster_info::ClusterInfo,
+    cluster_info_repair_listener::ClusterInfoRepairListener, result::Result, service::Service,
 };
+use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
     collections::BTreeSet,
@@ -401,15 +398,15 @@ impl Service for RepairService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::tests::{
-        make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
-    };
-    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::Node;
-    use crate::shred::max_ticks_per_n_shreds;
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::{thread_rng, Rng};
+    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
+    use solana_ledger::blocktree::{
+        make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
+    };
+    use solana_ledger::shred::max_ticks_per_n_shreds;
     use std::sync::mpsc::channel;
     use std::thread::Builder;
 

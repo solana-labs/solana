@@ -43,6 +43,7 @@
 
 use reed_solomon_erasure::galois_8::Field;
 use reed_solomon_erasure::ReedSolomon;
+use serde::{Deserialize, Serialize};
 
 //TODO(sakridge) pick these values
 /// Number of data blobs
@@ -130,6 +131,7 @@ impl Default for Session {
 #[cfg(test)]
 pub mod test {
     use super::*;
+    use log::*;
 
     /// Specifies the contents of a 16-data-blob and 4-coding-blob erasure set
     /// Exists to be passed to `generate_blocktree_with_coding`

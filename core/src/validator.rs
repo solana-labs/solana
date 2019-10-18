@@ -1,14 +1,12 @@
 //! The `validator` module hosts all the validator microservices.
 
 use crate::bank_forks::{BankForks, SnapshotConfig};
-use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::broadcast_stage::BroadcastStageType;
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::confidence::ForkConfidenceCache;
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::{discover_cluster, GossipService};
-use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::PohService;
 use crate::rpc::JsonRpcConfig;
@@ -21,6 +19,8 @@ use crate::snapshot_utils;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
+use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver};
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_metrics::datapoint_info;
 use solana_sdk::clock::{Slot, DEFAULT_SLOTS_PER_TURN};
 use solana_sdk::genesis_block::GenesisBlock;
@@ -120,7 +120,7 @@ impl Validator {
         warn!("vote pubkey: {:?}", vote_account);
         warn!(
             "CUDA is {}abled",
-            if crate::perf_libs::api().is_some() {
+            if solana_ledger::perf_libs::api().is_some() {
                 "en"
             } else {
                 "dis"
@@ -575,8 +575,8 @@ impl Service for Validator {
 }
 
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
-    use crate::blocktree::create_new_tmp_ledger;
     use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
+    use solana_ledger::blocktree::create_new_tmp_ledger;
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
@@ -616,8 +616,8 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::create_new_tmp_ledger;
     use crate::genesis_utils::create_genesis_block_with_leader;
+    use solana_ledger::blocktree::create_new_tmp_ledger;
     use std::fs::remove_dir_all;
 
     #[test]

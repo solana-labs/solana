@@ -4,10 +4,12 @@
 //! represents an approximate amount of time since the last Entry was created.
 use crate::perf_libs;
 use crate::poh::Poh;
+use log::*;
 use rayon::prelude::*;
 use rayon::ThreadPool;
+use serde::{Deserialize, Serialize};
 use solana_merkle_tree::MerkleTree;
-use solana_metrics::inc_new_counter_warn;
+use solana_metrics::*;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
@@ -317,7 +319,6 @@ pub fn create_ticks(num_ticks: u64, mut hash: Hash) -> Vec<Entry> {
     ticks
 }
 
-#[cfg(test)]
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
 pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     assert!(num_hashes > 0 || transactions.is_empty());

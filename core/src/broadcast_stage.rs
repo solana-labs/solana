@@ -2,12 +2,12 @@
 use self::broadcast_fake_blobs_run::BroadcastFakeBlobsRun;
 use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun;
 use self::standard_broadcast_run::StandardBroadcastRun;
-use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::staking_utils;
+use solana_ledger::blocktree::Blocktree;
+use solana_ledger::staking_utils;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -191,11 +191,11 @@ impl Service for BroadcastStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::entry::create_ticks;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::service::Service;
+    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
+    use solana_ledger::entry::create_ticks;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;

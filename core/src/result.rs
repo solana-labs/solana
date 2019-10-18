@@ -1,11 +1,11 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
-use crate::blocktree;
 use crate::cluster_info;
 use crate::packet;
 use crate::poh_recorder;
 use bincode;
 use serde_json;
+use solana_ledger::blocktree;
 use solana_sdk::transaction;
 use std;
 use std::any::Any;

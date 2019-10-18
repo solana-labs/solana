@@ -2,6 +2,7 @@ use crate::blocktree::{BlocktreeError, Result};
 
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
+use log::*;
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;

@@ -1,12 +1,12 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::cuda_runtime::PinnedVec;
-use crate::erasure::ErasureConfig;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::recycler::{Recycler, Reset};
 use crate::result::{Error, Result};
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
+use solana_ledger::erasure::ErasureConfig;
 use solana_metrics::inc_new_counter_debug;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
 use solana_sdk::pubkey::Pubkey;

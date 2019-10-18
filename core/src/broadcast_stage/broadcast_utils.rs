@@ -1,6 +1,6 @@
-use crate::entry::Entry;
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::Result;
+use solana_ledger::entry::Entry;
 use solana_runtime::bank::Bank;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;

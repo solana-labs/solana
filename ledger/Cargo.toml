@@ -1,0 +1,49 @@
+[package]
+name = "solana-ledger"
+version = "0.20.0"
+description = "Solana ledger"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+edition = "2018"
+
+[dependencies]
+bincode = "1.2.0"
+byteorder = "1.3.2"
+chrono = { version = "0.4.9", features = ["serde"] }
+dlopen = "0.1.8"
+dlopen_derive = "0.1.4"
+itertools = "0.8.0"
+lazy_static = "1.4.0"
+log = { version = "0.4.8" }
+rand = "0.6.5"
+rand_chacha = "0.1.1"
+rayon = "1.2.0"
+reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0.1-3", features = ["simd-accel"] }
+serde = "1.0.101"
+serde_derive = "1.0.101"
+solana-logger = { path = "../logger", version = "0.20.0" }
+solana-merkle-tree = { path = "../merkle-tree", version = "0.20.0" }
+solana-metrics = { path = "../metrics", version = "0.20.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.20.0" }
+solana-runtime = { path = "../runtime", version = "0.20.0" }
+solana-sdk = { path = "../sdk", version = "0.20.0" }
+solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.20.0" }
+sys-info = "0.5.8"
+
+[dependencies.rocksdb]
+# Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
+# when also using the bzip2 crate
+version = "0.11.0"
+default-features = false
+features = ["lz4"]
+
+[dev-dependencies]
+matches = "0.1.6"
+solana-budget-api = { path = "../programs/budget_api", version = "0.20.0" }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_ledger"

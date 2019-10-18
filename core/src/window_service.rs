@@ -1,16 +1,16 @@
 //! `window_service` handles the data plane incoming blobs, storing them in
 //!   blocktree and retransmitting where required
 //!
-use crate::blocktree::{self, Blocktree};
 use crate::cluster_info::ClusterInfo;
-use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::shred::Shred;
 use crate::streamer::{PacketReceiver, PacketSender};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use rayon::ThreadPool;
+use solana_ledger::blocktree::{self, Blocktree};
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
@@ -267,19 +267,19 @@ impl Service for WindowService {
 mod test {
     use super::*;
     use crate::{
-        blocktree::tests::make_many_slot_entries,
-        blocktree::{get_tmp_ledger_path, Blocktree},
         cluster_info::ClusterInfo,
         contact_info::ContactInfo,
-        entry::{create_ticks, Entry},
         genesis_utils::create_genesis_block_with_leader,
         packet::{Packet, Packets},
         repair_service::RepairSlotRange,
         service::Service,
-        shred::Shredder,
-        shred::SIZE_OF_SHRED_TYPE,
     };
     use rand::{seq::SliceRandom, thread_rng};
+    use solana_ledger::{
+        blocktree::{get_tmp_ledger_path, make_many_slot_entries, Blocktree},
+        entry::{create_ticks, Entry},
+        shred::{Shredder, SIZE_OF_SHRED_TYPE},
+    };
     use solana_sdk::{
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,

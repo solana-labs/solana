@@ -1,9 +1,9 @@
 #[macro_use]
-extern crate solana_core;
+extern crate solana_ledger;
 
 use assert_cmd::prelude::*;
-use solana_core::blocktree::create_new_tmp_ledger;
 use solana_core::genesis_utils::create_genesis_block;
+use solana_ledger::blocktree::create_new_tmp_ledger;
 use std::process::Command;
 use std::process::Output;
 

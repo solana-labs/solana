@@ -7,9 +7,9 @@ use crate::blockstream::BlockstreamEvents;
 use crate::blockstream::MockBlockstream as Blockstream;
 #[cfg(not(test))]
 use crate::blockstream::SocketBlockstream as Blockstream;
-use crate::blocktree::Blocktree;
 use crate::result::{Error, Result};
 use crate::service::Service;
+use solana_ledger::blocktree::Blocktree;
 use solana_sdk::pubkey::Pubkey;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -101,12 +101,12 @@ impl Service for BlockstreamService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::create_new_tmp_ledger;
-    use crate::entry::{create_ticks, Entry};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use bincode::{deserialize, serialize};
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
+    use solana_ledger::blocktree::create_new_tmp_ledger;
+    use solana_ledger::entry::{create_ticks, Entry};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;

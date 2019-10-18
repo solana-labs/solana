@@ -1,6 +1,6 @@
 use super::*;
-use crate::entry::Entry;
-use crate::shred::{Shredder, RECOMMENDED_FEC_RATE};
+use solana_ledger::entry::Entry;
+use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 
 pub(super) struct BroadcastFakeBlobsRun {

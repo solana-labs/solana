@@ -2,7 +2,6 @@
 //! multi-stage transaction processing pipeline in software.
 
 use crate::banking_stage::BankingStage;
-use crate::blocktree::Blocktree;
 use crate::broadcast_stage::{BroadcastStage, BroadcastStageType};
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
@@ -11,6 +10,7 @@ use crate::poh_recorder::{PohRecorder, WorkingBankEntry};
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
 use crossbeam_channel::unbounded;
+use solana_ledger::blocktree::Blocktree;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};

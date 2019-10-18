@@ -1,21 +1,21 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::{Blocktree, BlocktreeError};
 use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::confidence::{
     AggregateConfidenceService, ConfidenceAggregationData, ForkConfidenceCache,
 };
 use crate::consensus::{StakeLockout, Tower};
-use crate::entry::{Entry, EntrySlice};
-use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::packet::BlobError;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::snapshot_package::SnapshotPackageSender;
+use solana_ledger::blocktree::{Blocktree, BlocktreeError};
+use solana_ledger::entry::{Entry, EntrySlice};
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
@@ -868,13 +868,13 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::tests::make_slot_entries;
-    use crate::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, BlocktreeError};
     use crate::confidence::BankConfidence;
-    use crate::entry;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::replay_stage::ReplayStage;
-    use crate::shred::{Shred, ShredHeader, DATA_COMPLETE_SHRED, SIZE_OF_SHRED_HEADER};
+    use solana_ledger::blocktree::make_slot_entries;
+    use solana_ledger::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, BlocktreeError};
+    use solana_ledger::entry;
+    use solana_ledger::shred::{Shred, ShredHeader, DATA_COMPLETE_SHRED, SIZE_OF_SHRED_HEADER};
     use solana_runtime::genesis_utils::GenesisBlockInfo;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::packet::PACKET_DATA_SIZE;

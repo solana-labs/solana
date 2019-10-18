@@ -14,10 +14,8 @@
 
 use crate::bank_forks::BankForks;
 use crate::blockstream_service::BlockstreamService;
-use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::ClusterInfo;
 use crate::confidence::ForkConfidenceCache;
-use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::ledger_cleanup_service::LedgerCleanupService;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
@@ -27,6 +25,8 @@ use crate::service::Service;
 use crate::shred_fetch_stage::ShredFetchStage;
 use crate::snapshot_package::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
+use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver};
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -226,9 +226,9 @@ impl Service for Tvu {
 pub mod tests {
     use super::*;
     use crate::banking_stage::create_test_recorder;
-    use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use solana_ledger::blocktree::create_new_tmp_ledger;
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
 
