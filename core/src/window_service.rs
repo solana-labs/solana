@@ -7,10 +7,10 @@ use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::shred::Shred;
 use crate::streamer::{PacketReceiver, PacketSender};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use rayon::ThreadPool;
+use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
@@ -275,11 +275,12 @@ mod test {
         packet::{Packet, Packets},
         repair_service::RepairSlotRange,
         service::Service,
-        shred::Shredder,
-        shred::SIZE_OF_SHRED_TYPE,
     };
     use rand::{seq::SliceRandom, thread_rng};
-    use solana_ledger::entry::{create_ticks, Entry};
+    use solana_ledger::{
+        entry::{create_ticks, Entry},
+        shred::{Shredder, SIZE_OF_SHRED_TYPE},
+    };
     use solana_sdk::{
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,

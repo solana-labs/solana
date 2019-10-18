@@ -873,8 +873,8 @@ mod test {
     use crate::confidence::BankConfidence;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::replay_stage::ReplayStage;
-    use crate::shred::{Shred, ShredHeader, DATA_COMPLETE_SHRED, SIZE_OF_SHRED_HEADER};
     use solana_ledger::entry;
+    use solana_ledger::shred::{Shred, ShredHeader, DATA_COMPLETE_SHRED, SIZE_OF_SHRED_HEADER};
     use solana_runtime::genesis_utils::GenesisBlockInfo;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::packet::PACKET_DATA_SIZE;

@@ -1,9 +1,9 @@
 //! The `block_tree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-use crate::shred::{Shred, Shredder};
 use solana_ledger::entry::Entry;
 use solana_ledger::erasure::ErasureConfig;
+use solana_ledger::shred::{Shred, Shredder};
 
 use bincode::deserialize;
 
@@ -1691,11 +1691,11 @@ pub fn entries_to_test_shreds(
 pub mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use crate::shred::max_ticks_per_n_shreds;
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
     use solana_ledger::entry::{create_ticks, Entry};
+    use solana_ledger::shred::max_ticks_per_n_shreds;
     use solana_sdk::hash::Hash;
     use solana_sdk::packet::PACKET_DATA_SIZE;
     use std::iter::FromIterator;

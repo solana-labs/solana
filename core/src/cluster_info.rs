@@ -1786,10 +1786,9 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
-    use crate::shred::max_ticks_per_n_shreds;
-    use crate::shred::{Shred, ShredHeader};
     use crate::test_tx::test_tx;
     use rayon::prelude::*;
+    use solana_ledger::shred::{max_ticks_per_n_shreds, Shred, ShredHeader};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;

@@ -406,10 +406,10 @@ mod test {
     };
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::Node;
-    use crate::shred::max_ticks_per_n_shreds;
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::{thread_rng, Rng};
+    use solana_ledger::shred::max_ticks_per_n_shreds;
     use std::sync::mpsc::channel;
     use std::thread::Builder;
 

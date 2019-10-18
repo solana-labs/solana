@@ -1,5 +1,5 @@
 use super::*;
-use crate::shred::{Shredder, RECOMMENDED_FEC_RATE};
+use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 
 pub(super) struct FailEntryVerificationBroadcastRun {}
