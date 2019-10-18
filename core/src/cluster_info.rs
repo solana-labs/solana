@@ -1788,7 +1788,9 @@ mod tests {
     use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::blocktree::make_many_slot_entries;
     use solana_ledger::blocktree::Blocktree;
-    use solana_ledger::shred::{max_ticks_per_n_shreds, Shred, ShredHeader};
+    use solana_ledger::shred::{
+        max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
+    };
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
@@ -1946,11 +1948,16 @@ mod tests {
                 0,
             );
             assert!(rv.is_empty());
-            let mut data_shred = ShredHeader::default();
-            data_shred.data_header.common_header.slot = 2;
-            data_shred.data_header.parent_offset = 1;
-            data_shred.data_header.common_header.index = 1;
-            let shred_info = Shred::new_empty_from_header(data_shred);
+            let mut common_header = ShredCommonHeader::default();
+            common_header.slot = 2;
+            common_header.index = 1;
+            let mut data_header = DataShredHeader::default();
+            data_header.parent_offset = 1;
+            let shred_info = Shred::new_empty_from_header(
+                common_header,
+                data_header,
+                CodingShredHeader::default(),
+            );
 
             blocktree
                 .insert_shreds(vec![shred_info], None)
