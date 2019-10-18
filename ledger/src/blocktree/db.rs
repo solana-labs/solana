@@ -212,20 +212,6 @@ pub trait Column {
     fn as_index(slot: Slot) -> Self::Index;
 }
 
-pub trait DbCursor {
-    fn valid(&self) -> bool;
-
-    fn seek(&mut self, key: &[u8]);
-
-    fn seek_to_first(&mut self);
-
-    fn next(&mut self);
-
-    fn key(&self) -> Option<Vec<u8>>;
-
-    fn value(&self) -> Option<Vec<u8>>;
-}
-
 pub trait IWriteBatch {
     fn put_cf(&mut self, cf: ColumnFamily, key: &[u8], value: &[u8]) -> Result<()>;
     fn delete_cf(&mut self, cf: ColumnFamily, key: &[u8]) -> Result<()>;
@@ -753,32 +739,6 @@ impl WriteBatch {
     #[inline]
     fn get_cf<C: Column>(&self) -> ColumnFamily {
         self.map[C::NAME]
-    }
-}
-
-impl DbCursor for DBRawIterator {
-    fn valid(&self) -> bool {
-        DBRawIterator::valid(self)
-    }
-
-    fn seek(&mut self, key: &[u8]) {
-        DBRawIterator::seek(self, key);
-    }
-
-    fn seek_to_first(&mut self) {
-        DBRawIterator::seek_to_first(self);
-    }
-
-    fn next(&mut self) {
-        DBRawIterator::next(self);
-    }
-
-    fn key(&self) -> Option<Vec<u8>> {
-        DBRawIterator::key(self)
-    }
-
-    fn value(&self) -> Option<Vec<u8>> {
-        DBRawIterator::value(self)
     }
 }
 
