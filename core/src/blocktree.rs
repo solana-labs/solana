@@ -37,16 +37,13 @@ mod meta;
 mod rooted_slot_iterator;
 
 pub use db::columns;
-use db::{columns as cf, IteratorDirection, IteratorMode};
+use db::{columns as cf, Column, IteratorDirection, IteratorMode};
+use rocksdb::DBRawIterator;
 
 pub type Database = db::Database;
-pub type Cursor<C> = db::Cursor<C>;
 pub type LedgerColumn<C> = db::LedgerColumn<C>;
 pub type WriteBatch = db::WriteBatch;
 type BatchProcessor = db::BatchProcessor;
-
-pub trait Column: db::Column {}
-impl<C: db::Column> Column for C {}
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 
@@ -903,7 +900,7 @@ impl Blocktree {
     // indexes in the ledger in the range [start_index, end_index)
     // for the slot with the specified slot
     fn find_missing_indexes<C>(
-        db_iterator: &mut Cursor<C>,
+        db_iterator: &mut DBRawIterator,
         slot: u64,
         start_index: u64,
         end_index: u64,
@@ -919,7 +916,7 @@ impl Blocktree {
         let mut missing_indexes = vec![];
 
         // Seek to the first shred with index >= start_index
-        db_iterator.seek((slot, start_index));
+        db_iterator.seek(&C::key((slot, start_index)));
 
         // The index of the first missing shred in the slot
         let mut prev_index = start_index;
@@ -933,7 +930,7 @@ impl Blocktree {
                 }
                 break;
             }
-            let (current_slot, index) = db_iterator.key().expect("Expect a valid key");
+            let (current_slot, index) = C::index(&db_iterator.key().expect("Expect a valid key"));
 
             let current_index = {
                 if current_slot > slot {
@@ -974,8 +971,17 @@ impl Blocktree {
         end_index: u64,
         max_missing: usize,
     ) -> Vec<u64> {
-        if let Ok(mut db_iterator) = self.db.cursor::<cf::ShredData>() {
-            Self::find_missing_indexes(&mut db_iterator, slot, start_index, end_index, max_missing)
+        if let Ok(mut db_iterator) = self
+            .db
+            .raw_iterator_cf(self.db.cf_handle::<cf::ShredData>())
+        {
+            Self::find_missing_indexes::<cf::ShredData>(
+                &mut db_iterator,
+                slot,
+                start_index,
+                end_index,
+                max_missing,
+            )
         } else {
             vec![]
         }
@@ -1145,7 +1151,10 @@ impl Blocktree {
     pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {
         let mut results = vec![];
 
-        let mut iter = self.db.cursor::<cf::Orphans>().unwrap();
+        let mut iter = self
+            .db
+            .raw_iterator_cf(self.db.cf_handle::<cf::Orphans>())
+            .unwrap();
         iter.seek_to_first();
         while iter.valid() {
             if let Some(max) = max {
@@ -1153,7 +1162,7 @@ impl Blocktree {
                     break;
                 }
             }
-            results.push(iter.key().unwrap());
+            results.push(<cf::Orphans as Column>::index(&iter.key().unwrap()));
             iter.next();
         }
         results
