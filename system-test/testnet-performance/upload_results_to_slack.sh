@@ -6,16 +6,25 @@ upload_results_to_slack() {
     exit 1
   fi
 
+  [[ -n $BUILDKITE_MESSAGE ]] || BUILDKITE_MESSAGE="Message not defined"
+
   if [[ -n $BUILDKITE_COMMIT ]] ; then
-    COMMIT_LINK="<https://github.com/solana-labs/solana/commit/${BUILDKITE_COMMIT}|${BUILDKITE_COMMIT}>"
+    COMMIT_BUTTON_TEXT="$(echo $BUILDKITE_COMMIT | head -c 8)"
+    COMMIT_URL="https://github.com/solana-labs/solana/commit/${BUILDKITE_COMMIT}"
   else
-    COMMIT_LINK="Commit not defined"
+    COMMIT_BUTTON_TEXT="Commit not defined"
+    COMMIT_URL="https://github.com/solana-labs/solana/commits/master"
   fi
 
-  GRAFANA_URL="https://metrics.solana.com:3000/d/testnet-${CHANNEL:-edge}/testnet-monitor-${CHANNEL:-edge}?var-testnet=${TESTNET_TAG:-testnet-automation}&from=${START_UNIX_MSECS}&to=${FINISH_UNIX_MSECS}"
+  if [[ -n $BUILDKITE_BUILD_URL ]] ; then
+    BUILD_BUTTON_TEXT="Build Kite Job"
+  else
+    BUILD_BUTTON_TEXT="Build URL not defined"
+    BUILDKITE_BUILD_URL="https://buildkite.com/solana-labs/"
+  fi
 
-  [[ -n $BUILDKITE_MESSAGE ]] || BUILDKITE_MESSAGE="Message not defined"
-  [[ -n $BUILDKITE_BUILD_URL ]] || BUILDKITE_BUILD_URL="Build URL not defined"
+  GRAFANA_URL="https://metrics.solana.com:3000/d/testnet-${CHANNEL:-edge}/testnet-monitor-${CHANNEL:-edge}?var-testnet=${TESTNET_TAG:-testnet-automation}&from=${START_UNIX_MSECS:-0}&to=${FINISH_UNIX_MSECS:-0}"
+
   [[ -n $RESULT_DETAILS ]] || RESULT_DETAILS="Undefined"
   [[ -n $TEST_CONFIGURATION ]] || TEST_CONFIGURATION="Undefined"
 
@@ -26,15 +35,40 @@ upload_results_to_slack() {
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text":
-
-"*New Build Started at: $START_TIME*
-Buildkite Message: $BUILDKITE_MESSAGE
-Commit SHA1: $COMMIT_LINK
-Link to Build: $BUILDKITE_BUILD_URL
-Link to Grafana: $GRAFANA_URL
-"
-			},
+				"text": "*New Build: $BUILDKITE_MESSAGE*"
+			}
+		},
+    {
+			"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "$COMMIT_BUTTON_TEXT",
+						"emoji": true
+					},
+					"url": "$COMMIT_URL"
+				},
+        {
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "$BUILD_BUTTON_TEXT",
+						"emoji": true
+					},
+					"url": "$BUILDKITE_BUILD_URL"
+				},
+        {
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Grafana",
+						"emoji": true
+					},
+					"url": "$GRAFANA_URL"
+				}
+			]
 		},
 		{
 			"type": "divider"
@@ -44,7 +78,7 @@ Link to Grafana: $GRAFANA_URL
 			"text": {
 				"type": "mrkdwn",
 				"text": "Test Configuration: \n\`\`\`$TEST_CONFIGURATION\`\`\`"
-			},
+			}
 		},
 		{
 			"type": "divider"
@@ -54,7 +88,7 @@ Link to Grafana: $GRAFANA_URL
 			"text": {
 				"type": "mrkdwn",
 				"text": "Result Details: \n\`\`\`$RESULT_DETAILS\`\`\`"
-			},
+			}
 		}
 	]
 }
