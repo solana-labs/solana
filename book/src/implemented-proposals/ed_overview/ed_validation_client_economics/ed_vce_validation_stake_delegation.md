@@ -1,5 +1,7 @@
 # Validation Stake Delegation
 
+**Subject to change.**
+
 Running a Solana validation-client required relatively modest upfront hardware capital investment. **Table 2** provides an example hardware configuration to support ~1M tx/s with estimated ‘off-the-shelf’ costs:
 
 | Component | Example | Estimated Cost |

@@ -1,5 +1,7 @@
 # Attack Vectors
 
+**Subject to change.**
+
 ## Colluding validation and replication clients
 
 A colluding validation-client, may take the strategy to mark PoReps from non-colluding replicator nodes as invalid as an attempt to maximize the rewards for the colluding replicator nodes. In this case, it isn’t feasible for the offended-against replicator nodes to petition the network for resolution as this would result in a network-wide vote on each offending PoRep and create too much overhead for the network to progress adequately. Also, this mitigation attempt would still be vulnerable to a &gt;= 51% staked colluder.

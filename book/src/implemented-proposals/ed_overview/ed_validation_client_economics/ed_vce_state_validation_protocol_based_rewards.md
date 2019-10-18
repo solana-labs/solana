@@ -1,5 +1,7 @@
 # State-validation Protocol-based Rewards
 
+**Subject to change.**
+
 Validator-clients have two functional roles in the Solana network:
 
 * Validate \(vote\) the current global state of that PoH along with any Proofs-of-Replication \(see [Replication Client Economics](../ed_replication_client_economics/)\) that they are eligible to validate.
