@@ -1,5 +1,7 @@
 # Cluster Economics
 
+**Subject to change.**
+
 Solana’s crypto-economic system is designed to promote a healthy, long term self-sustaining economy with participant incentives aligned to the security and decentralization of the network. The main participants in this economy are validation-clients and replication-clients. Their contributions to the network, state validation and data storage respectively, and their requisite incentive mechanisms are discussed below.
 
 The main channels of participant remittances are referred to as protocol-based rewards and transaction fees. Protocol-based rewards are issuances from a global, protocol-defined, inflation rate. These rewards will constitute the total reward delivered to replication and validation clients, the remaining sourced from transaction fees. In the early days of the network, it is likely that protocol-based rewards, deployed based on predefined issuance schedule, will drive the majority of participant incentives to participate in the network.

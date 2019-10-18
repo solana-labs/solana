@@ -1,5 +1,7 @@
 # State-validation Transaction Fees
 
+**Subject to change.**
+
 Each transaction sent through the network, to be processed by the current leader validation-client and confirmed as a global state transaction, must contain a transaction fee. Transaction fees offer many benefits in the Solana economic design, for example they:
 
 * provide unit compensation to the validator network for the CPU/GPU resources necessary to process the state transaction,
