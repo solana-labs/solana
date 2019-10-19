@@ -34,8 +34,6 @@ lazy_static! {
     };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
-    pub static ref SIZE_OF_SHRED_TYPE: usize =
-        { bincode::serialized_size(&ShredType(DATA_SHRED)).unwrap() as usize };
 }
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
@@ -651,7 +649,7 @@ impl Shredder {
             let session = Session::new(num_data, num_coding).unwrap();
 
             let valid_data_len = PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_IGNORED_TAIL;
-            let coding_block_offset = *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_SHRED_TYPE;
+            let coding_block_offset = *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_COMMON_SHRED_HEADER;
             let mut blocks: Vec<(&mut [u8], bool)> = shred_bufs
                 .iter_mut()
                 .enumerate()
