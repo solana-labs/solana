@@ -3,6 +3,7 @@
 use crate::cluster_info;
 use crate::packet;
 use crate::poh_recorder;
+use crate::snapshot_utils;
 use bincode;
 use serde_json;
 use solana_ledger::blocktree;
@@ -32,6 +33,7 @@ pub enum Error {
     BlocktreeError(blocktree::BlocktreeError),
     FsExtra(fs_extra::error::Error),
     ToBlobError,
+    SnapshotError(snapshot_utils::SnapshotError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -132,6 +134,11 @@ impl std::convert::From<poh_recorder::PohRecorderError> for Error {
 impl std::convert::From<blocktree::BlocktreeError> for Error {
     fn from(e: blocktree::BlocktreeError) -> Error {
         Error::BlocktreeError(e)
+    }
+}
+impl std::convert::From<snapshot_utils::SnapshotError> for Error {
+    fn from(e: snapshot_utils::SnapshotError) -> Error {
+        Error::SnapshotError(e)
     }
 }
 
