@@ -69,7 +69,7 @@ pub fn create_account(
     )
 }
 
-/// transfer with target as credit-debit
+/// transfer with to as credit-debit
 pub fn transfer_now(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
