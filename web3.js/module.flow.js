@@ -228,7 +228,9 @@ declare module '@solana/web3.js' {
 
     constructor(opts?: TransactionCtorFields): Transaction;
     add(
-      ...items: Array<Transaction | TransactionInstruction | TransactionInstructionCtorFields>
+      ...items: Array<
+        Transaction | TransactionInstruction | TransactionInstructionCtorFields,
+      >
     ): Transaction;
     sign(...signers: Array<Account>): void;
     signPartial(...partialSigners: Array<PublicKey | Account>): void;
@@ -272,4 +274,6 @@ declare module '@solana/web3.js' {
 
   // === src/util/testnet.js ===
   declare export function testnetChannelEndpoint(channel?: string): string;
+
+  declare export var SOL_LAMPORTS: number;
 }
