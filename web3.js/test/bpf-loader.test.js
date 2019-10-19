@@ -7,6 +7,7 @@ import {
   BpfLoader,
   Transaction,
   sendAndConfirmTransaction,
+  SOL_LAMPORTS,
 } from '../src';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
@@ -24,7 +25,7 @@ test('load BPF C program', async () => {
   }
 
   const connection = new Connection(url);
-  const from = await newAccountWithLamports(connection, 1024);
+  const from = await newAccountWithLamports(connection, SOL_LAMPORTS);
   const data = await fs.readFile('test/fixtures/noop-c/noop.so');
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
@@ -41,7 +42,7 @@ test('load BPF Rust program', async () => {
   }
 
   const connection = new Connection(url);
-  const from = await newAccountWithLamports(connection, 100000);
+  const from = await newAccountWithLamports(connection, SOL_LAMPORTS);
   const data = await fs.readFile(
     'test/fixtures/noop-rust/solana_bpf_rust_noop.so',
   );

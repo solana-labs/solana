@@ -45,7 +45,9 @@ export class Loader {
     data: Array<number>,
   ): Promise<PublicKey> {
     {
-      const balanceNeeded = await connection.getMinimumBalanceForRentExemption(data.length);
+      const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+        data.length,
+      );
       const transaction = SystemProgram.createAccount(
         payer.publicKey,
         program.publicKey,
@@ -126,7 +128,7 @@ export class Loader {
       const transaction = new Transaction().add({
         keys: [
           {pubkey: program.publicKey, isSigner: true, isDebitable: true},
-          {pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isDebitable: false}
+          {pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isDebitable: false},
         ],
         programId,
         data,

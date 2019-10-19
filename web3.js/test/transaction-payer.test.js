@@ -1,5 +1,5 @@
 // @flow
-import {Account, Connection, SystemProgram} from '../src';
+import {Account, Connection, SystemProgram, SOL_LAMPORTS} from '../src';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
@@ -20,7 +20,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountPayer.publicKey.toBase58(), 100],
+      params: [accountPayer.publicKey.toBase58(), SOL_LAMPORTS],
     },
     {
       error: null,
@@ -28,7 +28,7 @@ test('transaction-payer', async () => {
         '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
-  await connection.requestAirdrop(accountPayer.publicKey, 100);
+  await connection.requestAirdrop(accountPayer.publicKey, SOL_LAMPORTS);
 
   mockRpc.push([
     url,
@@ -141,7 +141,7 @@ test('transaction-payer', async () => {
   // (exact amount less depends on the current cluster fees)
   const balance = await connection.getBalance(accountPayer.publicKey);
   expect(balance).toBeGreaterThan(0);
-  expect(balance).toBeLessThanOrEqual(100);
+  expect(balance).toBeLessThanOrEqual(SOL_LAMPORTS);
 
   // accountFrom should have exactly 2, since it didn't pay for the transaction
   mockRpc.push([
