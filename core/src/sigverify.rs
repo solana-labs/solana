@@ -54,10 +54,11 @@ impl PacketOffsets {
 #[derive(Debug, PartialEq)]
 pub enum PacketError {
     InvalidLen,
-    InvalidSignatureLen,
     InvalidPubkeyLen,
-    MismatchSignatureLen,
     InvalidShortVec,
+    InvalidSignatureLen,
+    MismatchSignatureLen,
+    PayerNotDebitable,
 }
 
 impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for PacketError {
@@ -145,6 +146,14 @@ fn do_get_packet_offsets(
     let sig_len_maybe_trusted = packet.data[msg_start_offset] as usize;
 
     let message_account_keys_len_offset = msg_start_offset + message_header_size;
+
+    // This reads and compares the MessageHeader num_required_signatures and
+    // num_credit_only_signed_accounts bytes. If num_required_signatures is not larger than
+    // num_credit_only_signed_accounts, the first account is not debitable, and cannot be charged
+    // required transaction fees.
+    if packet.data[msg_start_offset] <= packet.data[msg_start_offset + 1] {
+        return Err(PacketError::PayerNotDebitable);
+    }
 
     // read the length of Message.account_keys (serialized with short_vec)
     let (pubkey_len, pubkey_len_size) =
@@ -535,6 +544,26 @@ mod tests {
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
+    }
+
+    #[test]
+    fn test_fee_payer_is_debitable() {
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_credit_only_signed_accounts: 1,
+                num_credit_only_unsigned_accounts: 1,
+            },
+            account_keys: vec![],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let mut tx = Transaction::new_unsigned(message);
+        tx.signatures = vec![Signature::default()];
+        let packet = sigverify::make_packet_from_transaction(tx.clone());
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+
+        assert_eq!(res, Err(PacketError::PayerNotDebitable));
     }
 
     #[test]
