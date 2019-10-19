@@ -34,6 +34,12 @@ fn to_array_32(array: &[u8]) -> &[u8; 32] {
     array.try_into().expect("slice with incorrect length")
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ModuleBytes {
+    #[serde(with = "serde_bytes")]
+    pub bytes: Vec<u8>,
+}
+
 /// Type of Libra account held by a Solana account
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum LibraAccountState {
@@ -43,8 +49,9 @@ pub enum LibraAccountState {
     CompiledProgram(String),
     /// Serialized verified program bytes
     VerifiedProgram {
+        #[serde(with = "serde_bytes")]
         script_bytes: Vec<u8>,
-        modules_bytes: Vec<Vec<u8>>,
+        modules_bytes: Vec<ModuleBytes>,
     },
     /// Associated genesis account and the write set containing the Libra account data
     User(Pubkey, WriteSet),

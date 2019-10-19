@@ -15,6 +15,7 @@ indexmap = "1.1.0"
 libc = "0.2.65"
 log = "0.4.8"
 serde = "1.0.101"
+serde_bytes = "0.11"
 serde_derive = "1.0.101"
 serde_json = "1.0.41"
 solana-logger = { path = "../../logger", version = "0.20.0" }

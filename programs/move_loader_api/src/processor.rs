@@ -1,4 +1,4 @@
-use crate::account_state::{pubkey_to_address, LibraAccountState};
+use crate::account_state::{pubkey_to_address, LibraAccountState, ModuleBytes};
 use crate::data_store::DataStore;
 use crate::error_mappers::*;
 use crate::id;
@@ -127,7 +127,7 @@ impl MoveProcessor {
                 .as_inner()
                 .serialize(&mut buf)
                 .map_err(map_failure_error)?;
-            modules_bytes.push(buf);
+            modules_bytes.push(ModuleBytes { bytes: buf });
         }
         Ok(LibraAccountState::VerifiedProgram {
             script_bytes,
@@ -172,7 +172,7 @@ impl MoveProcessor {
                     VerifiedScript::deserialize(&script_bytes).map_err(map_vm_binary_error)?;
                 let modules = modules_bytes
                     .iter()
-                    .map(|bytes| VerifiedModule::deserialize(&bytes))
+                    .map(|module_bytes| VerifiedModule::deserialize(&module_bytes.bytes))
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(map_vm_binary_error)?;
 
