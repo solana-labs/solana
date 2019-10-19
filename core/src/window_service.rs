@@ -275,10 +275,11 @@ mod test {
         service::Service,
     };
     use rand::{seq::SliceRandom, thread_rng};
+    use solana_ledger::shred::DataShredHeader;
     use solana_ledger::{
         blocktree::{get_tmp_ledger_path, make_many_slot_entries, Blocktree},
         entry::{create_ticks, Entry},
-        shred::{Shredder, SIZE_OF_SHRED_TYPE},
+        shred::Shredder,
     };
     use solana_sdk::{
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -345,9 +346,10 @@ mod test {
         );
 
         // If it's a coding shred, test that slot >= root
+        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 6, 6, 0);
         let mut coding_shred =
-            Shred::new_empty_from_header(Shredder::new_coding_shred_header(5, 5, 6, 6, 0));
-        Shredder::sign_shred(&leader_keypair, &mut coding_shred, *SIZE_OF_SHRED_TYPE);
+            Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
+        Shredder::sign_shred(&leader_keypair, &mut coding_shred);
         assert_eq!(
             should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 0),
             true

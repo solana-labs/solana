@@ -874,7 +874,10 @@ mod test {
     use solana_ledger::blocktree::make_slot_entries;
     use solana_ledger::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, BlocktreeError};
     use solana_ledger::entry;
-    use solana_ledger::shred::{Shred, ShredHeader, DATA_COMPLETE_SHRED, SIZE_OF_SHRED_HEADER};
+    use solana_ledger::shred::{
+        CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
+        SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+    };
     use solana_runtime::genesis_utils::GenesisBlockInfo;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::packet::PACKET_DATA_SIZE;
@@ -999,15 +1002,20 @@ mod test {
     fn test_dead_fork_entry_deserialize_failure() {
         // Insert entry that causes deserialization failure
         let res = check_dead_fork(|_, _| {
-            let payload_len = PACKET_DATA_SIZE - *SIZE_OF_SHRED_HEADER;
+            let payload_len = *SIZE_OF_DATA_SHRED_PAYLOAD;
             let gibberish = [0xa5u8; PACKET_DATA_SIZE];
-            let mut header = ShredHeader::default();
-            header.data_header.flags = DATA_COMPLETE_SHRED;
-            let mut shred = Shred::new_empty_from_header(header);
-            let _ = bincode::serialize_into(
-                &mut shred.payload[*SIZE_OF_SHRED_HEADER..],
-                &gibberish[..payload_len],
+            let mut data_header = DataShredHeader::default();
+            data_header.flags = DATA_COMPLETE_SHRED;
+            let mut shred = Shred::new_empty_from_header(
+                ShredCommonHeader::default(),
+                data_header,
+                CodingShredHeader::default(),
             );
+            bincode::serialize_into(
+                &mut shred.payload[*SIZE_OF_COMMON_SHRED_HEADER + *SIZE_OF_DATA_SHRED_HEADER..],
+                &gibberish[..payload_len],
+            )
+            .unwrap();
             vec![shred]
         });
 
