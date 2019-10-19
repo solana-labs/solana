@@ -156,7 +156,7 @@ mod tests {
             4,
             |bank, mint_keypair| {
                 let key1 = Keypair::new().pubkey();
-                let tx = system_transaction::create_user_account(
+                let tx = system_transaction::transfer_now(
                     &mint_keypair,
                     &key1,
                     1,
@@ -224,7 +224,7 @@ mod tests {
             );
             let slot = bank.slot();
             let key1 = Keypair::new().pubkey();
-            let tx = system_transaction::create_user_account(
+            let tx = system_transaction::transfer_now(
                 &mint_keypair,
                 &key1,
                 1,
