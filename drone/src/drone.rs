@@ -388,14 +388,7 @@ mod tests {
 
         assert_eq!(message.instructions.len(), 1);
         let instruction: SystemInstruction = deserialize(&message.instructions[0].data).unwrap();
-        assert_eq!(
-            instruction,
-            SystemInstruction::CreateAccount {
-                lamports: 2,
-                space: 0,
-                program_id: Pubkey::default()
-            }
-        );
+        assert_eq!(instruction, SystemInstruction::Transfer { lamports: 2 });
 
         let mint = Keypair::new();
         drone = Drone::new(mint, None, Some(1));
