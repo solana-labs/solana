@@ -255,6 +255,6 @@ mod tests {
         status_cache_stream.flush().unwrap();
 
         // Check tarball is correct
-        snapshot_utils::tests::verify_snapshot_tar(output_tar_path, snapshots_dir, accounts_dir);
+        snapshot_utils::verify_snapshot_tar(output_tar_path, snapshots_dir, accounts_dir);
     }
 }

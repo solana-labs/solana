@@ -306,30 +306,21 @@ fn get_io_error(error: &str) -> SnapshotError {
     SnapshotError::IO(IOError::new(ErrorKind::Other, error))
 }
 
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use tempfile::TempDir;
+pub fn verify_snapshot_tar<P, Q, R>(snapshot_tar: P, snapshots_to_verify: Q, storages_to_verify: R)
+where
+    P: AsRef<Path>,
+    Q: AsRef<Path>,
+    R: AsRef<Path>,
+{
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let unpack_dir = temp_dir.path();
+    untar_snapshot_in(snapshot_tar, &unpack_dir).unwrap();
 
-    pub fn verify_snapshot_tar<P, Q, R>(
-        snapshot_tar: P,
-        snapshots_to_verify: Q,
-        storages_to_verify: R,
-    ) where
-        P: AsRef<Path>,
-        Q: AsRef<Path>,
-        R: AsRef<Path>,
-    {
-        let temp_dir = TempDir::new().unwrap();
-        let unpack_dir = temp_dir.path();
-        untar_snapshot_in(snapshot_tar, &unpack_dir).unwrap();
+    // Check snapshots are the same
+    let unpacked_snapshots = unpack_dir.join(&TAR_SNAPSHOTS_DIR);
+    assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
-        // Check snapshots are the same
-        let unpacked_snapshots = unpack_dir.join(&TAR_SNAPSHOTS_DIR);
-        assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
-
-        // Check the account entries are the same
-        let unpacked_accounts = unpack_dir.join(&TAR_ACCOUNTS_DIR);
-        assert!(!dir_diff::is_different(&storages_to_verify, unpacked_accounts).unwrap());
-    }
+    // Check the account entries are the same
+    let unpacked_accounts = unpack_dir.join(&TAR_ACCOUNTS_DIR);
+    assert!(!dir_diff::is_different(&storages_to_verify, unpacked_accounts).unwrap());
 }
