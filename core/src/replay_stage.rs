@@ -761,6 +761,7 @@ impl ReplayStage {
     ) -> Result<()> {
         let now = Instant::now();
         let last_entry = &bank_progress.last_entry;
+        datapoint_info!("verify-batch-size", ("size", entries.len() as i64, i64));
         let verify_result = entries.verify(last_entry);
         let verify_entries_elapsed = now.elapsed().as_micros();
         bank_progress.stats.entry_verification_elapsed += verify_entries_elapsed as u64;
