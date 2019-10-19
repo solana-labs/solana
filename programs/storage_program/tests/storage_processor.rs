@@ -472,11 +472,7 @@ fn init_storage_accounts(
     replicator_accounts_to_create: &[&Pubkey],
     lamports: u64,
 ) {
-    let mut ixs: Vec<_> = vec![system_instruction::create_user_account(
-        &mint.pubkey(),
-        owner,
-        1,
-    )];
+    let mut ixs: Vec<_> = vec![system_instruction::transfer_now(&mint.pubkey(), owner, 1)];
     ixs.append(
         &mut validator_accounts_to_create
             .into_iter()

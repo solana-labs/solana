@@ -138,12 +138,7 @@ mod test {
 
         let keypair = Keypair::new();
         let mut blockhash = entries[3].hash;
-        let tx = system_transaction::create_user_account(
-            &keypair,
-            &keypair.pubkey(),
-            1,
-            Hash::default(),
-        );
+        let tx = system_transaction::transfer_now(&keypair, &keypair.pubkey(), 1, Hash::default());
         let entry = Entry::new(&mut blockhash, 1, vec![tx]);
         blockhash = entry.hash;
         entries.push(entry);

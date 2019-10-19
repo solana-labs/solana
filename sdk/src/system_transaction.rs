@@ -1,11 +1,12 @@
 //! The `system_transaction` module provides functionality for creating system transactions.
 
-use crate::hash::Hash;
-use crate::pubkey::Pubkey;
-use crate::signature::{Keypair, KeypairUtil};
-use crate::system_instruction;
-use crate::system_program;
-use crate::transaction::Transaction;
+use crate::{
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_instruction,
+    transaction::Transaction,
+};
 
 /// Create and sign new SystemInstruction::CreateAccount transaction
 pub fn create_account(
@@ -23,15 +24,17 @@ pub fn create_account(
     Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
 }
 
-/// Create and sign a transaction to create a system account
-pub fn create_user_account(
+/// Create and sign new system_instruction::Transfer transaction, but don't use a CO "to"
+pub fn transfer_now(
     from_keypair: &Keypair,
     to: &Pubkey,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    let program_id = system_program::id();
-    create_account(from_keypair, to, recent_blockhash, lamports, 0, &program_id)
+    let from_pubkey = from_keypair.pubkey();
+    let transfer_instruction = system_instruction::transfer_now(&from_pubkey, to, lamports);
+    let instructions = vec![transfer_instruction];
+    Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
 }
 
 /// Create and sign new system_instruction::Assign transaction

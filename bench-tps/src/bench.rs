@@ -306,7 +306,7 @@ fn generate_system_txs(
         .par_iter()
         .map(|(from, to)| {
             (
-                system_transaction::create_user_account(from, &to.pubkey(), 1, *blockhash),
+                system_transaction::transfer_now(from, &to.pubkey(), 1, *blockhash),
                 timestamp(),
             )
         })

@@ -952,12 +952,7 @@ mod test {
                 blockhash,
                 1,
                 vec![
-                    system_transaction::create_user_account(
-                        &keypair1,
-                        &keypair2.pubkey(),
-                        2,
-                        *blockhash,
-                    ), // should be fine,
+                    system_transaction::transfer_now(&keypair1, &keypair2.pubkey(), 2, *blockhash), // should be fine,
                     system_transaction::transfer(
                         &missing_keypair,
                         &missing_keypair2.pubkey(),
@@ -985,7 +980,7 @@ mod test {
                 // User wrong blockhash so that the entry causes an entry verification failure
                 &bad_hash,
                 1,
-                vec![system_transaction::create_user_account(
+                vec![system_transaction::transfer_now(
                     &keypair1,
                     &keypair2.pubkey(),
                     2,

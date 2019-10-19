@@ -37,7 +37,7 @@ fn bench_poh_verify_transaction_entries(bencher: &mut Bencher) {
 
     let mut ticks: Vec<Entry> = Vec::with_capacity(NUM_ENTRIES);
     for _ in 0..NUM_ENTRIES {
-        let tx = system_transaction::create_user_account(&keypair1, &pubkey1, 42, cur_hash);
+        let tx = system_transaction::transfer_now(&keypair1, &pubkey1, 42, cur_hash);
         ticks.push(next_entry_mut(&mut cur_hash, NUM_HASHES, vec![tx]));
     }
 

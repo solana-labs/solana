@@ -501,7 +501,7 @@ mod tests {
         let key = KeypairNative::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let tx = system_transaction::create_user_account(&key, &to, 50, blockhash);
+        let tx = system_transaction::transfer_now(&key, &to, 50, blockhash);
         let serialized = serialize(&tx).unwrap();
         let tx = Box::new(Transaction::from_native(tx));
         let tx = Box::into_raw(tx);
@@ -520,7 +520,7 @@ mod tests {
         let key = KeypairNative::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let tx = system_transaction::create_user_account(&key, &to, 50, blockhash);
+        let tx = system_transaction::transfer_now(&key, &to, 50, blockhash);
         let serialized = serialize(&tx).unwrap();
         let deserialized;
         unsafe {
@@ -559,8 +559,7 @@ mod tests {
         let key_native = KeypairNative::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let mut tx_native =
-            system_transaction::create_user_account(&key_native, &to, 50, blockhash);
+        let mut tx_native = system_transaction::transfer_now(&key_native, &to, 50, blockhash);
         let tx = Box::into_raw(Box::new(Transaction::from_native(tx_native.clone())));
         let key = Keypair::from_native(&key_native);
         let tx2;

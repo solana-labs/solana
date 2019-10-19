@@ -1095,26 +1095,22 @@ mod tests {
 
             // fund another account so we can send 2 good transactions in a single batch.
             let keypair = Keypair::new();
-            let fund_tx = system_transaction::create_user_account(
-                &mint_keypair,
-                &keypair.pubkey(),
-                2,
-                start_hash,
-            );
+            let fund_tx =
+                system_transaction::transfer_now(&mint_keypair, &keypair.pubkey(), 2, start_hash);
             bank.process_transaction(&fund_tx).unwrap();
 
             // good tx
             let to = Pubkey::new_rand();
-            let tx = system_transaction::create_user_account(&mint_keypair, &to, 1, start_hash);
+            let tx = system_transaction::transfer_now(&mint_keypair, &to, 1, start_hash);
 
             // good tx, but no verify
             let to2 = Pubkey::new_rand();
-            let tx_no_ver = system_transaction::create_user_account(&keypair, &to2, 2, start_hash);
+            let tx_no_ver = system_transaction::transfer_now(&keypair, &to2, 2, start_hash);
 
             // bad tx, AccountNotFound
             let keypair = Keypair::new();
             let to3 = Pubkey::new_rand();
-            let tx_anf = system_transaction::create_user_account(&keypair, &to3, 1, start_hash);
+            let tx_anf = system_transaction::transfer_now(&keypair, &to3, 1, start_hash);
 
             // send 'em over
             let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
@@ -1190,7 +1186,7 @@ mod tests {
 
         // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
-        let tx = system_transaction::create_user_account(
+        let tx = system_transaction::transfer_now(
             &mint_keypair,
             &alice.pubkey(),
             2,
@@ -1205,7 +1201,7 @@ mod tests {
         verified_sender.send(packets).unwrap();
 
         // Process a second batch that spends one of those lamports.
-        let tx = system_transaction::create_user_account(
+        let tx = system_transaction::transfer_now(
             &alice,
             &mint_keypair.pubkey(),
             1,
@@ -1611,7 +1607,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Pubkey::new_rand();
 
-        let transactions = vec![system_transaction::create_user_account(
+        let transactions = vec![system_transaction::transfer_now(
             &mint_keypair,
             &pubkey,
             1,
