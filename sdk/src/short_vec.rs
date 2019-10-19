@@ -177,10 +177,10 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for ShortVec<T> {
 }
 
 /// Return the decoded value and how many bytes it consumed.
-pub fn decode_len(bytes: &[u8]) -> (usize, usize) {
-    let short_len: ShortU16 = bincode::deserialize(bytes).unwrap();
+pub fn decode_len(bytes: &[u8]) -> Result<(usize, usize), Box<bincode::ErrorKind>> {
+    let short_len: ShortU16 = bincode::deserialize(bytes)?;
     let num_bytes = bincode::serialized_size(&short_len).unwrap() as usize;
-    (short_len.0 as usize, num_bytes)
+    Ok((short_len.0 as usize, num_bytes))
 }
 
 #[cfg(test)]
@@ -197,7 +197,7 @@ mod tests {
     fn assert_len_encoding(len: u16, bytes: &[u8]) {
         assert_eq!(encode_len(len), bytes, "unexpected usize encoding");
         assert_eq!(
-            decode_len(bytes),
+            decode_len(bytes).unwrap(),
             (len as usize, bytes.len()),
             "unexpected usize decoding"
         );
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_short_vec_decode_zero_len() {
-        decode_len(&[]);
+        decode_len(&[]).unwrap();
     }
 
     #[test]

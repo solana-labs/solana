@@ -7,7 +7,6 @@
 use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
 use crate::recycler::Recycler;
-use crate::result::Result;
 use bincode::serialized_size;
 use rayon::ThreadPool;
 use solana_ledger::perf_libs;
@@ -52,23 +51,18 @@ impl PacketOffsets {
     }
 }
 
-struct UnsanitizedPacketOffsets {
-    pub correct: bool,
-    pub packet_offsets: PacketOffsets,
+#[derive(Debug, PartialEq)]
+pub enum PacketError {
+    InvalidLen,
+    InvalidSignatureLen,
+    InvalidPubkeyLen,
+    MismatchSignatureLen,
+    InvalidShortVec,
 }
 
-impl UnsanitizedPacketOffsets {
-    pub fn new(
-        correct: bool,
-        sig_len: u32,
-        sig_start: u32,
-        msg_start: u32,
-        pubkey_start: u32,
-    ) -> Self {
-        Self {
-            correct,
-            packet_offsets: PacketOffsets::new(sig_len, sig_start, msg_start, pubkey_start),
-        }
+impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for PacketError {
+    fn from(_e: std::boxed::Box<bincode::ErrorKind>) -> PacketError {
+        PacketError::InvalidShortVec
     }
 }
 
@@ -125,46 +119,73 @@ fn batch_size(batches: &[Packets]) -> usize {
 }
 
 // internal function to be unit-tested; should be used only by get_packet_offsets
-fn do_get_packet_offsets(packet: &Packet, current_offset: u32) -> UnsanitizedPacketOffsets {
-    // This directly reads the length of Transaction.signatures (serialized with short_vec)
-    let (sig_len_untrusted, sig_size) = decode_len(&packet.data);
+fn do_get_packet_offsets(
+    packet: &Packet,
+    current_offset: u32,
+) -> Result<PacketOffsets, PacketError> {
+    let message_header_size = serialized_size(&MessageHeader::default()).unwrap() as usize;
+    // should have at least 1 signature, sig lengths and the message header
+    if (1 + size_of::<Signature>() + message_header_size) > packet.meta.size {
+        return Err(PacketError::InvalidLen);
+    }
 
-    // This directly reads MessageHeader.num_required_signatures (serialized with u8)
-    let msg_start_offset = sig_size + sig_len_untrusted * size_of::<Signature>();
+    // read the length of Transaction.signatures (serialized with short_vec)
+    let (sig_len_untrusted, sig_size) = decode_len(&packet.data)?;
+
     // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
     // Ultimately, the actual sigverify will determine the uncertainty.
+    let msg_start_offset = sig_size + sig_len_untrusted * size_of::<Signature>();
+
+    // Packet should have data at least for signatures, MessageHeader, 1 byte for Message.account_keys.len
+    if (msg_start_offset + message_header_size + 1) > packet.meta.size {
+        return Err(PacketError::InvalidSignatureLen);
+    }
+
+    // read MessageHeader.num_required_signatures (serialized with u8)
     let sig_len_maybe_trusted = packet.data[msg_start_offset] as usize;
 
-    let msg_header_size = serialized_size(&MessageHeader::default()).unwrap() as usize;
+    let message_account_keys_len_offset = msg_start_offset + message_header_size;
 
-    // This directly reads the length of Message.account_keys (serialized with short_vec)
-    let (_pubkey_len, pubkey_len_size) =
-        decode_len(&packet.data[(msg_start_offset + msg_header_size)..]);
+    // read the length of Message.account_keys (serialized with short_vec)
+    let (pubkey_len, pubkey_len_size) =
+        decode_len(&packet.data[message_account_keys_len_offset..])?;
+
+    if (message_account_keys_len_offset + pubkey_len * size_of::<Pubkey>() + pubkey_len_size)
+        > packet.meta.size
+    {
+        return Err(PacketError::InvalidPubkeyLen);
+    }
 
     let sig_start = current_offset as usize + sig_size;
     let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start = msg_start + msg_header_size + pubkey_len_size;
+    let pubkey_start = msg_start + message_header_size + pubkey_len_size;
 
-    UnsanitizedPacketOffsets::new(
-        sig_len_maybe_trusted == sig_len_untrusted,
+    if sig_len_maybe_trusted != sig_len_untrusted {
+        return Err(PacketError::MismatchSignatureLen);
+    }
+
+    Ok(PacketOffsets::new(
         sig_len_untrusted as u32,
         sig_start as u32,
         msg_start as u32,
         pubkey_start as u32,
-    )
+    ))
 }
 
 fn get_packet_offsets(packet: &Packet, current_offset: u32) -> PacketOffsets {
     let unsanitized_packet_offsets = do_get_packet_offsets(packet, current_offset);
-    if unsanitized_packet_offsets.correct {
-        unsanitized_packet_offsets.packet_offsets
+    if let Ok(offsets) = unsanitized_packet_offsets {
+        offsets
     } else {
         // force sigverify to fail by returning zeros
         PacketOffsets::new(0, 0, 0, 0)
     }
 }
 
-pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> Result<TxOffsets> {
+pub fn generate_offsets(
+    batches: &[Packets],
+    recycler: &Recycler<TxOffset>,
+) -> Result<TxOffsets, ()> {
     debug!("allocating..");
     let mut signature_offsets: PinnedVec<_> = recycler.allocate("sig_offsets");
     signature_offsets.set_pinnable();
@@ -353,17 +374,17 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 
 #[cfg(test)]
 mod tests {
+    use super::PacketError;
     use crate::packet::{Packet, Packets};
     use crate::recycler::Recycler;
     use crate::sigverify;
     use crate::sigverify::PacketOffsets;
     use crate::test_tx::{test_multisig_tx, test_tx};
-    use bincode::{deserialize, serialize, serialized_size};
+    use bincode::{deserialize, serialize};
     use solana_sdk::hash::Hash;
     use solana_sdk::message::{Message, MessageHeader};
     use solana_sdk::signature::Signature;
     use solana_sdk::transaction::Transaction;
-    use std::mem::size_of;
 
     const SIG_OFFSET: usize = 1;
 
@@ -415,11 +436,7 @@ mod tests {
         assert_eq!(packet_offsets.sig_len, 1);
     }
 
-    #[test]
-    fn test_untrustworthy_sigs() {
-        let required_num_sigs = 14;
-        let actual_num_sigs = 5;
-
+    fn packet_from_num_sigs(required_num_sigs: u8, actual_num_sigs: usize) -> Packet {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: required_num_sigs,
@@ -432,14 +449,21 @@ mod tests {
         };
         let mut tx = Transaction::new_unsigned(message);
         tx.signatures = vec![Signature::default(); actual_num_sigs as usize];
-        let packet = sigverify::make_packet_from_transaction(tx.clone());
+        sigverify::make_packet_from_transaction(tx)
+    }
+
+    #[test]
+    fn test_untrustworthy_sigs() {
+        let required_num_sigs = 14;
+        let actual_num_sigs = 5;
+
+        let packet = packet_from_num_sigs(required_num_sigs, actual_num_sigs);
 
         let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0);
 
-        assert_eq!(unsanitized_packet_offsets.correct, false);
         assert_eq!(
-            unsanitized_packet_offsets.packet_offsets.sig_len as usize,
-            actual_num_sigs
+            unsanitized_packet_offsets,
+            Err(PacketError::MismatchSignatureLen)
         );
     }
 
@@ -449,36 +473,68 @@ mod tests {
         let required_num_sigs = 214;
         let actual_num_sigs = 5;
 
-        let message = Message {
-            header: MessageHeader {
-                num_required_signatures: required_num_sigs,
-                num_credit_only_signed_accounts: 12,
-                num_credit_only_unsigned_accounts: 11,
-            },
-            account_keys: vec![],
-            recent_blockhash: Hash::default(),
-            instructions: vec![],
-        };
-        let mut tx = Transaction::new_unsigned(message);
-        // reduce to actual_num_sigs to avoid packet error
-        tx.signatures = vec![Signature::default(); actual_num_sigs];
-        let packet = sigverify::make_packet_from_transaction(tx.clone());
+        let packet = packet_from_num_sigs(required_num_sigs, actual_num_sigs);
 
         let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0);
 
-        let expected_sig_size = 1;
-        let expected_sigs_size = actual_num_sigs * size_of::<Signature>();
-        let expected_msg_header_size = serialized_size(&MessageHeader::default()).unwrap() as usize;
-        let expected_pubkey_size = 1;
-        let expected_pubkey_start = expected_sig_size
-            + expected_sigs_size
-            + expected_msg_header_size
-            + expected_pubkey_size;
-
         assert_eq!(
-            expected_pubkey_start,
-            unsanitized_packet_offsets.packet_offsets.pubkey_start as usize
+            unsanitized_packet_offsets,
+            Err(PacketError::MismatchSignatureLen)
         );
+    }
+
+    #[test]
+    fn test_small_packet() {
+        let tx = test_tx();
+        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        packet.data[0] = 0xff;
+        packet.data[1] = 0xff;
+        packet.meta.size = 2;
+
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+        assert_eq!(res, Err(PacketError::InvalidLen));
+    }
+
+    #[test]
+    fn test_large_sig_len() {
+        let tx = test_tx();
+        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        // Make the signatures len huge
+        packet.data[0] = 0xff;
+
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+        assert_eq!(res, Err(PacketError::InvalidSignatureLen));
+    }
+
+    #[test]
+    fn test_really_large_sig_len() {
+        let tx = test_tx();
+        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        // Make the signatures len huge
+        packet.data[0] = 0xff;
+        packet.data[1] = 0xff;
+        packet.data[2] = 0xff;
+        packet.data[3] = 0xff;
+
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+        assert_eq!(res, Err(PacketError::InvalidShortVec));
+    }
+
+    #[test]
+    fn test_invalid_pubkey_len() {
+        let tx = test_tx();
+        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+
+        // make pubkey len huge
+        packet.data[res.unwrap().pubkey_start as usize - 1] = 0xff;
+
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+        assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
     }
 
     #[test]
