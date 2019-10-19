@@ -14,7 +14,6 @@ use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use std::io;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -27,6 +26,12 @@ lazy_static! {
         { serialized_size(&DataShredHeader::default()).unwrap() as usize };
     pub static ref SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
         { *SIZE_OF_COMMON_SHRED_HEADER + *SIZE_OF_CODING_SHRED_HEADER };
+    pub static ref SIZE_OF_DATA_SHRED_PAYLOAD: usize = {
+        PACKET_DATA_SIZE
+            - *SIZE_OF_COMMON_SHRED_HEADER
+            - *SIZE_OF_DATA_SHRED_HEADER
+            - *SIZE_OF_DATA_SHRED_IGNORED_TAIL
+    };
     static ref SIZE_OF_SIGNATURE: usize =
         { bincode::serialized_size(&Signature::default()).unwrap() as usize };
     pub static ref SIZE_OF_SHRED_TYPE: usize =
@@ -219,8 +224,31 @@ impl Shred {
         coding_header: CodingShredHeader,
     ) -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
-        let mut wr = io::Cursor::new(&mut payload[..*SIZE_OF_COMMON_SHRED_HEADER]);
-        bincode::serialize_into(&mut wr, &common_header).expect("Failed to serialize shred");
+        let mut start = 0;
+        Self::serialize_obj_into(
+            &mut start,
+            *SIZE_OF_COMMON_SHRED_HEADER,
+            &mut payload,
+            &common_header,
+        )
+        .expect("Failed to write header into shred buffer");
+        if common_header.shred_type == ShredType(DATA_SHRED) {
+            Self::serialize_obj_into(
+                &mut start,
+                *SIZE_OF_DATA_SHRED_HEADER,
+                &mut payload,
+                &data_header,
+            )
+            .expect("Failed to write data header into shred buffer");
+        } else if common_header.shred_type == ShredType(CODING_SHRED) {
+            Self::serialize_obj_into(
+                &mut start,
+                *SIZE_OF_CODING_SHRED_HEADER,
+                &mut payload,
+                &coding_header,
+            )
+            .expect("Failed to write data header into shred buffer");
+        }
         Shred {
             common_header,
             data_header,
@@ -230,14 +258,11 @@ impl Shred {
     }
 
     pub fn new_empty_data_shred() -> Self {
-        let mut payload = vec![0; PACKET_DATA_SIZE];
-        payload[0] = DATA_SHRED;
-        Shred {
-            common_header: ShredCommonHeader::default(),
-            data_header: DataShredHeader::default(),
-            coding_header: CodingShredHeader::default(),
-            payload,
-        }
+        Self::new_empty_from_header(
+            ShredCommonHeader::default(),
+            DataShredHeader::default(),
+            CodingShredHeader::default(),
+        )
     }
 
     pub fn slot(&self) -> u64 {
@@ -366,10 +391,7 @@ impl Shredder {
             bincode::serialize(entries).expect("Expect to serialize all entries");
         let serialize_time = now.elapsed().as_millis();
 
-        let no_header_size = PACKET_DATA_SIZE
-            - *SIZE_OF_COMMON_SHRED_HEADER
-            - *SIZE_OF_DATA_SHRED_HEADER
-            - *SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+        let no_header_size = *SIZE_OF_DATA_SHRED_PAYLOAD;
         let num_shreds = (serialized_shreds.len() + no_header_size - 1) / no_header_size;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
 
@@ -719,10 +741,7 @@ pub fn max_ticks_per_n_shreds(num_shreds: u64) -> u64 {
 }
 
 pub fn max_entries_per_n_shred(entry: &Entry, num_shreds: u64) -> u64 {
-    let shred_data_size = (PACKET_DATA_SIZE
-        - *SIZE_OF_COMMON_SHRED_HEADER
-        - *SIZE_OF_DATA_SHRED_HEADER
-        - *SIZE_OF_DATA_SHRED_IGNORED_TAIL) as u64;
+    let shred_data_size = *SIZE_OF_DATA_SHRED_PAYLOAD as u64;
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
     let count_size = vec_size - entry_size;
@@ -812,10 +831,7 @@ pub mod tests {
             .collect();
 
         let size = serialized_size(&entries).unwrap();
-        let no_header_size = (PACKET_DATA_SIZE
-            - *SIZE_OF_COMMON_SHRED_HEADER
-            - *SIZE_OF_DATA_SHRED_HEADER
-            - *SIZE_OF_DATA_SHRED_IGNORED_TAIL) as u64;
+        let no_header_size = *SIZE_OF_DATA_SHRED_PAYLOAD as u64;
         let num_expected_data_shreds = (size + no_header_size - 1) / no_header_size;
         let num_expected_coding_shreds =
             Shredder::calculate_num_coding_shreds(num_expected_data_shreds as f32, fec_rate);
