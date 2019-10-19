@@ -502,7 +502,7 @@ mod tests {
         let mut packet = sigverify::make_packet_from_transaction(tx.clone());
 
         // Make the signatures len huge
-        packet.data[0] = 0xff;
+        packet.data[0] = 0x7f;
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidSignatureLen));
@@ -531,7 +531,7 @@ mod tests {
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
         // make pubkey len huge
-        packet.data[res.unwrap().pubkey_start as usize - 1] = 0xff;
+        packet.data[res.unwrap().pubkey_start as usize - 1] = 0x7f;
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
