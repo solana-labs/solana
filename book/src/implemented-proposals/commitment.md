@@ -6,16 +6,16 @@ confirmation and stake levels on a particular block.
 # Calculation RPC
 
 Clients can request commitment metrics from a validator for a signature `s`
-through `get_commitment(s: Signature) -> BankCommitment` over RPC. The
-`BankCommitment` struct contains an array of u64 `[u64, MAX_LOCKOUT]`. This
+through `get_block_commitment(s: Signature) -> BlockCommitment` over RPC. The
+`BlockCommitment` struct contains an array of u64 `[u64, MAX_CONFIRMATIONS]`. This
 array represents the commitment metric for the particular block `N` that
 contains the signature `s` as of the last block `M` that the validator voted on.
 
-An entry `s` at index `i` in the `BankCommitment` array implies that the
-validator observed `s` total stake in the network reaching `i` confirmations on
-block `N` as observed in some block `M`. There will be `MAX_LOCKOUT` elements in
+An entry `s` at index `i` in the `BlockCommitment` array implies that the
+validator observed `s` total stake in the cluster reaching `i` confirmations on
+block `N` as observed in some block `M`. There will be `MAX_CONFIRMATIONS` elements in
 this array, representing all the possible number of confirmations from 1 and to
-`MAX_LOCKOUT`.
+`MAX_CONFIRMATIONS`.
 
 From here, we can calculate commitment in terms of stake-weighted lockouts,
 where the total equals:
@@ -29,7 +29,7 @@ where the total equals:
 
 # Computation of commitment metric
 
-Building this `BankCommitment` struct leverages the computations already being
+Building this `BlockCommitment` struct leverages the computations already being
 performed for building consensus. The `collect_vote_lockouts` function in
 `consensus.rs` builds a HashMap, where each entry is of the form `(b, s)`
 where `s` is a `StakeLockout` struct representing the amount of stake and
@@ -56,10 +56,10 @@ than those present in the status cache would not be queryable anyway, so those
 banks are not included in the commitment calculations here.
 
 Now we can naturally augment the above computation to also build a
-`BankCommitment` array for every bank `b` by:
-1) Adding a `ForkCommitmentCache` to collect the `BankCommitment` structs
+`BlockCommitment` array for every bank `b` by:
+1) Adding a `ForkCommitmentCache` to collect the `BlockCommitment` structs
 2) Replacing `f` with `f'` such that the above computation also builds this
-`BankCommitment` for every bank `b`.
+`BlockCommitment` for every bank `b`.
 
 We will proceed with the details of 2) as 1) is trivial.
 
@@ -88,7 +88,7 @@ where `f'` is defined as:
 ```
     fn f`(
         stake_lockout: &mut StakeLockout,
-        some_ancestor: &mut BankCommitment,
+        some_ancestor: &mut BlockCommitment,
         vote_account: VoteAccount,
         v: Vote, total_stake: u64
     ){
