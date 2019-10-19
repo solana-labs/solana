@@ -25,10 +25,6 @@ default_arg --bootstrap-stake-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/stak
 default_arg --bootstrap-storage-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
 default_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader
 default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
-default_arg --lamports 100000000000000
-default_arg --bootstrap-leader-lamports 424242424242
-default_arg --target-lamports-per-signature 42
-default_arg --target-signatures-per-slot 42
 default_arg --hashes-per-tick auto
 $solana_genesis "${args[@]}"
 
