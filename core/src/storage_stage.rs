@@ -2,7 +2,6 @@
 // for storage mining. Replicators submit storage proofs, validator then bundles them
 // to submit its proof for mining to be rewarded.
 
-use crate::bank_forks::BankForks;
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
@@ -10,6 +9,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::Blocktree;
 use solana_runtime::bank::Bank;
 use solana_runtime::storage_utils::replicator_accounts;

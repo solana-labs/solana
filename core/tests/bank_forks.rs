@@ -5,11 +5,11 @@ mod tests {
     use bincode::serialize_into;
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
-    use solana_core::bank_forks::{BankForks, SnapshotConfig};
     use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_core::service::Service;
     use solana_core::snapshot_packager_service::SnapshotPackagerService;
-    use solana_core::snapshot_utils;
+    use solana_ledger::bank_forks::{BankForks, SnapshotConfig};
+    use solana_ledger::snapshot_utils;
     use solana_runtime::bank::Bank;
     use solana_runtime::status_cache::SlotDelta;
     use solana_runtime::status_cache::MAX_CACHE_ENTRIES;

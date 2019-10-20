@@ -1,8 +1,8 @@
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::snapshot_package::{SnapshotPackage, SnapshotPackageReceiver};
-use crate::snapshot_utils::{self, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use bincode::serialize_into;
+use solana_ledger::snapshot_package::{SnapshotPackage, SnapshotPackageReceiver};
+use solana_ledger::snapshot_utils::{self, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::status_cache::SlotDelta;
@@ -187,7 +187,7 @@ impl Service for SnapshotPackagerService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::snapshot_utils;
+    use solana_ledger::snapshot_utils;
     use solana_runtime::accounts_db::AccountStorageEntry;
     use std::fs::OpenOptions;
     use std::io::Write;

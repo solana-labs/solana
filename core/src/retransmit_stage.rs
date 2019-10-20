@@ -1,7 +1,6 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
 use crate::{
-    bank_forks::BankForks,
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     repair_service::RepairStrategy,
     result::{Error, Result},
@@ -12,6 +11,7 @@ use crate::{
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_ledger::{
+    bank_forks::BankForks,
     blocktree::{Blocktree, CompletedSlotsReceiver},
     leader_schedule_cache::LeaderScheduleCache,
     staking_utils,
@@ -262,11 +262,11 @@ impl Service for RetransmitStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree_processor::{process_blocktree, ProcessOptions};
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::packet::{Meta, Packet, Packets};
     use solana_ledger::blocktree::create_new_tmp_ledger;
+    use solana_ledger::blocktree_processor::{process_blocktree, ProcessOptions};
     use solana_netutil::find_available_port_in_range;
     use solana_sdk::pubkey::Pubkey;
 

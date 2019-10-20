@@ -1,8 +1,8 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
-use crate::result::Result;
-use crate::snapshot_package::SnapshotPackageSender;
-use crate::snapshot_utils;
+use crate::snapshot_package::{SnapshotPackageSendError, SnapshotPackageSender};
+use crate::snapshot_utils::{self, SnapshotError};
+use log::*;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
@@ -24,6 +24,25 @@ pub struct SnapshotConfig {
 
     // Where to place the snapshots for recent slots
     pub snapshot_path: PathBuf,
+}
+
+#[derive(Debug)]
+pub enum BankForksError {
+    SnapshotError(SnapshotError),
+    SnapshotPackageSendError(SnapshotPackageSendError),
+}
+pub type Result<T> = std::result::Result<T, BankForksError>;
+
+impl std::convert::From<SnapshotError> for BankForksError {
+    fn from(e: SnapshotError) -> BankForksError {
+        BankForksError::SnapshotError(e)
+    }
+}
+
+impl std::convert::From<SnapshotPackageSendError> for BankForksError {
+    fn from(e: SnapshotPackageSendError) -> BankForksError {
+        BankForksError::SnapshotPackageSendError(e)
+    }
 }
 
 pub struct BankForks {

@@ -2,6 +2,7 @@ use crate::snapshot_package::SnapshotPackage;
 use bincode::{deserialize_from, serialize_into};
 use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
+use log::*;
 use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_runtime::status_cache::SlotDelta;

@@ -1,13 +1,13 @@
 use crate::cluster_info::ClusterInfo;
 use crate::crds_value::EpochSlots;
 use crate::result::Result;
-use crate::rooted_slot_iterator::RootedSlotIterator;
 use crate::service::Service;
 use byteorder::{ByteOrder, LittleEndian};
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_ledger::blocktree::Blocktree;
+use solana_ledger::rooted_slot_iterator::RootedSlotIterator;
 use solana_metrics::datapoint;
 use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{

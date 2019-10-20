@@ -12,7 +12,6 @@
 //! 4. StorageStage
 //! - Generating the keys used to encrypt the ledger and sample it for storage mining.
 
-use crate::bank_forks::BankForks;
 use crate::blockstream_service::BlockstreamService;
 use crate::cluster_info::ClusterInfo;
 use crate::confidence::ForkConfidenceCache;
@@ -25,6 +24,7 @@ use crate::service::Service;
 use crate::shred_fetch_stage::ShredFetchStage;
 use crate::snapshot_packager_service::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
+use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_sdk::pubkey::Pubkey;

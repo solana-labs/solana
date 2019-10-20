@@ -238,13 +238,13 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank_forks::BankForks;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use solana_budget_api;
     use solana_budget_api::budget_instruction;
+    use solana_ledger::bank_forks::BankForks;
     use solana_runtime::bank::Bank;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};

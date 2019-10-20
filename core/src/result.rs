@@ -3,12 +3,9 @@
 use crate::cluster_info;
 use crate::packet;
 use crate::poh_recorder;
-use crate::snapshot_utils;
-use bincode;
-use serde_json;
 use solana_ledger::blocktree;
+use solana_ledger::snapshot_utils;
 use solana_sdk::transaction;
-use std;
 use std::any::Any;
 
 #[derive(Debug)]

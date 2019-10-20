@@ -1,7 +1,7 @@
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, SubCommand};
-use solana_core::blocktree_processor::{process_blocktree, ProcessOptions};
-use solana_core::rooted_slot_iterator::RootedSlotIterator;
 use solana_ledger::blocktree::Blocktree;
+use solana_ledger::blocktree_processor::{process_blocktree, ProcessOptions};
+use solana_ledger::rooted_slot_iterator::RootedSlotIterator;
 use solana_sdk::clock::Slot;
 use solana_sdk::genesis_block::GenesisBlock;
 use std::collections::BTreeMap;

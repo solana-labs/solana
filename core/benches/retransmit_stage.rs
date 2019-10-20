@@ -4,13 +4,13 @@ extern crate solana_core;
 extern crate test;
 
 use log::*;
-use solana_core::bank_forks::BankForks;
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
 use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
 use solana_core::packet::to_packets_chunked;
 use solana_core::retransmit_stage::retransmitter;
 use solana_core::test_tx::test_tx;
+use solana_ledger::bank_forks::BankForks;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
