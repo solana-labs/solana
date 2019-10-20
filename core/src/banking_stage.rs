@@ -283,7 +283,7 @@ impl BankingStage {
         let (leader_at_slot_offset, poh_has_bank, would_be_leader) = {
             let poh = poh_recorder.lock().unwrap();
             (
-                poh.leader_after_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
+                poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
                 poh.has_bank(),
                 poh.would_be_leader(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
@@ -314,7 +314,7 @@ impl BankingStage {
                     let next_leader = poh_recorder
                         .lock()
                         .unwrap()
-                        .leader_after_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
+                        .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
                     next_leader.map_or(Ok(()), |leader_pubkey| {
                         let leader_addr = {
                             cluster_info

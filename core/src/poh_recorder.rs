@@ -100,14 +100,14 @@ impl PohRecorder {
                 })
     }
 
-    pub fn leader_after_slots(&self, slots: u64) -> Option<Pubkey> {
+    pub fn leader_after_n_slots(&self, slots: u64) -> Option<Pubkey> {
         let current_slot = self.tick_height.saturating_sub(1) / self.ticks_per_slot;
         self.leader_schedule_cache
             .slot_leader_at(current_slot + slots, None)
     }
 
     pub fn next_slot_leader(&self) -> Option<Pubkey> {
-        self.leader_after_slots(1)
+        self.leader_after_n_slots(1)
     }
 
     pub fn bank(&self) -> Option<Arc<Bank>> {
