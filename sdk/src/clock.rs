@@ -65,7 +65,7 @@ pub fn get_complete_segment_from_slot(
 ///  is some some number of Ticks long.
 pub type Slot = u64;
 
-/// A segment is some number of slots stored by replicators
+/// A segment is some number of slots stored by archivers
 pub type Segment = u64;
 
 /// Epoch is a unit of time a given leader schedule is honored,

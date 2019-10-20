@@ -49,7 +49,7 @@ BINS=(
   solana-install-init
   solana-keygen
   solana-ledger-tool
-  solana-replicator
+  solana-archiver
   solana-validator
 )
 

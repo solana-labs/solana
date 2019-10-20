@@ -59,7 +59,7 @@ solana_gossip=$(solana_program gossip)
 solana_keygen=$(solana_program keygen)
 solana_ledger_tool=$(solana_program ledger-tool)
 solana_cli=$(solana_program)
-solana_replicator=$(solana_program replicator)
+solana_archiver=$(solana_program archiver)
 
 export RUST_BACKTRACE=1
 

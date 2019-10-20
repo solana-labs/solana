@@ -47,7 +47,7 @@ members = [
     "programs/vest_program",
     "programs/vote_api",
     "programs/vote_program",
-    "replicator",
+    "archiver",
     "runtime",
     "sdk",
     "sdk-c",

@@ -428,7 +428,7 @@ startBootstrapLeader() {
          $deployMethod \
          bootstrap-leader \
          $entrypointIp \
-         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#replicatorIpList[@]})) \
+         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
@@ -493,7 +493,7 @@ startNode() {
          $deployMethod \
          $nodeType \
          $entrypointIp \
-         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#replicatorIpList[@]})) \
+         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
@@ -609,12 +609,12 @@ getNodeType() {
   nodeIndex=0 # <-- global
   nodeType=validator # <-- global
 
-  for ipAddress in "${fullnodeIpList[@]}" b "${blockstreamerIpList[@]}" r "${replicatorIpList[@]}"; do
+  for ipAddress in "${fullnodeIpList[@]}" b "${blockstreamerIpList[@]}" r "${archiverIpList[@]}"; do
     if [[ $ipAddress = b ]]; then
       nodeType=blockstreamer
       continue
     elif [[ $ipAddress = r ]]; then
-      nodeType=replicator
+      nodeType=archiver
       continue
     fi
 
@@ -689,7 +689,7 @@ deploy() {
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
   declare bootstrapLeader=true
-  for nodeAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${replicatorIpList[@]}"; do
+  for nodeAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}"; do
     nodeType=
     nodeIndex=
     getNodeType
@@ -774,7 +774,7 @@ deploy() {
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#replicatorIpList[@]} replicators) took $additionalNodeDeployTime seconds"
+  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"
 }
@@ -820,7 +820,7 @@ stop() {
 
   declare loopCount=0
   pids=()
-  for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${replicatorIpList[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress" false
 
     # Stagger additional node stop time to avoid too many concurrent ssh
@@ -922,7 +922,7 @@ logs)
   for ipAddress in "${blockstreamerIpList[@]}"; do
     fetchRemoteLog "$ipAddress" fullnode
   done
-  for ipAddress in "${replicatorIpList[@]}"; do
+  for ipAddress in "${archiverIpList[@]}"; do
     fetchRemoteLog "$ipAddress" fullnode
   done
   ;;

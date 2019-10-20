@@ -242,7 +242,7 @@ impl ClusterInfo {
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
         let mut spy_nodes = 0;
-        let mut replicators = 0;
+        let mut archivers = 0;
         let my_pubkey = self.my_data().id;
         let nodes: Vec<_> = self
             .all_peers()
@@ -250,8 +250,8 @@ impl ClusterInfo {
             .map(|(node, last_updated)| {
                 if Self::is_spy_node(&node) {
                     spy_nodes += 1;
-                } else if Self::is_replicator(&node) {
-                    replicators += 1;
+                } else if Self::is_archiver(&node) {
+                    archivers += 1;
                 }
                 fn addr_to_string(addr: &SocketAddr) -> String {
                     if ContactInfo::is_valid_address(addr) {
@@ -281,9 +281,9 @@ impl ClusterInfo {
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
-            nodes.len() - spy_nodes - replicators,
-            if replicators > 0 {
-                format!("\nReplicators: {}", replicators)
+            nodes.len() - spy_nodes - archivers,
+            if archivers > 0 {
+                format!("\nArchivers: {}", archivers)
             } else {
                 "".to_string()
             },
@@ -426,7 +426,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
-            .filter(|x| !ClusterInfo::is_replicator(x))
+            .filter(|x| !ClusterInfo::is_archiver(x))
             .filter(|x| x.id != me)
             .cloned()
             .collect()
@@ -478,7 +478,7 @@ impl ClusterInfo {
             && !ContactInfo::is_valid_address(&contact_info.storage_addr)
     }
 
-    pub fn is_replicator(contact_info: &ContactInfo) -> bool {
+    pub fn is_archiver(contact_info: &ContactInfo) -> bool {
         ContactInfo::is_valid_address(&contact_info.storage_addr)
             && !ContactInfo::is_valid_address(&contact_info.tpu)
     }
@@ -1593,7 +1593,7 @@ impl Node {
         let pubkey = Pubkey::new_rand();
         Self::new_localhost_with_pubkey(&pubkey)
     }
-    pub fn new_localhost_replicator(pubkey: &Pubkey) -> Self {
+    pub fn new_localhost_archiver(pubkey: &Pubkey) -> Self {
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1748,7 +1748,7 @@ impl Node {
             },
         }
     }
-    pub fn new_replicator_with_external_ip(
+    pub fn new_archiver_with_external_ip(
         pubkey: &Pubkey,
         gossip_addr: &SocketAddr,
         port_range: PortRange,
@@ -2130,9 +2130,9 @@ mod tests {
     }
 
     #[test]
-    fn new_replicator_external_ip_test() {
+    fn new_archiver_external_ip_test() {
         let ip = Ipv4Addr::from(0);
-        let node = Node::new_replicator_with_external_ip(
+        let node = Node::new_archiver_with_external_ip(
             &Pubkey::new_rand(),
             &socketaddr!(ip, 0),
             VALIDATOR_PORT_RANGE,

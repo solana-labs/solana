@@ -364,7 +364,7 @@ EOF
         validator-info publish "$(hostname)" -n team/solana --force || true
     fi
     ;;
-  replicator)
+  archiver)
     if [[ $deployMethod != skip ]]; then
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
     fi
@@ -374,14 +374,14 @@ EOF
     )
 
     if [[ $airdropsEnabled != true ]]; then
-      echo "TODO: replicators not supported without airdrops"
+      echo "TODO: archivers not supported without airdrops"
       # TODO: need to provide the `--identity` argument to an existing system
       #       account with lamports in it
       exit 1
     fi
 
 cat >> ~/solana/on-reboot <<EOF
-    nohup multinode-demo/replicator.sh ${args[@]} > fullnode.log.\$now 2>&1 &
+    nohup multinode-demo/archiver.sh ${args[@]} > fullnode.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown

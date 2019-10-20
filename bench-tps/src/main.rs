@@ -64,7 +64,7 @@ fn main() {
     }
 
     info!("Connecting to the cluster");
-    let (nodes, _replicators) =
+    let (nodes, _archivers) =
         discover_cluster(&entrypoint_addr, *num_nodes).unwrap_or_else(|err| {
             eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
             exit(1);

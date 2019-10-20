@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# A thin wrapper around `solana-replicator` that automatically provisions the
-# replicator's identity and/or storage keypair if not provided by the caller.
+# A thin wrapper around `solana-archiver` that automatically provisions the
+# archiver's identity and/or storage keypair if not provided by the caller.
 #
 set -e
 
@@ -42,26 +42,26 @@ while [[ -n $1 ]]; do
       shift 2
     else
       echo "Unknown argument: $1"
-      $solana_replicator --help
+      $solana_archiver --help
       exit 1
     fi
   else
     echo "Unknown argument: $1"
-    $solana_replicator --help
+    $solana_archiver --help
     exit 1
   fi
 done
 
-: "${identity_keypair:="$SOLANA_ROOT"/farf/replicator-identity-keypair"$label".json}"
-: "${storage_keypair:="$SOLANA_ROOT"/farf/replicator-storage-keypair"$label".json}"
-ledger="$SOLANA_ROOT"/farf/replicator-ledger"$label"
+: "${identity_keypair:="$SOLANA_ROOT"/farf/archiver-identity-keypair"$label".json}"
+: "${storage_keypair:="$SOLANA_ROOT"/farf/archiver-storage-keypair"$label".json}"
+ledger="$SOLANA_ROOT"/farf/archiver-ledger"$label"
 
 rpc_url=$($solana_gossip get-rpc-url --entrypoint "$entrypoint")
 
 if [[ ! -r $identity_keypair ]]; then
   $solana_keygen new -o "$identity_keypair"
 
-  # TODO: https://github.com/solana-labs/solminer/blob/9cd2289/src/replicator.js#L17-L18
+  # TODO: https://github.com/solana-labs/solminer/blob/9cd2289/src/archiver.js#L17-L18
   $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
       airdrop 100000 lamports
 fi
@@ -72,7 +72,7 @@ if [[ ! -r $storage_keypair ]]; then
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair")
 
   $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
-    create-replicator-storage-account "$identity_pubkey" "$storage_pubkey"
+    create-archiver-storage-account "$identity_pubkey" "$storage_pubkey"
 fi
 
 default_arg --entrypoint "$entrypoint"
@@ -81,5 +81,5 @@ default_arg --storage-keypair "$storage_keypair"
 default_arg --ledger "$ledger"
 
 set -x
-# shellcheck disable=SC2086 # Don't want to double quote $solana_replicator
-exec $solana_replicator "${args[@]}"
+# shellcheck disable=SC2086 # Don't want to double quote $solana_archiver
+exec $solana_archiver "${args[@]}"

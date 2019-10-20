@@ -18,7 +18,7 @@ gce)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
   blockstreamerMachineType="--machine-type n1-standard-8"
-  replicatorMachineType="--custom-cpu 4 --custom-memory 16GB"
+  archiverMachineType="--custom-cpu 4 --custom-memory 16GB"
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
@@ -34,7 +34,7 @@ ec2)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=c5.2xlarge
   blockstreamerMachineType=c5.2xlarge
-  replicatorMachineType=c5.xlarge
+  archiverMachineType=c5.xlarge
   ;;
 azure)
   # shellcheck source=net/scripts/azure-provider.sh
@@ -47,7 +47,7 @@ azure)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=Standard_D16s_v3
   blockstreamerMachineType=Standard_D16s_v3
-  replicatorMachineType=Standard_D4s_v3
+  archiverMachineType=Standard_D4s_v3
   ;;
 colo)
   # shellcheck source=net/scripts/colo-provider.sh
@@ -59,7 +59,7 @@ colo)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=0
   blockstreamerMachineType=0
-  replicatorMachineType=0
+  archiverMachineType=0
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -70,11 +70,11 @@ esac
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalFullNodeCount=2
 clientNodeCount=0
-replicatorNodeCount=0
+archiverNodeCount=0
 blockstreamer=false
 fullNodeBootDiskSizeInGb=500
 clientBootDiskSizeInGb=75
-replicatorBootDiskSizeInGb=500
+archiverBootDiskSizeInGb=500
 fullNodeAdditionalDiskSizeInGb=
 externalNodes=false
 failOnValidatorBootupFailure=true
@@ -127,7 +127,7 @@ Manage testnet instances
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
-   -r [number]      - Number of replicator nodes (default: $replicatorNodeCount)
+   -r [number]      - Number of archiver nodes (default: $archiverNodeCount)
    -u               - Include a Blockstreamer (default: $blockstreamer)
    -P               - Use public network IP addresses (default: $publicNetwork)
    -g               - Enable GPU (default: $enableGpu)
@@ -149,7 +149,7 @@ Manage testnet instances
                       Only supported on GCE.
    --dedicated      - Use dedicated instances for additional full nodes
                       (by default preemptible instances are used to reduce
-                      cost).  Note that the bootstrap leader, replicator,
+                      cost).  Note that the bootstrap leader, archiver,
                       blockstreamer and client nodes are always dedicated.
 
  config-specific options:
@@ -217,7 +217,7 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
     clientNodeCount=$OPTARG
     ;;
   r)
-    replicatorNodeCount=$OPTARG
+    archiverNodeCount=$OPTARG
     ;;
   z)
     containsZone "$OPTARG" "${zones[@]}" || zones+=("$OPTARG")
@@ -547,13 +547,13 @@ EOF
   }
 
   if ! $externalNodes; then
-    echo "replicatorIpList=()" >> "$configFile"
-    echo "replicatorIpListPrivate=()" >> "$configFile"
+    echo "archiverIpList=()" >> "$configFile"
+    echo "archiverIpListPrivate=()" >> "$configFile"
   fi
-  echo "Looking for replicator instances..."
-  cloud_FindInstances "$prefix-replicator"
+  echo "Looking for archiver instances..."
+  cloud_FindInstances "$prefix-archiver"
   [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp true replicatorIpList
+    cloud_ForEachInstance recordInstanceIp true archiverIpList
   }
 
   echo "Wrote $configFile"
@@ -621,7 +621,7 @@ create)
   Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
-  Replicators(s) = $replicatorNodeCount x $replicatorMachineType
+  Archivers(s) = $archiverNodeCount x $archiverMachineType
   Blockstreamer = $blockstreamer
 ========================================================================================
 
@@ -775,9 +775,9 @@ EOF
       "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$sshPrivateKey"
   fi
 
-  if [[ $replicatorNodeCount -gt 0 ]]; then
-    cloud_CreateInstances "$prefix" "$prefix-replicator" "$replicatorNodeCount" \
-      false "$replicatorMachineType" "${zones[0]}" "$replicatorBootDiskSizeInGb" \
+  if [[ $archiverNodeCount -gt 0 ]]; then
+    cloud_CreateInstances "$prefix" "$prefix-archiver" "$archiverNodeCount" \
+      false "$archiverMachineType" "${zones[0]}" "$archiverBootDiskSizeInGb" \
       "$startupScript" "" "" "" "never preemptible" "$sshPrivateKey"
   fi
 
@@ -824,11 +824,11 @@ info)
     printNode blockstreamer "$ipAddress" "$ipAddressPrivate" "$zone"
   done
 
-  for i in $(seq 0 $(( ${#replicatorIpList[@]} - 1)) ); do
-    ipAddress=${replicatorIpList[$i]}
-    ipAddressPrivate=${replicatorIpListPrivate[$i]}
-    zone=${replicatorIpListZone[$i]}
-    printNode replicator "$ipAddress" "$ipAddressPrivate" "$zone"
+  for i in $(seq 0 $(( ${#archiverIpList[@]} - 1)) ); do
+    ipAddress=${archiverIpList[$i]}
+    ipAddressPrivate=${archiverIpListPrivate[$i]}
+    zone=${archiverIpListZone[$i]}
+    printNode archiver "$ipAddress" "$ipAddressPrivate" "$zone"
   done
   ;;
 status)

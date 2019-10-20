@@ -2993,6 +2993,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-archiver"
+version = "0.20.0"
+dependencies = [
+ "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "console 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-core 0.20.0",
+ "solana-logger 0.20.0",
+ "solana-metrics 0.20.0",
+ "solana-netutil 0.20.0",
+ "solana-sdk 0.20.0",
+]
+
+[[package]]
 name = "solana-banking-bench"
 version = "0.20.0"
 dependencies = [
@@ -3743,19 +3756,6 @@ dependencies = [
  "cc 1.0.46 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana-replicator"
-version = "0.20.0"
-dependencies = [
- "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "console 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-core 0.20.0",
- "solana-logger 0.20.0",
- "solana-metrics 0.20.0",
- "solana-netutil 0.20.0",
- "solana-sdk 0.20.0",
 ]
 
 [[package]]

@@ -72,11 +72,11 @@ else
   done
 fi
 echo
-echo Replicators:
-if [[ ${#replicatorIpList[@]} -eq 0 ]]; then
+echo Archivers:
+if [[ ${#archiverIpList[@]} -eq 0 ]]; then
   echo "  None"
 else
-  for ipAddress in "${replicatorIpList[@]}"; do
+  for ipAddress in "${archiverIpList[@]}"; do
     printNode fullnode "$ipAddress"
   done
 fi

@@ -138,7 +138,7 @@ There are three release channels that map to branches as follows:
 ### Update documentation
 TODO: Documentation update procedure is WIP as we move to gitbook
 
-Document the new recommended version by updating `book/src/running-replicator.md` and `book/src/validator-testnet.md` on the release (beta) branch to point at the `solana-install` for the upcoming release version.
+Document the new recommended version by updating `book/src/running-archiver.md` and `book/src/validator-testnet.md` on the release (beta) branch to point at the `solana-install` for the upcoming release version.
 
 #### Publish updated Book
 We maintain three copies of the "book" as official documentation:
