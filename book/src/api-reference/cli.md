@@ -200,7 +200,7 @@ SUBCOMMANDS:
     claim-storage-reward                 Redeem storage reward credits
     cluster-version                      Get the version of the cluster entrypoint
     confirm                              Confirm transaction by signature
-    create-archiver-storage-account    Create a archiver storage account
+    create-archiver-storage-account    Create an archiver storage account
     create-stake-account                 Create a stake account
     create-validator-storage-account     Create a validator storage account
     create-vote-account                  Create a vote account
@@ -383,7 +383,7 @@ ARGS:
 #### solana-create-archiver-storage-account
 ```text
 solana-create-archiver-storage-account 
-Create a archiver storage account
+Create an archiver storage account
 
 USAGE:
     solana create-archiver-storage-account [OPTIONS] <STORAGE ACCOUNT OWNER PUBKEY> <STORAGE ACCOUNT PUBKEY>

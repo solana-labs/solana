@@ -224,7 +224,7 @@ A set of sha hash state which is constructed by sampling the encrypted version o
 
 ## storage proof challenge
 
-A transaction from a archiver that verifiably proves that a validator confirmed a fake proof.
+A transaction from an archiver that verifiably proves that a validator confirmed a fake proof.
 
 ## storage proof claim
 

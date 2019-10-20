@@ -1,6 +1,6 @@
-# Running a Archiver
+# Running an Archiver
 
-This document describes how to setup a archiver in the testnet
+This document describes how to setup an archiver in the testnet
 
 Please note some of the information and instructions described here may change in future releases.
 
@@ -16,7 +16,7 @@ The testnet is configured to reset the ledger daily, or sooner should the hourly
 
 ## Machine Requirements
 
-Archivers don't need specialized hardware. Anything with more than 128GB of disk space will be able to participate in the cluster as a archiver node.
+Archivers don't need specialized hardware. Anything with more than 128GB of disk space will be able to participate in the cluster as an archiver node.
 
 Currently the disk space requirements are very low but we expect them to change in the future.
 
@@ -24,7 +24,7 @@ Prebuilt binaries are available for Linux x86\_64 \(Ubuntu 18.04 recommended\), 
 
 ### Confirm The Testnet Is Reachable
 
-Before starting a archiver node, sanity check that the cluster is accessible to your machine by running some simple commands. If any of the commands fail, please retry 5-10 minutes later to confirm the testnet is not just restarting itself before debugging further.
+Before starting an archiver node, sanity check that the cluster is accessible to your machine by running some simple commands. If any of the commands fail, please retry 5-10 minutes later to confirm the testnet is not just restarting itself before debugging further.
 
 Fetch the current transaction count over JSON RPC:
 

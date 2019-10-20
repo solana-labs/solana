@@ -52,7 +52,7 @@ The storage epoch should be the number of slots which results in around 100GB-1T
 
    seed for the hash result.
 
-   * A fake proof should consist of a archiver hash of a signature of a PoH
+   * A fake proof should consist of an archiver hash of a signature of a PoH
 
      value. That way when the archiver reveals the fake proof, it can be
 
@@ -110,7 +110,7 @@ ClaimStorageReward {
 keys = [validator_keypair or archiver_keypair, validator/archiver_keypairs (unsigned)]
 ```
 
-Archivers and validators will use this transaction to get paid tokens from a program state where SubmitStorageProof, ProofValidation and ChallengeProofValidations are in a state where proofs have been submitted and validated and there are no ChallengeProofValidations referencing those proofs. For a validator, it should reference the archiver keypairs to which it has validated proofs in the relevant epoch. And for a archiver it should reference validator keypairs for which it has validated and wants to be rewarded.
+Archivers and validators will use this transaction to get paid tokens from a program state where SubmitStorageProof, ProofValidation and ChallengeProofValidations are in a state where proofs have been submitted and validated and there are no ChallengeProofValidations referencing those proofs. For a validator, it should reference the archiver keypairs to which it has validated proofs in the relevant epoch. And for an archiver it should reference validator keypairs for which it has validated and wants to be rewarded.
 
 ### ChallengeProofValidation
 
@@ -122,7 +122,7 @@ ChallengeProofValidation {
 keys = [archiver_keypair, validator_keypair]
 ```
 
-This transaction is for catching lazy validators who are not doing the work to validate proofs. A archiver will submit this transaction when it sees a validator has approved a fake SubmitMiningProof transaction. Since the archiver is a light client not looking at the full chain, it will have to ask a validator or some set of validators for this information maybe via RPC call to obtain all ProofValidations for a certain segment in the previous storage epoch. The program will look in the validator account state see that a ProofValidation is submitted in the previous storage epoch and hash the hash\_seed\_value and see that the hash matches the SubmitMiningProof transaction and that the validator marked it as valid. If so, then it will save the challenge to the list of challenges that it has in its state.
+This transaction is for catching lazy validators who are not doing the work to validate proofs. An archiver will submit this transaction when it sees a validator has approved a fake SubmitMiningProof transaction. Since the archiver is a light client not looking at the full chain, it will have to ask a validator or some set of validators for this information maybe via RPC call to obtain all ProofValidations for a certain segment in the previous storage epoch. The program will look in the validator account state see that a ProofValidation is submitted in the previous storage epoch and hash the hash\_seed\_value and see that the hash matches the SubmitMiningProof transaction and that the validator marked it as valid. If so, then it will save the challenge to the list of challenges that it has in its state.
 
 ### AdvertiseStorageRecentBlockhash
 

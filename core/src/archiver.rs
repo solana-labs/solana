@@ -187,7 +187,7 @@ fn poll_for_slot(receiver: Receiver<u64>, exit: &Arc<AtomicBool>) -> u64 {
 }
 
 impl Archiver {
-    /// Returns a Result that contains a archiver on success
+    /// Returns a Result that contains an archiver on success
     ///
     /// # Arguments
     /// * `ledger_path` - path to where the ledger will be stored.
@@ -780,7 +780,7 @@ impl Archiver {
         }
     }
 
-    /// Ask a archiver to populate a given blocktree with its segment.
+    /// Ask an archiver to populate a given blocktree with its segment.
     /// Return the slot at the start of the archiver's segment
     ///
     /// It is recommended to use a temporary blocktree for this since the download will not verify

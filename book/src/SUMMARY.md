@@ -35,7 +35,7 @@
   * [Publishing Validator Info](running-validator/validator-info.md)
   * [Troubleshooting](running-validator/validator-troubleshoot.md)
   * [FAQ](running-validator/validator-faq.md)
-* [Running a Archiver](running-archiver.md)
+* [Running an Archiver](running-archiver.md)
 * [API Reference](api-reference/README.md)
   * [Transaction](api-reference/transaction-api.md)
   * [Instruction](api-reference/instruction-api.md)

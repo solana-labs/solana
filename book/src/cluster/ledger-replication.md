@@ -10,7 +10,7 @@ Our improvement on this approach is to randomly sample the encrypted segments fa
 
 ## Network
 
-Validators for PoRep are the same validators that are verifying transactions. If a archiver can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
+Validators for PoRep are the same validators that are verifying transactions. If an archiver can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
 
 Archivers are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep archivers earn a reward of sol from the mining pool.
 
@@ -40,7 +40,7 @@ We have the following constraints:
 
 1. SLOTS\_PER\_SEGMENT: Number of slots in a segment of ledger data. The
 
-   unit of storage for a archiver.
+   unit of storage for an archiver.
 
 2. NUM\_KEY\_ROTATION\_SEGMENTS: Number of segments after which archivers
 
@@ -92,7 +92,7 @@ We have the following constraints:
 
 ### Archiver behavior
 
-1. Since a archiver is somewhat of a light client and not downloading all the
+1. Since an archiver is somewhat of a light client and not downloading all the
 
    ledger data, they have to rely on other validators and archivers for information.
 
@@ -102,7 +102,7 @@ We have the following constraints:
 
    archiver do extra wasted work. For many of the operations there are a number of options
 
-   depending on how paranoid a archiver is:
+   depending on how paranoid an archiver is:
 
    * \(a\) archiver can ask a validator
    * \(b\) archiver can ask multiple validators
@@ -115,7 +115,7 @@ We have the following constraints:
 
      generate the information itself \(assuming the slot is recent enough\)
 
-2. A archiver obtains the PoH hash corresponding to the last turn with its slot.
+2. An archiver obtains the PoH hash corresponding to the last turn with its slot.
 3. The archiver signs the PoH hash with its keypair. That signature is the
 
    seed used to pick the segment to replicate and also the encryption key. The
@@ -193,11 +193,11 @@ For each turn of the PoRep game, both Validators and Archivers evaluate each sta
 
 2. Validators maintain a map of ledger segments and corresponding archiver public keys.
 
-   The map is updated when a Validator processes a archiver's proofs for a segment.
+   The map is updated when a Validator processes an archiver's proofs for a segment.
 
    The validator provides an RPC interface to access the this map. Using this API, clients
 
-   can map a segment to a archiver's network address \(correlating it via cluster\_info table\).
+   can map a segment to an archiver's network address \(correlating it via cluster\_info table\).
 
    The clients can then send repair requests to the archiver to retrieve segments.
 
@@ -225,7 +225,7 @@ Our solution to this is to force the clients to continue using the same identity
 
 * Validator stealing mining proof results for itself. The proofs are derived
 
-  from a signature from a archiver, since the validator does not know the
+  from a signature from an archiver, since the validator does not know the
 
   private key used to generate the encryption key, it cannot be the generator of
 

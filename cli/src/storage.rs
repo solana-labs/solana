@@ -22,7 +22,7 @@ impl StorageSubCommands for App<'_, '_> {
     fn storage_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("create-archiver-storage-account")
-                .about("Create a archiver storage account")
+                .about("Create an archiver storage account")
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
