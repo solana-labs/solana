@@ -18,7 +18,7 @@ pub fn request_airdrop_transaction(
         let key = Keypair::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let tx = system_transaction::create_user_account(&key, &to, lamports, blockhash);
+        let tx = system_transaction::transfer_now(&key, &to, lamports, blockhash);
         Ok(tx)
     }
 }

@@ -71,7 +71,7 @@ fn verify_instruction(
     if pre.owner != post.owner && (!is_debitable || !system_program::check_id(&program_id)) {
         return Err(InstructionError::ModifiedProgramId);
     }
-    // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
+    // An account not assigned to the program cannot have its balance decrease.
     if *program_id != post.owner && pre.lamports > post.lamports {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }

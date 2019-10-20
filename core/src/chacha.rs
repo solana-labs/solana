@@ -78,12 +78,12 @@ mod tests {
     use solana_ledger::blocktree::Blocktree;
     use solana_ledger::entry::Entry;
     use solana_sdk::hash::{hash, Hash, Hasher};
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction;
     use std::fs::remove_file;
     use std::fs::File;
     use std::io::Read;
-    use std::path::Path;
     use std::sync::Arc;
 
     fn make_tiny_deterministic_test_entries(num: usize) -> Vec<Entry> {
@@ -101,7 +101,7 @@ mod tests {
                 Entry::new_mut(
                     &mut id,
                     &mut num_hashes,
-                    vec![system_transaction::create_user_account(
+                    vec![system_transaction::transfer_now(
                         &keypair,
                         &keypair.pubkey(),
                         1,
@@ -112,6 +112,18 @@ mod tests {
             .collect()
     }
 
+    use std::{env, fs::create_dir_all, path::PathBuf};
+    fn tmp_file_path(name: &str) -> PathBuf {
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        let mut path = PathBuf::new();
+        path.push(out_dir);
+        path.push("tmp");
+        create_dir_all(&path).unwrap();
+
+        path.push(format!("{}-{}", name, Pubkey::new_rand()));
+        path
+    }
+
     #[test]
     fn test_encrypt_ledger() {
         solana_logger::setup();
@@ -120,7 +132,7 @@ mod tests {
         let ticks_per_slot = 16;
         let slots_per_segment = 32;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-        let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
+        let out_path = tmp_file_path("test_encrypt_ledger");
 
         let seed = [2u8; 32];
         let mut rnd = GenKeys::new(seed);
@@ -144,20 +156,20 @@ mod tests {
             "abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234
                             abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234"
         );
-        chacha_cbc_encrypt_ledger(&blocktree, 0, slots_per_segment as u64, out_path, &mut key)
+        chacha_cbc_encrypt_ledger(&blocktree, 0, slots_per_segment as u64, &out_path, &mut key)
             .unwrap();
-        let mut out_file = File::open(out_path).unwrap();
+        let mut out_file = File::open(&out_path).unwrap();
         let mut buf = vec![];
         let size = out_file.read_to_end(&mut buf).unwrap();
         let mut hasher = Hasher::default();
         hasher.hash(&buf[..size]);
 
         //  golden needs to be updated if blob stuff changes....
-        let golden: Hash = "F3Grk43JpRUPeCuB8CbYovjxq2Bh77bh4uLB2UXKBFN8"
+        let golden: Hash = "BdmY3efqu7zbnFuGRAeFANwa35HkDdQ7hwhYez3xGXiM"
             .parse()
             .unwrap();
 
         assert_eq!(hasher.result(), golden);
-        remove_file(out_path).unwrap();
+        remove_file(&out_path).unwrap();
     }
 }

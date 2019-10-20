@@ -472,11 +472,7 @@ fn init_storage_accounts(
     replicator_accounts_to_create: &[&Pubkey],
     lamports: u64,
 ) {
-    let mut ixs: Vec<_> = vec![system_instruction::create_user_account(
-        &mint.pubkey(),
-        owner,
-        1,
-    )];
+    let mut ixs: Vec<_> = vec![system_instruction::transfer_now(&mint.pubkey(), owner, 1)];
     ixs.append(
         &mut validator_accounts_to_create
             .into_iter()
@@ -596,15 +592,11 @@ fn test_bank_storage() {
     let x2 = x * 2;
     let storage_blockhash = hash(&[x2]);
 
-    bank_client
-        .transfer(10, &mint_keypair, &replicator_pubkey)
-        .unwrap();
-
     let message = Message::new(storage_instruction::create_storage_account(
         &mint_pubkey,
         &Pubkey::default(),
         &replicator_pubkey,
-        1,
+        11,
         StorageAccountType::Replicator,
     ));
     bank_client.send_message(&[&mint_keypair], message).unwrap();

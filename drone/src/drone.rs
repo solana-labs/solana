@@ -121,7 +121,7 @@ impl Drone {
                     );
                     info!("Requesting airdrop of {} to {:?}", lamports, to);
 
-                    let create_instruction = system_instruction::create_user_account(
+                    let create_instruction = system_instruction::transfer_now(
                         &self.mint_keypair.pubkey(),
                         &to,
                         lamports,
@@ -388,14 +388,7 @@ mod tests {
 
         assert_eq!(message.instructions.len(), 1);
         let instruction: SystemInstruction = deserialize(&message.instructions[0].data).unwrap();
-        assert_eq!(
-            instruction,
-            SystemInstruction::CreateAccount {
-                lamports: 2,
-                space: 0,
-                program_id: Pubkey::default()
-            }
-        );
+        assert_eq!(instruction, SystemInstruction::Transfer { lamports: 2 });
 
         let mint = Keypair::new();
         drone = Drone::new(mint, None, Some(1));
@@ -419,7 +412,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let expected_instruction =
-            system_instruction::create_user_account(&keypair.pubkey(), &to, lamports);
+            system_instruction::transfer_now(&keypair.pubkey(), &to, lamports);
         let message = Message::new(vec![expected_instruction]);
         let expected_tx = Transaction::new(&[&keypair], message, blockhash);
         let expected_bytes = serialize(&expected_tx).unwrap();

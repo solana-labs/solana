@@ -411,12 +411,8 @@ impl LocalCluster {
     ) -> u64 {
         trace!("getting leader blockhash");
         let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
-        let mut tx = system_transaction::create_user_account(
-            &source_keypair,
-            dest_pubkey,
-            lamports,
-            blockhash,
-        );
+        let mut tx =
+            system_transaction::transfer_now(&source_keypair, dest_pubkey, lamports, blockhash);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
