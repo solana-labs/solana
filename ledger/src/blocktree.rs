@@ -1034,7 +1034,6 @@ impl Blocktree {
             .last()
             .map(|(_, end_index)| u64::from(*end_index) - start_index + 1);
 
-        // TODO: test one of these blocks failing
         let all_entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 completed_ranges
@@ -3669,7 +3668,7 @@ pub mod tests {
         for i in 0..completed_data_end_indexes.len() {
             for j in i..completed_data_end_indexes.len() {
                 let start_index = completed_data_end_indexes[i];
-                let consumed = (completed_data_end_indexes[j] + 1);
+                let consumed = completed_data_end_indexes[j] + 1;
                 // When start_index == completed_data_end_indexes[i], then that means
                 // the shred with index == start_index is a single-shred data block,
                 // so the start index is the end index for that data block.
@@ -3689,6 +3688,44 @@ pub mod tests {
                     expected
                 );
             }
+        }
+    }
+
+    #[test]
+    fn test_get_slot_entries_with_shred_count_corruption() {
+        let blocktree_path =
+            get_tmp_ledger_path("test_get_slot_entries_with_shred_count_corruption");
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let num_ticks = 8;
+            let entries = create_ticks(num_ticks, Hash::default());
+            let slot = 1;
+            let shreds = entries_to_test_shreds(entries, slot, 0, false);
+            let next_shred_index = shreds.len();
+            blocktree
+                .insert_shreds(shreds, None)
+                .expect("Expected successful write of shreds");
+            assert_eq!(
+                blocktree.get_slot_entries(slot, 0, None).unwrap().len() as u64,
+                num_ticks
+            );
+
+            // Insert an empty shred that won't deshred into entries
+            let shreds = vec![Shred::new_from_data(
+                slot,
+                next_shred_index as u32,
+                1,
+                None,
+                true,
+                true,
+            )];
+
+            // With the corruption, nothing should be returned, even though an
+            // earlier data block was valid
+            blocktree
+                .insert_shreds(shreds, None)
+                .expect("Expected successful write of shreds");
+            assert!(blocktree.get_slot_entries(slot, 0, None).is_err());
         }
     }
 }
