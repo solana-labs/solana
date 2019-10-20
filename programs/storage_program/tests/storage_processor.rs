@@ -592,15 +592,11 @@ fn test_bank_storage() {
     let x2 = x * 2;
     let storage_blockhash = hash(&[x2]);
 
-    bank_client
-        .transfer(10, &mint_keypair, &replicator_pubkey)
-        .unwrap();
-
     let message = Message::new(storage_instruction::create_storage_account(
         &mint_pubkey,
         &Pubkey::default(),
         &replicator_pubkey,
-        1,
+        11,
         StorageAccountType::Replicator,
     ));
     bank_client.send_message(&[&mint_keypair], message).unwrap();
