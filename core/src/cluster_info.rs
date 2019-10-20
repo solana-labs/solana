@@ -12,7 +12,6 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::bank_forks::BankForks;
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
@@ -30,6 +29,7 @@ use itertools::Itertools;
 use rand::SeedableRng;
 use rand::{thread_rng, Rng};
 use rand_chacha::ChaChaRng;
+use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::Blocktree;
 use solana_ledger::staking_utils;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
@@ -1779,7 +1779,6 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree_processor::tests::fill_blocktree_slot_with_ticks;
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
@@ -1788,6 +1787,7 @@ mod tests {
     use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::blocktree::make_many_slot_entries;
     use solana_ledger::blocktree::Blocktree;
+    use solana_ledger::blocktree_processor::fill_blocktree_slot_with_ticks;
     use solana_ledger::shred::{
         max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
     };

@@ -1,4 +1,5 @@
-use solana_ledger::blocktree::*;
+use crate::blocktree::*;
+use log::*;
 
 pub struct RootedSlotIterator<'a> {
     next_slots: Vec<u64>,
@@ -52,7 +53,7 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree_processor::tests::fill_blocktree_slot_with_ticks;
+    use crate::blocktree_processor::fill_blocktree_slot_with_ticks;
     use solana_sdk::hash::Hash;
 
     #[test]

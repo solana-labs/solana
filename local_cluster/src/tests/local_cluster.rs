@@ -6,10 +6,10 @@ use crate::{
 use log::*;
 use serial_test_derive::serial;
 use solana_core::{
-    bank_forks::SnapshotConfig, broadcast_stage::BroadcastStageType,
-    gossip_service::discover_cluster, snapshot_utils, validator::ValidatorConfig,
+    broadcast_stage::BroadcastStageType, gossip_service::discover_cluster,
+    validator::ValidatorConfig,
 };
-use solana_ledger::blocktree::Blocktree;
+use solana_ledger::{bank_forks::SnapshotConfig, blocktree::Blocktree, snapshot_utils};
 use solana_runtime::accounts_db::AccountsDB;
 use solana_sdk::{
     client::SyncClient,

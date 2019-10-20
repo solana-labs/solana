@@ -2,6 +2,7 @@
 
 use crate::snapshot_package::{SnapshotPackageSendError, SnapshotPackageSender};
 use crate::snapshot_utils::{self, SnapshotError};
+use log::*;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;

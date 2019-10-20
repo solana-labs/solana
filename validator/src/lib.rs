@@ -4,7 +4,6 @@ use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use solana_client::rpc_client::RpcClient;
-use solana_core::bank_forks::SnapshotConfig;
 use solana_core::cluster_info::{Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
 use solana_core::gossip_service::discover;
@@ -12,6 +11,7 @@ use solana_core::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
 use solana_core::service::Service;
 use solana_core::socketaddr;
 use solana_core::validator::{Validator, ValidatorConfig};
+use solana_ledger::bank_forks::SnapshotConfig;
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
@@ -195,7 +195,7 @@ fn initialize_ledger_path(
     download_tar_bz2(&rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
 
     if !no_snapshot_fetch {
-        let snapshot_package = solana_core::snapshot_utils::get_snapshot_tar_path(ledger_path);
+        let snapshot_package = solana_ledger::snapshot_utils::get_snapshot_tar_path(ledger_path);
         if snapshot_package.exists() {
             fs::remove_file(&snapshot_package)
                 .unwrap_or_else(|err| warn!("error removing {:?}: {}", snapshot_package, err));

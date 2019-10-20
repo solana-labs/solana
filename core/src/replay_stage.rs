@@ -1,7 +1,5 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
-use crate::bank_forks::BankForks;
-use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::confidence::{
     AggregateConfidenceService, ConfidenceAggregationData, ForkConfidenceCache,
@@ -12,10 +10,12 @@ use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
-use crate::snapshot_package::SnapshotPackageSender;
+use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::{Blocktree, BlocktreeError};
+use solana_ledger::blocktree_processor;
 use solana_ledger::entry::{Entry, EntrySlice};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+use solana_ledger::snapshot_package::SnapshotPackageSender;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;

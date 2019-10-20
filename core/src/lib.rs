@@ -5,7 +5,6 @@
 //! command-line tools to spin up validators and a Rust library
 //!
 
-pub mod bank_forks;
 pub mod banking_stage;
 pub mod broadcast_stage;
 pub mod chacha;
@@ -18,7 +17,6 @@ pub mod shred_fetch_stage;
 pub mod contact_info;
 pub mod blockstream;
 pub mod blockstream_service;
-pub mod blocktree_processor;
 pub mod cluster_info;
 pub mod cluster_info_repair_listener;
 pub mod consensus;
@@ -44,7 +42,6 @@ pub mod replay_stage;
 pub mod replicator;
 pub mod result;
 pub mod retransmit_stage;
-pub mod rooted_slot_iterator;
 pub mod rpc;
 pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;
@@ -54,9 +51,7 @@ pub mod sendmmsg;
 pub mod service;
 pub mod sigverify;
 pub mod sigverify_stage;
-pub mod snapshot_package;
 pub mod snapshot_packager_service;
-pub mod snapshot_utils;
 pub mod storage_stage;
 pub mod streamer;
 pub mod test_tx;
@@ -69,8 +64,6 @@ pub mod window_service;
 
 #[macro_use]
 extern crate solana_budget_program;
-
-extern crate solana_storage_program;
 
 #[cfg(test)]
 #[macro_use]
@@ -95,11 +88,3 @@ extern crate matches;
 
 #[macro_use]
 extern crate solana_ledger;
-
-extern crate bzip2;
-extern crate crossbeam_channel;
-extern crate dir_diff;
-extern crate fs_extra;
-extern crate symlink;
-extern crate tar;
-extern crate tempfile;

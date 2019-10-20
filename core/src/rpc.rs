@@ -1,7 +1,6 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use crate::{
-    bank_forks::BankForks,
     cluster_info::ClusterInfo,
     confidence::{BankConfidence, ForkConfidenceCache},
     contact_info::ContactInfo,
@@ -15,6 +14,7 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
 use solana_drone::drone::request_airdrop_transaction;
+use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,

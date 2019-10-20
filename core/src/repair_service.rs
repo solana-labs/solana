@@ -1,9 +1,10 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing blobs in the ledger and sends repair requests for those blobs
 use crate::{
-    bank_forks::BankForks, cluster_info::ClusterInfo,
-    cluster_info_repair_listener::ClusterInfoRepairListener, result::Result, service::Service,
+    cluster_info::ClusterInfo, cluster_info_repair_listener::ClusterInfoRepairListener,
+    result::Result, service::Service,
 };
+use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{

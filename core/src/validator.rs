@@ -1,7 +1,5 @@
 //! The `validator` module hosts all the validator microservices.
 
-use crate::bank_forks::{BankForks, SnapshotConfig};
-use crate::blocktree_processor::{self, BankForksInfo};
 use crate::broadcast_stage::BroadcastStageType;
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::confidence::ForkConfidenceCache;
@@ -15,12 +13,14 @@ use crate::rpc_service::JsonRpcService;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::sigverify;
-use crate::snapshot_utils;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
+use solana_ledger::bank_forks::{BankForks, SnapshotConfig};
 use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver};
+use solana_ledger::blocktree_processor::{self, BankForksInfo};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+use solana_ledger::snapshot_utils;
 use solana_metrics::datapoint_info;
 use solana_sdk::clock::{Slot, DEFAULT_SLOTS_PER_TURN};
 use solana_sdk::genesis_block::GenesisBlock;

@@ -1,17 +1,19 @@
 use crate::bank_forks::BankForks;
+use crate::blocktree::{Blocktree, SlotMeta};
+use crate::entry::{create_ticks, Entry, EntrySlice};
+use crate::leader_schedule_cache::LeaderScheduleCache;
+use log::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rayon::prelude::*;
 use rayon::ThreadPool;
-use solana_ledger::blocktree::{Blocktree, SlotMeta};
-use solana_ledger::entry::{Entry, EntrySlice};
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_runtime::bank::Bank;
 use solana_runtime::transaction_batch::TransactionBatch;
 use solana_sdk::clock::{Slot, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::transaction::Result;
 use std::result;
@@ -447,15 +449,42 @@ fn process_pending_slots(
     Ok(fork_info)
 }
 
+pub fn fill_blocktree_slot_with_ticks(
+    blocktree: &Blocktree,
+    ticks_per_slot: u64,
+    slot: u64,
+    parent_slot: u64,
+    last_entry_hash: Hash,
+) -> Hash {
+    let entries = create_ticks(ticks_per_slot, last_entry_hash);
+    let last_entry_hash = entries.last().unwrap().hash;
+
+    blocktree
+        .write_entries(
+            slot,
+            0,
+            0,
+            ticks_per_slot,
+            Some(parent_slot),
+            true,
+            &Arc::new(Keypair::new()),
+            entries,
+        )
+        .unwrap();
+
+    last_entry_hash
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::blocktree::create_new_tmp_ledger;
+    use crate::entry::{create_ticks, next_entry, next_entry_mut, Entry};
     use crate::genesis_utils::{
         create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
     };
+    use matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use solana_ledger::blocktree::create_new_tmp_ledger;
-    use solana_ledger::entry::{create_ticks, next_entry, next_entry_mut, Entry};
     use solana_sdk::{
         epoch_schedule::EpochSchedule,
         hash::Hash,
@@ -466,32 +495,6 @@ pub mod tests {
         transaction::{Transaction, TransactionError},
     };
     use std::sync::RwLock;
-
-    pub fn fill_blocktree_slot_with_ticks(
-        blocktree: &Blocktree,
-        ticks_per_slot: u64,
-        slot: u64,
-        parent_slot: u64,
-        last_entry_hash: Hash,
-    ) -> Hash {
-        let entries = create_ticks(ticks_per_slot, last_entry_hash);
-        let last_entry_hash = entries.last().unwrap().hash;
-
-        blocktree
-            .write_entries(
-                slot,
-                0,
-                0,
-                ticks_per_slot,
-                Some(parent_slot),
-                true,
-                &Arc::new(Keypair::new()),
-                entries,
-            )
-            .unwrap();
-
-        last_entry_hash
-    }
 
     #[test]
     fn test_process_blocktree_with_incomplete_slot() {
