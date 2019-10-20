@@ -1,11 +1,11 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
+    archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
     gossip_service::discover_cluster,
-    archiver::Archiver,
     service::Service,
     validator::{Validator, ValidatorConfig},
 };

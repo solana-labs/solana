@@ -429,10 +429,7 @@ fn test_validate_mining() {
         bank.register_tick(&bank.last_blockhash());
     }
 
-    assert_eq!(
-        bank_client.get_balance(&archiver_1_storage_id).unwrap(),
-        10
-    );
+    assert_eq!(bank_client.get_balance(&archiver_1_storage_id).unwrap(), 10);
 
     let message = Message::new_with_payer(
         vec![storage_instruction::claim_reward(
@@ -487,17 +484,15 @@ fn init_storage_accounts(
             })
             .collect(),
     );
-    archiver_accounts_to_create
-        .into_iter()
-        .for_each(|account| {
-            ixs.append(&mut storage_instruction::create_storage_account(
-                &mint.pubkey(),
-                owner,
-                account,
-                lamports,
-                StorageAccountType::Archiver,
-            ))
-        });
+    archiver_accounts_to_create.into_iter().for_each(|account| {
+        ixs.append(&mut storage_instruction::create_storage_account(
+            &mint.pubkey(),
+            owner,
+            account,
+            lamports,
+            StorageAccountType::Archiver,
+        ))
+    });
     let message = Message::new(ixs);
     client.send_message(&[mint], message).unwrap();
 }

@@ -238,12 +238,7 @@ fn spy(
         ));
         i += 1;
     }
-    (
-        met_criteria,
-        now.elapsed().as_secs(),
-        tvu_peers,
-        archivers,
-    )
+    (met_criteria, now.elapsed().as_secs(), tvu_peers, archivers)
 }
 
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in

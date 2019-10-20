@@ -1,10 +1,10 @@
 use crate::local_cluster::{ClusterConfig, LocalCluster};
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
+use solana_core::archiver::Archiver;
 use solana_core::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
 use solana_core::gossip_service::discover_cluster;
-use solana_core::archiver::Archiver;
 use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
 use solana_core::validator::ValidatorConfig;
 use solana_ledger::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
@@ -33,11 +33,8 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     };
     let cluster = LocalCluster::new(&config);
 
-    let (cluster_nodes, cluster_archivers) = discover_cluster(
-        &cluster.entry_point_info.gossip,
-        num_nodes + num_archivers,
-    )
-    .unwrap();
+    let (cluster_nodes, cluster_archivers) =
+        discover_cluster(&cluster.entry_point_info.gossip, num_nodes + num_archivers).unwrap();
     assert_eq!(
         cluster_nodes.len() + cluster_archivers.len(),
         num_nodes + num_archivers
@@ -58,13 +55,8 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     )));
     let path = get_tmp_ledger_path("test");
     let blocktree = Arc::new(Blocktree::open(&path).unwrap());
-    Archiver::download_from_archiver(
-        &cluster_info,
-        &archiver_info,
-        &blocktree,
-        slots_per_segment,
-    )
-    .unwrap();
+    Archiver::download_from_archiver(&cluster_info, &archiver_info, &blocktree, slots_per_segment)
+        .unwrap();
 }
 
 #[test]

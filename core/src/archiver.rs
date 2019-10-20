@@ -135,13 +135,7 @@ fn create_request_processor(
     let (s_responder, r_responder) = channel();
     let storage_socket = Arc::new(socket);
     let recycler = Recycler::default();
-    let t_receiver = receiver(
-        storage_socket.clone(),
-        exit,
-        s_reader,
-        recycler,
-        "archiver",
-    );
+    let t_receiver = receiver(storage_socket.clone(), exit, s_reader, recycler, "archiver");
     thread_handles.push(t_receiver);
 
     let t_responder = responder("archiver-responder", storage_socket.clone(), r_responder);
@@ -657,8 +651,7 @@ impl Archiver {
             Signature::new(&meta.signature.as_ref()),
             meta.blockhash,
         );
-        let message =
-            Message::new_with_payer(vec![instruction], Some(&archiver_keypair.pubkey()));
+        let message = Message::new_with_payer(vec![instruction], Some(&archiver_keypair.pubkey()));
         let mut transaction = Transaction::new(
             &[archiver_keypair.as_ref(), storage_keypair.as_ref()],
             message,

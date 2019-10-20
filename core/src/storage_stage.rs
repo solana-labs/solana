@@ -149,8 +149,7 @@ impl StorageState {
                 .keys()
                 .filter_map(|account_id| {
                     accounts.get(account_id).and_then(|account| {
-                        if let Ok(StorageContract::ArchiverStorage { owner, .. }) =
-                            account.state()
+                        if let Ok(StorageContract::ArchiverStorage { owner, .. }) = account.state()
                         {
                             Some(owner)
                         } else {
@@ -468,9 +467,7 @@ impl StorageStage {
 
                     let mut statew = storage_state.write().unwrap();
                     if statew.archiver_map.len() < segment as usize {
-                        statew
-                            .archiver_map
-                            .resize(segment as usize, HashMap::new());
+                        statew.archiver_map.resize(segment as usize, HashMap::new());
                     }
                     let proof_segment_index = proof.segment_index as usize;
                     if proof_segment_index < statew.archiver_map.len() {
