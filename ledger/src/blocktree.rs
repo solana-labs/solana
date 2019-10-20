@@ -1021,14 +1021,19 @@ impl Blocktree {
             return Ok((vec![], 0));
         }
 
+        let slot_meta = slot_meta.unwrap();
         // Find all the ranges for the completed data blocks
-        let completed_ranges = Self::get_completed_data_ranges(start_index, &slot_meta.unwrap());
+        let completed_ranges = Self::get_completed_data_ranges(
+            start_index as u32,
+            &slot_meta.completed_data_indexes[..],
+            slot_meta.consumed as u32,
+        );
         if completed_ranges.is_empty() {
             return Ok((vec![], 0));
         }
         let num_shreds = completed_ranges
             .last()
-            .map(|(_, end_index)| end_index - start_index + 1);
+            .map(|(_, end_index)| *end_index as u64 - start_index + 1);
 
         // TODO: test one of these blocks failing
         let all_entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
@@ -1036,10 +1041,7 @@ impl Blocktree {
                 completed_ranges
                     .par_iter()
                     .map(|(start_index, end_index)| {
-                        let now = Instant::now();
-                        let res = self.get_entries_in_data_block(slot, *start_index, *end_index);
-                        let elapsed = now.elapsed().as_micros();
-                        res
+                        self.get_entries_in_data_block(slot, *start_index, *end_index)
                     })
                     .collect()
             })
@@ -1050,26 +1052,27 @@ impl Blocktree {
     }
 
     // Get the range of indexes [start_index, end_index] of every completed data block
-    fn get_completed_data_ranges(mut start_index: u64, slot_meta: &SlotMeta) -> Vec<(u64, u64)> {
+    fn get_completed_data_ranges(
+        mut start_index: u32,
+        completed_data_end_indexes: &[u32],
+        consumed: u32,
+    ) -> Vec<(u32, u32)> {
         let mut completed_data_ranges = vec![];
-        let floor = slot_meta
-            .completed_data_indexes
+        let floor = completed_data_end_indexes
             .iter()
-            .position(|i| *i as u64 >= start_index)
-            .unwrap_or(slot_meta.completed_data_indexes.len());
+            .position(|i| *i >= start_index)
+            .unwrap_or(completed_data_end_indexes.len());
 
-        for i in &slot_meta.completed_data_indexes[floor as usize..] {
-            let i = *i as u64;
-            // slot_meta_cf.consumed is the next missing shred index, but shred
-            // `i` existing in slot_meta_cf.completed_data_indexes implies it's not
-            // missing
-            assert!(i != slot_meta.consumed);
+        for i in &completed_data_end_indexes[floor as usize..] {
+            // `consumed` is the next missing shred index, but shred `i` existing in
+            // completed_data_end_indexes implies it's not missing
+            assert!(*i != consumed);
 
             // TODO: test i == the input start_index, means there's an entry that is
             // one shred long
-            if i < slot_meta.consumed {
-                completed_data_ranges.push((start_index, i));
-                start_index = i + 1;
+            if *i < consumed {
+                completed_data_ranges.push((start_index, *i));
+                start_index = *i + 1;
             }
         }
 
@@ -1079,8 +1082,8 @@ impl Blocktree {
     fn get_entries_in_data_block(
         &self,
         slot: u64,
-        start_index: u64,
-        end_index: u64,
+        start_index: u32,
+        end_index: u32,
     ) -> Result<Vec<Entry>> {
         let data_shred_cf = self.db.column::<cf::ShredData>();
 
@@ -1088,7 +1091,7 @@ impl Blocktree {
         let data_shreds: Result<Vec<Shred>> = (start_index..=end_index)
             .map(|i| {
                 data_shred_cf
-                    .get_bytes((slot, i))
+                    .get_bytes((slot, i as u64))
                     .and_then(|serialized_shred| {
                         Shred::new_from_serialized_shred(
                             serialized_shred
@@ -3630,5 +3633,65 @@ pub mod tests {
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_get_completed_data_ranges() {
+        let completed_data_end_indexes = vec![2, 4, 9, 11];
+
+        // Consumed is 1, which means we're missing shred with index 1, should return empty
+        let start_index = 0;
+        let consumed = 1;
+        assert_eq!(
+            Blocktree::get_completed_data_ranges(
+                start_index,
+                &completed_data_end_indexes[..],
+                consumed
+            ),
+            vec![]
+        );
+
+        let start_index = 0;
+        let consumed = 3;
+        assert_eq!(
+            Blocktree::get_completed_data_ranges(
+                start_index,
+                &completed_data_end_indexes[..],
+                consumed
+            ),
+            vec![(0, 2)]
+        );
+
+        // Test all possible ranges:
+        //
+        // `consumed == completed_data_end_indexes[j] + 1`, means we have all the shreds up to index
+        // `completed_data_end_indexes[j] + 1`. Thus the completed data blocks is everything in the
+        // range:
+        // [start_index, completed_data_end_indexes[j]] ==
+        // [completed_data_end_indexes[i], completed_data_end_indexes[j]],
+        for i in 0..completed_data_end_indexes.len() {
+            for j in i..completed_data_end_indexes.len() {
+                let start_index = completed_data_end_indexes[i];
+                let consumed = (completed_data_end_indexes[j] + 1);
+                // When start_index == completed_data_end_indexes[i], then that means
+                // the shred with index == start_index is a single-shred data block,
+                // so the start index is the end index for that data block.
+                let mut expected = vec![(start_index, start_index)];
+                expected.extend(
+                    completed_data_end_indexes[i..=j]
+                        .windows(2)
+                        .map(|end_indexes| (end_indexes[0] + 1, end_indexes[1])),
+                );
+
+                assert_eq!(
+                    Blocktree::get_completed_data_ranges(
+                        start_index,
+                        &completed_data_end_indexes[..],
+                        consumed
+                    ),
+                    expected
+                );
+            }
+        }
     }
 }
