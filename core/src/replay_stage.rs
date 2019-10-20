@@ -417,7 +417,11 @@ impl ReplayStage {
         let now = Instant::now();
         let load_result = Self::load_blocktree_entries(bank, blocktree, bank_progress);
         let fetch_entries_elapsed = now.elapsed().as_micros();
-        bank_progress.stats.fetch_entries_elapsed += fetch_entries_elapsed as u64;
+        if load_result.is_err() {
+            bank_progress.stats.fetch_entries_fail_elapsed += fetch_entries_elapsed as u64;
+        } else {
+            bank_progress.stats.fetch_entries_elapsed += fetch_entries_elapsed as u64;
+        }
 
         let replay_result = load_result.and_then(|(entries, num_shreds)| {
             trace!(

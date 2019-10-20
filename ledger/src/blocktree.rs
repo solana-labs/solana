@@ -29,7 +29,6 @@ use std::rc::Rc;
 use std::result;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
 
 pub use self::meta::*;
 use crate::leader_schedule_cache::LeaderScheduleCache;
@@ -1033,7 +1032,7 @@ impl Blocktree {
         }
         let num_shreds = completed_ranges
             .last()
-            .map(|(_, end_index)| *end_index as u64 - start_index + 1);
+            .map(|(_, end_index)| u64::from(*end_index) - start_index + 1);
 
         // TODO: test one of these blocks failing
         let all_entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
@@ -1061,15 +1060,13 @@ impl Blocktree {
         let floor = completed_data_end_indexes
             .iter()
             .position(|i| *i >= start_index)
-            .unwrap_or(completed_data_end_indexes.len());
+            .unwrap_or_else(|| completed_data_end_indexes.len());
 
         for i in &completed_data_end_indexes[floor as usize..] {
             // `consumed` is the next missing shred index, but shred `i` existing in
             // completed_data_end_indexes implies it's not missing
             assert!(*i != consumed);
 
-            // TODO: test i == the input start_index, means there's an entry that is
-            // one shred long
             if *i < consumed {
                 completed_data_ranges.push((start_index, *i));
                 start_index = *i + 1;
@@ -1091,7 +1088,7 @@ impl Blocktree {
         let data_shreds: Result<Vec<Shred>> = (start_index..=end_index)
             .map(|i| {
                 data_shred_cf
-                    .get_bytes((slot, i as u64))
+                    .get_bytes((slot, u64::from(i)))
                     .and_then(|serialized_shred| {
                         Shred::new_from_serialized_shred(
                             serialized_shred
@@ -1260,14 +1257,14 @@ fn update_slot_meta(
 ) {
     // Index is zero-indexed, while the "received" height starts from 1,
     // so received = index + 1 for the same shred.
-    slot_meta.received = cmp::max((index as u64 + 1) as u64, slot_meta.received);
+    slot_meta.received = cmp::max((u64::from(index) + 1) as u64, slot_meta.received);
     slot_meta.consumed = new_consumed;
     slot_meta.last_index = {
         // If the last index in the slot hasn't been set before, then
         // set it to this shred index
         if slot_meta.last_index == std::u64::MAX {
             if is_last_in_slot {
-                index as u64
+                u64::from(index)
             } else {
                 std::u64::MAX
             }
@@ -1281,7 +1278,7 @@ fn update_slot_meta(
             .completed_data_indexes
             .iter()
             .position(|completed_data_index| *completed_data_index > index)
-            .unwrap_or(slot_meta.completed_data_indexes.len());
+            .unwrap_or_else(|| slot_meta.completed_data_indexes.len());
 
         slot_meta.completed_data_indexes.insert(position, index);
     }
