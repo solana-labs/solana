@@ -16,7 +16,6 @@ fn create_system_account(
 ) -> Result<(), InstructionError> {
     // if lamports == 0, the from account isn't touched
     if lamports != 0 && from.signer_key().is_none() {
-        debug!("CreateAccount: from must sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
@@ -25,29 +24,19 @@ fn create_system_account(
         || !to.account.data.is_empty()
         || !system_program::check_id(&to.account.owner)
     {
-        debug!(
-            "CreateAccount: invalid argument; account {} already in use",
-            to.unsigned_key()
-        );
         return Err(SystemError::AccountAlreadyInUse.into());
     }
 
     // guard against sysvars being made
     if sysvar::check_id(&program_id) {
-        debug!("CreateAccount: program id {} invalid", program_id);
         return Err(SystemError::InvalidProgramId.into());
     }
 
     if sysvar::is_sysvar_id(&to.unsigned_key()) {
-        debug!("CreateAccount: account id {} invalid", program_id);
         return Err(SystemError::InvalidAccountId.into());
     }
 
     if lamports > from.account.lamports {
-        debug!(
-            "CreateAccount: insufficient lamports ({}, need {})",
-            from.account.lamports, lamports
-        );
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
     from.account.lamports -= lamports;
@@ -67,7 +56,6 @@ fn assign_account_to_program(
     }
 
     if account.signer_key().is_none() {
-        debug!("Assign: account must sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
@@ -85,15 +73,10 @@ fn transfer_lamports(
     }
 
     if from.signer_key().is_none() {
-        debug!("Transfer: from must sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
     if lamports > from.account.lamports {
-        debug!(
-            "Transfer: insufficient lamports ({}, need {})",
-            from.account.lamports, lamports
-        );
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
     from.account.lamports -= lamports;
