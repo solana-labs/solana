@@ -34,6 +34,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --limit-ledger-size ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --skip-ledger-verify ]]; then
+      args+=("$1")
+      shift
     else
       echo "Unknown argument: $1"
       $program --help
