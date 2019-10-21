@@ -264,6 +264,10 @@ impl Tower {
     }
 
     pub fn has_voted(&self, slot: u64) -> bool {
+        if Some(slot) == self.root() {
+            return true;
+        }
+
         for vote in &self.lockouts.votes {
             if vote.slot == slot {
                 return true;
@@ -603,6 +607,16 @@ mod test {
         tower.record_vote(0, Hash::default());
         assert!(tower.has_voted(0));
         assert!(!tower.has_voted(1));
+    }
+
+    #[test]
+    fn test_check_root_counts_as_voted() {
+        let mut tower = Tower::new_for_tests(0, 0.67);
+        for i in 0..64 {
+            tower.record_vote(i, Hash::default());
+        }
+        assert_eq!(tower.root().unwrap(), 32);
+        assert!(tower.has_voted(tower.root().unwrap()));
     }
 
     #[test]
