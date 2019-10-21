@@ -1,5 +1,5 @@
 use crate::{
-    cli::{check_account_for_fee, CliCommand, CliConfig, CliError, ProcessResult},
+    cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
 };
@@ -224,27 +224,28 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_validator_info_command(
-    matches: &ArgMatches<'_>,
-) -> Result<(CliCommand, bool), CliError> {
+pub fn parse_validator_info_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
     // Prepare validator info
     let validator_info = parse_args(&matches);
-    Ok((
-        CliCommand::SetValidatorInfo {
+    Ok(CliCommandInfo {
+        command: CliCommand::SetValidatorInfo {
             validator_info,
             force_keybase: matches.is_present("force"),
             info_pubkey,
         },
-        true,
-    ))
+        require_keypair: true,
+    })
 }
 
 pub fn parse_get_validator_info_command(
     matches: &ArgMatches<'_>,
-) -> Result<(CliCommand, bool), CliError> {
+) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
-    Ok((CliCommand::GetValidatorInfo(info_pubkey), false))
+    Ok(CliCommandInfo {
+        command: CliCommand::GetValidatorInfo(info_pubkey),
+        require_keypair: false,
+    })
 }
 
 pub fn process_set_validator_info(

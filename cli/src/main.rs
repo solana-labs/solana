@@ -1,7 +1,7 @@
 use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 use solana_cli::{
-    cli::{app, parse_command, process_command, CliConfig, CliError},
+    cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliError},
     config::{self, Config},
     display::{println_name_value, println_name_value_or},
     input_validators::is_url,
@@ -80,9 +80,12 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
         default.json_rpc_url
     };
 
-    let (command, need_keypair) = parse_command(&matches)?;
+    let CliCommandInfo {
+        command,
+        require_keypair,
+    } = parse_command(&matches)?;
 
-    let (keypair, keypair_path) = if need_keypair {
+    let (keypair, keypair_path) = if require_keypair {
         let keypair_path = if matches.is_present("keypair") {
             matches.value_of("keypair").unwrap().to_string()
         } else if config.keypair != "" {

@@ -1,7 +1,7 @@
 use crate::{
     cli::{
         check_account_for_fee, check_unique_pubkeys, log_instruction_custom_error, CliCommand,
-        CliConfig, CliError, ProcessResult,
+        CliCommandInfo, CliConfig, CliError, ProcessResult,
     },
     input_parsers::*,
     input_validators::*,
@@ -100,56 +100,54 @@ impl StorageSubCommands for App<'_, '_> {
 
 pub fn parse_storage_create_archiver_account(
     matches: &ArgMatches<'_>,
-) -> Result<(CliCommand, bool), CliError> {
+) -> Result<CliCommandInfo, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-    Ok((
-        CliCommand::CreateStorageAccount {
+    Ok(CliCommandInfo {
+        command: CliCommand::CreateStorageAccount {
             account_owner,
             storage_account_pubkey,
             account_type: StorageAccountType::Archiver,
         },
-        true,
-    ))
+        require_keypair: true,
+    })
 }
 
 pub fn parse_storage_create_validator_account(
     matches: &ArgMatches<'_>,
-) -> Result<(CliCommand, bool), CliError> {
+) -> Result<CliCommandInfo, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-    Ok((
-        CliCommand::CreateStorageAccount {
+    Ok(CliCommandInfo {
+        command: CliCommand::CreateStorageAccount {
             account_owner,
             storage_account_pubkey,
             account_type: StorageAccountType::Validator,
         },
-        true,
-    ))
+        require_keypair: true,
+    })
 }
 
-pub fn parse_storage_claim_reward(
-    matches: &ArgMatches<'_>,
-) -> Result<(CliCommand, bool), CliError> {
+pub fn parse_storage_claim_reward(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let node_account_pubkey = pubkey_of(matches, "node_account_pubkey").unwrap();
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-    Ok((
-        CliCommand::ClaimStorageReward {
+    Ok(CliCommandInfo {
+        command: CliCommand::ClaimStorageReward {
             node_account_pubkey,
             storage_account_pubkey,
         },
-        true,
-    ))
+        require_keypair: true,
+    })
 }
 
 pub fn parse_storage_get_account_command(
     matches: &ArgMatches<'_>,
-) -> Result<(CliCommand, bool), CliError> {
+) -> Result<CliCommandInfo, CliError> {
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
-    Ok((
-        CliCommand::ShowStorageAccount(storage_account_pubkey),
-        false,
-    ))
+    Ok(CliCommandInfo {
+        command: CliCommand::ShowStorageAccount(storage_account_pubkey),
+        require_keypair: false,
+    })
 }
 
 pub fn process_create_storage_account(
@@ -245,14 +243,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_create_archiver_storage_account).unwrap(),
-            (
-                CliCommand::CreateStorageAccount {
+            CliCommandInfo {
+                command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
                     storage_account_pubkey,
                     account_type: StorageAccountType::Archiver,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
 
         let test_create_validator_storage_account = test_commands.clone().get_matches_from(vec![
@@ -263,14 +261,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_create_validator_storage_account).unwrap(),
-            (
-                CliCommand::CreateStorageAccount {
+            CliCommandInfo {
+                command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
                     storage_account_pubkey,
                     account_type: StorageAccountType::Validator,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
 
         let test_claim_storage_reward = test_commands.clone().get_matches_from(vec![
@@ -281,13 +279,13 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_claim_storage_reward).unwrap(),
-            (
-                CliCommand::ClaimStorageReward {
+            CliCommandInfo {
+                command: CliCommand::ClaimStorageReward {
                     node_account_pubkey: pubkey,
                     storage_account_pubkey,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
     }
     // TODO: Add process tests

@@ -1,7 +1,8 @@
 use crate::{
     cli::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys,
-        log_instruction_custom_error, CliCommand, CliConfig, CliError, ProcessResult,
+        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+        ProcessResult,
     },
     input_parsers::*,
     input_validators::*,
@@ -159,53 +160,57 @@ impl VoteSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<(CliCommand, bool), CliError> {
+pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
     let commission = value_of(&matches, "commission").unwrap_or(0);
     let authorized_voter = pubkey_of(matches, "authorized_voter");
     let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer");
 
-    Ok((
-        CliCommand::CreateVoteAccount {
+    Ok(CliCommandInfo {
+        command: CliCommand::CreateVoteAccount {
             vote_account_pubkey,
             node_pubkey,
             authorized_voter,
             authorized_withdrawer,
             commission,
         },
-        true,
-    ))
+        require_keypair: true,
+    })
 }
 
 pub fn parse_vote_authorize(
     matches: &ArgMatches<'_>,
     vote_authorize: VoteAuthorize,
-) -> Result<(CliCommand, bool), CliError> {
+) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let new_authorized_pubkey = pubkey_of(matches, "new_authorized_pubkey").unwrap();
 
-    Ok((
-        CliCommand::VoteAuthorize(vote_account_pubkey, new_authorized_pubkey, vote_authorize),
-        true,
-    ))
+    Ok(CliCommandInfo {
+        command: CliCommand::VoteAuthorize(
+            vote_account_pubkey,
+            new_authorized_pubkey,
+            vote_authorize,
+        ),
+        require_keypair: true,
+    })
 }
 
 pub fn parse_vote_get_account_command(
     matches: &ArgMatches<'_>,
-) -> Result<(CliCommand, bool), CliError> {
+) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let use_lamports_unit = matches.is_present("lamports");
-    Ok((
-        CliCommand::ShowVoteAccount {
+    Ok(CliCommandInfo {
+        command: CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
         },
-        false,
-    ))
+        require_keypair: false,
+    })
 }
 
-pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<(CliCommand, bool), CliError> {
+pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let aggregate = matches.is_present("aggregate");
     let span = if matches.is_present("span") {
@@ -213,14 +218,14 @@ pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<(CliCommand
     } else {
         None
     };
-    Ok((
-        CliCommand::Uptime {
+    Ok(CliCommandInfo {
+        command: CliCommand::Uptime {
             pubkey: vote_account_pubkey,
             aggregate,
             span,
         },
-        false,
-    ))
+        require_keypair: false,
+    })
 }
 
 pub fn process_create_vote_account(
@@ -456,10 +461,10 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_authorize_voter).unwrap(),
-            (
-                CliCommand::VoteAuthorize(pubkey, pubkey, VoteAuthorize::Voter),
-                true
-            )
+            CliCommandInfo {
+                command: CliCommand::VoteAuthorize(pubkey, pubkey, VoteAuthorize::Voter),
+                require_keypair: true
+            }
         );
 
         // Test CreateVoteAccount SubCommand
@@ -475,16 +480,16 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_create_vote_account).unwrap(),
-            (
-                CliCommand::CreateVoteAccount {
+            CliCommandInfo {
+                command: CliCommand::CreateVoteAccount {
                     vote_account_pubkey: pubkey,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
                     commission: 10,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
         let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
             "test",
@@ -494,16 +499,16 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_create_vote_account2).unwrap(),
-            (
-                CliCommand::CreateVoteAccount {
+            CliCommandInfo {
+                command: CliCommand::CreateVoteAccount {
                     vote_account_pubkey: pubkey,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
                     commission: 0,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
         // test init with an authed voter
         let authed = Pubkey::new_rand();
@@ -517,16 +522,16 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_create_vote_account3).unwrap(),
-            (
-                CliCommand::CreateVoteAccount {
+            CliCommandInfo {
+                command: CliCommand::CreateVoteAccount {
                     vote_account_pubkey: pubkey,
                     node_pubkey,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
                     commission: 0
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
         // test init with an authed withdrawer
         let test_create_vote_account4 = test_commands.clone().get_matches_from(vec![
@@ -539,16 +544,16 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_create_vote_account4).unwrap(),
-            (
-                CliCommand::CreateVoteAccount {
+            CliCommandInfo {
+                command: CliCommand::CreateVoteAccount {
                     vote_account_pubkey: pubkey,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),
                     commission: 0
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
 
         // Test Uptime Subcommand
@@ -563,14 +568,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&matches).unwrap(),
-            (
-                CliCommand::Uptime {
+            CliCommandInfo {
+                command: CliCommand::Uptime {
                     pubkey,
                     aggregate: true,
                     span: Some(4)
                 },
-                false
-            )
+                require_keypair: false
+            }
         );
     }
     // TODO: Add process tests

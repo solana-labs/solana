@@ -146,6 +146,12 @@ pub enum CliCommand {
     Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
 }
 
+#[derive(Debug, PartialEq)]
+pub struct CliCommandInfo {
+    pub command: CliCommand,
+    pub require_keypair: bool,
+}
+
 #[derive(Debug, Clone)]
 pub enum CliError {
     BadParameter(String),
@@ -199,24 +205,40 @@ impl Default for CliConfig {
     }
 }
 
-pub fn parse_command(
-    matches: &ArgMatches<'_>,
-) -> Result<(CliCommand, bool), Box<dyn error::Error>> {
+pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Cluster Query Commands
-        ("cluster-version", Some(_matches)) => Ok((CliCommand::ClusterVersion, false)),
-        ("fees", Some(_matches)) => Ok((CliCommand::Fees, false)),
-        ("get-epoch-info", Some(_matches)) => Ok((CliCommand::GetEpochInfo, false)),
-        ("get-genesis-blockhash", Some(_matches)) => Ok((CliCommand::GetGenesisBlockhash, false)),
-        ("get-slot", Some(_matches)) => Ok((CliCommand::GetSlot, false)),
-        ("get-transaction-count", Some(_matches)) => Ok((CliCommand::GetTransactionCount, false)),
+        ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::ClusterVersion,
+            require_keypair: false,
+        }),
+        ("fees", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::Fees,
+            require_keypair: false,
+        }),
+        ("get-epoch-info", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetEpochInfo,
+            require_keypair: false,
+        }),
+        ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetGenesisBlockhash,
+            require_keypair: false,
+        }),
+        ("get-slot", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetSlot,
+            require_keypair: false,
+        }),
+        ("get-transaction-count", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetTransactionCount,
+            require_keypair: false,
+        }),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
         ("show-validators", Some(matches)) => parse_show_validators(matches),
         // Program Deployment
-        ("deploy", Some(matches)) => Ok((
-            CliCommand::Deploy(matches.value_of("program_location").unwrap().to_string()),
-            true,
-        )),
+        ("deploy", Some(matches)) => Ok(CliCommandInfo {
+            command: CliCommand::Deploy(matches.value_of("program_location").unwrap().to_string()),
+            require_keypair: true,
+        }),
         // Stake Commands
         ("create-stake-account", Some(matches)) => parse_stake_create_account(matches),
         ("delegate-stake", Some(matches)) => parse_stake_delegate_stake(matches),
@@ -262,7 +284,10 @@ pub fn parse_command(
         ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         // Wallet Commands
-        ("address", Some(_matches)) => Ok((CliCommand::Address, true)),
+        ("address", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::Address,
+            require_keypair: true,
+        }),
         ("airdrop", Some(matches)) => {
             let drone_port = matches
                 .value_of("drone_port")
@@ -288,32 +313,39 @@ pub fn parse_command(
             let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
             let use_lamports_unit = matches.value_of("unit").is_some()
                 && matches.value_of("unit").unwrap() == "lamports";
-            Ok((
-                CliCommand::Airdrop {
+            Ok(CliCommandInfo {
+                command: CliCommand::Airdrop {
                     drone_host,
                     drone_port,
                     lamports,
                     use_lamports_unit,
                 },
-                true,
-            ))
+                require_keypair: true,
+            })
         }
         ("balance", Some(matches)) => {
             let pubkey = pubkey_of(&matches, "pubkey");
-            Ok((
-                CliCommand::Balance {
+            println!("{:?}", pubkey);
+            Ok(CliCommandInfo {
+                command: CliCommand::Balance {
                     pubkey,
                     use_lamports_unit: matches.is_present("lamports"),
                 },
-                pubkey.is_none(),
-            ))
+                require_keypair: pubkey.is_none(),
+            })
         }
         ("cancel", Some(matches)) => {
             let process_id = value_of(matches, "process_id").unwrap();
-            Ok((CliCommand::Cancel(process_id), true))
+            Ok(CliCommandInfo {
+                command: CliCommand::Cancel(process_id),
+                require_keypair: true,
+            })
         }
         ("confirm", Some(matches)) => match matches.value_of("signature").unwrap().parse() {
-            Ok(signature) => Ok((CliCommand::Confirm(signature), false)),
+            Ok(signature) => Ok(CliCommandInfo {
+                command: CliCommand::Confirm(signature),
+                require_keypair: false,
+            }),
             _ => {
                 eprintln!("{}", matches.usage());
                 Err(CliError::BadParameter("Invalid signature".to_string()))
@@ -337,8 +369,8 @@ pub fn parse_command(
             let witnesses = values_of(&matches, "witness");
             let cancelable = matches.is_present("cancelable");
 
-            Ok((
-                CliCommand::Pay {
+            Ok(CliCommandInfo {
+                command: CliCommand::Pay {
                     lamports,
                     to,
                     timestamp,
@@ -346,26 +378,29 @@ pub fn parse_command(
                     witnesses,
                     cancelable,
                 },
-                true,
-            ))
+                require_keypair: true,
+            })
         }
         ("show-account", Some(matches)) => {
             let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
             let output_file = matches.value_of("output_file");
             let use_lamports_unit = matches.is_present("lamports");
-            Ok((
-                CliCommand::ShowAccount {
+            Ok(CliCommandInfo {
+                command: CliCommand::ShowAccount {
                     pubkey: account_pubkey,
                     output_file: output_file.map(ToString::to_string),
                     use_lamports_unit,
                 },
-                false,
-            ))
+                require_keypair: false,
+            })
         }
         ("send-signature", Some(matches)) => {
             let to = value_of(&matches, "to").unwrap();
             let process_id = value_of(&matches, "process_id").unwrap();
-            Ok((CliCommand::Witness(to, process_id), true))
+            Ok(CliCommandInfo {
+                command: CliCommand::Witness(to, process_id),
+                require_keypair: true,
+            })
         }
         ("send-timestamp", Some(matches)) => {
             let to = value_of(&matches, "to").unwrap();
@@ -381,7 +416,10 @@ pub fn parse_command(
             } else {
                 Utc::now()
             };
-            Ok((CliCommand::TimeElapsed(to, process_id, dt), true))
+            Ok(CliCommandInfo {
+                command: CliCommand::TimeElapsed(to, process_id, dt),
+                require_keypair: true,
+            })
         }
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -1415,15 +1453,15 @@ mod tests {
             .get_matches_from(vec!["test", "airdrop", "50", "lamports"]);
         assert_eq!(
             parse_command(&test_airdrop).unwrap(),
-            (
-                CliCommand::Airdrop {
+            CliCommandInfo {
+                command: CliCommand::Airdrop {
                     drone_host: None,
                     drone_port: solana_drone::drone::DRONE_PORT,
                     lamports: 50,
                     use_lamports_unit: true,
                 },
-                true
-            )
+                require_keypair: true,
+            }
         );
 
         // Test Balance Subcommand, incl pubkey and keypair-file inputs
@@ -1437,13 +1475,13 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_balance).unwrap(),
-            (
-                CliCommand::Balance {
+            CliCommandInfo {
+                command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: false
                 },
-                true
-            )
+                require_keypair: false
+            }
         );
         let test_balance = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1453,13 +1491,27 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_balance).unwrap(),
-            (
-                CliCommand::Balance {
+            CliCommandInfo {
+                command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: true
                 },
-                true
-            )
+                require_keypair: false
+            }
+        );
+        let test_balance =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "balance", "--lamports"]);
+        assert_eq!(
+            parse_command(&test_balance).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Balance {
+                    pubkey: None,
+                    use_lamports_unit: true
+                },
+                require_keypair: true
+            }
         );
 
         // Test Cancel Subcommand
@@ -1469,7 +1521,10 @@ mod tests {
                 .get_matches_from(vec!["test", "cancel", &pubkey_string]);
         assert_eq!(
             parse_command(&test_cancel).unwrap(),
-            (CliCommand::Cancel(pubkey), true)
+            CliCommandInfo {
+                command: CliCommand::Cancel(pubkey),
+                require_keypair: true
+            }
         );
 
         // Test Confirm Subcommand
@@ -1481,7 +1536,10 @@ mod tests {
                 .get_matches_from(vec!["test", "confirm", &signature_string]);
         assert_eq!(
             parse_command(&test_confirm).unwrap(),
-            (CliCommand::Confirm(signature), false)
+            CliCommandInfo {
+                command: CliCommand::Confirm(signature),
+                require_keypair: false
+            }
         );
         let test_bad_signature = test_commands
             .clone()
@@ -1495,10 +1553,10 @@ mod tests {
                 .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
         assert_eq!(
             parse_command(&test_deploy).unwrap(),
-            (
-                CliCommand::Deploy("/Users/test/program.o".to_string()),
-                true
-            )
+            CliCommandInfo {
+                command: CliCommand::Deploy("/Users/test/program.o".to_string()),
+                require_keypair: true
+            }
         );
 
         // Test Simple Pay Subcommand
@@ -1511,8 +1569,8 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_pay).unwrap(),
-            (
-                CliCommand::Pay {
+            CliCommandInfo {
+                command: CliCommand::Pay {
                     lamports: 50,
                     to: pubkey,
                     timestamp: None,
@@ -1520,8 +1578,8 @@ mod tests {
                     witnesses: None,
                     cancelable: false,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
 
         // Test Pay Subcommand w/ Witness
@@ -1538,8 +1596,8 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_pay_multiple_witnesses).unwrap(),
-            (
-                CliCommand::Pay {
+            CliCommandInfo {
+                command: CliCommand::Pay {
                     lamports: 50,
                     to: pubkey,
                     timestamp: None,
@@ -1547,8 +1605,8 @@ mod tests {
                     witnesses: Some(vec![witness0, witness1]),
                     cancelable: false,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
         let test_pay_single_witness = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1561,8 +1619,8 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_pay_single_witness).unwrap(),
-            (
-                CliCommand::Pay {
+            CliCommandInfo {
+                command: CliCommand::Pay {
                     lamports: 50,
                     to: pubkey,
                     timestamp: None,
@@ -1570,8 +1628,8 @@ mod tests {
                     witnesses: Some(vec![witness0]),
                     cancelable: false,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
 
         // Test Pay Subcommand w/ Timestamp
@@ -1588,8 +1646,8 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_pay_timestamp).unwrap(),
-            (
-                CliCommand::Pay {
+            CliCommandInfo {
+                command: CliCommand::Pay {
                     lamports: 50,
                     to: pubkey,
                     timestamp: Some(dt),
@@ -1597,8 +1655,8 @@ mod tests {
                     witnesses: None,
                     cancelable: false,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
 
         // Test Send-Signature Subcommand
@@ -1610,7 +1668,10 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_send_signature).unwrap(),
-            (CliCommand::Witness(pubkey, pubkey), true)
+            CliCommandInfo {
+                command: CliCommand::Witness(pubkey, pubkey),
+                require_keypair: true
+            }
         );
         let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1629,8 +1690,8 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_pay_multiple_witnesses).unwrap(),
-            (
-                CliCommand::Pay {
+            CliCommandInfo {
+                command: CliCommand::Pay {
                     lamports: 50,
                     to: pubkey,
                     timestamp: Some(dt),
@@ -1638,8 +1699,8 @@ mod tests {
                     witnesses: Some(vec![witness0, witness1]),
                     cancelable: false,
                 },
-                true
-            )
+                require_keypair: true
+            }
         );
 
         // Test Send-Timestamp Subcommand
@@ -1653,7 +1714,10 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_send_timestamp).unwrap(),
-            (CliCommand::TimeElapsed(pubkey, pubkey, dt), true)
+            CliCommandInfo {
+                command: CliCommand::TimeElapsed(pubkey, pubkey, dt),
+                require_keypair: true
+            }
         );
         let test_bad_timestamp = test_commands.clone().get_matches_from(vec![
             "test",

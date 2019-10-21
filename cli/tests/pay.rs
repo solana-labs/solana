@@ -70,7 +70,7 @@ fn test_cli_timestamp_tx() {
         timestamp: Some(dt),
         timestamp_pubkey: Some(config_witness.keypair.pubkey()),
         witnesses: None,
-        cancelable: None,
+        cancelable: false,
     };
     let sig_response = process_command(&config_payer);
 
@@ -137,7 +137,7 @@ fn test_cli_witness_tx() {
         timestamp: None,
         timestamp_pubkey: None,
         witnesses: Some(vec![config_witness.keypair.pubkey()]),
-        cancelable: None,
+        cancelable: false,
     };
     let sig_response = process_command(&config_payer);
 
@@ -197,7 +197,7 @@ fn test_cli_cancel_tx() {
         timestamp: None,
         timestamp_pubkey: None,
         witnesses: Some(vec![config_witness.keypair.pubkey()]),
-        cancelable: Some(config_payer.keypair.pubkey()),
+        cancelable: true,
     };
     let sig_response = process_command(&config_payer).unwrap();
 
