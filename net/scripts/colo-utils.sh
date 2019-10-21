@@ -86,7 +86,7 @@ colo_instance_run() {
     if [[ "$RC" -ne 0 ]]; then
       echo "IP(${IP}) Err(${RC}) LINE(${LINE})" 1>&2
     fi
-  done <<< "$OUT"
+  done < <(tr -d $'\r' <<<"$OUT")
   return $RC
 }
 
