@@ -46,7 +46,7 @@ def get_packages():
     max_iterations = pow(len(dependency_graph),2)
     while dependency_graph:
         if max_iterations == 0:
-            # TODO: Be more helpful and find the actual cycle for the user
+            # One day be more helpful and find the actual cycle for the user...
             sys.exit('Error: Circular dependency suspected between these packages: {}\n'.format(' '.join(dependency_graph.keys())))
 
         max_iterations -= 1

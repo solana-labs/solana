@@ -20,7 +20,7 @@ Create a new Azure-based "queue=default" agent by running the following command:
 ```
 $ az vm create \
    --resource-group ci \
-   --name XXX \
+   --name XYZ \
    --image boilerplate \
    --admin-username $(whoami) \
    --ssh-key-value ~/.ssh/id_rsa.pub
@@ -42,11 +42,11 @@ Creating a "queue=cuda" agent follows the same process but additionally:
 1. When ready, ssh into the instance and start a root shell with `sudo -i`.  Then
    prepare it for deallocation by running:
    `waagent -deprovision+user; cd /etc; ln -s ../run/systemd/resolve/stub-resolv.conf resolv.conf`
-1. Run `az vm deallocate --resource-group ci --name XXX`
-1. Run `az vm generalize --resource-group ci --name XXX`
-1. Run `az image create --resource-group ci --source XXX --name boilerplate`
+1. Run `az vm deallocate --resource-group ci --name XYZ`
+1. Run `az vm generalize --resource-group ci --name XYZ`
+1. Run `az image create --resource-group ci --source XYZ --name boilerplate`
 1. Goto the `ci` resource group in the Azure portal and remove all resources
-   with the XXX name in them
+   with the XYZ name in them
 
 ## Reference
 
@@ -95,7 +95,7 @@ VM Instances in each group is manually adjusted.
 Each Instance group has its own disk image, `ci-default-vX` and
 `ci-cuda-vY`, where *X* and *Y* are incremented each time the image is changed.
 
-The process to update a disk image is as follows (TODO: make this less manual):
+The manual process to update a disk image is as follows:
 
 1. Create a new VM Instance using the disk image to modify.
 2. Once the VM boots, ssh to it and modify the disk as desired.

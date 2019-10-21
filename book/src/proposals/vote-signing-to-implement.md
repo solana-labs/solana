@@ -17,7 +17,7 @@ The following sections outline how this architecture would work:
 
    * The keypair is ephemeral. A new keypair is generated on node bootup. A
 
-     new keypair might also be generated at runtime based on some TBD
+     new keypair might also be generated at runtime based on some to be determined
 
      criteria.
 
@@ -28,7 +28,7 @@ The following sections outline how this architecture would work:
      signed by a trusted party
 3. The stakeholder of the node grants ephemeral key permission to use its stake.
 
-   This process is TBD.
+   This process is to be determined.
 
 4. The node's untrusted, non-enclave software calls trusted enclave software
 
@@ -40,7 +40,7 @@ The following sections outline how this architecture would work:
 
      presented with some verifiable data to check before signing the vote.
 
-   * The process of generating the verifiable data in untrusted space is TBD
+   * The process of generating the verifiable data in untrusted space is to be determined
 
 ### PoH Verification
 
