@@ -389,6 +389,7 @@ startCommon() {
   fi
   [[ -z "$externalNodeSshKey" ]] || ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
+    --exclude 'net/log' \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
     "$ipAddress":~/solana/
 }
