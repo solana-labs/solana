@@ -29,7 +29,7 @@ fn make_large_unchained_entries(txs_per_entry: u64, num_entries: u64) -> Vec<Ent
 #[bench]
 fn bench_shredder_ticks(bencher: &mut Bencher) {
     let kp = Arc::new(Keypair::new());
-    let shred_size = *SIZE_OF_DATA_SHRED_PAYLOAD;
+    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
     let num_shreds = ((1000 * 1000) + (shred_size - 1)) / shred_size;
     // ~1Mb
     let num_ticks = max_ticks_per_n_shreds(1) * num_shreds as u64;
@@ -43,7 +43,7 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
 #[bench]
 fn bench_shredder_large_entries(bencher: &mut Bencher) {
     let kp = Arc::new(Keypair::new());
-    let shred_size = *SIZE_OF_DATA_SHRED_PAYLOAD;
+    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
     let num_shreds = ((1000 * 1000) + (shred_size - 1)) / shred_size;
     let txs_per_entry = 128;
     let num_entries = max_entries_per_n_shred(&make_test_entry(txs_per_entry), num_shreds as u64);
@@ -58,7 +58,7 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
 #[bench]
 fn bench_deshredder(bencher: &mut Bencher) {
     let kp = Arc::new(Keypair::new());
-    let shred_size = *SIZE_OF_DATA_SHRED_PAYLOAD;
+    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
     // ~10Mb
     let num_shreds = ((10000 * 1000) + (shred_size - 1)) / shred_size;
     let num_ticks = max_ticks_per_n_shreds(1) * num_shreds as u64;
@@ -73,7 +73,7 @@ fn bench_deshredder(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_deserialize_hdr(bencher: &mut Bencher) {
-    let data = vec![0; *SIZE_OF_DATA_SHRED_PAYLOAD];
+    let data = vec![0; SIZE_OF_DATA_SHRED_PAYLOAD];
 
     let shred = Shred::new_from_data(2, 1, 1, Some(&data), true, true);
 

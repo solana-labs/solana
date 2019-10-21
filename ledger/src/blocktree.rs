@@ -588,18 +588,14 @@ impl Blocktree {
         let slot = shred.slot();
         let shred_index = shred.index();
 
-        let (_, num_coding, pos) = shred
-            .coding_params()
-            .expect("should_insert_coding_shred called with non-coding shred");
-
-        if shred_index < u32::from(pos) {
+        if shred.is_data() || shred_index < u32::from(shred.coding_header.position) {
             return false;
         }
 
-        let set_index = shred_index - u32::from(pos);
-        !(num_coding == 0
-            || pos >= num_coding
-            || std::u32::MAX - set_index < u32::from(num_coding) - 1
+        let set_index = shred_index - u32::from(shred.coding_header.position);
+        !(shred.coding_header.num_coding_shreds == 0
+            || shred.coding_header.position >= shred.coding_header.num_coding_shreds
+            || std::u32::MAX - set_index < u32::from(shred.coding_header.num_coding_shreds) - 1
             || coding_index.is_present(u64::from(shred_index))
             || slot <= *last_root.read().unwrap())
     }
@@ -613,21 +609,21 @@ impl Blocktree {
     ) -> Result<()> {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
-        let (num_data, num_coding, pos) = shred
-            .coding_params()
-            .expect("insert_coding_shred called with non-coding shred");
 
         // Assert guaranteed by integrity checks on the shred that happen before
         // `insert_coding_shred` is called
-        if shred_index < u64::from(pos) {
+        if shred.is_data() || shred_index < u64::from(shred.coding_header.position) {
             error!("Due to earlier validation, shred index must be >= pos");
             return Err(BlocktreeError::InvalidShredData(Box::new(
                 bincode::ErrorKind::Custom("shred index < pos".to_string()),
             )));
         }
 
-        let set_index = shred_index - u64::from(pos);
-        let erasure_config = ErasureConfig::new(num_data as usize, num_coding as usize);
+        let set_index = shred_index - u64::from(shred.coding_header.position);
+        let erasure_config = ErasureConfig::new(
+            shred.coding_header.num_data_shreds as usize,
+            shred.coding_header.num_coding_shreds as usize,
+        );
 
         let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
             self.erasure_meta_cf
