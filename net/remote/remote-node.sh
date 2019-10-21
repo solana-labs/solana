@@ -100,7 +100,8 @@ case "$gpuMode" in
 esac
 
 waitForNodeToInit() {
-  echo "--- waiting for node to boot up"
+  hostname=$(hostname)
+  echo "--- waiting for $hostname to boot up"
   SECONDS=
   while [[ ! -r $initCompleteFile ]]; do
     if [[ $SECONDS -ge 120 ]]; then
@@ -108,10 +109,10 @@ waitForNodeToInit() {
       echo "Error: $initCompleteFile not found in $SECONDS seconds"
       exit 1
     fi
-    echo "Waiting for $initCompleteFile ($SECONDS)..."
+    echo "Waiting for $initCompleteFile ($SECONDS) on $hostname..."
     sleep 5
   done
-  echo "Node booted up"
+  echo "$hostname booted up"
 }
 
 case $deployMethod in
