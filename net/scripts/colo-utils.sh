@@ -83,6 +83,9 @@ colo_instance_run() {
   set -e
   while read -r LINE; do
     echo -e "$IP\v$RC\v$LINE"
+    if [[ "$RC" -ne 0 ]]; then
+      echo "IP(${IP}) Err(${RC}) LINE(${LINE})" 1>&2
+    fi
   done <<< "$OUT"
   return $RC
 }
