@@ -1,12 +1,12 @@
 use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 use solana_cli::{
-    cli::{app, parse_command, process_command, CliConfig, CliError},
+    cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliError},
     config::{self, Config},
     display::{println_name_value, println_name_value_or},
     input_validators::is_url,
 };
-use solana_sdk::signature::{read_keypair_file, KeypairUtil};
+use solana_sdk::signature::read_keypair_file;
 use std::error;
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
@@ -18,7 +18,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                 if let Some(field) = subcommand_matches.value_of("specific_setting") {
                     let (value, default_value) = match field {
                         "url" => (config.url, default_cli_config.json_rpc_url),
-                        "keypair" => (config.keypair, default_cli_config.keypair_path),
+                        "keypair" => (config.keypair, default_cli_config.keypair_path.unwrap()),
                         _ => unreachable!(),
                     };
                     println_name_value_or(&format!("* {}:", field), &value, &default_value);
@@ -28,7 +28,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     println_name_value_or(
                         "* keypair:",
                         &config.keypair,
-                        &default_cli_config.keypair_path,
+                        &default_cli_config.keypair_path.unwrap(),
                     );
                 }
             } else {
@@ -80,34 +80,44 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
         default.json_rpc_url
     };
 
-    let keypair_path = if matches.is_present("keypair") {
-        matches.value_of("keypair").unwrap().to_string()
-    } else if config.keypair != "" {
-        config.keypair
+    let CliCommandInfo {
+        command,
+        require_keypair,
+    } = parse_command(&matches)?;
+
+    let (keypair, keypair_path) = if require_keypair {
+        let keypair_path = if matches.is_present("keypair") {
+            matches.value_of("keypair").unwrap().to_string()
+        } else if config.keypair != "" {
+            config.keypair
+        } else {
+            let default = CliConfig::default();
+            let maybe_keypair_path = default.keypair_path.unwrap();
+            if !std::path::Path::new(&maybe_keypair_path).exists() {
+                return Err(CliError::KeypairFileNotFound(
+                    "Generate a new keypair with `solana-keygen new`".to_string(),
+                )
+                .into());
+            }
+            maybe_keypair_path
+        };
+        let keypair = read_keypair_file(&keypair_path).or_else(|err| {
+            Err(CliError::BadParameter(format!(
+                "{}: Unable to open keypair file: {}",
+                err, keypair_path
+            )))
+        })?;
+        (keypair, Some(keypair_path.to_string()))
     } else {
         let default = CliConfig::default();
-        if !std::path::Path::new(&default.keypair_path).exists() {
-            return Err(CliError::KeypairFileNotFound(
-                "Generate a new keypair with `solana-keygen new`".to_string(),
-            )
-            .into());
-        }
-        default.keypair_path
+        (default.keypair, None)
     };
-    let keypair = read_keypair_file(&keypair_path).or_else(|err| {
-        Err(CliError::BadParameter(format!(
-            "{}: Unable to open keypair file: {}",
-            err, keypair_path
-        )))
-    })?;
-
-    let command = parse_command(&keypair.pubkey(), &matches)?;
 
     Ok(CliConfig {
         command,
         json_rpc_url,
         keypair,
-        keypair_path: keypair_path.to_string(),
+        keypair_path,
         rpc_client: None,
     })
 }

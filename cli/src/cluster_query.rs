@@ -1,7 +1,7 @@
 use crate::{
     cli::{
-        build_balance_message, check_account_for_fee, CliCommand, CliConfig, CliError,
-        ProcessResult,
+        build_balance_message, check_account_for_fee, CliCommand, CliCommandInfo, CliConfig,
+        CliError, ProcessResult,
     },
     display::println_name_value,
 };
@@ -88,7 +88,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
+pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let count = if matches.is_present("count") {
         Some(value_t_or_exit!(matches, "count", u64))
@@ -96,17 +96,23 @@ pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommand, CliErr
         None
     };
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
-    Ok(CliCommand::Ping {
-        interval,
-        count,
-        timeout,
+    Ok(CliCommandInfo {
+        command: CliCommand::Ping {
+            interval,
+            count,
+            timeout,
+        },
+        require_keypair: true,
     })
 }
 
-pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
+pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
 
-    Ok(CliCommand::ShowValidators { use_lamports_unit })
+    Ok(CliCommandInfo {
+        command: CliCommand::ShowValidators { use_lamports_unit },
+        require_keypair: false,
+    })
 }
 
 pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
@@ -358,68 +364,87 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
-        let pubkey = Pubkey::new_rand();
 
         let test_cluster_version = test_commands
             .clone()
             .get_matches_from(vec!["test", "cluster-version"]);
         assert_eq!(
-            parse_command(&pubkey, &test_cluster_version).unwrap(),
-            CliCommand::ClusterVersion
+            parse_command(&test_cluster_version).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ClusterVersion,
+                require_keypair: false
+            }
         );
 
         let test_fees = test_commands.clone().get_matches_from(vec!["test", "fees"]);
         assert_eq!(
-            parse_command(&pubkey, &test_fees).unwrap(),
-            CliCommand::Fees
+            parse_command(&test_fees).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Fees,
+                require_keypair: false
+            }
         );
 
         let test_get_epoch_info = test_commands
             .clone()
             .get_matches_from(vec!["test", "get-epoch-info"]);
         assert_eq!(
-            parse_command(&pubkey, &test_get_epoch_info).unwrap(),
-            CliCommand::GetEpochInfo
+            parse_command(&test_get_epoch_info).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::GetEpochInfo,
+                require_keypair: false
+            }
         );
 
         let test_get_genesis_blockhash = test_commands
             .clone()
             .get_matches_from(vec!["test", "get-genesis-blockhash"]);
         assert_eq!(
-            parse_command(&pubkey, &test_get_genesis_blockhash).unwrap(),
-            CliCommand::GetGenesisBlockhash
+            parse_command(&test_get_genesis_blockhash).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::GetGenesisBlockhash,
+                require_keypair: false
+            }
         );
 
         let test_get_slot = test_commands
             .clone()
             .get_matches_from(vec!["test", "get-slot"]);
         assert_eq!(
-            parse_command(&pubkey, &test_get_slot).unwrap(),
-            CliCommand::GetSlot
+            parse_command(&test_get_slot).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::GetSlot,
+                require_keypair: false
+            }
         );
 
         let test_transaction_count = test_commands
             .clone()
             .get_matches_from(vec!["test", "get-transaction-count"]);
         assert_eq!(
-            parse_command(&pubkey, &test_transaction_count).unwrap(),
-            CliCommand::GetTransactionCount
+            parse_command(&test_transaction_count).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::GetTransactionCount,
+                require_keypair: false
+            }
         );
 
         let test_ping = test_commands
             .clone()
             .get_matches_from(vec!["test", "ping", "-i", "1", "-c", "2", "-t", "3"]);
         assert_eq!(
-            parse_command(&pubkey, &test_ping).unwrap(),
-            CliCommand::Ping {
-                interval: Duration::from_secs(1),
-                count: Some(2),
-                timeout: Duration::from_secs(3),
+            parse_command(&test_ping).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Ping {
+                    interval: Duration::from_secs(1),
+                    count: Some(2),
+                    timeout: Duration::from_secs(3),
+                },
+                require_keypair: true
             }
         );
     }

@@ -6,7 +6,7 @@ use chrono::prelude::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
-use serde_json::{self, json};
+use serde_json::{self, json, Value};
 use solana_budget_api::budget_instruction::{self, BudgetError};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
@@ -28,9 +28,9 @@ use solana_sdk::{
     system_transaction,
     transaction::{Transaction, TransactionError},
 };
-use solana_stake_api::stake_state::{Authorized, Lockup, StakeAuthorize};
+use solana_stake_api::stake_state::{Lockup, StakeAuthorize};
 use solana_storage_api::storage_instruction::StorageAccountType;
-use solana_vote_api::vote_state::{VoteAuthorize, VoteInit};
+use solana_vote_api::vote_state::VoteAuthorize;
 use std::{
     fs::File,
     io::{Read, Write},
@@ -63,7 +63,13 @@ pub enum CliCommand {
     // Program Deployment
     Deploy(String),
     // Stake Commands
-    CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
+    CreateStakeAccount {
+        stake_account_pubkey: Pubkey,
+        staker: Option<Pubkey>,
+        withdrawer: Option<Pubkey>,
+        lockup: Lockup,
+        lamports: u64,
+    },
     DeactivateStake(Pubkey),
     DelegateStake(Pubkey, Pubkey, bool),
     RedeemVoteCredits(Pubkey, Pubkey),
@@ -86,9 +92,19 @@ pub enum CliCommand {
     ShowStorageAccount(Pubkey),
     // Validator Info Commands
     GetValidatorInfo(Option<Pubkey>),
-    SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
+    SetValidatorInfo {
+        validator_info: Value,
+        force_keybase: bool,
+        info_pubkey: Option<Pubkey>,
+    },
     // Vote Commands
-    CreateVoteAccount(Pubkey, VoteInit),
+    CreateVoteAccount {
+        vote_account_pubkey: Pubkey,
+        node_pubkey: Pubkey,
+        authorized_voter: Option<Pubkey>,
+        authorized_withdrawer: Option<Pubkey>,
+        commission: u8,
+    },
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
@@ -108,7 +124,7 @@ pub enum CliCommand {
         use_lamports_unit: bool,
     },
     Balance {
-        pubkey: Pubkey,
+        pubkey: Option<Pubkey>,
         use_lamports_unit: bool,
     },
     Cancel(Pubkey),
@@ -119,7 +135,7 @@ pub enum CliCommand {
         timestamp: Option<DateTime<Utc>>,
         timestamp_pubkey: Option<Pubkey>,
         witnesses: Option<Vec<Pubkey>>,
-        cancelable: Option<Pubkey>,
+        cancelable: bool,
     },
     ShowAccount {
         pubkey: Pubkey,
@@ -128,6 +144,12 @@ pub enum CliCommand {
     },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CliCommandInfo {
+    pub command: CliCommand,
+    pub require_keypair: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -161,7 +183,7 @@ pub struct CliConfig {
     pub command: CliCommand,
     pub json_rpc_url: String,
     pub keypair: Keypair,
-    pub keypair_path: String,
+    pub keypair_path: Option<String>,
     pub rpc_client: Option<RpcClient>,
 }
 
@@ -172,40 +194,53 @@ impl Default for CliConfig {
 
         CliConfig {
             command: CliCommand::Balance {
-                pubkey: Pubkey::default(),
+                pubkey: Some(Pubkey::default()),
                 use_lamports_unit: false,
             },
             json_rpc_url: "http://127.0.0.1:8899".to_string(),
             keypair: Keypair::new(),
-            keypair_path: keypair_path.to_str().unwrap().to_string(),
+            keypair_path: Some(keypair_path.to_str().unwrap().to_string()),
             rpc_client: None,
         }
     }
 }
 
-pub fn parse_command(
-    pubkey: &Pubkey,
-    matches: &ArgMatches<'_>,
-) -> Result<CliCommand, Box<dyn error::Error>> {
+pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Cluster Query Commands
-        ("cluster-version", Some(_matches)) => Ok(CliCommand::ClusterVersion),
-        ("fees", Some(_fees_matches)) => Ok(CliCommand::Fees),
-        ("get-epoch-info", Some(_matches)) => Ok(CliCommand::GetEpochInfo),
-        ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommand::GetGenesisBlockhash),
-        ("get-slot", Some(_matches)) => Ok(CliCommand::GetSlot),
-        ("get-transaction-count", Some(_matches)) => Ok(CliCommand::GetTransactionCount),
+        ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::ClusterVersion,
+            require_keypair: false,
+        }),
+        ("fees", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::Fees,
+            require_keypair: false,
+        }),
+        ("get-epoch-info", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetEpochInfo,
+            require_keypair: false,
+        }),
+        ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetGenesisBlockhash,
+            require_keypair: false,
+        }),
+        ("get-slot", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetSlot,
+            require_keypair: false,
+        }),
+        ("get-transaction-count", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetTransactionCount,
+            require_keypair: false,
+        }),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
         ("show-validators", Some(matches)) => parse_show_validators(matches),
         // Program Deployment
-        ("deploy", Some(deploy_matches)) => Ok(CliCommand::Deploy(
-            deploy_matches
-                .value_of("program_location")
-                .unwrap()
-                .to_string(),
-        )),
+        ("deploy", Some(matches)) => Ok(CliCommandInfo {
+            command: CliCommand::Deploy(matches.value_of("program_location").unwrap().to_string()),
+            require_keypair: true,
+        }),
         // Stake Commands
-        ("create-stake-account", Some(matches)) => parse_stake_create_account(pubkey, matches),
+        ("create-stake-account", Some(matches)) => parse_stake_create_account(matches),
         ("delegate-stake", Some(matches)) => parse_stake_delegate_stake(matches),
         ("withdraw-stake", Some(matches)) => parse_stake_withdraw_stake(matches),
         ("deactivate-stake", Some(matches)) => parse_stake_deactivate_stake(matches),
@@ -228,7 +263,7 @@ pub fn parse_command(
         ("show-storage-account", Some(matches)) => parse_storage_get_account_command(matches),
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
-            ("publish", Some(matches)) => parse_validator_info_command(matches, pubkey),
+            ("publish", Some(matches)) => parse_validator_info_command(matches),
             ("get", Some(matches)) => parse_get_validator_info_command(matches),
             ("", None) => {
                 eprintln!("{}", matches.usage());
@@ -239,7 +274,7 @@ pub fn parse_command(
             _ => unreachable!(),
         },
         // Vote Commands
-        ("create-vote-account", Some(matches)) => parse_vote_create_account(pubkey, matches),
+        ("create-vote-account", Some(matches)) => parse_vote_create_account(matches),
         ("vote-authorize-voter", Some(matches)) => {
             parse_vote_authorize(matches, VoteAuthorize::Voter)
         }
@@ -249,9 +284,12 @@ pub fn parse_command(
         ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         // Wallet Commands
-        ("address", Some(_address_matches)) => Ok(CliCommand::Address),
-        ("airdrop", Some(airdrop_matches)) => {
-            let drone_port = airdrop_matches
+        ("address", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::Address,
+            require_keypair: true,
+        }),
+        ("airdrop", Some(matches)) => {
+            let drone_port = matches
                 .value_of("drone_port")
                 .unwrap()
                 .parse()
@@ -272,102 +310,116 @@ pub fn parse_command(
             } else {
                 None
             };
-            let lamports = amount_of(airdrop_matches, "amount", "unit").expect("Invalid amount");
-            let use_lamports_unit = airdrop_matches.value_of("unit").is_some()
-                && airdrop_matches.value_of("unit").unwrap() == "lamports";
-            Ok(CliCommand::Airdrop {
-                drone_host,
-                drone_port,
-                lamports,
-                use_lamports_unit,
+            let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+            let use_lamports_unit = matches.value_of("unit").is_some()
+                && matches.value_of("unit").unwrap() == "lamports";
+            Ok(CliCommandInfo {
+                command: CliCommand::Airdrop {
+                    drone_host,
+                    drone_port,
+                    lamports,
+                    use_lamports_unit,
+                },
+                require_keypair: true,
             })
         }
-        ("balance", Some(balance_matches)) => {
-            let pubkey = pubkey_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
-            let use_lamports_unit = balance_matches.is_present("lamports");
-            Ok(CliCommand::Balance {
-                pubkey,
-                use_lamports_unit,
+        ("balance", Some(matches)) => {
+            let pubkey = pubkey_of(&matches, "pubkey");
+            println!("{:?}", pubkey);
+            Ok(CliCommandInfo {
+                command: CliCommand::Balance {
+                    pubkey,
+                    use_lamports_unit: matches.is_present("lamports"),
+                },
+                require_keypair: pubkey.is_none(),
             })
         }
-        ("cancel", Some(cancel_matches)) => {
-            let process_id = value_of(cancel_matches, "process_id").unwrap();
-            Ok(CliCommand::Cancel(process_id))
+        ("cancel", Some(matches)) => {
+            let process_id = value_of(matches, "process_id").unwrap();
+            Ok(CliCommandInfo {
+                command: CliCommand::Cancel(process_id),
+                require_keypair: true,
+            })
         }
-        ("confirm", Some(confirm_matches)) => {
-            match confirm_matches.value_of("signature").unwrap().parse() {
-                Ok(signature) => Ok(CliCommand::Confirm(signature)),
-                _ => {
-                    eprintln!("{}", confirm_matches.usage());
-                    Err(CliError::BadParameter("Invalid signature".to_string()))
-                }
+        ("confirm", Some(matches)) => match matches.value_of("signature").unwrap().parse() {
+            Ok(signature) => Ok(CliCommandInfo {
+                command: CliCommand::Confirm(signature),
+                require_keypair: false,
+            }),
+            _ => {
+                eprintln!("{}", matches.usage());
+                Err(CliError::BadParameter("Invalid signature".to_string()))
             }
-        }
-        ("pay", Some(pay_matches)) => {
-            let lamports = amount_of(pay_matches, "amount", "unit").expect("Invalid amount");
-            let to = value_of(&pay_matches, "to").unwrap_or(*pubkey);
-            let timestamp = if pay_matches.is_present("timestamp") {
+        },
+        ("pay", Some(matches)) => {
+            let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+            let to = value_of(&matches, "to").unwrap();
+            let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
-                let date_string = if !pay_matches.value_of("timestamp").unwrap().contains('Z') {
-                    format!("\"{}Z\"", pay_matches.value_of("timestamp").unwrap())
+                let date_string = if !matches.value_of("timestamp").unwrap().contains('Z') {
+                    format!("\"{}Z\"", matches.value_of("timestamp").unwrap())
                 } else {
-                    format!("\"{}\"", pay_matches.value_of("timestamp").unwrap())
+                    format!("\"{}\"", matches.value_of("timestamp").unwrap())
                 };
                 Some(serde_json::from_str(&date_string)?)
             } else {
                 None
             };
-            let timestamp_pubkey = value_of(&pay_matches, "timestamp_pubkey");
-            let witnesses = values_of(&pay_matches, "witness");
-            let cancelable = if pay_matches.is_present("cancelable") {
-                Some(*pubkey)
-            } else {
-                None
-            };
+            let timestamp_pubkey = value_of(&matches, "timestamp_pubkey");
+            let witnesses = values_of(&matches, "witness");
+            let cancelable = matches.is_present("cancelable");
 
-            Ok(CliCommand::Pay {
-                lamports,
-                to,
-                timestamp,
-                timestamp_pubkey,
-                witnesses,
-                cancelable,
+            Ok(CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports,
+                    to,
+                    timestamp,
+                    timestamp_pubkey,
+                    witnesses,
+                    cancelable,
+                },
+                require_keypair: true,
             })
         }
         ("show-account", Some(matches)) => {
             let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
             let output_file = matches.value_of("output_file");
             let use_lamports_unit = matches.is_present("lamports");
-            Ok(CliCommand::ShowAccount {
-                pubkey: account_pubkey,
-                output_file: output_file.map(ToString::to_string),
-                use_lamports_unit,
+            Ok(CliCommandInfo {
+                command: CliCommand::ShowAccount {
+                    pubkey: account_pubkey,
+                    output_file: output_file.map(ToString::to_string),
+                    use_lamports_unit,
+                },
+                require_keypair: false,
             })
         }
-        ("send-signature", Some(sig_matches)) => {
-            let to = value_of(&sig_matches, "to").unwrap();
-            let process_id = value_of(&sig_matches, "process_id").unwrap();
-            Ok(CliCommand::Witness(to, process_id))
+        ("send-signature", Some(matches)) => {
+            let to = value_of(&matches, "to").unwrap();
+            let process_id = value_of(&matches, "process_id").unwrap();
+            Ok(CliCommandInfo {
+                command: CliCommand::Witness(to, process_id),
+                require_keypair: true,
+            })
         }
-        ("send-timestamp", Some(timestamp_matches)) => {
-            let to = value_of(&timestamp_matches, "to").unwrap();
-            let process_id = value_of(&timestamp_matches, "process_id").unwrap();
-            let dt = if timestamp_matches.is_present("datetime") {
+        ("send-timestamp", Some(matches)) => {
+            let to = value_of(&matches, "to").unwrap();
+            let process_id = value_of(&matches, "process_id").unwrap();
+            let dt = if matches.is_present("datetime") {
                 // Parse input for serde_json
-                let date_string = if !timestamp_matches
-                    .value_of("datetime")
-                    .unwrap()
-                    .contains('Z')
-                {
-                    format!("\"{}Z\"", timestamp_matches.value_of("datetime").unwrap())
+                let date_string = if !matches.value_of("datetime").unwrap().contains('Z') {
+                    format!("\"{}Z\"", matches.value_of("datetime").unwrap())
                 } else {
-                    format!("\"{}\"", timestamp_matches.value_of("datetime").unwrap())
+                    format!("\"{}\"", matches.value_of("datetime").unwrap())
                 };
                 serde_json::from_str(&date_string)?
             } else {
                 Utc::now()
             };
-            Ok(CliCommand::TimeElapsed(to, process_id, dt))
+            Ok(CliCommandInfo {
+                command: CliCommand::TimeElapsed(to, process_id, dt),
+                require_keypair: true,
+            })
         }
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -457,11 +509,13 @@ fn process_airdrop(
 }
 
 fn process_balance(
-    pubkey: &Pubkey,
     rpc_client: &RpcClient,
+    config: &CliConfig,
+    pubkey: &Option<Pubkey>,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(pubkey, 5)?;
+    let pubkey = pubkey.unwrap_or(config.keypair.pubkey());
+    let balance = rpc_client.retry_get_balance(&pubkey, 5)?;
     match balance {
         Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit)),
         None => Err(
@@ -600,13 +654,19 @@ fn process_pay(
     timestamp: Option<DateTime<Utc>>,
     timestamp_pubkey: Option<Pubkey>,
     witnesses: &Option<Vec<Pubkey>>,
-    cancelable: Option<Pubkey>,
+    cancelable: bool,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (to, "to".to_string()),
     )?;
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let cancelable = if cancelable {
+        Some(config.keypair.pubkey())
+    } else {
+        None
+    };
 
     if timestamp == None && *witnesses == None {
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
@@ -725,7 +785,9 @@ fn process_witness(
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
-    println_name_value("Keypair:", &config.keypair_path);
+    if let Some(keypair_path) = &config.keypair_path {
+        println_name_value("Keypair:", keypair_path);
+    }
     if let CliCommand::Address = config.command {
         // Get address of this client
         return Ok(format!("{}", config.keypair.pubkey()));
@@ -770,16 +832,21 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Stake Commands
 
         // Create stake account
-        CliCommand::CreateStakeAccount(stake_account_pubkey, authorized, lockup, lamports) => {
-            process_create_stake_account(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &authorized,
-                lockup,
-                *lamports,
-            )
-        }
+        CliCommand::CreateStakeAccount {
+            stake_account_pubkey,
+            staker,
+            withdrawer,
+            lockup,
+            lamports,
+        } => process_create_stake_account(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            staker,
+            withdrawer,
+            lockup,
+            *lamports,
+        ),
         // Deactivate stake account
         CliCommand::DeactivateStake(stake_account_pubkey) => {
             process_deactivate_stake_account(&rpc_client, config, &stake_account_pubkey)
@@ -866,16 +933,36 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_get_validator_info(&rpc_client, *info_pubkey)
         }
         // Publish validator info
-        CliCommand::SetValidatorInfo(validator_info, info_pubkey) => {
-            process_set_validator_info(&rpc_client, config, &validator_info, *info_pubkey)
-        }
+        CliCommand::SetValidatorInfo {
+            validator_info,
+            force_keybase,
+            info_pubkey,
+        } => process_set_validator_info(
+            &rpc_client,
+            config,
+            &validator_info,
+            *force_keybase,
+            *info_pubkey,
+        ),
 
         // Vote Commands
 
         // Create vote account
-        CliCommand::CreateVoteAccount(vote_account_pubkey, vote_init) => {
-            process_create_vote_account(&rpc_client, config, &vote_account_pubkey, &vote_init)
-        }
+        CliCommand::CreateVoteAccount {
+            vote_account_pubkey,
+            node_pubkey,
+            authorized_voter,
+            authorized_withdrawer,
+            commission,
+        } => process_create_vote_account(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            &node_pubkey,
+            authorized_voter,
+            authorized_withdrawer,
+            *commission,
+        ),
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
@@ -937,7 +1024,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Balance {
             pubkey,
             use_lamports_unit,
-        } => process_balance(&pubkey, &rpc_client, *use_lamports_unit),
+        } => process_balance(&rpc_client, config, &pubkey, *use_lamports_unit),
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
@@ -1311,78 +1398,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("validator-info")
-                .about("Publish/get Validator info on Solana")
-                .subcommand(
-                    SubCommand::with_name("publish")
-                        .about("Publish Validator info on Solana")
-                        .arg(
-                            Arg::with_name("info_pubkey")
-                                .short("p")
-                                .long("info-pubkey")
-                                .value_name("PUBKEY")
-                                .takes_value(true)
-                                .validator(is_pubkey)
-                                .help("The pubkey of the Validator info account to update"),
-                        )
-                        .arg(
-                            Arg::with_name("name")
-                                .index(1)
-                                .value_name("NAME")
-                                .takes_value(true)
-                                .required(true)
-                                .validator(is_short_field)
-                                .help("Validator name"),
-                        )
-                        .arg(
-                            Arg::with_name("website")
-                                .short("w")
-                                .long("website")
-                                .value_name("URL")
-                                .takes_value(true)
-                                .validator(check_url)
-                                .help("Validator website url"),
-                        )
-                        .arg(
-                            Arg::with_name("keybase_username")
-                                .short("n")
-                                .long("keybase")
-                                .value_name("USERNAME")
-                                .takes_value(true)
-                                .validator(is_short_field)
-                                .help("Validator Keybase username"),
-                        )
-                        .arg(
-                            Arg::with_name("details")
-                                .short("d")
-                                .long("details")
-                                .value_name("DETAILS")
-                                .takes_value(true)
-                                .validator(check_details_length)
-                                .help("Validator description")
-                        )
-                        .arg(
-                            Arg::with_name("force")
-                                .long("force")
-                                .takes_value(false)
-                                .hidden(true) // Don't document this argument to discourage its use
-                                .help("Override keybase username validity check"),
-                        ),
-                )
-                .subcommand(
-                    SubCommand::with_name("get")
-                        .about("Get and parse Solana Validator info")
-                        .arg(
-                            Arg::with_name("info_pubkey")
-                                .index(1)
-                                .value_name("PUBKEY")
-                                .takes_value(true)
-                                .validator(is_pubkey)
-                                .help("The pubkey of the Validator info account; without this argument, returns all"),
-                        ),
-                )
-        )
+        .validator_info_subcommands()
         .vote_subcommands()
 }
 
@@ -1416,8 +1432,7 @@ mod tests {
     fn test_bad_amount() {
         let test_commands = app("test", "desc", "version");
         let test_bad_airdrop = test_commands.get_matches_from(vec!["test", "airdrop", "notint"]);
-        let pubkey = Pubkey::new_rand();
-        let _ignored = parse_command(&pubkey, &test_bad_airdrop).unwrap();
+        let _ignored = parse_command(&test_bad_airdrop).unwrap();
     }
 
     #[test]
@@ -1437,12 +1452,15 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "airdrop", "50", "lamports"]);
         assert_eq!(
-            parse_command(&pubkey, &test_airdrop).unwrap(),
-            CliCommand::Airdrop {
-                drone_host: None,
-                drone_port: solana_drone::drone::DRONE_PORT,
-                lamports: 50,
-                use_lamports_unit: true,
+            parse_command(&test_airdrop).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Airdrop {
+                    drone_host: None,
+                    drone_port: solana_drone::drone::DRONE_PORT,
+                    lamports: 50,
+                    use_lamports_unit: true,
+                },
+                require_keypair: true,
             }
         );
 
@@ -1456,10 +1474,13 @@ mod tests {
             &keypair.pubkey().to_string(),
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_balance).unwrap(),
-            CliCommand::Balance {
-                pubkey: keypair.pubkey(),
-                use_lamports_unit: false
+            parse_command(&test_balance).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Balance {
+                    pubkey: Some(keypair.pubkey()),
+                    use_lamports_unit: false
+                },
+                require_keypair: false
             }
         );
         let test_balance = test_commands.clone().get_matches_from(vec![
@@ -1469,10 +1490,27 @@ mod tests {
             "--lamports",
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_balance).unwrap(),
-            CliCommand::Balance {
-                pubkey: keypair.pubkey(),
-                use_lamports_unit: true
+            parse_command(&test_balance).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Balance {
+                    pubkey: Some(keypair.pubkey()),
+                    use_lamports_unit: true
+                },
+                require_keypair: false
+            }
+        );
+        let test_balance =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "balance", "--lamports"]);
+        assert_eq!(
+            parse_command(&test_balance).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Balance {
+                    pubkey: None,
+                    use_lamports_unit: true
+                },
+                require_keypair: true
             }
         );
 
@@ -1482,8 +1520,11 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "cancel", &pubkey_string]);
         assert_eq!(
-            parse_command(&pubkey, &test_cancel).unwrap(),
-            CliCommand::Cancel(pubkey)
+            parse_command(&test_cancel).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Cancel(pubkey),
+                require_keypair: true
+            }
         );
 
         // Test Confirm Subcommand
@@ -1494,13 +1535,16 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "confirm", &signature_string]);
         assert_eq!(
-            parse_command(&pubkey, &test_confirm).unwrap(),
-            CliCommand::Confirm(signature)
+            parse_command(&test_confirm).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Confirm(signature),
+                require_keypair: false
+            }
         );
         let test_bad_signature = test_commands
             .clone()
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
-        assert!(parse_command(&pubkey, &test_bad_signature).is_err());
+        assert!(parse_command(&test_bad_signature).is_err());
 
         // Test Deploy Subcommand
         let test_deploy =
@@ -1508,8 +1552,11 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
         assert_eq!(
-            parse_command(&pubkey, &test_deploy).unwrap(),
-            CliCommand::Deploy("/Users/test/program.o".to_string())
+            parse_command(&test_deploy).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Deploy("/Users/test/program.o".to_string()),
+                require_keypair: true
+            }
         );
 
         // Test Simple Pay Subcommand
@@ -1521,14 +1568,17 @@ mod tests {
             "lamports",
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_pay).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: None,
-                timestamp_pubkey: None,
-                witnesses: None,
-                cancelable: None
+            parse_command(&test_pay).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: None,
+                    timestamp_pubkey: None,
+                    witnesses: None,
+                    cancelable: false,
+                },
+                require_keypair: true
             }
         );
 
@@ -1545,14 +1595,17 @@ mod tests {
             &witness1_string,
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_pay_multiple_witnesses).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: None,
-                timestamp_pubkey: None,
-                witnesses: Some(vec![witness0, witness1]),
-                cancelable: None
+            parse_command(&test_pay_multiple_witnesses).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: None,
+                    timestamp_pubkey: None,
+                    witnesses: Some(vec![witness0, witness1]),
+                    cancelable: false,
+                },
+                require_keypair: true
             }
         );
         let test_pay_single_witness = test_commands.clone().get_matches_from(vec![
@@ -1565,14 +1618,17 @@ mod tests {
             &witness0_string,
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_pay_single_witness).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: None,
-                timestamp_pubkey: None,
-                witnesses: Some(vec![witness0]),
-                cancelable: None
+            parse_command(&test_pay_single_witness).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: None,
+                    timestamp_pubkey: None,
+                    witnesses: Some(vec![witness0]),
+                    cancelable: false,
+                },
+                require_keypair: true
             }
         );
 
@@ -1589,14 +1645,17 @@ mod tests {
             &witness0_string,
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_pay_timestamp).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: Some(dt),
-                timestamp_pubkey: Some(witness0),
-                witnesses: None,
-                cancelable: None
+            parse_command(&test_pay_timestamp).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: Some(dt),
+                    timestamp_pubkey: Some(witness0),
+                    witnesses: None,
+                    cancelable: false,
+                },
+                require_keypair: true
             }
         );
 
@@ -1608,8 +1667,11 @@ mod tests {
             &pubkey_string,
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_send_signature).unwrap(),
-            CliCommand::Witness(pubkey, pubkey)
+            parse_command(&test_send_signature).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Witness(pubkey, pubkey),
+                require_keypair: true
+            }
         );
         let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1627,14 +1689,17 @@ mod tests {
             &witness1_string,
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_pay_multiple_witnesses).unwrap(),
-            CliCommand::Pay {
-                lamports: 50,
-                to: pubkey,
-                timestamp: Some(dt),
-                timestamp_pubkey: Some(witness0),
-                witnesses: Some(vec![witness0, witness1]),
-                cancelable: None
+            parse_command(&test_pay_multiple_witnesses).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: Some(dt),
+                    timestamp_pubkey: Some(witness0),
+                    witnesses: Some(vec![witness0, witness1]),
+                    cancelable: false,
+                },
+                require_keypair: true
             }
         );
 
@@ -1648,8 +1713,11 @@ mod tests {
             "2018-09-19T17:30:59",
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_send_timestamp).unwrap(),
-            CliCommand::TimeElapsed(pubkey, pubkey, dt)
+            parse_command(&test_send_timestamp).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::TimeElapsed(pubkey, pubkey, dt),
+                require_keypair: true
+            }
         );
         let test_bad_timestamp = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1659,7 +1727,7 @@ mod tests {
             "--date",
             "20180919T17:30:59",
         ]);
-        assert!(parse_command(&pubkey, &test_bad_timestamp).is_err());
+        assert!(parse_command(&test_bad_timestamp).is_err());
     }
 
     #[test]
@@ -1675,13 +1743,13 @@ mod tests {
         assert_eq!(process_command(&config).unwrap(), pubkey);
 
         config.command = CliCommand::Balance {
-            pubkey: config.keypair.pubkey(),
+            pubkey: None,
             use_lamports_unit: true,
         };
         assert_eq!(process_command(&config).unwrap(), "50 lamports");
 
         config.command = CliCommand::Balance {
-            pubkey: config.keypair.pubkey(),
+            pubkey: None,
             use_lamports_unit: false,
         };
         assert_eq!(process_command(&config).unwrap(), "0 SOL");
@@ -1696,15 +1764,13 @@ mod tests {
 
         let bob_pubkey = Pubkey::new_rand();
         let node_pubkey = Pubkey::new_rand();
-        config.command = CliCommand::CreateVoteAccount(
-            bob_pubkey,
-            VoteInit {
-                node_pubkey,
-                authorized_voter: bob_pubkey,
-                authorized_withdrawer: bob_pubkey,
-                commission: 0,
-            },
-        );
+        config.command = CliCommand::CreateVoteAccount {
+            vote_account_pubkey: bob_pubkey,
+            node_pubkey,
+            authorized_voter: Some(bob_pubkey),
+            authorized_withdrawer: Some(bob_pubkey),
+            commission: 0,
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1716,15 +1782,13 @@ mod tests {
 
         let bob_pubkey = Pubkey::new_rand();
         let custodian = Pubkey::new_rand();
-        config.command = CliCommand::CreateStakeAccount(
-            bob_pubkey,
-            Authorized {
-                staker: config.keypair.pubkey(),
-                withdrawer: config.keypair.pubkey(),
-            },
-            Lockup { slot: 0, custodian },
-            1234,
-        );
+        config.command = CliCommand::CreateStakeAccount {
+            stake_account_pubkey: bob_pubkey,
+            staker: None,
+            withdrawer: None,
+            lockup: Lockup { slot: 0, custodian },
+            lamports: 1234,
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1751,7 +1815,7 @@ mod tests {
             timestamp: None,
             timestamp_pubkey: None,
             witnesses: None,
-            cancelable: None,
+            cancelable: false,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1764,7 +1828,7 @@ mod tests {
             timestamp: Some(dt),
             timestamp_pubkey: Some(config.keypair.pubkey()),
             witnesses: None,
-            cancelable: None,
+            cancelable: false,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -1785,7 +1849,7 @@ mod tests {
             timestamp: None,
             timestamp_pubkey: None,
             witnesses: Some(vec![witness]),
-            cancelable: Some(config.keypair.pubkey()),
+            cancelable: true,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -1858,20 +1922,18 @@ mod tests {
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::Balance {
-            pubkey: config.keypair.pubkey(),
+            pubkey: None,
             use_lamports_unit: false,
         };
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::CreateVoteAccount(
-            bob_pubkey,
-            VoteInit {
-                node_pubkey,
-                authorized_voter: bob_pubkey,
-                authorized_withdrawer: bob_pubkey,
-                commission: 0,
-            },
-        );
+        config.command = CliCommand::CreateVoteAccount {
+            vote_account_pubkey: bob_pubkey,
+            node_pubkey,
+            authorized_voter: Some(bob_pubkey),
+            authorized_withdrawer: Some(bob_pubkey),
+            commission: 0,
+        };
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::VoteAuthorize(bob_pubkey, bob_pubkey, VoteAuthorize::Voter);
@@ -1889,7 +1951,7 @@ mod tests {
             timestamp: None,
             timestamp_pubkey: None,
             witnesses: None,
-            cancelable: None,
+            cancelable: false,
         };
         assert!(process_command(&config).is_err());
 
@@ -1899,7 +1961,7 @@ mod tests {
             timestamp: Some(dt),
             timestamp_pubkey: Some(config.keypair.pubkey()),
             witnesses: None,
-            cancelable: None,
+            cancelable: false,
         };
         assert!(process_command(&config).is_err());
 
@@ -1909,7 +1971,7 @@ mod tests {
             timestamp: None,
             timestamp_pubkey: None,
             witnesses: Some(vec![witness]),
-            cancelable: Some(config.keypair.pubkey()),
+            cancelable: true,
         };
         assert!(process_command(&config).is_err());
 
