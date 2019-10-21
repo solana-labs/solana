@@ -57,7 +57,7 @@ declare useGithubIssueInsteadOf=(
   #'TODO'  # TODO: Uncomment this line to disable TODOs
 )
 
-if _ git --no-pager grep -n --max-depth=0 "${useGithubIssueInsteadOf[@]/#/-e }" -- '*.rs' '*.sh'; then
+if _ git --no-pager grep -n --max-depth=0 "${useGithubIssueInsteadOf[@]/#/-e }" -- '*.rs' '*.sh' '*.md'; then
     exit 1
 fi
 
