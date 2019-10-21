@@ -1,9 +1,7 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
 use crate::entry::{create_ticks, Entry};
 use crate::erasure::Session;
-use bincode::serialized_size;
 use core::cell::RefCell;
-use lazy_static::lazy_static;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rayon::slice::ParallelSlice;
 use rayon::ThreadPool;
@@ -17,24 +15,19 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::sync::Arc;
 use std::time::Instant;
 
-lazy_static! {
-    pub static ref SIZE_OF_COMMON_SHRED_HEADER: usize =
-        { serialized_size(&ShredCommonHeader::default()).unwrap() as usize };
-    pub static ref SIZE_OF_CODING_SHRED_HEADER: usize =
-        { serialized_size(&CodingShredHeader::default()).unwrap() as usize };
-    pub static ref SIZE_OF_DATA_SHRED_HEADER: usize =
-        { serialized_size(&DataShredHeader::default()).unwrap() as usize };
-    pub static ref SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
-        { *SIZE_OF_COMMON_SHRED_HEADER + *SIZE_OF_CODING_SHRED_HEADER };
-    pub static ref SIZE_OF_DATA_SHRED_PAYLOAD: usize = {
-        PACKET_DATA_SIZE
-            - *SIZE_OF_COMMON_SHRED_HEADER
-            - *SIZE_OF_DATA_SHRED_HEADER
-            - *SIZE_OF_DATA_SHRED_IGNORED_TAIL
-    };
-    static ref SIZE_OF_SIGNATURE: usize =
-        { bincode::serialized_size(&Signature::default()).unwrap() as usize };
-}
+/// The following constants are computed by hand, and hardcoded.
+/// `test_shred_constants` ensures that the values are correct.
+/// Constants are used over lazy_static for performance reasons.
+pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 77;
+pub const SIZE_OF_DATA_SHRED_HEADER: usize = 3;
+pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
+pub const SIZE_OF_SIGNATURE: usize = 64;
+pub const SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
+    SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
+pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
+    - SIZE_OF_COMMON_SHRED_HEADER
+    - SIZE_OF_DATA_SHRED_HEADER
+    - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -163,14 +156,14 @@ impl Shred {
             let mut start = 0;
             Self::serialize_obj_into(
                 &mut start,
-                *SIZE_OF_COMMON_SHRED_HEADER,
+                SIZE_OF_COMMON_SHRED_HEADER,
                 &mut payload,
                 &common_header,
             )
             .expect("Failed to write header into shred buffer");
             Self::serialize_obj_into(
                 &mut start,
-                *SIZE_OF_DATA_SHRED_HEADER,
+                SIZE_OF_DATA_SHRED_HEADER,
                 &mut payload,
                 &data_header,
             )
@@ -189,11 +182,11 @@ impl Shred {
     pub fn new_from_serialized_shred(payload: Vec<u8>) -> Result<Self> {
         let mut start = 0;
         let common_header: ShredCommonHeader =
-            Self::deserialize_obj(&mut start, *SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
+            Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
 
         let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
             let coding_header: CodingShredHeader =
-                Self::deserialize_obj(&mut start, *SIZE_OF_CODING_SHRED_HEADER, &payload)?;
+                Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
             Self {
                 common_header,
                 data_header: DataShredHeader::default(),
@@ -202,7 +195,7 @@ impl Shred {
             }
         } else if common_header.shred_type == ShredType(DATA_SHRED) {
             let data_header: DataShredHeader =
-                Self::deserialize_obj(&mut start, *SIZE_OF_DATA_SHRED_HEADER, &payload)?;
+                Self::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &payload)?;
             Self {
                 common_header,
                 data_header,
@@ -225,7 +218,7 @@ impl Shred {
         let mut start = 0;
         Self::serialize_obj_into(
             &mut start,
-            *SIZE_OF_COMMON_SHRED_HEADER,
+            SIZE_OF_COMMON_SHRED_HEADER,
             &mut payload,
             &common_header,
         )
@@ -233,7 +226,7 @@ impl Shred {
         if common_header.shred_type == ShredType(DATA_SHRED) {
             Self::serialize_obj_into(
                 &mut start,
-                *SIZE_OF_DATA_SHRED_HEADER,
+                SIZE_OF_DATA_SHRED_HEADER,
                 &mut payload,
                 &data_header,
             )
@@ -241,7 +234,7 @@ impl Shred {
         } else if common_header.shred_type == ShredType(CODING_SHRED) {
             Self::serialize_obj_into(
                 &mut start,
-                *SIZE_OF_CODING_SHRED_HEADER,
+                SIZE_OF_CODING_SHRED_HEADER,
                 &mut payload,
                 &coding_header,
             )
@@ -334,21 +327,9 @@ impl Shred {
         }
     }
 
-    pub fn coding_params(&self) -> Option<(u16, u16, u16)> {
-        if self.is_code() {
-            Some((
-                self.coding_header.num_data_shreds,
-                self.coding_header.num_coding_shreds,
-                self.coding_header.position,
-            ))
-        } else {
-            None
-        }
-    }
-
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         self.signature()
-            .verify(pubkey.as_ref(), &self.payload[*SIZE_OF_SIGNATURE..])
+            .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
     }
 }
 
@@ -389,7 +370,7 @@ impl Shredder {
             bincode::serialize(entries).expect("Expect to serialize all entries");
         let serialize_time = now.elapsed().as_millis();
 
-        let no_header_size = *SIZE_OF_DATA_SHRED_PAYLOAD;
+        let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD;
         let num_shreds = (serialized_shreds.len() + no_header_size - 1) / no_header_size;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
 
@@ -462,8 +443,8 @@ impl Shredder {
     }
 
     pub fn sign_shred(signer: &Arc<Keypair>, shred: &mut Shred) {
-        let signature = signer.sign_message(&shred.payload[*SIZE_OF_SIGNATURE..]);
-        bincode::serialize_into(&mut shred.payload[..*SIZE_OF_SIGNATURE], &signature)
+        let signature = signer.sign_message(&shred.payload[SIZE_OF_SIGNATURE..]);
+        bincode::serialize_into(&mut shred.payload[..SIZE_OF_SIGNATURE], &signature)
             .expect("Failed to generate serialized signature");
         shred.common_header.signature = signature;
     }
@@ -505,7 +486,7 @@ impl Shredder {
             let start_index = data_shred_batch[0].common_header.index;
 
             // All information after coding shred field in a data shred is encoded
-            let valid_data_len = PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+            let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
             let data_ptrs: Vec<_> = data_shred_batch
                 .iter()
                 .map(|data| &data.payload[..valid_data_len])
@@ -527,7 +508,7 @@ impl Shredder {
             });
 
             // Grab pointers for the coding blocks
-            let coding_block_offset = *SIZE_OF_COMMON_SHRED_HEADER + *SIZE_OF_CODING_SHRED_HEADER;
+            let coding_block_offset = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
             let mut coding_ptrs: Vec<_> = coding_shreds
                 .iter_mut()
                 .map(|buffer| &mut buffer[coding_block_offset..])
@@ -648,8 +629,8 @@ impl Shredder {
 
             let session = Session::new(num_data, num_coding).unwrap();
 
-            let valid_data_len = PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_IGNORED_TAIL;
-            let coding_block_offset = *SIZE_OF_CODING_SHRED_HEADER + *SIZE_OF_COMMON_SHRED_HEADER;
+            let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+            let coding_block_offset = SIZE_OF_CODING_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER;
             let mut blocks: Vec<(&mut [u8], bool)> = shred_bufs
                 .iter_mut()
                 .enumerate()
@@ -721,11 +702,11 @@ impl Shredder {
     }
 
     fn reassemble_payload(num_data: usize, data_shred_bufs: Vec<&Vec<u8>>) -> Vec<u8> {
-        let valid_data_len = PACKET_DATA_SIZE - *SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+        let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
         data_shred_bufs[..num_data]
             .iter()
             .flat_map(|data| {
-                let offset = *SIZE_OF_COMMON_SHRED_HEADER + *SIZE_OF_DATA_SHRED_HEADER;
+                let offset = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
                 data[offset..valid_data_len].iter()
             })
             .cloned()
@@ -739,7 +720,7 @@ pub fn max_ticks_per_n_shreds(num_shreds: u64) -> u64 {
 }
 
 pub fn max_entries_per_n_shred(entry: &Entry, num_shreds: u64) -> u64 {
-    let shred_data_size = *SIZE_OF_DATA_SHRED_PAYLOAD as u64;
+    let shred_data_size = SIZE_OF_DATA_SHRED_PAYLOAD as u64;
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
     let count_size = vec_size - entry_size;
@@ -750,10 +731,31 @@ pub fn max_entries_per_n_shred(entry: &Entry, num_shreds: u64) -> u64 {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use bincode::serialized_size;
     use matches::assert_matches;
     use solana_sdk::system_transaction;
     use std::collections::HashSet;
     use std::convert::TryInto;
+
+    #[test]
+    fn test_shred_constants() {
+        assert_eq!(
+            SIZE_OF_COMMON_SHRED_HEADER,
+            serialized_size(&ShredCommonHeader::default()).unwrap() as usize
+        );
+        assert_eq!(
+            SIZE_OF_CODING_SHRED_HEADER,
+            serialized_size(&CodingShredHeader::default()).unwrap() as usize
+        );
+        assert_eq!(
+            SIZE_OF_DATA_SHRED_HEADER,
+            serialized_size(&DataShredHeader::default()).unwrap() as usize
+        );
+        assert_eq!(
+            SIZE_OF_SIGNATURE,
+            bincode::serialized_size(&Signature::default()).unwrap() as usize
+        );
+    }
 
     fn verify_test_data_shred(
         shred: &Shred,
@@ -829,7 +831,7 @@ pub mod tests {
             .collect();
 
         let size = serialized_size(&entries).unwrap();
-        let no_header_size = *SIZE_OF_DATA_SHRED_PAYLOAD as u64;
+        let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD as u64;
         let num_expected_data_shreds = (size + no_header_size - 1) / no_header_size;
         let num_expected_coding_shreds =
             Shredder::calculate_num_coding_shreds(num_expected_data_shreds as f32, fec_rate);
