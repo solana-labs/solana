@@ -54,7 +54,7 @@ fn main() {
         );
     } else {
         info!("Connecting to the cluster");
-        let (nodes, _replicators) =
+        let (nodes, _archivers) =
             discover_cluster(&entrypoint_addr, num_nodes).unwrap_or_else(|_| {
                 panic!("Failed to discover nodes");
             });

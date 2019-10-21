@@ -142,7 +142,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_of("node_pubkey")
                 .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
 
-            let (nodes, _replicators) = discover(
+            let (nodes, _archivers) = discover(
                 &entrypoint_addr,
                 num_nodes,
                 timeout,
@@ -185,7 +185,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         ("get-rpc-url", Some(matches)) => {
             let timeout = value_t_or_exit!(matches, "timeout", u64);
-            let (nodes, _replicators) = discover(
+            let (nodes, _archivers) = discover(
                 &entrypoint_addr,
                 Some(1),
                 Some(timeout),
@@ -213,7 +213,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
-            let (nodes, _replicators) = discover(
+            let (nodes, _archivers) = discover(
                 &entrypoint_addr,
                 None,
                 None,

@@ -3,5 +3,5 @@
 Participate in our testnet:
 
 * [Running a Validator](../running-validator/)
-* [Running a Replicator](../running-replicator.md)
+* [Running an Archiver](../running-archiver.md)
 

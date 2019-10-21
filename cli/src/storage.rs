@@ -21,8 +21,8 @@ pub trait StorageSubCommands {
 impl StorageSubCommands for App<'_, '_> {
     fn storage_subcommands(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("create-replicator-storage-account")
-                .about("Create a replicator storage account")
+            SubCommand::with_name("create-archiver-storage-account")
+                .about("Create an archiver storage account")
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
@@ -98,7 +98,7 @@ impl StorageSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_storage_create_replicator_account(
+pub fn parse_storage_create_archiver_account(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommand, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
@@ -106,7 +106,7 @@ pub fn parse_storage_create_replicator_account(
     Ok(CliCommand::CreateStorageAccount {
         account_owner,
         storage_account_pubkey,
-        account_type: StorageAccountType::Replicator,
+        account_type: StorageAccountType::Archiver,
     })
 }
 
@@ -221,18 +221,18 @@ mod tests {
         let storage_account_pubkey = Pubkey::new_rand();
         let storage_account_string = storage_account_pubkey.to_string();
 
-        let test_create_replicator_storage_account = test_commands.clone().get_matches_from(vec![
+        let test_create_archiver_storage_account = test_commands.clone().get_matches_from(vec![
             "test",
-            "create-replicator-storage-account",
+            "create-archiver-storage-account",
             &pubkey_string,
             &storage_account_string,
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_create_replicator_storage_account).unwrap(),
+            parse_command(&pubkey, &test_create_archiver_storage_account).unwrap(),
             CliCommand::CreateStorageAccount {
                 account_owner: pubkey,
                 storage_account_pubkey,
-                account_type: StorageAccountType::Replicator,
+                account_type: StorageAccountType::Archiver,
             }
         );
 

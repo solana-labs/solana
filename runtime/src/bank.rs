@@ -237,7 +237,7 @@ pub struct Bank {
     /// cache of vote_account and stake_account state for this fork
     stakes: RwLock<Stakes>,
 
-    /// cache of validator and replicator storage accounts for this fork
+    /// cache of validator and archiver storage accounts for this fork
     storage_accounts: RwLock<StorageAccounts>,
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
@@ -1683,13 +1683,13 @@ mod tests {
         let ((vote_id, mut vote_account), stake) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
-        let ((validator_id, validator_account), (replicator_id, replicator_account)) =
+        let ((validator_id, validator_account), (archiver_id, archiver_account)) =
             crate::storage_utils::tests::create_storage_accounts_with_credits(100);
 
         // set up stakes,vote, and storage accounts
         bank.store_account(&stake.0, &stake.1);
         bank.store_account(&validator_id, &validator_account);
-        bank.store_account(&replicator_id, &replicator_account);
+        bank.store_account(&archiver_id, &archiver_account);
 
         // generate some rewards
         let mut vote_state = VoteState::from(&vote_account).unwrap();

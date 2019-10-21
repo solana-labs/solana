@@ -10,13 +10,13 @@ use solana_sdk::sysvar::{clock, rewards};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum StorageAccountType {
-    Replicator,
+    Archiver,
     Validator,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {
-    /// Initialize the account as a validator or replicator
+    /// Initialize the account as a validator or archiver
     ///
     /// Expects 1 Account:
     ///    0 - Account to be initialized
@@ -40,14 +40,14 @@ pub enum StorageInstruction {
     /// Expects 1 Account:
     ///    0 - Storage account with credits to redeem
     ///    1 - Clock Syscall to figure out the clock epoch
-    ///    2 - Replicator account to credit - this account *must* be the owner
+    ///    2 - Archiver account to credit - this account *must* be the owner
     ///    3 - MiningPool account to redeem credits from
     ///    4 - Rewards Syscall to figure out point values
     ClaimStorageReward,
     ProofValidation {
         /// The segment during which this proof was generated
         segment: u64,
-        /// A Vec of proof masks per keyed replicator account loaded by the instruction
+        /// A Vec of proof masks per keyed archiver account loaded by the instruction
         proofs: Vec<Vec<ProofStatus>>,
     },
 }

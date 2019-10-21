@@ -62,7 +62,7 @@ impl Default for ProofStatus {
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Proof {
-    /// The encryption key the replicator used (also used to generate offsets)
+    /// The encryption key the archiver used (also used to generate offsets)
     pub signature: Signature,
     /// A "recent" blockhash used to generate the seed
     pub blockhash: Hash,
@@ -82,14 +82,14 @@ pub enum StorageContract {
         segment: u64,
         // Most recently advertised blockhash
         hash: Hash,
-        // Lockouts and Rewards are per segment per replicator. It needs to remain this way until
+        // Lockouts and Rewards are per segment per archiver. It needs to remain this way until
         // the challenge stage is added.
         lockout_validations: BTreeMap<u64, BTreeMap<Pubkey, Vec<ProofStatus>>>,
         // Used to keep track of ongoing credits
         credits: Credits,
     },
 
-    ReplicatorStorage {
+    ArchiverStorage {
         owner: Pubkey,
         // TODO what to do about duplicate proofs across segments? - Check the blockhashes
         // Map of Proofs per segment, in a Vec
@@ -139,7 +139,7 @@ impl<'a> StorageAccount<'a> {
         let storage_contract = &mut self.account.state()?;
         if let StorageContract::Uninitialized = storage_contract {
             *storage_contract = match account_type {
-                StorageAccountType::Replicator => StorageContract::ReplicatorStorage {
+                StorageAccountType::Archiver => StorageContract::ArchiverStorage {
                     owner,
                     proofs: BTreeMap::new(),
                     validations: BTreeMap::new(),
@@ -168,7 +168,7 @@ impl<'a> StorageAccount<'a> {
         clock: sysvar::clock::Clock,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
-        if let StorageContract::ReplicatorStorage {
+        if let StorageContract::ArchiverStorage {
             proofs,
             validations,
             credits,
@@ -278,7 +278,7 @@ impl<'a> StorageAccount<'a> {
         clock: sysvar::clock::Clock,
         segment_index: u64,
         proofs_per_account: Vec<Vec<ProofStatus>>,
-        replicator_accounts: &mut [StorageAccount],
+        archiver_accounts: &mut [StorageAccount],
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ValidatorStorage {
@@ -293,12 +293,12 @@ impl<'a> StorageAccount<'a> {
                 ));
             }
 
-            let accounts = replicator_accounts
+            let accounts = archiver_accounts
                 .iter_mut()
                 .enumerate()
                 .filter_map(|(i, account)| {
                     account.account.state().ok().map(|contract| match contract {
-                        StorageContract::ReplicatorStorage {
+                        StorageContract::ArchiverStorage {
                             proofs: account_proofs,
                             ..
                         } => {
@@ -349,11 +349,11 @@ impl<'a> StorageAccount<'a> {
             // allow validators to store successful validations
             stored_proofs
                 .into_iter()
-                .for_each(|(replicator_account_id, proof_mask)| {
+                .for_each(|(archiver_account_id, proof_mask)| {
                     lockout_validations
                         .entry(segment_index)
                         .or_default()
-                        .insert(replicator_account_id, proof_mask);
+                        .insert(archiver_account_id, proof_mask);
                 });
 
             self.account.set_state(storage_contract)
@@ -387,7 +387,7 @@ impl<'a> StorageAccount<'a> {
             check_redeemable(credits, rewards.storage_point_value, rewards_pool, owner)?;
 
             self.account.set_state(storage_contract)
-        } else if let StorageContract::ReplicatorStorage {
+        } else if let StorageContract::ArchiverStorage {
             owner: account_owner,
             validations,
             credits,
@@ -438,7 +438,7 @@ pub fn create_rewards_pool() -> Account {
     Account::new_data(std::u64::MAX, &StorageContract::RewardsPool, &crate::id()).unwrap()
 }
 
-/// Store the result of a proof validation into the replicator account
+/// Store the result of a proof validation into the archiver account
 fn store_validation_result(
     me: &Pubkey,
     clock: &sysvar::clock::Clock,
@@ -448,7 +448,7 @@ fn store_validation_result(
 ) -> Result<(), InstructionError> {
     let mut storage_contract = storage_account.account.state()?;
     match &mut storage_contract {
-        StorageContract::ReplicatorStorage {
+        StorageContract::ArchiverStorage {
             proofs,
             validations,
             credits,
@@ -514,7 +514,7 @@ mod tests {
         if let StorageContract::ValidatorStorage { .. } = contract {
             assert!(true)
         }
-        if let StorageContract::ReplicatorStorage { .. } = &mut contract {
+        if let StorageContract::ArchiverStorage { .. } = &mut contract {
             panic!("Contract should not decode into two types");
         }
 
@@ -526,10 +526,10 @@ mod tests {
             credits: Credits::default(),
         };
         storage_account.account.set_state(&contract).unwrap();
-        if let StorageContract::ReplicatorStorage { .. } = contract {
+        if let StorageContract::ArchiverStorage { .. } = contract {
             panic!("Wrong contract type");
         }
-        contract = StorageContract::ReplicatorStorage {
+        contract = StorageContract::ArchiverStorage {
             owner: Pubkey::default(),
             proofs: BTreeMap::new(),
             validations: BTreeMap::new(),
@@ -574,7 +574,7 @@ mod tests {
         if let StorageContract::Uninitialized = storage_contract {
             let mut proofs = BTreeMap::new();
             proofs.insert(0, vec![proof.clone()]);
-            *storage_contract = StorageContract::ReplicatorStorage {
+            *storage_contract = StorageContract::ArchiverStorage {
                 owner: Pubkey::default(),
                 proofs,
                 validations: BTreeMap::new(),

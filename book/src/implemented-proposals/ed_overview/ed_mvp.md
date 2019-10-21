@@ -10,7 +10,7 @@ The preceeding sections, outlined in the [Economic Design Overview](./), describ
 * Mechanism by which validators are rewarded via network inflation.
 * Ability to delegate tokens to validator nodes
 * Validator set commission fees on interest from delegated tokens.
-* Replicators to receive fixed, arbitrary reward for submitting validated PoReps. Reward size mechanism \(i.e. PoRep reward as a function of total ledger redundancy\) to come later.
-* Pooling of replicator PoRep transaction fees and weighted distribution to validators based on PoRep verification \(see [Replication-validation Transaction Fees](ed_validation_client_economics/ed_vce_replication_validation_transaction_fees.md). It will be useful to test this protection against attacks on testnet.
-* Nice-to-have: auto-delegation of replicator rewards to validator.
+* Archivers to receive fixed, arbitrary reward for submitting validated PoReps. Reward size mechanism \(i.e. PoRep reward as a function of total ledger redundancy\) to come later.
+* Pooling of archiver PoRep transaction fees and weighted distribution to validators based on PoRep verification \(see [Replication-validation Transaction Fees](ed_validation_client_economics/ed_vce_replication_validation_transaction_fees.md). It will be useful to test this protection against attacks on testnet.
+* Nice-to-have: auto-delegation of archiver rewards to validator.
 

@@ -218,8 +218,8 @@ pub fn parse_command(
         ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
         ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
         // Storage Commands
-        ("create-replicator-storage-account", Some(matches)) => {
-            parse_storage_create_replicator_account(matches)
+        ("create-archiver-storage-account", Some(matches)) => {
+            parse_storage_create_archiver_account(matches)
         }
         ("create-validator-storage-account", Some(matches)) => {
             parse_storage_create_validator_account(matches)

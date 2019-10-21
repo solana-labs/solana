@@ -113,8 +113,8 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::archiver::sample_file;
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use crate::replicator::sample_file;
     use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::entry::create_ticks;
     use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;

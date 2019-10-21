@@ -10,8 +10,8 @@ pub struct StorageAccounts {
     /// validator storage accounts and their credits
     validator_accounts: HashSet<Pubkey>,
 
-    /// replicator storage accounts and their credits
-    replicator_accounts: HashSet<Pubkey>,
+    /// archiver storage accounts and their credits
+    archiver_accounts: HashSet<Pubkey>,
 
     /// unclaimed points.
     //  1 point == 1 storage account credit
@@ -25,11 +25,11 @@ pub fn is_storage(account: &Account) -> bool {
 impl StorageAccounts {
     pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
         if let Ok(storage_state) = account.state() {
-            if let StorageContract::ReplicatorStorage { credits, .. } = storage_state {
+            if let StorageContract::ArchiverStorage { credits, .. } = storage_state {
                 if account.lamports == 0 {
-                    self.replicator_accounts.remove(pubkey);
+                    self.archiver_accounts.remove(pubkey);
                 } else {
-                    self.replicator_accounts.insert(*pubkey);
+                    self.archiver_accounts.insert(*pubkey);
                     self.points.insert(*pubkey, credits.current_epoch);
                 }
             } else if let StorageContract::ValidatorStorage { credits, .. } = storage_state {
@@ -67,9 +67,9 @@ pub fn validator_accounts(bank: &Bank) -> HashMap<Pubkey, Account> {
         .collect()
 }
 
-pub fn replicator_accounts(bank: &Bank) -> HashMap<Pubkey, Account> {
+pub fn archiver_accounts(bank: &Bank) -> HashMap<Pubkey, Account> {
     bank.storage_accounts()
-        .replicator_accounts
+        .archiver_accounts
         .iter()
         .filter_map(|account_id| {
             bank.get_account(account_id)
@@ -97,8 +97,8 @@ pub(crate) mod tests {
     fn test_store_and_recover() {
         let (genesis_block, mint_keypair) = create_genesis_block(1000);
         let mint_pubkey = mint_keypair.pubkey();
-        let replicator_keypair = Keypair::new();
-        let replicator_pubkey = replicator_keypair.pubkey();
+        let archiver_keypair = Keypair::new();
+        let archiver_pubkey = archiver_keypair.pubkey();
         let validator_keypair = Keypair::new();
         let validator_pubkey = validator_keypair.pubkey();
         let mut bank = Bank::new(&genesis_block);
@@ -113,9 +113,9 @@ pub(crate) mod tests {
         let message = Message::new(storage_instruction::create_storage_account(
             &mint_pubkey,
             &Pubkey::default(),
-            &replicator_pubkey,
+            &archiver_pubkey,
             11,
-            StorageAccountType::Replicator,
+            StorageAccountType::Archiver,
         ));
         bank_client.send_message(&[&mint_keypair], message).unwrap();
 
@@ -129,7 +129,7 @@ pub(crate) mod tests {
         bank_client.send_message(&[&mint_keypair], message).unwrap();
 
         assert_eq!(validator_accounts(bank.as_ref()).len(), 1);
-        assert_eq!(replicator_accounts(bank.as_ref()).len(), 1);
+        assert_eq!(archiver_accounts(bank.as_ref()).len(), 1);
     }
 
     #[test]
@@ -140,38 +140,38 @@ pub(crate) mod tests {
         assert_eq!(storage_accounts.points(), 0);
         assert_eq!(storage_accounts.claim_points(), 0);
 
-        // create random validator and replicator accounts with `credits`
-        let ((validator_pubkey, validator_account), (replicator_pubkey, replicator_account)) =
+        // create random validator and archiver accounts with `credits`
+        let ((validator_pubkey, validator_account), (archiver_pubkey, archiver_account)) =
             create_storage_accounts_with_credits(credits);
 
         storage_accounts.store(&validator_pubkey, &validator_account);
-        storage_accounts.store(&replicator_pubkey, &replicator_account);
+        storage_accounts.store(&archiver_pubkey, &archiver_account);
         // check that 2x credits worth of points are available
         assert_eq!(storage_accounts.points(), credits * 2);
 
-        let ((validator_pubkey, validator_account), (replicator_pubkey, mut replicator_account)) =
+        let ((validator_pubkey, validator_account), (archiver_pubkey, mut archiver_account)) =
             create_storage_accounts_with_credits(credits);
 
         storage_accounts.store(&validator_pubkey, &validator_account);
-        storage_accounts.store(&replicator_pubkey, &replicator_account);
+        storage_accounts.store(&archiver_pubkey, &archiver_account);
         // check that 4x credits worth of points are available
         assert_eq!(storage_accounts.points(), credits * 2 * 2);
 
         storage_accounts.store(&validator_pubkey, &validator_account);
-        storage_accounts.store(&replicator_pubkey, &replicator_account);
+        storage_accounts.store(&archiver_pubkey, &archiver_account);
         // check that storing again has no effect
         assert_eq!(storage_accounts.points(), credits * 2 * 2);
 
-        let storage_contract = &mut replicator_account.state().unwrap();
-        if let StorageContract::ReplicatorStorage {
+        let storage_contract = &mut archiver_account.state().unwrap();
+        if let StorageContract::ArchiverStorage {
             credits: account_credits,
             ..
         } = storage_contract
         {
             account_credits.current_epoch += 1;
         }
-        replicator_account.set_state(storage_contract).unwrap();
-        storage_accounts.store(&replicator_pubkey, &replicator_account);
+        archiver_account.set_state(storage_contract).unwrap();
+        storage_accounts.store(&archiver_pubkey, &archiver_account);
 
         // check that incremental store increases credits
         assert_eq!(storage_accounts.points(), credits * 2 * 2 + 1);
@@ -185,7 +185,7 @@ pub(crate) mod tests {
         credits: u64,
     ) -> ((Pubkey, Account), (Pubkey, Account)) {
         let validator_pubkey = Pubkey::new_rand();
-        let replicator_pubkey = Pubkey::new_rand();
+        let archiver_pubkey = Pubkey::new_rand();
 
         let mut validator_account =
             Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
@@ -203,25 +203,25 @@ pub(crate) mod tests {
         }
         validator_account.set_state(storage_contract).unwrap();
 
-        let mut replicator_account =
+        let mut archiver_account =
             Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
-        let mut replicator = StorageAccount::new(replicator_pubkey, &mut replicator_account);
-        replicator
-            .initialize_storage(replicator_pubkey, StorageAccountType::Replicator)
+        let mut archiver = StorageAccount::new(archiver_pubkey, &mut archiver_account);
+        archiver
+            .initialize_storage(archiver_pubkey, StorageAccountType::Archiver)
             .unwrap();
-        let storage_contract = &mut replicator_account.state().unwrap();
-        if let StorageContract::ReplicatorStorage {
+        let storage_contract = &mut archiver_account.state().unwrap();
+        if let StorageContract::ArchiverStorage {
             credits: account_credits,
             ..
         } = storage_contract
         {
             account_credits.current_epoch = credits;
         }
-        replicator_account.set_state(storage_contract).unwrap();
+        archiver_account.set_state(storage_contract).unwrap();
 
         (
             (validator_pubkey, validator_account),
-            (replicator_pubkey, replicator_account),
+            (archiver_pubkey, archiver_account),
         )
     }
 }

@@ -10,9 +10,9 @@ Our improvement on this approach is to randomly sample the encrypted segments fa
 
 ## Network
 
-Validators for PoRep are the same validators that are verifying transactions. If a replicator can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
+Validators for PoRep are the same validators that are verifying transactions. If an archiver can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
 
-Replicators are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep replicators earn a reward of sol from the mining pool.
+Archivers are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep archivers earn a reward of sol from the mining pool.
 
 ## Constraints
 
@@ -40,9 +40,9 @@ We have the following constraints:
 
 1. SLOTS\_PER\_SEGMENT: Number of slots in a segment of ledger data. The
 
-   unit of storage for a replicator.
+   unit of storage for an archiver.
 
-2. NUM\_KEY\_ROTATION\_SEGMENTS: Number of segments after which replicators
+2. NUM\_KEY\_ROTATION\_SEGMENTS: Number of segments after which archivers
 
    regenerate their encryption keys and select a new dataset to store.
 
@@ -68,7 +68,7 @@ We have the following constraints:
 
 ### Validator behavior
 
-1. Validators join the network and begin looking for replicator accounts at each
+1. Validators join the network and begin looking for archiver accounts at each
 
    storage epoch/turn boundary.
 
@@ -78,11 +78,11 @@ We have the following constraints:
 
    This signed value is also submitted to the validator's storage account and will be used by
 
-   replicators at a later stage to cross-verify.
+   archivers at a later stage to cross-verify.
 
 3. Every `NUM_SLOTS_PER_TURN` slots the validator advertises the PoH value. This is value
 
-   is also served to Replicators via RPC interfaces.
+   is also served to Archivers via RPC interfaces.
 
 4. For a given turn N, all validations get locked out until turn N+3 \(a gap of 2 turn/epoch\).
 
@@ -90,53 +90,53 @@ We have the following constraints:
 
 5. Any incorrect validations will be marked during the turn in between.
 
-### Replicator behavior
+### Archiver behavior
 
-1. Since a replicator is somewhat of a light client and not downloading all the
+1. Since an archiver is somewhat of a light client and not downloading all the
 
-   ledger data, they have to rely on other validators and replicators for information.
+   ledger data, they have to rely on other validators and archivers for information.
 
    Any given validator may or may not be malicious and give incorrect information, although
 
    there are not any obvious attack vectors that this could accomplish besides having the
 
-   replicator do extra wasted work. For many of the operations there are a number of options
+   archiver do extra wasted work. For many of the operations there are a number of options
 
-   depending on how paranoid a replicator is:
+   depending on how paranoid an archiver is:
 
-   * \(a\) replicator can ask a validator
-   * \(b\) replicator can ask multiple validators
-   * \(c\) replicator can ask other replicators
-   * \(d\) replicator can subscribe to the full transaction stream and generate
+   * \(a\) archiver can ask a validator
+   * \(b\) archiver can ask multiple validators
+   * \(c\) archiver can ask other archivers
+   * \(d\) archiver can subscribe to the full transaction stream and generate
 
      the information itself \(assuming the slot is recent enough\)
 
-   * \(e\) replicator can subscribe to an abbreviated transaction stream to
+   * \(e\) archiver can subscribe to an abbreviated transaction stream to
 
      generate the information itself \(assuming the slot is recent enough\)
 
-2. A replicator obtains the PoH hash corresponding to the last turn with its slot.
-3. The replicator signs the PoH hash with its keypair. That signature is the
+2. An archiver obtains the PoH hash corresponding to the last turn with its slot.
+3. The archiver signs the PoH hash with its keypair. That signature is the
 
    seed used to pick the segment to replicate and also the encryption key. The
 
-   replicator mods the signature with the slot to get which segment to
+   archiver mods the signature with the slot to get which segment to
 
    replicate.
 
-4. The replicator retrives the ledger by asking peer validators and
+4. The archiver retrives the ledger by asking peer validators and
 
-   replicators. See 6.5.
+   archivers. See 6.5.
 
-5. The replicator then encrypts that segment with the key with chacha algorithm
+5. The archiver then encrypts that segment with the key with chacha algorithm
 
    in CBC mode with `NUM_CHACHA_ROUNDS` of encryption.
 
-6. The replicator initializes a chacha rng with the a signed recent PoH value as
+6. The archiver initializes a chacha rng with the a signed recent PoH value as
 
    the seed.
 
-7. The replicator generates `NUM_STORAGE_SAMPLES` samples in the range of the
+7. The archiver generates `NUM_STORAGE_SAMPLES` samples in the range of the
 
    entry size and samples the encrypted segment with sha256 for 32-bytes at each
 
@@ -144,23 +144,23 @@ We have the following constraints:
 
    segment.
 
-8. The replicator sends a PoRep proof transaction which contains its sha state
+8. The archiver sends a PoRep proof transaction which contains its sha state
 
    at the end of the sampling operation, its seed and the samples it used to the
 
    current leader and it is put onto the ledger.
 
-9. During a given turn the replicator should submit many proofs for the same segment
+9. During a given turn the archiver should submit many proofs for the same segment
 
    and based on the `RATIO_OF_FAKE_PROOFS` some of those proofs must be fake.
 
-10. As the PoRep game enters the next turn, the replicator must submit a
+10. As the PoRep game enters the next turn, the archiver must submit a
 
     transaction with the mask of which proofs were fake during the last turn. This
 
-    transaction will define the rewards for both replicators and validators.
+    transaction will define the rewards for both archivers and validators.
 
-11. Finally for a turn N, as the PoRep game enters turn N + 3, replicator's proofs for
+11. Finally for a turn N, as the PoRep game enters turn N + 3, archiver's proofs for
 
     turn N will be counted towards their rewards.
 
@@ -171,19 +171,19 @@ The Proof of Replication game has 4 primary stages. For each "turn" multiple PoR
 The 4 stages of the PoRep Game are as follows:
 
 1. Proof submission stage
-   * Replicators: submit as many proofs as possible during this stage
+   * Archivers: submit as many proofs as possible during this stage
    * Validators: No-op
 2. Proof verification stage
-   * Replicators: No-op
-   * Validators: Select replicators and verify their proofs from the previous turn
+   * Archivers: No-op
+   * Validators: Select archivers and verify their proofs from the previous turn
 3. Proof challenge stage
-   * Replicators: Submit the proof mask with justifications \(for fake proofs submitted 2 turns ago\)
+   * Archivers: Submit the proof mask with justifications \(for fake proofs submitted 2 turns ago\)
    * Validators: No-op
 4. Reward collection stage
-   * Replicators: Collect rewards for 3 turns ago
+   * Archivers: Collect rewards for 3 turns ago
    * Validators:  Collect rewards for 3 turns ago
 
-For each turn of the PoRep game, both Validators and Replicators evaluate each stage. The stages are run as separate transactions on the storage program.
+For each turn of the PoRep game, both Validators and Archivers evaluate each stage. The stages are run as separate transactions on the storage program.
 
 ### Finding who has a given block of ledger
 
@@ -191,15 +191,15 @@ For each turn of the PoRep game, both Validators and Replicators evaluate each s
 
    at turn boundaries for any proofs.
 
-2. Validators maintain a map of ledger segments and corresponding replicator public keys.
+2. Validators maintain a map of ledger segments and corresponding archiver public keys.
 
-   The map is updated when a Validator processes a replicator's proofs for a segment.
+   The map is updated when a Validator processes an archiver's proofs for a segment.
 
    The validator provides an RPC interface to access the this map. Using this API, clients
 
-   can map a segment to a replicator's network address \(correlating it via cluster\_info table\).
+   can map a segment to an archiver's network address \(correlating it via cluster\_info table\).
 
-   The clients can then send repair requests to the replicator to retrieve segments.
+   The clients can then send repair requests to the archiver to retrieve segments.
 
 3. Validators would need to invalidate this list every N turns.
 
@@ -209,11 +209,11 @@ For any random seed, we force everyone to use a signature that is derived from a
 
 Since there are many more client identities then encryption identities, we need to split the reward for multiple clients, and prevent Sybil attacks from generating many clients to acquire the same block of data. To remain BFT we want to avoid a single human entity from storing all the replications of a single chunk of the ledger.
 
-Our solution to this is to force the clients to continue using the same identity. If the first round is used to acquire the same block for many client identities, the second round for the same client identities will force a redistribution of the signatures, and therefore PoRep identities and blocks. Thus to get a reward for replicators need to store the first block for free and the network can reward long lived client identities more than new ones.
+Our solution to this is to force the clients to continue using the same identity. If the first round is used to acquire the same block for many client identities, the second round for the same client identities will force a redistribution of the signatures, and therefore PoRep identities and blocks. Thus to get a reward for archivers need to store the first block for free and the network can reward long lived client identities more than new ones.
 
 ## Validator attacks
 
-* If a validator approves fake proofs, replicator can easily out them by
+* If a validator approves fake proofs, archiver can easily out them by
 
   showing the initial state for the hash.
 
@@ -221,11 +221,11 @@ Our solution to this is to force the clients to continue using the same identity
 
   to distinguish who is correct. Rewards would have to rely on the results from
 
-  multiple validators to catch bad actors and replicators from being denied rewards.
+  multiple validators to catch bad actors and archivers from being denied rewards.
 
 * Validator stealing mining proof results for itself. The proofs are derived
 
-  from a signature from a replicator, since the validator does not know the
+  from a signature from an archiver, since the validator does not know the
 
   private key used to generate the encryption key, it cannot be the generator of
 
@@ -233,7 +233,7 @@ Our solution to this is to force the clients to continue using the same identity
 
 ## Reward incentives
 
-Fake proofs are easy to generate but difficult to verify. For this reason, PoRep proof transactions generated by replicators may require a higher fee than a normal transaction to represent the computational cost required by validators.
+Fake proofs are easy to generate but difficult to verify. For this reason, PoRep proof transactions generated by archivers may require a higher fee than a normal transaction to represent the computational cost required by validators.
 
 Some percentage of fake proofs are also necessary to receive a reward from storage mining.
 
@@ -247,13 +247,13 @@ Some percentage of fake proofs are also necessary to receive a reward from stora
 
   use the signatures as the seed
 
-* The game between validators and replicators is over random blocks and random
+* The game between validators and archivers is over random blocks and random
 
   encryption identities and random data samples. The goal of randomization is
 
   to prevent colluding groups from having overlap on data or validation.
 
-* Replicator clients fish for lazy validators by submitting fake proofs that
+* Archiver clients fish for lazy validators by submitting fake proofs that
 
   they can prove are fake.
 

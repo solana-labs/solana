@@ -38,9 +38,9 @@ clientIpListZone=()
 blockstreamerIpList=()
 blockstreamerIpListPrivate=()
 blockstreamerIpListZone=()
-replicatorIpList=()
-replicatorIpListPrivate=()
-replicatorIpListZone=()
+archiverIpList=()
+archiverIpListPrivate=()
+archiverIpListZone=()
 
 buildSshOptions() {
   sshOptions=(

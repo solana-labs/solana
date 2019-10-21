@@ -1,14 +1,14 @@
-# Running a Replicator
+# Running an Archiver
 
-This document describes how to setup a replicator in the testnet
+This document describes how to setup an archiver in the testnet
 
 Please note some of the information and instructions described here may change in future releases.
 
 ## Overview
 
-Replicators are specialized light clients. They download a part of the ledger \(a.k.a Segment\) and store it. They earn rewards for storing segments.
+Archivers are specialized light clients. They download a part of the ledger \(a.k.a Segment\) and store it. They earn rewards for storing segments.
 
-The testnet features a validator running at testnet.solana.com, which serves as the entrypoint to the cluster for your replicator node.
+The testnet features a validator running at testnet.solana.com, which serves as the entrypoint to the cluster for your archiver node.
 
 Additionally there is a blockexplorer available at [http://testnet.solana.com/](http://testnet.solana.com/).
 
@@ -16,7 +16,7 @@ The testnet is configured to reset the ledger daily, or sooner should the hourly
 
 ## Machine Requirements
 
-Replicators don't need specialized hardware. Anything with more than 128GB of disk space will be able to participate in the cluster as a replicator node.
+Archivers don't need specialized hardware. Anything with more than 128GB of disk space will be able to participate in the cluster as an archiver node.
 
 Currently the disk space requirements are very low but we expect them to change in the future.
 
@@ -24,7 +24,7 @@ Prebuilt binaries are available for Linux x86\_64 \(Ubuntu 18.04 recommended\), 
 
 ### Confirm The Testnet Is Reachable
 
-Before starting a replicator node, sanity check that the cluster is accessible to your machine by running some simple commands. If any of the commands fail, please retry 5-10 minutes later to confirm the testnet is not just restarting itself before debugging further.
+Before starting an archiver node, sanity check that the cluster is accessible to your machine by running some simple commands. If any of the commands fail, please retry 5-10 minutes later to confirm the testnet is not just restarting itself before debugging further.
 
 Fetch the current transaction count over JSON RPC:
 
@@ -36,7 +36,7 @@ Inspect the blockexplorer at [http://testnet.solana.com/](http://testnet.solana.
 
 View the [metrics dashboard](https://metrics.solana.com:3000/d/testnet-beta/testnet-monitor-beta?var-testnet=testnet) for more detail on cluster activity.
 
-## Replicator Setup
+## Archiver Setup
 
 #### Obtaining The Software
 
@@ -90,7 +90,7 @@ $ export PATH=$PWD/bin:$PATH
 
 Download the binaries by navigating to [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest), download **solana-release-x86\_64-pc-windows-msvc.tar.bz2**, then extract it into a folder. It is a good idea to add this extracted folder to your windows PATH.
 
-## Starting The Replicator
+## Starting The Archiver
 
 Try running following command to join the gossip network and view all the other nodes in the cluster:
 
@@ -99,12 +99,12 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 # Press ^C to exit
 ```
 
-Now configure the keypairs for your replicator by running:
+Now configure the keypairs for your archiver by running:
 
 Navigate to the solana install location and open a cmd prompt
 
 ```bash
-$ solana-keygen new -o replicator-keypair.json
+$ solana-keygen new -o archiver-keypair.json
 $ solana-keygen new -o storage-keypair.json
 ```
 
@@ -113,8 +113,8 @@ Use solana-keygen to show the public keys for each of the keypairs, they will be
 * Windows
 
   ```bash
-  # The replicator's identity
-  $ solana-keygen pubkey replicator-keypair.json
+  # The archiver's identity
+  $ solana-keygen pubkey archiver-keypair.json
   $ solana-keygen pubkey storage-keypair.json
   ```
 
@@ -122,34 +122,34 @@ Use solana-keygen to show the public keys for each of the keypairs, they will be
 
   \`\`\`bash
 
-  $ export REPLICATOR\_IDENTITY=$\(solana-keygen pubkey replicator-keypair.json\)
+  $ export ARCHIVER\_IDENTITY=$\(solana-keygen pubkey archiver-keypair.json\)
 
   $ export STORAGE\_IDENTITY=$\(solana-keygen pubkey storage-keypair.json\)
 
 ```text
-Then set up the storage accounts for your replicator by running:
+Then set up the storage accounts for your archiver by running:
 ```bash
-$ solana --keypair replicator-keypair.json airdrop 100000 lamports
-$ solana --keypair replicator-keypair.json create-replicator-storage-account $REPLICATOR_IDENTITY $STORAGE_IDENTITY
+$ solana --keypair archiver-keypair.json airdrop 100000 lamports
+$ solana --keypair archiver-keypair.json create-archiver-storage-account $ARCHIVER_IDENTITY $STORAGE_IDENTITY
 ```
 
-Note: Every time the testnet restarts, run the steps to setup the replicator accounts again.
+Note: Every time the testnet restarts, run the steps to setup the archiver accounts again.
 
-To start the replicator:
+To start the archiver:
 
 ```bash
-$ solana-replicator --entrypoint testnet.solana.com:8001 --identity replicator-keypair.json --storage-keypair storage-keypair.json --ledger replicator-ledger
+$ solana-archiver --entrypoint testnet.solana.com:8001 --identity archiver-keypair.json --storage-keypair storage-keypair.json --ledger archiver-ledger
 ```
 
-## Verify Replicator Setup
+## Verify Archiver Setup
 
-From another console, confirm the IP address and **identity pubkey** of your replicator is visible in the gossip network by running:
+From another console, confirm the IP address and **identity pubkey** of your archiver is visible in the gossip network by running:
 
 ```bash
 $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
-Provide the **storage account pubkey** to the `solana show-storage-account` command to view the recent mining activity from your replicator:
+Provide the **storage account pubkey** to the `solana show-storage-account` command to view the recent mining activity from your archiver:
 
 ```bash
 $ solana --keypair storage-keypair.json show-storage-account $STORAGE_IDENTITY

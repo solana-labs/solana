@@ -132,7 +132,7 @@ A list of [entries](terminology.md#entry) containing [transactions](terminology.
 
 ## ledger segment
 
-Portion of the ledger which is downloaded by the replicator where storage proof data is derived.
+Portion of the ledger which is downloaded by the archiver where storage proof data is derived.
 
 ## ledger vote
 
@@ -186,7 +186,7 @@ A stack of proofs, each which proves that some data existed before the proof was
 
 The public key of a [keypair](terminology.md#keypair).
 
-## replicator
+## archiver
 
 Storage mining client, stores some part of the ledger enumerated in blocks and submits storage proofs to the chain. Not a full-node.
 
@@ -224,7 +224,7 @@ A set of sha hash state which is constructed by sampling the encrypted version o
 
 ## storage proof challenge
 
-A transaction from a replicator that verifiably proves that a validator confirmed a fake proof.
+A transaction from an archiver that verifiably proves that a validator confirmed a fake proof.
 
 ## storage proof claim
 

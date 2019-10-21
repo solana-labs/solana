@@ -162,7 +162,7 @@ fn initialize_ledger_path(
     ledger_path: &Path,
     no_snapshot_fetch: bool,
 ) -> Result<Hash, String> {
-    let (nodes, _replicators) = discover(
+    let (nodes, _archivers) = discover(
         &entrypoint.gossip,
         Some(1),
         Some(60),

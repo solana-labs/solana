@@ -15,6 +15,7 @@ pub mod recycler;
 pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
+pub mod archiver;
 pub mod blockstream;
 pub mod blockstream_service;
 pub mod cluster_info;
@@ -39,7 +40,6 @@ pub mod poh_service;
 pub mod recvmmsg;
 pub mod repair_service;
 pub mod replay_stage;
-pub mod replicator;
 pub mod result;
 pub mod retransmit_stage;
 pub mod rpc;

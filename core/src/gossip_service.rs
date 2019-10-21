@@ -53,7 +53,7 @@ impl GossipService {
     }
 }
 
-/// Discover Nodes and Replicators in a cluster
+/// Discover Nodes and Archivers in a cluster
 pub fn discover_cluster(
     entry_point: &SocketAddr,
     num_nodes: usize,
@@ -76,7 +76,7 @@ pub fn discover(
     info!("Gossip entry point: {:?}", entry_point);
     info!("Spy node id: {:?}", id);
 
-    let (met_criteria, secs, tvu_peers, replicators) = spy(
+    let (met_criteria, secs, tvu_peers, archivers) = spy(
         spy_ref.clone(),
         num_nodes,
         timeout,
@@ -93,7 +93,7 @@ pub fn discover(
             secs,
             spy_ref.read().unwrap().contact_info_trace()
         );
-        return Ok((tvu_peers, replicators));
+        return Ok((tvu_peers, archivers));
     }
 
     if !tvu_peers.is_empty() {
@@ -101,7 +101,7 @@ pub fn discover(
             "discover failed to match criteria by timeout...\n{}",
             spy_ref.read().unwrap().contact_info_trace()
         );
-        return Ok((tvu_peers, replicators));
+        return Ok((tvu_peers, archivers));
     }
 
     info!(
@@ -159,7 +159,7 @@ fn spy(
     let now = Instant::now();
     let mut met_criteria = false;
     let mut tvu_peers: Vec<ContactInfo> = Vec::new();
-    let mut replicators: Vec<ContactInfo> = Vec::new();
+    let mut archivers: Vec<ContactInfo> = Vec::new();
     let mut i = 0;
     loop {
         if let Some(secs) = timeout {
@@ -167,22 +167,22 @@ fn spy(
                 break;
             }
         }
-        // collect tvu peers but filter out replicators since their tvu is transient and we do not want
+        // collect tvu peers but filter out archivers since their tvu is transient and we do not want
         // it to show up as a "node"
         tvu_peers = spy_ref
             .read()
             .unwrap()
             .tvu_peers()
             .into_iter()
-            .filter(|node| !ClusterInfo::is_replicator(&node))
+            .filter(|node| !ClusterInfo::is_archiver(&node))
             .collect::<Vec<_>>();
-        replicators = spy_ref.read().unwrap().storage_peers();
+        archivers = spy_ref.read().unwrap().storage_peers();
         if let Some(num) = num_nodes {
-            if tvu_peers.len() + replicators.len() >= num {
+            if tvu_peers.len() + archivers.len() >= num {
                 if let Some(ipaddr) = find_node_by_ipaddr {
                     if tvu_peers
                         .iter()
-                        .chain(replicators.iter())
+                        .chain(archivers.iter())
                         .any(|x| x.gossip.ip() == ipaddr)
                     {
                         met_criteria = true;
@@ -192,7 +192,7 @@ fn spy(
                 if let Some(pubkey) = find_node_by_pubkey {
                     if tvu_peers
                         .iter()
-                        .chain(replicators.iter())
+                        .chain(archivers.iter())
                         .any(|x| x.id == pubkey)
                     {
                         met_criteria = true;
@@ -209,7 +209,7 @@ fn spy(
             if let Some(pubkey) = find_node_by_pubkey {
                 if tvu_peers
                     .iter()
-                    .chain(replicators.iter())
+                    .chain(archivers.iter())
                     .any(|x| x.id == pubkey)
                 {
                     met_criteria = true;
@@ -219,7 +219,7 @@ fn spy(
             if let Some(ipaddr) = find_node_by_ipaddr {
                 if tvu_peers
                     .iter()
-                    .chain(replicators.iter())
+                    .chain(archivers.iter())
                     .any(|x| x.gossip.ip() == ipaddr)
                 {
                     met_criteria = true;
@@ -238,12 +238,7 @@ fn spy(
         ));
         i += 1;
     }
-    (
-        met_criteria,
-        now.elapsed().as_secs(),
-        tvu_peers,
-        replicators,
-    )
+    (met_criteria, now.elapsed().as_secs(), tvu_peers, archivers)
 }
 
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in

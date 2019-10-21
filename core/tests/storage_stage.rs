@@ -35,7 +35,7 @@ mod tests {
         solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
-        let replicator_keypair = Arc::new(Keypair::new());
+        let archiver_keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
         let GenesisBlockInfo {
@@ -81,9 +81,9 @@ mod tests {
         let account_ix = storage_instruction::create_storage_account(
             &mint_keypair.pubkey(),
             &Pubkey::new_rand(),
-            &replicator_keypair.pubkey(),
+            &archiver_keypair.pubkey(),
             1,
-            StorageAccountType::Replicator,
+            StorageAccountType::Archiver,
         );
         let account_tx = Transaction::new_signed_instructions(
             &[&mint_keypair],
@@ -104,7 +104,7 @@ mod tests {
         let keypair = Keypair::new();
 
         let mining_proof_ix = storage_instruction::mining_proof(
-            &replicator_keypair.pubkey(),
+            &archiver_keypair.pubkey(),
             Hash::default(),
             0,
             keypair.sign_message(b"test"),
@@ -124,7 +124,7 @@ mod tests {
         .unwrap();
         let message = Message::new_with_payer(vec![mining_proof_ix], Some(&mint_keypair.pubkey()));
         let mining_proof_tx = Transaction::new(
-            &[&mint_keypair, replicator_keypair.as_ref()],
+            &[&mint_keypair, archiver_keypair.as_ref()],
             message,
             next_bank.last_blockhash(),
         );

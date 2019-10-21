@@ -1,5 +1,5 @@
 // A stage that handles generating the keys used to encrypt the ledger and sample it
-// for storage mining. Replicators submit storage proofs, validator then bundles them
+// for storage mining. Archivers submit storage proofs, validator then bundles them
 // to submit its proof for mining to be rewarded.
 
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
@@ -12,7 +12,7 @@ use rand_chacha::ChaChaRng;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::Blocktree;
 use solana_runtime::bank::Bank;
-use solana_runtime::storage_utils::replicator_accounts;
+use solana_runtime::storage_utils::archiver_accounts;
 use solana_sdk::account::Account;
 use solana_sdk::account_utils::State;
 use solana_sdk::clock::get_segment_from_slot;
@@ -39,13 +39,13 @@ use std::{cmp, io};
 // Vec of [ledger blocks] x [keys]
 type StorageResults = Vec<Hash>;
 type StorageKeys = Vec<u8>;
-type ReplicatorMap = Vec<HashMap<Pubkey, Vec<Proof>>>;
+type ArchiverMap = Vec<HashMap<Pubkey, Vec<Proof>>>;
 
 #[derive(Default)]
 pub struct StorageStateInner {
     storage_results: StorageResults,
     pub storage_keys: StorageKeys,
-    replicator_map: ReplicatorMap,
+    archiver_map: ArchiverMap,
     storage_blockhash: Hash,
     slot: u64,
     slots_per_segment: u64,
@@ -92,12 +92,12 @@ impl StorageState {
     pub fn new(hash: &Hash, slots_per_turn: u64, slots_per_segment: u64) -> Self {
         let storage_keys = vec![0u8; KEY_SIZE * NUM_IDENTITIES];
         let storage_results = vec![Hash::default(); NUM_IDENTITIES];
-        let replicator_map = vec![];
+        let archiver_map = vec![];
 
         let state = StorageStateInner {
             storage_keys,
             storage_results,
-            replicator_map,
+            archiver_map,
             slots_per_turn,
             slot: 0,
             slots_per_segment,
@@ -140,17 +140,16 @@ impl StorageState {
         const MAX_PUBKEYS_TO_RETURN: usize = 5;
         let index =
             get_segment_from_slot(slot, self.state.read().unwrap().slots_per_segment) as usize;
-        let replicator_map = &self.state.read().unwrap().replicator_map;
+        let archiver_map = &self.state.read().unwrap().archiver_map;
         let working_bank = bank_forks.read().unwrap().working_bank();
-        let accounts = replicator_accounts(&working_bank);
-        if index < replicator_map.len() {
+        let accounts = archiver_accounts(&working_bank);
+        if index < archiver_map.len() {
             //perform an account owner lookup
-            let mut slot_replicators = replicator_map[index]
+            let mut slot_archivers = archiver_map[index]
                 .keys()
                 .filter_map(|account_id| {
                     accounts.get(account_id).and_then(|account| {
-                        if let Ok(StorageContract::ReplicatorStorage { owner, .. }) =
-                            account.state()
+                        if let Ok(StorageContract::ArchiverStorage { owner, .. }) = account.state()
                         {
                             Some(owner)
                         } else {
@@ -159,8 +158,8 @@ impl StorageState {
                     })
                 })
                 .collect::<Vec<_>>();
-            slot_replicators.truncate(MAX_PUBKEYS_TO_RETURN);
-            slot_replicators
+            slot_archivers.truncate(MAX_PUBKEYS_TO_RETURN);
+            slot_archivers
         } else {
             vec![]
         }
@@ -448,7 +447,7 @@ impl StorageStage {
         storage_state: &Arc<RwLock<StorageStateInner>>,
         current_key_idx: &mut usize,
     ) {
-        if let Ok(StorageContract::ReplicatorStorage { proofs, .. }) = account.state() {
+        if let Ok(StorageContract::ArchiverStorage { proofs, .. }) = account.state() {
             //convert slot to segment
             let segment = get_segment_from_slot(slot, slots_per_segment);
             if let Some(proofs) = proofs.get(&segment) {
@@ -467,16 +466,14 @@ impl StorageStage {
                     }
 
                     let mut statew = storage_state.write().unwrap();
-                    if statew.replicator_map.len() < segment as usize {
-                        statew
-                            .replicator_map
-                            .resize(segment as usize, HashMap::new());
+                    if statew.archiver_map.len() < segment as usize {
+                        statew.archiver_map.resize(segment as usize, HashMap::new());
                     }
                     let proof_segment_index = proof.segment_index as usize;
-                    if proof_segment_index < statew.replicator_map.len() {
+                    if proof_segment_index < statew.archiver_map.len() {
                         // TODO randomly select and verify the proof first
                         // Copy the submitted proof
-                        statew.replicator_map[proof_segment_index]
+                        statew.archiver_map[proof_segment_index]
                             .entry(account_id)
                             .or_default()
                             .push(proof.clone());
@@ -510,11 +507,11 @@ impl StorageStage {
                 storage_slots.slot_count += 1;
                 storage_slots.last_root = bank.slot();
                 if storage_slots.slot_count % slots_per_turn == 0 {
-                    // load all the replicator accounts in the bank. collect all their proofs at the current slot
-                    let replicator_accounts = replicator_accounts(bank.as_ref());
+                    // load all the archiver accounts in the bank. collect all their proofs at the current slot
+                    let archiver_accounts = archiver_accounts(bank.as_ref());
                     // find proofs, and use them to update
                     // the storage_keys with their signatures
-                    for (account_id, account) in replicator_accounts.into_iter() {
+                    for (account_id, account) in archiver_accounts.into_iter() {
                         Self::collect_proofs(
                             bank.slot(),
                             bank.slots_per_segment(),
@@ -553,13 +550,13 @@ impl StorageStage {
         storage_keypair: &Arc<Keypair>,
         ix_sender: &Sender<Instruction>,
     ) -> Result<()> {
-        // bundle up mining submissions from replicators
+        // bundle up mining submissions from archivers
         // and submit them in a tx to the leader to get rewarded.
         let mut w_state = storage_state.write().unwrap();
         let mut max_proof_mask = 0;
         let proof_mask_limit = storage_instruction::proof_mask_limit();
         let instructions: Vec<_> = w_state
-            .replicator_map
+            .archiver_map
             .iter_mut()
             .enumerate()
             .flat_map(|(_, proof_map)| {

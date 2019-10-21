@@ -200,7 +200,7 @@ SUBCOMMANDS:
     claim-storage-reward                 Redeem storage reward credits
     cluster-version                      Get the version of the cluster entrypoint
     confirm                              Confirm transaction by signature
-    create-replicator-storage-account    Create a replicator storage account
+    create-archiver-storage-account    Create an archiver storage account
     create-stake-account                 Create a stake account
     create-validator-storage-account     Create a validator storage account
     create-vote-account                  Create a vote account
@@ -380,13 +380,13 @@ ARGS:
     <SIGNATURE>    The transaction signature to confirm
 ```
 
-#### solana-create-replicator-storage-account
+#### solana-create-archiver-storage-account
 ```text
-solana-create-replicator-storage-account 
-Create a replicator storage account
+solana-create-archiver-storage-account 
+Create an archiver storage account
 
 USAGE:
-    solana create-replicator-storage-account [OPTIONS] <STORAGE ACCOUNT OWNER PUBKEY> <STORAGE ACCOUNT PUBKEY>
+    solana create-archiver-storage-account [OPTIONS] <STORAGE ACCOUNT OWNER PUBKEY> <STORAGE ACCOUNT PUBKEY>
 
 FLAGS:
     -h, --help       Prints help information

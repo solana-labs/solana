@@ -1,11 +1,11 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
+    archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
     gossip_service::discover_cluster,
-    replicator::Replicator,
     service::Service,
     validator::{Validator, ValidatorConfig},
 };
@@ -42,15 +42,15 @@ use std::{
     sync::Arc,
 };
 
-pub struct ReplicatorInfo {
-    pub replicator_storage_pubkey: Pubkey,
+pub struct ArchiverInfo {
+    pub archiver_storage_pubkey: Pubkey,
     pub ledger_path: PathBuf,
 }
 
-impl ReplicatorInfo {
+impl ArchiverInfo {
     fn new(storage_pubkey: Pubkey, ledger_path: PathBuf) -> Self {
         Self {
-            replicator_storage_pubkey: storage_pubkey,
+            archiver_storage_pubkey: storage_pubkey,
             ledger_path,
         }
     }
@@ -60,9 +60,9 @@ impl ReplicatorInfo {
 pub struct ClusterConfig {
     /// The validator config that should be applied to every node in the cluster
     pub validator_configs: Vec<ValidatorConfig>,
-    /// Number of replicators in the cluster
-    /// Note- replicators will timeout if ticks_per_slot is much larger than the default 8
-    pub num_replicators: usize,
+    /// Number of archivers in the cluster
+    /// Note- archivers will timeout if ticks_per_slot is much larger than the default 8
+    pub num_archivers: usize,
     /// Number of nodes that are unstaked and not voting (a.k.a listening)
     pub num_listeners: u64,
     /// The stakes of each node
@@ -81,7 +81,7 @@ impl Default for ClusterConfig {
     fn default() -> Self {
         ClusterConfig {
             validator_configs: vec![],
-            num_replicators: 0,
+            num_archivers: 0,
             num_listeners: 0,
             node_stakes: vec![],
             cluster_lamports: 0,
@@ -104,8 +104,8 @@ pub struct LocalCluster {
     pub listener_infos: HashMap<Pubkey, ClusterValidatorInfo>,
     validators: HashMap<Pubkey, Validator>,
     pub genesis_block: GenesisBlock,
-    replicators: Vec<Replicator>,
-    pub replicator_infos: HashMap<Pubkey, ReplicatorInfo>,
+    archivers: Vec<Archiver>,
+    pub archiver_infos: HashMap<Pubkey, ArchiverInfo>,
 }
 
 impl LocalCluster {
@@ -210,10 +210,10 @@ impl LocalCluster {
             funding_keypair: mint_keypair,
             entry_point_info: leader_contact_info,
             validators,
-            replicators: vec![],
+            archivers: vec![],
             genesis_block,
             validator_infos,
-            replicator_infos: HashMap::new(),
+            archiver_infos: HashMap::new(),
             listener_infos: HashMap::new(),
         };
 
@@ -236,13 +236,13 @@ impl LocalCluster {
         )
         .unwrap();
 
-        for _ in 0..config.num_replicators {
-            cluster.add_replicator();
+        for _ in 0..config.num_archivers {
+            cluster.add_archiver();
         }
 
         discover_cluster(
             &cluster.entry_point_info.gossip,
-            config.node_stakes.len() + config.num_replicators as usize,
+            config.node_stakes.len() + config.num_archivers as usize,
         )
         .unwrap();
 
@@ -261,8 +261,8 @@ impl LocalCluster {
             node.join().unwrap();
         }
 
-        while let Some(replicator) = self.replicators.pop() {
-            replicator.close();
+        while let Some(archiver) = self.archivers.pop() {
+            archiver.close();
         }
     }
 
@@ -344,9 +344,9 @@ impl LocalCluster {
         }
     }
 
-    fn add_replicator(&mut self) {
-        let replicator_keypair = Arc::new(Keypair::new());
-        let replicator_pubkey = replicator_keypair.pubkey();
+    fn add_archiver(&mut self) {
+        let archiver_keypair = Arc::new(Keypair::new());
+        let archiver_pubkey = archiver_keypair.pubkey();
         let storage_keypair = Arc::new(Keypair::new());
         let storage_pubkey = storage_keypair.pubkey();
         let client = create_client(
@@ -354,31 +354,31 @@ impl LocalCluster {
             VALIDATOR_PORT_RANGE,
         );
 
-        // Give the replicator some lamports to setup its storage accounts
+        // Give the archiver some lamports to setup its storage accounts
         Self::transfer_with_client(
             &client,
             &self.funding_keypair,
-            &replicator_keypair.pubkey(),
+            &archiver_keypair.pubkey(),
             42,
         );
-        let replicator_node = Node::new_localhost_replicator(&replicator_pubkey);
+        let archiver_node = Node::new_localhost_archiver(&archiver_pubkey);
 
-        Self::setup_storage_account(&client, &storage_keypair, &replicator_keypair, true).unwrap();
+        Self::setup_storage_account(&client, &storage_keypair, &archiver_keypair, true).unwrap();
 
-        let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
-        let replicator = Replicator::new(
-            &replicator_ledger_path,
-            replicator_node,
+        let (archiver_ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
+        let archiver = Archiver::new(
+            &archiver_ledger_path,
+            archiver_node,
             self.entry_point_info.clone(),
-            replicator_keypair,
+            archiver_keypair,
             storage_keypair,
         )
-        .unwrap_or_else(|err| panic!("Replicator::new() failed: {:?}", err));
+        .unwrap_or_else(|err| panic!("Archiver::new() failed: {:?}", err));
 
-        self.replicators.push(replicator);
-        self.replicator_infos.insert(
-            replicator_pubkey,
-            ReplicatorInfo::new(storage_pubkey, replicator_ledger_path),
+        self.archivers.push(archiver);
+        self.archiver_infos.insert(
+            archiver_pubkey,
+            ArchiverInfo::new(storage_pubkey, archiver_ledger_path),
         );
     }
 
@@ -388,7 +388,7 @@ impl LocalCluster {
             .validator_infos
             .values()
             .map(|f| &f.info.ledger_path)
-            .chain(self.replicator_infos.values().map(|info| &info.ledger_path))
+            .chain(self.archiver_infos.values().map(|info| &info.ledger_path))
         {
             remove_dir_all(&ledger_path)
                 .unwrap_or_else(|_| panic!("Unable to remove {:?}", ledger_path));
@@ -531,15 +531,15 @@ impl LocalCluster {
         }
     }
 
-    /// Sets up the storage account for validators/replicators and assumes the funder is the owner
+    /// Sets up the storage account for validators/archivers and assumes the funder is the owner
     fn setup_storage_account(
         client: &ThinClient,
         storage_keypair: &Keypair,
         from_keypair: &Arc<Keypair>,
-        replicator: bool,
+        archiver: bool,
     ) -> Result<()> {
-        let storage_account_type = if replicator {
-            StorageAccountType::Replicator
+        let storage_account_type = if archiver {
+            StorageAccountType::Archiver
         } else {
             StorageAccountType::Validator
         };
@@ -644,7 +644,7 @@ mod test {
         let num_nodes = 1;
         let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 3);
         assert_eq!(cluster.validators.len(), num_nodes);
-        assert_eq!(cluster.replicators.len(), 0);
+        assert_eq!(cluster.archivers.len(), 0);
     }
 
     #[test]
@@ -654,10 +654,10 @@ mod test {
         validator_config.rpc_config.enable_validator_exit = true;
         validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
         const NUM_NODES: usize = 1;
-        let num_replicators = 1;
+        let num_archivers = 1;
         let config = ClusterConfig {
             validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
-            num_replicators,
+            num_archivers,
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
             ticks_per_slot: 8,
@@ -666,6 +666,6 @@ mod test {
         };
         let cluster = LocalCluster::new(&config);
         assert_eq!(cluster.validators.len(), NUM_NODES);
-        assert_eq!(cluster.replicators.len(), num_replicators);
+        assert_eq!(cluster.archivers.len(), num_archivers);
     }
 }

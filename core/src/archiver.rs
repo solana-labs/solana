@@ -51,18 +51,18 @@ use std::time::Duration;
 static ENCRYPTED_FILENAME: &str = "ledger.enc";
 
 #[derive(Serialize, Deserialize)]
-pub enum ReplicatorRequest {
+pub enum ArchiverRequest {
     GetSlotHeight(SocketAddr),
 }
 
-pub struct Replicator {
+pub struct Archiver {
     thread_handles: Vec<JoinHandle<()>>,
     exit: Arc<AtomicBool>,
 }
 
-// Shared Replicator Meta struct used internally
+// Shared Archiver Meta struct used internally
 #[derive(Default)]
-struct ReplicatorMeta {
+struct ArchiverMeta {
     slot: u64,
     slots_per_segment: u64,
     ledger_path: PathBuf,
@@ -135,16 +135,10 @@ fn create_request_processor(
     let (s_responder, r_responder) = channel();
     let storage_socket = Arc::new(socket);
     let recycler = Recycler::default();
-    let t_receiver = receiver(
-        storage_socket.clone(),
-        exit,
-        s_reader,
-        recycler,
-        "replicator",
-    );
+    let t_receiver = receiver(storage_socket.clone(), exit, s_reader, recycler, "archiver");
     thread_handles.push(t_receiver);
 
-    let t_responder = responder("replicator-responder", storage_socket.clone(), r_responder);
+    let t_responder = responder("archiver-responder", storage_socket.clone(), r_responder);
     thread_handles.push(t_responder);
 
     let exit = exit.clone();
@@ -160,10 +154,10 @@ fn create_request_processor(
 
             if let Ok(packets) = packets {
                 for packet in &packets.packets {
-                    let req: result::Result<ReplicatorRequest, Box<bincode::ErrorKind>> =
+                    let req: result::Result<ArchiverRequest, Box<bincode::ErrorKind>> =
                         deserialize(&packet.data[..packet.meta.size]);
                     match req {
-                        Ok(ReplicatorRequest::GetSlotHeight(from)) => {
+                        Ok(ArchiverRequest::GetSlotHeight(from)) => {
                             if let Ok(blob) = to_shared_blob(slot, from) {
                                 let _ = s_responder.send(vec![blob]);
                             }
@@ -192,15 +186,15 @@ fn poll_for_slot(receiver: Receiver<u64>, exit: &Arc<AtomicBool>) -> u64 {
     }
 }
 
-impl Replicator {
-    /// Returns a Result that contains a replicator on success
+impl Archiver {
+    /// Returns a Result that contains an archiver on success
     ///
     /// # Arguments
     /// * `ledger_path` - path to where the ledger will be stored.
     /// Causes panic if none
-    /// * `node` - The replicator node
+    /// * `node` - The archiver node
     /// * `cluster_entrypoint` - ContactInfo representing an entry into the network
-    /// * `keypair` - Keypair for this replicator
+    /// * `keypair` - Keypair for this archiver
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: &Path,
@@ -211,7 +205,7 @@ impl Replicator {
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
 
-        info!("Replicator: id: {}", keypair.pubkey());
+        info!("Archiver: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
         let mut cluster_info = ClusterInfo::new(node.info.clone(), keypair.clone());
         cluster_info.set_entrypoint(cluster_entrypoint.clone());
@@ -235,7 +229,7 @@ impl Replicator {
         info!("Connecting to the cluster via {:?}", cluster_entrypoint);
         let (nodes, _) =
             match crate::gossip_service::discover_cluster(&cluster_entrypoint.gossip, 1) {
-                Ok(nodes_and_replicators) => nodes_and_replicators,
+                Ok(nodes_and_archivers) => nodes_and_archivers,
                 Err(e) => {
                     //shutdown services before exiting
                     exit.store(true, Ordering::Relaxed);
@@ -273,15 +267,15 @@ impl Replicator {
         let request_processor =
             create_request_processor(node.sockets.storage.unwrap(), &exit, slot_receiver);
 
-        let t_replicator = {
+        let t_archiver = {
             let exit = exit.clone();
             let node_info = node.info.clone();
-            let mut meta = ReplicatorMeta {
+            let mut meta = ArchiverMeta {
                 ledger_path: ledger_path.to_path_buf(),
-                ..ReplicatorMeta::default()
+                ..ArchiverMeta::default()
             };
             spawn(move || {
-                // setup replicator
+                // setup archiver
                 let window_service = match Self::setup(
                     &mut meta,
                     cluster_info.clone(),
@@ -296,7 +290,7 @@ impl Replicator {
                     Ok(window_service) => window_service,
                     Err(e) => {
                         //shutdown services before exiting
-                        error!("setup failed {:?}; replicator thread exiting...", e);
+                        error!("setup failed {:?}; archiver thread exiting...", e);
                         exit.store(true, Ordering::Relaxed);
                         request_processor
                             .into_iter()
@@ -308,7 +302,7 @@ impl Replicator {
                 };
 
                 info!("setup complete");
-                // run replicator
+                // run archiver
                 Self::run(
                     &mut meta,
                     &blocktree,
@@ -328,16 +322,16 @@ impl Replicator {
         };
 
         Ok(Self {
-            thread_handles: vec![t_replicator],
+            thread_handles: vec![t_archiver],
             exit,
         })
     }
 
     fn run(
-        meta: &mut ReplicatorMeta,
+        meta: &mut ArchiverMeta,
         blocktree: &Arc<Blocktree>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        replicator_keypair: &Arc<Keypair>,
+        archiver_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
     ) {
@@ -362,7 +356,7 @@ impl Replicator {
                     }
                 };
 
-            Self::submit_mining_proof(meta, &cluster_info, replicator_keypair, storage_keypair);
+            Self::submit_mining_proof(meta, &cluster_info, archiver_keypair, storage_keypair);
 
             // TODO make this a lot more frequent by picking a "new" blockhash instead of picking a storage blockhash
             // prep the next proof
@@ -382,34 +376,34 @@ impl Replicator {
                 }
             };
             meta.blockhash = storage_blockhash;
-            Self::redeem_rewards(&cluster_info, replicator_keypair, storage_keypair);
+            Self::redeem_rewards(&cluster_info, archiver_keypair, storage_keypair);
         }
         exit.store(true, Ordering::Relaxed);
     }
 
     fn redeem_rewards(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        replicator_keypair: &Arc<Keypair>,
+        archiver_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
     ) {
         let nodes = cluster_info.read().unwrap().tvu_peers();
         let client = crate::gossip_service::get_client(&nodes);
 
         if let Ok(Some(account)) = client.get_account(&storage_keypair.pubkey()) {
-            if let Ok(StorageContract::ReplicatorStorage { validations, .. }) = account.state() {
+            if let Ok(StorageContract::ArchiverStorage { validations, .. }) = account.state() {
                 if !validations.is_empty() {
                     let ix = storage_instruction::claim_reward(
-                        &replicator_keypair.pubkey(),
+                        &archiver_keypair.pubkey(),
                         &storage_keypair.pubkey(),
                     );
                     let message =
-                        Message::new_with_payer(vec![ix], Some(&replicator_keypair.pubkey()));
-                    if let Err(e) = client.send_message(&[&replicator_keypair], message) {
+                        Message::new_with_payer(vec![ix], Some(&archiver_keypair.pubkey()));
+                    if let Err(e) = client.send_message(&[&archiver_keypair], message) {
                         error!("unable to redeem reward, tx failed: {:?}", e);
                     } else {
                         info!(
                             "collected mining rewards: Account balance {:?}",
-                            client.get_balance(&replicator_keypair.pubkey())
+                            client.get_balance(&archiver_keypair.pubkey())
                         );
                     }
                 }
@@ -421,7 +415,7 @@ impl Replicator {
 
     // Find a segment to replicate and download it.
     fn setup(
-        meta: &mut ReplicatorMeta,
+        meta: &mut ArchiverMeta,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
         exit: &Arc<AtomicBool>,
@@ -520,7 +514,7 @@ impl Replicator {
 
         info!("Done receiving entries from window_service");
 
-        // Remove replicator from the data plane
+        // Remove archiver from the data plane
         let mut contact_info = node_info.clone();
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
         contact_info.wallclock = timestamp();
@@ -530,7 +524,7 @@ impl Replicator {
         }
     }
 
-    fn encrypt_ledger(meta: &mut ReplicatorMeta, blocktree: &Arc<Blocktree>) -> Result<()> {
+    fn encrypt_ledger(meta: &mut ArchiverMeta, blocktree: &Arc<Blocktree>) -> Result<()> {
         meta.ledger_data_file_encrypted = meta.ledger_path.join(ENCRYPTED_FILENAME);
 
         {
@@ -555,7 +549,7 @@ impl Replicator {
         Ok(())
     }
 
-    fn create_sampling_offsets(meta: &mut ReplicatorMeta) {
+    fn create_sampling_offsets(meta: &mut ArchiverMeta) {
         meta.sampling_offsets.clear();
         let mut rng_seed = [0u8; 32];
         rng_seed.copy_from_slice(&meta.blockhash.as_ref());
@@ -580,7 +574,7 @@ impl Replicator {
         keypair: &Keypair,
         storage_keypair: &Keypair,
     ) -> Result<()> {
-        // make sure replicator has some balance
+        // make sure archiver has some balance
         if client.poll_get_balance(&keypair.pubkey())? == 0 {
             return Err(
                 io::Error::new(io::ErrorKind::Other, "keypair account has no balance").into(),
@@ -605,7 +599,7 @@ impl Replicator {
                 &keypair.pubkey(),
                 &storage_keypair.pubkey(),
                 1,
-                StorageAccountType::Replicator,
+                StorageAccountType::Archiver,
             );
             let tx = Transaction::new_signed_instructions(&[keypair], ix, blockhash);
             let signature = client.async_send_transaction(tx)?;
@@ -623,9 +617,9 @@ impl Replicator {
     }
 
     fn submit_mining_proof(
-        meta: &ReplicatorMeta,
+        meta: &ArchiverMeta,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        replicator_keypair: &Arc<Keypair>,
+        archiver_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
     ) {
         // No point if we've got no storage account...
@@ -637,9 +631,9 @@ impl Replicator {
             return;
         }
         // ...or no lamports for fees
-        let balance = client.poll_get_balance(&replicator_keypair.pubkey());
+        let balance = client.poll_get_balance(&archiver_keypair.pubkey());
         if balance.is_err() || balance.unwrap() == 0 {
-            error!("Unable to submit mining proof, insufficient Replicator Account balance");
+            error!("Unable to submit mining proof, insufficient Archiver Account balance");
             return;
         }
 
@@ -657,15 +651,14 @@ impl Replicator {
             Signature::new(&meta.signature.as_ref()),
             meta.blockhash,
         );
-        let message =
-            Message::new_with_payer(vec![instruction], Some(&replicator_keypair.pubkey()));
+        let message = Message::new_with_payer(vec![instruction], Some(&archiver_keypair.pubkey()));
         let mut transaction = Transaction::new(
-            &[replicator_keypair.as_ref(), storage_keypair.as_ref()],
+            &[archiver_keypair.as_ref(), storage_keypair.as_ref()],
             message,
             blockhash,
         );
         if let Err(err) = client.send_and_confirm_transaction(
-            &[&replicator_keypair, &storage_keypair],
+            &[&archiver_keypair, &storage_keypair],
             &mut transaction,
             10,
             0,
@@ -787,21 +780,21 @@ impl Replicator {
         }
     }
 
-    /// Ask a replicator to populate a given blocktree with its segment.
-    /// Return the slot at the start of the replicator's segment
+    /// Ask an archiver to populate a given blocktree with its segment.
+    /// Return the slot at the start of the archiver's segment
     ///
     /// It is recommended to use a temporary blocktree for this since the download will not verify
     /// blobs received and might impact the chaining of blobs across slots
-    pub fn download_from_replicator(
+    pub fn download_from_archiver(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        replicator_info: &ContactInfo,
+        archiver_info: &ContactInfo,
         blocktree: &Arc<Blocktree>,
         slots_per_segment: u64,
     ) -> Result<(u64)> {
-        // Create a client which downloads from the replicator and see that it
+        // Create a client which downloads from the archiver and see that it
         // can respond with blobs.
-        let start_slot = Self::get_replicator_segment_slot(replicator_info.storage_addr);
-        info!("Replicator download: start at {}", start_slot);
+        let start_slot = Self::get_archiver_segment_slot(archiver_info.storage_addr);
+        info!("Archiver download: start at {}", start_slot);
 
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
@@ -811,13 +804,13 @@ impl Replicator {
             &exit,
             s_reader.clone(),
             Recycler::default(),
-            "replicator_reeciver",
+            "archiver_reeciver",
         );
         let id = cluster_info.read().unwrap().id();
         info!(
             "Sending repair requests from: {} to: {}",
             cluster_info.read().unwrap().my_data().id,
-            replicator_info.gossip
+            archiver_info.gossip
         );
         let repair_slot_range = RepairSlotRange {
             start: start_slot,
@@ -825,7 +818,7 @@ impl Replicator {
         };
         // try for upto 180 seconds //TODO needs tuning if segments are huge
         for _ in 0..120 {
-            // Strategy used by replicators
+            // Strategy used by archivers
             let repairs = RepairService::generate_repairs_in_range(
                 blocktree,
                 repair_service::MAX_REPAIR_LENGTH,
@@ -840,7 +833,7 @@ impl Replicator {
                             .read()
                             .unwrap()
                             .map_repair_request(&repair_request)
-                            .map(|result| ((replicator_info.gossip, result), repair_request))
+                            .map(|result| ((archiver_info.gossip, result), repair_request))
                             .ok()
                     })
                     .collect();
@@ -848,7 +841,7 @@ impl Replicator {
                 for ((to, req), repair_request) in reqs {
                     if let Ok(local_addr) = repair_socket.local_addr() {
                         datapoint_info!(
-                            "replicator_download",
+                            "archiver_download",
                             ("repair_request", format!("{:?}", repair_request), String),
                             ("to", to.to_string(), String),
                             ("from", local_addr.to_string(), String),
@@ -856,7 +849,7 @@ impl Replicator {
                         );
                     }
                     repair_socket
-                        .send_to(&req, replicator_info.gossip)
+                        .send_to(&req, archiver_info.gossip)
                         .unwrap_or_else(|e| {
                             error!("{} repair req send_to({}) error {:?}", id, to, e);
                             0
@@ -906,13 +899,13 @@ impl Replicator {
         true
     }
 
-    fn get_replicator_segment_slot(to: SocketAddr) -> u64 {
+    fn get_archiver_segment_slot(to: SocketAddr) -> u64 {
         let (_port, socket) = bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
         socket
             .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();
 
-        let req = ReplicatorRequest::GetSlotHeight(socket.local_addr().unwrap());
+        let req = ArchiverRequest::GetSlotHeight(socket.local_addr().unwrap());
         let serialized_req = bincode::serialize(&req).unwrap();
         for _ in 0..10 {
             socket.send_to(&serialized_req, to).unwrap();
@@ -922,7 +915,7 @@ impl Replicator {
             }
             sleep(Duration::from_millis(500));
         }
-        panic!("Couldn't get segment slot from replicator!");
+        panic!("Couldn't get segment slot from archiver!");
     }
 }
 

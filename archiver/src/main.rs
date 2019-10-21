@@ -1,8 +1,8 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
 use console::style;
+use solana_core::archiver::Archiver;
 use solana_core::cluster_info::{Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
-use solana_core::replicator::Replicator;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -94,11 +94,8 @@ fn main() {
         addr.set_ip(solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap());
         addr
     };
-    let node = Node::new_replicator_with_external_ip(
-        &keypair.pubkey(),
-        &gossip_addr,
-        VALIDATOR_PORT_RANGE,
-    );
+    let node =
+        Node::new_archiver_with_external_ip(&keypair.pubkey(), &gossip_addr, VALIDATOR_PORT_RANGE);
 
     println!(
         "{} version {} (branch={}, commit={})",
@@ -115,7 +112,7 @@ fn main() {
     );
 
     let entrypoint_info = ContactInfo::new_gossip_entry_point(&entrypoint_addr);
-    let replicator = Replicator::new(
+    let archiver = Archiver::new(
         &ledger_path,
         node,
         entrypoint_info,
@@ -124,5 +121,5 @@ fn main() {
     )
     .unwrap();
 
-    replicator.join();
+    archiver.join();
 }
