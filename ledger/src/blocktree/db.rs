@@ -71,7 +71,7 @@ pub mod columns {
 }
 
 #[derive(Debug)]
-pub struct Rocks(rocksdb::DB);
+struct Rocks(rocksdb::DB);
 
 impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
@@ -210,11 +210,6 @@ pub trait Column {
     fn index(key: &[u8]) -> Self::Index;
     fn slot(index: Self::Index) -> Slot;
     fn as_index(slot: Slot) -> Self::Index;
-}
-
-pub trait IWriteBatch {
-    fn put_cf(&mut self, cf: ColumnFamily, key: &[u8], value: &[u8]) -> Result<()>;
-    fn delete_cf(&mut self, cf: ColumnFamily, key: &[u8]) -> Result<()>;
 }
 
 pub trait TypedColumn: Column {
@@ -739,18 +734,6 @@ impl WriteBatch {
     #[inline]
     fn get_cf<C: Column>(&self) -> ColumnFamily {
         self.map[C::NAME]
-    }
-}
-
-impl IWriteBatch for RWriteBatch {
-    fn put_cf(&mut self, cf: ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
-        RWriteBatch::put_cf(self, cf, key, value)?;
-        Ok(())
-    }
-
-    fn delete_cf(&mut self, cf: ColumnFamily, key: &[u8]) -> Result<()> {
-        RWriteBatch::delete_cf(self, cf, key)?;
-        Ok(())
     }
 }
 
