@@ -132,17 +132,17 @@ launchTestnet() {
     )'
 
   declare q_mean_confirmation='
-    SELECT round(mean("duration_ms")) as "mean_confirmation"
+    SELECT round(mean("duration_ms")) as "mean_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
   declare q_max_confirmation='
-    SELECT round(max("duration_ms")) as "max_confirmation"
+    SELECT round(max("duration_ms")) as "max_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
   declare q_99th_confirmation='
-    SELECT round(percentile("duration_ms", 99)) as "99th_confirmation"
+    SELECT round(percentile("duration_ms", 99)) as "99th_percentile_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
