@@ -1,7 +1,7 @@
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use rayon::iter::ParallelIterator;
-use rayon::prelude::*;
+//use rayon::iter::ParallelIterator;
+//use rayon::prelude::*;
 use serial_test_derive::serial;
 use solana_core::cluster_info::{compute_retransmit_peers, ClusterInfo};
 use solana_core::contact_info::ContactInfo;
@@ -22,7 +22,7 @@ fn num_threads() -> usize {
 
 /// Search for the a node with the given balance
 fn find_insert_blob(id: &Pubkey, blob: i32, batches: &mut [Nodes]) {
-    batches.par_iter_mut().for_each(|batch| {
+    batches.iter_mut().for_each(|batch| {
         if batch.contains_key(id) {
             let _ = batch.get_mut(id).unwrap().1.insert(blob);
         }
@@ -140,7 +140,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
 
     // start turbine simulation
     let now = Instant::now();
-    batches.par_iter_mut().for_each(|batch| {
+    batches.iter_mut().for_each(|batch| {
         let mut cluster = c_info.clone();
         let mut remaining = batch.len();
         let senders: HashMap<_, _> = senders.lock().unwrap().clone();

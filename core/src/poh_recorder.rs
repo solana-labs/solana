@@ -936,6 +936,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_reset_to_new_value() {
         solana_logger::setup();
 

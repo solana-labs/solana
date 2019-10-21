@@ -635,7 +635,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::service::Service;
-    use rayon::prelude::*;
+    //use rayon::prelude::*;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hasher;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -687,15 +687,13 @@ mod tests {
         let hasher = Hasher::default();
         {
             let hist = hist.clone();
-            (0..(32 * NUM_IDENTITIES))
-                .into_par_iter()
-                .for_each(move |_| {
-                    let keypair = Keypair::new();
-                    let hash = hasher.clone().result();
-                    let signature = keypair.sign_message(&hash.as_ref());
-                    let ix = get_identity_index_from_signature(&signature);
-                    hist[ix].fetch_add(1, Ordering::Relaxed);
-                });
+            (0..(32 * NUM_IDENTITIES)).into_iter().for_each(move |_| {
+                let keypair = Keypair::new();
+                let hash = hasher.clone().result();
+                let signature = keypair.sign_message(&hash.as_ref());
+                let ix = get_identity_index_from_signature(&signature);
+                hist[ix].fetch_add(1, Ordering::Relaxed);
+            });
         }
 
         let mut hist_max = 0;

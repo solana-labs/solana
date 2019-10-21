@@ -8,13 +8,13 @@ use crate::shred::{Shred, Shredder};
 use bincode::deserialize;
 
 use log::*;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
-use rayon::ThreadPool;
+//use rayon::iter::IntoParallelRefIterator;
+//use rayon::iter::ParallelIterator;
+//use rayon::ThreadPool;
 use rocksdb;
 
 use solana_metrics::{datapoint_debug, datapoint_error};
-use solana_rayon_threadlimit::get_thread_count;
+//use solana_rayon_threadlimit::get_thread_count;
 
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -48,10 +48,10 @@ type BatchProcessor = db::BatchProcessor;
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .build()
-                    .unwrap()));
+/*thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+.num_threads(get_thread_count())
+.build()
+.unwrap()));*/
 
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 
@@ -1034,16 +1034,16 @@ impl Blocktree {
             .last()
             .map(|(_, end_index)| u64::from(*end_index) - start_index + 1);
 
-        let all_entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                completed_ranges
-                    .par_iter()
-                    .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(slot, *start_index, *end_index)
-                    })
-                    .collect()
+        //let all_entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
+        //    thread_pool.borrow().install(|| {
+        let all_entries: Result<Vec<Vec<Entry>>> = completed_ranges
+            .iter()
+            .map(|(start_index, end_index)| {
+                self.get_entries_in_data_block(slot, *start_index, *end_index)
             })
-        });
+            .collect();
+        //    })
+        //});
 
         let all_entries: Vec<Entry> = all_entries?.into_iter().flatten().collect();
         Ok((all_entries, num_shreds.unwrap_or(0) as usize))

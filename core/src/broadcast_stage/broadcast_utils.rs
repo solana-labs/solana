@@ -98,6 +98,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_recv_slot_entries_1() {
         let (genesis_block, bank0, tx) = setup_test();
 
@@ -123,6 +124,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_recv_slot_entries_2() {
         let (genesis_block, bank0, tx) = setup_test();
 

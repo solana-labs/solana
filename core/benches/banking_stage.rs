@@ -7,7 +7,7 @@ extern crate solana_ledger;
 use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
-use rayon::prelude::*;
+//use rayon::prelude::*;
 use solana_core::banking_stage::{create_test_recorder, BankingStage};
 use solana_core::cluster_info::ClusterInfo;
 use solana_core::cluster_info::Node;
@@ -97,7 +97,7 @@ fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Tra
     let to_pubkey = Pubkey::new_rand();
     let dummy = system_transaction::transfer(mint_keypair, &to_pubkey, 1, hash);
     (0..txes)
-        .into_par_iter()
+        .into_iter()
         .map(|_| {
             let mut new = dummy.clone();
             let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();

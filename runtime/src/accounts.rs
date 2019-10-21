@@ -5,7 +5,6 @@ use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use crate::rent_collector::RentCollector;
 use log::*;
-use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
@@ -296,9 +295,7 @@ impl Accounts {
         );
 
         let mut versions: Vec<(Pubkey, u64, B)> = accumulator.into_iter().flat_map(|x| x).collect();
-        self.accounts_db.thread_pool.install(|| {
-            versions.par_sort_by_key(|s| (s.0, s.1));
-        });
+        versions.sort_by_key(|s| (s.0, s.1));
         versions.dedup_by_key(|s| s.0);
         versions
             .into_iter()

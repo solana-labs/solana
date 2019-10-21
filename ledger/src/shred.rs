@@ -1,13 +1,12 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
 use crate::entry::{create_ticks, Entry};
 use crate::erasure::Session;
-use core::cell::RefCell;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
-use rayon::slice::ParallelSlice;
-use rayon::ThreadPool;
+//use bincode::serialized_size;
+//use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+//use rayon::slice::ParallelSlice;
+//use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
-use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
@@ -28,11 +27,6 @@ pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
-
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .build()
-                    .unwrap()));
 
 /// The constants that define if a shred is data or coding
 pub const DATA_SHRED: u8 = 0b1010_0101;
@@ -375,58 +369,58 @@ impl Shredder {
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
 
         // 1) Generate data shreds
-        let data_shreds: Vec<Shred> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                serialized_shreds
-                    .par_chunks(no_header_size)
-                    .enumerate()
-                    .map(|(i, shred_data)| {
-                        let shred_index = next_shred_index + i as u32;
+        //let data_shreds: Vec<Shred> = PAR_THREAD_POOL.with(|thread_pool| {
+        //    thread_pool.borrow().install(|| {
+        let data_shreds: Vec<Shred> = serialized_shreds
+            .chunks(no_header_size)
+            .enumerate()
+            .map(|(i, shred_data)| {
+                let shred_index = next_shred_index + i as u32;
 
-                        let (is_last_data, is_last_in_slot) = {
-                            if shred_index == last_shred_index {
-                                (true, is_last_in_slot)
-                            } else {
-                                (false, false)
-                            }
-                        };
+                let (is_last_data, is_last_in_slot) = {
+                    if shred_index == last_shred_index {
+                        (true, is_last_in_slot)
+                    } else {
+                        (false, false)
+                    }
+                };
 
-                        let mut shred = Shred::new_from_data(
-                            self.slot,
-                            shred_index,
-                            (self.slot - self.parent_slot) as u16,
-                            Some(shred_data),
-                            is_last_data,
-                            is_last_in_slot,
-                        );
+                let mut shred = Shred::new_from_data(
+                    self.slot,
+                    shred_index,
+                    (self.slot - self.parent_slot) as u16,
+                    Some(shred_data),
+                    is_last_data,
+                    is_last_in_slot,
+                );
 
-                        Shredder::sign_shred(&self.keypair, &mut shred);
-                        shred
-                    })
-                    .collect()
+                Shredder::sign_shred(&self.keypair, &mut shred);
+                shred
             })
-        });
+            .collect();
+        //    })
+        //});
 
         // 2) Generate coding shreds
-        let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                data_shreds
-                    .par_chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
-                    .flat_map(|shred_data_batch| {
-                        Shredder::generate_coding_shreds(self.slot, self.fec_rate, shred_data_batch)
-                    })
-                    .collect()
+        //let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
+        //    thread_pool.borrow().install(|| {
+        let mut coding_shreds: Vec<_> = data_shreds
+            .chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
+            .flat_map(|shred_data_batch| {
+                Shredder::generate_coding_shreds(self.slot, self.fec_rate, shred_data_batch)
             })
-        });
+            .collect();
+        //    })
+        //});
 
         // 3) Sign coding shreds
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                coding_shreds.par_iter_mut().for_each(|mut coding_shred| {
-                    Shredder::sign_shred(&self.keypair, &mut coding_shred);
-                })
-            })
+        //PAR_THREAD_POOL.with(|thread_pool| {
+        //    thread_pool.borrow().install(|| {
+        coding_shreds.iter_mut().for_each(|mut coding_shred| {
+            Shredder::sign_shred(&self.keypair, &mut coding_shred);
         });
+        //    })
+        //});
 
         let elapsed = now.elapsed().as_millis();
 

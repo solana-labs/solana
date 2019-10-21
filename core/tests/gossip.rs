@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate log;
 
-use rayon::iter::*;
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::gossip_service::GossipService;
 
@@ -180,7 +179,7 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
     let retransmit_peers: Vec<_> = peers.iter().collect();
     ClusterInfo::retransmit_to(&retransmit_peers, &mut p, None, &tn1, false)?;
     let res: Vec<_> = [tn1, tn2, tn3]
-        .into_par_iter()
+        .into_iter()
         .map(|s| {
             let mut p = Packet::default();
             s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();

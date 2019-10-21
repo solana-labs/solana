@@ -1,6 +1,6 @@
 use bincode::serialized_size;
 use log::*;
-use rayon::prelude::*;
+//use rayon::prelude::*;
 use solana_core::cluster_info::ClusterInfo;
 use solana_core::contact_info::ContactInfo;
 use solana_core::crds_gossip::*;
@@ -200,7 +200,7 @@ fn network_simulator(network: &mut Network, max_convergance: f64) {
     trace!("network_simulator_push_{}: converged: {}", num, converged);
     // make sure there is someone in the active set
     let network_values: Vec<Node> = network.values().cloned().collect();
-    network_values.par_iter().for_each(|node| {
+    network_values.iter().for_each(|node| {
         node.lock()
             .unwrap()
             .refresh_push_active_set(&HashMap::new());
@@ -211,7 +211,7 @@ fn network_simulator(network: &mut Network, max_convergance: f64) {
         let end = (second + 1) * 10;
         let now = (start * 100) as u64;
         // push a message to the network
-        network_values.par_iter().for_each(|locked_node| {
+        network_values.iter().for_each(|locked_node| {
             let node = &mut locked_node.lock().unwrap();
             let mut m = node
                 .crds
@@ -259,14 +259,14 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
     for t in start..end {
         let now = t as u64 * 100;
         let requests: Vec<_> = network_values
-            .par_iter()
+            .iter()
             .map(|node| {
                 node.lock().unwrap().purge(now);
                 node.lock().unwrap().new_push_messages(now)
             })
             .collect();
         let transfered: Vec<_> = requests
-            .into_par_iter()
+            .into_iter()
             .map(|(from, push_messages)| {
                 let mut bytes: usize = 0;
                 let mut delivered: usize = 0;
@@ -334,14 +334,14 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
             }
         }
         if now % CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS == 0 && now > 0 {
-            network_values.par_iter().for_each(|node| {
+            network_values.iter().for_each(|node| {
                 node.lock()
                     .unwrap()
                     .refresh_push_active_set(&HashMap::new());
             });
         }
         total = network_values
-            .par_iter()
+            .iter()
             .map(|v| v.lock().unwrap().push.num_pending())
             .sum();
         trace!(
@@ -377,7 +377,7 @@ fn network_run_pull(
         let now = t as u64 * 100;
         let requests: Vec<_> = {
             network_values
-                .par_iter()
+                .iter()
                 .filter_map(|from| {
                     from.lock()
                         .unwrap()
@@ -387,7 +387,7 @@ fn network_run_pull(
                 .collect()
         };
         let transfered: Vec<_> = requests
-            .into_par_iter()
+            .into_iter()
             .map(|(to, filters, caller_info)| {
                 let mut bytes: usize = 0;
                 let mut msgs: usize = 0;
@@ -436,7 +436,7 @@ fn network_run_pull(
             overhead += o;
         }
         let total: usize = network_values
-            .par_iter()
+            .iter()
             .map(|v| v.lock().unwrap().crds.table.len())
             .sum();
         convergance = total as f64 / ((num * num) as f64);

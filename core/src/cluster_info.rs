@@ -1783,7 +1783,7 @@ mod tests {
     use crate::repair_service::RepairType;
     use crate::result::Error;
     use crate::test_tx::test_tx;
-    use rayon::prelude::*;
+    //use rayon::prelude::*;
     use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::blocktree::make_many_slot_entries;
     use solana_ledger::blocktree::Blocktree;
@@ -2164,7 +2164,7 @@ mod tests {
         assert_eq!(push_messages.len() > 0, true);
         push_messages
             .values()
-            .for_each(|v| v.par_iter().for_each(|v| assert!(v.verify())));
+            .for_each(|v| v.iter().for_each(|v| assert!(v.verify())));
 
         let (_, _, val) = cluster_info
             .gossip

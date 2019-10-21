@@ -6,13 +6,10 @@ use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{PacketReceiver, PacketSender};
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
-use rayon::ThreadPool;
 use solana_ledger::blocktree::{self, Blocktree};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
-use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -71,7 +68,6 @@ fn recv_window<F>(
     r: &PacketReceiver,
     retransmit: &PacketSender,
     shred_filter: F,
-    thread_pool: &ThreadPool,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
 ) -> Result<()>
 where
@@ -89,32 +85,32 @@ where
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
     let last_root = blocktree.last_root();
-    let shreds: Vec<_> = thread_pool.install(|| {
-        packets
-            .par_iter_mut()
-            .flat_map(|packets| {
-                packets
-                    .packets
-                    .iter_mut()
-                    .filter_map(|packet| {
-                        if let Ok(shred) = Shred::new_from_serialized_shred(packet.data.to_vec()) {
-                            if shred_filter(&shred, last_root) {
-                                packet.meta.slot = shred.slot();
-                                packet.meta.seed = shred.seed();
-                                Some(shred)
-                            } else {
-                                packet.meta.discard = true;
-                                None
-                            }
+    //let shreds: Vec<_> = thread_pool.install(|| {
+    let shreds: Vec<_> = packets
+        .iter_mut()
+        .flat_map(|packets| {
+            packets
+                .packets
+                .iter_mut()
+                .filter_map(|packet| {
+                    if let Ok(shred) = Shred::new_from_serialized_shred(packet.data.to_vec()) {
+                        if shred_filter(&shred, last_root) {
+                            packet.meta.slot = shred.slot();
+                            packet.meta.seed = shred.seed();
+                            Some(shred)
                         } else {
                             packet.meta.discard = true;
                             None
                         }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect()
-    });
+                    } else {
+                        packet.meta.discard = true;
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    //});
 
     trace!("{:?} shreds from packets", shreds.len());
 
@@ -205,10 +201,6 @@ impl WindowService {
                 let id = cluster_info.read().unwrap().id();
                 trace!("{}: RECV_WINDOW started", id);
                 let mut now = Instant::now();
-                let thread_pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .build()
-                    .unwrap();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -229,7 +221,6 @@ impl WindowService {
                                 last_root,
                             )
                         },
-                        &thread_pool,
                         &leader_schedule_cache,
                     ) {
                         match e {

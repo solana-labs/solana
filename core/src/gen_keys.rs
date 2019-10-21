@@ -2,7 +2,7 @@
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rayon::prelude::*;
+//use rayon::prelude::*;
 use solana_sdk::signature::Keypair;
 
 pub struct GenKeys {
@@ -31,7 +31,7 @@ impl GenKeys {
 
     pub fn gen_n_keypairs(&mut self, n: u64) -> Vec<Keypair> {
         self.gen_n_seeds(n)
-            .into_par_iter()
+            .into_iter()
             .map(|seed| Keypair::generate(&mut ChaChaRng::from_seed(seed)))
             .collect()
     }

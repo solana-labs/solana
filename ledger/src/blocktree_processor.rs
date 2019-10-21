@@ -5,8 +5,8 @@ use crate::leader_schedule_cache::LeaderScheduleCache;
 use log::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use rayon::prelude::*;
-use rayon::ThreadPool;
+//use rayon::prelude::*;
+//use rayon::ThreadPool;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_runtime::bank::Bank;
 use solana_runtime::transaction_batch::TransactionBatch;
@@ -21,14 +21,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub const NUM_THREADS: u32 = 10;
-use solana_rayon_threadlimit::get_thread_count;
-use std::cell::RefCell;
-
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .build()
-                    .unwrap())
-);
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -73,20 +65,20 @@ fn execute_batches(
     entry_callback: Option<&ProcessCallback>,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|batch| {
-                    let result = execute_batch(batch);
-                    if let Some(entry_callback) = entry_callback {
-                        entry_callback(bank);
-                    }
-                    result
-                })
-                .collect()
+    //let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
+    //    thread_pool.borrow().install(|| {
+    let results: Vec<Result<()>> = batches
+        .iter()
+        .map(|batch| {
+            let result = execute_batch(batch);
+            if let Some(entry_callback) = entry_callback {
+                entry_callback(bank);
+            }
+            result
         })
-    });
+        .collect();
+    //    })
+    //});
 
     first_err(&results)
 }
@@ -194,14 +186,14 @@ pub fn process_blocktree(
     account_paths: Option<String>,
     opts: ProcessOptions,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
-    if let Some(num_threads) = opts.override_num_threads {
+    /*if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
             *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
                 .build()
                 .unwrap()
         });
-    }
+    }*/
 
     // Setup bank for slot 0
     let bank0 = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
@@ -957,9 +949,6 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
-        PAR_THREAD_POOL.with(|pool| {
-            assert_eq!(pool.borrow().current_num_threads(), 1);
-        });
     }
 
     #[test]

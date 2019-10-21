@@ -5,27 +5,18 @@
 use crate::perf_libs;
 use crate::poh::Poh;
 use log::*;
-use rayon::prelude::*;
-use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::*;
-use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
-use std::cell::RefCell;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
 pub const NUM_THREADS: u32 = 10;
-
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .build()
-                    .unwrap()));
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -177,23 +168,23 @@ impl EntrySlice for [Entry] {
             hash: *start_hash,
             transactions: vec![],
         }];
-        let entry_pairs = genesis.par_iter().chain(self).zip(self);
-        let res = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                entry_pairs.all(|(x0, x1)| {
-                    let r = x1.verify(&x0.hash);
-                    if !r {
-                        warn!(
-                            "entry invalid!: x0: {:?}, x1: {:?} num txs: {}",
-                            x0.hash,
-                            x1.hash,
-                            x1.transactions.len()
-                        );
-                    }
-                    r
-                })
-            })
+        let mut entry_pairs = genesis.iter().chain(self).zip(self);
+        //let res = PAR_THREAD_POOL.with(|thread_pool| {
+        //thread_pool.borrow().install(|| {
+        let res = entry_pairs.all(|(x0, x1)| {
+            let r = x1.verify(&x0.hash);
+            if !r {
+                warn!(
+                    "entry invalid!: x0: {:?}, x1: {:?} num txs: {}",
+                    x0.hash,
+                    x1.hash,
+                    x1.transactions.len()
+                );
+            }
+            r
         });
+        //})
+        //});
         inc_new_counter_warn!(
             "entry_verify-duration",
             timing::duration_as_ms(&now.elapsed()) as usize
@@ -255,19 +246,20 @@ impl EntrySlice for [Entry] {
             }
         });
 
-        let tx_hashes: Vec<Option<Hash>> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.into_par_iter()
-                    .map(|entry| {
-                        if entry.transactions.is_empty() {
-                            None
-                        } else {
-                            Some(hash_transactions(&entry.transactions))
-                        }
-                    })
-                    .collect()
+        //let tx_hashes: Vec<Option<Hash>> = PAR_THREAD_POOL.with(|thread_pool| {
+        //    thread_pool.borrow().install(|| {
+        let tx_hashes: Vec<Option<Hash>> = self
+            .iter()
+            .map(|entry| {
+                if entry.transactions.is_empty() {
+                    None
+                } else {
+                    Some(hash_transactions(&entry.transactions))
+                }
             })
-        });
+            .collect();
+        //    })
+        //});
 
         gpu_verify_thread.join().unwrap();
         inc_new_counter_warn!(
@@ -276,25 +268,26 @@ impl EntrySlice for [Entry] {
         );
 
         let hashes = Arc::try_unwrap(hashes).unwrap().into_inner().unwrap();
-        let res =
-            PAR_THREAD_POOL.with(|thread_pool| {
-                thread_pool.borrow().install(|| {
-                    hashes.into_par_iter().zip(tx_hashes).zip(self).all(
-                        |((hash, tx_hash), answer)| {
-                            if answer.num_hashes == 0 {
-                                hash == answer.hash
-                            } else {
-                                let mut poh = Poh::new(hash, None);
-                                if let Some(mixin) = tx_hash {
-                                    poh.record(mixin).unwrap().hash == answer.hash
-                                } else {
-                                    poh.tick().unwrap().hash == answer.hash
-                                }
-                            }
-                        },
-                    )
-                })
+        //let res = PAR_THREAD_POOL.with(|thread_pool| {
+        //    thread_pool.borrow().install(|| {
+        let res = hashes
+            .into_iter()
+            .zip(tx_hashes)
+            .zip(self)
+            .all(|((hash, tx_hash), answer)| {
+                if answer.num_hashes == 0 {
+                    hash == answer.hash
+                } else {
+                    let mut poh = Poh::new(hash, None);
+                    if let Some(mixin) = tx_hash {
+                        poh.record(mixin).unwrap().hash == answer.hash
+                    } else {
+                        poh.tick().unwrap().hash == answer.hash
+                    }
+                }
             });
+        //    })
+        //});
         inc_new_counter_warn!(
             "entry_verify-duration",
             timing::duration_as_ms(&start.elapsed()) as usize
