@@ -83,7 +83,10 @@ colo_instance_run() {
   set -e
   while read -r LINE; do
     echo -e "$IP\v$RC\v$LINE"
-  done <<< "$OUT"
+    if [[ "$RC" -ne 0 ]]; then
+      echo "IP(${IP}) Err(${RC}) LINE(${LINE})" 1>&2
+    fi
+  done < <(tr -d $'\r' <<<"$OUT")
   return $RC
 }
 
@@ -108,18 +111,19 @@ colo_instance_run_foreach() {
 }
 
 colo_whoami() {
-  declare ME LINE SOL_USER
+  declare ME LINE SOL_USER EOL
   while read -r LINE; do
     declare IP RC
-    IFS=$'\v' read -r IP RC SOL_USER <<< "$LINE"
+    IFS=$'\v' read -r IP RC SOL_USER EOL <<< "$LINE"
     if [ "$RC" -eq 0 ]; then
+      [[ "$EOL" = "EOL" ]] || echo "${FUNCNAME[0]}: Unexpected input \"$LINE\"" 1>&2
       if [ -z "$ME" ] || [ "$ME" = "$SOL_USER" ]; then
         ME="$SOL_USER"
       else
         echo "Found conflicting username \"$SOL_USER\" on $IP, expected \"$ME\"" 1>&2
       fi
     fi
-  done < <(colo_instance_run_foreach "[ -n \"\$SOLANA_USER\" ] && echo \"\$SOLANA_USER\"")
+  done < <(colo_instance_run_foreach "[ -n \"\$SOLANA_USER\" ] && echo -e \"\$SOLANA_USER\\vEOL\"")
   echo "$ME"
 }
 
@@ -138,16 +142,17 @@ __colo_node_status_script() {
                     # the time due to $SOLANA_LOCK_FILE not existing and is running from a
                     # subshell where normal redirection doesn't work
   exec 9<"$SOLANA_LOCK_FILE" && flock -s 9 && . "$SOLANA_LOCK_FILE" && exec 9>&-
-  echo -e "\$SOLANA_LOCK_USER\\v\$SOLANA_LOCK_INSTANCENAME"
+  echo -e "\$SOLANA_LOCK_USER\\v\$SOLANA_LOCK_INSTANCENAME\\vEOL"
   exec 2>&3 # Restore stderr
 EOF
 }
 
 __colo_node_status_result_normalize() {
-  declare IP RC US BY INSTNAME
+  declare IP RC US BY INSTNAME EOL
   declare ST="DOWN"
-  IFS=$'\v' read -r IP RC US INSTNAME <<< "$1"
+  IFS=$'\v' read -r IP RC US INSTNAME EOL <<< "$1"
   if [ "$RC" -eq 0 ]; then
+    [[ "$EOL" = "EOL" ]] || echo "${FUNCNAME[0]}: Unexpected input \"$1\"" 1>&2
     if [ -n "$US" ]; then
       BY="$US"
       ST="HELD"
