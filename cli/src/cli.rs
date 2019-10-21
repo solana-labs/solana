@@ -496,20 +496,20 @@ fn process_show_account(
     let account = rpc_client.get_account(account_pubkey)?;
 
     println!();
-    println!("Public Key: {}", account_pubkey);
-    println!(
-        "{:?}",
-        build_balance_message(account.lamports, use_lamports_unit)
+    println_name_value("Public Key:", &account_pubkey.to_string());
+    println_name_value(
+        "Balance:",
+        &build_balance_message(account.lamports, use_lamports_unit),
     );
-    println!("Owner: {}", account.owner);
-    println!("Executable: {}", account.executable);
+    println_name_value("Owner:", &account.owner.to_string());
+    println_name_value("Executable:", &account.executable.to_string());
 
     if let Some(output_file) = output_file {
         let mut f = File::create(output_file)?;
         f.write_all(&account.data)?;
         println!();
         println!("Wrote account data to {}", output_file);
-    } else {
+    } else if !account.data.is_empty() {
         use pretty_hex::*;
         println!("{:?}", account.data.hex_dump());
     }
