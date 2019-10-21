@@ -200,7 +200,6 @@ for i in "${TEST_PARAMS_TO_DISPLAY[@]}" ; do
   fi
 done
 
-START_TIME="$(date -u)"
 START_UNIX_MSECS="$(($(date +%s%N)/1000000))"
 
 launchTestnet
