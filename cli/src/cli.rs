@@ -135,7 +135,7 @@ pub enum CliCommand {
         timestamp: Option<DateTime<Utc>>,
         timestamp_pubkey: Option<Pubkey>,
         witnesses: Option<Vec<Pubkey>>,
-        cancelable: Option<Pubkey>,
+        cancelable: bool,
     },
     ShowAccount {
         pubkey: Pubkey,
@@ -312,7 +312,7 @@ pub fn parse_command(
         },
         ("pay", Some(matches)) => {
             let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
-            let to = value_of(&matches, "to").unwrap_or(*pubkey);
+            let to = value_of(&matches, "to").unwrap();
             let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
                 let date_string = if !matches.value_of("timestamp").unwrap().contains('Z') {
@@ -326,11 +326,7 @@ pub fn parse_command(
             };
             let timestamp_pubkey = value_of(&matches, "timestamp_pubkey");
             let witnesses = values_of(&matches, "witness");
-            let cancelable = if matches.is_present("cancelable") {
-                Some(*pubkey)
-            } else {
-                None
-            };
+            let cancelable = matches.is_present("cancelable");
 
             Ok(CliCommand::Pay {
                 lamports,
@@ -605,13 +601,19 @@ fn process_pay(
     timestamp: Option<DateTime<Utc>>,
     timestamp_pubkey: Option<Pubkey>,
     witnesses: &Option<Vec<Pubkey>>,
-    cancelable: Option<Pubkey>,
+    cancelable: bool,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (to, "to".to_string()),
     )?;
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let cancelable = if cancelable {
+        Some(config.keypair.pubkey())
+    } else {
+        None
+    };
 
     if timestamp == None && *witnesses == None {
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
@@ -1487,7 +1489,7 @@ mod tests {
                 timestamp: None,
                 timestamp_pubkey: None,
                 witnesses: None,
-                cancelable: None
+                cancelable: false,
             }
         );
 
@@ -1511,7 +1513,7 @@ mod tests {
                 timestamp: None,
                 timestamp_pubkey: None,
                 witnesses: Some(vec![witness0, witness1]),
-                cancelable: None
+                cancelable: false,
             }
         );
         let test_pay_single_witness = test_commands.clone().get_matches_from(vec![
@@ -1531,7 +1533,7 @@ mod tests {
                 timestamp: None,
                 timestamp_pubkey: None,
                 witnesses: Some(vec![witness0]),
-                cancelable: None
+                cancelable: false,
             }
         );
 
@@ -1555,7 +1557,7 @@ mod tests {
                 timestamp: Some(dt),
                 timestamp_pubkey: Some(witness0),
                 witnesses: None,
-                cancelable: None
+                cancelable: false,
             }
         );
 
@@ -1593,7 +1595,7 @@ mod tests {
                 timestamp: Some(dt),
                 timestamp_pubkey: Some(witness0),
                 witnesses: Some(vec![witness0, witness1]),
-                cancelable: None
+                cancelable: false,
             }
         );
 
@@ -1706,7 +1708,7 @@ mod tests {
             timestamp: None,
             timestamp_pubkey: None,
             witnesses: None,
-            cancelable: None,
+            cancelable: false,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1719,7 +1721,7 @@ mod tests {
             timestamp: Some(dt),
             timestamp_pubkey: Some(config.keypair.pubkey()),
             witnesses: None,
-            cancelable: None,
+            cancelable: false,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -1740,7 +1742,7 @@ mod tests {
             timestamp: None,
             timestamp_pubkey: None,
             witnesses: Some(vec![witness]),
-            cancelable: Some(config.keypair.pubkey()),
+            cancelable: true,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -1842,7 +1844,7 @@ mod tests {
             timestamp: None,
             timestamp_pubkey: None,
             witnesses: None,
-            cancelable: None,
+            cancelable: false,
         };
         assert!(process_command(&config).is_err());
 
@@ -1852,7 +1854,7 @@ mod tests {
             timestamp: Some(dt),
             timestamp_pubkey: Some(config.keypair.pubkey()),
             witnesses: None,
-            cancelable: None,
+            cancelable: false,
         };
         assert!(process_command(&config).is_err());
 
@@ -1862,7 +1864,7 @@ mod tests {
             timestamp: None,
             timestamp_pubkey: None,
             witnesses: Some(vec![witness]),
-            cancelable: Some(config.keypair.pubkey()),
+            cancelable: true,
         };
         assert!(process_command(&config).is_err());
 
