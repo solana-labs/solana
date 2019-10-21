@@ -190,7 +190,7 @@ pub fn parse_command(
     let response = match matches.subcommand() {
         // Cluster Query Commands
         ("cluster-version", Some(_matches)) => Ok(CliCommand::ClusterVersion),
-        ("fees", Some(_fees_matches)) => Ok(CliCommand::Fees),
+        ("fees", Some(_matches)) => Ok(CliCommand::Fees),
         ("get-epoch-info", Some(_matches)) => Ok(CliCommand::GetEpochInfo),
         ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommand::GetGenesisBlockhash),
         ("get-slot", Some(_matches)) => Ok(CliCommand::GetSlot),
@@ -198,11 +198,8 @@ pub fn parse_command(
         ("ping", Some(matches)) => parse_cluster_ping(matches),
         ("show-validators", Some(matches)) => parse_show_validators(matches),
         // Program Deployment
-        ("deploy", Some(deploy_matches)) => Ok(CliCommand::Deploy(
-            deploy_matches
-                .value_of("program_location")
-                .unwrap()
-                .to_string(),
+        ("deploy", Some(matches)) => Ok(CliCommand::Deploy(
+            matches.value_of("program_location").unwrap().to_string(),
         )),
         // Stake Commands
         ("create-stake-account", Some(matches)) => parse_stake_create_account(pubkey, matches),
@@ -249,9 +246,9 @@ pub fn parse_command(
         ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         // Wallet Commands
-        ("address", Some(_address_matches)) => Ok(CliCommand::Address),
-        ("airdrop", Some(airdrop_matches)) => {
-            let drone_port = airdrop_matches
+        ("address", Some(_matches)) => Ok(CliCommand::Address),
+        ("airdrop", Some(matches)) => {
+            let drone_port = matches
                 .value_of("drone_port")
                 .unwrap()
                 .parse()
@@ -272,9 +269,9 @@ pub fn parse_command(
             } else {
                 None
             };
-            let lamports = amount_of(airdrop_matches, "amount", "unit").expect("Invalid amount");
-            let use_lamports_unit = airdrop_matches.value_of("unit").is_some()
-                && airdrop_matches.value_of("unit").unwrap() == "lamports";
+            let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+            let use_lamports_unit = matches.value_of("unit").is_some()
+                && matches.value_of("unit").unwrap() == "lamports";
             Ok(CliCommand::Airdrop {
                 drone_host,
                 drone_port,
@@ -282,44 +279,42 @@ pub fn parse_command(
                 use_lamports_unit,
             })
         }
-        ("balance", Some(balance_matches)) => {
-            let pubkey = pubkey_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
-            let use_lamports_unit = balance_matches.is_present("lamports");
+        ("balance", Some(matches)) => {
+            let pubkey = pubkey_of(&matches, "pubkey").unwrap_or(*pubkey);
+            let use_lamports_unit = matches.is_present("lamports");
             Ok(CliCommand::Balance {
                 pubkey,
                 use_lamports_unit,
             })
         }
-        ("cancel", Some(cancel_matches)) => {
-            let process_id = value_of(cancel_matches, "process_id").unwrap();
+        ("cancel", Some(matches)) => {
+            let process_id = value_of(matches, "process_id").unwrap();
             Ok(CliCommand::Cancel(process_id))
         }
-        ("confirm", Some(confirm_matches)) => {
-            match confirm_matches.value_of("signature").unwrap().parse() {
-                Ok(signature) => Ok(CliCommand::Confirm(signature)),
-                _ => {
-                    eprintln!("{}", confirm_matches.usage());
-                    Err(CliError::BadParameter("Invalid signature".to_string()))
-                }
+        ("confirm", Some(matches)) => match matches.value_of("signature").unwrap().parse() {
+            Ok(signature) => Ok(CliCommand::Confirm(signature)),
+            _ => {
+                eprintln!("{}", matches.usage());
+                Err(CliError::BadParameter("Invalid signature".to_string()))
             }
-        }
-        ("pay", Some(pay_matches)) => {
-            let lamports = amount_of(pay_matches, "amount", "unit").expect("Invalid amount");
-            let to = value_of(&pay_matches, "to").unwrap_or(*pubkey);
-            let timestamp = if pay_matches.is_present("timestamp") {
+        },
+        ("pay", Some(matches)) => {
+            let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+            let to = value_of(&matches, "to").unwrap_or(*pubkey);
+            let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
-                let date_string = if !pay_matches.value_of("timestamp").unwrap().contains('Z') {
-                    format!("\"{}Z\"", pay_matches.value_of("timestamp").unwrap())
+                let date_string = if !matches.value_of("timestamp").unwrap().contains('Z') {
+                    format!("\"{}Z\"", matches.value_of("timestamp").unwrap())
                 } else {
-                    format!("\"{}\"", pay_matches.value_of("timestamp").unwrap())
+                    format!("\"{}\"", matches.value_of("timestamp").unwrap())
                 };
                 Some(serde_json::from_str(&date_string)?)
             } else {
                 None
             };
-            let timestamp_pubkey = value_of(&pay_matches, "timestamp_pubkey");
-            let witnesses = values_of(&pay_matches, "witness");
-            let cancelable = if pay_matches.is_present("cancelable") {
+            let timestamp_pubkey = value_of(&matches, "timestamp_pubkey");
+            let witnesses = values_of(&matches, "witness");
+            let cancelable = if matches.is_present("cancelable") {
                 Some(*pubkey)
             } else {
                 None
@@ -344,24 +339,20 @@ pub fn parse_command(
                 use_lamports_unit,
             })
         }
-        ("send-signature", Some(sig_matches)) => {
-            let to = value_of(&sig_matches, "to").unwrap();
-            let process_id = value_of(&sig_matches, "process_id").unwrap();
+        ("send-signature", Some(matches)) => {
+            let to = value_of(&matches, "to").unwrap();
+            let process_id = value_of(&matches, "process_id").unwrap();
             Ok(CliCommand::Witness(to, process_id))
         }
-        ("send-timestamp", Some(timestamp_matches)) => {
-            let to = value_of(&timestamp_matches, "to").unwrap();
-            let process_id = value_of(&timestamp_matches, "process_id").unwrap();
-            let dt = if timestamp_matches.is_present("datetime") {
+        ("send-timestamp", Some(matches)) => {
+            let to = value_of(&matches, "to").unwrap();
+            let process_id = value_of(&matches, "process_id").unwrap();
+            let dt = if matches.is_present("datetime") {
                 // Parse input for serde_json
-                let date_string = if !timestamp_matches
-                    .value_of("datetime")
-                    .unwrap()
-                    .contains('Z')
-                {
-                    format!("\"{}Z\"", timestamp_matches.value_of("datetime").unwrap())
+                let date_string = if !matches.value_of("datetime").unwrap().contains('Z') {
+                    format!("\"{}Z\"", matches.value_of("datetime").unwrap())
                 } else {
-                    format!("\"{}\"", timestamp_matches.value_of("datetime").unwrap())
+                    format!("\"{}\"", matches.value_of("datetime").unwrap())
                 };
                 serde_json::from_str(&date_string)?
             } else {
