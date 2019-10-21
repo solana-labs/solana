@@ -44,3 +44,25 @@ fi
 if _ git --no-pager grep -n 'Default::default()' -- '*.rs'; then
     exit 1
 fi
+
+
+# Github Issues should be used to track outstanding work items instead of
+# marking up the code
+#
+# Ref: https://github.com/solana-labs/solana/issues/6474
+declare useGithubIssueInsteadOf=(
+  'XXX'
+  'TBD'
+  'FIXME'
+  #'TODO'  # TODO: Uncomment this line to disable TODOs
+)
+
+if _ git --no-pager grep -n --max-depth=0 "${useGithubIssueInsteadOf[@]/#/-e }" -- '*.rs' '*.sh'; then
+    exit 1
+fi
+
+# TODO: Remove this `git grep` once TODOs are banned above
+#       (this command is only used to highlight the current offenders)
+_ git --no-pager grep -n --max-depth=0 "-e TODO" -- '*.rs' '*.sh' || true
+echo "^^^ +++"
+# END TODO

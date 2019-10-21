@@ -222,7 +222,7 @@ colo_machine_types_compatible() {
   declare MAYBE_MACH="$1"
   declare WANT_MACH="$2"
   declare COMPATIBLE=false
-  # XXX: Colo machine types are just GPU count ATM...
+  # Colo machine types are just GPU count ATM...
   if [[ "$MAYBE_MACH" -ge "$WANT_MACH" ]]; then
     COMPATIBLE=true
   fi

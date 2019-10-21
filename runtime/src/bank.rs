@@ -786,7 +786,7 @@ impl Bank {
     /// bank will reject transactions using that `hash`.
     pub fn register_tick(&self, hash: &Hash) {
         if self.is_frozen() {
-            warn!("=========== FIXME: register_tick() working on a frozen bank! ================");
+            warn!("=========== TODO: register_tick() working on a frozen bank! ================");
         }
 
         // TODO: put this assert back in
@@ -822,7 +822,7 @@ impl Bank {
         iteration_order: Option<Vec<usize>>,
     ) -> TransactionBatch<'a, 'b> {
         if self.is_frozen() {
-            warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
+            warn!("=========== TODO: lock_accounts() working on a frozen bank! ================");
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
@@ -1152,7 +1152,7 @@ impl Bank {
         signature_count: u64,
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
-            warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
+            warn!("=========== TODO: commit_transactions() working on a frozen bank! ================");
         }
 
         self.increment_transaction_count(tx_count);
