@@ -264,7 +264,8 @@ impl Tower {
     }
 
     pub fn has_voted(&self, slot: u64) -> bool {
-        if Some(slot) == self.root() {
+        // slot 0 is special since it is a known root but it also needs to be voted on
+        if slot > 0 && Some(slot) == self.root() {
             return true;
         }
 
@@ -617,6 +618,8 @@ mod test {
         }
         assert_eq!(tower.root().unwrap(), 32);
         assert!(tower.has_voted(tower.root().unwrap()));
+        // allow votes for 0, the `is_locked_out` check will prevent actual repeated votes
+        assert!(!tower.has_voted(0));
     }
 
     #[test]
