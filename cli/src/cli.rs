@@ -124,7 +124,7 @@ pub enum CliCommand {
         use_lamports_unit: bool,
     },
     Balance {
-        pubkey: Pubkey,
+        pubkey: Option<Pubkey>,
         use_lamports_unit: bool,
     },
     Cancel(Pubkey),
@@ -188,7 +188,7 @@ impl Default for CliConfig {
 
         CliConfig {
             command: CliCommand::Balance {
-                pubkey: Pubkey::default(),
+                pubkey: Some(Pubkey::default()),
                 use_lamports_unit: false,
             },
             json_rpc_url: "http://127.0.0.1:8899".to_string(),
@@ -295,14 +295,10 @@ pub fn parse_command(
                 use_lamports_unit,
             })
         }
-        ("balance", Some(matches)) => {
-            let pubkey = pubkey_of(&matches, "pubkey").unwrap_or(*pubkey);
-            let use_lamports_unit = matches.is_present("lamports");
-            Ok(CliCommand::Balance {
-                pubkey,
-                use_lamports_unit,
-            })
-        }
+        ("balance", Some(matches)) => Ok(CliCommand::Balance {
+            pubkey: pubkey_of(&matches, "pubkey"),
+            use_lamports_unit: matches.is_present("lamports"),
+        }),
         ("cancel", Some(matches)) => {
             let process_id = value_of(matches, "process_id").unwrap();
             Ok(CliCommand::Cancel(process_id))
@@ -464,11 +460,13 @@ fn process_airdrop(
 }
 
 fn process_balance(
-    pubkey: &Pubkey,
     rpc_client: &RpcClient,
+    config: &CliConfig,
+    pubkey: &Option<Pubkey>,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(pubkey, 5)?;
+    let pubkey = pubkey.unwrap_or(config.keypair.pubkey());
+    let balance = rpc_client.retry_get_balance(&pubkey, 5)?;
     match balance {
         Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit)),
         None => Err(
@@ -969,7 +967,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Balance {
             pubkey,
             use_lamports_unit,
-        } => process_balance(&pubkey, &rpc_client, *use_lamports_unit),
+        } => process_balance(&rpc_client, config, &pubkey, *use_lamports_unit),
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
@@ -1419,7 +1417,7 @@ mod tests {
         assert_eq!(
             parse_command(&pubkey, &test_balance).unwrap(),
             CliCommand::Balance {
-                pubkey: keypair.pubkey(),
+                pubkey: Some(keypair.pubkey()),
                 use_lamports_unit: false
             }
         );
@@ -1432,7 +1430,7 @@ mod tests {
         assert_eq!(
             parse_command(&pubkey, &test_balance).unwrap(),
             CliCommand::Balance {
-                pubkey: keypair.pubkey(),
+                pubkey: Some(keypair.pubkey()),
                 use_lamports_unit: true
             }
         );
@@ -1636,13 +1634,13 @@ mod tests {
         assert_eq!(process_command(&config).unwrap(), pubkey);
 
         config.command = CliCommand::Balance {
-            pubkey: config.keypair.pubkey(),
+            pubkey: None,
             use_lamports_unit: true,
         };
         assert_eq!(process_command(&config).unwrap(), "50 lamports");
 
         config.command = CliCommand::Balance {
-            pubkey: config.keypair.pubkey(),
+            pubkey: None,
             use_lamports_unit: false,
         };
         assert_eq!(process_command(&config).unwrap(), "0 SOL");
@@ -1815,7 +1813,7 @@ mod tests {
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::Balance {
-            pubkey: config.keypair.pubkey(),
+            pubkey: None,
             use_lamports_unit: false,
         };
         assert!(process_command(&config).is_err());
