@@ -9,9 +9,6 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Instant;
 
-#[cfg(target_os = "linux")]
-use thread_priority::*;
-
 pub struct PohService {
     tick_producer: JoinHandle<()>,
 }
@@ -46,16 +43,6 @@ impl PohService {
                         );
                     }
                 } else {
-                    #[cfg(target_os = "linux")]
-                    {
-                        let thread_id = thread_priority::thread_native_id();
-                        // This is a best effort try to set the scheduling policy. Ignoring the results.
-                        let _ignore = set_thread_priority(
-                            thread_id,
-                            ThreadPriority::Max,
-                            ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
-                        );
-                    }
                     // PoH service runs in a tight loop, generating hashes as fast as possible.
                     // Let's dedicate one of the CPU cores to this thread so that it can gain
                     // from cache performance.

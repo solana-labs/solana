@@ -113,6 +113,7 @@ waitForNodeToInit() {
     sleep 5
   done
   echo "$hostname booted up"
+  sudo chrt -r -p 99 `ps -eT | grep solana-poh-serv | awk '{print $2}'`
 }
 
 case $deployMethod in
