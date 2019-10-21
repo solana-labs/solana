@@ -93,7 +93,7 @@ if [[ -f $stake_keypair_path ]]; then
 fi
 
 if ((airdrops_enabled)); then
-  $solana_cli "${common_args[@]}" airdrop $stake_lamports lamports
+  $solana_cli "${common_args[@]}" airdrop "$stake_lamports" lamports
 fi
 
 $solana_keygen new -o "$stake_keypair_path"

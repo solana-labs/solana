@@ -122,7 +122,7 @@ cloud_Initialize() {
   declare networkName="$1"
   # ec2-provider.sh creates firewall rules programmatically, should do the same
   # here.
-  echo "TODO: create $networkName firewall rules programmatically instead of assuming the 'testnet' tag exists"
+  echo "Note: one day create $networkName firewall rules programmatically instead of assuming the 'testnet' tag exists"
 }
 
 #
@@ -170,8 +170,8 @@ cloud_CreateInstances() {
   if $enableGpu; then
     # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
     #
-    # TODO: Unfortunately this image is not public.  When this becomes an issue,
-    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
+    # Unfortunately this image is not public.  When this becomes an issue, use
+    # the stock Ubuntu 18.04 image and programmatically install CUDA after the
     # instance boots
     #
     imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
