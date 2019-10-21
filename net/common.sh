@@ -29,9 +29,9 @@ sshPrivateKey=
 letsEncryptDomainName=
 externalNodeSshKey=
 sshOptions=()
-fullnodeIpList=()
-fullnodeIpListPrivate=()
-fullnodeIpListZone=()
+validatorIpList=()
+validatorIpListPrivate=()
+validatorIpListZone=()
 clientIpList=()
 clientIpListPrivate=()
 clientIpListZone=()
@@ -64,14 +64,14 @@ loadConfigFile() {
   [[ -n "$publicNetwork" ]] || usage "Config file invalid, publicNetwork unspecified: $configFile"
   [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
   [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
-  [[ ${#fullnodeIpList[@]} -gt 0 ]] || usage "Config file invalid, fullnodeIpList unspecified: $configFile"
-  [[ ${#fullnodeIpListPrivate[@]} -gt 0 ]] || usage "Config file invalid, fullnodeIpListPrivate unspecified: $configFile"
-  [[ ${#fullnodeIpList[@]} -eq ${#fullnodeIpListPrivate[@]} ]] || usage "Config file invalid, fullnodeIpList/fullnodeIpListPrivate length mismatch: $configFile"
+  [[ ${#validatorIpList[@]} -gt 0 ]] || usage "Config file invalid, validatorIpList unspecified: $configFile"
+  [[ ${#validatorIpListPrivate[@]} -gt 0 ]] || usage "Config file invalid, validatorIpListPrivate unspecified: $configFile"
+  [[ ${#validatorIpList[@]} -eq ${#validatorIpListPrivate[@]} ]] || usage "Config file invalid, validatorIpList/validatorIpListPrivate length mismatch: $configFile"
 
   if $publicNetwork; then
-    entrypointIp=${fullnodeIpList[0]}
+    entrypointIp=${validatorIpList[0]}
   else
-    entrypointIp=${fullnodeIpListPrivate[0]}
+    entrypointIp=${validatorIpListPrivate[0]}
   fi
 
   buildSshOptions

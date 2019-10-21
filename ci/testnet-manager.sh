@@ -114,7 +114,7 @@ GCE_ZONES=(
   europe-west4-c
 )
 
-# GCE zones with enough quota for one CPU-only fullnode
+# GCE zones with enough quota for one CPU-only validator
 GCE_LOW_QUOTA_ZONES=(
   asia-east2-a
   asia-northeast1-b
@@ -515,11 +515,11 @@ deploy() {
       fi
 
       if [[ -z $ADDITIONAL_DISK_SIZE_GB ]]; then
-        maybeAdditionalDisk="--fullnode-additional-disk-size-gb 32000"
+        maybeAdditionalDisk="--validator-additional-disk-size-gb 32000"
       elif [[ $ADDITIONAL_DISK_SIZE_GB == skip ]]; then
         maybeAdditionalDisk=""
       else
-        maybeAdditionalDisk="--fullnode-additional-disk-size-gb ${ADDITIONAL_DISK_SIZE_GB}"
+        maybeAdditionalDisk="--validator-additional-disk-size-gb ${ADDITIONAL_DISK_SIZE_GB}"
       fi
 
 

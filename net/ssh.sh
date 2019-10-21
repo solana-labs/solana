@@ -50,8 +50,8 @@ printNode() {
 }
 
 echo Full nodes:
-for ipAddress in "${fullnodeIpList[@]}"; do
-  printNode fullnode "$ipAddress"
+for ipAddress in "${validatorIpList[@]}"; do
+  printNode validator "$ipAddress"
 done
 echo
 echo Clients:
@@ -68,7 +68,7 @@ if [[ ${#blockstreamerIpList[@]} -eq 0 ]]; then
   echo "  None"
 else
   for ipAddress in "${blockstreamerIpList[@]}"; do
-    printNode fullnode "$ipAddress"
+    printNode validator "$ipAddress"
   done
 fi
 echo
@@ -77,7 +77,7 @@ if [[ ${#archiverIpList[@]} -eq 0 ]]; then
   echo "  None"
 else
   for ipAddress in "${archiverIpList[@]}"; do
-    printNode fullnode "$ipAddress"
+    printNode validator "$ipAddress"
   done
 fi
 echo
