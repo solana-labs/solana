@@ -298,7 +298,7 @@ mod test {
             );
 
             let blocktree = broadcast_service.blocktree;
-            let (entries, _, _, _) = blocktree
+            let (entries, _) = blocktree
                 .get_slot_entries_with_shred_count(slot, 0)
                 .expect("Expect entries to be present");
             assert_eq!(entries.len(), max_tick_height as usize);

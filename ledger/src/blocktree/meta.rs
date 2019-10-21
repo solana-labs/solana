@@ -27,6 +27,8 @@ pub struct SlotMeta {
     // True if this slot is full (consumed == last_index + 1) and if every
     // slot that is a parent of this slot is also connected.
     pub is_connected: bool,
+    // List of start indexes for completed data slots
+    pub completed_data_indexes: Vec<u32>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -227,6 +229,7 @@ impl SlotMeta {
             next_slots: vec![],
             is_connected: slot == 0,
             last_index: std::u64::MAX,
+            completed_data_indexes: vec![],
         }
     }
 }
