@@ -90,7 +90,7 @@ where
     let shreds: Vec<_> = thread_pool.install(|| {
         packets
             .packets
-            .par_iter_mut()
+            .iter_mut()
             .filter_map(|packet| {
                 if let Ok(shred) = Shred::new_from_serialized_shred(packet.data.to_vec()) {
                     if shred_filter(&shred, last_root) {

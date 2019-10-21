@@ -177,7 +177,7 @@ impl EntrySlice for [Entry] {
             hash: *start_hash,
             transactions: vec![],
         }];
-        let entry_pairs = genesis.par_iter().chain(self).zip(self);
+        let mut entry_pairs = genesis.iter().chain(self).zip(self);
         let res = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 entry_pairs.all(|(x0, x1)| {
@@ -257,7 +257,7 @@ impl EntrySlice for [Entry] {
 
         let tx_hashes: Vec<Option<Hash>> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
-                self.into_par_iter()
+                self.into_iter()
                     .map(|entry| {
                         if entry.transactions.is_empty() {
                             None
@@ -276,25 +276,26 @@ impl EntrySlice for [Entry] {
         );
 
         let hashes = Arc::try_unwrap(hashes).unwrap().into_inner().unwrap();
-        let res =
-            PAR_THREAD_POOL.with(|thread_pool| {
-                thread_pool.borrow().install(|| {
-                    hashes.into_par_iter().zip(tx_hashes).zip(self).all(
-                        |((hash, tx_hash), answer)| {
-                            if answer.num_hashes == 0 {
-                                hash == answer.hash
+        let res = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                hashes
+                    .into_iter()
+                    .zip(tx_hashes)
+                    .zip(self)
+                    .all(|((hash, tx_hash), answer)| {
+                        if answer.num_hashes == 0 {
+                            hash == answer.hash
+                        } else {
+                            let mut poh = Poh::new(hash, None);
+                            if let Some(mixin) = tx_hash {
+                                poh.record(mixin).unwrap().hash == answer.hash
                             } else {
-                                let mut poh = Poh::new(hash, None);
-                                if let Some(mixin) = tx_hash {
-                                    poh.record(mixin).unwrap().hash == answer.hash
-                                } else {
-                                    poh.tick().unwrap().hash == answer.hash
-                                }
+                                poh.tick().unwrap().hash == answer.hash
                             }
-                        },
-                    )
-                })
-            });
+                        }
+                    })
+            })
+        });
         inc_new_counter_warn!(
             "entry_verify-duration",
             timing::duration_as_ms(&start.elapsed()) as usize

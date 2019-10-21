@@ -251,8 +251,8 @@ pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
     let rv = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches
-                .into_par_iter()
-                .map(|p| p.packets.par_iter().map(verify_packet).collect())
+                .into_iter()
+                .map(|p| p.packets.iter().map(verify_packet).collect())
                 .collect()
         })
     });
@@ -265,7 +265,7 @@ pub fn ed25519_verify_disabled(batches: &[Packets]) -> Vec<Vec<u8>> {
     let count = batch_size(batches);
     debug!("disabled ECDSA for {}", batch_size(batches));
     let rv = batches
-        .into_par_iter()
+        .into_iter()
         .map(|p| vec![1u8; p.packets.len()])
         .collect();
     inc_new_counter_debug!("ed25519_verify_disabled", count);

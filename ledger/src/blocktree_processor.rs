@@ -76,7 +76,7 @@ fn execute_batches(
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches
-                .into_par_iter()
+                .into_iter()
                 .map(|batch| {
                     let result = execute_batch(batch);
                     if let Some(entry_callback) = entry_callback {
