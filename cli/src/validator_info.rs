@@ -224,20 +224,27 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_validator_info_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
+pub fn parse_validator_info_command(
+    matches: &ArgMatches<'_>,
+) -> Result<(CliCommand, bool), CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
     // Prepare validator info
     let validator_info = parse_args(&matches);
-    Ok(CliCommand::SetValidatorInfo {
-        validator_info,
-        force_keybase: matches.is_present("force"),
-        info_pubkey,
-    })
+    Ok((
+        CliCommand::SetValidatorInfo {
+            validator_info,
+            force_keybase: matches.is_present("force"),
+            info_pubkey,
+        },
+        true,
+    ))
 }
 
-pub fn parse_get_validator_info_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
+pub fn parse_get_validator_info_command(
+    matches: &ArgMatches<'_>,
+) -> Result<(CliCommand, bool), CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
-    Ok(CliCommand::GetValidatorInfo(info_pubkey))
+    Ok((CliCommand::GetValidatorInfo(info_pubkey), false))
 }
 
 pub fn process_set_validator_info(
