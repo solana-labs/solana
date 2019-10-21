@@ -61,9 +61,8 @@ rpc_url=$($solana_gossip get-rpc-url --entrypoint "$entrypoint")
 if [[ ! -r $identity_keypair ]]; then
   $solana_keygen new -o "$identity_keypair"
 
-  # TODO: https://github.com/solana-labs/solminer/blob/9cd2289/src/archiver.js#L17-L18
-  $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
-      airdrop 100000 lamports
+  # See https://github.com/solana-labs/solana/issues/4344
+  $solana_cli --keypair "$identity_keypair" --url "$rpc_url" airdrop 1
 fi
 identity_pubkey=$($solana_keygen pubkey "$identity_keypair")
 
