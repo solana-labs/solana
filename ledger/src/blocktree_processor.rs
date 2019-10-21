@@ -943,7 +943,7 @@ pub mod tests {
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 });
         let bank = bank_forks[0].clone();
-        assert_eq!(bank.tick_height(), 0);
+        assert_eq!(bank.tick_height(), 1);
     }
 
     #[test]

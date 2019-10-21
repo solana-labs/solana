@@ -791,29 +791,13 @@ impl Bank {
 
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        let current_tick_height = self.tick_height.load(Ordering::Relaxed) as u64;
-        let should_register_hash = {
-            if self.ticks_per_slot() != 1 || self.slot() != 0 {
-                let lock = {
-                    if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
-                        Some(self.blockhash_queue.write().unwrap())
-                    } else {
-                        None
-                    }
-                };
-                self.tick_height.fetch_add(1, Ordering::Relaxed);
-                inc_new_counter_debug!("bank-register_tick-registered", 1);
-                lock
-            } else if current_tick_height % self.ticks_per_slot == 0 {
-                // Register a new block hash if at the last tick in the slot
-                Some(self.blockhash_queue.write().unwrap())
-            } else {
-                None
-            }
-        };
-
-        if let Some(mut w_blockhash_queue) = should_register_hash {
-            w_blockhash_queue.register_hash(hash, &self.fee_calculator);
+        inc_new_counter_debug!("bank-register_tick-registered", 1);
+        let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
+        if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
+            self.blockhash_queue
+                .write()
+                .unwrap()
+                .register_hash(hash, &self.fee_calculator);
         }
     }
 
