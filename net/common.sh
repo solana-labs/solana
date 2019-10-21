@@ -99,14 +99,15 @@ SOLANA_CONFIG_DIR=$SOLANA_ROOT/config
 # Clear the current cluster configuration
 clear_config_dir() {
   declare config_dir="$1"
+
+  setup_secondary_mount
+
   (
     set -x
     rm -rf "${config_dir:?}/" # <-- $i might be a symlink, rm the other side of it first
     rm -rf "$config_dir"
     mkdir -p "$config_dir"
   )
-
-  setup_secondary_mount
 }
 
 SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
