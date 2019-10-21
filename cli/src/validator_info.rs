@@ -1,5 +1,6 @@
 use crate::{
     cli::{check_account_for_fee, CliCommand, CliConfig, CliError, ProcessResult},
+    input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
 };
 use bincode::deserialize;
@@ -142,17 +143,6 @@ fn parse_validator_info(
     }
 }
 
-fn parse_info_pubkey(matches: &ArgMatches<'_>) -> Result<Option<Pubkey>, CliError> {
-    let info_pubkey = if let Some(pubkey) = matches.value_of("info_pubkey") {
-        Some(pubkey.parse::<Pubkey>().map_err(|err| {
-            CliError::BadParameter(format!("Invalid validator info pubkey: {:?}", err))
-        })?)
-    } else {
-        None
-    };
-    Ok(info_pubkey)
-}
-
 pub trait ValidatorInfoSubCommands {
     fn validator_info_subcommands(self) -> Self;
 }
@@ -234,17 +224,34 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_validator_info_command(
-    matches: &ArgMatches<'_>,
-    validator_pubkey: &Pubkey,
-) -> Result<CliCommand, CliError> {
-    let info_pubkey = parse_info_pubkey(matches)?;
+pub fn parse_validator_info_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
+    let info_pubkey = pubkey_of(matches, "info_pubkey");
     // Prepare validator info
     let validator_info = parse_args(&matches);
+    Ok(CliCommand::SetValidatorInfo {
+        validator_info,
+        force_keybase: matches.is_present("force"),
+        info_pubkey,
+    })
+}
+
+pub fn parse_get_validator_info_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
+    let info_pubkey = pubkey_of(matches, "info_pubkey");
+    Ok(CliCommand::GetValidatorInfo(info_pubkey))
+}
+
+pub fn process_set_validator_info(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    validator_info: &Value,
+    force_keybase: bool,
+    info_pubkey: Option<Pubkey>,
+) -> ProcessResult {
+    // Validate keybase username
     if let Some(string) = validator_info.get("keybaseUsername") {
-        let result = verify_keybase(&validator_pubkey, &string);
+        let result = verify_keybase(&config.keypair.pubkey(), &string);
         if result.is_err() {
-            if matches.is_present("force") {
+            if force_keybase {
                 println!("--force supplied, ignoring: {:?}", result);
             } else {
                 result.map_err(|err| {
@@ -257,20 +264,6 @@ pub fn parse_validator_info_command(
     let validator_info = ValidatorInfo {
         info: validator_string,
     };
-    Ok(CliCommand::SetValidatorInfo(validator_info, info_pubkey))
-}
-
-pub fn parse_get_validator_info_command(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
-    let info_pubkey = parse_info_pubkey(matches)?;
-    Ok(CliCommand::GetValidatorInfo(info_pubkey))
-}
-
-pub fn process_set_validator_info(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    validator_info: &ValidatorInfo,
-    info_pubkey: Option<Pubkey>,
-) -> ProcessResult {
     // Check for existing validator-info account
     let all_config = rpc_client.get_program_accounts(&solana_config_api::id())?;
     let existing_account = all_config
@@ -320,7 +313,7 @@ pub fn process_set_validator_info(
             &info_keypair.pubkey(),
             true,
             keys,
-            validator_info,
+            &validator_info,
         )]);
         let signers = vec![&config.keypair, &info_keypair];
         let message = Message::new(instructions);
@@ -335,7 +328,7 @@ pub fn process_set_validator_info(
             &info_pubkey,
             false,
             keys,
-            validator_info,
+            &validator_info,
         )];
         let message = Message::new_with_payer(instructions, Some(&config.keypair.pubkey()));
         let signers = vec![&config.keypair];

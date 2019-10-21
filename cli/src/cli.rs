@@ -6,7 +6,7 @@ use chrono::prelude::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
-use serde_json::{self, json};
+use serde_json::{self, json, Value};
 use solana_budget_api::budget_instruction::{self, BudgetError};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
@@ -92,7 +92,11 @@ pub enum CliCommand {
     ShowStorageAccount(Pubkey),
     // Validator Info Commands
     GetValidatorInfo(Option<Pubkey>),
-    SetValidatorInfo(ValidatorInfo, Option<Pubkey>),
+    SetValidatorInfo {
+        validator_info: Value,
+        force_keybase: bool,
+        info_pubkey: Option<Pubkey>,
+    },
     // Vote Commands
     CreateVoteAccount(Pubkey, VoteInit),
     ShowVoteAccount {
@@ -231,7 +235,7 @@ pub fn parse_command(
         ("show-storage-account", Some(matches)) => parse_storage_get_account_command(matches),
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
-            ("publish", Some(matches)) => parse_validator_info_command(matches, pubkey),
+            ("publish", Some(matches)) => parse_validator_info_command(matches),
             ("get", Some(matches)) => parse_get_validator_info_command(matches),
             ("", None) => {
                 eprintln!("{}", matches.usage());
@@ -868,9 +872,17 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_get_validator_info(&rpc_client, *info_pubkey)
         }
         // Publish validator info
-        CliCommand::SetValidatorInfo(validator_info, info_pubkey) => {
-            process_set_validator_info(&rpc_client, config, &validator_info, *info_pubkey)
-        }
+        CliCommand::SetValidatorInfo {
+            validator_info,
+            force_keybase,
+            info_pubkey,
+        } => process_set_validator_info(
+            &rpc_client,
+            config,
+            &validator_info,
+            *force_keybase,
+            *info_pubkey,
+        ),
 
         // Vote Commands
 
