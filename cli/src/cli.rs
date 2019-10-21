@@ -28,7 +28,7 @@ use solana_sdk::{
     system_transaction,
     transaction::{Transaction, TransactionError},
 };
-use solana_stake_api::stake_state::{Authorized, Lockup, StakeAuthorize};
+use solana_stake_api::stake_state::{Lockup, StakeAuthorize};
 use solana_storage_api::storage_instruction::StorageAccountType;
 use solana_vote_api::vote_state::{VoteAuthorize, VoteInit};
 use std::{
@@ -63,7 +63,13 @@ pub enum CliCommand {
     // Program Deployment
     Deploy(String),
     // Stake Commands
-    CreateStakeAccount(Pubkey, Authorized, Lockup, u64),
+    CreateStakeAccount {
+        stake_account_pubkey: Pubkey,
+        staker: Option<Pubkey>,
+        withdrawer: Option<Pubkey>,
+        lockup: Lockup,
+        lamports: u64,
+    },
     DeactivateStake(Pubkey),
     DelegateStake(Pubkey, Pubkey, bool),
     RedeemVoteCredits(Pubkey, Pubkey),
@@ -202,7 +208,7 @@ pub fn parse_command(
             matches.value_of("program_location").unwrap().to_string(),
         )),
         // Stake Commands
-        ("create-stake-account", Some(matches)) => parse_stake_create_account(pubkey, matches),
+        ("create-stake-account", Some(matches)) => parse_stake_create_account(matches),
         ("delegate-stake", Some(matches)) => parse_stake_delegate_stake(matches),
         ("withdraw-stake", Some(matches)) => parse_stake_withdraw_stake(matches),
         ("deactivate-stake", Some(matches)) => parse_stake_deactivate_stake(matches),
@@ -761,16 +767,21 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Stake Commands
 
         // Create stake account
-        CliCommand::CreateStakeAccount(stake_account_pubkey, authorized, lockup, lamports) => {
-            process_create_stake_account(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &authorized,
-                lockup,
-                *lamports,
-            )
-        }
+        CliCommand::CreateStakeAccount {
+            stake_account_pubkey,
+            staker,
+            withdrawer,
+            lockup,
+            lamports,
+        } => process_create_stake_account(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            staker,
+            withdrawer,
+            lockup,
+            *lamports,
+        ),
         // Deactivate stake account
         CliCommand::DeactivateStake(stake_account_pubkey) => {
             process_deactivate_stake_account(&rpc_client, config, &stake_account_pubkey)
@@ -1707,15 +1718,13 @@ mod tests {
 
         let bob_pubkey = Pubkey::new_rand();
         let custodian = Pubkey::new_rand();
-        config.command = CliCommand::CreateStakeAccount(
-            bob_pubkey,
-            Authorized {
-                staker: config.keypair.pubkey(),
-                withdrawer: config.keypair.pubkey(),
-            },
-            Lockup { slot: 0, custodian },
-            1234,
-        );
+        config.command = CliCommand::CreateStakeAccount {
+            stake_account_pubkey: bob_pubkey,
+            staker: None,
+            withdrawer: None,
+            lockup: Lockup { slot: 0, custodian },
+            lamports: 1234,
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 

@@ -251,23 +251,21 @@ impl StakeSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_stake_create_account(
-    pubkey: &Pubkey,
-    matches: &ArgMatches<'_>,
-) -> Result<CliCommand, CliError> {
+pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let slot = value_of(&matches, "lockup").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
-    let staker = pubkey_of(matches, "authorized_staker").unwrap_or(*pubkey); // defaults to config
-    let withdrawer = pubkey_of(matches, "authorized_withdrawer").unwrap_or(*pubkey); // defaults to config
+    let staker = pubkey_of(matches, "authorized_staker");
+    let withdrawer = pubkey_of(matches, "authorized_withdrawer");
     let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
 
-    Ok(CliCommand::CreateStakeAccount(
+    Ok(CliCommand::CreateStakeAccount {
         stake_account_pubkey,
-        Authorized { staker, withdrawer },
-        Lockup { custodian, slot },
+        staker,
+        withdrawer,
+        lockup: Lockup { custodian, slot },
         lamports,
-    ))
+    })
 }
 
 pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand, CliError> {
@@ -335,7 +333,8 @@ pub fn process_create_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
-    authorized: &Authorized,
+    staker: &Option<Pubkey>,
+    withdrawer: &Option<Pubkey>,
     lockup: &Lockup,
     lamports: u64,
 ) -> ProcessResult {
@@ -363,10 +362,16 @@ pub fn process_create_stake_account(
         .into());
     }
 
+    let authorized = Authorized {
+        staker: staker.unwrap_or(config.keypair.pubkey()),
+        withdrawer: withdrawer.unwrap_or(config.keypair.pubkey()),
+    };
+    println!("{:?}", authorized);
+
     let ixs = stake_instruction::create_stake_account_with_lockup(
         &config.keypair.pubkey(),
         stake_account_pubkey,
-        authorized,
+        &authorized,
         lockup,
         lamports,
     );
@@ -672,18 +677,16 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_stake_account).unwrap(),
-            CliCommand::CreateStakeAccount(
-                pubkey,
-                Authorized {
-                    staker: authorized,
-                    withdrawer: authorized,
-                },
-                Lockup {
+            CliCommand::CreateStakeAccount {
+                stake_account_pubkey: pubkey,
+                staker: Some(authorized),
+                withdrawer: Some(authorized),
+                lockup: Lockup {
                     slot: 43,
                     custodian,
                 },
-                50
-            )
+                lamports: 50
+            }
         );
         let test_create_stake_account2 = test_commands.clone().get_matches_from(vec![
             "test",
@@ -694,18 +697,16 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_stake_account2).unwrap(),
-            CliCommand::CreateStakeAccount(
-                pubkey,
-                Authorized {
-                    staker: pubkey,
-                    withdrawer: pubkey,
-                },
-                Lockup {
+            CliCommand::CreateStakeAccount {
+                stake_account_pubkey: pubkey,
+                staker: None,
+                withdrawer: None,
+                lockup: Lockup {
                     slot: 0,
                     custodian: Pubkey::default(),
                 },
-                50
-            )
+                lamports: 50
+            }
         );
 
         // Test DelegateStake Subcommand
