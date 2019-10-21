@@ -60,10 +60,10 @@
     "prepare": "run-s clean bpf-sdk:install bpf-sdk:remove-symlinks build",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.js'",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
-    "test": "npm run build:fixtures; cross-env NODE_ENV=test jest --useStderr",
-    "test:cover": "npm run build:fixtures; cross-env NODE_ENV=test jest --coverage --useStderr",
-    "test:live": "npm run build:fixtures; cross-env NODE_ENV=test TEST_LIVE=1 jest --useStderr",
-    "test:watch": "npm run build:fixtures; cross-env NODE_ENV=test jest --watch --useStderr"
+    "test": "npm run build:fixtures && cross-env NODE_ENV=test jest --useStderr",
+    "test:cover": "npm run build:fixtures && cross-env NODE_ENV=test jest --coverage --useStderr",
+    "test:live": "npm run build:fixtures && cross-env NODE_ENV=test TEST_LIVE=1 jest --useStderr",
+    "test:watch": "npm run build:fixtures && cross-env NODE_ENV=test jest --watch --useStderr"
   },
   "dependencies": {
     "@babel/runtime": "^7.3.1",
