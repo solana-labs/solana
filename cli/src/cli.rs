@@ -30,7 +30,7 @@ use solana_sdk::{
 };
 use solana_stake_api::stake_state::{Lockup, StakeAuthorize};
 use solana_storage_api::storage_instruction::StorageAccountType;
-use solana_vote_api::vote_state::{VoteAuthorize, VoteInit};
+use solana_vote_api::vote_state::VoteAuthorize;
 use std::{
     fs::File,
     io::{Read, Write},
@@ -98,7 +98,13 @@ pub enum CliCommand {
         info_pubkey: Option<Pubkey>,
     },
     // Vote Commands
-    CreateVoteAccount(Pubkey, VoteInit),
+    CreateVoteAccount {
+        vote_account_pubkey: Pubkey,
+        node_pubkey: Pubkey,
+        authorized_voter: Option<Pubkey>,
+        authorized_withdrawer: Option<Pubkey>,
+        commission: u8,
+    },
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
@@ -246,7 +252,7 @@ pub fn parse_command(
             _ => unreachable!(),
         },
         // Vote Commands
-        ("create-vote-account", Some(matches)) => parse_vote_create_account(pubkey, matches),
+        ("create-vote-account", Some(matches)) => parse_vote_create_account(matches),
         ("vote-authorize-voter", Some(matches)) => {
             parse_vote_authorize(matches, VoteAuthorize::Voter)
         }
@@ -887,9 +893,21 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Vote Commands
 
         // Create vote account
-        CliCommand::CreateVoteAccount(vote_account_pubkey, vote_init) => {
-            process_create_vote_account(&rpc_client, config, &vote_account_pubkey, &vote_init)
-        }
+        CliCommand::CreateVoteAccount {
+            vote_account_pubkey,
+            node_pubkey,
+            authorized_voter,
+            authorized_withdrawer,
+            commission,
+        } => process_create_vote_account(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            &node_pubkey,
+            authorized_voter,
+            authorized_withdrawer,
+            *commission,
+        ),
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
@@ -1639,15 +1657,13 @@ mod tests {
 
         let bob_pubkey = Pubkey::new_rand();
         let node_pubkey = Pubkey::new_rand();
-        config.command = CliCommand::CreateVoteAccount(
-            bob_pubkey,
-            VoteInit {
-                node_pubkey,
-                authorized_voter: bob_pubkey,
-                authorized_withdrawer: bob_pubkey,
-                commission: 0,
-            },
-        );
+        config.command = CliCommand::CreateVoteAccount {
+            vote_account_pubkey: bob_pubkey,
+            node_pubkey,
+            authorized_voter: Some(bob_pubkey),
+            authorized_withdrawer: Some(bob_pubkey),
+            commission: 0,
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1804,15 +1820,13 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::CreateVoteAccount(
-            bob_pubkey,
-            VoteInit {
-                node_pubkey,
-                authorized_voter: bob_pubkey,
-                authorized_withdrawer: bob_pubkey,
-                commission: 0,
-            },
-        );
+        config.command = CliCommand::CreateVoteAccount {
+            vote_account_pubkey: bob_pubkey,
+            node_pubkey,
+            authorized_voter: Some(bob_pubkey),
+            authorized_withdrawer: Some(bob_pubkey),
+            commission: 0,
+        };
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::VoteAuthorize(bob_pubkey, bob_pubkey, VoteAuthorize::Voter);
