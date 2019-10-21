@@ -1313,78 +1313,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("validator-info")
-                .about("Publish/get Validator info on Solana")
-                .subcommand(
-                    SubCommand::with_name("publish")
-                        .about("Publish Validator info on Solana")
-                        .arg(
-                            Arg::with_name("info_pubkey")
-                                .short("p")
-                                .long("info-pubkey")
-                                .value_name("PUBKEY")
-                                .takes_value(true)
-                                .validator(is_pubkey)
-                                .help("The pubkey of the Validator info account to update"),
-                        )
-                        .arg(
-                            Arg::with_name("name")
-                                .index(1)
-                                .value_name("NAME")
-                                .takes_value(true)
-                                .required(true)
-                                .validator(is_short_field)
-                                .help("Validator name"),
-                        )
-                        .arg(
-                            Arg::with_name("website")
-                                .short("w")
-                                .long("website")
-                                .value_name("URL")
-                                .takes_value(true)
-                                .validator(check_url)
-                                .help("Validator website url"),
-                        )
-                        .arg(
-                            Arg::with_name("keybase_username")
-                                .short("n")
-                                .long("keybase")
-                                .value_name("USERNAME")
-                                .takes_value(true)
-                                .validator(is_short_field)
-                                .help("Validator Keybase username"),
-                        )
-                        .arg(
-                            Arg::with_name("details")
-                                .short("d")
-                                .long("details")
-                                .value_name("DETAILS")
-                                .takes_value(true)
-                                .validator(check_details_length)
-                                .help("Validator description")
-                        )
-                        .arg(
-                            Arg::with_name("force")
-                                .long("force")
-                                .takes_value(false)
-                                .hidden(true) // Don't document this argument to discourage its use
-                                .help("Override keybase username validity check"),
-                        ),
-                )
-                .subcommand(
-                    SubCommand::with_name("get")
-                        .about("Get and parse Solana Validator info")
-                        .arg(
-                            Arg::with_name("info_pubkey")
-                                .index(1)
-                                .value_name("PUBKEY")
-                                .takes_value(true)
-                                .validator(is_pubkey)
-                                .help("The pubkey of the Validator info account; without this argument, returns all"),
-                        ),
-                )
-        )
+        .validator_info_subcommands()
         .vote_subcommands()
 }
 
