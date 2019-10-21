@@ -78,6 +78,126 @@ pub fn init() {
     }
 }
 
+/// Assuming layout is 
+/// signature: Signature
+/// msg: {
+///   slot: u64,
+///   ...
+/// }
+/// Signature is the first thing in the packet, and slot is the first thing in the signed message.
+fn verify_shred(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Option<u8> {
+    let sig_start = 0;
+    let sig_end = size_of::<Signature>();
+    let slot_start = sig_end;
+    let slot_end = sig_end + size_of::<u64>();
+    let msg_start = sig_start;
+    let msg_end = packet.data.len() - sig_start;
+    let slot = deserialize(packet.data[slot_start..slot_end]).ok()?;
+    let pubkey = slot_headers.lookup(slot).ok()?;
+    if !signature.verify(
+            &pubkey,
+            &packet.data[msg_start..msg_end],
+        ) {
+            return 0;
+        } 
+    return 1;
+}
+
+pub fn verify_shreds_cpu(shreds: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) -> Vec<Vec<u8>> {
+    use rayon::prelude::*;
+    let count = batch_size(batches);
+    debug!("CPU SHRED ECDSA for {}", count);
+    let rv = PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            batches
+                .into_par_iter()
+                .map(|p| p.packets.par_iter().map(|p| verify_shred(p, slot_leaders).unwrap_or(0)).collect())
+                .collect()
+        })
+    });
+    inc_new_counter_debug!("shred_verify_cpu", count);
+    rv 
+
+}
+fn shred_gpu_pubkeys(packet: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) ->  (PinnedVec<Pubkey>, Vec<Vec<u32>>) {
+    assert_eq!(slot_leaders.get(u64::max()), Some(Pubkey::default()));
+    let slots = PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            batches
+                .into_par_iter()
+                .map(|p| 
+                     
+                     p.packets.par_iter().map(|packet|  {
+                        let slot_start = size_of::<Signature>();
+                        let slot_end = sig_end + size_of::<u64>();
+                        if let Ok(slot) = deserialize(packet.data[slot_start..slot_end]) 
+                            && slot_leaders.contains_key(slot)) {
+                            slot
+                        } else {
+                            u64::max()
+                        }
+                     }
+                 ).collect())
+                .collect()
+        })
+    }); 
+    let keys = HashMap::new(slots.iter().flat_map(|x|).enumerate());
+    let pubkey_vec = PinnedVec::new();
+    for (k,i) in keys {
+        let pubkey = slot_leaders.get(k).unwrap();
+        pubkey_vec.append(pubkey)
+    }
+    let offsets = slots
+        .into_iter()
+        .map(|packet_slots| { 
+            packet_slots.into_iter().map(|slot|
+                keys.get(slot).unwrap() * size_of::<Pubkey>()
+            ).collect()
+        }).collect();
+    (pubkey_vec, offsets)
+    
+}
+
+fn shred_gpu_offsets(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Result<TxOffsets> {
+    let sig_start = 0;
+    let sig_end = size_of::<Signature>();
+    let slot_start = sig_end;
+    let slot_end = sig_end + size_of::<u64>();
+    let msg_start = sig_start;
+    let msg_end = packet.data.len() - sig_start;
+    let slot = deserialize(packet.data[slot_start..slot_end]).ok()?;
+    let pubkey = slot_headers.lookup(slot).ok()?;
+}
+ 
+pub fn verify_shreds_gpu(
+    shreds: &[Packets],
+    slot_leaders: &HashMap<u64, Pubkey>,
+    recycler: &Recycler<TxOffset>,
+    recycler: &Recycler<Pubkey>,
+) -> Vec<Vec<u8>> {
+    let mut elems = Vec::new();
+    let mut rvs = Vec::new();
+
+    let mut out = recycler_out.allocate("out_buffer");
+    out.set_pinnable();
+
+    let mut num_packets = 0;
+    for p in batches {
+        for packet in p.packets {
+        }
+        elems.push(perf_libs::Elems {
+            elems: p.packets.as_ptr(),
+            num: p.packets.len() as u32,
+        });
+        let mut v = Vec::new();
+        v.resize(p.packets.len(), 0);
+        rvs.push(v);
+        num_packets += p.packets.len();
+    }
+    out.resize(signature_offsets.len(), 0); 
+
+}
+
 fn verify_packet(packet: &Packet) -> u8 {
     let packet_offsets = get_packet_offsets(packet, 0);
     let mut sig_start = packet_offsets.sig_start as usize;
