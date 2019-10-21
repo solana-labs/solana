@@ -415,7 +415,8 @@ impl ReplayStage {
             .entry(bank.slot())
             .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
         let now = Instant::now();
-        let load_result = Self::load_blocktree_entries(bank, blocktree, bank_progress);
+        let load_result =
+            Self::load_blocktree_entries_with_shred_count(bank, blocktree, bank_progress);
         let fetch_entries_elapsed = now.elapsed().as_micros();
         if load_result.is_err() {
             bank_progress.stats.fetch_entries_fail_elapsed += fetch_entries_elapsed as u64;
@@ -725,15 +726,15 @@ impl ReplayStage {
         });
     }
 
-    fn load_blocktree_entries(
+    fn load_blocktree_entries_with_shred_count(
         bank: &Bank,
         blocktree: &Blocktree,
         bank_progress: &mut ForkProgress,
     ) -> Result<(Vec<Entry>, usize)> {
         let bank_slot = bank.slot();
-        let entries_and_count = blocktree
+        let entries_and_shred_count = blocktree
             .get_slot_entries_with_shred_count(bank_slot, bank_progress.num_shreds as u64)?;
-        Ok(entries_and_count)
+        Ok(entries_and_shred_count)
     }
 
     fn replay_entries_into_bank(
