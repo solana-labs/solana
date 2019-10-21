@@ -7,6 +7,10 @@ use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
+use std::time::Instant;
+
+#[cfg(target_os = "linux")]
+use thread_priority::*;
 
 pub struct PohService {
     tick_producer: JoinHandle<()>,
@@ -42,6 +46,16 @@ impl PohService {
                         );
                     }
                 } else {
+                    #[cfg(target_os = "linux")]
+                    {
+                        let thread_id = thread_priority::thread_native_id();
+                        // This is a best effort try to set the scheduling policy. Ignoring the results.
+                        let _ignore = set_thread_priority(
+                            thread_id,
+                            ThreadPriority::Max,
+                            ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
+                        );
+                    }
                     // PoH service runs in a tight loop, generating hashes as fast as possible.
                     // Let's dedicate one of the CPU cores to this thread so that it can gain
                     // from cache performance.
@@ -86,10 +100,22 @@ impl PohService {
 
     fn tick_producer(poh_recorder: Arc<Mutex<PohRecorder>>, poh_exit: &AtomicBool) {
         let poh = poh_recorder.lock().unwrap().poh.clone();
+        let mut now = Instant::now();
+        let mut num_ticks = 0;
         loop {
             if poh.lock().unwrap().hash(NUM_HASHES_PER_BATCH) {
                 // Lock PohRecorder only for the final hash...
                 poh_recorder.lock().unwrap().tick();
+                num_ticks += 1;
+                if num_ticks >= 8 {
+                    datapoint_debug!(
+                        "poh-service",
+                        ("ticks", num_ticks as i64, i64),
+                        ("elapsed_ms", now.elapsed().as_millis() as i64, i64),
+                    );
+                    num_ticks = 0;
+                    now = Instant::now();
+                }
                 if poh_exit.load(Ordering::Relaxed) {
                     break;
                 }
