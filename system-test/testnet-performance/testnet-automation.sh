@@ -119,17 +119,23 @@ launchTestnet() {
 
   echo --- collect statistics about run
   declare q_mean_tps='
-    SELECT round(mean("sum_count")) AS "mean_tps" FROM (
-      SELECT sum("count") AS "sum_count"
-        FROM "'$TESTNET_TAG'"."autogen"."banking_stage-record_transactions"
-        WHERE time > now() - '"$TEST_DURATION_SECONDS"'s GROUP BY time(1s)
+    SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
+      SELECT MEDIAN(sum_count) AS "median_sum" FROM (
+        SELECT SUM("count") AS "sum_count"
+          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
+          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
+          GROUP BY time(1s), host_id)
+      GROUP BY time(1s)
     )'
 
   declare q_max_tps='
-    SELECT round(max("sum_count")) AS "max_tps" FROM (
-      SELECT sum("count") AS "sum_count"
-        FROM "'$TESTNET_TAG'"."autogen"."banking_stage-record_transactions"
-        WHERE time > now() - '"$TEST_DURATION_SECONDS"'s GROUP BY time(1s)
+    SELECT MAX("median_sum") as "max_tps" FROM (
+      SELECT MEDIAN(sum_count) AS "median_sum" FROM (
+        SELECT SUM("count") AS "sum_count"
+          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
+          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
+          GROUP BY time(1s), host_id)
+      GROUP BY time(1s)
     )'
 
   declare q_mean_confirmation='
