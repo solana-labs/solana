@@ -533,6 +533,7 @@ deploy() {
         -t "$CHANNEL_OR_TAG" \
         -n ${TDS_NODE_COUNT} \
         -c ${TDS_CLIENT_COUNT} \
+        --idle-clients \
         -P -u \
         -a tds-solana-com --letsencrypt tds.solana.com \
         ${maybeHashesPerTick} \

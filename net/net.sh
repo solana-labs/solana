@@ -40,6 +40,7 @@ Operate a configured testnet
                                         more than once.  Defaults to bench-tps for all clients if not
                                         specified.
                                         Valid client types are:
+                                            idle
                                             bench-tps
                                             bench-exchange
                                         User can optionally provide extraArgs that are transparently
@@ -118,6 +119,7 @@ skipSetup=false
 customPrograms=
 updatePlatforms=
 nodeAddress=
+numIdleClients=0
 numBenchTpsClients=0
 numBenchExchangeClients=0
 benchTpsExtraArgs=
@@ -270,6 +272,10 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
         exit 1
       fi
       case $clientType in
+        idle)
+          numIdleClients=$numClients
+          # $extraArgs ignored for 'idle'
+        ;;
         bench-tps)
           numBenchTpsClients=$numClients
           benchTpsExtraArgs=$extraArgs
@@ -310,10 +316,10 @@ if [[ -n $numValidatorsRequested ]]; then
 fi
 
 numClients=${#clientIpList[@]}
-numClientsRequested=$((numBenchTpsClients+numBenchExchangeClients))
+numClientsRequested=$((numBenchTpsClients + numBenchExchangeClients + numIdleClients))
 if [[ "$numClientsRequested" -eq 0 ]]; then
   numBenchTpsClients=$numClients
-  numClientsRequested=$((numBenchTpsClients+numBenchExchangeClients))
+  numClientsRequested=$numClients
 else
   if [[ "$numClientsRequested" -gt "$numClients" ]]; then
     echo "Error: More clients requested ($numClientsRequested) then available ($numClients)"
@@ -740,7 +746,7 @@ deploy() {
                                  # have caught up to the bootstrap leader yet
 
   SECONDS=0
-  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
+  for ((i=0; i < "$numClients" && i < $((numBenchTpsClients + numBenchExchangeClients)); i++)) do
     if [[ $i -lt "$numBenchTpsClients" ]]; then
       startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
     else
