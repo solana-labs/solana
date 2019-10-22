@@ -152,6 +152,7 @@ EOF
     set -x
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
+      setup_secondary_mount
 
       if [[ -n $internalNodesLamports ]]; then
         echo "---" >> config/fullnode-balances.yml
@@ -248,6 +249,7 @@ EOF
     fi
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
+      setup_secondary_mount
       [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
       "$entrypointIp":~/solana/config/fullnode-"$nodeIndex"-identity.json config/fullnode-identity.json
     fi

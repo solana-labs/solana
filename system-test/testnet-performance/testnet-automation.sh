@@ -7,10 +7,9 @@ set -e
 
 # TODO: Remove all default values, force explicitness in the testcase definition
 [[ -n $TEST_DURATION ]] || TEST_DURATION=300
-[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=60
+[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=0
 [[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES=2
 [[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=1
-[[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-a"
 
 function collect_logs {
   echo --- collect logs from remote nodes
@@ -26,6 +25,11 @@ function collect_logs {
 }
 
 function cleanup_testnet {
+  FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
+  if [[ -n $UPLOAD_RESULTS_TO_SLACK ]] ; then
+    upload_results_to_slack
+  fi
+
   (
     set +e
     collect_logs
@@ -101,9 +105,9 @@ launchTestnet() {
 
   echo --- start "$NUMBER_OF_VALIDATOR_NODES" node test
   if [[ -n $CHANNEL ]]; then
-    net/net.sh start -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
+    net/net.sh restart -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
   else
-    net/net.sh start -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
+    net/net.sh restart -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
   fi
 
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
@@ -128,27 +132,27 @@ launchTestnet() {
     )'
 
   declare q_mean_confirmation='
-    SELECT round(mean("duration_ms")) as "mean_confirmation"
+    SELECT round(mean("duration_ms")) as "mean_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
   declare q_max_confirmation='
-    SELECT round(max("duration_ms")) as "max_confirmation"
+    SELECT round(max("duration_ms")) as "max_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
   declare q_99th_confirmation='
-    SELECT round(percentile("duration_ms", 99)) as "99th_confirmation"
+    SELECT round(percentile("duration_ms", 99)) as "99th_percentile_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
       WHERE time > now() - '"$TEST_DURATION"'s'
 
-  RESULTS_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$NUMBER_OF_VALIDATOR_NODES".log
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
-    python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULTS_FILE"
+    python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULT_FILE"
 
-  upload-ci-artifact "$RESULTS_FILE"
+  RESULT_DETAILS=$(<"$RESULT_FILE")
+  upload-ci-artifact "$RESULT_FILE"
 }
 
 cd "$(dirname "$0")/../.."
@@ -169,10 +173,33 @@ fi
 
 # shellcheck disable=SC1091
 source ci/upload-ci-artifact.sh
+source system-test/testnet-performance/upload_results_to_slack.sh
 
 maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
 maybeMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"-G"}
 
 IFS=, read -r -a TESTNET_CLOUD_ZONES <<<"${TESTNET_ZONES}"
+
+RESULT_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$NUMBER_OF_VALIDATOR_NODES".log
+rm -f $RESULT_FILE
+RESULT_DETAILS="Test failed to finish"
+
+TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
+                        NUMBER_OF_VALIDATOR_NODES \
+                        VALIDATOR_NODE_MACHINE_TYPE \
+                        NUMBER_OF_CLIENT_NODES \
+                        CLIENT_OPTIONS \
+                        TESTNET_ZONES \
+                        TEST_DURATION \
+                        ADDITIONAL_FLAGS)
+
+TEST_CONFIGURATION=
+for i in "${TEST_PARAMS_TO_DISPLAY[@]}" ; do
+  if [[ -n ${!i} ]] ; then
+    TEST_CONFIGURATION+="${i} = ${!i} | "
+  fi
+done
+
+START_UNIX_MSECS="$(($(date +%s%N)/1000000))"
 
 launchTestnet
