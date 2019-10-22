@@ -5,10 +5,10 @@ cd "$(dirname "$0")"/..
 source ci/upload-ci-artifact.sh
 
 zone=
-bootstrapFullNodeAddress=
-bootstrapFullNodeMachineType=
+bootstrapValidatorAddress=
+bootstrapValidatorMachineType=
 clientNodeCount=0
-additionalFullNodeCount=10
+additionalValidatorCount=10
 publicNetwork=false
 stopNetwork=false
 reuseLedger=false
@@ -29,7 +29,7 @@ maybeInternalNodesLamports=
 maybeExternalPrimordialAccountsFile=
 maybeLamports=
 maybeLetsEncrypt=
-maybeFullnodeAdditionalDiskSize=
+maybeValidatorAdditionalDiskSize=
 maybeNoSnapshot=
 maybeLimitLedgerSize=
 
@@ -54,13 +54,13 @@ Deploys a CD testnet
                                  specified release channel (edge|beta|stable) or release tag
                                  (vX.Y.Z)
                                  (default: $tarChannelOrTag)
-   -n [number]          - Number of additional full nodes (default: $additionalFullNodeCount)
+   -n [number]          - Number of additional validators (default: $additionalValidatorCount)
    -c [number]          - Number of client bencher nodes (default: $clientNodeCount)
    -u                   - Include a Blockstreamer (default: $blockstreamer)
    -P                   - Use public network IP addresses (default: $publicNetwork)
    -G                   - Enable GPU, and set count/type of GPUs to use (e.g n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100)
    -g                   - Enable GPU (default: $enableGpu)
-   -a [address]         - Set the bootstrap fullnode's external IP address to this GCE address
+   -a [address]         - Set the bootstrap validator's external IP address to this GCE address
    -d [disk-type]       - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
    -D                   - Delete the network
    -r                   - Reuse existing node/ledger configuration from a
@@ -88,8 +88,8 @@ Deploys a CD testnet
                         - If set, will not fetch logs from remote nodes
    --letsencrypt [dns name]
                         - Attempt to generate a TLS certificate using this DNS name
-   --fullnode-additional-disk-size-gb [number]
-                        - Size of additional disk in GB for all fullnodes
+   --validator-additional-disk-size-gb [number]
+                        - Size of additional disk in GB for all validators
    --no-snapshot-fetch
                         - If set, disables booting validators from a snapshot
 
@@ -128,8 +128,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --letsencrypt ]]; then
       maybeLetsEncrypt="$1 $2"
       shift 2
-    elif [[ $1 = --fullnode-additional-disk-size-gb ]]; then
-      maybeFullnodeAdditionalDiskSize="$1 $2"
+    elif [[ $1 = --validator-additional-disk-size-gb ]]; then
+      maybeValidatorAdditionalDiskSize="$1 $2"
       shift 2
     elif [[ $1 == --machine-type* ]]; then # Bypass quoted long args for GPUs
       shortArgs+=("$1")
@@ -167,7 +167,7 @@ while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfe" opt "${shortArgs[@]}"; do
     publicNetwork=true
     ;;
   n)
-    additionalFullNodeCount=$OPTARG
+    additionalValidatorCount=$OPTARG
     ;;
   c)
     clientNodeCount=$OPTARG
@@ -187,10 +187,10 @@ while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfe" opt "${shortArgs[@]}"; do
     ;;
   G)
     enableGpu=true
-    bootstrapFullNodeMachineType=$OPTARG
+    bootstrapValidatorMachineType=$OPTARG
     ;;
   a)
-    bootstrapFullNodeAddress=$OPTARG
+    bootstrapValidatorAddress=$OPTARG
     ;;
   d)
     bootDiskType=$OPTARG
@@ -275,9 +275,9 @@ if ! $skipCreate; then
   echo "--- $cloudProvider.sh create"
   create_args=(
     -p "$netName"
-    -a "$bootstrapFullNodeAddress"
+    -a "$bootstrapValidatorAddress"
     -c "$clientNodeCount"
-    -n "$additionalFullNodeCount"
+    -n "$additionalValidatorCount"
     --dedicated
   )
   # shellcheck disable=SC2206
@@ -297,10 +297,10 @@ if ! $skipCreate; then
   fi
 
   if $enableGpu; then
-    if [[ -z $bootstrapFullNodeMachineType ]]; then
+    if [[ -z $bootstrapValidatorMachineType ]]; then
       create_args+=(-g)
     else
-      create_args+=(-G "$bootstrapFullNodeMachineType")
+      create_args+=(-G "$bootstrapValidatorMachineType")
     fi
   fi
 
@@ -316,9 +316,9 @@ if ! $skipCreate; then
     create_args+=(-f)
   fi
 
-  if [[ -n $maybeFullnodeAdditionalDiskSize ]]; then
+  if [[ -n $maybeValidatorAdditionalDiskSize ]]; then
     # shellcheck disable=SC2206 # Do not want to quote
-    create_args+=($maybeFullnodeAdditionalDiskSize)
+    create_args+=($maybeValidatorAdditionalDiskSize)
   fi
 
   time net/"$cloudProvider".sh create "${create_args[@]}"

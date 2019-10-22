@@ -48,7 +48,7 @@ Operate a configured testnet
                                             -c bench-tps=2="--tx_count 25000"
                                         This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                         to the bench-tps client.
-   -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
+   -n NUM_VALIDATORS                  - Number of validators to apply command to.
    --gpu-mode GPU_MODE                - Specify GPU mode to launch validators with (default: $gpuMode).
                                         MODE must be one of
                                           on - GPU *required*, any vendor *
@@ -124,7 +124,7 @@ benchTpsExtraArgs=
 benchExchangeExtraArgs=
 failOnValidatorBootupFailure=true
 genesisOptions=
-numFullnodesRequested=
+numValidatorsRequested=
 externalPrimordialAccountsFile=
 remoteExternalPrimordialAccountsFile=
 internalNodesStakeLamports=
@@ -235,7 +235,7 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
     esac
     ;;
   n)
-    numFullnodesRequested=$OPTARG
+    numValidatorsRequested=$OPTARG
     ;;
   r)
     skipSetup=true
@@ -303,10 +303,10 @@ done
 
 loadConfigFile
 
-if [[ -n $numFullnodesRequested ]]; then
-  truncatedNodeList=( "${fullnodeIpList[@]:0:$numFullnodesRequested}" )
-  unset fullnodeIpList
-  fullnodeIpList=( "${truncatedNodeList[@]}" )
+if [[ -n $numValidatorsRequested ]]; then
+  truncatedNodeList=( "${validatorIpList[@]:0:$numValidatorsRequested}" )
+  unset validatorIpList
+  validatorIpList=( "${truncatedNodeList[@]}" )
 fi
 
 numClients=${#clientIpList[@]}
@@ -401,7 +401,7 @@ startBootstrapLeader() {
   echo "--- Starting bootstrap leader: $ipAddress"
   echo "start log: $logFile"
 
-  # Deploy local binaries to bootstrap fullnode.  Other fullnodes and clients later fetch the
+  # Deploy local binaries to bootstrap validator.  Other validators and clients later fetch the
   # binaries from it
   (
     set -x
@@ -429,7 +429,7 @@ startBootstrapLeader() {
          $deployMethod \
          bootstrap-leader \
          $entrypointIp \
-         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
+         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
@@ -455,7 +455,7 @@ startNode() {
   declare ipAddress=$1
   declare nodeType=$2
   declare nodeIndex="$3"
-  declare logFile="$netLogDir/fullnode-$ipAddress.log"
+  declare logFile="$netLogDir/validator-$ipAddress.log"
 
   if [[ -z $nodeType ]]; then
     echo nodeType not specified
@@ -494,7 +494,7 @@ startNode() {
          $deployMethod \
          $nodeType \
          $entrypointIp \
-         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
+         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
@@ -511,7 +511,7 @@ startNode() {
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  ln -sf "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
+  ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
   pids+=("$pid")
 }
 
@@ -541,7 +541,7 @@ sanity() {
   $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
 
   declare ok=true
-  declare bootstrapLeader=${fullnodeIpList[0]}
+  declare bootstrapLeader=${validatorIpList[0]}
   declare blockstreamer=${blockstreamerIpList[0]}
 
   annotateBlockexplorerUrl
@@ -581,7 +581,7 @@ deployUpdate() {
   fi
 
   declare ok=true
-  declare bootstrapLeader=${fullnodeIpList[0]}
+  declare bootstrapLeader=${validatorIpList[0]}
 
   for updatePlatform in $updatePlatforms; do
     echo "--- Deploying solana-install update: $updatePlatform"
@@ -610,7 +610,7 @@ getNodeType() {
   nodeIndex=0 # <-- global
   nodeType=validator # <-- global
 
-  for ipAddress in "${fullnodeIpList[@]}" b "${blockstreamerIpList[@]}" r "${archiverIpList[@]}"; do
+  for ipAddress in "${validatorIpList[@]}" b "${blockstreamerIpList[@]}" r "${archiverIpList[@]}"; do
     if [[ $ipAddress = b ]]; then
       nodeType=blockstreamer
       continue
@@ -673,7 +673,7 @@ prepare_deploy() {
     echo "Fetching current software version"
     (
       set -x
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "${fullnodeIpList[0]}":~/version.yml current-version.yml
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "${validatorIpList[0]}":~/version.yml current-version.yml
     )
     cat current-version.yml
     if ! diff -q current-version.yml "$SOLANA_ROOT"/solana-release/version.yml; then
@@ -690,7 +690,7 @@ deploy() {
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
   declare bootstrapLeader=true
-  for nodeAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}"; do
+  for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}"; do
     nodeType=
     nodeIndex=
     getNodeType
@@ -721,8 +721,8 @@ deploy() {
     declare ok=true
     wait "$pid" || ok=false
     if ! $ok; then
-      echo "+++ fullnode failed to start"
-      cat "$netLogDir/fullnode-$pid.log"
+      echo "+++ validator failed to start"
+      cat "$netLogDir/validator-$pid.log"
       if $failOnValidatorBootupFailure; then
         exit 1
       else
@@ -731,7 +731,7 @@ deploy() {
     fi
   done
 
-  $metricsWriteDatapoint "testnet-deploy net-fullnodes-started=1"
+  $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
   additionalNodeDeployTime=$SECONDS
 
   annotateBlockexplorerUrl
@@ -775,7 +775,7 @@ deploy() {
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
+  echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"
 }
@@ -784,7 +784,7 @@ deploy() {
 stopNode() {
   local ipAddress=$1
   local block=$2
-  declare logFile="$netLogDir/stop-fullnode-$ipAddress.log"
+  declare logFile="$netLogDir/stop-validator-$ipAddress.log"
   echo "--- Stopping node: $ipAddress"
   echo "stop log: $logFile"
   (
@@ -807,7 +807,7 @@ stopNode() {
   ) >> "$logFile" 2>&1 &
 
   declare pid=$!
-  ln -sf "stop-fullnode-$ipAddress.log" "$netLogDir/stop-fullnode-$pid.log"
+  ln -sf "stop-validator-$ipAddress.log" "$netLogDir/stop-validator-$pid.log"
   if $block; then
     wait $pid
   else
@@ -821,7 +821,7 @@ stop() {
 
   declare loopCount=0
   pids=()
-  for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress" false
 
     # Stagger additional node stop time to avoid too many concurrent ssh
@@ -842,13 +842,13 @@ stop() {
 
 
 checkPremptibleInstances() {
-  # The fullnodeIpList nodes may be preemptible instances that can disappear at
-  # any time.  Try to detect when a fullnode has been preempted to help the user
+  # The validatorIpList nodes may be preemptible instances that can disappear at
+  # any time.  Try to detect when a validator has been preempted to help the user
   # out.
   #
   # Of course this isn't airtight as an instance could always disappear
   # immediately after its successfully pinged.
-  for ipAddress in "${fullnodeIpList[@]}"; do
+  for ipAddress in "${validatorIpList[@]}"; do
     (
       set -x
       timeout 5s ping -c 1 "$ipAddress" | tr - _
@@ -913,18 +913,18 @@ logs)
         "$ipAddress":solana/"$log".log "$netLogDir"/remote-"$log"-"$ipAddress".log
     ) || echo "failed to fetch log"
   }
-  fetchRemoteLog "${fullnodeIpList[0]}" drone
-  for ipAddress in "${fullnodeIpList[@]}"; do
-    fetchRemoteLog "$ipAddress" fullnode
+  fetchRemoteLog "${validatorIpList[0]}" drone
+  for ipAddress in "${validatorIpList[@]}"; do
+    fetchRemoteLog "$ipAddress" validator
   done
   for ipAddress in "${clientIpList[@]}"; do
     fetchRemoteLog "$ipAddress" client
   done
   for ipAddress in "${blockstreamerIpList[@]}"; do
-    fetchRemoteLog "$ipAddress" fullnode
+    fetchRemoteLog "$ipAddress" validator
   done
   for ipAddress in "${archiverIpList[@]}"; do
-    fetchRemoteLog "$ipAddress" fullnode
+    fetchRemoteLog "$ipAddress" validator
   done
   ;;
 

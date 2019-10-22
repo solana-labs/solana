@@ -72,7 +72,7 @@ cd ~/solana
 source scripts/oom-score-adj.sh
 
 now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-ln -sfT fullnode.log.\$now fullnode.log
+ln -sfT validator.log.\$now validator.log
 EOF
 chmod +x ~/solana/on-reboot
 echo "@reboot ~/solana/on-reboot" | crontab -
@@ -155,11 +155,11 @@ EOF
       setup_secondary_mount
 
       if [[ -n $internalNodesLamports ]]; then
-        echo "---" >> config/fullnode-balances.yml
+        echo "---" >> config/validator-balances.yml
         for i in $(seq 0 "$numNodes"); do
-          solana-keygen new -o config/fullnode-"$i"-identity.json
-          pubkey="$(solana-keygen pubkey config/fullnode-"$i"-identity.json)"
-          cat >> config/fullnode-balances.yml <<EOF
+          solana-keygen new -o config/validator-"$i"-identity.json
+          pubkey="$(solana-keygen pubkey config/validator-"$i"-identity.json)"
+          cat >> config/validator-balances.yml <<EOF
 $pubkey:
   balance: $internalNodesLamports
   owner: 11111111111111111111111111111111
@@ -195,10 +195,10 @@ EOF
         echo "" >> config/client-accounts.yml
       done
       if [[ -f $externalPrimordialAccountsFile ]]; then
-        cat "$externalPrimordialAccountsFile" >> config/fullnode-balances.yml
+        cat "$externalPrimordialAccountsFile" >> config/validator-balances.yml
       fi
-      if [[ -f config/fullnode-balances.yml ]]; then
-        genesisOptions+=" --primordial-accounts-file config/fullnode-balances.yml"
+      if [[ -f config/validator-balances.yml ]]; then
+        genesisOptions+=" --primordial-accounts-file config/validator-balances.yml"
       fi
       if [[ -f config/client-accounts.yml ]]; then
         genesisOptions+=" --primordial-keypairs-file config/client-accounts.yml"
@@ -228,7 +228,7 @@ EOF
     args+=($extraNodeArgs)
 
 cat >> ~/solana/on-reboot <<EOF
-    nohup ./multinode-demo/bootstrap-leader.sh ${args[@]} > fullnode.log.\$now 2>&1 &
+    nohup ./multinode-demo/bootstrap-leader.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
@@ -251,7 +251,7 @@ EOF
       clear_config_dir "$SOLANA_CONFIG_DIR"
       setup_secondary_mount
       [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
-      "$entrypointIp":~/solana/config/fullnode-"$nodeIndex"-identity.json config/fullnode-identity.json
+      "$entrypointIp":~/solana/config/validator-"$nodeIndex"-identity.json config/validator-identity.json
     fi
 
     args=(
@@ -271,10 +271,10 @@ EOF
       fi
     fi
 
-    if [[ ! -f config/fullnode-identity.json ]]; then
-      solana-keygen new -o config/fullnode-identity.json
+    if [[ ! -f config/validator-identity.json ]]; then
+      solana-keygen new -o config/validator-identity.json
     fi
-    args+=(--identity config/fullnode-identity.json)
+    args+=(--identity config/validator-identity.json)
 
     if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
@@ -337,7 +337,7 @@ EOF
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
 cat >> ~/solana/on-reboot <<EOF
-    nohup multinode-demo/validator.sh ${args[@]} > fullnode.log.\$now 2>&1 &
+    nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
@@ -354,8 +354,8 @@ EOF
       if [[ $airdropsEnabled != true ]]; then
         args+=(--no-airdrop)
       fi
-      if [[ -f config/fullnode-identity.json ]]; then
-        args+=(--keypair config/fullnode-identity.json)
+      if [[ -f config/validator-identity.json ]]; then
+        args+=(--keypair config/validator-identity.json)
       fi
 
       multinode-demo/delegate-stake.sh "${args[@]}"
@@ -363,7 +363,7 @@ EOF
 
     if [[ $skipSetup != true ]]; then
       solana --url http://"$entrypointIp":8899 \
-        --keypair config/fullnode-identity.json \
+        --keypair config/validator-identity.json \
         validator-info publish "$(hostname)" -n team/solana --force || true
     fi
     ;;
@@ -384,7 +384,7 @@ EOF
     fi
 
 cat >> ~/solana/on-reboot <<EOF
-    nohup multinode-demo/archiver.sh ${args[@]} > fullnode.log.\$now 2>&1 &
+    nohup multinode-demo/archiver.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
