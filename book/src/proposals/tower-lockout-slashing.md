@@ -27,9 +27,21 @@ N.
 
 
 ## Proof that Validator violated a Lockout
+Given two votes A and B to determine whether they are slashable,
+the protocol is:
 
-To submit a proof that the validator violated a consensus rule, the
-prover needs to submit two votes.
+Find whether A or B is older, meaning which one contains the highest
+voted slot. Let's say it's B
+
+Find the slot `v_s` the vote that is greatest common ancestor of A
+and B. Let the first vote greater than s in A and B be called `v_a`
+and `v_b` respectively
+
+Apply `v_b` onto A. All votes in `A >= v_a` should be popped off.
+If not, these two votes are slashable.
+
+For example: To submit a proof that the validator violated a consensus
+rule, the prover needs to submit two votes.
 
 * vote A: 0, 1, 2, 3
 * vote B: 0, 1, 5
