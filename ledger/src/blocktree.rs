@@ -1,49 +1,39 @@
 //! The `blocktree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
+use crate::blocktree_db::{self, columns as cf, Column, IteratorDirection, IteratorMode};
+pub use crate::blocktree_db::{BlocktreeError, Result};
+pub use crate::blocktree_meta::SlotMeta;
+use crate::blocktree_meta::*;
 use crate::entry::{create_ticks, Entry};
 use crate::erasure::ErasureConfig;
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::shred::{Shred, Shredder};
-
 use bincode::deserialize;
-
 use log::*;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
-use rocksdb;
-
+use rocksdb::DBRawIterator;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
-
+use solana_sdk::clock::Slot;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::result;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 
-pub use self::meta::*;
-use crate::leader_schedule_cache::LeaderScheduleCache;
-use solana_sdk::clock::Slot;
-
-mod db;
-mod meta;
-
-use db::{columns as cf, Column, IteratorDirection, IteratorMode};
-use rocksdb::DBRawIterator;
-
-type Database = db::Database;
-type LedgerColumn<C> = db::LedgerColumn<C>;
-type WriteBatch = db::WriteBatch;
-type BatchProcessor = db::BatchProcessor;
+type Database = blocktree_db::Database;
+type LedgerColumn<C> = blocktree_db::LedgerColumn<C>;
+type WriteBatch = blocktree_db::WriteBatch;
+type BatchProcessor = blocktree_db::BatchProcessor;
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 
@@ -56,37 +46,6 @@ pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 
 pub type SlotMetaWorkingSetEntry = (Rc<RefCell<SlotMeta>>, Option<SlotMeta>);
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
-
-#[derive(Debug)]
-pub enum BlocktreeError {
-    ShredForIndexExists,
-    InvalidShredData(Box<bincode::ErrorKind>),
-    RocksDb(rocksdb::Error),
-    SlotNotRooted,
-    IO(std::io::Error),
-    Serialize(std::boxed::Box<bincode::ErrorKind>),
-}
-pub type Result<T> = result::Result<T, BlocktreeError>;
-
-impl std::error::Error for BlocktreeError {}
-
-impl std::fmt::Display for BlocktreeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "blocktree error")
-    }
-}
-
-impl std::convert::From<std::io::Error> for BlocktreeError {
-    fn from(e: std::io::Error) -> BlocktreeError {
-        BlocktreeError::IO(e)
-    }
-}
-
-impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for BlocktreeError {
-    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> BlocktreeError {
-        BlocktreeError::Serialize(e)
-    }
-}
 
 // ledger window
 pub struct Blocktree {
@@ -103,22 +62,6 @@ pub struct Blocktree {
     pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
-
-// Column family for metadata about a leader slot
-pub const META_CF: &str = "meta";
-// Column family for slots that have been marked as dead
-pub const DEAD_SLOTS_CF: &str = "dead_slots";
-pub const ERASURE_META_CF: &str = "erasure_meta";
-// Column family for orphans data
-pub const ORPHANS_CF: &str = "orphans";
-// Column family for root data
-pub const ROOT_CF: &str = "root";
-/// Column family for indexes
-pub const INDEX_CF: &str = "index";
-/// Column family for Data Shreds
-pub const DATA_SHRED_CF: &str = "data_shred";
-/// Column family for Code Shreds
-pub const CODE_SHRED_CF: &str = "code_shred";
 
 impl Blocktree {
     /// Opens a Ledger in directory, provides "infinite" window of shreds
@@ -1644,7 +1587,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open(ledger_path)?;
 
-    let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
+    let entries = create_ticks(ticks_per_slot, genesis_block.hash());
     let last_hash = entries.last().unwrap().hash;
 
     let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()))

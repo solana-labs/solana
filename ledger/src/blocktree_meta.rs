@@ -1,8 +1,7 @@
 use crate::erasure::ErasureConfig;
 use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint;
-use std::cmp::Ordering;
-use std::{collections::BTreeSet, ops::Range, ops::RangeBounds};
+use std::{collections::BTreeSet, ops::RangeBounds};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
@@ -29,51 +28,6 @@ pub struct SlotMeta {
     pub is_connected: bool,
     // List of start indexes for completed data slots
     pub completed_data_indexes: Vec<u32>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
-pub struct ErasureSetRanges {
-    r: Vec<Range<u64>>,
-}
-
-impl ErasureSetRanges {
-    pub fn insert(&mut self, start: u64, end: u64) -> Result<usize, Range<u64>> {
-        let range = if start < end {
-            (start..end)
-        } else {
-            (end..start)
-        };
-
-        match self.pos(range.start) {
-            Ok(pos) => Err(self.r[pos].clone()),
-            Err(pos) => {
-                self.r.insert(pos, range);
-                Ok(pos)
-            }
-        }
-    }
-
-    fn pos(&self, seek: u64) -> Result<usize, usize> {
-        self.r.binary_search_by(|probe| {
-            if probe.contains(&seek) {
-                Ordering::Equal
-            } else {
-                probe.start.cmp(&seek)
-            }
-        })
-    }
-
-    pub fn lookup(&self, seek: u64) -> Result<Range<u64>, usize> {
-        self.pos(seek)
-            .map(|pos| self.r[pos].clone())
-            .or_else(|epos| {
-                if epos < self.r.len() && self.r[epos].contains(&seek) {
-                    Ok(self.r[epos].clone())
-                } else {
-                    Err(epos)
-                }
-            })
-    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -116,7 +70,7 @@ pub enum ErasureMetaStatus {
 }
 
 impl Index {
-    pub(in crate::blocktree) fn new(slot: u64) -> Self {
+    pub(crate) fn new(slot: u64) -> Self {
         Index {
             slot,
             data: DataIndex::default(),
@@ -220,7 +174,7 @@ impl SlotMeta {
         self.parent_slot != std::u64::MAX
     }
 
-    pub(in crate::blocktree) fn new(slot: u64, parent_slot: u64) -> Self {
+    pub(crate) fn new(slot: u64, parent_slot: u64) -> Self {
         SlotMeta {
             slot,
             consumed: 0,
@@ -349,51 +303,5 @@ mod test {
 
             assert_eq!(e_meta.status(&index), DataFull);
         }
-    }
-
-    #[test]
-    fn test_erasure_set_ranges() {
-        let mut ranges = ErasureSetRanges::default();
-
-        // Test empty ranges
-        (0..100 as u64).for_each(|i| {
-            assert_eq!(ranges.lookup(i), Err(0));
-        });
-
-        // Test adding one range and all boundary condition lookups
-        assert_eq!(ranges.insert(5, 13), Ok(0));
-        assert_eq!(ranges.lookup(0), Err(0));
-        assert_eq!(ranges.lookup(4), Err(0));
-        assert_eq!(ranges.lookup(5), Ok(5..13));
-        assert_eq!(ranges.lookup(12), Ok(5..13));
-        assert_eq!(ranges.lookup(13), Err(1));
-        assert_eq!(ranges.lookup(100), Err(1));
-
-        // Test adding second range (with backwards values) and all boundary condition lookups
-        assert_eq!(ranges.insert(55, 33), Ok(1));
-        assert_eq!(ranges.lookup(0), Err(0));
-        assert_eq!(ranges.lookup(4), Err(0));
-        assert_eq!(ranges.lookup(5), Ok(5..13));
-        assert_eq!(ranges.lookup(12), Ok(5..13));
-        assert_eq!(ranges.lookup(13), Err(1));
-        assert_eq!(ranges.lookup(32), Err(1));
-        assert_eq!(ranges.lookup(33), Ok(33..55));
-        assert_eq!(ranges.lookup(54), Ok(33..55));
-        assert_eq!(ranges.lookup(55), Err(2));
-
-        // Add a third range between previous two ranges
-        assert_eq!(ranges.insert(23, 30), Ok(1));
-        assert_eq!(ranges.lookup(0), Err(0));
-        assert_eq!(ranges.lookup(4), Err(0));
-        assert_eq!(ranges.lookup(5), Ok(5..13));
-        assert_eq!(ranges.lookup(12), Ok(5..13));
-        assert_eq!(ranges.lookup(13), Err(1));
-        assert_eq!(ranges.lookup(23), Ok(23..30));
-        assert_eq!(ranges.lookup(29), Ok(23..30));
-        assert_eq!(ranges.lookup(30), Err(2));
-        assert_eq!(ranges.lookup(32), Err(2));
-        assert_eq!(ranges.lookup(33), Ok(33..55));
-        assert_eq!(ranges.lookup(54), Ok(33..55));
-        assert_eq!(ranges.lookup(55), Err(3));
     }
 }

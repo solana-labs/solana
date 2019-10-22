@@ -1,4 +1,5 @@
 use crate::blocktree::*;
+use crate::blocktree_meta::SlotMeta;
 use log::*;
 
 pub struct RootedSlotIterator<'a> {

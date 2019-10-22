@@ -1,5 +1,6 @@
 use crate::bank_forks::BankForks;
-use crate::blocktree::{Blocktree, SlotMeta};
+use crate::blocktree::Blocktree;
+use crate::blocktree_meta::SlotMeta;
 use crate::entry::{create_ticks, Entry, EntrySlice};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use log::*;
