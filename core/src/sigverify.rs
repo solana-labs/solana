@@ -136,14 +136,13 @@ fn shred_gpu_pubkeys(
                         let slot_start = size_of::<Signature>() + size_of::<ShredType>();
                         let slot_end = slot_start + size_of::<u64>();
                         if let Ok(slot) = deserialize(packet.data[slot_start..slot_end]) 
-                            && slot_leaders.contains_key(slot)) {
+                            && slot_leaders.contains_key(slot) {
                             slot
                         } else {
                             u64::max()
                         }
-                     }
-                 ).collect())
-                .collect()
+                     }).collect()
+                ).collect()
         })
     }); 
     let mut keys: HashMap<Pubkey, Vec<u64>> = HashMap::new();
@@ -166,10 +165,11 @@ fn shred_gpu_pubkeys(
     let offset_table = slots
         .iter()
         .map(|packet_slots| { 
-            packet_slots.iter().for_each(|slot|
+            packet_slots.iter().for_each(|slot| {
                 offets.append(slot_to_key_ix.get(slot).unwrap() * size_of::<Pubkey>());
             );
             offsets
+            }
         });
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data 
@@ -299,7 +299,6 @@ pub fn verify_shreds_gpu(
     recycler.recycle(msg_start_offsets);
     recycler.recycler_pubkeys(pubkeys);
     rvs
-}
 }
 
 fn verify_packet(packet: &Packet) -> u8 {
