@@ -7,7 +7,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use solana_sdk::clock::Slot;
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
 use std::marker::PhantomData;
@@ -513,10 +512,7 @@ impl Database {
     where
         C: TypedColumn,
     {
-        if let Some(serialized_value) = self
-            .backend
-            .get_cf(self.cf_handle::<C>(), C::key(key).borrow())?
-        {
+        if let Some(serialized_value) = self.backend.get_cf(self.cf_handle::<C>(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
 
             Ok(Some(value))
@@ -536,10 +532,8 @@ impl Database {
             match iterator_mode {
                 IteratorMode::From(start_from, direction) => {
                     let key = C::key(start_from);
-                    self.backend.iterator_cf(
-                        self.cf_handle::<C>(),
-                        IteratorMode::From(key.borrow(), direction),
-                    )?
+                    self.backend
+                        .iterator_cf(self.cf_handle::<C>(), IteratorMode::From(&key, direction))?
                 }
                 IteratorMode::Start => self
                     .backend
@@ -615,7 +609,7 @@ where
     C: Column,
 {
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
-        self.backend.get_cf(self.handle(), C::key(key).borrow())
+        self.backend.get_cf(self.handle(), &C::key(key))
     }
 
     pub fn iter(
@@ -627,7 +621,7 @@ where
                 IteratorMode::From(start_from, direction) => {
                     let key = C::key(start_from);
                     self.backend
-                        .iterator_cf(self.handle(), IteratorMode::From(key.borrow(), direction))?
+                        .iterator_cf(self.handle(), IteratorMode::From(&key, direction))?
                 }
                 IteratorMode::Start => self
                     .backend
@@ -686,8 +680,7 @@ where
     }
 
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
-        self.backend
-            .put_cf(self.handle(), C::key(key).borrow(), value)
+        self.backend.put_cf(self.handle(), &C::key(key), value)
     }
 }
 
@@ -696,7 +689,7 @@ where
     C: TypedColumn,
 {
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), C::key(key).borrow())? {
+        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
 
             Ok(Some(value))
@@ -709,27 +702,27 @@ where
         let serialized_value = serialize(value)?;
 
         self.backend
-            .put_cf(self.handle(), C::key(key).borrow(), &serialized_value)
+            .put_cf(self.handle(), &C::key(key), &serialized_value)
     }
 }
 
 impl WriteBatch {
     pub fn put_bytes<C: Column>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
-            .put_cf(self.get_cf::<C>(), C::key(key).borrow(), bytes)
+            .put_cf(self.get_cf::<C>(), &C::key(key), bytes)
             .map_err(|e| e.into())
     }
 
     pub fn delete<C: Column>(&mut self, key: C::Index) -> Result<()> {
         self.write_batch
-            .delete_cf(self.get_cf::<C>(), C::key(key).borrow())
+            .delete_cf(self.get_cf::<C>(), &C::key(key))
             .map_err(|e| e.into())
     }
 
     pub fn put<C: TypedColumn>(&mut self, key: C::Index, value: &C::Type) -> Result<()> {
         let serialized_value = serialize(&value)?;
         self.write_batch
-            .put_cf(self.get_cf::<C>(), C::key(key).borrow(), &serialized_value)
+            .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value)
             .map_err(|e| e.into())
     }
 
