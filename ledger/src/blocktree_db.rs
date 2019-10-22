@@ -521,22 +521,17 @@ impl Database {
     where
         C: Column,
     {
-        let iter = {
-            match iterator_mode {
-                IteratorMode::From(start_from, direction) => {
-                    let key = C::key(start_from);
-                    self.backend
-                        .iterator_cf(self.cf_handle::<C>(), IteratorMode::From(&key, direction))?
-                }
-                IteratorMode::Start => self
-                    .backend
-                    .iterator_cf(self.cf_handle::<C>(), IteratorMode::Start)?,
-                IteratorMode::End => self
-                    .backend
-                    .iterator_cf(self.cf_handle::<C>(), IteratorMode::End)?,
+        let cf = self.cf_handle::<C>();
+        let start_key;
+        let iterator_mode: IteratorMode<&[u8]> = match iterator_mode {
+            IteratorMode::From(start_from, direction) => {
+                start_key = C::key(start_from);
+                IteratorMode::From(&start_key, direction)
             }
+            IteratorMode::Start => IteratorMode::Start,
+            IteratorMode::End => IteratorMode::End,
         };
-
+        let iter = self.backend.iterator_cf(cf, iterator_mode)?;
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
@@ -609,20 +604,17 @@ where
         &self,
         iterator_mode: IteratorMode<C::Index>,
     ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>> {
-        let iter = {
-            match iterator_mode {
-                IteratorMode::From(start_from, direction) => {
-                    let key = C::key(start_from);
-                    self.backend
-                        .iterator_cf(self.handle(), IteratorMode::From(&key, direction))?
-                }
-                IteratorMode::Start => self
-                    .backend
-                    .iterator_cf(self.handle(), IteratorMode::Start)?,
-                IteratorMode::End => self.backend.iterator_cf(self.handle(), IteratorMode::End)?,
+        let cf = self.handle();
+        let start_key;
+        let iterator_mode: IteratorMode<&[u8]> = match iterator_mode {
+            IteratorMode::From(start_from, direction) => {
+                start_key = C::key(start_from);
+                IteratorMode::From(&start_key, direction)
             }
+            IteratorMode::Start => IteratorMode::Start,
+            IteratorMode::End => IteratorMode::End,
         };
-
+        let iter = self.backend.iterator_cf(cf, iterator_mode)?;
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
