@@ -709,21 +709,21 @@ where
 impl WriteBatch {
     pub fn put_bytes<C: Column>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
-            .put_cf(self.get_cf::<C>(), &C::key(key), bytes)
-            .map_err(|e| e.into())
+            .put_cf(self.get_cf::<C>(), &C::key(key), bytes)?;
+        Ok(())
     }
 
     pub fn delete<C: Column>(&mut self, key: C::Index) -> Result<()> {
         self.write_batch
-            .delete_cf(self.get_cf::<C>(), &C::key(key))
-            .map_err(|e| e.into())
+            .delete_cf(self.get_cf::<C>(), &C::key(key))?;
+        Ok(())
     }
 
     pub fn put<C: TypedColumn>(&mut self, key: C::Index, value: &C::Type) -> Result<()> {
         let serialized_value = serialize(&value)?;
         self.write_batch
-            .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value)
-            .map_err(|e| e.into())
+            .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value)?;
+        Ok(())
     }
 
     #[inline]
