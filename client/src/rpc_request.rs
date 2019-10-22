@@ -58,6 +58,7 @@ pub enum RpcRequest {
     GetBalance,
     GetClusterNodes,
     GetEpochInfo,
+    GetEpochSchedule,
     GetGenesisBlockhash,
     GetInflation,
     GetNumBlocksSinceSignatureConfirmation,
@@ -91,6 +92,7 @@ impl RpcRequest {
             RpcRequest::GetBalance => "getBalance",
             RpcRequest::GetClusterNodes => "getClusterNodes",
             RpcRequest::GetEpochInfo => "getEpochInfo",
+            RpcRequest::GetEpochSchedule => "getEpochSchedule",
             RpcRequest::GetGenesisBlockhash => "getGenesisBlockhash",
             RpcRequest::GetInflation => "getInflation",
             RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
