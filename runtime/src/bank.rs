@@ -1315,10 +1315,7 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.rc
-            .accounts
-            .load_slow(&self.ancestors, pubkey)
-            .map(|(account, _)| account)
+        self.rc.accounts.load_slow(&self.ancestors, pubkey)
     }
 
     pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
@@ -1338,7 +1335,7 @@ impl Bank {
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Fork)> {
         let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
-        self.rc.accounts.load_slow(&just_self, pubkey)
+        self.rc.accounts.accounts_db.load_slow(&just_self, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -1941,12 +1938,8 @@ mod tests {
         let dest = Keypair::new();
 
         // source with 0 program context
-        let tx = system_transaction::transfer_now(
-            &mint_keypair,
-            &dest.pubkey(),
-            2,
-            genesis_block.hash(),
-        );
+        let tx =
+            system_transaction::transfer(&mint_keypair, &dest.pubkey(), 2, genesis_block.hash());
         let signature = tx.signatures[0];
         assert!(!bank.has_signature(&signature));
 
@@ -2272,9 +2265,6 @@ mod tests {
             system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
-        bank.rc
-            .accounts
-            .commit_credits_unsafe(&bank.ancestors, bank.slot());
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
         // since System Transfer `To` accounts are given credit-only handling
@@ -2293,9 +2283,6 @@ mod tests {
             system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
-        bank.rc
-            .accounts
-            .commit_credits_unsafe(&bank.ancestors, bank.slot());
         // However, an account may not be locked as credit-only and credit-debit at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
