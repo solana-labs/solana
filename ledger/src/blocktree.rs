@@ -30,7 +30,8 @@ use std::result;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 
-pub use crate::blocktree_meta::*;
+pub use crate::blocktree_meta::SlotMeta;
+use crate::blocktree_meta::*;
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use solana_sdk::clock::Slot;
 

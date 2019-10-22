@@ -1,5 +1,4 @@
-use crate::blocktree::{BlocktreeError, Result};
-
+use crate::blocktree_meta;
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
 use log::*;
@@ -283,7 +282,7 @@ impl Column for columns::Index {
 }
 
 impl TypedColumn for columns::Index {
-    type Type = crate::blocktree_meta::Index;
+    type Type = blocktree_meta::Index;
 }
 
 impl Column for columns::DeadSlots {
@@ -391,7 +390,7 @@ impl Column for columns::SlotMeta {
 }
 
 impl TypedColumn for columns::SlotMeta {
-    type Type = crate::blocktree::SlotMeta;
+    type Type = blocktree_meta::SlotMeta;
 }
 
 impl Column for columns::ErasureMeta {
@@ -422,7 +421,7 @@ impl Column for columns::ErasureMeta {
 }
 
 impl TypedColumn for columns::ErasureMeta {
-    type Type = crate::blocktree::ErasureMeta;
+    type Type = blocktree_meta::ErasureMeta;
 }
 
 #[derive(Debug, Clone)]
