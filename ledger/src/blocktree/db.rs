@@ -31,6 +31,7 @@ pub enum IteratorMode<Index> {
     From(Index, IteratorDirection),
 }
 
+#[allow(dead_code)]
 pub enum IteratorDirection {
     Forward,
     Reverse,
@@ -155,11 +156,6 @@ impl Rocks {
 
     fn put_cf(&self, cf: ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
         self.0.put_cf(cf, key, value)?;
-        Ok(())
-    }
-
-    fn delete_cf(&self, cf: ColumnFamily, key: &[u8]) -> Result<()> {
-        self.0.delete_cf(cf, key)?;
         Ok(())
     }
 
@@ -467,30 +463,6 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_bytes<C>(&self, key: C::Index) -> Result<Option<Vec<u8>>>
-    where
-        C: Column,
-    {
-        self.backend
-            .get_cf(self.cf_handle::<C>(), C::key(key).borrow())
-    }
-
-    pub fn put_bytes<C>(&self, key: C::Index, data: &[u8]) -> Result<()>
-    where
-        C: Column,
-    {
-        self.backend
-            .put_cf(self.cf_handle::<C>(), C::key(key).borrow(), data)
-    }
-
-    pub fn delete<C>(&self, key: C::Index) -> Result<()>
-    where
-        C: Column,
-    {
-        self.backend
-            .delete_cf(self.cf_handle::<C>(), C::key(key).borrow())
-    }
-
     pub fn get<C>(&self, key: C::Index) -> Result<Option<C::Type>>
     where
         C: TypedColumn,
@@ -505,19 +477,6 @@ impl Database {
         } else {
             Ok(None)
         }
-    }
-
-    pub fn put<C>(&self, key: C::Index, value: &C::Type) -> Result<()>
-    where
-        C: TypedColumn,
-    {
-        let serialized_value = serialize(value)?;
-
-        self.backend.put_cf(
-            self.cf_handle::<C>(),
-            C::key(key).borrow(),
-            &serialized_value,
-        )
     }
 
     pub fn iter<C>(
@@ -673,6 +632,7 @@ where
         self.backend.cf_handle(C::NAME)
     }
 
+    #[cfg(test)]
     pub fn is_empty(&self) -> Result<bool> {
         let mut iter = self.backend.raw_iterator_cf(self.handle())?;
         iter.seek_to_first();
@@ -682,10 +642,6 @@ where
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
         self.backend
             .put_cf(self.handle(), C::key(key).borrow(), value)
-    }
-
-    pub fn delete(&self, key: C::Index) -> Result<()> {
-        self.backend.delete_cf(self.handle(), C::key(key).borrow())
     }
 }
 

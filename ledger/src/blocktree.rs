@@ -37,13 +37,12 @@ use solana_sdk::clock::Slot;
 mod db;
 mod meta;
 
-pub use db::columns;
 use db::{columns as cf, Column, IteratorDirection, IteratorMode};
 use rocksdb::DBRawIterator;
 
-pub type Database = db::Database;
-pub type LedgerColumn<C> = db::LedgerColumn<C>;
-pub type WriteBatch = db::WriteBatch;
+type Database = db::Database;
+type LedgerColumn<C> = db::LedgerColumn<C>;
+type WriteBatch = db::WriteBatch;
 type BatchProcessor = db::BatchProcessor;
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
