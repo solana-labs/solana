@@ -70,7 +70,7 @@ pub enum ErasureMetaStatus {
 }
 
 impl Index {
-    pub(in crate::blocktree) fn new(slot: u64) -> Self {
+    pub(crate) fn new(slot: u64) -> Self {
         Index {
             slot,
             data: DataIndex::default(),
@@ -174,7 +174,7 @@ impl SlotMeta {
         self.parent_slot != std::u64::MAX
     }
 
-    pub(in crate::blocktree) fn new(slot: u64, parent_slot: u64) -> Self {
+    pub(crate) fn new(slot: u64, parent_slot: u64) -> Self {
         SlotMeta {
             slot,
             consumed: 0,

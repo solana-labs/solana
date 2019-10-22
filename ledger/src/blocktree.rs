@@ -30,20 +30,17 @@ use std::result;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 
-pub use self::meta::*;
+pub use crate::blocktree_meta::*;
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use solana_sdk::clock::Slot;
 
-mod db;
-mod meta;
-
-use db::{columns as cf, Column, IteratorDirection, IteratorMode};
+use crate::blocktree_db::{columns as cf, Column, IteratorDirection, IteratorMode};
 use rocksdb::DBRawIterator;
 
-type Database = db::Database;
-type LedgerColumn<C> = db::LedgerColumn<C>;
-type WriteBatch = db::WriteBatch;
-type BatchProcessor = db::BatchProcessor;
+type Database = crate::blocktree_db::Database;
+type LedgerColumn<C> = crate::blocktree_db::LedgerColumn<C>;
+type WriteBatch = crate::blocktree_db::WriteBatch;
+type BatchProcessor = crate::blocktree_db::BatchProcessor;
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 

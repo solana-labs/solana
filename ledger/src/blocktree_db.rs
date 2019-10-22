@@ -76,7 +76,7 @@ struct Rocks(rocksdb::DB);
 
 impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
-        use crate::blocktree::db::columns::{
+        use columns::{
             DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
         };
 
@@ -121,7 +121,7 @@ impl Rocks {
     }
 
     fn columns(&self) -> Vec<&'static str> {
-        use crate::blocktree::db::columns::{
+        use columns::{
             DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
         };
 
@@ -213,7 +213,7 @@ pub trait TypedColumn: Column {
 }
 
 impl Column for columns::ShredCode {
-    const NAME: &'static str = super::CODE_SHRED_CF;
+    const NAME: &'static str = crate::blocktree::CODE_SHRED_CF;
     type Index = (u64, u64);
 
     fn key(index: (u64, u64)) -> Vec<u8> {
@@ -234,7 +234,7 @@ impl Column for columns::ShredCode {
 }
 
 impl Column for columns::ShredData {
-    const NAME: &'static str = super::DATA_SHRED_CF;
+    const NAME: &'static str = crate::blocktree::DATA_SHRED_CF;
     type Index = (u64, u64);
 
     fn key((slot, index): (u64, u64)) -> Vec<u8> {
@@ -260,7 +260,7 @@ impl Column for columns::ShredData {
 }
 
 impl Column for columns::Index {
-    const NAME: &'static str = super::INDEX_CF;
+    const NAME: &'static str = crate::blocktree::INDEX_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -283,11 +283,11 @@ impl Column for columns::Index {
 }
 
 impl TypedColumn for columns::Index {
-    type Type = crate::blocktree::meta::Index;
+    type Type = crate::blocktree_meta::Index;
 }
 
 impl Column for columns::DeadSlots {
-    const NAME: &'static str = super::DEAD_SLOTS_CF;
+    const NAME: &'static str = crate::blocktree::DEAD_SLOTS_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -314,7 +314,7 @@ impl TypedColumn for columns::DeadSlots {
 }
 
 impl Column for columns::Orphans {
-    const NAME: &'static str = super::ORPHANS_CF;
+    const NAME: &'static str = crate::blocktree::ORPHANS_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -341,7 +341,7 @@ impl TypedColumn for columns::Orphans {
 }
 
 impl Column for columns::Root {
-    const NAME: &'static str = super::ROOT_CF;
+    const NAME: &'static str = crate::blocktree::ROOT_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -368,7 +368,7 @@ impl TypedColumn for columns::Root {
 }
 
 impl Column for columns::SlotMeta {
-    const NAME: &'static str = super::META_CF;
+    const NAME: &'static str = crate::blocktree::META_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -391,11 +391,11 @@ impl Column for columns::SlotMeta {
 }
 
 impl TypedColumn for columns::SlotMeta {
-    type Type = super::SlotMeta;
+    type Type = crate::blocktree::SlotMeta;
 }
 
 impl Column for columns::ErasureMeta {
-    const NAME: &'static str = super::ERASURE_META_CF;
+    const NAME: &'static str = crate::blocktree::ERASURE_META_CF;
     type Index = (u64, u64);
 
     fn index(key: &[u8]) -> (u64, u64) {
@@ -422,7 +422,7 @@ impl Column for columns::ErasureMeta {
 }
 
 impl TypedColumn for columns::ErasureMeta {
-    type Type = super::ErasureMeta;
+    type Type = crate::blocktree::ErasureMeta;
 }
 
 #[derive(Debug, Clone)]
@@ -700,7 +700,7 @@ impl std::convert::From<rocksdb::Error> for BlocktreeError {
 }
 
 fn get_cf_options(name: &'static str) -> Options {
-    use crate::blocktree::db::columns::{ErasureMeta, Index, ShredCode, ShredData};
+    use columns::{ErasureMeta, Index, ShredCode, ShredData};
 
     let mut options = Options::default();
     match name {
