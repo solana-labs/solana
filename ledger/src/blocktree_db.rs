@@ -24,6 +24,22 @@ const TOTAL_THREADS: i32 = 8;
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 const MIN_WRITE_BUFFER_SIZE: u64 = 64 * 1024; // 64KB
 
+// Column family for metadata about a leader slot
+const META_CF: &str = "meta";
+// Column family for slots that have been marked as dead
+const DEAD_SLOTS_CF: &str = "dead_slots";
+const ERASURE_META_CF: &str = "erasure_meta";
+// Column family for orphans data
+const ORPHANS_CF: &str = "orphans";
+// Column family for root data
+const ROOT_CF: &str = "root";
+/// Column family for indexes
+const INDEX_CF: &str = "index";
+/// Column family for Data Shreds
+const DATA_SHRED_CF: &str = "data_shred";
+/// Column family for Code Shreds
+const CODE_SHRED_CF: &str = "code_shred";
+
 #[derive(Debug)]
 pub enum BlocktreeError {
     ShredForIndexExists,
@@ -243,7 +259,7 @@ pub trait TypedColumn: Column {
 }
 
 impl Column for columns::ShredCode {
-    const NAME: &'static str = crate::blocktree::CODE_SHRED_CF;
+    const NAME: &'static str = CODE_SHRED_CF;
     type Index = (u64, u64);
 
     fn key(index: (u64, u64)) -> Vec<u8> {
@@ -264,7 +280,7 @@ impl Column for columns::ShredCode {
 }
 
 impl Column for columns::ShredData {
-    const NAME: &'static str = crate::blocktree::DATA_SHRED_CF;
+    const NAME: &'static str = DATA_SHRED_CF;
     type Index = (u64, u64);
 
     fn key((slot, index): (u64, u64)) -> Vec<u8> {
@@ -290,7 +306,7 @@ impl Column for columns::ShredData {
 }
 
 impl Column for columns::Index {
-    const NAME: &'static str = crate::blocktree::INDEX_CF;
+    const NAME: &'static str = INDEX_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -317,7 +333,7 @@ impl TypedColumn for columns::Index {
 }
 
 impl Column for columns::DeadSlots {
-    const NAME: &'static str = crate::blocktree::DEAD_SLOTS_CF;
+    const NAME: &'static str = DEAD_SLOTS_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -344,7 +360,7 @@ impl TypedColumn for columns::DeadSlots {
 }
 
 impl Column for columns::Orphans {
-    const NAME: &'static str = crate::blocktree::ORPHANS_CF;
+    const NAME: &'static str = ORPHANS_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -371,7 +387,7 @@ impl TypedColumn for columns::Orphans {
 }
 
 impl Column for columns::Root {
-    const NAME: &'static str = crate::blocktree::ROOT_CF;
+    const NAME: &'static str = ROOT_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -398,7 +414,7 @@ impl TypedColumn for columns::Root {
 }
 
 impl Column for columns::SlotMeta {
-    const NAME: &'static str = crate::blocktree::META_CF;
+    const NAME: &'static str = META_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -425,7 +441,7 @@ impl TypedColumn for columns::SlotMeta {
 }
 
 impl Column for columns::ErasureMeta {
-    const NAME: &'static str = crate::blocktree::ERASURE_META_CF;
+    const NAME: &'static str = ERASURE_META_CF;
     type Index = (u64, u64);
 
     fn index(key: &[u8]) -> (u64, u64) {

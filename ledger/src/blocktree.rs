@@ -71,22 +71,6 @@ pub struct Blocktree {
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
 
-// Column family for metadata about a leader slot
-pub const META_CF: &str = "meta";
-// Column family for slots that have been marked as dead
-pub const DEAD_SLOTS_CF: &str = "dead_slots";
-pub const ERASURE_META_CF: &str = "erasure_meta";
-// Column family for orphans data
-pub const ORPHANS_CF: &str = "orphans";
-// Column family for root data
-pub const ROOT_CF: &str = "root";
-/// Column family for indexes
-pub const INDEX_CF: &str = "index";
-/// Column family for Data Shreds
-pub const DATA_SHRED_CF: &str = "data_shred";
-/// Column family for Code Shreds
-pub const CODE_SHRED_CF: &str = "code_shred";
-
 impl Blocktree {
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blocktree> {
