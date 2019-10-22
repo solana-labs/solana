@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use solana_sdk::{
     account::Account,
     clock::{Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
+    epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     hash::Hash,
     inflation::Inflation,
@@ -134,6 +135,25 @@ impl RpcClient {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetEpochInfo parse failure: {}", err),
+            )
+        })
+    }
+
+    pub fn get_epoch_schedule(&self) -> io::Result<EpochSchedule> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetEpochSchedule, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetEpochSchedule request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetEpochSchedule parse failure: {}", err),
             )
         })
     }

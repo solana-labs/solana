@@ -10,8 +10,8 @@ use crate::{
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    account::Account, epoch_schedule::EpochSchedule, pubkey::Pubkey, signature::KeypairUtil,
-    system_instruction::SystemError, sysvar, transaction::Transaction,
+    account::Account, pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
+    transaction::Transaction,
 };
 use solana_vote_api::{
     vote_instruction::{self, VoteError},
@@ -301,22 +301,6 @@ pub fn process_vote_authorize(
     log_instruction_custom_error::<VoteError>(result)
 }
 
-fn get_epoch_schedule(rpc_client: &RpcClient) -> Result<EpochSchedule, Box<dyn std::error::Error>> {
-    let epoch_schedule_account = rpc_client.get_account(&sysvar::epoch_schedule::id())?;
-
-    if epoch_schedule_account.owner != sysvar::id() {
-        return Err(CliError::RpcRequestError(format!(
-            "{:?} is not an epoch_schedule account",
-            sysvar::epoch_schedule::id()
-        ))
-        .into());
-    }
-
-    let epoch_schedule = EpochSchedule::deserialize(&epoch_schedule_account)?;
-
-    Ok(epoch_schedule)
-}
-
 fn get_vote_account(
     rpc_client: &RpcClient,
     vote_account_pubkey: &Pubkey,
@@ -346,7 +330,7 @@ pub fn process_show_vote_account(
 ) -> ProcessResult {
     let (vote_account, vote_state) = get_vote_account(rpc_client, vote_account_pubkey)?;
 
-    let epoch_schedule = get_epoch_schedule(rpc_client)?;
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
     println!(
         "account balance: {}",
@@ -401,7 +385,7 @@ pub fn process_uptime(
 ) -> ProcessResult {
     let (_vote_account, vote_state) = get_vote_account(rpc_client, vote_account_pubkey)?;
 
-    let epoch_schedule = get_epoch_schedule(rpc_client)?;
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
     println!("Node id: {}", vote_state.node_pubkey);
     println!("Authorized voter: {}", vote_state.authorized_voter);

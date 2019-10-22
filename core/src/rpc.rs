@@ -18,6 +18,7 @@ use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
+    epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     hash::Hash,
     inflation::Inflation,
@@ -99,6 +100,10 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_inflation(&self) -> Result<Inflation> {
         Ok(self.bank().inflation())
+    }
+
+    pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
+        Ok(*self.bank().epoch_schedule())
     }
 
     pub fn get_balance(&self, pubkey: &Pubkey) -> u64 {
@@ -289,6 +294,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getInflation")]
     fn get_inflation(&self, _: Self::Metadata) -> Result<Inflation>;
 
+    #[rpc(meta, name = "getEpochSchedule")]
+    fn get_epoch_schedule(&self, _: Self::Metadata) -> Result<EpochSchedule>;
+
     #[rpc(meta, name = "getBalance")]
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
@@ -436,6 +444,16 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_inflation()
+            .unwrap())
+    }
+
+    fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
+        debug!("get_epoch_schedule rpc request received");
+        Ok(meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_epoch_schedule()
             .unwrap())
     }
 
@@ -989,6 +1007,28 @@ pub mod tests {
             panic!("Expected single response");
         };
         assert_eq!(inflation, bank.inflation());
+    }
+
+    #[test]
+    fn test_rpc_get_epoch_schedule() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getEpochSchedule"}}"#);
+        let rep = io.handle_request_sync(&req, meta);
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let epoch_schedule: EpochSchedule = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        assert_eq!(epoch_schedule, *bank.epoch_schedule());
     }
 
     #[test]
