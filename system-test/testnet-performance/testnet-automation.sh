@@ -119,7 +119,7 @@ launchTestnet() {
 
   echo --- collect statistics about run
   declare q_mean_tps='
-    SELECT ROUND(MEAN("median_sum")) FROM (
+    SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
       SELECT MEDIAN(sum_count) AS "median_sum" FROM (
         SELECT SUM("count") AS "sum_count"
           FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
@@ -129,7 +129,7 @@ launchTestnet() {
     )'
 
   declare q_max_tps='
-    SELECT MAX("median_sum") FROM (
+    SELECT MAX("median_sum") as "max_tps" FROM (
       SELECT MEDIAN(sum_count) AS "median_sum" FROM (
         SELECT SUM("count") AS "sum_count"
           FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
