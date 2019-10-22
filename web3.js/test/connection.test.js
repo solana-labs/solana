@@ -80,9 +80,13 @@ test('get program accounts', async () => {
       account1.publicKey.toBase58(),
     ]).toEqual(expect.arrayContaining([element[0]]));
     if (element[0] == account0.publicKey) {
-      expect(element[1].lamports).toBe(SOL_LAMPORTS - feeCalculator.lamportsPerSignature);
+      expect(element[1].lamports).toBe(
+        SOL_LAMPORTS - feeCalculator.lamportsPerSignature,
+      );
     } else {
-      expect(element[1].lamports).toBe(0.5 * SOL_LAMPORTS- feeCalculator.lamportsPerSignature);
+      expect(element[1].lamports).toBe(
+        0.5 * SOL_LAMPORTS - feeCalculator.lamportsPerSignature,
+      );
     }
   });
 });
