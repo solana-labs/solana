@@ -66,7 +66,6 @@ local|tar|skip)
   solana_cli=solana
   solana_gossip=solana-gossip
   solana_install=solana-install
-  solana_keygen=solana-keygen
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -85,11 +84,8 @@ fi
 
 echo "+++ $sanityTargetIp: validators"
 (
-  # Ensure solana-cli has a keypair even though it doesn't really need one...
-  # TODO: Remove when https://github.com/solana-labs/solana/issues/6375 is fixed
-  $solana_keygen new --force -o temp-id.json
   set -x
-  $solana_cli --keypair temp-id.json --url http://"$sanityTargetIp":8899 show-validators
+  $solana_cli --url http://"$sanityTargetIp":8899 show-validators
 )
 
 echo "+++ $sanityTargetIp: node count ($numSanityNodes expected)"

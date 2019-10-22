@@ -88,14 +88,12 @@ if [[ ! -f $vote_keypair_path ]]; then
 fi
 
 if [[ -f $stake_keypair_path ]]; then
-  # TODO: Add ability to add multiple stakes with this script?
   echo "Error: $stake_keypair_path already exists"
   exit 1
 fi
 
 if ((airdrops_enabled)); then
-  declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
-  $solana_cli "${common_args[@]}" airdrop $((stake_lamports+fees)) lamports
+  $solana_cli "${common_args[@]}" airdrop "$stake_lamports" lamports
 fi
 
 $solana_keygen new -o "$stake_keypair_path"

@@ -3,8 +3,8 @@ set -ex
 #
 # Prevent background upgrades that block |apt-get|
 #
-# TODO: This approach is pretty uncompromising.  An alternative solution that
-#       doesn't involve deleting system files would be welcome.
+# This approach is pretty uncompromising.  An alternative solution that doesn't
+# involve deleting system files would be welcome.
 
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1

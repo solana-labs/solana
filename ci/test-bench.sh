@@ -70,9 +70,9 @@ _ cargo +$rust_nightly bench --manifest-path programs/bpf/Cargo.toml ${V:+--verb
 # Run banking bench. Doesn't require nightly, but use since it is already built.
 _ cargo +$rust_nightly run --release --manifest-path banking_bench/Cargo.toml ${V:+--verbose} | tee -a "$BENCH_FILE"
 
-# TODO: debug why solana-upload-perf takes over 30 minutes to complete.
+# `solana-upload-perf` disabled as it can take over 30 minutes to complete for some
+# reason
 exit 0
-
 _ cargo +$rust_nightly run --release --package solana-upload-perf \
   -- "$BENCH_FILE" "$TARGET_BRANCH" "$UPLOAD_METRICS" | tee "$BENCH_ARTIFACT"
 

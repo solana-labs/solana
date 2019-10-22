@@ -126,7 +126,7 @@ cloud_Initialize() {
   declare networkName="$1"
   # ec2-provider.sh creates firewall rules programmatically, should do the same
   # here.
-  echo "TODO: create $networkName firewall rules programmatically instead of assuming the 'testnet' tag exists"
+  echo "Note: one day create $networkName firewall rules programmatically instead of assuming the 'testnet' tag exists"
 }
 
 #

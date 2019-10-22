@@ -377,9 +377,9 @@ EOF
     )
 
     if [[ $airdropsEnabled != true ]]; then
-      echo "TODO: archivers not supported without airdrops"
-      # TODO: need to provide the `--identity` argument to an existing system
-      #       account with lamports in it
+      # If this ever becomes a problem, we need to provide the `--identity`
+      # argument to an existing system account with lamports in it
+      echo "Error: archivers not supported without airdrops"
       exit 1
     fi
 

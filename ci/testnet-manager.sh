@@ -636,20 +636,7 @@ sanity-or-restart)
   else
     echo "+++ Sanity failed, updating the network"
     $metricsWriteDatapoint "testnet-manager sanity-failure=1"
-
-    # TODO: Restore attempt to restart the cluster before recreating it
-    #       See https://github.com/solana-labs/solana/issues/3774
-    if false; then
-      if start; then
-        echo Update successful
-      else
-        echo "+++ Update failed, restarting the network"
-        $metricsWriteDatapoint "testnet-manager update-failure=1"
-        create-and-start
-      fi
-    else
-      create-and-start
-    fi
+    create-and-start
   fi
   ;;
 *)
